@@ -34,5 +34,6 @@ compose-up:
 compose-down:
 	docker compose down
 
-
-# eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJkZTJjZjRkMy03NzgwLTRjNjktOWZmYi03OGYzNTNhZjliZTkiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NzU1MDczMjEsImlhdCI6MTc3NTQyMDkyMX0.YCjPO4FJ-NSMQOeI9_cQXz4i-CqdzES6KdVetSk_zfY
+generate:
+	oapi-codegen --config=config/oapi-models.yaml api/swagger.yaml
+	oapi-codegen --config=config/oapi-server.yaml api/swagger.yaml
