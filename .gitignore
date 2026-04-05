@@ -1,0 +1,47 @@
+/bin/
+/dist/
+*.exe
+*.exe~
+*.test
+
+/node_modules/
+/vendor/
+
+.env
+.env.*
+!.env.example
+*.local
+
+/cockroach-data/
+/seaweedfs-data/
+/temporal-data/
+/polaris-data/
+/data/
+/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Go
+/go.work
+/go.work.sum
+*.cover
+coverage.txt
+
+# Web build
+/web/dist/
+/web/.svelte-kit/
+
+# Helm secrets
+/deploy/helm/**/secrets.yaml
+/deploy/helm/**/values.local.yaml

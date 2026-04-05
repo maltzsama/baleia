@@ -4,18 +4,25 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/server/handler"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Server struct {
-	cfg *config.Config
-	mux *chi.Mux
+	cfg     *config.Config
+	mux     *chi.Mux
+	pool    *pgxpool.Pool
+	queries *db.Queries
 }
 
-func New(cfg *config.Config) *Server {
-	s := &Server{cfg: cfg, mux: chi.NewRouter()}
+func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
+	queries := db.New(pool)
+	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries}
 	s.routes()
 	return s
 }
@@ -29,9 +36,20 @@ func (s *Server) routes() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// v1 API — handlers registrados aqui
+	authHandler := handler.NewAuthHandler(s.queries, s.cfg)
+
 	s.mux.Route("/api/v1", func(r chi.Router) {
-		// auth, workspaces, lenses, executions, catalog...
+		// rotas públicas
+		r.Post("/auth/setup", authHandler.Setup)
+		r.Post("/auth/login", authHandler.Login)
+		r.Get("/auth/oidc/{provider}", authHandler.OIDCRedirect)
+		r.Get("/auth/oidc/{provider}/callback", authHandler.OIDCCallback)
+
+		// rotas autenticadas
+		r.Group(func(r chi.Router) {
+			r.Use(auth.Middleware(s.cfg.JWTSecret))
+			r.Get("/auth/me", authHandler.Me)
+		})
 	})
 }
 

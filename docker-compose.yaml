@@ -5,7 +5,7 @@ networks:
 volumes:
   icebergdata:
   seaweedfs-data:
-  cockroachdb-data:
+  postgres-data:
 
 services:
 
@@ -18,8 +18,8 @@ services:
       - "9333:9333"  # Master
       - "8888:8888"  # Filer UI
     volumes:
-      - ./s3.json:/etc/seaweedfs/s3.json
-      - seaweedfs-data:/data
+      - ./tmp/s3.json:/etc/seaweedfs/s3.json
+      - ./tmp/seaweedfs-data:/data
     command: 'server -s3 -filer -dir="/data" -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -filer.port=8888 -master.port=9333 -volume.port=8082 -s3.domainName=seaweedfs'
     environment:
       - AWS_REGION=us-east-1
@@ -32,56 +32,59 @@ services:
       retries: 5
 
   # DATABASE - CockroachDB (single node dev)
-  cockroachdb:
-    image: cockroachdb/cockroach:latest
-    container_name: baleia_cockroachdb
+  postgres:
+    image: postgres:18
+    container_name: baleia_postgres
     ports:
-      - "26257:26257"  # SQL
-      - "8080:8080"    # Admin UI
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=baleia
+      - POSTGRES_PASSWORD=baleia
+      - POSTGRES_DB=baleia
     volumes:
-      - cockroachdb-data:/cockroach/cockroach-data
-    command: start-single-node --insecure --advertise-addr=cockroachdb
+      - ./tmp/postgres-data:/var/lib/postgresql
     networks:
       - app_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
+      test: ["CMD-SHELL", "pg_isready -U baleia"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  cockroachdb-init:
-    image: cockroachdb/cockroach:latest
-    container_name: baleia_cockroachdb_init
+  postgres-init:
+    image: postgres:18
+    container_name: baleia_postgres_init
     networks:
       - app_net
     depends_on:
-      cockroachdb:
+      postgres:
         condition: service_healthy
+    environment:
+      - PGPASSWORD=baleia
     command: >
-      sql --insecure --host=cockroachdb:26257
-      --execute="
-        CREATE DATABASE IF NOT EXISTS baleia;
-        CREATE DATABASE IF NOT EXISTS temporal;
-      "
+      psql -h postgres -U baleia -d baleia
+      -c "CREATE DATABASE temporal;"
     restart: on-failure
 
-  # WORKFLOW ENGINE - Temporal
   temporal:
     image: temporalio/auto-setup:latest
     container_name: baleia_temporal
     ports:
-      - "7233:7233"   # gRPC
+      - "7233:7233"
+    volumes:
+      - ./config/dynamicconfig:/etc/temporal/config/dynamicconfig
     environment:
-      - DB=postgresql
-      - DB_PORT=26257
-      - POSTGRES_USER=root
-      - POSTGRES_PWD=
-      - POSTGRES_SEEDS=cockroachdb
-      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=baleia
+      - POSTGRES_PWD=baleia
+      - POSTGRES_SEEDS=postgres
+      - TEMPORAL_DBNAME=temporal
+      - DYNAMIC_CONFIG_FILE_PATH=./config/dynamicconfig/development-sql.yaml
     networks:
       - app_net
     depends_on:
-      cockroachdb-init:
+      postgres-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "temporal", "workflow", "list", "--address", "localhost:7233"]
