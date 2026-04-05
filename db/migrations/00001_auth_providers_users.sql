@@ -2,23 +2,23 @@
 
 CREATE TABLE auth_providers (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        STRING        NOT NULL,
-    type        STRING        NOT NULL CHECK (type IN ('oidc')),
+    name        TEXT        NOT NULL,
+    type        TEXT        NOT NULL CHECK (type IN ('oidc')),
     config_enc  TEXT          NOT NULL,
-    enabled     BOOL          NOT NULL DEFAULT true,
+    enabled     BOOLEAN          NOT NULL DEFAULT true,
     created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
 CREATE TABLE users (
     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name                  STRING        NOT NULL,
-    email                 STRING        NOT NULL UNIQUE,
-    password_hash         STRING,
-    role                  STRING        NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
-    auth_provider         STRING        NOT NULL DEFAULT 'local' CHECK (auth_provider IN ('local', 'oidc')),
+    name                  TEXT        NOT NULL,
+    email                 TEXT        NOT NULL UNIQUE,
+    password_hash         TEXT,
+    role                  TEXT        NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    auth_provider         TEXT        NOT NULL DEFAULT 'local' CHECK (auth_provider IN ('local', 'oidc')),
     auth_provider_id      UUID          REFERENCES auth_providers (id) ON DELETE SET NULL,
-    external_id           STRING,
+    external_id           TEXT,
     personal_workspace_id UUID,
     created_at            TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -30,8 +30,8 @@ CREATE TABLE users (
 CREATE TABLE api_keys (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID          NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    name        STRING        NOT NULL,
-    key_hash    STRING        NOT NULL UNIQUE,
+    name        TEXT        NOT NULL,
+    key_hash    TEXT        NOT NULL UNIQUE,
     expires_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
 );

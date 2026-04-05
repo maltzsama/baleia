@@ -2,8 +2,8 @@
 
 CREATE TABLE teams (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        STRING        NOT NULL,
-    description STRING,
+    name        TEXT        NOT NULL,
+    description TEXT,
     created_by  UUID          NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
     created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
@@ -13,17 +13,17 @@ CREATE TABLE team_members (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id     UUID          NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
     user_id     UUID          NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    role        STRING        NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
+    role        TEXT        NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
     joined_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
     UNIQUE (team_id, user_id)
 );
 
 CREATE TABLE workspaces (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name                 STRING        NOT NULL,
-    description          STRING,
-    type                 STRING        NOT NULL CHECK (type IN ('personal', 'shared')),
-    polaris_catalog_name STRING        NOT NULL UNIQUE,
+    name                 TEXT        NOT NULL,
+    description          TEXT,
+    type                 TEXT        NOT NULL CHECK (type IN ('personal', 'shared')),
+    polaris_catalog_name TEXT        NOT NULL UNIQUE,
     owner_user_id        UUID          REFERENCES users (id) ON DELETE RESTRICT,
     owner_team_id        UUID          REFERENCES teams (id) ON DELETE RESTRICT,
     created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),

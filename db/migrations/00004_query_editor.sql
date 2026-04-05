@@ -4,7 +4,7 @@ CREATE TABLE query_folders (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID          NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
     parent_id    UUID          REFERENCES query_folders (id) ON DELETE CASCADE,
-    name         STRING        NOT NULL,
+    name         TEXT        NOT NULL,
     created_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
@@ -13,7 +13,7 @@ CREATE TABLE saved_queries (
     workspace_id UUID          NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
     folder_id    UUID          REFERENCES query_folders (id) ON DELETE SET NULL,
     created_by   UUID          NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
-    name         STRING        NOT NULL,
+    name         TEXT        NOT NULL,
     sql          TEXT          NOT NULL,
     created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
@@ -24,11 +24,11 @@ CREATE TABLE query_executions (
     workspace_id    UUID          NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
     user_id         UUID          NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
     saved_query_id  UUID          REFERENCES saved_queries (id) ON DELETE SET NULL,
-    status          STRING        NOT NULL CHECK (status IN ('running', 'finished', 'failed', 'cancelled')),
+    status          TEXT        NOT NULL CHECK (status IN ('running', 'finished', 'failed', 'cancelled')),
     sql             TEXT          NOT NULL,
-    trino_query_id  STRING,
-    rows_returned   INT8,
-    duration_ms     INT8,
+    trino_query_id  TEXT,
+    rows_returned   BIGINT,
+    duration_ms     BIGINT,
     started_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
     finished_at     TIMESTAMPTZ
 );
@@ -36,12 +36,12 @@ CREATE TABLE query_executions (
 CREATE TABLE query_statements (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     execution_id    UUID          NOT NULL REFERENCES query_executions (id) ON DELETE CASCADE,
-    position        INT4          NOT NULL,
+    position        INTEGER          NOT NULL,
     sql             TEXT          NOT NULL,
-    status          STRING        NOT NULL CHECK (status IN ('running', 'finished', 'failed', 'cancelled')),
-    trino_query_id  STRING,
-    rows_returned   INT8,
-    duration_ms     INT8,
+    status          TEXT        NOT NULL CHECK (status IN ('running', 'finished', 'failed', 'cancelled')),
+    trino_query_id  TEXT,
+    rows_returned   BIGINT,
+    duration_ms     BIGINT,
     error_message   TEXT,
     started_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
     finished_at     TIMESTAMPTZ

@@ -18,7 +18,7 @@ services:
       - "9333:9333"  # Master
       - "8888:8888"  # Filer UI
     volumes:
-      - ./tmp/s3.json:/etc/seaweedfs/s3.json
+      - ./config/s3.json:/etc/seaweedfs/s3.json
       - ./tmp/seaweedfs-data:/data
     command: 'server -s3 -filer -dir="/data" -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -filer.port=8888 -master.port=9333 -volume.port=8082 -s3.domainName=seaweedfs'
     environment:
@@ -63,7 +63,8 @@ services:
       - PGPASSWORD=baleia
     command: >
       psql -h postgres -U baleia -d baleia
-      -c "CREATE DATABASE temporal;"
+      -c "CREATE DATABASE IF NOT EXISTS temporal;"
+
     restart: on-failure
 
   temporal:
