@@ -1,0 +1,107 @@
+networks:
+  app_net:
+    driver: bridge
+
+volumes:
+  icebergdata:
+  seaweedfs-data:
+
+services:
+  
+  # STORAGE LAYER - SeaweedFS
+  seaweedfs:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+    image: chrislusf/seaweedfs:latest
+    container_name: baleia_seaweedfs
+    ports:
+      - "8333:8333"  # S3 API
+      - "9333:9333"  # Master
+      - "8888:8888"  # Filer UI
+    volumes:
+      - ./s3.json:/etc/seaweedfs/s3.json
+      - seaweedfs-data:/data
+    command: 'server -s3 -filer -dir="/data" -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -filer.port=8888 -master.port=9333 -volume.port=8082 -s3.domainName=seaweedfs'
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
+      interval: 10s
+      retries: 5
+
+
+  # ICEBERG CATALOG - Apache Polaris
+  polaris:
+    image: apache/polaris:1.3.0-incubating
+    container_name: baleia_polaris
+    platform: linux/arm64
+    ports:
+      - "8181:8181"
+      - "8182:8182"
+    environment:
+      # --- FIX DO CORS PARA A UI NÃO DAR NETWORK ERROR ---
+      - QUARKUS_HTTP_CORS_ENABLED=true
+      - QUARKUS_HTTP_CORS_ORIGINS=http://localhost:4000
+      - QUARKUS_HTTP_CORS_METHODS=GET,POST,PUT,DELETE,PATCH,OPTIONS
+      - QUARKUS_HTTP_CORS_HEADERS=Content-Type,Authorization,Polaris-Realm,X-Request-ID
+      # ---------------------------------------------------
+      - POLARIS_FEATURES_SKIP_CREDENTIAL_SUBSCOPING_INDIRECTION=true
+      - POLARIS_FEATURES_ALLOW_INSECURE_STORAGE_TYPES=true
+      
+      - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
+      - polaris.realm-context.realms=POLARIS
+      - polaris.readiness.ignore-severe-issues=true
+      - polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES"=["FILE","S3","GCS","AZURE"]
+      - POLARIS_S3_ENDPOINT=http://seaweedfs:8333
+      - POLARIS_S3_ACCESS_KEY=seaweedfs
+      - POLARIS_S3_SECRET_KEY=seaweedfs
+      - POLARIS_S3_REGION=us-east-1
+      
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=seaweedfs
+      - AWS_SECRET_ACCESS_KEY=seaweedfs
+      
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8182/q/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # POLARIS UI - Console
+  polaris-console:
+    image: maltzsama/polaris-console:latest
+    container_name: baleia_polaris_ui
+    ports:
+      - "4000:80"
+    environment:
+      - VITE_POLARIS_API_URL=http://localhost:8181
+      - VITE_OAUTH_TOKEN_URL=http://localhost:8181/api/catalog/v1/oauth/tokens
+      - VITE_POLARIS_REALM=POLARIS
+    networks:
+      - app_net
+    depends_on:
+      - polaris
+
+
+  # QUERY ENGINE - Trino
+  trino:
+    image: trinodb/trino:latest
+    container_name: baleia_trino
+    ports:
+      - "8088:8080"
+    volumes:
+      - ./trino_catalog:/etc/trino/catalog
+    networks:
+      - app_net
+    depends_on:
+      polaris:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
