@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/yourusername/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/config"
 )
 
 type Server struct {

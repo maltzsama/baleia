@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/yourusername/baleia/internal/config"
-	"github.com/yourusername/baleia/internal/server"
+	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/server"
 )
 
 func main() {

@@ -1,0 +1,15 @@
+{
+  "identities": [
+    {
+      "name": "sumeh-dev",
+      "credentials": [
+        {
+          "accessKey": "seaweedfs",
+          "secretKey": "seaweedfs"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List"]
+    }
+  ],
+  "region": "us-east-1"
+}
