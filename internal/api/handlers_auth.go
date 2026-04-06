@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
@@ -144,6 +145,14 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 // ── Password Reset ────────────────────────────────────────────────────────────
 
 func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPasswordResetRequestObject) (RequestPasswordResetResponseObject, error) {
+
+	if h.cfg.SMTPHost == "" || h.cfg.SMTPPort == "" {
+		return RequestPasswordReset503JSONResponse{
+			Code:    "service_unavailable",
+			Message: "email service not configured",
+		}, nil
+	}
+
 	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err != nil {
 		return RequestPasswordReset204Response{}, nil
@@ -153,15 +162,17 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 	expires := time.Now().Add(1 * time.Hour)
 
 	if err := h.queries.SetPasswordResetToken(ctx, db.SetPasswordResetTokenParams{
-		Email:                 string(request.Body.Email),
-		PasswordResetToken:    &token,
+		Email:                  string(request.Body.Email),
+		PasswordResetToken:     &token,
 		PasswordResetExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
 	}); err != nil {
+		slog.Error("SetPasswordResetToken failed", "err", err)
 		return nil, err
 	}
 
 	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
 	if err := sendResetEmail(h.cfg, user.Email, resetURL); err != nil {
+		slog.Error("sendResetEmail failed", "err", err)
 		return nil, err
 	}
 

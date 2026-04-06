@@ -700,7 +700,7 @@ type ApiKeyCreated struct {
 	KeyPrefix string             `json:"key_prefix"`
 	Name      string             `json:"name"`
 
-	// Secret Mostrado apenas uma vez na criação
+	// Secret Displayed only once upon creation
 	Secret string `json:"secret"`
 }
 
@@ -733,7 +733,7 @@ type CreateApiKeyRequest struct {
 
 // CreateCatalogConnectionRequest defines model for CreateCatalogConnectionRequest.
 type CreateCatalogConnectionRequest struct {
-	// Credentials Credenciais específicas do tipo (armazenadas encriptadas)
+	// Credentials Type-specific credentials (stored encrypted)
 	Credentials     *map[string]interface{}            `json:"credentials,omitempty"`
 	DefaultReadonly *bool                              `json:"default_readonly,omitempty"`
 	Name            string                             `json:"name"`
@@ -781,7 +781,7 @@ type CreateMigrationRequestSourceType string
 type CreateRetrieverRequest struct {
 	CronSchedule string `json:"cron_schedule"`
 
-	// DefinitionSql CREATE MATERIALIZED VIEW ... AS SELECT ... O destino é extraído da query.
+	// DefinitionSql CREATE MATERIALIZED VIEW ... AS SELECT ... Destination is extracted from the query.
 	DefinitionSql string                             `json:"definition_sql"`
 	Name          string                             `json:"name"`
 	RefreshType   *CreateRetrieverRequestRefreshType `json:"refresh_type,omitempty"`
@@ -808,7 +808,7 @@ type CreateWorkspaceRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        string  `json:"name"`
 
-	// OwnerTeamId Obrigatório quando type=shared
+	// OwnerTeamId Required when type=shared
 	OwnerTeamId *openapi_types.UUID        `json:"owner_team_id,omitempty"`
 	Type        CreateWorkspaceRequestType `json:"type"`
 }

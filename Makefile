@@ -1,7 +1,8 @@
 .PHONY: dev worker migrate sqlc lint build
 
 dev:
-	PORT=9000 go run ./cmd/api
+	SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
+
 
 worker:
 	go run ./cmd/worker

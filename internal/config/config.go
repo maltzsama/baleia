@@ -26,6 +26,11 @@ func Load() *Config {
 		TrinoURL:     getEnv("TRINO_URL", "http://localhost:8088"),
 		JWTSecret:    getEnv("JWT_SECRET", "change-me-in-production"),
 		PublicURL:    getEnv("PUBLIC_URL", "http://localhost:8080"),
+		SMTPHost:     getEnv("SMTP_HOST", ""),
+		SMTPPort:     getEnv("SMTP_PORT", ""),
+		SMTPUser:     getEnv("SMTP_USER", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:     getEnv("SMTP_FROM", ""),
 	}
 }
 

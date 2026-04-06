@@ -19,241 +19,241 @@ import (
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Lista API keys do usuário atual
+	// List current user's API keys
 	// (GET /api-keys)
 	ListApiKeys(w http.ResponseWriter, r *http.Request)
-	// Cria uma nova API key
+	// Create a new API key
 	// (POST /api-keys)
 	CreateApiKey(w http.ResponseWriter, r *http.Request)
-	// Remove uma API key
+	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId)
-	// Autenticar e receber JWT
+	// Authenticate and receive JWT
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
-	// Invalidar sessão atual
+	// Invalidate current session
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
-	// Retorna o usuário autenticado
+	// Return authenticated user
 	// (GET /auth/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
-	// Lista providers OIDC configurados
+	// List configured OIDC providers
 	// (GET /auth/oidc/providers)
 	ListOIDCProviders(w http.ResponseWriter, r *http.Request)
-	// Redireciona para o provider OIDC
-	// (GET /auth/oidc/{provider_id})
-	OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID)
-	// Callback OIDC — troca code por JWT
+	// OIDC callback — exchange code for JWT
 	// (GET /auth/oidc/{provider_id}/callback)
 	OidcCallback(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID, params OidcCallbackParams)
-	// Confirma reset de senha com token
+	// Redirect to OIDC provider
+	// (GET /auth/oidc/{provider_id}/login)
+	OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID)
+	// Confirm password reset with token
 	// (POST /auth/password-reset/confirm)
 	ConfirmPasswordReset(w http.ResponseWriter, r *http.Request)
-	// Solicita link de reset de senha
+	// Request password reset link
 	// (POST /auth/password-reset/request)
 	RequestPasswordReset(w http.ResponseWriter, r *http.Request)
-	// Lista todas as conexões de catálogo — admin only
+	// List all catalog connections — admin only
 	// (GET /catalog-connections)
 	ListCatalogConnections(w http.ResponseWriter, r *http.Request)
-	// Cria uma conexão de catálogo — admin only
+	// Create a catalog connection — admin only
 	// (POST /catalog-connections)
 	CreateCatalogConnection(w http.ResponseWriter, r *http.Request)
-	// Remove uma conexão — admin only
+	// Remove a connection — admin only
 	// (DELETE /catalog-connections/{id})
 	DeleteCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
-	// Detalhes de uma conexão
+	// Connection details
 	// (GET /catalog-connections/{id})
 	GetCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
-	// Atualiza uma conexão — admin only
+	// Update a connection — admin only
 	// (PATCH /catalog-connections/{id})
 	UpdateCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
-	// Testa conectividade com o catálogo
+	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
-	// Lista namespaces do catálogo via Trino
+	// List catalog namespaces via Trino
 	// (GET /catalog/{catalog_connection_id}/namespaces)
 	ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID)
-	// Lista tabelas de um namespace
+	// List tables in a namespace
 	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables)
 	ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string)
-	// Lista colunas de uma tabela
+	// List table columns
 	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns)
 	ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string)
-	// Lista snapshots Iceberg de uma tabela
+	// List Iceberg snapshots for a table
 	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots)
 	ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string)
-	// Lista todas as Lenses — admin only
+	// List all Lenses — admin only
 	// (GET /lenses)
 	ListLenses(w http.ResponseWriter, r *http.Request)
-	// Cria uma Lens — admin only
+	// Create a Lens — admin only
 	// (POST /lenses)
 	CreateLens(w http.ResponseWriter, r *http.Request)
-	// Remove uma Lens — admin only
+	// Remove a Lens — admin only
 	// (DELETE /lenses/{id})
 	DeleteLens(w http.ResponseWriter, r *http.Request, id PathId)
-	// Detalhes de uma Lens
+	// Lens details
 	// (GET /lenses/{id})
 	GetLens(w http.ResponseWriter, r *http.Request, id PathId)
-	// Atualiza uma Lens — admin only
+	// Update a Lens — admin only
 	// (PATCH /lenses/{id})
 	UpdateLens(w http.ResponseWriter, r *http.Request, id PathId)
-	// Histórico de execuções da Lens
+	// Lens execution history
 	// (GET /lenses/{id}/history)
 	GetLensHistory(w http.ResponseWriter, r *http.Request, id PathId, params GetLensHistoryParams)
-	// Dispara execução manual da Lens — admin only
+	// Trigger manual Lens execution — admin only
 	// (POST /lenses/{id}/run)
 	TriggerLens(w http.ResponseWriter, r *http.Request, id PathId)
-	// Perfil do usuário atual
+	// Current user profile
 	// (GET /me)
 	GetProfile(w http.ResponseWriter, r *http.Request)
-	// Atualiza perfil do usuário atual
+	// Update current user profile
 	// (PATCH /me)
 	UpdateProfile(w http.ResponseWriter, r *http.Request)
-	// Altera senha do usuário atual
+	// Change current user password
 	// (PATCH /me/password)
 	UpdatePassword(w http.ResponseWriter, r *http.Request)
-	// Lista migrações — admin only
+	// List migrations — admin only
 	// (GET /migrations)
 	ListMigrations(w http.ResponseWriter, r *http.Request)
-	// Cria uma migração copy-zero — admin only
+	// Create a zero-copy migration — admin only
 	// (POST /migrations)
 	CreateMigration(w http.ResponseWriter, r *http.Request)
-	// Status de uma migração
+	// Migration status
 	// (GET /migrations/{id})
 	GetMigration(w http.ResponseWriter, r *http.Request, id PathId)
-	// Cancela uma migração em andamento — admin only
+	// Cancel an ongoing migration — admin only
 	// (POST /migrations/{id}/cancel)
 	CancelMigration(w http.ResponseWriter, r *http.Request, id PathId)
-	// Lista tabelas individuais de uma migração
+	// List individual tables in a migration
 	// (GET /migrations/{id}/items)
 	ListMigrationItems(w http.ResponseWriter, r *http.Request, id PathId, params ListMigrationItemsParams)
-	// Inicia execução da migração — admin only
+	// Start migration execution — admin only
 	// (POST /migrations/{id}/start)
 	StartMigration(w http.ResponseWriter, r *http.Request, id PathId)
-	// Cria o primeiro usuário admin
+	// Create first admin user
 	// (POST /setup/admin)
 	CreateFirstAdmin(w http.ResponseWriter, r *http.Request)
-	// Status de configuração do sistema
+	// System configuration status
 	// (GET /setup/status)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
-	// Lista todos os times
+	// List all teams
 	// (GET /teams)
 	ListTeams(w http.ResponseWriter, r *http.Request)
-	// Cria um time — admin only
+	// Create a team — admin only
 	// (POST /teams)
 	CreateTeam(w http.ResponseWriter, r *http.Request)
-	// Remove um time — admin only
+	// Remove a team — admin only
 	// (DELETE /teams/{id})
 	DeleteTeam(w http.ResponseWriter, r *http.Request, id PathId)
-	// Detalhes de um time
+	// Team details
 	// (GET /teams/{id})
 	GetTeam(w http.ResponseWriter, r *http.Request, id PathId)
-	// Lista membros de um time
+	// List team members
 	// (GET /teams/{id}/members)
 	ListTeamMembers(w http.ResponseWriter, r *http.Request, id PathId)
-	// Adiciona usuário ao time — admin only
+	// Add user to team — admin only
 	// (POST /teams/{id}/members)
 	AddTeamMember(w http.ResponseWriter, r *http.Request, id PathId)
-	// Remove usuário do time — admin only
+	// Remove user from team — admin only
 	// (DELETE /teams/{id}/members/{user_id})
 	RemoveTeamMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID)
-	// Lista todos os usuários — admin only
+	// List all users — admin only
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
-	// Convida um novo usuário — admin only
+	// Invite a new user — admin only
 	// (POST /users/invite)
 	InviteUser(w http.ResponseWriter, r *http.Request)
-	// Remove um usuário — admin only
+	// Remove a user — admin only
 	// (DELETE /users/{id})
 	RemoveUser(w http.ResponseWriter, r *http.Request, id PathId)
-	// Atualiza role de um usuário — admin only
+	// Update user role — admin only
 	// (PATCH /users/{id})
 	UpdateUserRole(w http.ResponseWriter, r *http.Request, id PathId)
-	// Lista workspaces acessíveis ao usuário atual
+	// List workspaces accessible to current user
 	// (GET /workspaces)
 	ListWorkspaces(w http.ResponseWriter, r *http.Request)
-	// Cria um workspace — admin only para shared
+	// Create a workspace — admin only for shared
 	// (POST /workspaces)
 	CreateWorkspace(w http.ResponseWriter, r *http.Request)
-	// Detalhes de um workspace
+	// Workspace details
 	// (GET /workspaces/{id})
 	GetWorkspace(w http.ResponseWriter, r *http.Request, id PathId)
-	// Atualiza um workspace
+	// Update a workspace
 	// (PATCH /workspaces/{id})
 	UpdateWorkspace(w http.ResponseWriter, r *http.Request, id PathId)
-	// Lista catálogos externos acessíveis ao workspace
+	// List external catalogs accessible to the workspace
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId)
-	// Concede acesso a um catálogo externo — admin only
+	// Grant access to an external catalog — admin only
 	// (POST /workspaces/{id}/catalog-access)
 	GrantCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId)
-	// Revoga acesso a um catálogo externo — admin only
+	// Revoke access to an external catalog — admin only
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_connection_id})
 	RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogConnectionId openapi_types.UUID)
-	// Histórico de execuções do workspace
+	// Workspace execution history
 	// (GET /workspaces/{id}/executions)
 	ListExecutions(w http.ResponseWriter, r *http.Request, id PathId, params ListExecutionsParams)
-	// Submete uma query para execução via Trino
+	// Submit a query for execution via Trino
 	// (POST /workspaces/{id}/executions)
 	RunQuery(w http.ResponseWriter, r *http.Request, id PathId)
-	// Status e metadata de uma execução
+	// Execution status and metadata
 	// (GET /workspaces/{id}/executions/{execution_id})
 	GetExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
-	// Cancela uma execução em andamento
+	// Cancel an ongoing execution
 	// (POST /workspaces/{id}/executions/{execution_id}/cancel)
 	CancelExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
-	// Resultados da execução como Arrow IPC stream
+	// Execution results as Arrow IPC stream
 	// (GET /workspaces/{id}/executions/{execution_id}/results)
 	GetResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
-	// Lista statements individuais de uma execução multi-statement
+	// List individual statements in a multi-statement execution
 	// (GET /workspaces/{id}/executions/{execution_id}/statements)
 	ListStatements(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
-	// Lista pastas do workspace
+	// List workspace folders
 	// (GET /workspaces/{id}/folders)
 	ListFolders(w http.ResponseWriter, r *http.Request, id PathId, params ListFoldersParams)
-	// Cria uma pasta no workspace
+	// Create a folder in the workspace
 	// (POST /workspaces/{id}/folders)
 	CreateFolder(w http.ResponseWriter, r *http.Request, id PathId)
-	// Remove uma pasta e seu conteúdo
+	// Remove a folder and its contents
 	// (DELETE /workspaces/{id}/folders/{folder_id})
 	DeleteFolder(w http.ResponseWriter, r *http.Request, id PathId, folderId openapi_types.UUID)
-	// Lista queries salvas do workspace
+	// List workspace saved queries
 	// (GET /workspaces/{id}/queries)
 	ListSavedQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListSavedQueriesParams)
-	// Salva uma query no workspace
+	// Save a query in the workspace
 	// (POST /workspaces/{id}/queries)
 	CreateSavedQuery(w http.ResponseWriter, r *http.Request, id PathId)
-	// Remove uma query salva
+	// Remove a saved query
 	// (DELETE /workspaces/{id}/queries/{query_id})
 	DeleteSavedQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID)
-	// Retorna uma query salva
+	// Return a saved query
 	// (GET /workspaces/{id}/queries/{query_id})
 	GetSavedQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID)
-	// Atualiza uma query salva
+	// Update a saved query
 	// (PATCH /workspaces/{id}/queries/{query_id})
 	UpdateSavedQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID)
-	// Lista Retrievers do workspace
+	// List workspace Retrievers
 	// (GET /workspaces/{id}/retrievers)
 	ListRetrievers(w http.ResponseWriter, r *http.Request, id PathId)
-	// Cria um Retriever no workspace
+	// Create a Retriever in the workspace
 	// (POST /workspaces/{id}/retrievers)
 	CreateRetriever(w http.ResponseWriter, r *http.Request, id PathId)
-	// Remove um Retriever
+	// Remove a Retriever
 	// (DELETE /workspaces/{id}/retrievers/{retriever_id})
 	DeleteRetriever(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
-	// Detalhes de um Retriever
+	// Retriever details
 	// (GET /workspaces/{id}/retrievers/{retriever_id})
 	GetRetriever(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
-	// Atualiza um Retriever
+	// Update a Retriever
 	// (PATCH /workspaces/{id}/retrievers/{retriever_id})
 	UpdateRetriever(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
-	// Histórico de refreshes do Retriever
+	// Retriever refresh history
 	// (GET /workspaces/{id}/retrievers/{retriever_id}/history)
 	GetRetrieverHistory(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID, params GetRetrieverHistoryParams)
-	// Dispara refresh manual do Retriever
+	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
-	// WebSocket para progresso em tempo real da execução
+	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, params StreamExecutionParams)
 }
@@ -262,475 +262,475 @@ type ServerInterface interface {
 
 type Unimplemented struct{}
 
-// Lista API keys do usuário atual
+// List current user's API keys
 // (GET /api-keys)
 func (_ Unimplemented) ListApiKeys(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria uma nova API key
+// Create a new API key
 // (POST /api-keys)
 func (_ Unimplemented) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove uma API key
+// Remove an API key
 // (DELETE /api-keys/{id})
 func (_ Unimplemented) DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Autenticar e receber JWT
+// Authenticate and receive JWT
 // (POST /auth/login)
 func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Invalidar sessão atual
+// Invalidate current session
 // (POST /auth/logout)
 func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Retorna o usuário autenticado
+// Return authenticated user
 // (GET /auth/me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista providers OIDC configurados
+// List configured OIDC providers
 // (GET /auth/oidc/providers)
 func (_ Unimplemented) ListOIDCProviders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Redireciona para o provider OIDC
-// (GET /auth/oidc/{provider_id})
-func (_ Unimplemented) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Callback OIDC — troca code por JWT
+// OIDC callback — exchange code for JWT
 // (GET /auth/oidc/{provider_id}/callback)
 func (_ Unimplemented) OidcCallback(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID, params OidcCallbackParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Confirma reset de senha com token
+// Redirect to OIDC provider
+// (GET /auth/oidc/{provider_id}/login)
+func (_ Unimplemented) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Confirm password reset with token
 // (POST /auth/password-reset/confirm)
 func (_ Unimplemented) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Solicita link de reset de senha
+// Request password reset link
 // (POST /auth/password-reset/request)
 func (_ Unimplemented) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista todas as conexões de catálogo — admin only
+// List all catalog connections — admin only
 // (GET /catalog-connections)
 func (_ Unimplemented) ListCatalogConnections(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria uma conexão de catálogo — admin only
+// Create a catalog connection — admin only
 // (POST /catalog-connections)
 func (_ Unimplemented) CreateCatalogConnection(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove uma conexão — admin only
+// Remove a connection — admin only
 // (DELETE /catalog-connections/{id})
 func (_ Unimplemented) DeleteCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Detalhes de uma conexão
+// Connection details
 // (GET /catalog-connections/{id})
 func (_ Unimplemented) GetCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Atualiza uma conexão — admin only
+// Update a connection — admin only
 // (PATCH /catalog-connections/{id})
 func (_ Unimplemented) UpdateCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Testa conectividade com o catálogo
+// Test catalog connectivity
 // (POST /catalog-connections/{id}/test)
 func (_ Unimplemented) TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista namespaces do catálogo via Trino
+// List catalog namespaces via Trino
 // (GET /catalog/{catalog_connection_id}/namespaces)
 func (_ Unimplemented) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista tabelas de um namespace
+// List tables in a namespace
 // (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables)
 func (_ Unimplemented) ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista colunas de uma tabela
+// List table columns
 // (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns)
 func (_ Unimplemented) ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista snapshots Iceberg de uma tabela
+// List Iceberg snapshots for a table
 // (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots)
 func (_ Unimplemented) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista todas as Lenses — admin only
+// List all Lenses — admin only
 // (GET /lenses)
 func (_ Unimplemented) ListLenses(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria uma Lens — admin only
+// Create a Lens — admin only
 // (POST /lenses)
 func (_ Unimplemented) CreateLens(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove uma Lens — admin only
+// Remove a Lens — admin only
 // (DELETE /lenses/{id})
 func (_ Unimplemented) DeleteLens(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Detalhes de uma Lens
+// Lens details
 // (GET /lenses/{id})
 func (_ Unimplemented) GetLens(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Atualiza uma Lens — admin only
+// Update a Lens — admin only
 // (PATCH /lenses/{id})
 func (_ Unimplemented) UpdateLens(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Histórico de execuções da Lens
+// Lens execution history
 // (GET /lenses/{id}/history)
 func (_ Unimplemented) GetLensHistory(w http.ResponseWriter, r *http.Request, id PathId, params GetLensHistoryParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Dispara execução manual da Lens — admin only
+// Trigger manual Lens execution — admin only
 // (POST /lenses/{id}/run)
 func (_ Unimplemented) TriggerLens(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Perfil do usuário atual
+// Current user profile
 // (GET /me)
 func (_ Unimplemented) GetProfile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Atualiza perfil do usuário atual
+// Update current user profile
 // (PATCH /me)
 func (_ Unimplemented) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Altera senha do usuário atual
+// Change current user password
 // (PATCH /me/password)
 func (_ Unimplemented) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista migrações — admin only
+// List migrations — admin only
 // (GET /migrations)
 func (_ Unimplemented) ListMigrations(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria uma migração copy-zero — admin only
+// Create a zero-copy migration — admin only
 // (POST /migrations)
 func (_ Unimplemented) CreateMigration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Status de uma migração
+// Migration status
 // (GET /migrations/{id})
 func (_ Unimplemented) GetMigration(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cancela uma migração em andamento — admin only
+// Cancel an ongoing migration — admin only
 // (POST /migrations/{id}/cancel)
 func (_ Unimplemented) CancelMigration(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista tabelas individuais de uma migração
+// List individual tables in a migration
 // (GET /migrations/{id}/items)
 func (_ Unimplemented) ListMigrationItems(w http.ResponseWriter, r *http.Request, id PathId, params ListMigrationItemsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Inicia execução da migração — admin only
+// Start migration execution — admin only
 // (POST /migrations/{id}/start)
 func (_ Unimplemented) StartMigration(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria o primeiro usuário admin
+// Create first admin user
 // (POST /setup/admin)
 func (_ Unimplemented) CreateFirstAdmin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Status de configuração do sistema
+// System configuration status
 // (GET /setup/status)
 func (_ Unimplemented) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista todos os times
+// List all teams
 // (GET /teams)
 func (_ Unimplemented) ListTeams(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria um time — admin only
+// Create a team — admin only
 // (POST /teams)
 func (_ Unimplemented) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove um time — admin only
+// Remove a team — admin only
 // (DELETE /teams/{id})
 func (_ Unimplemented) DeleteTeam(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Detalhes de um time
+// Team details
 // (GET /teams/{id})
 func (_ Unimplemented) GetTeam(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista membros de um time
+// List team members
 // (GET /teams/{id}/members)
 func (_ Unimplemented) ListTeamMembers(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Adiciona usuário ao time — admin only
+// Add user to team — admin only
 // (POST /teams/{id}/members)
 func (_ Unimplemented) AddTeamMember(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove usuário do time — admin only
+// Remove user from team — admin only
 // (DELETE /teams/{id}/members/{user_id})
 func (_ Unimplemented) RemoveTeamMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista todos os usuários — admin only
+// List all users — admin only
 // (GET /users)
 func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Convida um novo usuário — admin only
+// Invite a new user — admin only
 // (POST /users/invite)
 func (_ Unimplemented) InviteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove um usuário — admin only
+// Remove a user — admin only
 // (DELETE /users/{id})
 func (_ Unimplemented) RemoveUser(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Atualiza role de um usuário — admin only
+// Update user role — admin only
 // (PATCH /users/{id})
 func (_ Unimplemented) UpdateUserRole(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista workspaces acessíveis ao usuário atual
+// List workspaces accessible to current user
 // (GET /workspaces)
 func (_ Unimplemented) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria um workspace — admin only para shared
+// Create a workspace — admin only for shared
 // (POST /workspaces)
 func (_ Unimplemented) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Detalhes de um workspace
+// Workspace details
 // (GET /workspaces/{id})
 func (_ Unimplemented) GetWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Atualiza um workspace
+// Update a workspace
 // (PATCH /workspaces/{id})
 func (_ Unimplemented) UpdateWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista catálogos externos acessíveis ao workspace
+// List external catalogs accessible to the workspace
 // (GET /workspaces/{id}/catalog-access)
 func (_ Unimplemented) ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Concede acesso a um catálogo externo — admin only
+// Grant access to an external catalog — admin only
 // (POST /workspaces/{id}/catalog-access)
 func (_ Unimplemented) GrantCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Revoga acesso a um catálogo externo — admin only
+// Revoke access to an external catalog — admin only
 // (DELETE /workspaces/{id}/catalog-access/{catalog_connection_id})
 func (_ Unimplemented) RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogConnectionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Histórico de execuções do workspace
+// Workspace execution history
 // (GET /workspaces/{id}/executions)
 func (_ Unimplemented) ListExecutions(w http.ResponseWriter, r *http.Request, id PathId, params ListExecutionsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Submete uma query para execução via Trino
+// Submit a query for execution via Trino
 // (POST /workspaces/{id}/executions)
 func (_ Unimplemented) RunQuery(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Status e metadata de uma execução
+// Execution status and metadata
 // (GET /workspaces/{id}/executions/{execution_id})
 func (_ Unimplemented) GetExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cancela uma execução em andamento
+// Cancel an ongoing execution
 // (POST /workspaces/{id}/executions/{execution_id}/cancel)
 func (_ Unimplemented) CancelExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Resultados da execução como Arrow IPC stream
+// Execution results as Arrow IPC stream
 // (GET /workspaces/{id}/executions/{execution_id}/results)
 func (_ Unimplemented) GetResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista statements individuais de uma execução multi-statement
+// List individual statements in a multi-statement execution
 // (GET /workspaces/{id}/executions/{execution_id}/statements)
 func (_ Unimplemented) ListStatements(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista pastas do workspace
+// List workspace folders
 // (GET /workspaces/{id}/folders)
 func (_ Unimplemented) ListFolders(w http.ResponseWriter, r *http.Request, id PathId, params ListFoldersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria uma pasta no workspace
+// Create a folder in the workspace
 // (POST /workspaces/{id}/folders)
 func (_ Unimplemented) CreateFolder(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove uma pasta e seu conteúdo
+// Remove a folder and its contents
 // (DELETE /workspaces/{id}/folders/{folder_id})
 func (_ Unimplemented) DeleteFolder(w http.ResponseWriter, r *http.Request, id PathId, folderId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista queries salvas do workspace
+// List workspace saved queries
 // (GET /workspaces/{id}/queries)
 func (_ Unimplemented) ListSavedQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListSavedQueriesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Salva uma query no workspace
+// Save a query in the workspace
 // (POST /workspaces/{id}/queries)
 func (_ Unimplemented) CreateSavedQuery(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove uma query salva
+// Remove a saved query
 // (DELETE /workspaces/{id}/queries/{query_id})
 func (_ Unimplemented) DeleteSavedQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Retorna uma query salva
+// Return a saved query
 // (GET /workspaces/{id}/queries/{query_id})
 func (_ Unimplemented) GetSavedQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Atualiza uma query salva
+// Update a saved query
 // (PATCH /workspaces/{id}/queries/{query_id})
 func (_ Unimplemented) UpdateSavedQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Lista Retrievers do workspace
+// List workspace Retrievers
 // (GET /workspaces/{id}/retrievers)
 func (_ Unimplemented) ListRetrievers(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Cria um Retriever no workspace
+// Create a Retriever in the workspace
 // (POST /workspaces/{id}/retrievers)
 func (_ Unimplemented) CreateRetriever(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove um Retriever
+// Remove a Retriever
 // (DELETE /workspaces/{id}/retrievers/{retriever_id})
 func (_ Unimplemented) DeleteRetriever(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Detalhes de um Retriever
+// Retriever details
 // (GET /workspaces/{id}/retrievers/{retriever_id})
 func (_ Unimplemented) GetRetriever(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Atualiza um Retriever
+// Update a Retriever
 // (PATCH /workspaces/{id}/retrievers/{retriever_id})
 func (_ Unimplemented) UpdateRetriever(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Histórico de refreshes do Retriever
+// Retriever refresh history
 // (GET /workspaces/{id}/retrievers/{retriever_id}/history)
 func (_ Unimplemented) GetRetrieverHistory(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID, params GetRetrieverHistoryParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Dispara refresh manual do Retriever
+// Trigger manual Retriever refresh
 // (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 func (_ Unimplemented) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// WebSocket para progresso em tempo real da execução
+// WebSocket for real-time execution progress
 // (GET /ws/workspaces/{id}/executions/{execution_id})
 func (_ Unimplemented) StreamExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, params StreamExecutionParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -894,31 +894,6 @@ func (siw *ServerInterfaceWrapper) ListOIDCProviders(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
-// OidcRedirect operation middleware
-func (siw *ServerInterfaceWrapper) OidcRedirect(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "provider_id" -------------
-	var providerId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "provider_id", chi.URLParam(r, "provider_id"), &providerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.OidcRedirect(w, r, providerId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // OidcCallback operation middleware
 func (siw *ServerInterfaceWrapper) OidcCallback(w http.ResponseWriter, r *http.Request) {
 
@@ -968,6 +943,31 @@ func (siw *ServerInterfaceWrapper) OidcCallback(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.OidcCallback(w, r, providerId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OidcRedirect operation middleware
+func (siw *ServerInterfaceWrapper) OidcRedirect(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "provider_id" -------------
+	var providerId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider_id", chi.URLParam(r, "provider_id"), &providerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OidcRedirect(w, r, providerId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3523,10 +3523,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/auth/oidc/providers", wrapper.ListOIDCProviders)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/auth/oidc/{provider_id}", wrapper.OidcRedirect)
+		r.Get(options.BaseURL+"/auth/oidc/{provider_id}/callback", wrapper.OidcCallback)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/auth/oidc/{provider_id}/callback", wrapper.OidcCallback)
+		r.Get(options.BaseURL+"/auth/oidc/{provider_id}/login", wrapper.OidcRedirect)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/password-reset/confirm", wrapper.ConfirmPasswordReset)
@@ -3946,22 +3946,6 @@ func (response ListOIDCProviders200JSONResponse) VisitListOIDCProvidersResponse(
 	return json.NewEncoder(w).Encode(response)
 }
 
-type OidcRedirectRequestObject struct {
-	ProviderId openapi_types.UUID `json:"provider_id"`
-}
-
-type OidcRedirectResponseObject interface {
-	VisitOidcRedirectResponse(w http.ResponseWriter) error
-}
-
-type OidcRedirect302Response struct {
-}
-
-func (response OidcRedirect302Response) VisitOidcRedirectResponse(w http.ResponseWriter) error {
-	w.WriteHeader(302)
-	return nil
-}
-
 type OidcCallbackRequestObject struct {
 	ProviderId openapi_types.UUID `json:"provider_id"`
 	Params     OidcCallbackParams
@@ -3975,6 +3959,22 @@ type OidcCallback302Response struct {
 }
 
 func (response OidcCallback302Response) VisitOidcCallbackResponse(w http.ResponseWriter) error {
+	w.WriteHeader(302)
+	return nil
+}
+
+type OidcRedirectRequestObject struct {
+	ProviderId openapi_types.UUID `json:"provider_id"`
+}
+
+type OidcRedirectResponseObject interface {
+	VisitOidcRedirectResponse(w http.ResponseWriter) error
+}
+
+type OidcRedirect302Response struct {
+}
+
+func (response OidcRedirect302Response) VisitOidcRedirectResponse(w http.ResponseWriter) error {
 	w.WriteHeader(302)
 	return nil
 }
@@ -4027,6 +4027,15 @@ type RequestPasswordReset204Response = NoContentResponse
 func (response RequestPasswordReset204Response) VisitRequestPasswordResetResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
+}
+
+type RequestPasswordReset503JSONResponse Error
+
+func (response RequestPasswordReset503JSONResponse) VisitRequestPasswordResetResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListCatalogConnectionsRequestObject struct {
@@ -6545,241 +6554,241 @@ func (response StreamExecution401JSONResponse) VisitStreamExecutionResponse(w ht
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// Lista API keys do usuário atual
+	// List current user's API keys
 	// (GET /api-keys)
 	ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error)
-	// Cria uma nova API key
+	// Create a new API key
 	// (POST /api-keys)
 	CreateApiKey(ctx context.Context, request CreateApiKeyRequestObject) (CreateApiKeyResponseObject, error)
-	// Remove uma API key
+	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error)
-	// Autenticar e receber JWT
+	// Authenticate and receive JWT
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
-	// Invalidar sessão atual
+	// Invalidate current session
 	// (POST /auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
-	// Retorna o usuário autenticado
+	// Return authenticated user
 	// (GET /auth/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
-	// Lista providers OIDC configurados
+	// List configured OIDC providers
 	// (GET /auth/oidc/providers)
 	ListOIDCProviders(ctx context.Context, request ListOIDCProvidersRequestObject) (ListOIDCProvidersResponseObject, error)
-	// Redireciona para o provider OIDC
-	// (GET /auth/oidc/{provider_id})
-	OidcRedirect(ctx context.Context, request OidcRedirectRequestObject) (OidcRedirectResponseObject, error)
-	// Callback OIDC — troca code por JWT
+	// OIDC callback — exchange code for JWT
 	// (GET /auth/oidc/{provider_id}/callback)
 	OidcCallback(ctx context.Context, request OidcCallbackRequestObject) (OidcCallbackResponseObject, error)
-	// Confirma reset de senha com token
+	// Redirect to OIDC provider
+	// (GET /auth/oidc/{provider_id}/login)
+	OidcRedirect(ctx context.Context, request OidcRedirectRequestObject) (OidcRedirectResponseObject, error)
+	// Confirm password reset with token
 	// (POST /auth/password-reset/confirm)
 	ConfirmPasswordReset(ctx context.Context, request ConfirmPasswordResetRequestObject) (ConfirmPasswordResetResponseObject, error)
-	// Solicita link de reset de senha
+	// Request password reset link
 	// (POST /auth/password-reset/request)
 	RequestPasswordReset(ctx context.Context, request RequestPasswordResetRequestObject) (RequestPasswordResetResponseObject, error)
-	// Lista todas as conexões de catálogo — admin only
+	// List all catalog connections — admin only
 	// (GET /catalog-connections)
 	ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error)
-	// Cria uma conexão de catálogo — admin only
+	// Create a catalog connection — admin only
 	// (POST /catalog-connections)
 	CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error)
-	// Remove uma conexão — admin only
+	// Remove a connection — admin only
 	// (DELETE /catalog-connections/{id})
 	DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error)
-	// Detalhes de uma conexão
+	// Connection details
 	// (GET /catalog-connections/{id})
 	GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error)
-	// Atualiza uma conexão — admin only
+	// Update a connection — admin only
 	// (PATCH /catalog-connections/{id})
 	UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error)
-	// Testa conectividade com o catálogo
+	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error)
-	// Lista namespaces do catálogo via Trino
+	// List catalog namespaces via Trino
 	// (GET /catalog/{catalog_connection_id}/namespaces)
 	ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error)
-	// Lista tabelas de um namespace
+	// List tables in a namespace
 	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables)
 	ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error)
-	// Lista colunas de uma tabela
+	// List table columns
 	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns)
 	ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error)
-	// Lista snapshots Iceberg de uma tabela
+	// List Iceberg snapshots for a table
 	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots)
 	ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error)
-	// Lista todas as Lenses — admin only
+	// List all Lenses — admin only
 	// (GET /lenses)
 	ListLenses(ctx context.Context, request ListLensesRequestObject) (ListLensesResponseObject, error)
-	// Cria uma Lens — admin only
+	// Create a Lens — admin only
 	// (POST /lenses)
 	CreateLens(ctx context.Context, request CreateLensRequestObject) (CreateLensResponseObject, error)
-	// Remove uma Lens — admin only
+	// Remove a Lens — admin only
 	// (DELETE /lenses/{id})
 	DeleteLens(ctx context.Context, request DeleteLensRequestObject) (DeleteLensResponseObject, error)
-	// Detalhes de uma Lens
+	// Lens details
 	// (GET /lenses/{id})
 	GetLens(ctx context.Context, request GetLensRequestObject) (GetLensResponseObject, error)
-	// Atualiza uma Lens — admin only
+	// Update a Lens — admin only
 	// (PATCH /lenses/{id})
 	UpdateLens(ctx context.Context, request UpdateLensRequestObject) (UpdateLensResponseObject, error)
-	// Histórico de execuções da Lens
+	// Lens execution history
 	// (GET /lenses/{id}/history)
 	GetLensHistory(ctx context.Context, request GetLensHistoryRequestObject) (GetLensHistoryResponseObject, error)
-	// Dispara execução manual da Lens — admin only
+	// Trigger manual Lens execution — admin only
 	// (POST /lenses/{id}/run)
 	TriggerLens(ctx context.Context, request TriggerLensRequestObject) (TriggerLensResponseObject, error)
-	// Perfil do usuário atual
+	// Current user profile
 	// (GET /me)
 	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
-	// Atualiza perfil do usuário atual
+	// Update current user profile
 	// (PATCH /me)
 	UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error)
-	// Altera senha do usuário atual
+	// Change current user password
 	// (PATCH /me/password)
 	UpdatePassword(ctx context.Context, request UpdatePasswordRequestObject) (UpdatePasswordResponseObject, error)
-	// Lista migrações — admin only
+	// List migrations — admin only
 	// (GET /migrations)
 	ListMigrations(ctx context.Context, request ListMigrationsRequestObject) (ListMigrationsResponseObject, error)
-	// Cria uma migração copy-zero — admin only
+	// Create a zero-copy migration — admin only
 	// (POST /migrations)
 	CreateMigration(ctx context.Context, request CreateMigrationRequestObject) (CreateMigrationResponseObject, error)
-	// Status de uma migração
+	// Migration status
 	// (GET /migrations/{id})
 	GetMigration(ctx context.Context, request GetMigrationRequestObject) (GetMigrationResponseObject, error)
-	// Cancela uma migração em andamento — admin only
+	// Cancel an ongoing migration — admin only
 	// (POST /migrations/{id}/cancel)
 	CancelMigration(ctx context.Context, request CancelMigrationRequestObject) (CancelMigrationResponseObject, error)
-	// Lista tabelas individuais de uma migração
+	// List individual tables in a migration
 	// (GET /migrations/{id}/items)
 	ListMigrationItems(ctx context.Context, request ListMigrationItemsRequestObject) (ListMigrationItemsResponseObject, error)
-	// Inicia execução da migração — admin only
+	// Start migration execution — admin only
 	// (POST /migrations/{id}/start)
 	StartMigration(ctx context.Context, request StartMigrationRequestObject) (StartMigrationResponseObject, error)
-	// Cria o primeiro usuário admin
+	// Create first admin user
 	// (POST /setup/admin)
 	CreateFirstAdmin(ctx context.Context, request CreateFirstAdminRequestObject) (CreateFirstAdminResponseObject, error)
-	// Status de configuração do sistema
+	// System configuration status
 	// (GET /setup/status)
 	GetSetupStatus(ctx context.Context, request GetSetupStatusRequestObject) (GetSetupStatusResponseObject, error)
-	// Lista todos os times
+	// List all teams
 	// (GET /teams)
 	ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error)
-	// Cria um time — admin only
+	// Create a team — admin only
 	// (POST /teams)
 	CreateTeam(ctx context.Context, request CreateTeamRequestObject) (CreateTeamResponseObject, error)
-	// Remove um time — admin only
+	// Remove a team — admin only
 	// (DELETE /teams/{id})
 	DeleteTeam(ctx context.Context, request DeleteTeamRequestObject) (DeleteTeamResponseObject, error)
-	// Detalhes de um time
+	// Team details
 	// (GET /teams/{id})
 	GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error)
-	// Lista membros de um time
+	// List team members
 	// (GET /teams/{id}/members)
 	ListTeamMembers(ctx context.Context, request ListTeamMembersRequestObject) (ListTeamMembersResponseObject, error)
-	// Adiciona usuário ao time — admin only
+	// Add user to team — admin only
 	// (POST /teams/{id}/members)
 	AddTeamMember(ctx context.Context, request AddTeamMemberRequestObject) (AddTeamMemberResponseObject, error)
-	// Remove usuário do time — admin only
+	// Remove user from team — admin only
 	// (DELETE /teams/{id}/members/{user_id})
 	RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error)
-	// Lista todos os usuários — admin only
+	// List all users — admin only
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
-	// Convida um novo usuário — admin only
+	// Invite a new user — admin only
 	// (POST /users/invite)
 	InviteUser(ctx context.Context, request InviteUserRequestObject) (InviteUserResponseObject, error)
-	// Remove um usuário — admin only
+	// Remove a user — admin only
 	// (DELETE /users/{id})
 	RemoveUser(ctx context.Context, request RemoveUserRequestObject) (RemoveUserResponseObject, error)
-	// Atualiza role de um usuário — admin only
+	// Update user role — admin only
 	// (PATCH /users/{id})
 	UpdateUserRole(ctx context.Context, request UpdateUserRoleRequestObject) (UpdateUserRoleResponseObject, error)
-	// Lista workspaces acessíveis ao usuário atual
+	// List workspaces accessible to current user
 	// (GET /workspaces)
 	ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error)
-	// Cria um workspace — admin only para shared
+	// Create a workspace — admin only for shared
 	// (POST /workspaces)
 	CreateWorkspace(ctx context.Context, request CreateWorkspaceRequestObject) (CreateWorkspaceResponseObject, error)
-	// Detalhes de um workspace
+	// Workspace details
 	// (GET /workspaces/{id})
 	GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error)
-	// Atualiza um workspace
+	// Update a workspace
 	// (PATCH /workspaces/{id})
 	UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error)
-	// Lista catálogos externos acessíveis ao workspace
+	// List external catalogs accessible to the workspace
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error)
-	// Concede acesso a um catálogo externo — admin only
+	// Grant access to an external catalog — admin only
 	// (POST /workspaces/{id}/catalog-access)
 	GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error)
-	// Revoga acesso a um catálogo externo — admin only
+	// Revoke access to an external catalog — admin only
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_connection_id})
 	RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error)
-	// Histórico de execuções do workspace
+	// Workspace execution history
 	// (GET /workspaces/{id}/executions)
 	ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error)
-	// Submete uma query para execução via Trino
+	// Submit a query for execution via Trino
 	// (POST /workspaces/{id}/executions)
 	RunQuery(ctx context.Context, request RunQueryRequestObject) (RunQueryResponseObject, error)
-	// Status e metadata de uma execução
+	// Execution status and metadata
 	// (GET /workspaces/{id}/executions/{execution_id})
 	GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error)
-	// Cancela uma execução em andamento
+	// Cancel an ongoing execution
 	// (POST /workspaces/{id}/executions/{execution_id}/cancel)
 	CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error)
-	// Resultados da execução como Arrow IPC stream
+	// Execution results as Arrow IPC stream
 	// (GET /workspaces/{id}/executions/{execution_id}/results)
 	GetResults(ctx context.Context, request GetResultsRequestObject) (GetResultsResponseObject, error)
-	// Lista statements individuais de uma execução multi-statement
+	// List individual statements in a multi-statement execution
 	// (GET /workspaces/{id}/executions/{execution_id}/statements)
 	ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error)
-	// Lista pastas do workspace
+	// List workspace folders
 	// (GET /workspaces/{id}/folders)
 	ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error)
-	// Cria uma pasta no workspace
+	// Create a folder in the workspace
 	// (POST /workspaces/{id}/folders)
 	CreateFolder(ctx context.Context, request CreateFolderRequestObject) (CreateFolderResponseObject, error)
-	// Remove uma pasta e seu conteúdo
+	// Remove a folder and its contents
 	// (DELETE /workspaces/{id}/folders/{folder_id})
 	DeleteFolder(ctx context.Context, request DeleteFolderRequestObject) (DeleteFolderResponseObject, error)
-	// Lista queries salvas do workspace
+	// List workspace saved queries
 	// (GET /workspaces/{id}/queries)
 	ListSavedQueries(ctx context.Context, request ListSavedQueriesRequestObject) (ListSavedQueriesResponseObject, error)
-	// Salva uma query no workspace
+	// Save a query in the workspace
 	// (POST /workspaces/{id}/queries)
 	CreateSavedQuery(ctx context.Context, request CreateSavedQueryRequestObject) (CreateSavedQueryResponseObject, error)
-	// Remove uma query salva
+	// Remove a saved query
 	// (DELETE /workspaces/{id}/queries/{query_id})
 	DeleteSavedQuery(ctx context.Context, request DeleteSavedQueryRequestObject) (DeleteSavedQueryResponseObject, error)
-	// Retorna uma query salva
+	// Return a saved query
 	// (GET /workspaces/{id}/queries/{query_id})
 	GetSavedQuery(ctx context.Context, request GetSavedQueryRequestObject) (GetSavedQueryResponseObject, error)
-	// Atualiza uma query salva
+	// Update a saved query
 	// (PATCH /workspaces/{id}/queries/{query_id})
 	UpdateSavedQuery(ctx context.Context, request UpdateSavedQueryRequestObject) (UpdateSavedQueryResponseObject, error)
-	// Lista Retrievers do workspace
+	// List workspace Retrievers
 	// (GET /workspaces/{id}/retrievers)
 	ListRetrievers(ctx context.Context, request ListRetrieversRequestObject) (ListRetrieversResponseObject, error)
-	// Cria um Retriever no workspace
+	// Create a Retriever in the workspace
 	// (POST /workspaces/{id}/retrievers)
 	CreateRetriever(ctx context.Context, request CreateRetrieverRequestObject) (CreateRetrieverResponseObject, error)
-	// Remove um Retriever
+	// Remove a Retriever
 	// (DELETE /workspaces/{id}/retrievers/{retriever_id})
 	DeleteRetriever(ctx context.Context, request DeleteRetrieverRequestObject) (DeleteRetrieverResponseObject, error)
-	// Detalhes de um Retriever
+	// Retriever details
 	// (GET /workspaces/{id}/retrievers/{retriever_id})
 	GetRetriever(ctx context.Context, request GetRetrieverRequestObject) (GetRetrieverResponseObject, error)
-	// Atualiza um Retriever
+	// Update a Retriever
 	// (PATCH /workspaces/{id}/retrievers/{retriever_id})
 	UpdateRetriever(ctx context.Context, request UpdateRetrieverRequestObject) (UpdateRetrieverResponseObject, error)
-	// Histórico de refreshes do Retriever
+	// Retriever refresh history
 	// (GET /workspaces/{id}/retrievers/{retriever_id}/history)
 	GetRetrieverHistory(ctx context.Context, request GetRetrieverHistoryRequestObject) (GetRetrieverHistoryResponseObject, error)
-	// Dispara refresh manual do Retriever
+	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error)
-	// WebSocket para progresso em tempo real da execução
+	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error)
 }
@@ -6997,32 +7006,6 @@ func (sh *strictHandler) ListOIDCProviders(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// OidcRedirect operation middleware
-func (sh *strictHandler) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
-	var request OidcRedirectRequestObject
-
-	request.ProviderId = providerId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.OidcRedirect(ctx, request.(OidcRedirectRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "OidcRedirect")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(OidcRedirectResponseObject); ok {
-		if err := validResponse.VisitOidcRedirectResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // OidcCallback operation middleware
 func (sh *strictHandler) OidcCallback(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID, params OidcCallbackParams) {
 	var request OidcCallbackRequestObject
@@ -7043,6 +7026,32 @@ func (sh *strictHandler) OidcCallback(w http.ResponseWriter, r *http.Request, pr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(OidcCallbackResponseObject); ok {
 		if err := validResponse.VisitOidcCallbackResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OidcRedirect operation middleware
+func (sh *strictHandler) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
+	var request OidcRedirectRequestObject
+
+	request.ProviderId = providerId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OidcRedirect(ctx, request.(OidcRedirectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OidcRedirect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OidcRedirectResponseObject); ok {
+		if err := validResponse.VisitOidcRedirectResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

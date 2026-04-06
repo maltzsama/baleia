@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"fmt"
 
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -57,18 +58,22 @@ func (s *Server) routes() {
 
 func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
 	publicOps := map[string]bool{
-		"getSetupStatus":       true,
-		"createFirstAdmin":     true,
-		"login":                true,
-		"listOIDCProviders":    true,
-		"oidcRedirect":         true,
-		"oidcCallback":         true,
-		"requestPasswordReset": true,
-		"confirmPasswordReset": true,
+		"GetSetupStatus":       true,
+		"CreateFirstAdmin":     true,
+		"Login":                true,
+		"ListOIDCProviders":    true,
+		"OidcRedirect":         true,
+		"OidcCallback":         true,
+		"RequestPasswordReset": true,
+		"ConfirmPasswordReset": true,
 	}
 
 	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
+		fmt.Printf("DEBUG registering operationID: %s", operationID)
+
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+			fmt.Printf("DEBUG request operationID: %s", operationID)
+
 			if publicOps[operationID] {
 				return f(ctx, w, r, args)
 			}

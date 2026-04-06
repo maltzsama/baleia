@@ -3,17 +3,17 @@ info:
   title: "Baleia API"
   description: |
     First-class UI for Trino + Apache Iceberg catalog management platform.
-
+    
     ## Serialization
-
+    
     **JSON** (`application/json`) for application data: auth, users, teams,
     workspaces, catalog connections, lenses, retrievers, migrations.
-
+    
     **Arrow IPC** (`application/vnd.apache.arrow.stream`) for data originating
     from Trino: query results, explain plans, Iceberg catalog.
-
+    
     ## Authentication
-
+    
     JWT via `Authorization: Bearer <token>` or `token` cookie (for WebSocket).
     API Keys via `X-Api-Key` header.
 
@@ -25,40 +25,39 @@ servers:
 security:
   - BearerAuth: []
   - ApiKeyAuth: []
-
+  
 tags:
   - name: Setup
-    description: "Configuração inicial do sistema"
+    description: "Initial system configuration"
   - name: Auth
-    description: "Autenticação e sessões"
+    description: "Authentication and sessions"
   - name: ApiKeys
-    description: "Chaves de acesso programático"
+    description: "Programmatic access keys"
   - name: Users
-    description: "Perfis de usuário e administração"
+    description: "User profiles and administration"
   - name: Teams
-    description: "Gerenciamento de times"
+    description: "Team management"
   - name: Workspaces
-    description: "Espaços de trabalho por usuário ou time"
+    description: "User or team workspaces"
   - name: CatalogConnections
-    description: "Conexões com catálogos Iceberg externos"
+    description: "External Iceberg catalog connections"
   - name: Catalog
-    description: "Exploração de catálogos, namespaces e tabelas Iceberg via Trino"
+    description: "Iceberg catalog, namespace, and table exploration via Trino"
   - name: QueryEditor
-    description: "Pastas, queries salvas e execuções"
+    description: "Folders, saved queries, and executions"
   - name: Executions
-    description: "Ciclo de vida de execuções — submit, status, cancel, streaming"
+    description: "Execution lifecycle — submit, status, cancel, streaming"
   - name: Lenses
-    description: "Manutenção de tabelas Iceberg (compaction, snapshots, orphan files)"
+    description: "Iceberg table maintenance (compaction, snapshots, orphan files)"
   - name: Retrievers
-    description: "Materialized views Iceberg agendadas"
+    description: "Scheduled Iceberg materialized views"
   - name: Migrant
-    description: "Migração copy-zero de catálogos (Nessie → Polaris)"
+    description: "Zero-copy catalog migration (Nessie → Polaris)"
 
 # ═══════════════════════════════════════════════════════════════
 # COMPONENTS
 # ═══════════════════════════════════════════════════════════════
 components:
-
   securitySchemes:
     BearerAuth:
       type: http
@@ -68,7 +67,6 @@ components:
       type: apiKey
       in: header
       name: X-Api-Key
-
   parameters:
     PathId:
       name: id
@@ -83,32 +81,31 @@ components:
       name: per_page
       in: query
       schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
-
   responses:
     NoContent:
-      description: "Sucesso sem corpo"
+      description: "Successful response with no body"
     Unauthorized:
-      description: "Credenciais ausentes ou inválidas"
+      description: "Missing or invalid credentials"
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Forbidden:
-      description: "Permissão insuficiente"
+      description: "Insufficient permissions"
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     NotFound:
-      description: "Recurso não encontrado"
+      description: "Resource not found"
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Conflict:
-      description: "Recurso já existe"
+      description: "Resource already exists"
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     UnprocessableEntity:
-      description: "Erro de validação"
+      description: "Validation error"
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ValidationError' }
@@ -117,10 +114,8 @@ components:
       content:
         application/vnd.apache.arrow.stream:
           schema: { type: string, format: binary }
-
   schemas:
-
-    # ── Genérico ─────────────────────────────────────────
+    # ── Generic ────────────────────────────────────────────────
     Error:
       type: object
       required: [code, message]
@@ -151,7 +146,7 @@ components:
         total:       { type: integer }
         total_pages: { type: integer }
 
-    # ── Setup ─────────────────────────────────────────────
+    # ── Setup ──────────────────────────────────────────────────
     SetupStatus:
       type: object
       required: [is_configured, version]
@@ -165,9 +160,9 @@ components:
       properties:
         name:     { type: string }
         email:    { type: string, format: email }
-        password: { type: string, minLength: 8 }
+        password:  { type: string, minLength: 8 }
 
-    # ── Auth ──────────────────────────────────────────────
+    # ── Auth ───────────────────────────────────────────────────
     LoginRequest:
       type: object
       required: [email, password]
@@ -204,7 +199,7 @@ components:
         token:        { type: string }
         new_password: { type: string, minLength: 8 }
 
-    # ── API Keys ──────────────────────────────────────────
+    # ── API Keys ───────────────────────────────────────────────
     ApiKey:
       type: object
       required: [id, name, key_prefix, created_at]
@@ -223,7 +218,7 @@ components:
           properties:
             secret:
               type: string
-              description: "Mostrado apenas uma vez na criação"
+              description: "Displayed only once upon creation"
 
     CreateApiKeyRequest:
       type: object
@@ -232,7 +227,7 @@ components:
         name:       { type: string }
         expires_at: { type: string, format: date-time, nullable: true }
 
-    # ── Users ─────────────────────────────────────────────
+    # ── Users ──────────────────────────────────────────────────
     UserPublic:
       type: object
       required: [id, name, email, role, auth_provider, created_at]
@@ -270,7 +265,7 @@ components:
       properties:
         role: { type: string, enum: [admin, member] }
 
-    # ── Teams ─────────────────────────────────────────────
+    # ── Teams ──────────────────────────────────────────────────
     Team:
       type: object
       required: [id, name, created_at]
@@ -302,7 +297,7 @@ components:
         user_id: { type: string, format: uuid }
         role:    { type: string, enum: [owner, member], default: member }
 
-    # ── Workspaces ────────────────────────────────────────
+    # ── Workspaces ─────────────────────────────────────────────
     Workspace:
       type: object
       required: [id, name, type, polaris_catalog_name, created_at]
@@ -324,7 +319,7 @@ components:
         name:         { type: string }
         description:  { type: string }
         type:         { type: string, enum: [personal, shared] }
-        owner_team_id: { type: string, format: uuid, nullable: true, description: "Obrigatório quando type=shared" }
+        owner_team_id: { type: string, format: uuid, nullable: true, description: "Required when type=shared" }
 
     UpdateWorkspaceRequest:
       type: object
@@ -332,7 +327,7 @@ components:
         name:        { type: string }
         description: { type: string }
 
-    # ── Catalog Connections ───────────────────────────────
+    # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
       required: [id, name, type, url, default_readonly, created_at]
@@ -352,7 +347,7 @@ components:
         name:             { type: string }
         type:             { type: string, enum: [polaris, nessie, glue, hive] }
         url:              { type: string }
-        credentials:      { type: object, description: "Credenciais específicas do tipo (armazenadas encriptadas)" }
+        credentials:      { type: object, description: "Type-specific credentials (stored encrypted)" }
         default_readonly: { type: boolean, default: true }
 
     UpdateCatalogConnectionRequest:
@@ -389,14 +384,14 @@ components:
         catalog_connection_id: { type: string, format: uuid }
         permission:            { type: string, enum: [read, write] }
 
-    # ── Query Editor ──────────────────────────────────────
+    # ── Query Editor ───────────────────────────────────────────
     QueryFolder:
       type: object
       required: [id, name, workspace_id, created_at]
       properties:
         id:           { type: string, format: uuid }
         name:         { type: string }
-        workspace_id: { type: string, format: uuid }
+        workspace_id:  { type: string, format: uuid }
         parent_id:    { type: string, format: uuid, nullable: true }
         created_at:   { type: string, format: date-time }
 
@@ -435,29 +430,29 @@ components:
         folder_id: { type: string, format: uuid, nullable: true }
         sql:       { type: string }
 
-    # ── Executions ────────────────────────────────────────
+    # ── Executions ─────────────────────────────────────────────
     ExecutionRequest:
       type: object
       required: [workspace_id, sql]
       properties:
-        workspace_id:    { type: string, format: uuid }
-        saved_query_id:  { type: string, format: uuid, nullable: true }
-        sql:             { type: string }
+        workspace_id:   { type: string, format: uuid }
+        saved_query_id: { type: string, format: uuid, nullable: true }
+        sql:            { type: string }
 
     Execution:
       type: object
       required: [id, workspace_id, status, sql, created_at]
       properties:
-        id:              { type: string, format: uuid }
-        workspace_id:    { type: string, format: uuid }
-        saved_query_id:  { type: string, format: uuid, nullable: true }
-        status:          { type: string, enum: [running, finished, failed, cancelled] }
-        sql:             { type: string }
-        trino_query_id:  { type: string, nullable: true }
-        rows_returned:   { type: integer, nullable: true }
-        duration_ms:     { type: integer, nullable: true }
-        started_at:      { type: string, format: date-time }
-        finished_at:     { type: string, format: date-time, nullable: true }
+        id:             { type: string, format: uuid }
+        workspace_id:   { type: string, format: uuid }
+        saved_query_id: { type: string, format: uuid, nullable: true }
+        status:         { type: string, enum: [running, finished, failed, cancelled] }
+        sql:            { type: string }
+        trino_query_id: { type: string, nullable: true }
+        rows_returned:  { type: integer, nullable: true }
+        duration_ms:    { type: integer, nullable: true }
+        started_at:     { type: string, format: date-time }
+        finished_at:    { type: string, format: date-time, nullable: true }
 
     QueryStatement:
       type: object
@@ -475,7 +470,7 @@ components:
         started_at:     { type: string, format: date-time, nullable: true }
         finished_at:    { type: string, format: date-time, nullable: true }
 
-    # ── Lenses ────────────────────────────────────────────
+    # ── Lenses ─────────────────────────────────────────────────
     Lens:
       type: object
       required: [id, name, catalog_connection_id, iceberg_catalog, iceberg_namespace, iceberg_table, cron_schedule, status, created_at]
@@ -530,17 +525,17 @@ components:
       type: object
       required: [id, lens_id, status, started_at]
       properties:
-        id:                   { type: string, format: uuid }
-        lens_id:              { type: string, format: uuid }
+        id:                 { type: string, format: uuid }
+        lens_id:            { type: string, format: uuid }
         temporal_workflow_id: { type: string }
-        status:               { type: string, enum: [running, finished, failed] }
-        operations_summary:   { type: string, nullable: true }
-        error_message:        { type: string, nullable: true }
-        duration_ms:          { type: integer, nullable: true }
-        started_at:           { type: string, format: date-time }
-        finished_at:          { type: string, format: date-time, nullable: true }
+        status:             { type: string, enum: [running, finished, failed] }
+        operations_summary: { type: string, nullable: true }
+        error_message:      { type: string, nullable: true }
+        duration_ms:        { type: integer, nullable: true }
+        started_at:         { type: string, format: date-time }
+        finished_at:        { type: string, format: date-time, nullable: true }
 
-    # ── Retrievers ────────────────────────────────────────
+    # ── Retrievers ─────────────────────────────────────────────
     Retriever:
       type: object
       required: [id, name, workspace_id, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, created_at]
@@ -566,7 +561,7 @@ components:
       required: [name, definition_sql, cron_schedule]
       properties:
         name:           { type: string }
-        definition_sql: { type: string, description: "CREATE MATERIALIZED VIEW ... AS SELECT ... O destino é extraído da query." }
+        definition_sql: { type: string, description: "CREATE MATERIALIZED VIEW ... AS SELECT ... Destination is extracted from the query." }
         cron_schedule:  { type: string }
         refresh_type:   { type: string, enum: [incremental, full], default: incremental }
 
@@ -593,7 +588,7 @@ components:
         started_at:           { type: string, format: date-time }
         finished_at:          { type: string, format: date-time, nullable: true }
 
-    # ── Migrant ───────────────────────────────────────────
+    # ── Migrant ────────────────────────────────────────────────
     Migration:
       type: object
       required: [id, name, source_type, source_url, target_catalog_connection_id, status, created_at]
@@ -641,13 +636,12 @@ components:
 # PATHS
 # ═══════════════════════════════════════════════════════════════
 paths:
-
-  # ── Setup ─────────────────────────────────────────────
+  # ── Setup ─────────────────────────────────────────────────────
   /setup/status:
     get:
       tags: [Setup]
       operationId: getSetupStatus
-      summary: "Status de configuração do sistema"
+      summary: "System configuration status"
       security: []
       responses:
         '200':
@@ -660,8 +654,8 @@ paths:
     post:
       tags: [Setup]
       operationId: createFirstAdmin
-      summary: "Cria o primeiro usuário admin"
-      description: "Falha com 409 se já existir qualquer usuário."
+      summary: "Create first admin user"
+      description: "Returns 409 if any user already exists."
       security: []
       requestBody:
         required: true
@@ -670,19 +664,19 @@ paths:
             schema: { $ref: '#/components/schemas/CreateAdminRequest' }
       responses:
         '201':
-          description: "Admin criado"
+          description: "Admin created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoginResponse' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
 
-  # ── Auth ──────────────────────────────────────────────
+  # ── Auth ──────────────────────────────────────────────────────
   /auth/login:
     post:
       tags: [Auth]
       operationId: login
-      summary: "Autenticar e receber JWT"
+      summary: "Authenticate and receive JWT"
       security: []
       requestBody:
         required: true
@@ -691,7 +685,7 @@ paths:
             schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
         '200':
-          description: "Sessão criada"
+          description: "Session created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoginResponse' }
@@ -702,7 +696,7 @@ paths:
     post:
       tags: [Auth]
       operationId: logout
-      summary: "Invalidar sessão atual"
+      summary: "Invalidate current session"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -711,10 +705,10 @@ paths:
     get:
       tags: [Auth]
       operationId: getMe
-      summary: "Retorna o usuário autenticado"
+      summary: "Return authenticated user"
       responses:
         '200':
-          description: "Usuário atual"
+          description: "Current user"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserPublic' }
@@ -724,22 +718,22 @@ paths:
     get:
       tags: [Auth]
       operationId: listOIDCProviders
-      summary: "Lista providers OIDC configurados"
+      summary: "List configured OIDC providers"
       security: []
       responses:
         '200':
-          description: "Lista de providers"
+          description: "List of providers"
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/OIDCProvider' }
 
-  /auth/oidc/{provider_id}:
+  /auth/oidc/{provider_id}/login:
     get:
       tags: [Auth]
       operationId: oidcRedirect
-      summary: "Redireciona para o provider OIDC"
+      summary: "Redirect to OIDC provider"
       security: []
       parameters:
         - name: provider_id
@@ -748,13 +742,13 @@ paths:
           schema: { type: string, format: uuid }
       responses:
         '302':
-          description: "Redirecionamento para o provider"
+          description: "Redirect to provider"
 
   /auth/oidc/{provider_id}/callback:
     get:
       tags: [Auth]
       operationId: oidcCallback
-      summary: "Callback OIDC — troca code por JWT"
+      summary: "OIDC callback — exchange code for JWT"
       security: []
       parameters:
         - name: provider_id
@@ -771,14 +765,14 @@ paths:
           schema: { type: string }
       responses:
         '302':
-          description: "Redirecionamento para o frontend com token"
+          description: "Redirect to frontend with token"
 
   /auth/password-reset/request:
     post:
       tags: [Auth]
       operationId: requestPasswordReset
-      summary: "Solicita link de reset de senha"
-      description: "Sempre retorna 204 independente do email existir."
+      summary: "Request password reset link"
+      description: "Always returns 204 regardless of email existence. Returns 503 if email service is not configured."
       security: []
       requestBody:
         required: true
@@ -787,12 +781,17 @@ paths:
             schema: { $ref: '#/components/schemas/PasswordResetRequestBody' }
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
+        '503':
+          description: "Email service unavailable"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /auth/password-reset/confirm:
     post:
       tags: [Auth]
       operationId: confirmPasswordReset
-      summary: "Confirma reset de senha com token"
+      summary: "Confirm password reset with token"
       security: []
       requestBody:
         required: true
@@ -804,15 +803,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
 
-  # ── API Keys ──────────────────────────────────────────
+  # ── API Keys ──────────────────────────────────────────────────
   /api-keys:
     get:
       tags: [ApiKeys]
       operationId: listApiKeys
-      summary: "Lista API keys do usuário atual"
+      summary: "List current user's API keys"
       responses:
         '200':
-          description: "Lista de keys"
+          description: "List of keys"
           content:
             application/json:
               schema:
@@ -822,7 +821,7 @@ paths:
     post:
       tags: [ApiKeys]
       operationId: createApiKey
-      summary: "Cria uma nova API key"
+      summary: "Create a new API key"
       requestBody:
         required: true
         content:
@@ -830,7 +829,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateApiKeyRequest' }
       responses:
         '201':
-          description: "Key criada — secret mostrado apenas uma vez"
+          description: "Key created — secret displayed only once"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiKeyCreated' }
@@ -842,24 +841,24 @@ paths:
     delete:
       tags: [ApiKeys]
       operationId: deleteApiKey
-      summary: "Remove uma API key"
+      summary: "Remove an API key"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Users ─────────────────────────────────────────────
+  # ── Users ─────────────────────────────────────────────────────
   /users:
     get:
       tags: [Users]
       operationId: listUsers
-      summary: "Lista todos os usuários — admin only"
+      summary: "List all users — admin only"
       parameters:
         - $ref: '#/components/parameters/QueryPage'
         - $ref: '#/components/parameters/QueryPerPage'
       responses:
         '200':
-          description: "Lista paginada"
+          description: "Paginated list"
           content:
             application/json:
               schema:
@@ -876,7 +875,7 @@ paths:
     post:
       tags: [Users]
       operationId: inviteUser
-      summary: "Convida um novo usuário — admin only"
+      summary: "Invite a new user — admin only"
       requestBody:
         required: true
         content:
@@ -884,7 +883,7 @@ paths:
             schema: { $ref: '#/components/schemas/InviteUserRequest' }
       responses:
         '201':
-          description: "Convite enviado"
+          description: "Invitation sent"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserPublic' }
@@ -898,7 +897,7 @@ paths:
     patch:
       tags: [Users]
       operationId: updateUserRole
-      summary: "Atualiza role de um usuário — admin only"
+      summary: "Update user role — admin only"
       requestBody:
         required: true
         content:
@@ -906,7 +905,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateUserRoleRequest' }
       responses:
         '200':
-          description: "Usuário atualizado"
+          description: "User updated"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserPublic' }
@@ -916,7 +915,7 @@ paths:
     delete:
       tags: [Users]
       operationId: removeUser
-      summary: "Remove um usuário — admin only"
+      summary: "Remove a user — admin only"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -927,10 +926,10 @@ paths:
     get:
       tags: [Users]
       operationId: getProfile
-      summary: "Perfil do usuário atual"
+      summary: "Current user profile"
       responses:
         '200':
-          description: "Perfil"
+          description: "Profile"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserPublic' }
@@ -938,7 +937,7 @@ paths:
     patch:
       tags: [Users]
       operationId: updateProfile
-      summary: "Atualiza perfil do usuário atual"
+      summary: "Update current user profile"
       requestBody:
         required: true
         content:
@@ -946,7 +945,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
       responses:
         '200':
-          description: "Perfil atualizado"
+          description: "Profile updated"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserPublic' }
@@ -956,7 +955,7 @@ paths:
     patch:
       tags: [Users]
       operationId: updatePassword
-      summary: "Altera senha do usuário atual"
+      summary: "Change current user password"
       requestBody:
         required: true
         content:
@@ -967,15 +966,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
 
-  # ── Teams ─────────────────────────────────────────────
+  # ── Teams ─────────────────────────────────────────────────────
   /teams:
     get:
       tags: [Teams]
       operationId: listTeams
-      summary: "Lista todos os times"
+      summary: "List all teams"
       responses:
         '200':
-          description: "Times"
+          description: "Teams"
           content:
             application/json:
               schema:
@@ -985,7 +984,7 @@ paths:
     post:
       tags: [Teams]
       operationId: createTeam
-      summary: "Cria um time — admin only"
+      summary: "Create a team — admin only"
       requestBody:
         required: true
         content:
@@ -993,7 +992,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateTeamRequest' }
       responses:
         '201':
-          description: "Time criado"
+          description: "Team created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Team' }
@@ -1006,10 +1005,10 @@ paths:
     get:
       tags: [Teams]
       operationId: getTeam
-      summary: "Detalhes de um time"
+      summary: "Team details"
       responses:
         '200':
-          description: "Time"
+          description: "Team"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Team' }
@@ -1018,7 +1017,7 @@ paths:
     delete:
       tags: [Teams]
       operationId: deleteTeam
-      summary: "Remove um time — admin only"
+      summary: "Remove a team — admin only"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1031,10 +1030,10 @@ paths:
     get:
       tags: [Teams]
       operationId: listTeamMembers
-      summary: "Lista membros de um time"
+      summary: "List team members"
       responses:
         '200':
-          description: "Membros"
+          description: "Members"
           content:
             application/json:
               schema:
@@ -1045,7 +1044,7 @@ paths:
     post:
       tags: [Teams]
       operationId: addTeamMember
-      summary: "Adiciona usuário ao time — admin only"
+      summary: "Add user to team — admin only"
       requestBody:
         required: true
         content:
@@ -1053,7 +1052,7 @@ paths:
             schema: { $ref: '#/components/schemas/AddTeamMemberRequest' }
       responses:
         '201':
-          description: "Membro adicionado"
+          description: "Member added"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/TeamMember' }
@@ -1071,19 +1070,19 @@ paths:
     delete:
       tags: [Teams]
       operationId: removeTeamMember
-      summary: "Remove usuário do time — admin only"
+      summary: "Remove user from team — admin only"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Workspaces ────────────────────────────────────────
+  # ── Workspaces ────────────────────────────────────────────────
   /workspaces:
     get:
       tags: [Workspaces]
       operationId: listWorkspaces
-      summary: "Lista workspaces acessíveis ao usuário atual"
+      summary: "List workspaces accessible to current user"
       responses:
         '200':
           description: "Workspaces"
@@ -1096,7 +1095,7 @@ paths:
     post:
       tags: [Workspaces]
       operationId: createWorkspace
-      summary: "Cria um workspace — admin only para shared"
+      summary: "Create a workspace — admin only for shared"
       requestBody:
         required: true
         content:
@@ -1104,7 +1103,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateWorkspaceRequest' }
       responses:
         '201':
-          description: "Workspace criado"
+          description: "Workspace created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Workspace' }
@@ -1117,7 +1116,7 @@ paths:
     get:
       tags: [Workspaces]
       operationId: getWorkspace
-      summary: "Detalhes de um workspace"
+      summary: "Workspace details"
       responses:
         '200':
           description: "Workspace"
@@ -1129,7 +1128,7 @@ paths:
     patch:
       tags: [Workspaces]
       operationId: updateWorkspace
-      summary: "Atualiza um workspace"
+      summary: "Update a workspace"
       requestBody:
         required: true
         content:
@@ -1137,7 +1136,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateWorkspaceRequest' }
       responses:
         '200':
-          description: "Workspace atualizado"
+          description: "Workspace updated"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Workspace' }
@@ -1150,10 +1149,10 @@ paths:
     get:
       tags: [Workspaces]
       operationId: listWorkspaceCatalogAccess
-      summary: "Lista catálogos externos acessíveis ao workspace"
+      summary: "List external catalogs accessible to the workspace"
       responses:
         '200':
-          description: "Acessos"
+          description: "Access grants"
           content:
             application/json:
               schema:
@@ -1164,7 +1163,7 @@ paths:
     post:
       tags: [Workspaces]
       operationId: grantCatalogAccess
-      summary: "Concede acesso a um catálogo externo — admin only"
+      summary: "Grant access to an external catalog — admin only"
       requestBody:
         required: true
         content:
@@ -1172,7 +1171,7 @@ paths:
             schema: { $ref: '#/components/schemas/GrantCatalogAccessRequest' }
       responses:
         '201':
-          description: "Acesso concedido"
+          description: "Access granted"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkspaceCatalogAccess' }
@@ -1189,22 +1188,22 @@ paths:
     delete:
       tags: [Workspaces]
       operationId: revokeCatalogAccess
-      summary: "Revoga acesso a um catálogo externo — admin only"
+      summary: "Revoke access to an external catalog — admin only"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Catalog Connections ───────────────────────────────
+  # ── Catalog Connections ───────────────────────────────────────
   /catalog-connections:
     get:
       tags: [CatalogConnections]
       operationId: listCatalogConnections
-      summary: "Lista todas as conexões de catálogo — admin only"
+      summary: "List all catalog connections — admin only"
       responses:
         '200':
-          description: "Conexões"
+          description: "Connections"
           content:
             application/json:
               schema:
@@ -1215,7 +1214,7 @@ paths:
     post:
       tags: [CatalogConnections]
       operationId: createCatalogConnection
-      summary: "Cria uma conexão de catálogo — admin only"
+      summary: "Create a catalog connection — admin only"
       requestBody:
         required: true
         content:
@@ -1223,7 +1222,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateCatalogConnectionRequest' }
       responses:
         '201':
-          description: "Conexão criada"
+          description: "Connection created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CatalogConnection' }
@@ -1237,10 +1236,10 @@ paths:
     get:
       tags: [CatalogConnections]
       operationId: getCatalogConnection
-      summary: "Detalhes de uma conexão"
+      summary: "Connection details"
       responses:
         '200':
-          description: "Conexão"
+          description: "Connection"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CatalogConnection' }
@@ -1249,7 +1248,7 @@ paths:
     patch:
       tags: [CatalogConnections]
       operationId: updateCatalogConnection
-      summary: "Atualiza uma conexão — admin only"
+      summary: "Update a connection — admin only"
       requestBody:
         required: true
         content:
@@ -1257,7 +1256,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateCatalogConnectionRequest' }
       responses:
         '200':
-          description: "Conexão atualizada"
+          description: "Connection updated"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CatalogConnection' }
@@ -1267,7 +1266,7 @@ paths:
     delete:
       tags: [CatalogConnections]
       operationId: deleteCatalogConnection
-      summary: "Remove uma conexão — admin only"
+      summary: "Remove a connection — admin only"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1280,17 +1279,17 @@ paths:
     post:
       tags: [CatalogConnections]
       operationId: testCatalogConnection
-      summary: "Testa conectividade com o catálogo"
+      summary: "Test catalog connectivity"
       responses:
         '200':
-          description: "Resultado do teste"
+          description: "Test result"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/TestCatalogConnectionResult' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Catalog Explorer ──────────────────────────────────
+  # ── Catalog Explorer ──────────────────────────────────────────
   /catalog/{catalog_connection_id}/namespaces:
     parameters:
       - name: catalog_connection_id
@@ -1300,7 +1299,7 @@ paths:
     get:
       tags: [Catalog]
       operationId: listNamespaces
-      summary: "Lista namespaces do catálogo via Trino"
+      summary: "List catalog namespaces via Trino"
       description: |
         Arrow IPC stream.
         Schema: [name: Utf8, catalog: Utf8]
@@ -1322,7 +1321,7 @@ paths:
     get:
       tags: [Catalog]
       operationId: listTables
-      summary: "Lista tabelas de um namespace"
+      summary: "List tables in a namespace"
       description: |
         Arrow IPC stream.
         Schema: [name: Utf8, type: Utf8, format: Utf8]
@@ -1348,7 +1347,7 @@ paths:
     get:
       tags: [Catalog]
       operationId: listColumns
-      summary: "Lista colunas de uma tabela"
+      summary: "List table columns"
       description: |
         Arrow IPC stream.
         Schema: [name: Utf8, ordinal: Int32, data_type: Utf8, is_nullable: Bool, comment: Utf8]
@@ -1374,7 +1373,7 @@ paths:
     get:
       tags: [Catalog]
       operationId: listTableSnapshots
-      summary: "Lista snapshots Iceberg de uma tabela"
+      summary: "List Iceberg snapshots for a table"
       description: |
         Arrow IPC stream.
         Schema: [snapshot_id: Int64, parent_id: Int64, committed_at: Timestamp, operation: Utf8, manifest_list: Utf8]
@@ -1383,21 +1382,21 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Query Editor ──────────────────────────────────────
+  # ── Query Editor ──────────────────────────────────────────────
   /workspaces/{id}/folders:
     parameters:
       - $ref: '#/components/parameters/PathId'
     get:
       tags: [QueryEditor]
       operationId: listFolders
-      summary: "Lista pastas do workspace"
+      summary: "List workspace folders"
       parameters:
         - name: parent_id
           in: query
           schema: { type: string, format: uuid }
       responses:
         '200':
-          description: "Pastas"
+          description: "Folders"
           content:
             application/json:
               schema:
@@ -1407,7 +1406,7 @@ paths:
     post:
       tags: [QueryEditor]
       operationId: createFolder
-      summary: "Cria uma pasta no workspace"
+      summary: "Create a folder in the workspace"
       requestBody:
         required: true
         content:
@@ -1415,7 +1414,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateFolderRequest' }
       responses:
         '201':
-          description: "Pasta criada"
+          description: "Folder created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/QueryFolder' }
@@ -1431,7 +1430,7 @@ paths:
     delete:
       tags: [QueryEditor]
       operationId: deleteFolder
-      summary: "Remove uma pasta e seu conteúdo"
+      summary: "Remove a folder and its contents"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1443,7 +1442,7 @@ paths:
     get:
       tags: [QueryEditor]
       operationId: listSavedQueries
-      summary: "Lista queries salvas do workspace"
+      summary: "List workspace saved queries"
       parameters:
         - name: folder_id
           in: query
@@ -1460,7 +1459,7 @@ paths:
     post:
       tags: [QueryEditor]
       operationId: createSavedQuery
-      summary: "Salva uma query no workspace"
+      summary: "Save a query in the workspace"
       requestBody:
         required: true
         content:
@@ -1468,7 +1467,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateSavedQueryRequest' }
       responses:
         '201':
-          description: "Query salva"
+          description: "Query saved"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SavedQuery' }
@@ -1484,7 +1483,7 @@ paths:
     get:
       tags: [QueryEditor]
       operationId: getSavedQuery
-      summary: "Retorna uma query salva"
+      summary: "Return a saved query"
       responses:
         '200':
           description: "Query"
@@ -1496,7 +1495,7 @@ paths:
     patch:
       tags: [QueryEditor]
       operationId: updateSavedQuery
-      summary: "Atualiza uma query salva"
+      summary: "Update a saved query"
       requestBody:
         required: true
         content:
@@ -1504,7 +1503,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateSavedQueryRequest' }
       responses:
         '200':
-          description: "Query atualizada"
+          description: "Query updated"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SavedQuery' }
@@ -1513,20 +1512,20 @@ paths:
     delete:
       tags: [QueryEditor]
       operationId: deleteSavedQuery
-      summary: "Remove uma query salva"
+      summary: "Remove a saved query"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Executions ────────────────────────────────────────
+  # ── Executions ────────────────────────────────────────────────
   /workspaces/{id}/executions:
     parameters:
       - $ref: '#/components/parameters/PathId'
     get:
       tags: [Executions]
       operationId: listExecutions
-      summary: "Histórico de execuções do workspace"
+      summary: "Workspace execution history"
       parameters:
         - name: status
           in: query
@@ -1535,7 +1534,7 @@ paths:
         - $ref: '#/components/parameters/QueryPerPage'
       responses:
         '200':
-          description: "Execuções paginadas"
+          description: "Paginated executions"
           content:
             application/json:
               schema:
@@ -1549,7 +1548,7 @@ paths:
     post:
       tags: [Executions]
       operationId: runQuery
-      summary: "Submete uma query para execução via Trino"
+      summary: "Submit a query for execution via Trino"
       requestBody:
         required: true
         content:
@@ -1557,7 +1556,7 @@ paths:
             schema: { $ref: '#/components/schemas/ExecutionRequest' }
       responses:
         '202':
-          description: "Execução iniciada"
+          description: "Execution started"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Execution' }
@@ -1574,10 +1573,10 @@ paths:
     get:
       tags: [Executions]
       operationId: getExecution
-      summary: "Status e metadata de uma execução"
+      summary: "Execution status and metadata"
       responses:
         '200':
-          description: "Execução"
+          description: "Execution"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Execution' }
@@ -1594,10 +1593,10 @@ paths:
     post:
       tags: [Executions]
       operationId: cancelExecution
-      summary: "Cancela uma execução em andamento"
+      summary: "Cancel an ongoing execution"
       responses:
         '200':
-          description: "Execução cancelada"
+          description: "Execution cancelled"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Execution' }
@@ -1614,7 +1613,7 @@ paths:
     get:
       tags: [Executions]
       operationId: listStatements
-      summary: "Lista statements individuais de uma execução multi-statement"
+      summary: "List individual statements in a multi-statement execution"
       responses:
         '200':
           description: "Statements"
@@ -1636,16 +1635,15 @@ paths:
     get:
       tags: [Executions]
       operationId: getResults
-      summary: "Resultados da execução como Arrow IPC stream"
+      summary: "Execution results as Arrow IPC stream"
       description: |
-        Retorna o resultado completo via Arrow IPC.
-        Usa o Trino spooling protocol — segmentos são buscados em paralelo do object storage.
+        Returns complete results via Arrow IPC. Uses Trino spooling protocol — segments are fetched in parallel from object storage.
       responses:
         '200': { $ref: '#/components/responses/ArrowStream' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: "Execução ainda não completou"
+          description: "Execution not yet completed"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1660,22 +1658,20 @@ paths:
     get:
       tags: [Executions]
       operationId: streamExecution
-      summary: "WebSocket para progresso em tempo real da execução"
+      summary: "WebSocket for real-time execution progress"
       description: |
-        Autentica via `?token=<jwt>`.
-
-        ## Eventos server → client
-
+        Authenticate via `?token=<jwt>`.
+        
+        ## Server → Client Events
         ```json
-        { "type": "running",   "execution_id": "...", "ts": "..." }
-        { "type": "progress",  "execution_id": "...", "ts": "...", "rows_so_far": 1000 }
-        { "type": "finished",  "execution_id": "...", "ts": "...", "rows_returned": 9843, "duration_ms": 1240 }
-        { "type": "failed",    "execution_id": "...", "ts": "...", "message": "..." }
+        { "type": "running", "execution_id": "...", "ts": "..." }
+        { "type": "progress", "execution_id": "...", "ts": "...", "rows_so_far": 1000 }
+        { "type": "finished", "execution_id": "...", "ts": "...", "rows_returned": 9843, "duration_ms": 1240 }
+        { "type": "failed", "execution_id": "...", "ts": "...", "message": "..." }
         { "type": "cancelled", "execution_id": "...", "ts": "..." }
         ```
-
-        Após `finished`, buscar `GET .../results` para o Arrow IPC stream.
-        Conexão fecha automaticamente após qualquer evento terminal.
+        After `finished`, fetch `GET .../results` for the Arrow IPC stream.
+        Connection closes automatically after any terminal event.
       parameters:
         - name: token
           in: query
@@ -1683,15 +1679,15 @@ paths:
           schema: { type: string }
       responses:
         '101':
-          description: "WebSocket estabelecido"
+          description: "WebSocket established"
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-  # ── Lenses ────────────────────────────────────────────
+  # ── Lenses ────────────────────────────────────────────────────
   /lenses:
     get:
       tags: [Lenses]
       operationId: listLenses
-      summary: "Lista todas as Lenses — admin only"
+      summary: "List all Lenses — admin only"
       responses:
         '200':
           description: "Lenses"
@@ -1705,7 +1701,7 @@ paths:
     post:
       tags: [Lenses]
       operationId: createLens
-      summary: "Cria uma Lens — admin only"
+      summary: "Create a Lens — admin only"
       requestBody:
         required: true
         content:
@@ -1713,7 +1709,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateLensRequest' }
       responses:
         '201':
-          description: "Lens criada"
+          description: "Lens created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Lens' }
@@ -1727,7 +1723,7 @@ paths:
     get:
       tags: [Lenses]
       operationId: getLens
-      summary: "Detalhes de uma Lens"
+      summary: "Lens details"
       responses:
         '200':
           description: "Lens"
@@ -1739,7 +1735,7 @@ paths:
     patch:
       tags: [Lenses]
       operationId: updateLens
-      summary: "Atualiza uma Lens — admin only"
+      summary: "Update a Lens — admin only"
       requestBody:
         required: true
         content:
@@ -1747,7 +1743,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateLensRequest' }
       responses:
         '200':
-          description: "Lens atualizada"
+          description: "Lens updated"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Lens' }
@@ -1757,7 +1753,7 @@ paths:
     delete:
       tags: [Lenses]
       operationId: deleteLens
-      summary: "Remove uma Lens — admin only"
+      summary: "Remove a Lens — admin only"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1770,10 +1766,10 @@ paths:
     post:
       tags: [Lenses]
       operationId: triggerLens
-      summary: "Dispara execução manual da Lens — admin only"
+      summary: "Trigger manual Lens execution — admin only"
       responses:
         '202':
-          description: "Execução iniciada"
+          description: "Execution started"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LensRunHistory' }
@@ -1787,13 +1783,13 @@ paths:
     get:
       tags: [Lenses]
       operationId: getLensHistory
-      summary: "Histórico de execuções da Lens"
+      summary: "Lens execution history"
       parameters:
         - $ref: '#/components/parameters/QueryPage'
         - $ref: '#/components/parameters/QueryPerPage'
       responses:
         '200':
-          description: "Histórico"
+          description: "History"
           content:
             application/json:
               schema:
@@ -1806,14 +1802,14 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Retrievers ────────────────────────────────────────
+  # ── Retrievers ────────────────────────────────────────────────
   /workspaces/{id}/retrievers:
     parameters:
       - $ref: '#/components/parameters/PathId'
     get:
       tags: [Retrievers]
       operationId: listRetrievers
-      summary: "Lista Retrievers do workspace"
+      summary: "List workspace Retrievers"
       responses:
         '200':
           description: "Retrievers"
@@ -1826,7 +1822,7 @@ paths:
     post:
       tags: [Retrievers]
       operationId: createRetriever
-      summary: "Cria um Retriever no workspace"
+      summary: "Create a Retriever in the workspace"
       requestBody:
         required: true
         content:
@@ -1834,7 +1830,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateRetrieverRequest' }
       responses:
         '201':
-          description: "Retriever criado"
+          description: "Retriever created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Retriever' }
@@ -1851,7 +1847,7 @@ paths:
     get:
       tags: [Retrievers]
       operationId: getRetriever
-      summary: "Detalhes de um Retriever"
+      summary: "Retriever details"
       responses:
         '200':
           description: "Retriever"
@@ -1863,7 +1859,7 @@ paths:
     patch:
       tags: [Retrievers]
       operationId: updateRetriever
-      summary: "Atualiza um Retriever"
+      summary: "Update a Retriever"
       requestBody:
         required: true
         content:
@@ -1871,7 +1867,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateRetrieverRequest' }
       responses:
         '200':
-          description: "Retriever atualizado"
+          description: "Retriever updated"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Retriever' }
@@ -1880,7 +1876,7 @@ paths:
     delete:
       tags: [Retrievers]
       operationId: deleteRetriever
-      summary: "Remove um Retriever"
+      summary: "Remove a Retriever"
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1896,7 +1892,7 @@ paths:
     post:
       tags: [Retrievers]
       operationId: triggerRetrieverRefresh
-      summary: "Dispara refresh manual do Retriever"
+      summary: "Trigger manual Retriever refresh"
       requestBody:
         content:
           application/json:
@@ -1906,7 +1902,7 @@ paths:
                 refresh_type: { type: string, enum: [incremental, full], default: incremental }
       responses:
         '202':
-          description: "Refresh iniciado"
+          description: "Refresh started"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RetrieverRefreshHistory' }
@@ -1923,13 +1919,13 @@ paths:
     get:
       tags: [Retrievers]
       operationId: getRetrieverHistory
-      summary: "Histórico de refreshes do Retriever"
+      summary: "Retriever refresh history"
       parameters:
         - $ref: '#/components/parameters/QueryPage'
         - $ref: '#/components/parameters/QueryPerPage'
       responses:
         '200':
-          description: "Histórico"
+          description: "History"
           content:
             application/json:
               schema:
@@ -1942,15 +1938,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Migrant ───────────────────────────────────────────
+  # ── Migrant ───────────────────────────────────────────────────
   /migrations:
     get:
       tags: [Migrant]
       operationId: listMigrations
-      summary: "Lista migrações — admin only"
+      summary: "List migrations — admin only"
       responses:
         '200':
-          description: "Migrações"
+          description: "Migrations"
           content:
             application/json:
               schema:
@@ -1961,7 +1957,7 @@ paths:
     post:
       tags: [Migrant]
       operationId: createMigration
-      summary: "Cria uma migração copy-zero — admin only"
+      summary: "Create a zero-copy migration — admin only"
       requestBody:
         required: true
         content:
@@ -1969,7 +1965,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateMigrationRequest' }
       responses:
         '201':
-          description: "Migração criada"
+          description: "Migration created"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Migration' }
@@ -1983,10 +1979,10 @@ paths:
     get:
       tags: [Migrant]
       operationId: getMigration
-      summary: "Status de uma migração"
+      summary: "Migration status"
       responses:
         '200':
-          description: "Migração"
+          description: "Migration"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Migration' }
@@ -1999,10 +1995,10 @@ paths:
     post:
       tags: [Migrant]
       operationId: startMigration
-      summary: "Inicia execução da migração — admin only"
+      summary: "Start migration execution — admin only"
       responses:
         '202':
-          description: "Migração iniciada"
+          description: "Migration started"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Migration' }
@@ -2016,10 +2012,10 @@ paths:
     post:
       tags: [Migrant]
       operationId: cancelMigration
-      summary: "Cancela uma migração em andamento — admin only"
+      summary: "Cancel an ongoing migration — admin only"
       responses:
         '200':
-          description: "Migração cancelada"
+          description: "Migration cancelled"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Migration' }
@@ -2033,7 +2029,7 @@ paths:
     get:
       tags: [Migrant]
       operationId: listMigrationItems
-      summary: "Lista tabelas individuais de uma migração"
+      summary: "List individual tables in a migration"
       parameters:
         - name: status
           in: query
@@ -2042,7 +2038,7 @@ paths:
         - $ref: '#/components/parameters/QueryPerPage'
       responses:
         '200':
-          description: "Itens"
+          description: "Items"
           content:
             application/json:
               schema:

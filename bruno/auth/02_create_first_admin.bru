@@ -1,0 +1,25 @@
+meta {
+  name: Create First Admin
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/setup/admin
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "Admin",
+    "email": "admin@baleia.io",
+    "password": "admin123456"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("token", res.body.token);
+  }
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Logout
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/auth/logout
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+script:post-response {
+  if (res.status === 204) {
+    bru.setVar("token", "");
+  }
+}
