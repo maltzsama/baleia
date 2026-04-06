@@ -25,20 +25,6 @@ func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleReq
 	return nil, errNotImplemented
 }
 
-// ── API Keys ──────────────────────────────────────────────────────────────────
-
-func (h *Handlers) ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) CreateApiKey(ctx context.Context, request CreateApiKeyRequestObject) (CreateApiKeyResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error) {
-	return nil, errNotImplemented
-}
-
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
 func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error) {

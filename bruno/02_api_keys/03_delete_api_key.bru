@@ -1,0 +1,15 @@
+meta {
+  name: Delete API Key
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{base_url}}/api-keys/{{api_key_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
