@@ -76,3 +76,6 @@ SET password_hash = $2,
     password_reset_expires_at = NULL,
     updated_at = now()
 WHERE id = $1;
+
+-- name: GetAPIKeyByID :one
+SELECT * FROM api_keys WHERE id = $1 AND user_id = $2;

@@ -388,6 +388,7 @@ func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.O
 	}
 
 	redirectURL := h.cfg.PublicURL + "/api/v1/auth/oidc/" + providerID + "/callback"
+
 	return auth.NewOIDCProvider(r.Context(), auth.OIDCConfig{
 		IssuerURL:    cfg.IssuerURL,
 		ClientID:     cfg.ClientID,

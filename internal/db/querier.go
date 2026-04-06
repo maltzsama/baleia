@@ -33,6 +33,7 @@ type Querier interface {
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error
 	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
+	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
 	GetCatalogAccess(ctx context.Context, arg GetCatalogAccessParams) (WorkspaceCatalogAccess, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)

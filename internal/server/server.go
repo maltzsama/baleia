@@ -44,8 +44,9 @@ func (s *Server) routes() {
 	h := baleiaapi.NewHandlers(s.queries, s.cfg)
 
 	// OIDC precisa de cookie + redirect
-	s.mux.Get("/api/v1/auth/oidc/{provider_id}", h.HandleOIDCRedirect)
+	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/callback", h.HandleOIDCCallback)
+
 
 	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret),

@@ -18,8 +18,6 @@ body:json {
   }
 }
 
-script:post-response {
-  if (res.status === 201) {
-    bru.setVar("token", res.body.token);
-  }
+vars:post-response {
+  token: res.body.token
 }
