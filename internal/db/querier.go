@@ -32,6 +32,7 @@ type Querier interface {
 	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error
 	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error
+	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
@@ -94,6 +95,7 @@ type Querier interface {
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserPersonalWorkspace(ctx context.Context, arg UpdateUserPersonalWorkspaceParams) error
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 }
 

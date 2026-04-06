@@ -77,5 +77,11 @@ SET password_hash = $2,
     updated_at = now()
 WHERE id = $1;
 
+-- name: UpdateUserRole :exec
+UPDATE users SET role = $2, updated_at = now() WHERE id = $1;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1;
+
 -- name: GetAPIKeyByID :one
 SELECT * FROM api_keys WHERE id = $1 AND user_id = $2;

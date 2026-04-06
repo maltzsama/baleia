@@ -1,0 +1,26 @@
+meta {
+  name: Invite User
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/users/invite
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "email": "member@baleia.io",
+    "role": "member"
+  }
+}
+
+vars:post-response {
+  invited_user_id: res.body.id
+}

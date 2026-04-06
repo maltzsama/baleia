@@ -135,6 +135,15 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) erro
 	return err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
 SELECT id, user_id, name, key_hash, expires_at, created_at FROM api_keys WHERE key_hash = $1
 `
@@ -521,5 +530,19 @@ type UpdateUserPersonalWorkspaceParams struct {
 
 func (q *Queries) UpdateUserPersonalWorkspace(ctx context.Context, arg UpdateUserPersonalWorkspaceParams) error {
 	_, err := q.db.Exec(ctx, updateUserPersonalWorkspace, arg.ID, arg.PersonalWorkspaceID)
+	return err
+}
+
+const updateUserRole = `-- name: UpdateUserRole :exec
+UPDATE users SET role = $2, updated_at = now() WHERE id = $1
+`
+
+type UpdateUserRoleParams struct {
+	ID   pgtype.UUID `json:"id"`
+	Role string      `json:"role"`
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error {
+	_, err := q.db.Exec(ctx, updateUserRole, arg.ID, arg.Role)
 	return err
 }

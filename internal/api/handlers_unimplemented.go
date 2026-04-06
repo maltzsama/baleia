@@ -7,24 +7,6 @@ package api
 
 import "context"
 
-// ── Users ─────────────────────────────────────────────────────────────────────
-
-func (h *Handlers) ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObject) (InviteUserResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObject) (RemoveUserResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleRequestObject) (UpdateUserRoleResponseObject, error) {
-	return nil, errNotImplemented
-}
-
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
 func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error) {
