@@ -198,17 +198,19 @@ type TeamMember struct {
 }
 
 type User struct {
-	ID                  pgtype.UUID        `json:"id"`
-	Name                string             `json:"name"`
-	Email               string             `json:"email"`
-	PasswordHash        *string            `json:"password_hash"`
-	Role                string             `json:"role"`
-	AuthProvider        string             `json:"auth_provider"`
-	AuthProviderID      pgtype.UUID        `json:"auth_provider_id"`
-	ExternalID          *string            `json:"external_id"`
-	PersonalWorkspaceID pgtype.UUID        `json:"personal_workspace_id"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ID                     pgtype.UUID        `json:"id"`
+	Name                   string             `json:"name"`
+	Email                  string             `json:"email"`
+	PasswordHash           *string            `json:"password_hash"`
+	Role                   string             `json:"role"`
+	AuthProvider           string             `json:"auth_provider"`
+	AuthProviderID         pgtype.UUID        `json:"auth_provider_id"`
+	ExternalID             *string            `json:"external_id"`
+	PersonalWorkspaceID    pgtype.UUID        `json:"personal_workspace_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	PasswordResetToken     *string            `json:"password_reset_token"`
+	PasswordResetExpiresAt pgtype.Timestamptz `json:"password_reset_expires_at"`
 }
 
 type Workspace struct {

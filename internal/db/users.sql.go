@@ -79,7 +79,7 @@ func (q *Queries) CreateAuthProvider(ctx context.Context, arg CreateAuthProvider
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email, password_hash, role, auth_provider, auth_provider_id, external_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, password_reset_token, password_reset_expires_at
 `
 
 type CreateUserParams struct {
@@ -115,6 +115,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PersonalWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
 	)
 	return i, err
 }
@@ -171,7 +173,7 @@ func (q *Queries) GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (Auth
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at FROM users WHERE email = $1
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, password_reset_token, password_reset_expires_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -189,12 +191,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.PersonalWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
 	)
 	return i, err
 }
 
 const getUserByExternalID = `-- name: GetUserByExternalID :one
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at FROM users
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, password_reset_token, password_reset_expires_at FROM users
 WHERE auth_provider_id = $1 AND external_id = $2
 `
 
@@ -218,12 +222,14 @@ func (q *Queries) GetUserByExternalID(ctx context.Context, arg GetUserByExternal
 		&i.PersonalWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at FROM users WHERE id = $1
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, password_reset_token, password_reset_expires_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -241,6 +247,35 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.PersonalWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
+	)
+	return i, err
+}
+
+const getUserByResetToken = `-- name: GetUserByResetToken :one
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, password_reset_token, password_reset_expires_at FROM users
+WHERE password_reset_token = $1
+  AND password_reset_expires_at > now()
+`
+
+func (q *Queries) GetUserByResetToken(ctx context.Context, passwordResetToken *string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByResetToken, passwordResetToken)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.AuthProvider,
+		&i.AuthProviderID,
+		&i.ExternalID,
+		&i.PersonalWorkspaceID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
 	)
 	return i, err
 }
@@ -309,7 +344,7 @@ func (q *Queries) ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at FROM users ORDER BY name
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, password_reset_token, password_reset_expires_at FROM users ORDER BY name
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -333,6 +368,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.PersonalWorkspaceID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PasswordResetToken,
+			&i.PasswordResetExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -342,6 +379,23 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setPasswordResetToken = `-- name: SetPasswordResetToken :exec
+UPDATE users
+SET password_reset_token = $2, password_reset_expires_at = $3
+WHERE email = $1
+`
+
+type SetPasswordResetTokenParams struct {
+	Email                  string             `json:"email"`
+	PasswordResetToken     *string            `json:"password_reset_token"`
+	PasswordResetExpiresAt pgtype.Timestamptz `json:"password_reset_expires_at"`
+}
+
+func (q *Queries) SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error {
+	_, err := q.db.Exec(ctx, setPasswordResetToken, arg.Email, arg.PasswordResetToken, arg.PasswordResetExpiresAt)
+	return err
 }
 
 const updateAuthProvider = `-- name: UpdateAuthProvider :one
@@ -382,7 +436,7 @@ const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET name = $2, email = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, password_reset_token, password_reset_expires_at
 `
 
 type UpdateUserParams struct {
@@ -406,8 +460,29 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.PersonalWorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PasswordResetToken,
+		&i.PasswordResetExpiresAt,
 	)
 	return i, err
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users
+SET password_hash = $2,
+    password_reset_token = NULL,
+    password_reset_expires_at = NULL,
+    updated_at = now()
+WHERE id = $1
+`
+
+type UpdateUserPasswordParams struct {
+	ID           pgtype.UUID `json:"id"`
+	PasswordHash *string     `json:"password_hash"`
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
+	return err
 }
 
 const updateUserPersonalWorkspace = `-- name: UpdateUserPersonalWorkspace :exec

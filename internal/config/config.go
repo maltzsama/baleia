@@ -10,6 +10,11 @@ type Config struct {
 	TrinoURL     string
 	JWTSecret    string
 	PublicURL    string
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 func Load() *Config {

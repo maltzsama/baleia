@@ -144,10 +144,50 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 // ── Password Reset ────────────────────────────────────────────────────────────
 
 func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPasswordResetRequestObject) (RequestPasswordResetResponseObject, error) {
+	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
+	if err != nil {
+		return RequestPasswordReset204Response{}, nil
+	}
+
+	token := randomState()
+	expires := time.Now().Add(1 * time.Hour)
+
+	if err := h.queries.SetPasswordResetToken(ctx, db.SetPasswordResetTokenParams{
+		Email:                 string(request.Body.Email),
+		PasswordResetToken:    &token,
+		PasswordResetExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
+	if err := sendResetEmail(h.cfg, user.Email, resetURL); err != nil {
+		return nil, err
+	}
+
 	return RequestPasswordReset204Response{}, nil
 }
 
 func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPasswordResetRequestObject) (ConfirmPasswordResetResponseObject, error) {
+	user, err := h.queries.GetUserByResetToken(ctx, &request.Body.Token)
+	if err != nil {
+		return ConfirmPasswordReset401JSONResponse{
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid or expired token"},
+		}, nil
+	}
+
+	hash, err := auth.HashPassword(request.Body.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := h.queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		ID:           user.ID,
+		PasswordHash: &hash,
+	}); err != nil {
+		return nil, err
+	}
+
 	return ConfirmPasswordReset204Response{}, nil
 }
 
@@ -226,7 +266,18 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 		}, nil
 	}
 
-	// TODO: adicionar query UpdateUserPassword ao sqlc
+	hash, err := auth.HashPassword(request.Body.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := h.queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		ID:           uid,
+		PasswordHash: &hash,
+	}); err != nil {
+		return nil, err
+	}
+
 	return UpdatePassword204Response{}, nil
 }
 
