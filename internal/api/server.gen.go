@@ -5611,6 +5611,15 @@ func (response CreateWorkspace401JSONResponse) VisitCreateWorkspaceResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateWorkspace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateWorkspace403JSONResponse) VisitCreateWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateWorkspace422JSONResponse struct {
 	UnprocessableEntityJSONResponse
 }

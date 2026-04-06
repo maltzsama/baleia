@@ -7,36 +7,6 @@ package api
 
 import "context"
 
-// ── Workspaces ────────────────────────────────────────────────────────────────
-
-func (h *Handlers) ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) CreateWorkspace(ctx context.Context, request CreateWorkspaceRequestObject) (CreateWorkspaceResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error) {
-	return nil, errNotImplemented
-}
-
 // ── Catalog Connections ───────────────────────────────────────────────────────
 
 func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {

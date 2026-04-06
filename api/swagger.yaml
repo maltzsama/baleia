@@ -1109,6 +1109,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Workspace' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
 
   /workspaces/{id}:
