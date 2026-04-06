@@ -101,6 +101,15 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	return i, err
 }
 
+const deleteTeam = `-- name: DeleteTeam :exec
+DELETE FROM teams WHERE id = $1
+`
+
+func (q *Queries) DeleteTeam(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteTeam, id)
+	return err
+}
+
 const getTeamByID = `-- name: GetTeamByID :one
 SELECT id, name, description, created_by, created_at, updated_at FROM teams WHERE id = $1
 `

@@ -5330,6 +5330,15 @@ func (response AddTeamMember403JSONResponse) VisitAddTeamMemberResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
+type AddTeamMember404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AddTeamMember404JSONResponse) VisitAddTeamMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type AddTeamMember409JSONResponse struct{ ConflictJSONResponse }
 
 func (response AddTeamMember409JSONResponse) VisitAddTeamMemberResponse(w http.ResponseWriter) error {

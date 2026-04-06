@@ -7,36 +7,6 @@ package api
 
 import "context"
 
-// ── Teams ─────────────────────────────────────────────────────────────────────
-
-func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) CreateTeam(ctx context.Context, request CreateTeamRequestObject) (CreateTeamResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObject) (DeleteTeamResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersRequestObject) (ListTeamMembersResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberRequestObject) (AddTeamMemberResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error) {
-	return nil, errNotImplemented
-}
-
 // ── Workspaces ────────────────────────────────────────────────────────────────
 
 func (h *Handlers) ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error) {

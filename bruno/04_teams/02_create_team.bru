@@ -1,0 +1,26 @@
+meta {
+  name: Create Team
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/teams
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Engineering",
+    "description": "Engineering team"
+  }
+}
+
+vars:post-response {
+  team_id: res.body.id
+}

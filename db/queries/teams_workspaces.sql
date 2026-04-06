@@ -65,3 +65,6 @@ UPDATE workspaces
 SET name = $2, description = $3, updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: DeleteTeam :exec
+DELETE FROM teams WHERE id = $1;
