@@ -345,10 +345,55 @@ components:
       required: [name, type, url]
       properties:
         name:             { type: string }
-        type:             { type: string, enum: [polaris, nessie, glue, hive] }
+        type:             { type: string, enum: [polaris, nessie, glue, hive, iceberg] }
         url:              { type: string }
-        credentials:      { type: object, description: "Type-specific credentials (stored encrypted)" }
         default_readonly: { type: boolean, default: true }
+        polaris_credentials:
+          $ref: '#/components/schemas/PolarisCredentials'
+        nessie_credentials:
+          $ref: '#/components/schemas/NessieCredentials'
+        glue_credentials:
+          $ref: '#/components/schemas/GlueCredentials'
+        hive_credentials:
+          $ref: '#/components/schemas/HiveCredentials'
+        iceberg_credentials:
+          $ref: '#/components/schemas/IcebergCredentials'
+    
+    # ── Catalog Connection Credentials ───────────────────
+
+    IcebergCredentials:
+      type: object
+      properties:
+        token:         { type: string, description: "Bearer token" }
+        client_id:     { type: string, description: "OAuth2 client ID" }
+        client_secret: { type: string, description: "OAuth2 client secret" }
+        oauth2_server_uri: { type: string, description: "OAuth2 token endpoint custom" }
+
+    PolarisCredentials:
+      type: object
+      required: [client_id, client_secret]
+      properties:
+        client_id:     { type: string }
+        client_secret: { type: string }
+
+    NessieCredentials:
+      type: object
+      properties:
+        token: { type: string, description: "Bearer token optional" }
+
+    GlueCredentials:
+      type: object
+      required: [access_key_id, secret_access_key, region]
+      properties:
+        access_key_id:     { type: string }
+        secret_access_key: { type: string }
+        region:            { type: string }
+
+    HiveCredentials:
+      type: object
+      properties:
+        username: { type: string }
+        password: { type: string }
 
     UpdateCatalogConnectionRequest:
       type: object

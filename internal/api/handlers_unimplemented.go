@@ -7,32 +7,6 @@ package api
 
 import "context"
 
-// ── Catalog Connections ───────────────────────────────────────────────────────
-
-func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error) {
-	return nil, errNotImplemented
-}
-
 // ── Catalog Explorer ──────────────────────────────────────────────────────────
 
 func (h *Handlers) ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error) {

@@ -1,0 +1,15 @@
+meta {
+  name: List Catalog Connections
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/catalog-connections
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

@@ -60,6 +60,7 @@ func (e CatalogConnectionType) Valid() bool {
 const (
 	CreateCatalogConnectionRequestTypeGlue    CreateCatalogConnectionRequestType = "glue"
 	CreateCatalogConnectionRequestTypeHive    CreateCatalogConnectionRequestType = "hive"
+	CreateCatalogConnectionRequestTypeIceberg CreateCatalogConnectionRequestType = "iceberg"
 	CreateCatalogConnectionRequestTypeNessie  CreateCatalogConnectionRequestType = "nessie"
 	CreateCatalogConnectionRequestTypePolaris CreateCatalogConnectionRequestType = "polaris"
 )
@@ -70,6 +71,8 @@ func (e CreateCatalogConnectionRequestType) Valid() bool {
 	case CreateCatalogConnectionRequestTypeGlue:
 		return true
 	case CreateCatalogConnectionRequestTypeHive:
+		return true
+	case CreateCatalogConnectionRequestTypeIceberg:
 		return true
 	case CreateCatalogConnectionRequestTypeNessie:
 		return true
@@ -733,12 +736,15 @@ type CreateApiKeyRequest struct {
 
 // CreateCatalogConnectionRequest defines model for CreateCatalogConnectionRequest.
 type CreateCatalogConnectionRequest struct {
-	// Credentials Type-specific credentials (stored encrypted)
-	Credentials     *map[string]interface{}            `json:"credentials,omitempty"`
-	DefaultReadonly *bool                              `json:"default_readonly,omitempty"`
-	Name            string                             `json:"name"`
-	Type            CreateCatalogConnectionRequestType `json:"type"`
-	Url             string                             `json:"url"`
+	DefaultReadonly    *bool                              `json:"default_readonly,omitempty"`
+	GlueCredentials    *GlueCredentials                   `json:"glue_credentials,omitempty"`
+	HiveCredentials    *HiveCredentials                   `json:"hive_credentials,omitempty"`
+	IcebergCredentials *IcebergCredentials                `json:"iceberg_credentials,omitempty"`
+	Name               string                             `json:"name"`
+	NessieCredentials  *NessieCredentials                 `json:"nessie_credentials,omitempty"`
+	PolarisCredentials *PolarisCredentials                `json:"polaris_credentials,omitempty"`
+	Type               CreateCatalogConnectionRequestType `json:"type"`
+	Url                string                             `json:"url"`
 }
 
 // CreateCatalogConnectionRequestType defines model for CreateCatalogConnectionRequest.Type.
@@ -846,6 +852,13 @@ type ExecutionRequest struct {
 	WorkspaceId  openapi_types.UUID  `json:"workspace_id"`
 }
 
+// GlueCredentials defines model for GlueCredentials.
+type GlueCredentials struct {
+	AccessKeyId     string `json:"access_key_id"`
+	Region          string `json:"region"`
+	SecretAccessKey string `json:"secret_access_key"`
+}
+
 // GrantCatalogAccessRequest defines model for GrantCatalogAccessRequest.
 type GrantCatalogAccessRequest struct {
 	CatalogConnectionId openapi_types.UUID                  `json:"catalog_connection_id"`
@@ -854,6 +867,27 @@ type GrantCatalogAccessRequest struct {
 
 // GrantCatalogAccessRequestPermission defines model for GrantCatalogAccessRequest.Permission.
 type GrantCatalogAccessRequestPermission string
+
+// HiveCredentials defines model for HiveCredentials.
+type HiveCredentials struct {
+	Password *string `json:"password,omitempty"`
+	Username *string `json:"username,omitempty"`
+}
+
+// IcebergCredentials defines model for IcebergCredentials.
+type IcebergCredentials struct {
+	// ClientId OAuth2 client ID
+	ClientId *string `json:"client_id,omitempty"`
+
+	// ClientSecret OAuth2 client secret
+	ClientSecret *string `json:"client_secret,omitempty"`
+
+	// Oauth2ServerUri OAuth2 token endpoint custom
+	Oauth2ServerUri *string `json:"oauth2_server_uri,omitempty"`
+
+	// Token Bearer token
+	Token *string `json:"token,omitempty"`
+}
 
 // InviteUserRequest defines model for InviteUserRequest.
 type InviteUserRequest struct {
@@ -957,6 +991,12 @@ type MigrationItem struct {
 // MigrationItemStatus defines model for MigrationItem.Status.
 type MigrationItemStatus string
 
+// NessieCredentials defines model for NessieCredentials.
+type NessieCredentials struct {
+	// Token Bearer token optional
+	Token *string `json:"token,omitempty"`
+}
+
 // OIDCProvider defines model for OIDCProvider.
 type OIDCProvider struct {
 	Id   openapi_types.UUID `json:"id"`
@@ -984,6 +1024,12 @@ type PasswordResetConfirmBody struct {
 // PasswordResetRequestBody defines model for PasswordResetRequestBody.
 type PasswordResetRequestBody struct {
 	Email openapi_types.Email `json:"email"`
+}
+
+// PolarisCredentials defines model for PolarisCredentials.
+type PolarisCredentials struct {
+	ClientId     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
 }
 
 // QueryFolder defines model for QueryFolder.

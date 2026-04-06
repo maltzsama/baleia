@@ -1,0 +1,32 @@
+meta {
+  name: Create Catalog Connection
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/catalog-connections
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Local Polaris",
+    "type": "polaris",
+    "url": "http://localhost:8181",
+    "default_readonly": false,
+    "polaris_credentials": {
+      "client_id": "admin",
+      "client_secret": "admin"
+    }
+  }
+}
+
+vars:post-response {
+  catalog_connection_id: res.body.id
+}
