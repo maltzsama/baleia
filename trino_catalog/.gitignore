@@ -1,0 +1,4 @@
+# Dynamic Trino catalogs are created at runtime (via CREATE CATALOG) and
+# contain credentials — they are runtime state, not source.
+*
+!.gitignore
