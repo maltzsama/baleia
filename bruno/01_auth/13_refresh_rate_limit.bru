@@ -1,0 +1,21 @@
+meta {
+  name: Refresh Rate Limit
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{base_url}}/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refresh_token": "invalid-token-to-trigger-rate-limit"
+  }
+}
+
+assert {
+  res.status: eq 429
+}

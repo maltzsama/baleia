@@ -6,10 +6,20 @@ meta {
 
 post {
   url: {{base_url}}/auth/logout
-  body: none
+  body: json
   auth: bearer
 }
 
 auth:bearer {
   token: {{token}}
+}
+
+body:json {
+  {
+    "refresh_token": "{{refresh_token}}"
+  }
+}
+
+assert {
+  res.status: eq 204
 }
