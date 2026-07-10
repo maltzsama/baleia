@@ -19,11 +19,13 @@ type Server struct {
 	mux     *chi.Mux
 	pool    *pgxpool.Pool
 	queries *db.Queries
+	rl      *RateLimiter
 }
 
 func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	queries := db.New(pool)
-	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries}
+	rl := NewRateLimiter()
+	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl}
 	s.routes()
 	return s
 }
@@ -53,6 +55,7 @@ func (s *Server) routes() {
 	})
 
 	s.mux.Route("/api/v1", func(r chi.Router) {
+		r.Use(RateLimitRefreshMiddleware(s.rl))
 		baleiaapi.HandlerFromMux(strictHandler, r)
 	})
 }
@@ -67,6 +70,7 @@ func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
 		"OidcCallback":         true,
 		"RequestPasswordReset": true,
 		"ConfirmPasswordReset": true,
+		"RefreshToken":         true,
 	}
 
 	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {

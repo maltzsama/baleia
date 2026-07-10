@@ -55,15 +55,29 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		return nil, err
 	}
 
-	token, err := auth.NewToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
 	if err != nil {
 		return nil, err
 	}
 
+	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		TokenHash: refreshHash,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
 	return CreateFirstAdmin201JSONResponse{
-		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-		User:      dbUserToPublic(user),
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+		ExpiresAt:    time.Now().Add(auth.AccessTokenTTL),
+		User:         dbUserToPublic(user),
 	}, nil
 }
 
@@ -83,19 +97,39 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (Login
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid credentials"}}, nil
 	}
 
-	token, err := auth.NewToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
 	if err != nil {
 		return nil, err
 	}
 
+	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		TokenHash: refreshHash,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
 	return Login200JSONResponse{
-		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-		User:      dbUserToPublic(user),
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+		ExpiresAt:    time.Now().Add(auth.AccessTokenTTL),
+		User:         dbUserToPublic(user),
 	}, nil
 }
 
 func (h *Handlers) Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error) {
+	if request.Body != nil && request.Body.RefreshToken != nil && *request.Body.RefreshToken != "" {
+		hash := auth.HashRefreshToken(*request.Body.RefreshToken)
+		if rt, err := h.queries.GetRefreshTokenByHash(ctx, hash); err == nil {
+			_ = h.queries.RevokeRefreshToken(ctx, rt.ID)
+		}
+	}
 	return Logout204Response{}, nil
 }
 
@@ -140,6 +174,52 @@ func (h *Handlers) OidcRedirect(ctx context.Context, request OidcRedirectRequest
 
 func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequestObject) (OidcCallbackResponseObject, error) {
 	return OidcCallback302Response{}, nil
+}
+
+// ── Refresh Token ─────────────────────────────────────────────────────────────
+
+func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error) {
+	hash := auth.HashRefreshToken(request.Body.RefreshToken)
+
+	rt, err := h.queries.GetRefreshTokenByHash(ctx, hash)
+	if err != nil {
+		return RefreshToken401JSONResponse{
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid or expired refresh token"},
+		}, nil
+	}
+
+	user, err := h.queries.GetUserByID(ctx, rt.UserID)
+	if err != nil {
+		return RefreshToken401JSONResponse{
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"},
+		}, nil
+	}
+
+	_ = h.queries.RevokeRefreshToken(ctx, rt.ID)
+
+	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	newRefreshToken, newHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		TokenHash: newHash,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	return RefreshToken200JSONResponse{
+		Token:        accessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresAt:    time.Now().Add(auth.AccessTokenTTL),
+	}, nil
 }
 
 // ── Password Reset ────────────────────────────────────────────────────────────
@@ -358,13 +438,28 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, err := auth.NewToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
 		return
 	}
 
-	http.Redirect(w, r, "/?token="+token, http.StatusFound)
+	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
+		return
+	}
+
+	if _, err := h.queries.CreateRefreshToken(r.Context(), db.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		TokenHash: refreshHash,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+	}); err != nil {
+		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
+		return
+	}
+
+	http.Redirect(w, r, "/?token="+accessToken+"&refresh_token="+refreshToken, http.StatusFound)
 }
 
 func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.OIDCProvider, error) {
