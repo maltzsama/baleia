@@ -7,23 +7,6 @@ package api
 
 import "context"
 
-// ── Catalog Explorer ──────────────────────────────────────────────────────────
-
-func (h *Handlers) ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error) {
-	return nil, errNotImplemented
-}
 
 // ── Query Editor ──────────────────────────────────────────────────────────────
 

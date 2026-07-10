@@ -1336,8 +1336,8 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  # ── Catalog Explorer ──────────────────────────────────────────
-  /catalog/{catalog_connection_id}/namespaces:
+  # ── Catalog Explorer ──────────────────────────────────────────────
+  /catalog/{catalog_connection_id}/catalogs:
     parameters:
       - name: catalog_connection_id
         in: path
@@ -1345,22 +1345,60 @@ paths:
         schema: { type: string, format: uuid }
     get:
       tags: [Catalog]
-      operationId: listNamespaces
-      summary: "List catalog namespaces via Trino"
-      description: |
-        Arrow IPC stream.
-        Schema: [name: Utf8, catalog: Utf8]
+      operationId: listCatalogs
+      summary: "List catalogs available in the catalog manager"
       responses:
-        '200': { $ref: '#/components/responses/ArrowStream' }
+        '200':
+          description: "List of catalogs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    type: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /catalog/{catalog_connection_id}/namespaces/{namespace}/tables:
+  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces:
     parameters:
       - name: catalog_connection_id
         in: path
         required: true
         schema: { type: string, format: uuid }
+      - name: catalog
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Catalog]
+      operationId: listNamespaces
+      summary: "List namespaces in a catalog"
+      responses:
+        '200':
+          description: "List of namespaces"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+                  items: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables:
+    parameters:
+      - name: catalog_connection_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: catalog
+        in: path
+        required: true
+        schema: { type: string }
       - name: namespace
         in: path
         required: true
@@ -1369,20 +1407,31 @@ paths:
       tags: [Catalog]
       operationId: listTables
       summary: "List tables in a namespace"
-      description: |
-        Arrow IPC stream.
-        Schema: [name: Utf8, type: Utf8, format: Utf8]
       responses:
-        '200': { $ref: '#/components/responses/ArrowStream' }
+        '200':
+          description: "List of tables"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    namespace: { type: array, items: { type: string } }
+                    name:      { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns:
+  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns:
     parameters:
       - name: catalog_connection_id
         in: path
         required: true
         schema: { type: string, format: uuid }
+      - name: catalog
+        in: path
+        required: true
+        schema: { type: string }
       - name: namespace
         in: path
         required: true
@@ -1394,21 +1443,35 @@ paths:
     get:
       tags: [Catalog]
       operationId: listColumns
-      summary: "List table columns"
-      description: |
-        Arrow IPC stream.
-        Schema: [name: Utf8, ordinal: Int32, data_type: Utf8, is_nullable: Bool, comment: Utf8]
+      summary: "List columns of a table"
       responses:
-        '200': { $ref: '#/components/responses/ArrowStream' }
+        '200':
+          description: "List of columns"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:       { type: integer }
+                    name:     { type: string }
+                    type:     { type: string }
+                    required: { type: boolean }
+                    doc:      { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots:
+  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots:
     parameters:
       - name: catalog_connection_id
         in: path
         required: true
         schema: { type: string, format: uuid }
+      - name: catalog
+        in: path
+        required: true
+        schema: { type: string }
       - name: namespace
         in: path
         required: true
@@ -1421,11 +1484,21 @@ paths:
       tags: [Catalog]
       operationId: listTableSnapshots
       summary: "List Iceberg snapshots for a table"
-      description: |
-        Arrow IPC stream.
-        Schema: [snapshot_id: Int64, parent_id: Int64, committed_at: Timestamp, operation: Utf8, manifest_list: Utf8]
       responses:
-        '200': { $ref: '#/components/responses/ArrowStream' }
+        '200':
+          description: "List of snapshots"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    snapshot_id:  { type: integer, format: int64 }
+                    parent_id:    { type: integer, format: int64, nullable: true }
+                    timestamp_ms: { type: integer, format: int64 }
+                    operation:    { type: string }
+                    manifest_list: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 

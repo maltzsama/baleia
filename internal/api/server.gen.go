@@ -70,18 +70,21 @@ type ServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
-	// List catalog namespaces via Trino
-	// (GET /catalog/{catalog_connection_id}/namespaces)
-	ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID)
+	// List catalogs available in the catalog manager
+	// (GET /catalog/{catalog_connection_id}/catalogs)
+	ListCatalogs(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID)
+	// List namespaces in a catalog
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces)
+	ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string)
 	// List tables in a namespace
-	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables)
-	ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string)
-	// List table columns
-	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns)
-	ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string)
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables)
+	ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string)
+	// List columns of a table
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns)
+	ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string)
 	// List Iceberg snapshots for a table
-	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots)
-	ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string)
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots)
+	ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string)
 	// List all Lenses — admin only
 	// (GET /lenses)
 	ListLenses(w http.ResponseWriter, r *http.Request)
@@ -364,27 +367,33 @@ func (_ Unimplemented) TestCatalogConnection(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List catalog namespaces via Trino
-// (GET /catalog/{catalog_connection_id}/namespaces)
-func (_ Unimplemented) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID) {
+// List catalogs available in the catalog manager
+// (GET /catalog/{catalog_connection_id}/catalogs)
+func (_ Unimplemented) ListCatalogs(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List namespaces in a catalog
+// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces)
+func (_ Unimplemented) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List tables in a namespace
-// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables)
-func (_ Unimplemented) ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string) {
+// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables)
+func (_ Unimplemented) ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List table columns
-// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns)
-func (_ Unimplemented) ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string) {
+// List columns of a table
+// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns)
+func (_ Unimplemented) ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List Iceberg snapshots for a table
-// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots)
-func (_ Unimplemented) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string) {
+// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots)
+func (_ Unimplemented) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1181,8 +1190,8 @@ func (siw *ServerInterfaceWrapper) TestCatalogConnection(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
-// ListNamespaces operation middleware
-func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http.Request) {
+// ListCatalogs operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogs(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
@@ -1204,7 +1213,49 @@ func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListNamespaces(w, r, catalogConnectionId)
+		siw.Handler.ListCatalogs(w, r, catalogConnectionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNamespaces operation middleware
+func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_connection_id" -------------
+	var catalogConnectionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_connection_id", chi.URLParam(r, "catalog_connection_id"), &catalogConnectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_connection_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog" -------------
+	var catalog string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNamespaces(w, r, catalogConnectionId, catalog)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1228,6 +1279,15 @@ func (siw *ServerInterfaceWrapper) ListTables(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// ------------- Path parameter "catalog" -------------
+	var catalog string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		return
+	}
+
 	// ------------- Path parameter "namespace" -------------
 	var namespace string
 
@@ -1246,7 +1306,7 @@ func (siw *ServerInterfaceWrapper) ListTables(w http.ResponseWriter, r *http.Req
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTables(w, r, catalogConnectionId, namespace)
+		siw.Handler.ListTables(w, r, catalogConnectionId, catalog, namespace)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1270,6 +1330,15 @@ func (siw *ServerInterfaceWrapper) ListColumns(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// ------------- Path parameter "catalog" -------------
+	var catalog string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		return
+	}
+
 	// ------------- Path parameter "namespace" -------------
 	var namespace string
 
@@ -1297,7 +1366,7 @@ func (siw *ServerInterfaceWrapper) ListColumns(w http.ResponseWriter, r *http.Re
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListColumns(w, r, catalogConnectionId, namespace, table)
+		siw.Handler.ListColumns(w, r, catalogConnectionId, catalog, namespace, table)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1321,6 +1390,15 @@ func (siw *ServerInterfaceWrapper) ListTableSnapshots(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Path parameter "catalog" -------------
+	var catalog string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		return
+	}
+
 	// ------------- Path parameter "namespace" -------------
 	var namespace string
 
@@ -1348,7 +1426,7 @@ func (siw *ServerInterfaceWrapper) ListTableSnapshots(w http.ResponseWriter, r *
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTableSnapshots(w, r, catalogConnectionId, namespace, table)
+		siw.Handler.ListTableSnapshots(w, r, catalogConnectionId, catalog, namespace, table)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3553,16 +3631,19 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalog-connections/{id}/test", wrapper.TestCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/namespaces", wrapper.ListNamespaces)
+		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs", wrapper.ListCatalogs)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/namespaces/{namespace}/tables", wrapper.ListTables)
+		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces", wrapper.ListNamespaces)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns", wrapper.ListColumns)
+		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables", wrapper.ListTables)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots", wrapper.ListTableSnapshots)
+		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns", wrapper.ListColumns)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots", wrapper.ListTableSnapshots)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/lenses", wrapper.ListLenses)
@@ -4275,30 +4356,60 @@ func (response TestCatalogConnection404JSONResponse) VisitTestCatalogConnectionR
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListCatalogsRequestObject struct {
+	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
+}
+
+type ListCatalogsResponseObject interface {
+	VisitListCatalogsResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogs200JSONResponse []struct {
+	Name *string `json:"name,omitempty"`
+	Type *string `json:"type,omitempty"`
+}
+
+func (response ListCatalogs200JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogs401JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogs404JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListNamespacesRequestObject struct {
 	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
+	Catalog             string             `json:"catalog"`
 }
 
 type ListNamespacesResponseObject interface {
 	VisitListNamespacesResponse(w http.ResponseWriter) error
 }
 
-type ListNamespaces200ApplicationvndApacheArrowStreamResponse struct {
-	ArrowStreamApplicationvndApacheArrowStreamResponse
-}
+type ListNamespaces200JSONResponse [][]string
 
-func (response ListNamespaces200ApplicationvndApacheArrowStreamResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/vnd.apache.arrow.stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response ListNamespaces200JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListNamespaces401JSONResponse struct{ UnauthorizedJSONResponse }
@@ -4321,6 +4432,7 @@ func (response ListNamespaces404JSONResponse) VisitListNamespacesResponse(w http
 
 type ListTablesRequestObject struct {
 	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
+	Catalog             string             `json:"catalog"`
 	Namespace           string             `json:"namespace"`
 }
 
@@ -4328,22 +4440,16 @@ type ListTablesResponseObject interface {
 	VisitListTablesResponse(w http.ResponseWriter) error
 }
 
-type ListTables200ApplicationvndApacheArrowStreamResponse struct {
-	ArrowStreamApplicationvndApacheArrowStreamResponse
+type ListTables200JSONResponse []struct {
+	Name      *string   `json:"name,omitempty"`
+	Namespace *[]string `json:"namespace,omitempty"`
 }
 
-func (response ListTables200ApplicationvndApacheArrowStreamResponse) VisitListTablesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/vnd.apache.arrow.stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response ListTables200JSONResponse) VisitListTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListTables401JSONResponse struct{ UnauthorizedJSONResponse }
@@ -4366,6 +4472,7 @@ func (response ListTables404JSONResponse) VisitListTablesResponse(w http.Respons
 
 type ListColumnsRequestObject struct {
 	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
+	Catalog             string             `json:"catalog"`
 	Namespace           string             `json:"namespace"`
 	Table               string             `json:"table"`
 }
@@ -4374,22 +4481,19 @@ type ListColumnsResponseObject interface {
 	VisitListColumnsResponse(w http.ResponseWriter) error
 }
 
-type ListColumns200ApplicationvndApacheArrowStreamResponse struct {
-	ArrowStreamApplicationvndApacheArrowStreamResponse
+type ListColumns200JSONResponse []struct {
+	Doc      *string `json:"doc,omitempty"`
+	Id       *int    `json:"id,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Required *bool   `json:"required,omitempty"`
+	Type     *string `json:"type,omitempty"`
 }
 
-func (response ListColumns200ApplicationvndApacheArrowStreamResponse) VisitListColumnsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/vnd.apache.arrow.stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response ListColumns200JSONResponse) VisitListColumnsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListColumns401JSONResponse struct{ UnauthorizedJSONResponse }
@@ -4412,6 +4516,7 @@ func (response ListColumns404JSONResponse) VisitListColumnsResponse(w http.Respo
 
 type ListTableSnapshotsRequestObject struct {
 	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
+	Catalog             string             `json:"catalog"`
 	Namespace           string             `json:"namespace"`
 	Table               string             `json:"table"`
 }
@@ -4420,22 +4525,19 @@ type ListTableSnapshotsResponseObject interface {
 	VisitListTableSnapshotsResponse(w http.ResponseWriter) error
 }
 
-type ListTableSnapshots200ApplicationvndApacheArrowStreamResponse struct {
-	ArrowStreamApplicationvndApacheArrowStreamResponse
+type ListTableSnapshots200JSONResponse []struct {
+	ManifestList *string `json:"manifest_list,omitempty"`
+	Operation    *string `json:"operation,omitempty"`
+	ParentId     *int64  `json:"parent_id,omitempty"`
+	SnapshotId   *int64  `json:"snapshot_id,omitempty"`
+	TimestampMs  *int64  `json:"timestamp_ms,omitempty"`
 }
 
-func (response ListTableSnapshots200ApplicationvndApacheArrowStreamResponse) VisitListTableSnapshotsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/vnd.apache.arrow.stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response ListTableSnapshots200JSONResponse) VisitListTableSnapshotsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListTableSnapshots401JSONResponse struct{ UnauthorizedJSONResponse }
@@ -6623,17 +6725,20 @@ type StrictServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error)
-	// List catalog namespaces via Trino
-	// (GET /catalog/{catalog_connection_id}/namespaces)
+	// List catalogs available in the catalog manager
+	// (GET /catalog/{catalog_connection_id}/catalogs)
+	ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error)
+	// List namespaces in a catalog
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces)
 	ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error)
 	// List tables in a namespace
-	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables)
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables)
 	ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error)
-	// List table columns
-	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/columns)
+	// List columns of a table
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns)
 	ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error)
 	// List Iceberg snapshots for a table
-	// (GET /catalog/{catalog_connection_id}/namespaces/{namespace}/tables/{table}/snapshots)
+	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots)
 	ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error)
 	// List all Lenses — admin only
 	// (GET /lenses)
@@ -7305,11 +7410,38 @@ func (sh *strictHandler) TestCatalogConnection(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// ListCatalogs operation middleware
+func (sh *strictHandler) ListCatalogs(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID) {
+	var request ListCatalogsRequestObject
+
+	request.CatalogConnectionId = catalogConnectionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogs(ctx, request.(ListCatalogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogsResponseObject); ok {
+		if err := validResponse.VisitListCatalogsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListNamespaces operation middleware
-func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID) {
+func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string) {
 	var request ListNamespacesRequestObject
 
 	request.CatalogConnectionId = catalogConnectionId
+	request.Catalog = catalog
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListNamespaces(ctx, request.(ListNamespacesRequestObject))
@@ -7332,10 +7464,11 @@ func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, 
 }
 
 // ListTables operation middleware
-func (sh *strictHandler) ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string) {
+func (sh *strictHandler) ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string) {
 	var request ListTablesRequestObject
 
 	request.CatalogConnectionId = catalogConnectionId
+	request.Catalog = catalog
 	request.Namespace = namespace
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
@@ -7359,10 +7492,11 @@ func (sh *strictHandler) ListTables(w http.ResponseWriter, r *http.Request, cata
 }
 
 // ListColumns operation middleware
-func (sh *strictHandler) ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string) {
+func (sh *strictHandler) ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
 	var request ListColumnsRequestObject
 
 	request.CatalogConnectionId = catalogConnectionId
+	request.Catalog = catalog
 	request.Namespace = namespace
 	request.Table = table
 
@@ -7387,10 +7521,11 @@ func (sh *strictHandler) ListColumns(w http.ResponseWriter, r *http.Request, cat
 }
 
 // ListTableSnapshots operation middleware
-func (sh *strictHandler) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, namespace string, table string) {
+func (sh *strictHandler) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
 	var request ListTableSnapshotsRequestObject
 
 	request.CatalogConnectionId = catalogConnectionId
+	request.Catalog = catalog
 	request.Namespace = namespace
 	request.Table = table
 
