@@ -400,5 +400,7 @@ func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.O
 func randomState() string {
 	b := make([]byte, 16)
 	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
+	// RawURLEncoding: URL-safe and no '=' padding, so the token survives being
+	// embedded raw in a query string (password reset link, OIDC state).
+	return base64.RawURLEncoding.EncodeToString(b)
 }
