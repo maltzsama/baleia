@@ -172,11 +172,31 @@ components:
 
     LoginResponse:
       type: object
-      required: [token, expires_at, user]
+      required: [token, refresh_token, expires_at, user]
       properties:
-        token:      { type: string }
-        expires_at: { type: string, format: date-time }
-        user:       { $ref: '#/components/schemas/UserPublic' }
+        token:         { type: string }
+        refresh_token: { type: string }
+        expires_at:    { type: string, format: date-time }
+        user:          { $ref: '#/components/schemas/UserPublic' }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    RefreshResponse:
+      type: object
+      required: [token, refresh_token, expires_at]
+      properties:
+        token:         { type: string }
+        refresh_token: { type: string }
+        expires_at:    { type: string, format: date-time }
+
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token: { type: string }
 
     OIDCProvider:
       type: object
@@ -742,8 +762,32 @@ paths:
       tags: [Auth]
       operationId: logout
       summary: "Invalidate current session"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogoutRequest' }
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: "Exchange refresh token for new access token pair"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: "New token pair"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefreshResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /auth/me:

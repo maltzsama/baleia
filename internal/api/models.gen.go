@@ -946,9 +946,15 @@ type LoginRequest struct {
 
 // LoginResponse defines model for LoginResponse.
 type LoginResponse struct {
-	ExpiresAt time.Time  `json:"expires_at"`
-	Token     string     `json:"token"`
-	User      UserPublic `json:"user"`
+	ExpiresAt    time.Time  `json:"expires_at"`
+	RefreshToken string     `json:"refresh_token"`
+	Token        string     `json:"token"`
+	User         UserPublic `json:"user"`
+}
+
+// LogoutRequest defines model for LogoutRequest.
+type LogoutRequest struct {
+	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
 // Migration defines model for Migration.
@@ -1058,6 +1064,18 @@ type QueryStatement struct {
 
 // QueryStatementStatus defines model for QueryStatement.Status.
 type QueryStatementStatus string
+
+// RefreshRequest defines model for RefreshRequest.
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// RefreshResponse defines model for RefreshResponse.
+type RefreshResponse struct {
+	ExpiresAt    time.Time `json:"expires_at"`
+	RefreshToken string    `json:"refresh_token"`
+	Token        string    `json:"token"`
+}
 
 // Retriever defines model for Retriever.
 type Retriever struct {
@@ -1372,11 +1390,17 @@ type CreateApiKeyJSONRequestBody = CreateApiKeyRequest
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// LogoutJSONRequestBody defines body for Logout for application/json ContentType.
+type LogoutJSONRequestBody = LogoutRequest
+
 // ConfirmPasswordResetJSONRequestBody defines body for ConfirmPasswordReset for application/json ContentType.
 type ConfirmPasswordResetJSONRequestBody = PasswordResetConfirmBody
 
 // RequestPasswordResetJSONRequestBody defines body for RequestPasswordReset for application/json ContentType.
 type RequestPasswordResetJSONRequestBody = PasswordResetRequestBody
+
+// RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
+type RefreshTokenJSONRequestBody = RefreshRequest
 
 // CreateCatalogConnectionJSONRequestBody defines body for CreateCatalogConnection for application/json ContentType.
 type CreateCatalogConnectionJSONRequestBody = CreateCatalogConnectionRequest
