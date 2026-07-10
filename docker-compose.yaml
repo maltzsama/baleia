@@ -118,8 +118,8 @@ services:
       - QUARKUS_HTTP_CORS_ORIGINS=http://localhost:4000
       - QUARKUS_HTTP_CORS_METHODS=GET,POST,PUT,DELETE,PATCH,OPTIONS
       - QUARKUS_HTTP_CORS_HEADERS=Content-Type,Authorization,Polaris-Realm,X-Request-ID
-      - POLARIS_FEATURES_SKIP_CREDENTIAL_SUBSCOPING_INDIRECTION=true
-      - POLARIS_FEATURES_ALLOW_INSECURE_STORAGE_TYPES=true
+      - polaris.features."SKIP_CREDENTIAL_SUBSCOPING_INDIRECTION"=true
+      - polaris.features."ALLOW_INSECURE_STORAGE_TYPES"=true
       - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
       - polaris.realm-context.realms=POLARIS
       - polaris.readiness.ignore-severe-issues=true

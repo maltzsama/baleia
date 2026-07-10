@@ -13,3 +13,8 @@ get {
 auth:bearer {
   token: {{token}}
 }
+
+assert {
+  res.status: eq 200
+  res.body[0].name: eq id
+}

@@ -14,6 +14,11 @@ auth:bearer {
   token: {{token}}
 }
 
+assert {
+  res.status: eq 200
+  res.body[0][0]: eq analytics
+}
+
 vars:post-response {
   namespace_name: res.body[0][0]
 }
