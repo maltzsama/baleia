@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/ws"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -60,6 +61,10 @@ func (s *Server) routes() {
 	// OIDC precisa de cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/callback", h.HandleOIDCCallback)
+
+	// WebSocket precisa de raw connection
+	wsHandler := ws.New(s.queries.AsWSQuerier(), s.cfg.JWTSecret, s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
+	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
 
 
 	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{

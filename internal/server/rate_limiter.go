@@ -97,7 +97,8 @@ func RateLimitRefreshMiddleware(rl *RateLimiter) func(http.Handler) http.Handler
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			limited := r.URL.Path == "/api/v1/auth/refresh" ||
-				strings.HasSuffix(r.URL.Path, "/results")
+				strings.HasSuffix(r.URL.Path, "/results") ||
+				strings.Contains(r.URL.Path, "/ws/workspaces/")
 
 			if !limited {
 				next.ServeHTTP(w, r)
