@@ -38,6 +38,18 @@ type CatalogConnection struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ClusterSnapshot struct {
+	ID               pgtype.UUID        `json:"id"`
+	CapturedAt       pgtype.Timestamptz `json:"captured_at"`
+	ActiveWorkers    int32              `json:"active_workers"`
+	RunningQueries   int32              `json:"running_queries"`
+	QueuedQueries    int32              `json:"queued_queries"`
+	BlockedQueries   int32              `json:"blocked_queries"`
+	TotalMemoryBytes *int64             `json:"total_memory_bytes"`
+	FreeMemoryBytes  *int64             `json:"free_memory_bytes"`
+	RawPayload       []byte             `json:"raw_payload"`
+}
+
 type LensRunHistory struct {
 	ID                 pgtype.UUID        `json:"id"`
 	LensID             pgtype.UUID        `json:"lens_id"`
@@ -191,6 +203,24 @@ type SavedQuery struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type TableHealthSnapshot struct {
+	ID                     pgtype.UUID        `json:"id"`
+	CatalogConnectionID    pgtype.UUID        `json:"catalog_connection_id"`
+	Catalog                string             `json:"catalog"`
+	Namespace              string             `json:"namespace"`
+	TableName              string             `json:"table_name"`
+	CapturedAt             pgtype.Timestamptz `json:"captured_at"`
+	SnapshotCount          int32              `json:"snapshot_count"`
+	FileCount              *int32             `json:"file_count"`
+	TotalSizeBytes         *int64             `json:"total_size_bytes"`
+	OldestSnapshotAgeHours *int32             `json:"oldest_snapshot_age_hours"`
+	LastMaintenanceAt      pgtype.Timestamptz `json:"last_maintenance_at"`
+	HealthScore            int32              `json:"health_score"`
+	NeedsCompaction        bool               `json:"needs_compaction"`
+	NeedsSnapshotExpiry    bool               `json:"needs_snapshot_expiry"`
+	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
+}
+
 type Team struct {
 	ID          pgtype.UUID        `json:"id"`
 	Name        string             `json:"name"`
@@ -206,6 +236,27 @@ type TeamMember struct {
 	UserID   pgtype.UUID        `json:"user_id"`
 	Role     string             `json:"role"`
 	JoinedAt pgtype.Timestamptz `json:"joined_at"`
+}
+
+type TrinoQuerySnapshot struct {
+	ID                 pgtype.UUID        `json:"id"`
+	TrinoQueryID       string             `json:"trino_query_id"`
+	ExecutionID        pgtype.UUID        `json:"execution_id"`
+	Origin             string             `json:"origin"`
+	User               string             `json:"user"`
+	State              string             `json:"state"`
+	Sql                string             `json:"sql"`
+	Catalog            *string            `json:"catalog"`
+	Schema             *string            `json:"schema"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	ElapsedMs          *int32             `json:"elapsed_ms"`
+	CpuMs              *int32             `json:"cpu_ms"`
+	PhysicalInputBytes *int64             `json:"physical_input_bytes"`
+	OutputRows         *int64             `json:"output_rows"`
+	ErrorMessage       *string            `json:"error_message"`
+	RawTrinoPayload    []byte             `json:"raw_trino_payload"`
+	FirstSeenAt        pgtype.Timestamptz `json:"first_seen_at"`
+	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
 }
 
 type User struct {

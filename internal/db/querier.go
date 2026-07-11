@@ -42,13 +42,16 @@ type Querier interface {
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
 	GetCatalogAccess(ctx context.Context, arg GetCatalogAccessParams) (WorkspaceCatalogAccess, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)
+	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
 	GetLensByID(ctx context.Context, id pgtype.UUID) (Lense, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
 	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
+	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
+	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (TrinoQuerySnapshot, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
@@ -56,10 +59,14 @@ type Querier interface {
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
 	GrantCatalogAccess(ctx context.Context, arg GrantCatalogAccessParams) (WorkspaceCatalogAccess, error)
+	// Cluster Snapshots
+	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
+	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	ListCatalogAccessByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogAccessByWorkspaceRow, error)
 	ListCatalogConnections(ctx context.Context) ([]CatalogConnection, error)
+	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
 	ListLensRunHistory(ctx context.Context, arg ListLensRunHistoryParams) ([]LensRunHistory, error)
 	ListLenses(ctx context.Context) ([]Lense, error)
 	ListLensesDue(ctx context.Context) ([]Lense, error)
@@ -73,9 +80,12 @@ type Querier interface {
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
 	ListSavedQueries(ctx context.Context, arg ListSavedQueriesParams) ([]SavedQuery, error)
+	ListTableHealthByConnection(ctx context.Context, arg ListTableHealthByConnectionParams) ([]TableHealthSnapshot, error)
+	ListTableHealthSnapshots(ctx context.Context, arg ListTableHealthSnapshotsParams) ([]TableHealthSnapshot, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
 	ListTeams(ctx context.Context) ([]Team, error)
 	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Team, error)
+	ListTrinoQuerySnapshots(ctx context.Context, arg ListTrinoQuerySnapshotsParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
@@ -104,6 +114,10 @@ type Querier interface {
 	UpdateUserPersonalWorkspace(ctx context.Context, arg UpdateUserPersonalWorkspaceParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
+	// Table Health Snapshots
+	UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTableHealthSnapshotParams) (TableHealthSnapshot, error)
+	// Trino Query Snapshots
+	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
 }
 
 var _ Querier = (*Queries)(nil)
