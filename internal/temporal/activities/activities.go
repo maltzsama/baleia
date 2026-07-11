@@ -10,7 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/trino_client"
+	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/activity"
@@ -21,14 +21,14 @@ var defaultActivities *Activities
 
 type Activities struct {
 	queries *db.Queries
-	trino   *trino_client.Client
+	trino   *trino.Client
 	s3      *storage.S3Client
 }
 
 func New(pool *pgxpool.Pool, cfg *config.Config) *Activities {
 	a := &Activities{
 		queries: db.New(pool),
-		trino:   trino_client.New(cfg.TrinoURL, "baleia"),
+		trino:   trino.New(cfg.TrinoURL, "baleia"),
 		s3:      storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
 	}
 	defaultActivities = a

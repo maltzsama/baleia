@@ -1,4 +1,4 @@
-package trino_client
+package trino
 
 import (
 	"bytes"
