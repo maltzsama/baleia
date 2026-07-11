@@ -61,6 +61,48 @@ type QueryResult struct {
 	RowCount int64
 }
 
+// IcebergCatalogParams configures a dynamic Iceberg REST catalog registration.
+// S3 access to the Iceberg data files is delegated to the catalog manager
+// (Polaris) via credential vending — Trino gets scoped S3 credentials from
+// Polaris, so no storage credentials belong here. (Baleia's own result bucket
+// is a separate concern, handled by the worker, not the catalog.)
+type IcebergCatalogParams struct {
+	Name       string
+	RestURI    string
+	Warehouse  string
+	Credential string // "<client_id>:<client_secret>"
+	Scope      string
+}
+
+// CreateIcebergCatalog registers a catalog in Trino at runtime (requires
+// catalog.management=dynamic). Idempotent: an "already exists" error is
+// treated as success so it can run before every execution.
+func (c *Client) CreateIcebergCatalog(ctx context.Context, p IcebergCatalogParams) error {
+	scope := p.Scope
+	if scope == "" {
+		scope = "PRINCIPAL_ROLE:ALL"
+	}
+
+	ddl := fmt.Sprintf(`CREATE CATALOG %s USING iceberg WITH (
+	"iceberg.catalog.type" = 'rest',
+	"iceberg.rest-catalog.uri" = '%s',
+	"iceberg.rest-catalog.warehouse" = '%s',
+	"iceberg.rest-catalog.security" = 'OAUTH2',
+	"iceberg.rest-catalog.oauth2.credential" = '%s',
+	"iceberg.rest-catalog.oauth2.scope" = '%s',
+	"iceberg.rest-catalog.vended-credentials-enabled" = 'true',
+	"fs.native-s3.enabled" = 'true'
+)`, p.Name, p.RestURI, p.Warehouse, p.Credential, scope)
+
+	if _, err := c.Execute(ctx, ddl, "", ""); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*QueryResult, error) {
 	reqURL := c.baseURL + "/v1/statement"
 

@@ -2,7 +2,9 @@ package activities
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/arrowipc"
@@ -35,8 +37,68 @@ func New(pool *pgxpool.Pool, cfg *config.Config) *Activities {
 	return a
 }
 
+// EnsureCatalogParams tells the worker which Trino catalog to register for a
+// workspace before its statements run.
+type EnsureCatalogParams struct {
+	WorkspaceID string
+	CatalogName string
+}
+
+// EnsureCatalog registers the workspace's Polaris catalog in Trino (idempotent).
+// Trino talks to Polaris over the Iceberg REST protocol and gets S3 credentials
+// for the data files from Polaris via credential vending — the result bucket is
+// unrelated and never referenced here.
+func EnsureCatalog(ctx context.Context, params EnsureCatalogParams) error {
+	return defaultActivities.ensureCatalog(ctx, params)
+}
+
+func (a *Activities) ensureCatalog(ctx context.Context, params EnsureCatalogParams) error {
+	var wsID pgtype.UUID
+	if err := wsID.Scan(params.WorkspaceID); err != nil {
+		return err
+	}
+
+	access, err := a.queries.ListCatalogAccessByWorkspace(ctx, wsID)
+	if err != nil {
+		return fmt.Errorf("list catalog access: %w", err)
+	}
+	if len(access) == 0 {
+		return fmt.Errorf("workspace has no catalog connection")
+	}
+
+	// Prefer a REST-based Iceberg catalog manager; fall back to the first.
+	chosen := access[0]
+	for _, ac := range access {
+		if ac.CatalogType == "polaris" || ac.CatalogType == "iceberg" || ac.CatalogType == "nessie" {
+			chosen = ac
+			break
+		}
+	}
+
+	conn, err := a.queries.GetCatalogConnectionByID(ctx, chosen.CatalogConnectionID)
+	if err != nil {
+		return fmt.Errorf("load catalog connection: %w", err)
+	}
+
+	var creds struct {
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+	}
+	if conn.CredentialsEnc != nil && *conn.CredentialsEnc != "" {
+		_ = json.Unmarshal([]byte(*conn.CredentialsEnc), &creds)
+	}
+
+	return a.trino.CreateIcebergCatalog(ctx, trino.IcebergCatalogParams{
+		Name:       params.CatalogName,
+		RestURI:    strings.TrimRight(conn.Url, "/") + "/api/catalog",
+		Warehouse:  params.CatalogName,
+		Credential: creds.ClientID + ":" + creds.ClientSecret,
+	})
+}
+
 func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SplitSQL)
+	w.RegisterActivity(EnsureCatalog)
 	w.RegisterActivity(CreateStatementRecords)
 	w.RegisterActivity(ExecuteStatement)
 	w.RegisterActivity(UpdateStatementRecord)

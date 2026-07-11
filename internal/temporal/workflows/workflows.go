@@ -14,6 +14,18 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
+	// Register the workspace's catalog in Trino before running anything.
+	if err := workflow.ExecuteActivity(ctx, activities.EnsureCatalog, activities.EnsureCatalogParams{
+		WorkspaceID: workspaceID,
+		CatalogName: trinoCatalog,
+	}).Get(ctx, nil); err != nil {
+		_ = workflow.ExecuteActivity(ctx, activities.FailExecution, activities.FailExecutionParams{
+			ExecutionID:  executionID,
+			ErrorMessage: err.Error(),
+		}).Get(ctx, nil)
+		return err
+	}
+
 	var splitResult activities.SplitSQLResult
 	if err := workflow.ExecuteActivity(ctx, activities.SplitSQL, activities.SplitSQLParams{
 		SQL: sql,
