@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
+	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
 	CreateCatalogConnection(ctx context.Context, arg CreateCatalogConnectionParams) (CatalogConnection, error)
@@ -80,6 +81,7 @@ type Querier interface {
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	RevokeCatalogAccess(ctx context.Context, arg RevokeCatalogAccessParams) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
+	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
 	UpdateCatalogConnection(ctx context.Context, arg UpdateCatalogConnectionParams) (CatalogConnection, error)

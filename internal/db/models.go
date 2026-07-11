@@ -114,6 +114,8 @@ type QueryExecution struct {
 	DurationMs   *int64             `json:"duration_ms"`
 	StartedAt    pgtype.Timestamptz `json:"started_at"`
 	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
+	TrinoCatalog *string            `json:"trino_catalog"`
+	ResultKey    *string            `json:"result_key"`
 }
 
 type QueryFolder struct {

@@ -36,6 +36,27 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 	return i, err
 }
 
+const checkWorkspaceAccess = `-- name: CheckWorkspaceAccess :one
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+    WHERE w.id = $1
+      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+) AS has_access
+`
+
+type CheckWorkspaceAccessParams struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkWorkspaceAccess, arg.ID, arg.UserID)
+	var has_access bool
+	err := row.Scan(&has_access)
+	return has_access, err
+}
+
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (name, description, created_by)
 VALUES ($1, $2, $3)
