@@ -9,15 +9,22 @@ import (
 	"github.com/galileostudio/baleia/internal/server"
 )
 
+func testConfig() server.RateLimiterConfig {
+	return server.RateLimiterConfig{
+		RequestsPerSecond: 1,
+		Burst:             1,
+	}
+}
+
 func TestRateLimiterAllow(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	ip := "192.168.1.1"
 
-	for i := 0; i < server.RefreshRateBurst; i++ {
+	for i := 0; i < testConfig().Burst; i++ {
 		if !rl.Allow(ip) {
-			t.Fatalf("request %d should be allowed (burst=%d)", i+1, server.RefreshRateBurst)
+			t.Fatalf("request %d should be allowed (burst=%d)", i+1, testConfig().Burst)
 		}
 	}
 
@@ -31,7 +38,8 @@ func TestRateLimiterRefill(t *testing.T) {
 		t.Skip("skipping refill test in short mode")
 	}
 
-	rl := server.NewRateLimiter()
+	cfg := testConfig()
+	rl := server.NewRateLimiter(cfg)
 	defer rl.Stop()
 
 	ip := "192.168.1.2"
@@ -41,8 +49,7 @@ func TestRateLimiterRefill(t *testing.T) {
 		t.Fatal("second request should be rate-limited")
 	}
 
-	interval := server.RefreshRatePeriod / server.RefreshRateLimit
-	time.Sleep(interval + 50*time.Millisecond)
+	time.Sleep(time.Second + 50*time.Millisecond)
 
 	if !rl.Allow(ip) {
 		t.Fatal("request should be allowed after refill interval")
@@ -50,7 +57,7 @@ func TestRateLimiterRefill(t *testing.T) {
 }
 
 func TestRateLimiterPerIP(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	ip1 := "10.0.0.1"
@@ -67,7 +74,7 @@ func TestRateLimiterPerIP(t *testing.T) {
 }
 
 func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	middleware := server.RateLimitRefreshMiddleware(rl)
@@ -79,17 +86,19 @@ func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
 	tests := []struct {
 		name       string
 		path       string
+		remoteAddr string
 		wantStatus int
 	}{
-		{"refresh endpoint", "/api/v1/auth/refresh", http.StatusOK},
-		{"login endpoint", "/api/v1/auth/login", http.StatusOK},
-		{"other endpoint", "/api/v1/me", http.StatusOK},
+		{"refresh endpoint", "/api/v1/auth/refresh", "192.168.1.1:12345", http.StatusOK},
+		{"results endpoint", "/api/v1/workspaces/abc/executions/def/results", "192.168.1.2:12345", http.StatusOK},
+		{"login endpoint", "/api/v1/auth/login", "192.168.1.3:12345", http.StatusOK},
+		{"other endpoint", "/api/v1/me", "192.168.1.4:12345", http.StatusOK},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("POST", tt.path, nil)
-			req.RemoteAddr = "192.168.1.1:12345"
+			req.RemoteAddr = tt.remoteAddr
 			rec := httptest.NewRecorder()
 			middleware(handler).ServeHTTP(rec, req)
 			if rec.Code != tt.wantStatus {
@@ -100,7 +109,8 @@ func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
 }
 
 func TestRateLimiterMiddlewareBlocksRefresh(t *testing.T) {
-	rl := server.NewRateLimiter()
+	cfg := testConfig()
+	rl := server.NewRateLimiter(cfg)
 	defer rl.Stop()
 
 	middleware := server.RateLimitRefreshMiddleware(rl)
@@ -112,7 +122,36 @@ func TestRateLimiterMiddlewareBlocksRefresh(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/auth/refresh", nil)
 	req.RemoteAddr = "192.168.1.100:12345"
 
-	for i := 0; i < server.RefreshRateBurst; i++ {
+	for i := 0; i < cfg.Burst; i++ {
+		rec := httptest.NewRecorder()
+		middleware(handler).ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d expected 200, got %d", i+1, rec.Code)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	middleware(handler).ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+}
+
+func TestRateLimiterMiddlewareBlocksResults(t *testing.T) {
+	cfg := testConfig()
+	rl := server.NewRateLimiter(cfg)
+	defer rl.Stop()
+
+	middleware := server.RateLimitRefreshMiddleware(rl)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/v1/workspaces/uuid/executions/uuid/results", nil)
+	req.RemoteAddr = "192.168.1.101:12345"
+
+	for i := 0; i < cfg.Burst; i++ {
 		rec := httptest.NewRecorder()
 		middleware(handler).ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -128,7 +167,7 @@ func TestRateLimiterMiddlewareBlocksRefresh(t *testing.T) {
 }
 
 func TestRateLimiterCleanup(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	rl.Allow("stale-ip")
@@ -146,7 +185,7 @@ func TestRateLimiterCleanup(t *testing.T) {
 }
 
 func TestRateLimiterConcurrent(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	done := make(chan bool)
@@ -169,7 +208,7 @@ func TestRateLimiterConcurrent(t *testing.T) {
 }
 
 func TestRateLimiterReset(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	ip := "10.0.0.99"
@@ -181,7 +220,7 @@ func TestRateLimiterReset(t *testing.T) {
 }
 
 func TestRateLimiterMiddlewareNonRefreshUnlimited(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	middleware := server.RateLimitRefreshMiddleware(rl)
@@ -202,7 +241,7 @@ func TestRateLimiterMiddlewareNonRefreshUnlimited(t *testing.T) {
 }
 
 func TestRateLimiterDefaultBurst(t *testing.T) {
-	rl := server.NewRateLimiter()
+	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
 	ip := "172.16.0.1"
@@ -216,5 +255,26 @@ func TestRateLimiterDefaultBurst(t *testing.T) {
 
 	if count < 1 {
 		t.Fatal("burst should allow at least 1 request")
+	}
+}
+
+func TestRateLimiterConfigurable(t *testing.T) {
+	cfg := server.RateLimiterConfig{
+		RequestsPerSecond: 100,
+		Burst:             50,
+	}
+	rl := server.NewRateLimiter(cfg)
+	defer rl.Stop()
+
+	ip := "10.0.0.200"
+
+	for i := 0; i < cfg.Burst; i++ {
+		if !rl.Allow(ip) {
+			t.Fatalf("request %d should be allowed with burst=%d", i+1, cfg.Burst)
+		}
+	}
+
+	if rl.Allow(ip) {
+		t.Fatal("should be rate-limited after burst")
 	}
 }
