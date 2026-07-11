@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -74,11 +76,40 @@ func (s *Server) routes() {
 	s.mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(RateLimitRefreshMiddleware(s.rl))
 		baleiaapi.HandlerFromMux(strictHandler, r)
-	})
-
-	s.mux.Route("/api/v1", func(r chi.Router) {
 		baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg.JWTSecret, temporalClient)
 	})
+
+	fileServer := http.FileServer(http.Dir("web/build"))
+	s.mux.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if strings.HasPrefix(path, "/api/") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if path == "/" || path == "/setup" {
+			users, err := s.queries.ListUsers(r.Context())
+			configured := err == nil && len(users) > 0
+
+			if !configured && path == "/" {
+				http.Redirect(w, r, "/setup", http.StatusFound)
+				return
+			}
+			if configured && path == "/setup" {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+
+		fullPath := "web/build" + path
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			http.ServeFile(w, r, "web/build/app.html")
+			return
+		}
+
+		fileServer.ServeHTTP(w, r)
+	}))
 }
 
 func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {

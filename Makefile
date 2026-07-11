@@ -29,11 +29,19 @@ build:
 	go build -o bin/api ./cmd/api
 	go build -o bin/worker ./cmd/worker
 
+build-web:
+	cd web && npm run build
+
+build-all: build-web build
+
 compose-up:
-	docker compose up -d
+	docker compose up -d --build
 
 compose-down:
 	docker compose down
+
+compose-logs:
+	docker compose logs -f api worker
 
 generate:
 	oapi-codegen --config=config/oapi-models.yaml api/swagger.yaml
