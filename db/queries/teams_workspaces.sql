@@ -66,5 +66,13 @@ SET name = $2, description = $3, updated_at = now()
 WHERE id = $1
 RETURNING *;
 
+-- name: CheckWorkspaceAccess :one
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+    WHERE w.id = $1
+      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+) AS has_access;
+
 -- name: DeleteTeam :exec
 DELETE FROM teams WHERE id = $1;

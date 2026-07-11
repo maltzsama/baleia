@@ -34,8 +34,8 @@ RETURNING *;
 DELETE FROM saved_queries WHERE id = $1 AND workspace_id = $2;
 
 -- name: CreateQueryExecution :one
-INSERT INTO query_executions (workspace_id, user_id, saved_query_id, status, sql)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO query_executions (workspace_id, user_id, saved_query_id, status, sql, trino_catalog)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: UpdateQueryExecution :one
@@ -43,6 +43,11 @@ UPDATE query_executions
 SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
 WHERE id = $1
 RETURNING *;
+
+-- name: SetExecutionResult :exec
+UPDATE query_executions
+SET result_key = $2
+WHERE id = $1;
 
 -- name: GetQueryExecutionByID :one
 SELECT * FROM query_executions WHERE id = $1;
