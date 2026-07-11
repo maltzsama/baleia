@@ -73,8 +73,7 @@ services:
     environment:
       - PGPASSWORD=baleia
     command: >
-      psql -h postgres -U baleia -d baleia
-      -c "CREATE DATABASE IF NOT EXISTS temporal;"
+      sh -c "psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE temporal;' 2>/dev/null || true"
 
     restart: on-failure
 
@@ -92,14 +91,14 @@ services:
       - POSTGRES_PWD=baleia
       - POSTGRES_SEEDS=postgres
       - TEMPORAL_DBNAME=temporal
-      - DYNAMIC_CONFIG_FILE_PATH=./config/dynamicconfig/development-sql.yaml
+      - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig/development-sql.yaml
     networks:
       - app_net
     depends_on:
       postgres-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "temporal", "workflow", "list", "--address", "localhost:7233"]
+      test: ["CMD-SHELL", "pgrep -f 'temporal-server' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -198,3 +197,70 @@ services:
       - "8025:8025"  # UI web
     networks:
       - app_net
+
+  # BALEA SERVICES
+
+  api:
+    build: .
+    container_name: baleia_api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
+      - TEMPORAL_HOST=temporal:7233
+      - TRINO_URL=http://trino:8080
+      - POLARIS_URL=http://polaris:8181
+      - JWT_SECRET=change-me-in-production
+      - PUBLIC_URL=http://localhost:8080
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_FROM=noreply@baleia.io
+      - S3_ENDPOINT=ceph:8080
+      - S3_ACCESS_KEY=seaweedfs
+      - S3_SECRET_KEY=seaweedfs
+      - S3_BUCKET=baleia
+      - S3_USE_SSL=false
+    command: /api
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+
+  worker:
+    build: .
+    container_name: baleia_worker
+    environment:
+      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
+      - TEMPORAL_HOST=temporal:7233
+      - TRINO_URL=http://trino:8080
+      - POLARIS_URL=http://polaris:8181
+      - S3_ENDPOINT=ceph:8080
+      - S3_ACCESS_KEY=seaweedfs
+      - S3_SECRET_KEY=seaweedfs
+      - S3_BUCKET=baleia
+      - S3_USE_SSL=false
+    command: /worker
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+
+  migrate:
+    build: .
+    container_name: baleia_migrate
+    environment:
+      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
+    command: sh -c "sleep 5 && /migrate -cmd=up"
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
