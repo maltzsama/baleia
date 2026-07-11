@@ -91,8 +91,9 @@ func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
 	}{
 		{"refresh endpoint", "/api/v1/auth/refresh", "192.168.1.1:12345", http.StatusOK},
 		{"results endpoint", "/api/v1/workspaces/abc/executions/def/results", "192.168.1.2:12345", http.StatusOK},
-		{"login endpoint", "/api/v1/auth/login", "192.168.1.3:12345", http.StatusOK},
-		{"other endpoint", "/api/v1/me", "192.168.1.4:12345", http.StatusOK},
+		{"websocket endpoint", "/api/v1/ws/workspaces/abc/executions/def", "192.168.1.3:12345", http.StatusOK},
+		{"login endpoint", "/api/v1/auth/login", "192.168.1.4:12345", http.StatusOK},
+		{"other endpoint", "/api/v1/me", "192.168.1.5:12345", http.StatusOK},
 	}
 
 	for _, tt := range tests {
