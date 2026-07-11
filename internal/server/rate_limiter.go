@@ -3,17 +3,24 @@ package server
 import (
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
-const (
-	RefreshRateLimit  = 5
-	RefreshRatePeriod = 1 * time.Minute
-	RefreshRateBurst  = 1
-)
+type RateLimiterConfig struct {
+	RequestsPerSecond int
+	Burst             int
+}
+
+func DefaultRateLimiterConfig() RateLimiterConfig {
+	return RateLimiterConfig{
+		RequestsPerSecond: 60,
+		Burst:             10,
+	}
+}
 
 type ipLimiter struct {
 	limiter  *rate.Limiter
@@ -23,12 +30,14 @@ type ipLimiter struct {
 type RateLimiter struct {
 	mu    sync.Mutex
 	perIP map[string]*ipLimiter
+	cfg   RateLimiterConfig
 	done  chan struct{}
 }
 
-func NewRateLimiter() *RateLimiter {
+func NewRateLimiter(cfg RateLimiterConfig) *RateLimiter {
 	rl := &RateLimiter{
 		perIP: make(map[string]*ipLimiter),
+		cfg:   cfg,
 		done:  make(chan struct{}),
 	}
 	go rl.cleanup(5 * time.Minute)
@@ -42,7 +51,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	entry, ok := rl.perIP[ip]
 	if !ok {
 		entry = &ipLimiter{
-			limiter: rate.NewLimiter(rate.Every(RefreshRatePeriod/RefreshRateLimit), RefreshRateBurst),
+			limiter: rate.NewLimiter(rate.Limit(rl.cfg.RequestsPerSecond), rl.cfg.Burst),
 		}
 		rl.perIP[ip] = entry
 	}
@@ -87,7 +96,10 @@ func (rl *RateLimiter) cleanup(interval time.Duration) {
 func RateLimitRefreshMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/api/v1/auth/refresh" {
+			limited := r.URL.Path == "/api/v1/auth/refresh" ||
+				strings.HasSuffix(r.URL.Path, "/results")
+
+			if !limited {
 				next.ServeHTTP(w, r)
 				return
 			}
