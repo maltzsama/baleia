@@ -40,33 +40,6 @@ func (h *Handlers) GetLensHistory(ctx context.Context, request GetLensHistoryReq
 
 // ── Retrievers ────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListRetrievers(ctx context.Context, request ListRetrieversRequestObject) (ListRetrieversResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverRequestObject) (CreateRetrieverResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GetRetriever(ctx context.Context, request GetRetrieverRequestObject) (GetRetrieverResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverRequestObject) (UpdateRetrieverResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) DeleteRetriever(ctx context.Context, request DeleteRetrieverRequestObject) (DeleteRetrieverResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GetRetrieverHistory(ctx context.Context, request GetRetrieverHistoryRequestObject) (GetRetrieverHistoryResponseObject, error) {
-	return nil, errNotImplemented
-}
 
 // ── Migrant ───────────────────────────────────────────────────────────────────
 
