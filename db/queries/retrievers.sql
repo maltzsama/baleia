@@ -2,8 +2,8 @@
 INSERT INTO retrievers (
     workspace_id, created_by, name,
     definition_sql, dest_catalog, dest_namespace, dest_table,
-    cron_schedule, refresh_type
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    cron_schedule, refresh_type, next_refresh_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: GetRetrieverByID :one
@@ -22,7 +22,7 @@ ORDER BY next_refresh_at;
 -- name: UpdateRetriever :one
 UPDATE retrievers
 SET name = $3, definition_sql = $4, cron_schedule = $5,
-    refresh_type = $6, status = $7, updated_at = now()
+    refresh_type = $6, status = $7, next_refresh_at = $8, updated_at = now()
 WHERE id = $1 AND workspace_id = $2
 RETURNING *;
 

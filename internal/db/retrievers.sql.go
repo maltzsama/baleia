@@ -15,21 +15,22 @@ const createRetriever = `-- name: CreateRetriever :one
 INSERT INTO retrievers (
     workspace_id, created_by, name,
     definition_sql, dest_catalog, dest_namespace, dest_table,
-    cron_schedule, refresh_type
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    cron_schedule, refresh_type, next_refresh_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at
 `
 
 type CreateRetrieverParams struct {
-	WorkspaceID   pgtype.UUID `json:"workspace_id"`
-	CreatedBy     pgtype.UUID `json:"created_by"`
-	Name          string      `json:"name"`
-	DefinitionSql string      `json:"definition_sql"`
-	DestCatalog   string      `json:"dest_catalog"`
-	DestNamespace string      `json:"dest_namespace"`
-	DestTable     string      `json:"dest_table"`
-	CronSchedule  string      `json:"cron_schedule"`
-	RefreshType   string      `json:"refresh_type"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	CreatedBy     pgtype.UUID        `json:"created_by"`
+	Name          string             `json:"name"`
+	DefinitionSql string             `json:"definition_sql"`
+	DestCatalog   string             `json:"dest_catalog"`
+	DestNamespace string             `json:"dest_namespace"`
+	DestTable     string             `json:"dest_table"`
+	CronSchedule  string             `json:"cron_schedule"`
+	RefreshType   string             `json:"refresh_type"`
+	NextRefreshAt pgtype.Timestamptz `json:"next_refresh_at"`
 }
 
 func (q *Queries) CreateRetriever(ctx context.Context, arg CreateRetrieverParams) (Retriever, error) {
@@ -43,6 +44,7 @@ func (q *Queries) CreateRetriever(ctx context.Context, arg CreateRetrieverParams
 		arg.DestTable,
 		arg.CronSchedule,
 		arg.RefreshType,
+		arg.NextRefreshAt,
 	)
 	var i Retriever
 	err := row.Scan(
@@ -263,19 +265,20 @@ func (q *Queries) ListRetrieversDue(ctx context.Context) ([]Retriever, error) {
 const updateRetriever = `-- name: UpdateRetriever :one
 UPDATE retrievers
 SET name = $3, definition_sql = $4, cron_schedule = $5,
-    refresh_type = $6, status = $7, updated_at = now()
+    refresh_type = $6, status = $7, next_refresh_at = $8, updated_at = now()
 WHERE id = $1 AND workspace_id = $2
 RETURNING id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at
 `
 
 type UpdateRetrieverParams struct {
-	ID            pgtype.UUID `json:"id"`
-	WorkspaceID   pgtype.UUID `json:"workspace_id"`
-	Name          string      `json:"name"`
-	DefinitionSql string      `json:"definition_sql"`
-	CronSchedule  string      `json:"cron_schedule"`
-	RefreshType   string      `json:"refresh_type"`
-	Status        string      `json:"status"`
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	Name          string             `json:"name"`
+	DefinitionSql string             `json:"definition_sql"`
+	CronSchedule  string             `json:"cron_schedule"`
+	RefreshType   string             `json:"refresh_type"`
+	Status        string             `json:"status"`
+	NextRefreshAt pgtype.Timestamptz `json:"next_refresh_at"`
 }
 
 func (q *Queries) UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams) (Retriever, error) {
@@ -287,6 +290,7 @@ func (q *Queries) UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams
 		arg.CronSchedule,
 		arg.RefreshType,
 		arg.Status,
+		arg.NextRefreshAt,
 	)
 	var i Retriever
 	err := row.Scan(
