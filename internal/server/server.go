@@ -2,16 +2,18 @@ package server
 
 import (
 	"context"
-	"net/http"
 	"fmt"
+	"net/http"
 
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.temporal.io/sdk/client"
 )
 
 type Server struct {
@@ -24,7 +26,10 @@ type Server struct {
 
 func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	queries := db.New(pool)
-	rl := NewRateLimiter()
+	rl := NewRateLimiter(RateLimiterConfig{
+		RequestsPerSecond: cfg.RateLimitRPS,
+		Burst:             cfg.RateLimitBurst,
+	})
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl}
 	s.routes()
 	return s
@@ -43,7 +48,14 @@ func (s *Server) routes() {
 		http.ServeFile(w, r, "api/swagger.yaml")
 	})
 
-	h := baleiaapi.NewHandlers(s.queries, s.cfg)
+	temporalClient, err := client.Dial(client.Options{HostPort: s.cfg.TemporalHost})
+	if err != nil {
+		panic("failed to connect to temporal: " + err.Error())
+	}
+
+	s3Client := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
+
+	h := baleiaapi.NewHandlers(s.queries, s.cfg, temporalClient, s3Client)
 
 	// OIDC precisa de cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)

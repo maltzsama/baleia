@@ -1,22 +1,31 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/storage"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.temporal.io/sdk/client"
 )
 
+var ErrWorkspaceNotFound = errors.New("workspace not found")
+
 type Handlers struct {
-	queries *db.Queries
-	cfg     *config.Config
+	queries        *db.Queries
+	cfg            *config.Config
+	temporalClient client.Client
+	s3             *storage.S3Client
 }
 
-func NewHandlers(queries *db.Queries, cfg *config.Config) *Handlers {
-	return &Handlers{queries: queries, cfg: cfg}
+func NewHandlers(queries *db.Queries, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
+	return &Handlers{queries: queries, cfg: cfg, temporalClient: temporalClient, s3: s3}
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -45,6 +54,30 @@ func uuidFromString(s string) (pgtype.UUID, error) {
 	var uid pgtype.UUID
 	err := uid.Scan(s)
 	return uid, err
+}
+
+func workspaceIDFromRequest(id openapi_types.UUID) pgtype.UUID {
+	return pgtype.UUID{Bytes: id, Valid: true}
+}
+
+func requireWorkspaceAccess(ctx context.Context, queries *db.Queries, workspaceID openapi_types.UUID) error {
+	userID := auth.UserIDFromContext(ctx)
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return err
+	}
+
+	hasAccess, err := queries.CheckWorkspaceAccess(ctx, db.CheckWorkspaceAccessParams{
+		ID:     workspaceIDFromRequest(workspaceID),
+		UserID: uid,
+	})
+	if err != nil {
+		return err
+	}
+	if !hasAccess {
+		return ErrWorkspaceNotFound
+	}
+	return nil
 }
 
 func errUnauthorized(msg string) Error {

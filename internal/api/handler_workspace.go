@@ -88,27 +88,35 @@ func (h *Handlers) CreateWorkspace(ctx context.Context, request CreateWorkspaceR
 }
 
 func (h *Handlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
-    var uid pgtype.UUID
-    uid.Bytes = request.Id
-    uid.Valid = true
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
 
-    workspace, err := h.queries.GetWorkspaceByID(ctx, uid)
-    if err != nil {
-        return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
-    }
+	var uid pgtype.UUID
+	uid.Bytes = request.Id
+	uid.Valid = true
 
-    return GetWorkspace200JSONResponse(dbWorkspaceToPublic(workspace)), nil
+	workspace, err := h.queries.GetWorkspaceByID(ctx, uid)
+	if err != nil {
+		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
+
+	return GetWorkspace200JSONResponse(dbWorkspaceToPublic(workspace)), nil
 }
 
 func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error) {
-    var uid pgtype.UUID
-    uid.Bytes = request.Id
-    uid.Valid = true
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		return UpdateWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
 
-    current, err := h.queries.GetWorkspaceByID(ctx, uid)
-    if err != nil {
-        return UpdateWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
-    }
+	var uid pgtype.UUID
+	uid.Bytes = request.Id
+	uid.Valid = true
+
+	current, err := h.queries.GetWorkspaceByID(ctx, uid)
+	if err != nil {
+		return UpdateWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
 
     name := current.Name
     desc := current.Description
@@ -132,14 +140,18 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 }
 
 func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error) {
-    var uid pgtype.UUID
-    uid.Bytes = request.Id
-    uid.Valid = true
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		return ListWorkspaceCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
 
-    _, err := h.queries.GetWorkspaceByID(ctx, uid)
-    if err != nil {
-        return ListWorkspaceCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
-    }
+	var uid pgtype.UUID
+	uid.Bytes = request.Id
+	uid.Valid = true
+
+	_, err := h.queries.GetWorkspaceByID(ctx, uid)
+	if err != nil {
+		return ListWorkspaceCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
 
     accesses, err := h.queries.ListCatalogAccessByWorkspace(ctx, uid)
     if err != nil {
@@ -162,10 +174,14 @@ func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListW
 }
 
 func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error) {
-    role := auth.RoleFromContext(ctx)
-    if role != "admin" {
-        return GrantCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
-    }
+	role := auth.RoleFromContext(ctx)
+	if role != "admin" {
+		return GrantCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+	}
+
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		return GrantCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "workspace not found"}}, nil
+	}
 
     userID := auth.UserIDFromContext(ctx)
     grantedBy, err := uuidFromString(userID)
@@ -208,10 +224,14 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
 }
 
 func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error) {
-    role := auth.RoleFromContext(ctx)
-    if role != "admin" {
-        return RevokeCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
-    }
+	role := auth.RoleFromContext(ctx)
+	if role != "admin" {
+		return RevokeCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+	}
+
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
 
     var workspaceID pgtype.UUID
     workspaceID.Bytes = request.Id
