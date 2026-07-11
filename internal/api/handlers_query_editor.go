@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"net/http"
-	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
@@ -435,22 +434,29 @@ func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObje
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "no results available"}}, nil
 	}
 
-	presignedURL, err := h.s3.PresignedGetURL(ctx, *execution.ResultKey, 1*time.Hour)
+	// Proxy the Arrow IPC bytes through the API. The stored object's presigned
+	// URL points at the internal S3 host (ceph:8080), which the browser cannot
+	// reach — so we fetch server-side and stream it back on the same origin.
+	data, contentType, err := h.s3.Get(ctx, *execution.ResultKey)
 	if err != nil {
 		return nil, err
 	}
+	if contentType == "" {
+		contentType = "application/vnd.apache.arrow.stream"
+	}
 
-	return resultsRedirectResponse{url: presignedURL}, nil
+	return arrowStreamResponse{data: data, contentType: contentType}, nil
 }
 
-type resultsRedirectResponse struct {
-	url string
+type arrowStreamResponse struct {
+	data        []byte
+	contentType string
 }
 
-func (r resultsRedirectResponse) VisitGetResultsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (r arrowStreamResponse) VisitGetResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", r.contentType)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"url":"` + r.url + `"}`))
+	w.Write(r.data)
 	return nil
 }
 

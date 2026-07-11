@@ -7,6 +7,7 @@
 	import { sql, PostgreSQL } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
 	import { autocompletion } from '@codemirror/autocomplete';
+	import { tableFromIPC } from 'apache-arrow';
 
 	let { dark = false }: { dark?: boolean } = $props();
 
@@ -27,8 +28,8 @@
 	let page = $state(1);
 	let perPage = $state(50);
 
-	const apiBase = 'http://localhost:8080/api/v1';
-	const wsBase = 'ws://localhost:8080/api/v1';
+	// Same-origin: the Go server serves this SPA and the API under /api/v1.
+	const apiBase = '/api/v1';
 	const workspaceId = localStorage.getItem('workspace_id') || '';
 	const token = localStorage.getItem('token') || '';
 
@@ -80,7 +81,8 @@
 	}
 
 	function connectWS(execId: string) {
-		const ws = new WebSocket(`${wsBase}/ws/workspaces/${workspaceId}/executions/${execId}?token=${token}`);
+		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+		const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws/workspaces/${workspaceId}/executions/${execId}?token=${token}`);
 
 		ws.onmessage = (e) => {
 			const event = JSON.parse(e.data);
@@ -95,13 +97,15 @@
 					statusText = 'Complete';
 					rowCount = event.rows_returned || 0;
 					durationMs = event.duration_ms || 0;
-					if (event.result_url) fetchResults(event.result_url);
-					else { executing = false; }
+					page = 1;
+					ws.close();
+					fetchResults(execId);
 					break;
 				case 'failed':
 					errorMsg = event.message || 'Query failed';
 					executing = false;
 					statusText = 'Failed';
+					ws.close();
 					break;
 			}
 		};
@@ -112,18 +116,25 @@
 		};
 	}
 
-	async function fetchResults(url: string) {
+	// Results are an Arrow IPC stream proxied by the API (same origin, auth).
+	async function fetchResults(execId: string) {
 		try {
-			const res = await fetch(url);
-			const data = await res.json();
-			if (data.columns) {
-				columns = data.columns.map((c: any) => c.name);
+			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions/${execId}/results`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) throw new Error(`results ${res.status}`);
+			const buf = await res.arrayBuffer();
+			const table = tableFromIPC(new Uint8Array(buf));
+			columns = table.schema.fields.map((f) => f.name);
+			const decoded: any[][] = [];
+			for (const row of table.toArray()) {
+				decoded.push(columns.map((c) => (row as any)[c]));
 			}
-			if (data.rows) {
-				results = data.rows;
-			}
+			results = decoded;
+			rowCount = decoded.length;
 		} catch (e: any) {
 			errorMsg = 'Failed to fetch results';
+			statusText = 'Error';
 		}
 		executing = false;
 	}

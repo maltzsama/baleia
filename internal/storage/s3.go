@@ -64,6 +64,40 @@ func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType
 	return nil
 }
 
+// Get fetches an object's bytes (server-side, authenticated). Used to proxy
+// results through the API so the browser never needs to reach the S3 host
+// directly (the presigned host is the internal container endpoint).
+func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) {
+	scheme := "http"
+	if c.useSSL {
+		scheme = "https"
+	}
+	u := fmt.Sprintf("%s://%s/%s/%s", scheme, c.endpoint, c.bucket, key)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("s3 get: %w", err)
+	}
+	c.signV2(req, key)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("s3 get: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("s3 get %d: %s", resp.StatusCode, string(body))
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("s3 get read: %w", err)
+	}
+	return data, resp.Header.Get("Content-Type"), nil
+}
+
 func (c *S3Client) PresignedGetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	scheme := "http"
 	if c.useSSL {
