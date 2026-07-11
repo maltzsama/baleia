@@ -4,12 +4,19 @@
 	import LeftSidebar from '$lib/components/LeftSidebar.svelte';
 	import RightSidebar from '$lib/components/RightSidebar.svelte';
 	import QueryEditor from '$lib/components/QueryEditor.svelte';
+	import { browser } from '$app/environment';
 
 	let leftCollapsed = $state(false);
 	let rightCollapsed = $state(false);
 	let sidebarTab = $state<'database' | 'queries'>('database');
 	let datasource = $state('polaris-prod');
-	let dark = $state(false);
+	let dark = $state(browser && localStorage.getItem('theme') === 'dark');
+
+	$effect(() => {
+		if (!browser) return;
+		document.body.classList.toggle('dark', dark);
+		localStorage.setItem('theme', dark ? 'dark' : 'light');
+	});
 </script>
 
 <div class="app-shell">
@@ -30,7 +37,7 @@
 			/>
 
 			<div class="center-panel panel">
-				<QueryEditor />
+				<QueryEditor {dark} />
 			</div>
 
 			<RightSidebar
@@ -46,8 +53,4 @@
 	.main-workspace { flex: 1; display: flex; overflow: hidden; padding: 10px; gap: 10px; }
 	.panel { background: var(--bg-panel); border-radius: var(--radius); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); }
 	.center-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
-	.placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); }
-	.placeholder svg { width: 36px; height: 36px; opacity: 0.3; }
-	.placeholder-title { font-size: 16px; font-weight: 600; margin-top: 4px; }
-	.placeholder-sub { font-size: 13px; }
 </style>

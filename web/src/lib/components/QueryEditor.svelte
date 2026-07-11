@@ -2,14 +2,17 @@
 	import { onMount } from 'svelte';
 	import { basicSetup } from 'codemirror';
 	import { EditorView, keymap } from '@codemirror/view';
-	import { EditorState } from '@codemirror/state';
+	import { EditorState, Compartment } from '@codemirror/state';
 	import { indentWithTab } from '@codemirror/commands';
 	import { sql, PostgreSQL } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
 	import { autocompletion } from '@codemirror/autocomplete';
 
+	let { dark = false }: { dark?: boolean } = $props();
+
 	let editorView: EditorView;
 	let editorEl: HTMLDivElement;
+	const themeCompartment = new Compartment();
 
 	let executing = $state(false);
 	let sqlCode = $state('SELECT * FROM users LIMIT 10;');
@@ -35,7 +38,7 @@
 			keymap.of([indentWithTab]),
 			sql({ dialect: PostgreSQL }),
 			autocompletion(),
-			oneDark,
+			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of(update => {
 				if (update.docChanged) sqlCode = update.state.doc.toString();
 			}),
@@ -43,6 +46,13 @@
 
 		const state = EditorState.create({ doc: sqlCode, extensions });
 		editorView = new EditorView({ state, parent: editorEl });
+	});
+
+	// React to theme changes without recreating the editor.
+	$effect(() => {
+		if (editorView) {
+			editorView.dispatch({ effects: themeCompartment.reconfigure(dark ? oneDark : []) });
+		}
 	});
 
 	async function runQuery() {
@@ -261,11 +271,10 @@
 	.editor-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
 	.editor-tabs {
-		display: flex; align-items: stretch; background: #f8fafc;
+		display: flex; align-items: stretch; background: var(--bg-toolbar);
 		padding: 6px 8px 0; gap: 2px;
 		border-bottom: 1px solid var(--border-light); flex-shrink: 0;
 	}
-	.dark .editor-tabs { background: #1c2128; }
 	.tab {
 		padding: 6px 14px; display: flex; align-items: center; gap: 6px;
 		font-size: 12px; border-radius: 6px 6px 0 0; cursor: pointer;
@@ -276,7 +285,7 @@
 	.tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 	.tab-close { opacity: 0; font-size: 14px; color: var(--text-muted); padding: 1px 3px; border-radius: 3px; }
 	.tab:hover .tab-close { opacity: 1; }
-	.tab-close:hover { background: #e2e8f0; color: var(--text-main); }
+	.tab-close:hover { background: var(--border-light); color: var(--text-main); }
 	.tab-add {
 		display: flex; align-items: center; justify-content: center;
 		width: 32px; font-size: 18px; color: var(--text-muted);
@@ -297,8 +306,7 @@
 		color: var(--text-muted); border: 1px solid transparent;
 		background: transparent; transition: .15s; white-space: nowrap;
 	}
-	.toolbar-btn:hover { background: #e2e8f0; color: var(--text-main); border-color: var(--border-light); }
-	.dark .toolbar-btn:hover { background: #30363d; }
+	.toolbar-btn:hover { background: var(--border-light); color: var(--text-main); border-color: var(--border-light); }
 	.toolbar-spacer { flex: 1; }
 
 	.btn-run {
@@ -312,42 +320,26 @@
 	.btn-run svg { width: 10px; height: 10px; fill: white; stroke: none; }
 	.shortcut { font-size: 10px; opacity: 0.7; font-weight: 400; }
 
-	.dark-toggle-wrap { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
-	.dark-icon { width: 13px; height: 13px; }
-	.dark-toggle {
-		width: 32px; height: 18px; background: var(--border-light);
-		border-radius: 9px; cursor: pointer; position: relative; transition: background 0.2s;
-	}
-	.dark-toggle.on { background: var(--primary); }
-	.dark-toggle::after {
-		content: ''; position: absolute; width: 14px; height: 14px;
-		background: white; border-radius: 50%; top: 2px; left: 2px;
-		transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-	}
-	.dark-toggle.on::after { transform: translateX(14px); }
-
 	.editor-body { flex: 1; overflow: auto; min-height: 0; }
 	:global(.cm-editor) { height: 100%; font-size: 13px; }
 	:global(.cm-editor.cm-focused) { outline: none; }
-	:global(.cm-scroller) { font-family: 'JetBrains Mono', monospace; }
+	:global(.cm-scroller) { font-family: var(--font-mono); }
 
 	.status-bar {
 		display: flex; align-items: center; gap: 16px;
-		padding: 0 14px; height: 24px; background: #f1f5f9;
+		padding: 0 14px; height: 24px; background: var(--bg-toolbar);
 		border-top: 1px solid var(--border-light);
 		border-bottom: 1px solid var(--border-light);
 		font-size: 11px; color: var(--text-muted); flex-shrink: 0;
 	}
-	.dark .status-bar { background: #1c2128; }
 	.status-item { display: flex; align-items: center; gap: 4px; }
 	.status-dialect { color: var(--primary); font-weight: 600; }
 
 	.results-container { height: 42%; display: flex; flex-direction: column; flex-shrink: 0; }
 	.results-tabs {
-		display: flex; align-items: stretch; background: #f8fafc;
+		display: flex; align-items: stretch; background: var(--bg-toolbar);
 		border-bottom: 1px solid var(--border-light); padding: 0 12px; flex-shrink: 0;
 	}
-	.dark .results-tabs { background: #1c2128; }
 	.rtab {
 		padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
 		color: var(--text-muted); border-bottom: 2px solid transparent;
@@ -363,7 +355,7 @@
 		font-size: 11px; border-radius: 4px; cursor: pointer;
 		color: var(--text-muted); background: none; border: none;
 	}
-	.results-action-btn:hover { background: #e2e8f0; color: var(--text-main); }
+	.results-action-btn:hover { background: var(--border-light); color: var(--text-main); }
 
 	.results-meta {
 		padding: 6px 14px; display: flex; align-items: center; gap: 20px;
@@ -376,17 +368,14 @@
 	.table-wrapper { flex: 1; overflow: auto; }
 	table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 12px; }
 	th {
-		background: #fafafa; padding: 7px 14px; font-weight: 600;
+		background: var(--bg-toolbar); padding: 7px 14px; font-weight: 600;
 		color: var(--text-muted); border-bottom: 1px solid var(--border-light);
 		position: sticky; top: 0; z-index: 1; font-size: 11px;
 		letter-spacing: 0.3px; text-transform: uppercase;
 	}
-	.dark th { background: #1c2128; }
-	td { padding: 7px 14px; border-bottom: 1px solid #f1f5f9; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-	.dark td { border-bottom-color: #21262d; }
-	tr:hover td { background: #f8fafc; }
-	.dark tr:hover td { background: #1c2128; }
-	.row-num { color: #cbd5e1; width: 36px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+	td { padding: 7px 14px; border-bottom: 1px solid var(--border-light); font-family: var(--font-mono); font-size: 12px; }
+	tr:hover td { background: var(--bg-toolbar); }
+	.row-num { color: var(--text-muted); width: 36px; text-align: right; font-family: var(--font-mono); font-size: 11px; opacity: 0.6; }
 	.null-val { color: #cbd5e1; font-style: italic; }
 
 	.pagination {

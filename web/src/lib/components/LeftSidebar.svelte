@@ -90,7 +90,7 @@
 		background: none; border: none;
 	}
 	.sidebar-reopen-btn:hover { background: #eff6ff; color: var(--primary); }
-	.dark .sidebar-reopen-btn:hover { background: #152236; }
+	:global(.dark) .sidebar-reopen-btn:hover { background: #152236; }
 	.sidebar-reopen-label {
 		writing-mode: vertical-rl; font-size: 10px; font-weight: 600;
 		letter-spacing: 0.5px; text-transform: uppercase;
@@ -102,7 +102,7 @@
 		display: flex; background: #f8fafc;
 		border-bottom: 1px solid var(--border-light); flex-shrink: 0;
 	}
-	.dark .sidebar-tabs { background: #1c2128; }
+	:global(.dark) .sidebar-tabs { background: #1c2128; }
 	.sidebar-tab {
 		flex: 1; text-align: center; padding: 9px 6px;
 		font-size: 11px; font-weight: 600; cursor: pointer;
@@ -129,7 +129,7 @@
 		background: #f1f5f9; border: 1px solid var(--border-light);
 		border-radius: 6px; padding: 5px 8px; transition: 0.15s;
 	}
-	.dark .search-input { background: #1c2128; }
+	:global(.dark) .search-input { background: #1c2128; }
 	.search-input:focus-within { background: var(--bg-panel); border-color: var(--primary); }
 	.search-input input {
 		border: none; background: transparent; outline: none;
@@ -143,9 +143,9 @@
 
 	.tree-node { display: flex; align-items: center; padding: 5px 6px; border-radius: 5px; cursor: pointer; gap: 4px; }
 	.tree-node:hover { background: #f1f5f9; }
-	.dark .tree-node:hover { background: #1c2128; }
+	:global(.dark) .tree-node:hover { background: #1c2128; }
 	.tree-node.active { background: #eff6ff; color: var(--primary); font-weight: 500; }
-	.dark .tree-node.active { background: #152236; }
+	:global(.dark) .tree-node.active { background: #152236; }
 	.node-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.chevron { transition: transform 0.15s; color: var(--text-muted); flex-shrink: 0; }
 	.chevron.open { transform: rotate(90deg); }
@@ -163,7 +163,7 @@
 	.sq-group-label::after { content: ''; flex: 1; height: 1px; background: var(--border-light); }
 	.sq-file { display: flex; align-items: center; padding: 6px 8px; border-radius: 6px; gap: 8px; cursor: pointer; margin-bottom: 1px; }
 	.sq-file:hover { background: #f1f5f9; }
-	.dark .sq-file:hover { background: #1c2128; }
+	:global(.dark) .sq-file:hover { background: #1c2128; }
 	.sq-file-icon { flex-shrink: 0; color: var(--text-muted); }
 	.sq-file-icon svg { width: 14px; height: 14px; }
 	.sq-file-info { flex: 1; min-width: 0; }

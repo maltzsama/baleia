@@ -46,7 +46,7 @@
 		cursor: pointer; font-size: 12px; font-weight: 600;
 		transition: 0.15s;
 	}
-	.dark .datasource-switcher { background: #1c2128; }
+	:global(.dark) .datasource-switcher { background: #1c2128; }
 	.datasource-switcher:hover { border-color: var(--border-hover); }
 	.ds-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
 	.ds-type { color: var(--text-muted); font-weight: 400; }
