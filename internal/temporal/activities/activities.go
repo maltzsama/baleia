@@ -43,6 +43,10 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(CompleteExecution)
 	w.RegisterActivity(FailExecution)
 	w.RegisterActivity(StoreResults)
+	w.RegisterActivity(LensPollTrinoQueries)
+	w.RegisterActivity(LensPollTrinoCluster)
+	w.RegisterActivity(LensAnalyzeTableHealth)
+	w.RegisterActivity(LensRunMaintenance)
 }
 
 type SplitSQLParams struct {
