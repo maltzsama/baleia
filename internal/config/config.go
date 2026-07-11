@@ -23,7 +23,7 @@ type Config struct {
 	S3SecretKey  string
 	S3Bucket     string
 	S3UseSSL     bool
-	RateLimitRPS int
+	RateLimitRPS   int
 	RateLimitBurst int
 }
 

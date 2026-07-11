@@ -75,6 +75,10 @@ func (s *Server) routes() {
 		r.Use(RateLimitRefreshMiddleware(s.rl))
 		baleiaapi.HandlerFromMux(strictHandler, r)
 	})
+
+	s.mux.Route("/api/v1", func(r chi.Router) {
+		baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg.JWTSecret, temporalClient)
+	})
 }
 
 func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
