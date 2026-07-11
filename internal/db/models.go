@@ -50,39 +50,6 @@ type ClusterSnapshot struct {
 	RawPayload       []byte             `json:"raw_payload"`
 }
 
-type LensRunHistory struct {
-	ID                 pgtype.UUID        `json:"id"`
-	LensID             pgtype.UUID        `json:"lens_id"`
-	TemporalWorkflowID string             `json:"temporal_workflow_id"`
-	Status             string             `json:"status"`
-	OperationsSummary  *string            `json:"operations_summary"`
-	ErrorMessage       *string            `json:"error_message"`
-	DurationMs         *int64             `json:"duration_ms"`
-	StartedAt          pgtype.Timestamptz `json:"started_at"`
-	FinishedAt         pgtype.Timestamptz `json:"finished_at"`
-}
-
-type Lense struct {
-	ID                  pgtype.UUID        `json:"id"`
-	CatalogConnectionID pgtype.UUID        `json:"catalog_connection_id"`
-	CreatedBy           pgtype.UUID        `json:"created_by"`
-	Name                string             `json:"name"`
-	IcebergCatalog      string             `json:"iceberg_catalog"`
-	IcebergNamespace    string             `json:"iceberg_namespace"`
-	IcebergTable        string             `json:"iceberg_table"`
-	CronSchedule        string             `json:"cron_schedule"`
-	ExpireSnapshots     bool               `json:"expire_snapshots"`
-	RemoveOrphanFiles   bool               `json:"remove_orphan_files"`
-	CompactDataFiles    bool               `json:"compact_data_files"`
-	RewriteManifests    bool               `json:"rewrite_manifests"`
-	RemoveOldMetadata   bool               `json:"remove_old_metadata"`
-	Status              string             `json:"status"`
-	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
-	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-}
-
 type Migration struct {
 	ID                        pgtype.UUID        `json:"id"`
 	CreatedBy                 pgtype.UUID        `json:"created_by"`

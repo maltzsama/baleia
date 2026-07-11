@@ -16,8 +16,6 @@ type Querier interface {
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
 	CreateCatalogConnection(ctx context.Context, arg CreateCatalogConnectionParams) (CatalogConnection, error)
-	CreateLens(ctx context.Context, arg CreateLensParams) (Lense, error)
-	CreateLensRunHistory(ctx context.Context, arg CreateLensRunHistoryParams) (LensRunHistory, error)
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) (Migration, error)
 	CreateMigrationItem(ctx context.Context, arg CreateMigrationItemParams) (MigrationItem, error)
 	CreateQueryExecution(ctx context.Context, arg CreateQueryExecutionParams) (QueryExecution, error)
@@ -43,7 +41,6 @@ type Querier interface {
 	GetCatalogAccess(ctx context.Context, arg GetCatalogAccessParams) (WorkspaceCatalogAccess, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)
 	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
-	GetLensByID(ctx context.Context, id pgtype.UUID) (Lense, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
 	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
@@ -67,9 +64,6 @@ type Querier interface {
 	ListCatalogAccessByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogAccessByWorkspaceRow, error)
 	ListCatalogConnections(ctx context.Context) ([]CatalogConnection, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
-	ListLensRunHistory(ctx context.Context, arg ListLensRunHistoryParams) ([]LensRunHistory, error)
-	ListLenses(ctx context.Context) ([]Lense, error)
-	ListLensesDue(ctx context.Context) ([]Lense, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
@@ -95,9 +89,6 @@ type Querier interface {
 	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
 	UpdateCatalogConnection(ctx context.Context, arg UpdateCatalogConnectionParams) (CatalogConnection, error)
-	UpdateLens(ctx context.Context, arg UpdateLensParams) (Lense, error)
-	UpdateLensAfterRun(ctx context.Context, arg UpdateLensAfterRunParams) error
-	UpdateLensRunHistory(ctx context.Context, arg UpdateLensRunHistoryParams) error
 	UpdateMigrationItem(ctx context.Context, arg UpdateMigrationItemParams) error
 	UpdateMigrationProgress(ctx context.Context, arg UpdateMigrationProgressParams) error
 	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error

@@ -194,48 +194,6 @@ func (e InviteUserRequestRole) Valid() bool {
 	}
 }
 
-// Defines values for LensStatus.
-const (
-	LensStatusActive LensStatus = "active"
-	LensStatusError  LensStatus = "error"
-	LensStatusPaused LensStatus = "paused"
-)
-
-// Valid indicates whether the value is a known member of the LensStatus enum.
-func (e LensStatus) Valid() bool {
-	switch e {
-	case LensStatusActive:
-		return true
-	case LensStatusError:
-		return true
-	case LensStatusPaused:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LensRunHistoryStatus.
-const (
-	LensRunHistoryStatusFailed   LensRunHistoryStatus = "failed"
-	LensRunHistoryStatusFinished LensRunHistoryStatus = "finished"
-	LensRunHistoryStatusRunning  LensRunHistoryStatus = "running"
-)
-
-// Valid indicates whether the value is a known member of the LensRunHistoryStatus enum.
-func (e LensRunHistoryStatus) Valid() bool {
-	switch e {
-	case LensRunHistoryStatusFailed:
-		return true
-	case LensRunHistoryStatusFinished:
-		return true
-	case LensRunHistoryStatusRunning:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for MigrationSourceType.
 const (
 	MigrationSourceTypeNessie MigrationSourceType = "nessie"
@@ -440,24 +398,6 @@ func (e TeamMemberRole) Valid() bool {
 	}
 }
 
-// Defines values for UpdateLensRequestStatus.
-const (
-	UpdateLensRequestStatusActive UpdateLensRequestStatus = "active"
-	UpdateLensRequestStatusPaused UpdateLensRequestStatus = "paused"
-)
-
-// Valid indicates whether the value is a known member of the UpdateLensRequestStatus enum.
-func (e UpdateLensRequestStatus) Valid() bool {
-	switch e {
-	case UpdateLensRequestStatusActive:
-		return true
-	case UpdateLensRequestStatusPaused:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for UpdateRetrieverRequestRefreshType.
 const (
 	UpdateRetrieverRequestRefreshTypeFull        UpdateRetrieverRequestRefreshType = "full"
@@ -637,22 +577,22 @@ func (e ListMigrationItemsParamsStatus) Valid() bool {
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
-	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
-	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
-	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
+	Cancelled ListExecutionsParamsStatus = "cancelled"
+	Failed    ListExecutionsParamsStatus = "failed"
+	Finished  ListExecutionsParamsStatus = "finished"
+	Running   ListExecutionsParamsStatus = "running"
 )
 
 // Valid indicates whether the value is a known member of the ListExecutionsParamsStatus enum.
 func (e ListExecutionsParamsStatus) Valid() bool {
 	switch e {
-	case ListExecutionsParamsStatusCancelled:
+	case Cancelled:
 		return true
-	case ListExecutionsParamsStatusFailed:
+	case Failed:
 		return true
-	case ListExecutionsParamsStatusFinished:
+	case Finished:
 		return true
-	case ListExecutionsParamsStatusRunning:
+	case Running:
 		return true
 	default:
 		return false
@@ -754,21 +694,6 @@ type CreateCatalogConnectionRequestType string
 type CreateFolderRequest struct {
 	Name     string              `json:"name"`
 	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
-}
-
-// CreateLensRequest defines model for CreateLensRequest.
-type CreateLensRequest struct {
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
-	CompactDataFiles    *bool              `json:"compact_data_files,omitempty"`
-	CronSchedule        string             `json:"cron_schedule"`
-	ExpireSnapshots     *bool              `json:"expire_snapshots,omitempty"`
-	IcebergCatalog      string             `json:"iceberg_catalog"`
-	IcebergNamespace    string             `json:"iceberg_namespace"`
-	IcebergTable        string             `json:"iceberg_table"`
-	Name                string             `json:"name"`
-	RemoveOldMetadata   *bool              `json:"remove_old_metadata,omitempty"`
-	RemoveOrphanFiles   *bool              `json:"remove_orphan_files,omitempty"`
-	RewriteManifests    *bool              `json:"rewrite_manifests,omitempty"`
 }
 
 // CreateMigrationRequest defines model for CreateMigrationRequest.
@@ -897,46 +822,6 @@ type InviteUserRequest struct {
 
 // InviteUserRequestRole defines model for InviteUserRequest.Role.
 type InviteUserRequestRole string
-
-// Lens defines model for Lens.
-type Lens struct {
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
-	CompactDataFiles    *bool              `json:"compact_data_files,omitempty"`
-	CreatedAt           time.Time          `json:"created_at"`
-	CronSchedule        string             `json:"cron_schedule"`
-	ExpireSnapshots     *bool              `json:"expire_snapshots,omitempty"`
-	IcebergCatalog      string             `json:"iceberg_catalog"`
-	IcebergNamespace    string             `json:"iceberg_namespace"`
-	IcebergTable        string             `json:"iceberg_table"`
-	Id                  openapi_types.UUID `json:"id"`
-	LastRunAt           *time.Time         `json:"last_run_at,omitempty"`
-	Name                string             `json:"name"`
-	NextRunAt           *time.Time         `json:"next_run_at,omitempty"`
-	RemoveOldMetadata   *bool              `json:"remove_old_metadata,omitempty"`
-	RemoveOrphanFiles   *bool              `json:"remove_orphan_files,omitempty"`
-	RewriteManifests    *bool              `json:"rewrite_manifests,omitempty"`
-	Status              LensStatus         `json:"status"`
-	UpdatedAt           *time.Time         `json:"updated_at,omitempty"`
-}
-
-// LensStatus defines model for Lens.Status.
-type LensStatus string
-
-// LensRunHistory defines model for LensRunHistory.
-type LensRunHistory struct {
-	DurationMs         *int                 `json:"duration_ms,omitempty"`
-	ErrorMessage       *string              `json:"error_message,omitempty"`
-	FinishedAt         *time.Time           `json:"finished_at,omitempty"`
-	Id                 openapi_types.UUID   `json:"id"`
-	LensId             openapi_types.UUID   `json:"lens_id"`
-	OperationsSummary  *string              `json:"operations_summary,omitempty"`
-	StartedAt          time.Time            `json:"started_at"`
-	Status             LensRunHistoryStatus `json:"status"`
-	TemporalWorkflowId *string              `json:"temporal_workflow_id,omitempty"`
-}
-
-// LensRunHistoryStatus defines model for LensRunHistory.Status.
-type LensRunHistoryStatus string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -1174,21 +1059,6 @@ type UpdateCatalogConnectionRequest struct {
 	Url             *string                 `json:"url,omitempty"`
 }
 
-// UpdateLensRequest defines model for UpdateLensRequest.
-type UpdateLensRequest struct {
-	CompactDataFiles  *bool                    `json:"compact_data_files,omitempty"`
-	CronSchedule      *string                  `json:"cron_schedule,omitempty"`
-	ExpireSnapshots   *bool                    `json:"expire_snapshots,omitempty"`
-	Name              *string                  `json:"name,omitempty"`
-	RemoveOldMetadata *bool                    `json:"remove_old_metadata,omitempty"`
-	RemoveOrphanFiles *bool                    `json:"remove_orphan_files,omitempty"`
-	RewriteManifests  *bool                    `json:"rewrite_manifests,omitempty"`
-	Status            *UpdateLensRequestStatus `json:"status,omitempty"`
-}
-
-// UpdateLensRequestStatus defines model for UpdateLensRequest.Status.
-type UpdateLensRequestStatus string
-
 // UpdatePasswordRequest defines model for UpdatePasswordRequest.
 type UpdatePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
@@ -1323,12 +1193,6 @@ type OidcCallbackParams struct {
 	State string `form:"state" json:"state"`
 }
 
-// GetLensHistoryParams defines parameters for GetLensHistory.
-type GetLensHistoryParams struct {
-	Page    *QueryPage    `form:"page,omitempty" json:"page,omitempty"`
-	PerPage *QueryPerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
-}
-
 // ListMigrationItemsParams defines parameters for ListMigrationItems.
 type ListMigrationItemsParams struct {
 	Status  *ListMigrationItemsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
@@ -1407,12 +1271,6 @@ type CreateCatalogConnectionJSONRequestBody = CreateCatalogConnectionRequest
 
 // UpdateCatalogConnectionJSONRequestBody defines body for UpdateCatalogConnection for application/json ContentType.
 type UpdateCatalogConnectionJSONRequestBody = UpdateCatalogConnectionRequest
-
-// CreateLensJSONRequestBody defines body for CreateLens for application/json ContentType.
-type CreateLensJSONRequestBody = CreateLensRequest
-
-// UpdateLensJSONRequestBody defines body for UpdateLens for application/json ContentType.
-type UpdateLensJSONRequestBody = UpdateLensRequest
 
 // UpdateProfileJSONRequestBody defines body for UpdateProfile for application/json ContentType.
 type UpdateProfileJSONRequestBody = UpdateProfileRequest

@@ -7,7 +7,7 @@ info:
     ## Serialization
     
     **JSON** (`application/json`) for application data: auth, users, teams,
-    workspaces, catalog connections, lenses, retrievers, migrations.
+    workspaces, catalog connections, retrievers, migrations.
     
     **Arrow IPC** (`application/vnd.apache.arrow.stream`) for data originating
     from Trino: query results, explain plans, Iceberg catalog.
@@ -47,8 +47,6 @@ tags:
     description: "Folders, saved queries, and executions"
   - name: Executions
     description: "Execution lifecycle — submit, status, cancel, streaming"
-  - name: Lenses
-    description: "Iceberg table maintenance (compaction, snapshots, orphan files)"
   - name: Retrievers
     description: "Scheduled Iceberg materialized views"
   - name: Migrant
@@ -534,71 +532,6 @@ components:
         error_message:  { type: string, nullable: true }
         started_at:     { type: string, format: date-time, nullable: true }
         finished_at:    { type: string, format: date-time, nullable: true }
-
-    # ── Lenses ─────────────────────────────────────────────────
-    Lens:
-      type: object
-      required: [id, name, catalog_connection_id, iceberg_catalog, iceberg_namespace, iceberg_table, cron_schedule, status, created_at]
-      properties:
-        id:                     { type: string, format: uuid }
-        name:                   { type: string }
-        catalog_connection_id:  { type: string, format: uuid }
-        iceberg_catalog:        { type: string }
-        iceberg_namespace:      { type: string }
-        iceberg_table:          { type: string }
-        cron_schedule:          { type: string, example: "0 2 * * *" }
-        expire_snapshots:       { type: boolean }
-        remove_orphan_files:    { type: boolean }
-        compact_data_files:     { type: boolean }
-        rewrite_manifests:      { type: boolean }
-        remove_old_metadata:    { type: boolean }
-        status:                 { type: string, enum: [active, paused, error] }
-        last_run_at:            { type: string, format: date-time, nullable: true }
-        next_run_at:            { type: string, format: date-time, nullable: true }
-        created_at:             { type: string, format: date-time }
-        updated_at:             { type: string, format: date-time }
-
-    CreateLensRequest:
-      type: object
-      required: [name, catalog_connection_id, iceberg_catalog, iceberg_namespace, iceberg_table, cron_schedule]
-      properties:
-        name:                   { type: string }
-        catalog_connection_id:  { type: string, format: uuid }
-        iceberg_catalog:        { type: string }
-        iceberg_namespace:      { type: string }
-        iceberg_table:          { type: string }
-        cron_schedule:          { type: string }
-        expire_snapshots:       { type: boolean, default: true }
-        remove_orphan_files:    { type: boolean, default: true }
-        compact_data_files:     { type: boolean, default: true }
-        rewrite_manifests:      { type: boolean, default: true }
-        remove_old_metadata:    { type: boolean, default: true }
-
-    UpdateLensRequest:
-      type: object
-      properties:
-        name:                { type: string }
-        cron_schedule:       { type: string }
-        expire_snapshots:    { type: boolean }
-        remove_orphan_files: { type: boolean }
-        compact_data_files:  { type: boolean }
-        rewrite_manifests:   { type: boolean }
-        remove_old_metadata: { type: boolean }
-        status:              { type: string, enum: [active, paused] }
-
-    LensRunHistory:
-      type: object
-      required: [id, lens_id, status, started_at]
-      properties:
-        id:                 { type: string, format: uuid }
-        lens_id:            { type: string, format: uuid }
-        temporal_workflow_id: { type: string }
-        status:             { type: string, enum: [running, finished, failed] }
-        operations_summary: { type: string, nullable: true }
-        error_message:      { type: string, nullable: true }
-        duration_ms:        { type: integer, nullable: true }
-        started_at:         { type: string, format: date-time }
-        finished_at:        { type: string, format: date-time, nullable: true }
 
     # ── Retrievers ─────────────────────────────────────────────
     Retriever:
@@ -1845,126 +1778,6 @@ paths:
         '101':
           description: "WebSocket established"
         '401': { $ref: '#/components/responses/Unauthorized' }
-
-  # ── Lenses ────────────────────────────────────────────────────
-  /lenses:
-    get:
-      tags: [Lenses]
-      operationId: listLenses
-      summary: "List all Lenses — admin only"
-      responses:
-        '200':
-          description: "Lenses"
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/Lens' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-    post:
-      tags: [Lenses]
-      operationId: createLens
-      summary: "Create a Lens — admin only"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateLensRequest' }
-      responses:
-        '201':
-          description: "Lens created"
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Lens' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-
-  /lenses/{id}:
-    parameters:
-      - $ref: '#/components/parameters/PathId'
-    get:
-      tags: [Lenses]
-      operationId: getLens
-      summary: "Lens details"
-      responses:
-        '200':
-          description: "Lens"
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Lens' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-    patch:
-      tags: [Lenses]
-      operationId: updateLens
-      summary: "Update a Lens — admin only"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/UpdateLensRequest' }
-      responses:
-        '200':
-          description: "Lens updated"
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Lens' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-    delete:
-      tags: [Lenses]
-      operationId: deleteLens
-      summary: "Remove a Lens — admin only"
-      responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /lenses/{id}/run:
-    parameters:
-      - $ref: '#/components/parameters/PathId'
-    post:
-      tags: [Lenses]
-      operationId: triggerLens
-      summary: "Trigger manual Lens execution — admin only"
-      responses:
-        '202':
-          description: "Execution started"
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/LensRunHistory' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /lenses/{id}/history:
-    parameters:
-      - $ref: '#/components/parameters/PathId'
-    get:
-      tags: [Lenses]
-      operationId: getLensHistory
-      summary: "Lens execution history"
-      parameters:
-        - $ref: '#/components/parameters/QueryPage'
-        - $ref: '#/components/parameters/QueryPerPage'
-      responses:
-        '200':
-          description: "History"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/LensRunHistory' }
-                  pagination: { $ref: '#/components/schemas/Pagination' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
 
   # ── Retrievers ────────────────────────────────────────────────
   /workspaces/{id}/retrievers:
