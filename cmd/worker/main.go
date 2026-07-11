@@ -36,6 +36,10 @@ func main() {
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflow)
+	w.RegisterWorkflow(workflows.LensQueryPollerWorkflow)
+	w.RegisterWorkflow(workflows.LensClusterPollerWorkflow)
+	w.RegisterWorkflow(workflows.LensTableHealthWorkflow)
+	w.RegisterWorkflow(workflows.LensMaintenanceWorkflow)
 
 	slog.Info("worker started", "queue", "baleia-task-queue")
 	if err := w.Run(worker.InterruptCh()); err != nil {
