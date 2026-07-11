@@ -1,0 +1,30 @@
+meta {
+  name: Run Query
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/executions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "workspace_id": "{{workspace_id}}",
+    "sql": "SELECT 1"
+  }
+}
+
+vars:post-response {
+  execution_id: res.body.id
+}
+
+assert {
+  res.status: eq 202
+}

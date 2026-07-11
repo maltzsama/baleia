@@ -1,0 +1,26 @@
+meta {
+  name: Update Saved Query
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{base_url}}/workspaces/{{workspace_id}}/queries/{{query_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "My Query Updated",
+    "sql": "SELECT 2"
+  }
+}
+
+assert {
+  res.status: eq 200
+}

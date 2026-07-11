@@ -1,0 +1,19 @@
+meta {
+  name: List Folders
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/folders
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
