@@ -8,39 +8,6 @@ package api
 import "context"
 
 
-// ── Lenses ────────────────────────────────────────────────────────────────────
-
-func (h *Handlers) ListLenses(ctx context.Context, request ListLensesRequestObject) (ListLensesResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) CreateLens(ctx context.Context, request CreateLensRequestObject) (CreateLensResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GetLens(ctx context.Context, request GetLensRequestObject) (GetLensResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) UpdateLens(ctx context.Context, request UpdateLensRequestObject) (UpdateLensResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) DeleteLens(ctx context.Context, request DeleteLensRequestObject) (DeleteLensResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) TriggerLens(ctx context.Context, request TriggerLensRequestObject) (TriggerLensResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Handlers) GetLensHistory(ctx context.Context, request GetLensHistoryRequestObject) (GetLensHistoryResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-// ── Retrievers ────────────────────────────────────────────────────────────────
-
-
 // ── Migrant ───────────────────────────────────────────────────────────────────
 
 func (h *Handlers) ListMigrations(ctx context.Context, request ListMigrationsRequestObject) (ListMigrationsResponseObject, error) {
