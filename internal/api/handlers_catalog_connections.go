@@ -235,3 +235,240 @@ func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 		UpdatedAt:       func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),
 	}
 }
+
+func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error) {
+	var connID pgtype.UUID
+	connID.Bytes = request.ConnectionId
+	connID.Valid = true
+
+	catalogs, err := h.queries.ListCatalogsByConnection(ctx, connID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]Catalog, 0, len(catalogs))
+	for _, c := range catalogs {
+		id := openapi_types.UUID(c.ID.Bytes)
+		result = append(result, Catalog{
+			Id:               &id,
+			Name:             &c.Name,
+			TrinoCatalogName: &c.TrinoCatalogName,
+		})
+	}
+	return ListCatalogs200JSONResponse(result), nil
+}
+
+func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogRequestObject) (CreateCatalogResponseObject, error) {
+	var connID pgtype.UUID
+	connID.Bytes = request.ConnectionId
+	connID.Valid = true
+
+	var desc *string
+	if request.Body.Description != nil {
+		desc = request.Body.Description
+	}
+
+	catalog, err := h.queries.CreateCatalog(ctx, db.CreateCatalogParams{
+		ConnectionID:     connID,
+		Name:             request.Body.Name,
+		TrinoCatalogName: request.Body.TrinoCatalogName,
+		Description:      desc,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	id := openapi_types.UUID(catalog.ID.Bytes)
+	return CreateCatalog201JSONResponse(Catalog{
+		Id:               &id,
+		Name:             &catalog.Name,
+		TrinoCatalogName: &catalog.TrinoCatalogName,
+	}), nil
+}
+
+func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObject) (GetCatalogResponseObject, error) {
+	var catalogID pgtype.UUID
+	catalogID.Bytes = request.CatalogId
+	catalogID.Valid = true
+
+	catalog, err := h.queries.GetCatalogByID(ctx, catalogID)
+	if err != nil {
+		return GetCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	}
+
+	id := openapi_types.UUID(catalog.ID.Bytes)
+	return GetCatalog200JSONResponse(Catalog{
+		Id:               &id,
+		Name:             &catalog.Name,
+		TrinoCatalogName: &catalog.TrinoCatalogName,
+	}), nil
+}
+
+func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error) {
+	var catalogID pgtype.UUID
+	catalogID.Bytes = request.CatalogId
+	catalogID.Valid = true
+
+	var desc *string
+	if request.Body.Description != nil {
+		desc = request.Body.Description
+	}
+
+	catalog, err := h.queries.UpdateCatalog(ctx, db.UpdateCatalogParams{
+		ID:               catalogID,
+		Name:             request.Body.Name,
+		TrinoCatalogName: request.Body.TrinoCatalogName,
+		Description:      desc,
+	})
+	if err != nil {
+		return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	}
+
+	id := openapi_types.UUID(catalog.ID.Bytes)
+	return UpdateCatalog200JSONResponse(Catalog{
+		Id:               &id,
+		Name:             &catalog.Name,
+		TrinoCatalogName: &catalog.TrinoCatalogName,
+	}), nil
+}
+
+func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogRequestObject) (DeleteCatalogResponseObject, error) {
+	var catalogID pgtype.UUID
+	catalogID.Bytes = request.CatalogId
+	catalogID.Valid = true
+
+	if err := h.queries.DeleteCatalog(ctx, catalogID); err != nil {
+		return DeleteCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	}
+
+	return DeleteCatalog204Response{}, nil
+}
+
+func (h *Handlers) ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error) {
+	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	if err != nil {
+		return ListNamespaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
+	}
+
+	namespaces, err := client.ListNamespaces(ctx, catName)
+	if err != nil {
+		return nil, err
+	}
+
+	return ListNamespaces200JSONResponse(namespaces), nil
+}
+
+func (h *Handlers) ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error) {
+	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	if err != nil {
+		return ListTables404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
+	}
+
+	tables, err := client.ListTables(ctx, catName, request.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(ListTables200JSONResponse, 0, len(tables))
+	for _, t := range tables {
+		name := t.Name
+		ns := t.Namespace
+		result = append(result, struct {
+			Name      *string   `json:"name,omitempty"`
+			Namespace *[]string `json:"namespace,omitempty"`
+		}{Name: &name, Namespace: &ns})
+	}
+	return result, nil
+}
+
+func (h *Handlers) ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error) {
+	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	if err != nil {
+		return ListColumns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
+	}
+
+	meta, err := client.LoadTable(ctx, catName, request.Namespace, request.Table)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(meta.Schemas) == 0 {
+		return ListColumns200JSONResponse{}, nil
+	}
+
+	schema := meta.Schemas[len(meta.Schemas)-1]
+	result := make(ListColumns200JSONResponse, 0, len(schema.Fields))
+	for _, f := range schema.Fields {
+		id := f.ID
+		name := f.Name
+		required := f.Required
+		doc := f.Doc
+		typeStr, _ := json.Marshal(f.Type)
+		typeStrVal := string(typeStr)
+		result = append(result, struct {
+			Doc      *string `json:"doc,omitempty"`
+			Id       *int    `json:"id,omitempty"`
+			Name     *string `json:"name,omitempty"`
+			Required *bool   `json:"required,omitempty"`
+			Type     *string `json:"type,omitempty"`
+		}{Id: &id, Name: &name, Type: &typeStrVal, Required: &required, Doc: &doc})
+	}
+	return result, nil
+}
+
+func (h *Handlers) ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error) {
+	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	if err != nil {
+		return ListTableSnapshots404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
+	}
+
+	meta, err := client.LoadTable(ctx, catName, request.Namespace, request.Table)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(ListTableSnapshots200JSONResponse, 0, len(meta.Snapshots))
+	for _, s := range meta.Snapshots {
+		snapshotID := s.SnapshotID
+		timestampMs := s.TimestampMs
+		operation := s.Operation
+		manifestList := s.ManifestList
+		result = append(result, struct {
+			ManifestList *string `json:"manifest_list,omitempty"`
+			Operation    *string `json:"operation,omitempty"`
+			ParentId     *int64  `json:"parent_id,omitempty"`
+			SnapshotId   *int64  `json:"snapshot_id,omitempty"`
+			TimestampMs  *int64  `json:"timestamp_ms,omitempty"`
+		}{
+			SnapshotId:   &snapshotID,
+			TimestampMs:  &timestampMs,
+			Operation:    &operation,
+			ManifestList: &manifestList,
+			ParentId:     s.ParentSnapshotID,
+		})
+	}
+	return result, nil
+}
+
+func (h *Handlers) resolveCatalogClient(ctx context.Context, catalogID openapi_types.UUID) (catalog_connections.Client, string, error) {
+	var catID pgtype.UUID
+	catID.Bytes = catalogID
+	catID.Valid = true
+
+	catalog, err := h.queries.GetCatalogByID(ctx, catID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, catalog.ConnectionID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	client, err := catalog_connections.NewClient(conn.Type, conn.Url, conn.CredentialsEnc)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return client, catalog.Name, nil
+}

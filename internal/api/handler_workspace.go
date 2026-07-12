@@ -160,14 +160,13 @@ func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListW
 
     result := make([]WorkspaceCatalogAccess, 0, len(accesses))
     for _, a := range accesses {
-        catalogID := openapi_types.UUID(a.CatalogConnectionID.Bytes)
-        catalogType := WorkspaceCatalogAccessCatalogType(a.CatalogType)
+        catalogID := openapi_types.UUID(a.CatalogID.Bytes)
         result = append(result, WorkspaceCatalogAccess{
-            CatalogConnectionId: catalogID,
-            CatalogName:         &a.CatalogName,
-            CatalogType:         &catalogType,
-            Permission:          WorkspaceCatalogAccessPermission(a.Permission),
-            GrantedAt:           pgTimestampToTime(a.GrantedAt),
+            CatalogId:         catalogID,
+            CatalogName:        &a.CatalogName,
+            TrinoCatalogName:   &a.TrinoCatalogName,
+            Permission:         WorkspaceCatalogAccessPermission(a.Permission),
+            GrantedAt:          pgTimestampToTime(a.GrantedAt),
         })
     }
     return ListWorkspaceCatalogAccess200JSONResponse(result), nil
@@ -194,32 +193,31 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
     workspaceID.Valid = true
 
     var catalogID pgtype.UUID
-    catalogID.Bytes = request.Body.CatalogConnectionId
+    catalogID.Bytes = request.Body.CatalogId
     catalogID.Valid = true
 
     access, err := h.queries.GrantCatalogAccess(ctx, db.GrantCatalogAccessParams{
-        WorkspaceID:         workspaceID,
-        CatalogConnectionID: catalogID,
-        Permission:          string(request.Body.Permission),
-        GrantedBy:           grantedBy,
+        WorkspaceID: workspaceID,
+        CatalogID:   catalogID,
+        Permission:  string(request.Body.Permission),
+        GrantedBy:   grantedBy,
     })
     if err != nil {
         return nil, err
     }
 
-    conn, err := h.queries.GetCatalogConnectionByID(ctx, catalogID)
+    catalog, err := h.queries.GetCatalogByID(ctx, catalogID)
     if err != nil {
         return nil, err
     }
 
-    catalogConnID := openapi_types.UUID(access.CatalogConnectionID.Bytes)
-    catalogType := WorkspaceCatalogAccessCatalogType(conn.Type)
+    catalogUUID := openapi_types.UUID(access.CatalogID.Bytes)
     return GrantCatalogAccess201JSONResponse{
-        CatalogConnectionId: catalogConnID,
-        CatalogName:         &conn.Name,
-        CatalogType:         &catalogType,
-        Permission:          WorkspaceCatalogAccessPermission(access.Permission),
-        GrantedAt:           pgTimestampToTime(access.GrantedAt),
+        CatalogId:        catalogUUID,
+        CatalogName:       &catalog.Name,
+        TrinoCatalogName:  &catalog.TrinoCatalogName,
+        Permission:        WorkspaceCatalogAccessPermission(access.Permission),
+        GrantedAt:         pgTimestampToTime(access.GrantedAt),
     }, nil
 }
 
@@ -238,12 +236,12 @@ func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalo
     workspaceID.Valid = true
 
     var catalogID pgtype.UUID
-    catalogID.Bytes = request.CatalogConnectionId
+    catalogID.Bytes = request.CatalogId
     catalogID.Valid = true
 
     if err := h.queries.RevokeCatalogAccess(ctx, db.RevokeCatalogAccessParams{
-        WorkspaceID:         workspaceID,
-        CatalogConnectionID: catalogID,
+        WorkspaceID: workspaceID,
+        CatalogID:   catalogID,
     }); err != nil {
         return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "access not found"}}, nil
     }
