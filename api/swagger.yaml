@@ -345,6 +345,26 @@ components:
         name:        { type: string }
         description: { type: string }
 
+    # ── Catalogs ─────────────────────────────────────────────────
+    Catalog:
+      type: object
+      properties:
+        id:                 { type: string, format: uuid }
+        connection_id:      { type: string, format: uuid }
+        name:               { type: string, description: "Nome do warehouse dentro do catalog manager" }
+        description:        { type: string }
+        trino_catalog_name: { type: string, description: "Nome registrado no Trino" }
+        created_at:         { type: string, format: date-time }
+        updated_at:         { type: string, format: date-time }
+
+    CreateCatalogRequest:
+      type: object
+      required: [name, trino_catalog_name]
+      properties:
+        name:               { type: string }
+        description:        { type: string }
+        trino_catalog_name: { type: string }
+
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
@@ -393,6 +413,7 @@ components:
       properties:
         client_id:     { type: string }
         client_secret: { type: string }
+        realm:         { type: string, description: "Realm do Polaris. Default: POLARIS" }
 
     NessieCredentials:
       type: object
@@ -432,20 +453,20 @@ components:
 
     WorkspaceCatalogAccess:
       type: object
-      required: [catalog_connection_id, permission, granted_at]
+      required: [catalog_id, permission, granted_at]
       properties:
-        catalog_connection_id: { type: string, format: uuid }
-        catalog_name:          { type: string }
-        catalog_type:          { type: string, enum: [polaris, nessie, glue, hive] }
-        permission:            { type: string, enum: [read, write] }
-        granted_at:            { type: string, format: date-time }
+        catalog_id:   { type: string, format: uuid }
+        catalog_name:  { type: string }
+        trino_catalog_name: { type: string }
+        permission:    { type: string, enum: [read, write] }
+        granted_at:    { type: string, format: date-time }
 
     GrantCatalogAccessRequest:
       type: object
-      required: [catalog_connection_id, permission]
+      required: [catalog_id, permission]
       properties:
-        catalog_connection_id: { type: string, format: uuid }
-        permission:            { type: string, enum: [read, write] }
+        catalog_id: { type: string, format: uuid }
+        permission:  { type: string, enum: [read, write] }
 
     # ── Query Editor ───────────────────────────────────────────
     QueryFolder:
@@ -1202,10 +1223,10 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  /workspaces/{id}/catalog-access/{catalog_connection_id}:
+  /workspaces/{id}/catalog-access/{catalog_id}:
     parameters:
       - $ref: '#/components/parameters/PathId'
-      - name: catalog_connection_id
+      - name: catalog_id
         in: path
         required: true
         schema: { type: string, format: uuid }
@@ -1314,16 +1335,17 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ── Catalog Explorer ──────────────────────────────────────────────
-  /catalog/{catalog_connection_id}/catalogs:
+
+  /connections/{connection_id}/catalogs:
     parameters:
-      - name: catalog_connection_id
+      - name: connection_id
         in: path
         required: true
         schema: { type: string, format: uuid }
     get:
       tags: [Catalog]
       operationId: listCatalogs
-      summary: "List catalogs available in the catalog manager"
+      summary: "List catalogs registered under a connection"
       responses:
         '200':
           description: "List of catalogs"
@@ -1331,24 +1353,78 @@ paths:
             application/json:
               schema:
                 type: array
-                items:
-                  type: object
-                  properties:
-                    name: { type: string }
-                    type: { type: string }
+                items: { $ref: '#/components/schemas/Catalog' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Catalog]
+      operationId: createCatalog
+      summary: "Register a catalog under a connection"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCatalogRequest' }
+      responses:
+        '201':
+          description: "Catalog created"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Catalog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
-  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces:
+  /connections/{connection_id}/catalogs/{catalog_id}:
     parameters:
-      - name: catalog_connection_id
+      - name: connection_id
         in: path
         required: true
         schema: { type: string, format: uuid }
-      - name: catalog
+      - name: catalog_id
         in: path
         required: true
-        schema: { type: string }
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Catalog]
+      operationId: getCatalog
+      summary: "Catalog details"
+      responses:
+        '200':
+          description: "Catalog"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Catalog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Catalog]
+      operationId: updateCatalog
+      summary: "Update a catalog"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCatalogRequest' }
+      responses:
+        '200':
+          description: "Catalog updated"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Catalog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Catalog]
+      operationId: deleteCatalog
+      summary: "Remove a catalog"
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /catalogs/{catalog_id}/namespaces:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
     get:
       tags: [Catalog]
       operationId: listNamespaces
@@ -1366,16 +1442,12 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables:
+  /catalogs/{catalog_id}/namespaces/{namespace}/tables:
     parameters:
-      - name: catalog_connection_id
+      - name: catalog_id
         in: path
         required: true
         schema: { type: string, format: uuid }
-      - name: catalog
-        in: path
-        required: true
-        schema: { type: string }
       - name: namespace
         in: path
         required: true
@@ -1399,16 +1471,12 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns:
+  /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns:
     parameters:
-      - name: catalog_connection_id
+      - name: catalog_id
         in: path
         required: true
         schema: { type: string, format: uuid }
-      - name: catalog
-        in: path
-        required: true
-        schema: { type: string }
       - name: namespace
         in: path
         required: true
@@ -1439,16 +1507,12 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots:
+  /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots:
     parameters:
-      - name: catalog_connection_id
+      - name: catalog_id
         in: path
         required: true
         schema: { type: string, format: uuid }
-      - name: catalog
-        in: path
-        required: true
-        schema: { type: string }
       - name: namespace
         in: path
         required: true

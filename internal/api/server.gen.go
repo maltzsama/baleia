@@ -73,21 +73,33 @@ type ServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
-	// List catalogs available in the catalog manager
-	// (GET /catalog/{catalog_connection_id}/catalogs)
-	ListCatalogs(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID)
 	// List namespaces in a catalog
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces)
-	ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string)
+	// (GET /catalogs/{catalog_id}/namespaces)
+	ListNamespaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
 	// List tables in a namespace
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables)
-	ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string)
+	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables)
+	ListTables(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string)
 	// List columns of a table
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns)
-	ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string)
+	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns)
+	ListColumns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string)
 	// List Iceberg snapshots for a table
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots)
-	ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string)
+	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots)
+	ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string)
+	// List catalogs registered under a connection
+	// (GET /connections/{connection_id}/catalogs)
+	ListCatalogs(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID)
+	// Register a catalog under a connection
+	// (POST /connections/{connection_id}/catalogs)
+	CreateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID)
+	// Remove a catalog
+	// (DELETE /connections/{connection_id}/catalogs/{catalog_id})
+	DeleteCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID)
+	// Catalog details
+	// (GET /connections/{connection_id}/catalogs/{catalog_id})
+	GetCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID)
+	// Update a catalog
+	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
+	UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID)
 	// Current user profile
 	// (GET /me)
 	GetProfile(w http.ResponseWriter, r *http.Request)
@@ -173,8 +185,8 @@ type ServerInterface interface {
 	// (POST /workspaces/{id}/catalog-access)
 	GrantCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId)
 	// Revoke access to an external catalog — admin only
-	// (DELETE /workspaces/{id}/catalog-access/{catalog_connection_id})
-	RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogConnectionId openapi_types.UUID)
+	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
+	RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID)
 	// Workspace execution history
 	// (GET /workspaces/{id}/executions)
 	ListExecutions(w http.ResponseWriter, r *http.Request, id PathId, params ListExecutionsParams)
@@ -355,33 +367,57 @@ func (_ Unimplemented) TestCatalogConnection(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List catalogs available in the catalog manager
-// (GET /catalog/{catalog_connection_id}/catalogs)
-func (_ Unimplemented) ListCatalogs(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // List namespaces in a catalog
-// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces)
-func (_ Unimplemented) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string) {
+// (GET /catalogs/{catalog_id}/namespaces)
+func (_ Unimplemented) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List tables in a namespace
-// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables)
-func (_ Unimplemented) ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string) {
+// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables)
+func (_ Unimplemented) ListTables(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List columns of a table
-// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns)
-func (_ Unimplemented) ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
+// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns)
+func (_ Unimplemented) ListColumns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List Iceberg snapshots for a table
-// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots)
-func (_ Unimplemented) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
+// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots)
+func (_ Unimplemented) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List catalogs registered under a connection
+// (GET /connections/{connection_id}/catalogs)
+func (_ Unimplemented) ListCatalogs(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Register a catalog under a connection
+// (POST /connections/{connection_id}/catalogs)
+func (_ Unimplemented) CreateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a catalog
+// (DELETE /connections/{connection_id}/catalogs/{catalog_id})
+func (_ Unimplemented) DeleteCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Catalog details
+// (GET /connections/{connection_id}/catalogs/{catalog_id})
+func (_ Unimplemented) GetCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a catalog
+// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
+func (_ Unimplemented) UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -554,8 +590,8 @@ func (_ Unimplemented) GrantCatalogAccess(w http.ResponseWriter, r *http.Request
 }
 
 // Revoke access to an external catalog — admin only
-// (DELETE /workspaces/{id}/catalog-access/{catalog_connection_id})
-func (_ Unimplemented) RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogConnectionId openapi_types.UUID) {
+// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
+func (_ Unimplemented) RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1150,59 +1186,17 @@ func (siw *ServerInterfaceWrapper) TestCatalogConnection(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
-// ListCatalogs operation middleware
-func (siw *ServerInterfaceWrapper) ListCatalogs(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "catalog_connection_id" -------------
-	var catalogConnectionId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_connection_id", chi.URLParam(r, "catalog_connection_id"), &catalogConnectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_connection_id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListCatalogs(w, r, catalogConnectionId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListNamespaces operation middleware
 func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
-	// ------------- Path parameter "catalog_connection_id" -------------
-	var catalogConnectionId openapi_types.UUID
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_connection_id", chi.URLParam(r, "catalog_connection_id"), &catalogConnectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_connection_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "catalog" -------------
-	var catalog string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
 		return
 	}
 
@@ -1215,7 +1209,7 @@ func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListNamespaces(w, r, catalogConnectionId, catalog)
+		siw.Handler.ListNamespaces(w, r, catalogId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1230,21 +1224,12 @@ func (siw *ServerInterfaceWrapper) ListTables(w http.ResponseWriter, r *http.Req
 
 	var err error
 
-	// ------------- Path parameter "catalog_connection_id" -------------
-	var catalogConnectionId openapi_types.UUID
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_connection_id", chi.URLParam(r, "catalog_connection_id"), &catalogConnectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_connection_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "catalog" -------------
-	var catalog string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
 		return
 	}
 
@@ -1266,7 +1251,7 @@ func (siw *ServerInterfaceWrapper) ListTables(w http.ResponseWriter, r *http.Req
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTables(w, r, catalogConnectionId, catalog, namespace)
+		siw.Handler.ListTables(w, r, catalogId, namespace)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1281,21 +1266,12 @@ func (siw *ServerInterfaceWrapper) ListColumns(w http.ResponseWriter, r *http.Re
 
 	var err error
 
-	// ------------- Path parameter "catalog_connection_id" -------------
-	var catalogConnectionId openapi_types.UUID
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_connection_id", chi.URLParam(r, "catalog_connection_id"), &catalogConnectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_connection_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "catalog" -------------
-	var catalog string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
 		return
 	}
 
@@ -1326,7 +1302,7 @@ func (siw *ServerInterfaceWrapper) ListColumns(w http.ResponseWriter, r *http.Re
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListColumns(w, r, catalogConnectionId, catalog, namespace, table)
+		siw.Handler.ListColumns(w, r, catalogId, namespace, table)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1341,21 +1317,12 @@ func (siw *ServerInterfaceWrapper) ListTableSnapshots(w http.ResponseWriter, r *
 
 	var err error
 
-	// ------------- Path parameter "catalog_connection_id" -------------
-	var catalogConnectionId openapi_types.UUID
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_connection_id", chi.URLParam(r, "catalog_connection_id"), &catalogConnectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_connection_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "catalog" -------------
-	var catalog string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog", chi.URLParam(r, "catalog"), &catalog, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
 		return
 	}
 
@@ -1386,7 +1353,199 @@ func (siw *ServerInterfaceWrapper) ListTableSnapshots(w http.ResponseWriter, r *
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTableSnapshots(w, r, catalogConnectionId, catalog, namespace, table)
+		siw.Handler.ListTableSnapshots(w, r, catalogId, namespace, table)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCatalogs operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "connection_id" -------------
+	var connectionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection_id", chi.URLParam(r, "connection_id"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCatalogs(w, r, connectionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCatalog operation middleware
+func (siw *ServerInterfaceWrapper) CreateCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "connection_id" -------------
+	var connectionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection_id", chi.URLParam(r, "connection_id"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCatalog(w, r, connectionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCatalog operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "connection_id" -------------
+	var connectionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection_id", chi.URLParam(r, "connection_id"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCatalog(w, r, connectionId, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCatalog operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "connection_id" -------------
+	var connectionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection_id", chi.URLParam(r, "connection_id"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalog(w, r, connectionId, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCatalog operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "connection_id" -------------
+	var connectionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection_id", chi.URLParam(r, "connection_id"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCatalog(w, r, connectionId, catalogId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2232,12 +2391,12 @@ func (siw *ServerInterfaceWrapper) RevokeCatalogAccess(w http.ResponseWriter, r 
 		return
 	}
 
-	// ------------- Path parameter "catalog_connection_id" -------------
-	var catalogConnectionId openapi_types.UUID
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_connection_id", chi.URLParam(r, "catalog_connection_id"), &catalogConnectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_connection_id", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
 		return
 	}
 
@@ -2250,7 +2409,7 @@ func (siw *ServerInterfaceWrapper) RevokeCatalogAccess(w http.ResponseWriter, r 
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RevokeCatalogAccess(w, r, id, catalogConnectionId)
+		siw.Handler.RevokeCatalogAccess(w, r, id, catalogId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3366,19 +3525,31 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalog-connections/{id}/test", wrapper.TestCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs", wrapper.ListCatalogs)
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces", wrapper.ListNamespaces)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces", wrapper.ListNamespaces)
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces/{namespace}/tables", wrapper.ListTables)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables", wrapper.ListTables)
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns", wrapper.ListColumns)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns", wrapper.ListColumns)
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots", wrapper.ListTableSnapshots)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots", wrapper.ListTableSnapshots)
+		r.Get(options.BaseURL+"/connections/{connection_id}/catalogs", wrapper.ListCatalogs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/connections/{connection_id}/catalogs", wrapper.CreateCatalog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/connections/{connection_id}/catalogs/{catalog_id}", wrapper.DeleteCatalog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/connections/{connection_id}/catalogs/{catalog_id}", wrapper.GetCatalog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/connections/{connection_id}/catalogs/{catalog_id}", wrapper.UpdateCatalog)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetProfile)
@@ -3465,7 +3636,7 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/workspaces/{id}/catalog-access", wrapper.GrantCatalogAccess)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/workspaces/{id}/catalog-access/{catalog_connection_id}", wrapper.RevokeCatalogAccess)
+		r.Delete(options.BaseURL+"/workspaces/{id}/catalog-access/{catalog_id}", wrapper.RevokeCatalogAccess)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/executions", wrapper.ListExecutions)
@@ -4097,47 +4268,8 @@ func (response TestCatalogConnection404JSONResponse) VisitTestCatalogConnectionR
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListCatalogsRequestObject struct {
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
-}
-
-type ListCatalogsResponseObject interface {
-	VisitListCatalogsResponse(w http.ResponseWriter) error
-}
-
-type ListCatalogs200JSONResponse []struct {
-	Name *string `json:"name,omitempty"`
-	Type *string `json:"type,omitempty"`
-}
-
-func (response ListCatalogs200JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListCatalogs401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListCatalogs401JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListCatalogs404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response ListCatalogs404JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 type ListNamespacesRequestObject struct {
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
-	Catalog             string             `json:"catalog"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
 }
 
 type ListNamespacesResponseObject interface {
@@ -4172,9 +4304,8 @@ func (response ListNamespaces404JSONResponse) VisitListNamespacesResponse(w http
 }
 
 type ListTablesRequestObject struct {
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
-	Catalog             string             `json:"catalog"`
-	Namespace           string             `json:"namespace"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Namespace string             `json:"namespace"`
 }
 
 type ListTablesResponseObject interface {
@@ -4212,10 +4343,9 @@ func (response ListTables404JSONResponse) VisitListTablesResponse(w http.Respons
 }
 
 type ListColumnsRequestObject struct {
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
-	Catalog             string             `json:"catalog"`
-	Namespace           string             `json:"namespace"`
-	Table               string             `json:"table"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Namespace string             `json:"namespace"`
+	Table     string             `json:"table"`
 }
 
 type ListColumnsResponseObject interface {
@@ -4256,10 +4386,9 @@ func (response ListColumns404JSONResponse) VisitListColumnsResponse(w http.Respo
 }
 
 type ListTableSnapshotsRequestObject struct {
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
-	Catalog             string             `json:"catalog"`
-	Namespace           string             `json:"namespace"`
-	Table               string             `json:"table"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Namespace string             `json:"namespace"`
+	Table     string             `json:"table"`
 }
 
 type ListTableSnapshotsResponseObject interface {
@@ -4293,6 +4422,166 @@ func (response ListTableSnapshots401JSONResponse) VisitListTableSnapshotsRespons
 type ListTableSnapshots404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListTableSnapshots404JSONResponse) VisitListTableSnapshotsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogsRequestObject struct {
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+}
+
+type ListCatalogsResponseObject interface {
+	VisitListCatalogsResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogs200JSONResponse []Catalog
+
+func (response ListCatalogs200JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogs401JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogRequestObject struct {
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+	Body         *CreateCatalogJSONRequestBody
+}
+
+type CreateCatalogResponseObject interface {
+	VisitCreateCatalogResponse(w http.ResponseWriter) error
+}
+
+type CreateCatalog201JSONResponse Catalog
+
+func (response CreateCatalog201JSONResponse) VisitCreateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalog401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateCatalog401JSONResponse) VisitCreateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogRequestObject struct {
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+	CatalogId    openapi_types.UUID `json:"catalog_id"`
+}
+
+type DeleteCatalogResponseObject interface {
+	VisitDeleteCatalogResponse(w http.ResponseWriter) error
+}
+
+type DeleteCatalog204Response = NoContentResponse
+
+func (response DeleteCatalog204Response) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCatalog401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteCatalog401JSONResponse) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalog404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteCatalog404JSONResponse) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogRequestObject struct {
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+	CatalogId    openapi_types.UUID `json:"catalog_id"`
+}
+
+type GetCatalogResponseObject interface {
+	VisitGetCatalogResponse(w http.ResponseWriter) error
+}
+
+type GetCatalog200JSONResponse Catalog
+
+func (response GetCatalog200JSONResponse) VisitGetCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalog401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalog401JSONResponse) VisitGetCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalog404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalog404JSONResponse) VisitGetCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogRequestObject struct {
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+	CatalogId    openapi_types.UUID `json:"catalog_id"`
+	Body         *UpdateCatalogJSONRequestBody
+}
+
+type UpdateCatalogResponseObject interface {
+	VisitUpdateCatalogResponse(w http.ResponseWriter) error
+}
+
+type UpdateCatalog200JSONResponse Catalog
+
+func (response UpdateCatalog200JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalog401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateCatalog401JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalog404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateCatalog404JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -5332,8 +5621,8 @@ func (response GrantCatalogAccess403JSONResponse) VisitGrantCatalogAccessRespons
 }
 
 type RevokeCatalogAccessRequestObject struct {
-	Id                  PathId             `json:"id"`
-	CatalogConnectionId openapi_types.UUID `json:"catalog_connection_id"`
+	Id        PathId             `json:"id"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
 }
 
 type RevokeCatalogAccessResponseObject interface {
@@ -6184,21 +6473,33 @@ type StrictServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error)
-	// List catalogs available in the catalog manager
-	// (GET /catalog/{catalog_connection_id}/catalogs)
-	ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error)
 	// List namespaces in a catalog
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces)
+	// (GET /catalogs/{catalog_id}/namespaces)
 	ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error)
 	// List tables in a namespace
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables)
+	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables)
 	ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error)
 	// List columns of a table
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/columns)
+	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns)
 	ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error)
 	// List Iceberg snapshots for a table
-	// (GET /catalog/{catalog_connection_id}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}/snapshots)
+	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots)
 	ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error)
+	// List catalogs registered under a connection
+	// (GET /connections/{connection_id}/catalogs)
+	ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error)
+	// Register a catalog under a connection
+	// (POST /connections/{connection_id}/catalogs)
+	CreateCatalog(ctx context.Context, request CreateCatalogRequestObject) (CreateCatalogResponseObject, error)
+	// Remove a catalog
+	// (DELETE /connections/{connection_id}/catalogs/{catalog_id})
+	DeleteCatalog(ctx context.Context, request DeleteCatalogRequestObject) (DeleteCatalogResponseObject, error)
+	// Catalog details
+	// (GET /connections/{connection_id}/catalogs/{catalog_id})
+	GetCatalog(ctx context.Context, request GetCatalogRequestObject) (GetCatalogResponseObject, error)
+	// Update a catalog
+	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
+	UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error)
 	// Current user profile
 	// (GET /me)
 	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
@@ -6284,7 +6585,7 @@ type StrictServerInterface interface {
 	// (POST /workspaces/{id}/catalog-access)
 	GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error)
 	// Revoke access to an external catalog — admin only
-	// (DELETE /workspaces/{id}/catalog-access/{catalog_connection_id})
+	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 	RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error)
 	// Workspace execution history
 	// (GET /workspaces/{id}/executions)
@@ -6889,38 +7190,11 @@ func (sh *strictHandler) TestCatalogConnection(w http.ResponseWriter, r *http.Re
 	}
 }
 
-// ListCatalogs operation middleware
-func (sh *strictHandler) ListCatalogs(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID) {
-	var request ListCatalogsRequestObject
-
-	request.CatalogConnectionId = catalogConnectionId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListCatalogs(ctx, request.(ListCatalogsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListCatalogs")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListCatalogsResponseObject); ok {
-		if err := validResponse.VisitListCatalogsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // ListNamespaces operation middleware
-func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string) {
+func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
 	var request ListNamespacesRequestObject
 
-	request.CatalogConnectionId = catalogConnectionId
-	request.Catalog = catalog
+	request.CatalogId = catalogId
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListNamespaces(ctx, request.(ListNamespacesRequestObject))
@@ -6943,11 +7217,10 @@ func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, 
 }
 
 // ListTables operation middleware
-func (sh *strictHandler) ListTables(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string) {
+func (sh *strictHandler) ListTables(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string) {
 	var request ListTablesRequestObject
 
-	request.CatalogConnectionId = catalogConnectionId
-	request.Catalog = catalog
+	request.CatalogId = catalogId
 	request.Namespace = namespace
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
@@ -6971,11 +7244,10 @@ func (sh *strictHandler) ListTables(w http.ResponseWriter, r *http.Request, cata
 }
 
 // ListColumns operation middleware
-func (sh *strictHandler) ListColumns(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
+func (sh *strictHandler) ListColumns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
 	var request ListColumnsRequestObject
 
-	request.CatalogConnectionId = catalogConnectionId
-	request.Catalog = catalog
+	request.CatalogId = catalogId
 	request.Namespace = namespace
 	request.Table = table
 
@@ -7000,11 +7272,10 @@ func (sh *strictHandler) ListColumns(w http.ResponseWriter, r *http.Request, cat
 }
 
 // ListTableSnapshots operation middleware
-func (sh *strictHandler) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogConnectionId openapi_types.UUID, catalog string, namespace string, table string) {
+func (sh *strictHandler) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
 	var request ListTableSnapshotsRequestObject
 
-	request.CatalogConnectionId = catalogConnectionId
-	request.Catalog = catalog
+	request.CatalogId = catalogId
 	request.Namespace = namespace
 	request.Table = table
 
@@ -7021,6 +7292,153 @@ func (sh *strictHandler) ListTableSnapshots(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListTableSnapshotsResponseObject); ok {
 		if err := validResponse.VisitListTableSnapshotsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCatalogs operation middleware
+func (sh *strictHandler) ListCatalogs(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID) {
+	var request ListCatalogsRequestObject
+
+	request.ConnectionId = connectionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogs(ctx, request.(ListCatalogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogsResponseObject); ok {
+		if err := validResponse.VisitListCatalogsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCatalog operation middleware
+func (sh *strictHandler) CreateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID) {
+	var request CreateCatalogRequestObject
+
+	request.ConnectionId = connectionId
+
+	var body CreateCatalogJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCatalog(ctx, request.(CreateCatalogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCatalog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCatalogResponseObject); ok {
+		if err := validResponse.VisitCreateCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCatalog operation middleware
+func (sh *strictHandler) DeleteCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	var request DeleteCatalogRequestObject
+
+	request.ConnectionId = connectionId
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCatalog(ctx, request.(DeleteCatalogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCatalog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCatalogResponseObject); ok {
+		if err := validResponse.VisitDeleteCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCatalog operation middleware
+func (sh *strictHandler) GetCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	var request GetCatalogRequestObject
+
+	request.ConnectionId = connectionId
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalog(ctx, request.(GetCatalogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogResponseObject); ok {
+		if err := validResponse.VisitGetCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCatalog operation middleware
+func (sh *strictHandler) UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	var request UpdateCatalogRequestObject
+
+	request.ConnectionId = connectionId
+	request.CatalogId = catalogId
+
+	var body UpdateCatalogJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCatalog(ctx, request.(UpdateCatalogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCatalog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCatalogResponseObject); ok {
+		if err := validResponse.VisitUpdateCatalogResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7812,11 +8230,11 @@ func (sh *strictHandler) GrantCatalogAccess(w http.ResponseWriter, r *http.Reque
 }
 
 // RevokeCatalogAccess operation middleware
-func (sh *strictHandler) RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogConnectionId openapi_types.UUID) {
+func (sh *strictHandler) RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID) {
 	var request RevokeCatalogAccessRequestObject
 
 	request.Id = id
-	request.CatalogConnectionId = catalogConnectionId
+	request.CatalogId = catalogId
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.RevokeCatalogAccess(ctx, request.(RevokeCatalogAccessRequestObject))

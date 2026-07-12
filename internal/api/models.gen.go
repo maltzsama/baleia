@@ -506,30 +506,6 @@ func (e WorkspaceType) Valid() bool {
 	}
 }
 
-// Defines values for WorkspaceCatalogAccessCatalogType.
-const (
-	Glue    WorkspaceCatalogAccessCatalogType = "glue"
-	Hive    WorkspaceCatalogAccessCatalogType = "hive"
-	Nessie  WorkspaceCatalogAccessCatalogType = "nessie"
-	Polaris WorkspaceCatalogAccessCatalogType = "polaris"
-)
-
-// Valid indicates whether the value is a known member of the WorkspaceCatalogAccessCatalogType enum.
-func (e WorkspaceCatalogAccessCatalogType) Valid() bool {
-	switch e {
-	case Glue:
-		return true
-	case Hive:
-		return true
-	case Nessie:
-		return true
-	case Polaris:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for WorkspaceCatalogAccessPermission.
 const (
 	WorkspaceCatalogAccessPermissionRead  WorkspaceCatalogAccessPermission = "read"
@@ -647,6 +623,21 @@ type ApiKeyCreated struct {
 	Secret string `json:"secret"`
 }
 
+// Catalog defines model for Catalog.
+type Catalog struct {
+	ConnectionId *openapi_types.UUID `json:"connection_id,omitempty"`
+	CreatedAt    *time.Time          `json:"created_at,omitempty"`
+	Description  *string             `json:"description,omitempty"`
+	Id           *openapi_types.UUID `json:"id,omitempty"`
+
+	// Name Nome do warehouse dentro do catalog manager
+	Name *string `json:"name,omitempty"`
+
+	// TrinoCatalogName Nome registrado no Trino
+	TrinoCatalogName *string    `json:"trino_catalog_name,omitempty"`
+	UpdatedAt        *time.Time `json:"updated_at,omitempty"`
+}
+
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
 	CreatedAt       time.Time             `json:"created_at"`
@@ -689,6 +680,13 @@ type CreateCatalogConnectionRequest struct {
 
 // CreateCatalogConnectionRequestType defines model for CreateCatalogConnectionRequest.Type.
 type CreateCatalogConnectionRequestType string
+
+// CreateCatalogRequest defines model for CreateCatalogRequest.
+type CreateCatalogRequest struct {
+	Description      *string `json:"description,omitempty"`
+	Name             string  `json:"name"`
+	TrinoCatalogName string  `json:"trino_catalog_name"`
+}
 
 // CreateFolderRequest defines model for CreateFolderRequest.
 type CreateFolderRequest struct {
@@ -786,8 +784,8 @@ type GlueCredentials struct {
 
 // GrantCatalogAccessRequest defines model for GrantCatalogAccessRequest.
 type GrantCatalogAccessRequest struct {
-	CatalogConnectionId openapi_types.UUID                  `json:"catalog_connection_id"`
-	Permission          GrantCatalogAccessRequestPermission `json:"permission"`
+	CatalogId  openapi_types.UUID                  `json:"catalog_id"`
+	Permission GrantCatalogAccessRequestPermission `json:"permission"`
 }
 
 // GrantCatalogAccessRequestPermission defines model for GrantCatalogAccessRequest.Permission.
@@ -921,6 +919,9 @@ type PasswordResetRequestBody struct {
 type PolarisCredentials struct {
 	ClientId     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+
+	// Realm Realm do Polaris. Default: POLARIS
+	Realm *string `json:"realm,omitempty"`
 }
 
 // QueryFolder defines model for QueryFolder.
@@ -1150,15 +1151,12 @@ type WorkspaceType string
 
 // WorkspaceCatalogAccess defines model for WorkspaceCatalogAccess.
 type WorkspaceCatalogAccess struct {
-	CatalogConnectionId openapi_types.UUID                 `json:"catalog_connection_id"`
-	CatalogName         *string                            `json:"catalog_name,omitempty"`
-	CatalogType         *WorkspaceCatalogAccessCatalogType `json:"catalog_type,omitempty"`
-	GrantedAt           time.Time                          `json:"granted_at"`
-	Permission          WorkspaceCatalogAccessPermission   `json:"permission"`
+	CatalogId        openapi_types.UUID               `json:"catalog_id"`
+	CatalogName      *string                          `json:"catalog_name,omitempty"`
+	GrantedAt        time.Time                        `json:"granted_at"`
+	Permission       WorkspaceCatalogAccessPermission `json:"permission"`
+	TrinoCatalogName *string                          `json:"trino_catalog_name,omitempty"`
 }
-
-// WorkspaceCatalogAccessCatalogType defines model for WorkspaceCatalogAccess.CatalogType.
-type WorkspaceCatalogAccessCatalogType string
 
 // WorkspaceCatalogAccessPermission defines model for WorkspaceCatalogAccess.Permission.
 type WorkspaceCatalogAccessPermission string
@@ -1271,6 +1269,12 @@ type CreateCatalogConnectionJSONRequestBody = CreateCatalogConnectionRequest
 
 // UpdateCatalogConnectionJSONRequestBody defines body for UpdateCatalogConnection for application/json ContentType.
 type UpdateCatalogConnectionJSONRequestBody = UpdateCatalogConnectionRequest
+
+// CreateCatalogJSONRequestBody defines body for CreateCatalog for application/json ContentType.
+type CreateCatalogJSONRequestBody = CreateCatalogRequest
+
+// UpdateCatalogJSONRequestBody defines body for UpdateCatalog for application/json ContentType.
+type UpdateCatalogJSONRequestBody = CreateCatalogRequest
 
 // UpdateProfileJSONRequestBody defines body for UpdateProfile for application/json ContentType.
 type UpdateProfileJSONRequestBody = UpdateProfileRequest
