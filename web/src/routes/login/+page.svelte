@@ -19,7 +19,7 @@
 		error = msg;
 		if (field) {
 			shakeField = field;
-			setTimeout(() => shakeField = '', 400);
+			setTimeout(() => shakeField = '', 1000);
 		}
 	}
 
