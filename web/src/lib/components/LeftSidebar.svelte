@@ -1,7 +1,11 @@
 <script lang="ts">
 	import DataSourceTree from './DataSourceTree.svelte';
 
-	let { collapsed = $bindable(false), activeTab = $bindable<'datasources' | 'queries'>('datasources') } = $props();
+	let { collapsed = $bindable(false), activeTab = $bindable<'datasources' | 'queries'>('datasources'), onSelectTable }: {
+		collapsed?: boolean;
+		activeTab?: 'datasources' | 'queries';
+		onSelectTable?: (t: {catalog: string, namespace: string, table: string} | null) => void;
+	} = $props();
 	let search = $state('');
 </script>
 
@@ -47,7 +51,7 @@
 			</div>
 
 			{#if activeTab === 'datasources'}
-				<DataSourceTree />
+				<DataSourceTree {onSelectTable} />
 			{:else}
 				<div class="overflow-y-auto flex-1 px-1.5 pt-1.5 pb-2">
 					<div class="text-[10px] font-bold tracking-wide uppercase text-text-muted pt-2 px-1.5 pb-1 flex items-center gap-1.5 after:content-[''] after:flex-1 after:h-px after:bg-border">Saved Queries</div>
