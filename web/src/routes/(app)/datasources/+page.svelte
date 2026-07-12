@@ -45,10 +45,27 @@
 		form = { name: '', type: 'polaris', url: '', client_id: '', client_secret: '', username: '', password: '' };
 		modalOpen = true;
 	}
-	function openEdit(c: any) {
+	async function openEdit(c: any) {
 		editingId = c.id;
-		form = { name: c.name, type: c.type, url: c.url, client_id: '', client_secret: '', username: '', password: '' };
+		form = { name: c.name, type: c.type, url: c.url || '', host: c.host || '', port: c.port || '', database: '', client_id: '', client_secret: '', username: '', password: '' };
+		if (!c.host && c.url) {
+			const m = c.url.match(/jdbc:[a-z]+:\/\/([^:]+):(\d+)\/(.+)/);
+			if (m) { form.host = m[1]; form.port = m[2]; form.database = m[3]; }
+		}
 		modalOpen = true;
+		try {
+			const res = await fetch(`/api/v1/catalog-connections/${c.id}`, { headers: { Authorization: `Bearer ${token}` } });
+			if (res.ok) {
+				const detail = await res.json();
+				if (detail.credentials) {
+					const creds = detail.credentials as any;
+					if (creds.client_id) form.client_id = creds.client_id;
+					if (creds.client_secret) form.client_secret = creds.client_secret;
+					if (creds.username) form.username = creds.username;
+					if (creds.password) form.password = creds.password;
+				}
+			}
+		} catch {}
 	}
 	function closeModal() { modalOpen = false; }
 
@@ -64,13 +81,23 @@
 			connUrl = `jdbc:${form.type}://${form.host || 'localhost'}:${form.port || (form.type === 'postgresql' ? '5432' : '3306')}/${db}`;
 		}
 		const body: any = { name: form.name, type: form.type, url: connUrl, default_readonly: false };
-		if (isIcebergType()) {
-			body.polaris_credentials = { client_id: form.client_id, client_secret: form.client_secret };
-		}
-		if (isSqlType()) {
-			const creds = { username: form.username, password: form.password };
-			if (form.type === 'postgresql') body.postgresql_credentials = creds;
-			else body.mysql_credentials = creds;
+		if (editingId) {
+			body.url = connUrl;
+			if (isIcebergType() || isSqlType()) {
+				const creds: any = {};
+				if (isIcebergType()) { creds.client_id = form.client_id; creds.client_secret = form.client_secret; }
+				if (isSqlType()) { creds.username = form.username; creds.password = form.password; }
+				body.credentials = creds;
+			}
+		} else {
+			if (isIcebergType()) {
+				body.polaris_credentials = { client_id: form.client_id, client_secret: form.client_secret };
+			}
+			if (isSqlType()) {
+				const creds = { username: form.username, password: form.password };
+				if (form.type === 'postgresql') body.postgresql_credentials = creds;
+				else body.mysql_credentials = creds;
+			}
 		}
 		const method = editingId ? 'PATCH' : 'POST';
 		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
@@ -82,6 +109,16 @@
 		if (!deleteTarget) return;
 		await fetch(`/api/v1/catalog-connections/${deleteTarget.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
 		deleteTarget = null; loadConnections();
+	}
+
+	function displayUrl(conn: any) {
+		if (conn.host) return `${conn.host}:${conn.port || ''}`;
+		const sqlTypes = ['postgresql', 'mysql'];
+		if (sqlTypes.includes(conn.type) && conn.url) {
+			const m = conn.url.match(/jdbc:[a-z]+:\/\/([^\/]+)/);
+			if (m) return m[1];
+		}
+		return conn.url;
 	}
 
 	function engineShort(type: string) { return type.slice(0, 2).toUpperCase(); }
@@ -121,7 +158,7 @@
 						<div class="engine-badge w-9 h-9 rounded-lg flex items-center justify-center font-mono text-[11px] font-bold shrink-0 {engineClasses[conn.type] || 'bg-slate-50 text-slate-600'}">{engineShort(conn.type)}</div>
 						<div class="min-w-0 flex-1">
 							<div class="text-[13px] font-semibold truncate mb-0.5">{conn.name}</div>
-							<div class="text-[11px] text-text-muted font-mono truncate">{conn.url} · {engineLabels[conn.type] || conn.type}</div>
+							<div class="text-[11px] text-text-muted font-mono truncate">{displayUrl(conn)} · {engineLabels[conn.type] || conn.type}</div>
 						</div>
 					</div>
 					<div class="ds-status absolute top-3.5 right-3.5 flex items-center gap-1 text-[10px] font-semibold font-mono px-2 py-0.5 rounded-full bg-green-50 text-green-700"><span class="w-[5px] h-[5px] rounded-full bg-green-500 shadow-[0_0_0_2px_rgba(34,197,94,.2)] shrink-0"></span>Active</div>
@@ -174,6 +211,9 @@
 
 				{#if showIcebergCreds}
 					<div class="section text-[10px] font-bold uppercase tracking-[0.8px] text-text-muted mb-3 mt-4 flex items-center gap-2.5 after:content-[''] after:flex-1 after:h-px after:bg-border">Credentials</div>
+					{#if editingId}
+						<p class="text-[10px] text-text-muted -mt-2 mb-3">Leave blank to keep current values.</p>
+					{/if}
 					<div class="grid grid-cols-2 gap-2 mb-3.5">
 						<div><label class="block text-[11px] font-semibold mb-[5px]">Client ID</label><input class="minput w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs text-text-main outline-none transition-shadow duration-150 focus:bg-bg-panel focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)]" type="text" bind:value={form.client_id}></div>
 						<div><label class="block text-[11px] font-semibold mb-[5px]">Client Secret</label><input class="minput w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs text-text-main outline-none transition-shadow duration-150 focus:bg-bg-panel focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)]" type="password" bind:value={form.client_secret}></div>
@@ -182,6 +222,9 @@
 
 				{#if showSqlCreds}
 					<div class="section text-[10px] font-bold uppercase tracking-[0.8px] text-text-muted mb-3 mt-4 flex items-center gap-2.5 after:content-[''] after:flex-1 after:h-px after:bg-border">Credentials</div>
+					{#if editingId}
+						<p class="text-[10px] text-text-muted -mt-2 mb-3">Leave blank to keep current values.</p>
+					{/if}
 					<div class="grid grid-cols-2 gap-2 mb-3.5">
 						<div><label class="block text-[11px] font-semibold mb-[5px]">Username</label><input class="minput w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs text-text-main outline-none transition-shadow duration-150 focus:bg-bg-panel focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)]" type="text" bind:value={form.username}></div>
 						<div><label class="block text-[11px] font-semibold mb-[5px]">Password</label><input class="minput w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs text-text-main outline-none transition-shadow duration-150 focus:bg-bg-panel focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)]" type="password" bind:value={form.password}></div>

@@ -1,6 +1,7 @@
 <script lang="ts">
-	let { collapsed = $bindable(false), activeTab = $bindable<'database' | 'queries'>('database') } = $props();
+	import DataSourceTree from './DataSourceTree.svelte';
 
+	let { collapsed = $bindable(false), activeTab = $bindable<'datasources' | 'queries'>('datasources') } = $props();
 	let search = $state('');
 </script>
 
@@ -9,38 +10,29 @@
 
 	{#if collapsed}
 		<div class="flex flex-col items-center py-2.5 gap-2.5 flex-1">
-			<button
-				onclick={() => collapsed = false}
-				title="Expand"
+			<button onclick={() => collapsed = false} title="Expand"
 				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted transition-all duration-150 bg-none border-none
 					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]">
 				<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
 			</button>
-			<span class="[writing-mode:vertical-rl] text-[10px] font-semibold tracking-wide uppercase text-text-muted rotate-180 mt-1">
-				Database
-			</span>
+			<span class="[writing-mode:vertical-rl] text-[10px] font-semibold tracking-wide uppercase text-text-muted rotate-180 mt-1">Datasources</span>
 		</div>
 	{:else}
 		<div class="flex flex-col flex-1 overflow-hidden">
-
 			<div class="flex bg-slate-50 dark:bg-[#1c2128] border-b border-border shrink-0">
-				<button
-					onclick={() => activeTab = 'database'}
+				<button onclick={() => activeTab = 'datasources'}
 					class="flex-1 text-center py-[9px] px-1.5 text-[11px] font-semibold cursor-pointer flex items-center justify-center gap-1.5 border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
-						{activeTab === 'database' ? 'text-primary border-b-primary bg-bg-panel' : 'text-text-muted border-b-transparent hover:text-text-main'}">
+						{activeTab === 'datasources' ? 'text-primary border-b-primary bg-bg-panel' : 'text-text-muted border-b-transparent hover:text-text-main'}">
 					<svg viewBox="0 0 24 24" class="w-3 h-3"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-					Database
+					Datasources
 				</button>
-				<button
-					onclick={() => activeTab = 'queries'}
+				<button onclick={() => activeTab = 'queries'}
 					class="flex-1 text-center py-[9px] px-1.5 text-[11px] font-semibold cursor-pointer flex items-center justify-center gap-1.5 border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
 						{activeTab === 'queries' ? 'text-primary border-b-primary bg-bg-panel' : 'text-text-muted border-b-transparent hover:text-text-main'}">
 					<svg viewBox="0 0 24 24" class="w-3 h-3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
 					Queries
 				</button>
-				<button
-					onclick={() => collapsed = true}
-					title="Collapse"
+				<button onclick={() => collapsed = true} title="Collapse"
 					class="flex items-center px-2 border-l border-border text-text-muted cursor-pointer bg-transparent border-t-0 border-b-0 border-r-0 transition-colors duration-150 hover:text-text-main">
 					<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M15 18l-6-6 6-6"/></svg>
 				</button>
@@ -49,52 +41,17 @@
 			<div class="p-2 border-b border-border shrink-0">
 				<div class="w-full flex items-center gap-1.5 bg-slate-100 dark:bg-[#1c2128] border border-border rounded-md px-2 py-[5px] transition-all duration-150 focus-within:bg-bg-panel focus-within:border-primary">
 					<svg viewBox="0 0 24 24" class="w-3 h-3 text-text-muted shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-					<input
-						type="text"
-						placeholder="Search tables, schemas..."
-						bind:value={search}
+					<input type="text" placeholder="Search..." bind:value={search}
 						class="border-none bg-transparent outline-none text-xs text-text-main w-full placeholder:text-text-muted">
 				</div>
 			</div>
 
-			{#if activeTab === 'database'}
-				<div class="overflow-y-auto flex-1 px-1.5 pb-2 text-[13px]">
-					<div class="flex items-center py-[5px] px-1.5 rounded-[5px] cursor-pointer gap-1 hover:bg-slate-100 dark:hover:bg-[#1c2128]">
-						<svg viewBox="0 0 24 24" class="rotate-90 text-text-muted shrink-0 w-3.5 h-3.5"><path d="M9 18l6-6-6-6"/></svg>
-						<svg viewBox="0 0 24 24" class="text-red-500 w-3.5 h-3.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-						<span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"><b>Polaris Catalog</b></span>
-					</div>
-					<div class="flex items-center py-[5px] px-1.5 pl-5 rounded-[5px] cursor-pointer gap-1 hover:bg-slate-100 dark:hover:bg-[#1c2128]">
-						<svg viewBox="0 0 24 24" class="rotate-90 text-text-muted shrink-0 w-3.5 h-3.5"><path d="M9 18l6-6-6-6"/></svg>
-						<svg viewBox="0 0 24 24" class="text-amber-500 w-3.5 h-3.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-						<span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">default</span>
-					</div>
-					<div class="flex items-center py-[5px] px-1.5 pl-9 rounded-[5px] cursor-pointer gap-1 bg-blue-50 dark:bg-[#152236] text-primary font-medium">
-						<svg viewBox="0 0 24 24" class="text-text-muted shrink-0 w-3.5 h-3.5"><path d="M9 18l6-6-6-6"/></svg>
-						<svg viewBox="0 0 24 24" class="text-primary w-3.5 h-3.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-						<span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">users</span>
-					</div>
-					<div class="flex items-center py-[5px] px-1.5 pl-9 rounded-[5px] cursor-pointer gap-1 hover:bg-slate-100 dark:hover:bg-[#1c2128]">
-						<svg viewBox="0 0 24 24" class="text-text-muted shrink-0 w-3.5 h-3.5"><path d="M9 18l6-6-6-6"/></svg>
-						<svg viewBox="0 0 24 24" class="text-text-muted w-3.5 h-3.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-						<span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">projects</span>
-					</div>
-				</div>
+			{#if activeTab === 'datasources'}
+				<DataSourceTree />
 			{:else}
 				<div class="overflow-y-auto flex-1 px-1.5 pt-1.5 pb-2">
-					<div class="text-[10px] font-bold tracking-wide uppercase text-text-muted pt-2 px-1.5 pb-1 flex items-center gap-1.5
-						after:content-[''] after:flex-1 after:h-px after:bg-border">
-						Mine
-					</div>
-					<div class="flex items-center py-1.5 px-2 rounded-md gap-2 cursor-pointer mb-px hover:bg-slate-100 dark:hover:bg-[#1c2128]">
-						<svg viewBox="0 0 24 24" class="shrink-0 text-text-muted w-3.5 h-3.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-						<div class="flex-1 min-w-0">
-							<div class="text-xs font-medium overflow-hidden text-ellipsis whitespace-nowrap">Example Query</div>
-							<div class="text-[10px] text-text-muted mt-px">Edited just now</div>
-						</div>
-						<span class="text-[9px] font-bold py-0.5 px-[5px] rounded-[3px] shrink-0 bg-amber-100 text-amber-600">SQL</span>
-					</div>
-					<div class="hidden py-6 px-3 text-center text-xs text-text-muted">No saved queries yet.</div>
+					<div class="text-[10px] font-bold tracking-wide uppercase text-text-muted pt-2 px-1.5 pb-1 flex items-center gap-1.5 after:content-[''] after:flex-1 after:h-px after:bg-border">Saved Queries</div>
+					<p class="text-xs text-text-muted px-2 py-6 text-center">No saved queries yet.</p>
 				</div>
 			{/if}
 		</div>
