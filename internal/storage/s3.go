@@ -64,9 +64,6 @@ func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType
 	return nil
 }
 
-// Get fetches an object's bytes (server-side, authenticated). Used to proxy
-// results through the API so the browser never needs to reach the S3 host
-// directly (the presigned host is the internal container endpoint).
 func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) {
 	scheme := "http"
 	if c.useSSL {
@@ -78,6 +75,7 @@ func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) 
 	if err != nil {
 		return nil, "", fmt.Errorf("s3 get: %w", err)
 	}
+
 	c.signV2(req, key)
 
 	resp, err := c.httpClient.Do(req)
@@ -93,8 +91,9 @@ func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) 
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, "", fmt.Errorf("s3 get read: %w", err)
+		return nil, "", err
 	}
+
 	return data, resp.Header.Get("Content-Type"), nil
 }
 
@@ -121,13 +120,12 @@ func (c *S3Client) PresignedGetURL(ctx context.Context, key string, ttl time.Dur
 }
 
 func (c *S3Client) signV2(req *http.Request, key string) {
-	expires := strconv.FormatInt(time.Now().Add(15*time.Minute).Unix(), 10)
-
+	date := time.Now().UTC().Format(time.RFC1123Z)
 	resource := "/" + c.bucket + "/" + key
 	stringToSign := req.Method + "\n" +
 		req.Header.Get("Content-MD5") + "\n" +
 		req.Header.Get("Content-Type") + "\n" +
-		expires + "\n" +
+		date + "\n" +
 		resource
 
 	mac := hmac.New(sha1.New, []byte(c.secretKey))
@@ -135,7 +133,7 @@ func (c *S3Client) signV2(req *http.Request, key string) {
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
 	req.Header.Set("Authorization", "AWS "+c.accessKey+":"+signature)
-	req.Header.Set("Date", expires)
+	req.Header.Set("Date", date)
 }
 
 func (c *S3Client) presignSignature(method, key string, expires int64) string {
