@@ -7,7 +7,8 @@
 	import { indentWithTab } from '@codemirror/commands';
 	import { sql, PostgreSQL } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
-	import { autocompletion } from '@codemirror/autocomplete';
+	import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
+	import { format as formatSQLFormatter } from 'sql-formatter';
 	import { tableFromIPC } from 'apache-arrow';
 
 	let editorView: EditorView;
@@ -15,7 +16,7 @@
 	const themeCompartment = new Compartment();
 
 	let executing = $state(false);
-	let sqlCode = $state('SELECT * FROM users LIMIT 10;');
+	let sqlCode = $state('SELECT 1;');
 	let executionId = $state('');
 	let results: any[] = $state([]);
 	let columns: string[] = $state([]);
@@ -30,8 +31,22 @@
 	let dark = $state(browser && document.body.classList.contains('dark'));
 
 	const apiBase = '/api/v1';
-	const workspaceId = localStorage.getItem('workspace_id') || '';
+	let workspaceId = $state('');
 	const token = localStorage.getItem('token') || '';
+
+	onMount(async () => {
+		if (!workspaceId) {
+			try {
+				const res = await fetch(`${apiBase}/workspaces`, { headers: { Authorization: `Bearer ${token}` } });
+				if (res.ok) {
+					const workspaces = await res.json();
+					if (workspaces.length > 0) {
+						workspaceId = workspaces[0].id;
+					}
+				}
+			} catch {}
+		}
+	});
 
 	onMount(() => {
 		const observer = new MutationObserver(() => {
@@ -39,11 +54,17 @@
 		});
 		observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
+		const trinoSQL = sql({
+			dialect: PostgreSQL,
+			schema: {},
+			tables: [],
+		});
+
 		const extensions = [
 			basicSetup,
 			keymap.of([indentWithTab]),
-			sql({ dialect: PostgreSQL }),
-			autocompletion(),
+			trinoSQL,
+			autocompletion({ override: [catalogAutocomplete] }),
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of(update => {
 				if (update.docChanged) sqlCode = update.state.doc.toString();
@@ -90,7 +111,7 @@
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws/workspaces/${workspaceId}/executions/${execId}?token=${token}`);
 
-		ws.onmessage = (e) => {
+		ws.onmessage = async (e) => {
 			const event = JSON.parse(e.data);
 			switch (event.type) {
 				case 'running':
@@ -99,14 +120,15 @@
 				case 'progress':
 					statusText = `Running... ${event.rows_so_far || 0} rows`;
 					break;
-				case 'finished':
-					statusText = 'Complete';
-					rowCount = event.rows_returned || 0;
-					durationMs = event.duration_ms || 0;
-					page = 1;
-					ws.close();
-					fetchResults(execId);
-					break;
+			case 'finished':
+				statusText = 'Complete';
+				rowCount = event.rows_returned || 0;
+				durationMs = event.duration_ms || 0;
+				page = 1;
+				ws.close();
+				await fetchResults(execId);
+				executing = false;
+				break;
 				case 'failed':
 					errorMsg = event.message || 'Query failed';
 					executing = false;
@@ -127,40 +149,96 @@
 			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions/${execId}/results`, {
 				headers: { Authorization: `Bearer ${token}` }
 			});
-			if (!res.ok) throw new Error(`results ${res.status}`);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const buf = await res.arrayBuffer();
-			const table = tableFromIPC(new Uint8Array(buf));
-			columns = table.schema.fields.map((f) => f.name);
-			const decoded: any[][] = [];
-			for (const row of table.toArray()) {
-				decoded.push(columns.map((c) => (row as any)[c]));
+			console.log('Results buffer size:', buf.byteLength);
+			if (buf.byteLength > 0) {
+				const arr = new Uint8Array(buf);
+				const table = tableFromIPC(arr);
+				columns = table.schema.fields.map((f) => f.name);
+				const decoded: any[][] = [];
+				for (const row of table.toArray()) {
+					decoded.push(columns.map((c) => (row as any)[c]));
+				}
+				results = decoded;
+				rowCount = decoded.length;
+				console.log('Rows loaded:', decoded.length, 'Columns:', columns.length);
 			}
-			results = decoded;
-			rowCount = decoded.length;
 		} catch (e: any) {
-			errorMsg = 'Failed to fetch results';
-			statusText = 'Error';
+			errorMsg = 'Fetch results: ' + (e.message || String(e));
+			console.error('fetchResults error:', e);
 		}
-		executing = false;
 	}
 
 	function formatSQL() {
-		const keywords = ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'INSERT', 'UPDATE', 'DELETE',
-			'CREATE', 'TABLE', 'ALTER', 'DROP', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'ON',
-			'GROUP', 'BY', 'ORDER', 'LIMIT', 'OFFSET', 'AS', 'IN', 'NOT', 'NULL', 'IS'];
-		let formatted = sqlCode;
-		keywords.forEach(kw => {
-			const re = new RegExp(`\\b${kw}\\b`, 'gi');
-			formatted = formatted.replace(re, kw);
-		});
-		sqlCode = formatted;
-		editorView.dispatch({
-			changes: { from: 0, to: editorView.state.doc.length, insert: formatted }
-		});
+		try {
+			const formatted = formatSQLFormatter(sqlCode, {
+				language: 'postgresql',
+				keywordCase: 'upper',
+				indentStyle: 'standard',
+			});
+			sqlCode = formatted;
+			editorView.dispatch({
+				changes: { from: 0, to: editorView.state.doc.length, insert: formatted }
+			});
+		} catch { /* keep original on error */ }
 	}
 
 	function explainQuery() {
+		const current = sqlCode.trim();
+		if (!current.toUpperCase().startsWith('EXPLAIN')) {
+			sqlCode = 'EXPLAIN ' + current;
+			editorView.dispatch({
+				changes: { from: 0, to: editorView.state.doc.length, insert: sqlCode }
+			});
+		}
 		runQuery();
+	}
+
+	async function catalogAutocomplete(context: CompletionContext) {
+		const word = context.matchBefore(/\w+/);
+		if (!word || word.from === word.to) return null;
+
+		const token = localStorage.getItem('token') || '';
+		const apiBase = '/api/v1';
+
+		try {
+			const connRes = await fetch(`${apiBase}/catalog-connections`, { headers: { Authorization: `Bearer ${token}` } });
+			if (!connRes.ok) return null;
+			const connections = await connRes.json();
+			if (!connections.length) return null;
+
+			const connId = connections[0].id;
+			const catRes = await fetch(`${apiBase}/connections/${connId}/catalogs`, { headers: { Authorization: `Bearer ${token}` } });
+			if (!catRes.ok) return null;
+			const catalogs = await catRes.json();
+			if (!catalogs.length) return null;
+
+			const options: any[] = [];
+			for (const cat of catalogs.slice(0, 3)) {
+				try {
+					const nsRes = await fetch(`${apiBase}/catalogs/${cat.id}/namespaces`, { headers: { Authorization: `Bearer ${token}` } });
+					if (!nsRes.ok) continue;
+					const namespaces: string[][] = await nsRes.json();
+					for (const ns of namespaces.slice(0, 3)) {
+						const nsName = ns.join('.');
+						try {
+							const tRes = await fetch(`${apiBase}/catalogs/${cat.id}/namespaces/${nsName}/tables`, { headers: { Authorization: `Bearer ${token}` } });
+							if (!tRes.ok) continue;
+							const tables = await tRes.json();
+							for (const t of tables) {
+								options.push({ label: `${cat.name}.${nsName}.${t.name}`, type: 'table', detail: 'table' });
+							}
+						} catch {}
+					}
+				} catch {}
+			}
+
+			if (options.length === 0) return null;
+			return { from: word.from, options };
+		} catch {
+			return null;
+		}
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
