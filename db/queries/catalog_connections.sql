@@ -19,23 +19,24 @@ RETURNING *;
 DELETE FROM catalog_connections WHERE id = $1;
 
 -- name: GrantCatalogAccess :one
-INSERT INTO workspace_catalog_access (workspace_id, catalog_connection_id, permission, granted_by)
+INSERT INTO workspace_catalog_access (workspace_id, catalog_id, permission, granted_by)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (workspace_id, catalog_connection_id)
+ON CONFLICT (workspace_id, catalog_id)
 DO UPDATE SET permission = $3, granted_by = $4, granted_at = now()
 RETURNING *;
 
 -- name: RevokeCatalogAccess :exec
 DELETE FROM workspace_catalog_access
-WHERE workspace_id = $1 AND catalog_connection_id = $2;
+WHERE workspace_id = $1 AND catalog_id = $2;
 
 -- name: ListCatalogAccessByWorkspace :many
-SELECT wca.*, cc.name AS catalog_name, cc.type AS catalog_type, cc.url AS catalog_url
+SELECT wca.*, c.name AS catalog_name, c.trino_catalog_name, c.connection_id, cc.name AS connection_name, cc.type AS connection_type, cc.url AS connection_url
 FROM workspace_catalog_access wca
-JOIN catalog_connections cc ON cc.id = wca.catalog_connection_id
+JOIN catalogs c ON c.id = wca.catalog_id
+JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE wca.workspace_id = $1
-ORDER BY cc.name;
+ORDER BY c.name;
 
 -- name: GetCatalogAccess :one
 SELECT * FROM workspace_catalog_access
-WHERE workspace_id = $1 AND catalog_connection_id = $2;
+WHERE workspace_id = $1 AND catalog_id = $2;
