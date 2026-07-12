@@ -41,7 +41,7 @@
 			const data = await res.json();
 			localStorage.setItem('token', data.token);
 			localStorage.setItem('refresh_token', data.refresh_token);
-			window.location.href = '/';
+			window.location.href = '/sql';
 		} catch {
 			showError('Connection error. Is the server running?', 'password');
 		}

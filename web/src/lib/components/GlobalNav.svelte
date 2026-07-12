@@ -15,10 +15,10 @@
 		<a href="/" title="Baleia" class="text-white mb-4 flex">
 			<svg viewBox="0 0 24 24" class="w-[22px] h-[22px]"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
 		</a>
-		<a href="/"
+		<a href="/sql"
 			title="SQL Editor"
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
-				{isActive('/') ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
+				{isActive('/sql') ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
 			<svg viewBox="0 0 24 24" class="w-4 h-4"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
 		</a>
 		<a href="/datasources"

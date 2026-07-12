@@ -370,7 +370,7 @@
 						</div>
 						<div class="text-[22px] font-bold tracking-[-.4px]">Baleia is ready</div>
 						<div class="text-[13px] text-text-muted max-w-[340px] leading-[1.6]">Your instance is configured. Head to the editor and run your first query.</div>
-						<button onclick={() => window.location.href = '/'}
+						<button onclick={() => window.location.href = '/sql'}
 							class="w-full h-10 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center justify-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover">
 							<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
 							Open editor
