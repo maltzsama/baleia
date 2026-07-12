@@ -5,101 +5,178 @@
 	let colFilter = $state<'all' | 'pk' | 'partition' | 'nullable'>('all');
 </script>
 
-<aside class="panel sidebar-right" class:collapsed>
+<aside class="bg-bg-panel border border-border rounded-[var(--radius)] shadow-sm flex flex-col overflow-hidden transition-[width] duration-200 shrink-0
+	{collapsed ? 'w-9' : 'w-[292px]'}">
+
 	{#if collapsed}
-		<div class="inspector-collapsed">
-			<button class="inspector-reopen-btn" onclick={() => collapsed = false} title="Expand">
-				<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+		<div class="flex flex-col items-center py-2.5 gap-2.5 flex-1">
+			<button
+				onclick={() => collapsed = false}
+				title="Expand"
+				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted transition-all duration-150 bg-none border-none
+					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]">
+				<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
 			</button>
-			<span class="inspector-reopen-label">Inspector</span>
+			<span class="[writing-mode:vertical-rl] text-[10px] font-semibold tracking-wide uppercase text-text-muted rotate-180 mt-1">
+				Inspector
+			</span>
 		</div>
 	{:else}
-		<div class="inspector-full">
-			<div class="inspector-header">
-				<div class="inspector-topbar">
-					<span class="inspector-source-badge">
-						<span class="dot"></span>ICEBERG
+		<div class="flex flex-col flex-1 overflow-hidden">
+
+			<div class="shrink-0 border-b border-border">
+				<div class="flex items-center gap-2 py-[7px] px-2.5 border-b border-border bg-bg-toolbar">
+					<span class="flex items-center gap-1 bg-red-50 dark:bg-[#1f0f0f] border border-red-200 dark:border-[#4d1111] text-red-600 dark:text-red-400 text-[9px] font-bold tracking-wide py-0.5 px-1.5 rounded-[3px] font-mono uppercase shrink-0">
+						<span class="w-[5px] h-[5px] rounded-full bg-red-500"></span>ICEBERG
 					</span>
-					<span class="inspector-breadcrumb">default / <b>users</b></span>
-					<button class="inspector-collapse-btn" onclick={() => collapsed = true} title="Collapse">
-						<svg viewBox="0 0 24 24"><path d="M9 18l15-6-6-6"/></svg>
+					<span class="flex-1 font-mono text-[11px] text-text-muted overflow-hidden text-ellipsis whitespace-nowrap">
+						default / <b class="text-text-main font-semibold">users</b>
+					</span>
+					<button
+						onclick={() => collapsed = true}
+						title="Collapse"
+						class="w-5 h-5 rounded shrink-0 cursor-pointer flex items-center justify-center text-text-muted transition-all duration-150 bg-none border-none hover:bg-slate-200 hover:text-text-main">
+						<svg viewBox="0 0 24 24" class="w-3 h-3"><path d="M9 18l15-6-6-6"/></svg>
 					</button>
 				</div>
 
-				<div class="inspector-header-main">
-					<div class="inspector-entity-name-row">
-						<svg class="inspector-table-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-						<span class="inspector-entity-name">users</span>
+				<div class="py-3 px-3 pb-2.5 bg-bg-panel">
+					<div class="flex items-center gap-[7px] mb-2">
+						<svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0 text-primary"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+						<span class="text-[15px] font-bold font-mono">users</span>
 					</div>
-					<div class="table-comment-box">User accounts with profile, preferences and activity tracking.</div>
-					<div class="inspector-stats-strip">
-						<div class="stat-cell"><span class="stat-cell-val">24</span><span class="stat-cell-label">Columns</span></div>
-						<div class="stat-cell"><span class="stat-cell-val">1.2M</span><span class="stat-cell-label">Rows</span></div>
-						<div class="stat-cell"><span class="stat-cell-val">48 MB</span><span class="stat-cell-label">Size</span></div>
+					<div class="text-xs text-text-muted leading-[1.55] bg-slate-50 dark:bg-[#1c2128] border border-border rounded-[4px] py-[7px] px-[9px] mb-2.5 max-h-20 overflow-y-auto break-words">
+						User accounts with profile, preferences and activity tracking.
+					</div>
+					<div class="flex border border-border rounded-[5px] overflow-hidden mt-0.5">
+						<div class="flex-1 py-[5px] text-center border-r border-border">
+							<span class="block text-xs font-bold font-mono leading-tight">24</span>
+							<span class="block text-[9px] font-semibold uppercase tracking-[0.4px] text-text-muted mt-px">Columns</span>
+						</div>
+						<div class="flex-1 py-[5px] text-center border-r border-border">
+							<span class="block text-xs font-bold font-mono leading-tight">1.2M</span>
+							<span class="block text-[9px] font-semibold uppercase tracking-[0.4px] text-text-muted mt-px">Rows</span>
+						</div>
+						<div class="flex-1 py-[5px] text-center">
+							<span class="block text-xs font-bold font-mono leading-tight">48 MB</span>
+							<span class="block text-[9px] font-semibold uppercase tracking-[0.4px] text-text-muted mt-px">Size</span>
+						</div>
 					</div>
 				</div>
 			</div>
 
-			<div class="inspector-tabs">
-				<button class="itab" class:active={inspectorTab === 'columns'} onclick={() => inspectorTab = 'columns'} style="flex:1.2">Columns</button>
-				<button class="itab" class:active={inspectorTab === 'details'} onclick={() => inspectorTab = 'details'}>Details</button>
+			<div class="flex border-b border-border bg-bg-toolbar shrink-0">
+				<button
+					onclick={() => inspectorTab = 'columns'}
+					style="flex:1.2"
+					class="text-center py-[7px] px-1 text-[11px] font-semibold cursor-pointer border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
+						{inspectorTab === 'columns' ? 'text-primary border-b-primary bg-bg-panel' : 'text-text-muted border-b-transparent hover:text-text-main'}">
+					Columns
+				</button>
+				<button
+					onclick={() => inspectorTab = 'details'}
+					class="flex-1 text-center py-[7px] px-1 text-[11px] font-semibold cursor-pointer border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
+						{inspectorTab === 'details' ? 'text-primary border-b-primary bg-bg-panel' : 'text-text-muted border-b-transparent hover:text-text-main'}">
+					Details
+				</button>
 			</div>
 
-			<div class="col-search-bar">
-				<div class="col-search-input">
-					<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-					<input type="text" placeholder="Search columns..." bind:value={colSearch}>
+			<div class="flex items-center py-[7px] px-2.5 border-b border-border bg-bg-panel shrink-0">
+				<div class="flex-1 flex items-center gap-[5px] bg-slate-100 dark:bg-[#1c2128] border border-border rounded-[4px] py-1 px-[7px] transition-all duration-150 focus-within:bg-bg-panel focus-within:border-primary">
+					<svg viewBox="0 0 24 24" class="w-3 h-3 text-text-muted shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+					<input
+						type="text"
+						placeholder="Search columns..."
+						bind:value={colSearch}
+						class="border-none bg-transparent outline-none text-xs text-text-main w-full">
 				</div>
 			</div>
 
-			<div class="col-filters">
-				<button class="filter-chip" class:active={colFilter === 'all'} onclick={() => colFilter = 'all'}>All</button>
-				<button class="filter-chip" class:active={colFilter === 'pk'} onclick={() => colFilter = 'pk'}>PK</button>
-				<button class="filter-chip" class:active={colFilter === 'partition'} onclick={() => colFilter = 'partition'}>Partition</button>
-				<button class="filter-chip" class:active={colFilter === 'nullable'} onclick={() => colFilter = 'nullable'}>Nullable</button>
+			<div class="flex gap-1 py-2 px-2.5 bg-bg-panel shrink-0">
+				<button
+					onclick={() => colFilter = 'all'}
+					class="text-[10px] font-semibold py-0.5 px-[7px] rounded-[3px] cursor-pointer border transition-all duration-150
+						{colFilter === 'all' ? 'bg-blue-50 dark:bg-[#152236] border-blue-200 text-primary' : 'border-border bg-transparent text-text-muted hover:border-primary hover:text-primary'}">
+					All
+				</button>
+				<button
+					onclick={() => colFilter = 'pk'}
+					class="text-[10px] font-semibold py-0.5 px-[7px] rounded-[3px] cursor-pointer border transition-all duration-150
+						{colFilter === 'pk' ? 'bg-blue-50 dark:bg-[#152236] border-blue-200 text-primary' : 'border-border bg-transparent text-text-muted hover:border-primary hover:text-primary'}">
+					PK
+				</button>
+				<button
+					onclick={() => colFilter = 'partition'}
+					class="text-[10px] font-semibold py-0.5 px-[7px] rounded-[3px] cursor-pointer border transition-all duration-150
+						{colFilter === 'partition' ? 'bg-blue-50 dark:bg-[#152236] border-blue-200 text-primary' : 'border-border bg-transparent text-text-muted hover:border-primary hover:text-primary'}">
+					Partition
+				</button>
+				<button
+					onclick={() => colFilter = 'nullable'}
+					class="text-[10px] font-semibold py-0.5 px-[7px] rounded-[3px] cursor-pointer border transition-all duration-150
+						{colFilter === 'nullable' ? 'bg-blue-50 dark:bg-[#152236] border-blue-200 text-primary' : 'border-border bg-transparent text-text-muted hover:border-primary hover:text-primary'}">
+					Nullable
+				</button>
 			</div>
 
-			<div class="inspector-content">
-				<div class="col-row">
-					<div class="col-body">
-						<div class="col-name-row">
-							<span class="badge-pk"><svg viewBox="0 0 24 24"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg></span>
-							<span class="col-name">id</span>
-							<span class="type-chip type-numeric">UUID</span>
+			<div class="flex-1 overflow-y-auto">
+				<div class="flex items-start py-2 px-3 border-b border-border gap-2 hover:bg-slate-50 dark:hover:bg-[#1c2128]">
+					<div class="flex-1 min-w-0">
+						<div class="flex items-center gap-[5px] mb-[3px]">
+							<span class="text-amber-500 shrink-0">
+								<svg viewBox="0 0 24 24" class="w-[11px] h-[11px]"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+							</span>
+							<span class="text-xs font-semibold font-mono flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">id</span>
+							<span class="inline-flex items-center text-[10px] font-semibold font-mono py-px px-[5px] rounded-[3px] border whitespace-nowrap shrink-0"
+								style="color: var(--color-type-numeric); background: var(--color-type-numeric-bg); border-color: var(--color-type-numeric-border);">
+								UUID
+							</span>
 						</div>
 					</div>
 				</div>
-				<div class="col-row">
-					<div class="col-body">
-						<div class="col-name-row">
-							<span class="col-name">email</span>
-							<span class="type-chip type-string">varchar</span>
+				<div class="flex items-start py-2 px-3 border-b border-border gap-2 hover:bg-slate-50 dark:hover:bg-[#1c2128]">
+					<div class="flex-1 min-w-0">
+						<div class="flex items-center gap-[5px] mb-[3px]">
+							<span class="text-xs font-semibold font-mono flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">email</span>
+							<span class="inline-flex items-center text-[10px] font-semibold font-mono py-px px-[5px] rounded-[3px] border whitespace-nowrap shrink-0"
+								style="color: var(--color-type-string); background: var(--color-type-string-bg); border-color: var(--color-type-string-border);">
+								varchar
+							</span>
 						</div>
 					</div>
 				</div>
-				<div class="col-row highlighted">
-					<div class="col-body">
-						<div class="col-name-row">
-							<span class="badge-partition">P</span>
-							<span class="col-name">created_at</span>
-							<span class="type-chip type-temporal">timestamp</span>
+				<div class="flex items-start py-2 px-2.5 border-b border-border gap-2 border-l-2 border-l-amber-500 bg-amber-50/40 dark:bg-[#1f1a00] dark:border-l-[#b45309] hover:bg-slate-50 dark:hover:bg-[#1c2128]">
+					<div class="flex-1 min-w-0">
+						<div class="flex items-center gap-[5px] mb-[3px]">
+							<span class="text-[9px] font-bold font-mono py-px px-1 rounded-[2px] bg-amber-100 border border-amber-200 text-amber-700 shrink-0">P</span>
+							<span class="text-xs font-semibold font-mono flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">created_at</span>
+							<span class="inline-flex items-center text-[10px] font-semibold font-mono py-px px-[5px] rounded-[3px] border whitespace-nowrap shrink-0"
+								style="color: var(--color-type-temporal); background: var(--color-type-temporal-bg); border-color: var(--color-type-temporal-border);">
+								timestamp
+							</span>
 						</div>
 					</div>
 				</div>
-				<div class="col-row">
-					<div class="col-body">
-						<div class="col-name-row">
-							<span class="col-name">name</span>
-							<span class="type-chip type-string">varchar</span>
+				<div class="flex items-start py-2 px-3 border-b border-border gap-2 hover:bg-slate-50 dark:hover:bg-[#1c2128]">
+					<div class="flex-1 min-w-0">
+						<div class="flex items-center gap-[5px] mb-[3px]">
+							<span class="text-xs font-semibold font-mono flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">name</span>
+							<span class="inline-flex items-center text-[10px] font-semibold font-mono py-px px-[5px] rounded-[3px] border whitespace-nowrap shrink-0"
+								style="color: var(--color-type-string); background: var(--color-type-string-bg); border-color: var(--color-type-string-border);">
+								varchar
+							</span>
 						</div>
-						<div class="col-comment">User display name</div>
+						<div class="text-[11px] text-text-muted leading-[1.45]">User display name</div>
 					</div>
 				</div>
-				<div class="col-row">
-					<div class="col-body">
-						<div class="col-name-row">
-							<span class="col-name">is_active</span>
-							<span class="type-chip type-bool">boolean</span>
+				<div class="flex items-start py-2 px-3 border-b border-border gap-2 hover:bg-slate-50 dark:hover:bg-[#1c2128]">
+					<div class="flex-1 min-w-0">
+						<div class="flex items-center gap-[5px] mb-[3px]">
+							<span class="text-xs font-semibold font-mono flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">is_active</span>
+							<span class="inline-flex items-center text-[10px] font-semibold font-mono py-px px-[5px] rounded-[3px] border whitespace-nowrap shrink-0"
+								style="color: var(--color-type-bool); background: var(--color-type-bool-bg); border-color: var(--color-type-bool-border);">
+								boolean
+							</span>
 						</div>
 					</div>
 				</div>
@@ -107,167 +184,3 @@
 		</div>
 	{/if}
 </aside>
-
-<style>
-	.sidebar-right { width: 292px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; transition: width 0.2s; }
-	.sidebar-right.collapsed { width: 36px; }
-
-	.inspector-collapsed {
-		display: flex; flex-direction: column;
-		align-items: center; padding: 10px 0; gap: 10px; flex: 1;
-	}
-	.inspector-reopen-btn {
-		width: 22px; height: 22px; border-radius: 5px; cursor: pointer;
-		display: flex; align-items: center; justify-content: center;
-		color: var(--text-muted); transition: 0.15s;
-		background: none; border: none;
-	}
-	.inspector-reopen-btn:hover { background: #eff6ff; color: var(--primary); }
-	:global(.dark) .inspector-reopen-btn:hover { background: #152236; }
-	.inspector-reopen-label {
-		writing-mode: vertical-rl; font-size: 10px; font-weight: 600;
-		letter-spacing: 0.5px; text-transform: uppercase;
-		color: var(--text-muted); transform: rotate(180deg); margin-top: 4px;
-	}
-	.inspector-full { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
-	.inspector-header { flex-shrink: 0; border-bottom: 1px solid var(--border-light); }
-	.inspector-topbar {
-		display: flex; align-items: center; gap: 8px;
-		padding: 7px 10px; border-bottom: 1px solid var(--border-light);
-		background: var(--bg-toolbar);
-	}
-	.inspector-source-badge {
-		display: flex; align-items: center; gap: 4px;
-		background: #fef2f2; border: 1px solid #fecaca;
-		color: #dc2626; font-size: 9px; font-weight: 700;
-		letter-spacing: 0.5px; padding: 2px 6px;
-		border-radius: 3px; font-family: 'JetBrains Mono', monospace;
-		text-transform: uppercase; flex-shrink: 0;
-	}
-	:global(.dark) .inspector-source-badge { background: #1f0f0f; border-color: #4d1111; color: #f87171; }
-	.inspector-source-badge .dot { width: 5px; height: 5px; border-radius: 50%; background: #ef4444; }
-	.inspector-breadcrumb {
-		flex: 1; font-family: 'JetBrains Mono', monospace;
-		font-size: 11px; color: var(--text-muted);
-		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-	}
-	.inspector-breadcrumb b { color: var(--text-main); font-weight: 600; }
-	.inspector-collapse-btn {
-		width: 20px; height: 20px; border-radius: 4px; cursor: pointer;
-		display: flex; align-items: center; justify-content: center;
-		color: var(--text-muted); transition: 0.15s; flex-shrink: 0;
-		background: none; border: none;
-	}
-	.inspector-collapse-btn:hover { background: #e2e8f0; color: var(--text-main); }
-	.inspector-collapse-btn svg { width: 12px; height: 12px; }
-
-	.inspector-header-main { padding: 12px 12px 10px; background: var(--bg-panel); }
-	.inspector-entity-name-row { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
-	.inspector-table-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--primary); }
-	.inspector-table-icon svg { width: 16px; height: 16px; }
-	.inspector-entity-name { font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-	.table-comment-box {
-		font-size: 12px; color: var(--text-muted); line-height: 1.55;
-		background: #f8fafc; border: 1px solid var(--border-light);
-		border-radius: 4px; padding: 7px 9px; margin-bottom: 10px;
-		max-height: 80px; overflow-y: auto; word-break: break-word;
-	}
-	:global(.dark) .table-comment-box { background: #1c2128; }
-	.inspector-stats-strip {
-		display: flex; gap: 0; border: 1px solid var(--border-light);
-		border-radius: 5px; overflow: hidden; margin-top: 2px;
-	}
-	.stat-cell {
-		flex: 1; padding: 5px 0; text-align: center;
-		border-right: 1px solid var(--border-light);
-	}
-	.stat-cell:last-child { border-right: none; }
-	.stat-cell-val {
-		display: block; font-size: 12px; font-weight: 700;
-		font-family: 'JetBrains Mono', monospace; line-height: 1.2;
-	}
-	.stat-cell-label {
-		display: block; font-size: 9px; font-weight: 600;
-		text-transform: uppercase; letter-spacing: 0.4px;
-		color: var(--text-muted); margin-top: 1px;
-	}
-
-	.inspector-tabs {
-		display: flex; border-bottom: 1px solid var(--border-light);
-		background: var(--bg-toolbar); flex-shrink: 0;
-	}
-	.itab {
-		flex: 1; text-align: center; padding: 7px 4px;
-		font-size: 11px; font-weight: 600; cursor: pointer;
-		color: var(--text-muted); border-bottom: 2px solid transparent;
-		transition: 0.15s; background: none; border-top: none;
-		border-left: none; border-right: none;
-	}
-	.itab:hover { color: var(--text-main); }
-	.itab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--bg-panel); }
-
-	.col-search-bar {
-		display: flex; align-items: center; gap: 0;
-		padding: 7px 10px; border-bottom: 1px solid var(--border-light);
-		background: var(--bg-panel); flex-shrink: 0;
-	}
-	.col-search-input {
-		flex: 1; display: flex; align-items: center; gap: 5px;
-		background: #f1f5f9; border: 1px solid var(--border-light);
-		border-radius: 4px; padding: 4px 7px; transition: 0.15s;
-	}
-	:global(.dark) .col-search-input { background: #1c2128; }
-	.col-search-input:focus-within { background: var(--bg-panel); border-color: var(--primary); }
-	.col-search-input svg { width: 12px; height: 12px; color: var(--text-muted); flex-shrink: 0; }
-	.col-search-input input {
-		border: none; background: transparent; outline: none;
-		font-size: 12px; color: var(--text-main); width: 100%;
-	}
-
-	.col-filters {
-		display: flex; gap: 4px; padding: 8px 10px;
-		background: var(--bg-panel); flex-shrink: 0;
-	}
-	.filter-chip {
-		font-size: 10px; font-weight: 600; padding: 2px 7px;
-		border-radius: 3px; cursor: pointer; border: 1px solid var(--border-light);
-		background: transparent; color: var(--text-muted); transition: 0.15s;
-	}
-	.filter-chip:hover { border-color: var(--primary); color: var(--primary); }
-	.filter-chip.active { background: #eff6ff; border-color: #bfdbfe; color: var(--primary); }
-	:global(.dark) .filter-chip.active { background: #152236; }
-
-	.inspector-content { flex: 1; overflow-y: auto; padding: 0; }
-	.col-row {
-		display: flex; align-items: flex-start; padding: 8px 12px;
-		border-bottom: 1px solid var(--border-light); cursor: default; gap: 8px;
-	}
-	.col-row:hover { background: #f8fafc; }
-	:global(.dark) .col-row:hover { background: #1c2128; }
-	.col-row.highlighted { border-left: 2px solid #f59e0b; padding-left: 10px; }
-	:global(.dark) .col-row.highlighted { background: #1f1a00; border-left-color: #b45309; }
-	.col-body { flex: 1; min-width: 0; }
-	.col-name-row { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
-	.col-name {
-		font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
-		flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-	}
-	.badge-pk { color: #f59e0b; flex-shrink: 0; }
-	.badge-pk svg { width: 11px; height: 11px; }
-	.badge-partition {
-		font-size: 9px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
-		padding: 1px 4px; border-radius: 2px; background: #fef3c7;
-		border: 1px solid #fde68a; color: #b45309; flex-shrink: 0;
-	}
-	.type-chip {
-		display: inline-flex; align-items: center;
-		font-size: 10px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
-		padding: 1px 5px; border-radius: 3px; border: 1px solid transparent;
-		white-space: nowrap; flex-shrink: 0;
-	}
-	.type-string  { color: #0f766e; background: #f0fdf9; border-color: #99f6e4; }
-	.type-numeric { color: #7c3aed; background: #f5f3ff; border-color: #ddd6fe; }
-	.type-temporal{ color: #b45309; background: #fffbeb; border-color: #fde68a; }
-	.type-bool    { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
-	.col-comment { font-size: 11px; color: var(--text-muted); line-height: 1.45; }
-</style>

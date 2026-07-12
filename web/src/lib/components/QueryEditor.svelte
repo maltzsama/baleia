@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
 	import { EditorView, keymap } from '@codemirror/view';
 	import { EditorState, Compartment } from '@codemirror/state';
@@ -8,8 +9,6 @@
 	import { oneDark } from '@codemirror/theme-one-dark';
 	import { autocompletion } from '@codemirror/autocomplete';
 	import { tableFromIPC } from 'apache-arrow';
-
-	let { dark = false }: { dark?: boolean } = $props();
 
 	let editorView: EditorView;
 	let editorEl: HTMLDivElement;
@@ -28,12 +27,18 @@
 	let page = $state(1);
 	let perPage = $state(50);
 
-	// Same-origin: the Go server serves this SPA and the API under /api/v1.
+	let dark = $state(browser && document.body.classList.contains('dark'));
+
 	const apiBase = '/api/v1';
 	const workspaceId = localStorage.getItem('workspace_id') || '';
 	const token = localStorage.getItem('token') || '';
 
 	onMount(() => {
+		const observer = new MutationObserver(() => {
+			dark = document.body.classList.contains('dark');
+		});
+		observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
 		const extensions = [
 			basicSetup,
 			keymap.of([indentWithTab]),
@@ -47,9 +52,10 @@
 
 		const state = EditorState.create({ doc: sqlCode, extensions });
 		editorView = new EditorView({ state, parent: editorEl });
+
+		return () => observer.disconnect();
 	});
 
-	// React to theme changes without recreating the editor.
 	$effect(() => {
 		if (editorView) {
 			editorView.dispatch({ effects: themeCompartment.reconfigure(dark ? oneDark : []) });
@@ -116,7 +122,6 @@
 		};
 	}
 
-	// Results are an Arrow IPC stream proxied by the API (same origin, auth).
 	async function fetchResults(execId: string) {
 		try {
 			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions/${execId}/results`, {
@@ -140,7 +145,6 @@
 	}
 
 	function formatSQL() {
-		// simple uppercase for keywords
 		const keywords = ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'INSERT', 'UPDATE', 'DELETE',
 			'CREATE', 'TABLE', 'ALTER', 'DROP', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'ON',
 			'GROUP', 'BY', 'ORDER', 'LIMIT', 'OFFSET', 'AS', 'IN', 'NOT', 'NULL', 'IS'];
@@ -172,102 +176,124 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="editor-panel">
-	<div class="editor-tabs">
-		<div class="tab active">
-			<span class="tab-name">Untitled Query</span>
-			<span class="tab-close">×</span>
+<div class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+	<div class="flex items-stretch bg-bg-toolbar pt-1.5 px-2 gap-0.5 border-b border-border shrink-0">
+		<div class="py-1.5 px-3.5 flex items-center gap-1.5 text-xs rounded-t-md cursor-pointer -mb-px border border-transparent border-b-0
+			bg-bg-panel text-primary font-semibold" style="border-color: var(--color-border)">
+			<span class="overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">Untitled Query</span>
+			<span class="opacity-0 text-sm text-text-muted py-px px-1 rounded-[3px] group-hover:opacity-100 hover:bg-border hover:text-text-main">×</span>
 		</div>
-		<button class="tab-add">+</button>
+		<button class="flex items-center justify-center w-8 text-lg text-text-muted cursor-pointer shrink-0 transition-colors duration-150 bg-none border-none hover:text-primary">+</button>
 	</div>
 
-	<div class="editor-toolbar">
-		<button class="btn-run" onclick={runQuery} disabled={executing}>
-			<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+	<div class="flex items-center py-1.5 px-3 gap-1.5 border-b border-border bg-bg-toolbar shrink-0">
+		<button
+			onclick={runQuery}
+			disabled={executing}
+			class="bg-success text-white border-none py-[5px] px-3.5 text-xs font-bold rounded-[5px] cursor-pointer flex items-center gap-1.5 transition-colors duration-150
+				hover:enabled:bg-success-hover disabled:opacity-60 disabled:cursor-not-allowed">
+			<svg viewBox="0 0 24 24" class="w-2.5 h-2.5 fill-white stroke-none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
 			{executing ? 'Running...' : 'Run'}
-			<span class="shortcut">⌘↵</span>
+			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
 		</button>
-		<button class="toolbar-btn" onclick={explainQuery}>
-			<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+		<button onclick={explainQuery} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent transition-all duration-150 whitespace-nowrap hover:bg-border hover:text-text-main">
+			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 			Explain
 		</button>
-		<div class="toolbar-divider"></div>
-		<button class="toolbar-btn" onclick={formatSQL}>
-			<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+		<div class="w-px h-[18px] bg-border mx-1"></div>
+		<button onclick={formatSQL} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent transition-all duration-150 whitespace-nowrap hover:bg-border hover:text-text-main">
+			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><polyline points="6 9 12 15 18 9"/></svg>
 			Format
 		</button>
-		<button class="toolbar-btn" onclick={() => window.location.href = '/app'}>
-			<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+		<button onclick={() => window.location.href = '/app'} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent transition-all duration-150 whitespace-nowrap hover:bg-border hover:text-text-main">
+			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
 			Save
 		</button>
-		<div class="toolbar-spacer"></div>
+		<div class="flex-1"></div>
 	</div>
 
-	<div class="editor-body" bind:this={editorEl}></div>
+	<div bind:this={editorEl} class="flex-1 overflow-auto min-h-0"></div>
 
-	<div class="status-bar">
-		<span class="status-item"><span class="status-dialect">Trino SQL</span></span>
-		<span class="status-item">Ln 1, Col 1</span>
-		<span class="status-item">{statusText}</span>
+	<div class="flex items-center gap-4 px-3.5 h-6 bg-bg-toolbar border-t border-b border-border text-[11px] text-text-muted shrink-0">
+		<span class="flex items-center gap-1"><span class="text-primary font-semibold">Trino SQL</span></span>
+		<span class="flex items-center gap-1">Ln 1, Col 1</span>
+		<span class="flex items-center gap-1">{statusText}</span>
 		{#if errorMsg}
-			<span class="status-item" style="color:#dc2626">{errorMsg}</span>
+			<span class="flex items-center gap-1 text-red-600">{errorMsg}</span>
 		{/if}
 	</div>
 
 	{#if results.length > 0 || executing}
-		<div class="results-container">
-			<div class="results-tabs">
-				<div class="rtab active">
-					Result <span class="rtab-count">{rowCount}</span>
+		<div class="h-[42%] flex flex-col shrink-0">
+			<div class="flex items-stretch bg-bg-toolbar border-b border-border px-3 shrink-0">
+				<div class="py-[7px] px-3 text-xs font-semibold cursor-pointer -mb-px flex items-center gap-1.5 bg-none border-t-0 border-l-0 border-r-0 border-b-2
+					text-primary border-b-primary">
+					Result <span class="bg-blue-100 text-primary text-[10px] font-bold py-px px-[5px] rounded-full">{rowCount}</span>
 				</div>
-				<div class="results-actions">
-					<button class="results-action-btn">
-						<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+				<div class="ml-auto flex items-center">
+					<button class="flex items-center gap-1 py-1 px-2 text-[11px] rounded cursor-pointer text-text-muted bg-none border-none hover:bg-border hover:text-text-main">
+						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 						Export
 					</button>
 				</div>
 			</div>
-			<div class="results-meta">
-				<span class="metric"><span class="status-dot"></span> Finished</span>
-				<span class="metric">{rowCount} rows</span>
-				<span class="metric">{durationMs}ms</span>
+			<div class="py-1.5 px-3.5 flex items-center gap-5 border-b border-border text-xs bg-bg-panel shrink-0">
+				<span class="flex items-center gap-[5px] text-text-muted"><span class="w-[7px] h-[7px] rounded-full bg-success"></span> Finished</span>
+				<span class="flex items-center gap-[5px] text-text-muted">{rowCount} rows</span>
+				<span class="flex items-center gap-[5px] text-text-muted">{durationMs}ms</span>
 			</div>
-			<div class="table-wrapper">
-				<table>
+			<div class="flex-1 overflow-auto">
+				<table class="w-full border-separate border-spacing-0 text-left text-xs">
 					<thead>
 						<tr>
-							<th class="row-num">#</th>
+							<th class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] tracking-[0.3px] uppercase text-right w-9">#</th>
 							{#each columns as col}
-								<th>{col}</th>
+								<th class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] tracking-[0.3px] uppercase">{col}</th>
 							{/each}
 						</tr>
 					</thead>
 					<tbody>
 						{#each pagedRows as row, i}
-							<tr>
-							<td class="row-num">{(page - 1) * perPage + i + 1}</td>
-							{#each row as cell}
-								<td>
-									{#if cell === null}
-										<span class="null-val">NULL</span>
-									{:else}
-										{cell}
-									{/if}
-								</td>
-							{/each}
+							<tr class="hover:[&>td]:bg-bg-toolbar">
+								<td class="py-[7px] px-3.5 border-b border-border font-mono text-xs text-text-muted w-9 text-right opacity-60">{(page - 1) * perPage + i + 1}</td>
+								{#each row as cell}
+									<td class="py-[7px] px-3.5 border-b border-border font-mono text-xs">
+										{#if cell === null}
+											<span class="text-slate-300 italic">NULL</span>
+										{:else}
+											{cell}
+										{/if}
+									</td>
+								{/each}
 							</tr>
 						{/each}
 					</tbody>
 				</table>
 			</div>
-			<div class="pagination">
-				<button class="pg-btn" disabled={page <= 1} onclick={() => page--}>← Prev</button>
-				<span class="pg-info">Page <b>{page}</b> of <b>{totalPages}</b></span>
-				<button class="pg-btn" disabled={page >= totalPages} onclick={() => page++}>Next →</button>
-				<span class="pg-spacer"></span>
-				<span class="pg-size">
+			<div class="flex items-center gap-1.5 py-1.5 px-3 border-t border-border shrink-0 bg-bg-panel text-xs text-text-muted">
+				<button
+					disabled={page <= 1}
+					onclick={() => page--}
+					class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer transition-all duration-150 text-text-muted
+						hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed">
+					← Prev
+				</button>
+				<span class="text-[11px] text-text-muted">Page <b class="text-text-main">{page}</b> of <b class="text-text-main">{totalPages}</b></span>
+				<button
+					disabled={page >= totalPages}
+					onclick={() => page++}
+					class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer transition-all duration-150 text-text-muted
+						hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed">
+					Next →
+				</button>
+				<span class="flex-1"></span>
+				<span class="flex items-center gap-[5px] text-[11px] text-text-muted">
 					Rows per page:
-					<select bind:value={perPage} onchange={() => page = 1}>
+					<select
+						bind:value={perPage}
+						onchange={() => page = 1}
+						class="border border-border rounded py-0.5 px-1.5 text-[11px] text-text-main bg-bg-panel outline-none cursor-pointer">
 						<option value={25}>25</option>
 						<option value={50}>50</option>
 						<option value={100}>100</option>
@@ -277,138 +303,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	.editor-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-
-	.editor-tabs {
-		display: flex; align-items: stretch; background: var(--bg-toolbar);
-		padding: 6px 8px 0; gap: 2px;
-		border-bottom: 1px solid var(--border-light); flex-shrink: 0;
-	}
-	.tab {
-		padding: 6px 14px; display: flex; align-items: center; gap: 6px;
-		font-size: 12px; border-radius: 6px 6px 0 0; cursor: pointer;
-		color: var(--text-muted); border: 1px solid transparent;
-		border-bottom: none; margin-bottom: -1px;
-	}
-	.tab.active { background: var(--bg-panel); color: var(--primary); font-weight: 600; border-color: var(--border-light); }
-	.tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-	.tab-close { opacity: 0; font-size: 14px; color: var(--text-muted); padding: 1px 3px; border-radius: 3px; }
-	.tab:hover .tab-close { opacity: 1; }
-	.tab-close:hover { background: var(--border-light); color: var(--text-main); }
-	.tab-add {
-		display: flex; align-items: center; justify-content: center;
-		width: 32px; font-size: 18px; color: var(--text-muted);
-		cursor: pointer; flex-shrink: 0; transition: .15s;
-		background: none; border: none;
-	}
-	.tab-add:hover { color: var(--primary); }
-
-	.editor-toolbar {
-		display: flex; align-items: center; padding: 6px 12px; gap: 6px;
-		border-bottom: 1px solid var(--border-light);
-		background: var(--bg-toolbar); flex-shrink: 0;
-	}
-	.toolbar-divider { width: 1px; height: 18px; background: var(--border-light); margin: 0 4px; }
-	.toolbar-btn {
-		display: flex; align-items: center; gap: 5px; padding: 4px 8px;
-		font-size: 12px; font-weight: 500; border-radius: 5px; cursor: pointer;
-		color: var(--text-muted); border: 1px solid transparent;
-		background: transparent; transition: .15s; white-space: nowrap;
-	}
-	.toolbar-btn:hover { background: var(--border-light); color: var(--text-main); border-color: var(--border-light); }
-	.toolbar-spacer { flex: 1; }
-
-	.btn-run {
-		background: var(--success); color: white; border: none;
-		padding: 5px 14px; font-size: 12px; font-weight: 700;
-		border-radius: 5px; cursor: pointer; display: flex;
-		align-items: center; gap: 6px; transition: .15s;
-	}
-	.btn-run:hover:not(:disabled) { background: var(--success-hover); }
-	.btn-run:disabled { opacity: 0.6; cursor: not-allowed; }
-	.btn-run svg { width: 10px; height: 10px; fill: white; stroke: none; }
-	.shortcut { font-size: 10px; opacity: 0.7; font-weight: 400; }
-
-	.editor-body { flex: 1; overflow: auto; min-height: 0; }
-	:global(.cm-editor) { height: 100%; font-size: 13px; }
-	:global(.cm-editor.cm-focused) { outline: none; }
-	:global(.cm-scroller) { font-family: var(--font-mono); }
-
-	.status-bar {
-		display: flex; align-items: center; gap: 16px;
-		padding: 0 14px; height: 24px; background: var(--bg-toolbar);
-		border-top: 1px solid var(--border-light);
-		border-bottom: 1px solid var(--border-light);
-		font-size: 11px; color: var(--text-muted); flex-shrink: 0;
-	}
-	.status-item { display: flex; align-items: center; gap: 4px; }
-	.status-dialect { color: var(--primary); font-weight: 600; }
-
-	.results-container { height: 42%; display: flex; flex-direction: column; flex-shrink: 0; }
-	.results-tabs {
-		display: flex; align-items: stretch; background: var(--bg-toolbar);
-		border-bottom: 1px solid var(--border-light); padding: 0 12px; flex-shrink: 0;
-	}
-	.rtab {
-		padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
-		color: var(--text-muted); border-bottom: 2px solid transparent;
-		margin-bottom: -1px; display: flex; align-items: center; gap: 6px;
-		background: none; border-top: none; border-left: none; border-right: none;
-	}
-	.rtab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
-	.rtab-count { background: #e2e8f0; color: var(--text-muted); font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 10px; }
-	.rtab.active .rtab-count { background: #dbeafe; color: var(--primary); }
-	.results-actions { margin-left: auto; display: flex; align-items: center; }
-	.results-action-btn {
-		display: flex; align-items: center; gap: 4px; padding: 4px 8px;
-		font-size: 11px; border-radius: 4px; cursor: pointer;
-		color: var(--text-muted); background: none; border: none;
-	}
-	.results-action-btn:hover { background: var(--border-light); color: var(--text-main); }
-
-	.results-meta {
-		padding: 6px 14px; display: flex; align-items: center; gap: 20px;
-		border-bottom: 1px solid var(--border-light); font-size: 12px;
-		background: var(--bg-panel); flex-shrink: 0;
-	}
-	.metric { display: flex; align-items: center; gap: 5px; color: var(--text-muted); }
-	.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
-
-	.table-wrapper { flex: 1; overflow: auto; }
-	table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 12px; }
-	th {
-		background: var(--bg-toolbar); padding: 7px 14px; font-weight: 600;
-		color: var(--text-muted); border-bottom: 1px solid var(--border-light);
-		position: sticky; top: 0; z-index: 1; font-size: 11px;
-		letter-spacing: 0.3px; text-transform: uppercase;
-	}
-	td { padding: 7px 14px; border-bottom: 1px solid var(--border-light); font-family: var(--font-mono); font-size: 12px; }
-	tr:hover td { background: var(--bg-toolbar); }
-	.row-num { color: var(--text-muted); width: 36px; text-align: right; font-family: var(--font-mono); font-size: 11px; opacity: 0.6; }
-	.null-val { color: #cbd5e1; font-style: italic; }
-
-	.pagination {
-		display: flex; align-items: center; gap: 6px; padding: 6px 12px;
-		border-top: 1px solid var(--border-light); flex-shrink: 0;
-		background: var(--bg-panel); font-size: 12px; color: var(--text-muted);
-	}
-	.pg-btn {
-		height: 26px; padding: 0 10px; border-radius: 5px;
-		border: 1px solid var(--border-light); background: transparent;
-		font-size: 11px; font-weight: 600; cursor: pointer; transition: .15s;
-		color: var(--text-muted);
-	}
-	.pg-btn:hover:not(:disabled) { border-color: var(--border-hover); color: var(--text-main); }
-	.pg-btn:disabled { opacity: .4; cursor: not-allowed; }
-	.pg-info { font-size: 11px; color: var(--text-muted); }
-	.pg-info b { color: var(--text-main); }
-	.pg-spacer { flex: 1; }
-	.pg-size { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
-	.pg-size select {
-		border: 1px solid var(--border-light); border-radius: 4px;
-		padding: 2px 6px; font-size: 11px; color: var(--text-main);
-		background: var(--bg-panel); outline: none; cursor: pointer;
-	}
-</style>
