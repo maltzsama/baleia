@@ -78,6 +78,10 @@ func (a *Activities) ensureCatalog(ctx context.Context, params EnsureCatalogPara
 		}
 	}
 
+	if chosen.ConnectionType != "polaris" && chosen.ConnectionType != "iceberg" && chosen.ConnectionType != "nessie" {
+		return nil
+	}
+
 	conn, err := a.queries.GetCatalogConnectionByID(ctx, chosen.ConnectionID)
 	if err != nil {
 		return fmt.Errorf("load catalog connection: %w", err)
@@ -333,6 +337,11 @@ func StoreResults(ctx context.Context, params StoreResultsParams) (*StoreResults
 }
 
 func (a *Activities) storeResults(ctx context.Context, params StoreResultsParams) (*StoreResultsResult, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("storeResults input", "columns", len(params.Columns), "rows", len(params.Rows))
+	if len(params.Rows) > 0 {
+		logger.Info("first row", "len", len(params.Rows[0]), "val", params.Rows[0])
+	}
 	arrowCols := make([]arrowipc.ColumnInfo, len(params.Columns))
 	for i, c := range params.Columns {
 		arrowCols[i] = arrowipc.ColumnInfo{Name: c.Name, Type: c.Type}
@@ -342,6 +351,7 @@ func (a *Activities) storeResults(ctx context.Context, params StoreResultsParams
 	if err != nil {
 		return nil, fmt.Errorf("arrow conversion: %w", err)
 	}
+	logger.Info("storeResults arrow", "bytes", len(data))
 
 	key := fmt.Sprintf("query-results/%s/result.arrow", params.ExecutionID)
 	if err := a.s3.Put(ctx, key, data, "application/vnd.apache.arrow.stream"); err != nil {

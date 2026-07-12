@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -103,7 +104,12 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 		allRows = append(allRows, execResult.Rows...)
 	}
 
-	_ = workflow.ExecuteActivity(ctx, activities.StoreResults, activities.StoreResultsParams{
+	storeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+
+	_ = workflow.ExecuteActivity(storeCtx, activities.StoreResults, activities.StoreResultsParams{
 		ExecutionID: executionID,
 		Columns:     allColumns,
 		Rows:        allRows,
