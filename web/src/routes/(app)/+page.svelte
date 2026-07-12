@@ -1,0 +1,24 @@
+<script lang="ts">
+	import LeftSidebar from '$lib/components/LeftSidebar.svelte';
+	import RightSidebar from '$lib/components/RightSidebar.svelte';
+	import QueryEditor from '$lib/components/QueryEditor.svelte';
+
+	let leftCollapsed = $state(false);
+	let rightCollapsed = $state(false);
+	let sidebarTab = $state<'database' | 'queries'>('database');
+</script>
+
+<div class="flex-1 flex overflow-hidden p-2.5 gap-2.5">
+	<LeftSidebar
+		bind:collapsed={leftCollapsed}
+		bind:activeTab={sidebarTab}
+	/>
+
+	<div class="flex-1 min-w-0 flex flex-col overflow-hidden bg-bg-panel rounded-[var(--radius)] border border-border shadow-sm">
+		<QueryEditor />
+	</div>
+
+	<RightSidebar
+		bind:collapsed={rightCollapsed}
+	/>
+</div>
