@@ -69,13 +69,13 @@ func (a *Activities) ensureCatalog(ctx context.Context, params EnsureCatalogPara
 	// Prefer a REST-based Iceberg catalog manager; fall back to the first.
 	chosen := access[0]
 	for _, ac := range access {
-		if ac.CatalogType == "polaris" || ac.CatalogType == "iceberg" || ac.CatalogType == "nessie" {
+		if ac.ConnectionType == "polaris" || ac.ConnectionType == "iceberg" || ac.ConnectionType == "nessie" {
 			chosen = ac
 			break
 		}
 	}
 
-	conn, err := a.queries.GetCatalogConnectionByID(ctx, chosen.CatalogConnectionID)
+	conn, err := a.queries.GetCatalogConnectionByID(ctx, chosen.ConnectionID)
 	if err != nil {
 		return fmt.Errorf("load catalog connection: %w", err)
 	}
@@ -91,7 +91,7 @@ func (a *Activities) ensureCatalog(ctx context.Context, params EnsureCatalogPara
 	return a.trino.CreateIcebergCatalog(ctx, trino.IcebergCatalogParams{
 		Name:       params.CatalogName,
 		RestURI:    strings.TrimRight(conn.Url, "/") + "/api/catalog",
-		Warehouse:  params.CatalogName,
+		Warehouse:  chosen.CatalogName,
 		Credential: creds.ClientID + ":" + creds.ClientSecret,
 	})
 }
