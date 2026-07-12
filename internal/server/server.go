@@ -102,19 +102,6 @@ func (s *Server) routes() {
 			}
 		}
 
-		publicPaths := map[string]bool{"/": true, "/setup": true, "/login": true}
-		if !publicPaths[path] && !strings.HasPrefix(path, "/_app/") {
-			token := extractToken(r)
-			if token == "" {
-				http.Redirect(w, r, "/login", http.StatusFound)
-				return
-			}
-			if _, err := auth.ParseToken(token, s.cfg.JWTSecret); err != nil {
-				http.Redirect(w, r, "/login", http.StatusFound)
-				return
-			}
-		}
-
 		fullPath := "web/build" + path
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 			http.ServeFile(w, r, "web/build/app.html")
