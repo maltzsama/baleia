@@ -4,7 +4,7 @@
 	import QueryEditor from '$lib/components/QueryEditor.svelte';
 
 	let leftCollapsed = $state(false);
-	let rightCollapsed = $state(false);
+	let rightCollapsed = $state(true);
 	let sidebarTab = $state<'datasources' | 'queries'>('datasources');
 	let selectedTable = $state<{catalog: string, namespace: string, table: string} | null>(null);
 </script>

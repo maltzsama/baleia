@@ -11,68 +11,95 @@
 	import { format as formatSQLFormatter } from 'sql-formatter';
 	import { tableFromIPC } from 'apache-arrow';
 
+	type Tab = { id: string; name: string; sql: string; savedId: string | null;
+		results: any[]; columns: string[]; rowCount: number; durationMs: number; errorMsg: string; statusText: string; page: number; };
+
 	let editorView: EditorView;
 	let editorEl: HTMLDivElement;
 	const themeCompartment = new Compartment();
 
+	let activeIdx = $state(0);
 	let executing = $state(false);
-	let sqlCode = $state('SELECT 1;');
 	let executionId = $state('');
-	let results: any[] = $state([]);
-	let columns: string[] = $state([]);
-	let rowCount = $state(0);
-	let durationMs = $state(0);
-	let errorMsg = $state('');
-	let statusText = $state('Ready');
-
-	let page = $state(1);
-	let perPage = $state(50);
-
+	let runningTabIdx = $state(0);
+	let tabs = $state<Tab[]>([{ id: '1', name: 'Untitled', sql: 'SELECT 1;', savedId: null,
+		results: [], columns: [], rowCount: 0, durationMs: 0, errorMsg: '', statusText: 'Ready', page: 1 }]);
 	let dark = $state(browser && document.body.classList.contains('dark'));
 
+	const activeTab = $derived(tabs[activeIdx]);
+	let tabCounter = $state(2);
 	const apiBase = '/api/v1';
 	let workspaceId = $state('');
 	const token = localStorage.getItem('token') || '';
+	let saveModalOpen = $state(false);
+	let saveName = $state('');
+	let perPage = $state(50);
+
+	function switchTab(idx: number) {
+		if (activeIdx !== idx) {
+			tabs[activeIdx].sql = editorView.state.doc.toString();
+		}
+		activeIdx = idx;
+		editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: tabs[idx].sql } });
+	}
+
+	function newTab() {
+		tabs[activeIdx].sql = editorView.state.doc.toString();
+		tabs.push({ id: String(tabCounter++), name: 'Untitled', sql: 'SELECT 1;', savedId: null,
+			results: [], columns: [], rowCount: 0, durationMs: 0, errorMsg: '', statusText: 'Ready', page: 1 });
+		activeIdx = tabs.length - 1;
+		editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: 'SELECT 1;' } });
+	}
+
+	function closeTab(idx: number) {
+		if (tabs.length <= 1) return;
+		tabs.splice(idx, 1);
+		if (activeIdx >= tabs.length) activeIdx = tabs.length - 1;
+		const t = tabs[activeIdx];
+		editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: t.sql } });
+	}
+
+	function loadQuery(q: any) {
+		tabs.push({ id: String(tabCounter++), name: q.name, sql: q.sql, savedId: q.id,
+			results: [], columns: [], rowCount: 0, durationMs: 0, errorMsg: '', statusText: 'Ready', page: 1 });
+		activeIdx = tabs.length - 1;
+		editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: q.sql } });
+	}
 
 	onMount(async () => {
 		if (!workspaceId) {
 			try {
 				const res = await fetch(`${apiBase}/workspaces`, { headers: { Authorization: `Bearer ${token}` } });
 				if (res.ok) {
-					const workspaces = await res.json();
-					if (workspaces.length > 0) {
-						workspaceId = workspaces[0].id;
-					}
+					const w = await res.json();
+					if (w.length > 0) workspaceId = w[0].id;
 				}
 			} catch {}
 		}
-	});
 
-	onMount(() => {
 		const observer = new MutationObserver(() => {
 			dark = document.body.classList.contains('dark');
 		});
 		observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-		const trinoSQL = sql({
-			dialect: PostgreSQL,
-			schema: {},
-			tables: [],
-		});
-
+		const trinoSQL = sql({ dialect: PostgreSQL });
 		const extensions = [
-			basicSetup,
-			keymap.of([indentWithTab]),
-			trinoSQL,
+			basicSetup, keymap.of([indentWithTab]), trinoSQL,
 			autocompletion({ override: [catalogAutocomplete] }),
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of(update => {
-				if (update.docChanged) sqlCode = update.state.doc.toString();
+				if (update.docChanged) {
+					tabs[activeIdx].sql = update.state.doc.toString();
+				}
 			}),
 		];
 
-		const state = EditorState.create({ doc: sqlCode, extensions });
+		const state = EditorState.create({ doc: tabs[activeIdx].sql, extensions });
 		editorView = new EditorView({ state, parent: editorEl });
+
+		if (typeof window !== 'undefined') {
+			window.addEventListener('query-load', ((e: CustomEvent) => loadQuery(e.detail)) as EventListener);
+		}
 
 		return () => observer.disconnect();
 	});
@@ -84,299 +111,222 @@
 	});
 
 	async function runQuery() {
-		if (!sqlCode.trim()) return;
-		executing = true;
-		errorMsg = '';
-		results = [];
-		statusText = 'Running...';
-
+		const sql = editorView.state.doc.toString().trim();
+		if (!sql) return;
+		const idx = activeIdx;
+		executing = true; tabs[idx].errorMsg = ''; tabs[idx].results = []; tabs[idx].statusText = 'Running...';
 		try {
 			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-				body: JSON.stringify({ workspace_id: workspaceId, sql: sqlCode })
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({ workspace_id: workspaceId, sql })
 			});
 			if (!res.ok) throw new Error('Failed to start execution');
 			const exec = await res.json();
 			executionId = exec.id;
 			connectWS(executionId);
-		} catch (e: any) {
-			errorMsg = e.message;
-			executing = false;
-			statusText = 'Error';
-		}
+		} catch (e: any) { tabs[activeIdx].errorMsg = e.message; executing = false; tabs[activeIdx].statusText = 'Error'; }
 	}
 
 	function connectWS(execId: string) {
+		const idx = activeIdx;
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws/workspaces/${workspaceId}/executions/${execId}?token=${token}`);
-
 		ws.onmessage = async (e) => {
 			const event = JSON.parse(e.data);
 			switch (event.type) {
-				case 'running':
-					statusText = 'Running...';
+				case 'running': tabs[idx].statusText = 'Running...'; break;
+				case 'progress': tabs[idx].statusText = `Running... ${event.rows_so_far || 0} rows`; break;
+				case 'finished':
+					tabs[idx].statusText = 'Complete'; tabs[idx].rowCount = event.rows_returned || 0;
+					tabs[idx].durationMs = event.duration_ms || 0; tabs[idx].page = 1; ws.close();
+					await fetchResults(execId, idx); executing = false;
 					break;
-				case 'progress':
-					statusText = `Running... ${event.rows_so_far || 0} rows`;
-					break;
-			case 'finished':
-				statusText = 'Complete';
-				rowCount = event.rows_returned || 0;
-				durationMs = event.duration_ms || 0;
-				page = 1;
-				ws.close();
-				await fetchResults(execId);
-				executing = false;
-				break;
-				case 'failed':
-					errorMsg = event.message || 'Query failed';
-					executing = false;
-					statusText = 'Failed';
-					ws.close();
-					break;
+				case 'failed': tabs[idx].errorMsg = event.message || 'Query failed'; executing = false; tabs[idx].statusText = 'Failed'; ws.close(); break;
 			}
 		};
-
-		ws.onerror = () => {
-			executing = false;
-			statusText = 'Connection error';
-		};
+		ws.onerror = () => { executing = false; tabs[activeIdx].statusText = 'Connection error'; };
 	}
 
-	async function fetchResults(execId: string) {
+	async function fetchResults(execId: string, idx: number) {
 		try {
-			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions/${execId}/results`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions/${execId}/results`, { headers: { Authorization: `Bearer ${token}` } });
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const buf = await res.arrayBuffer();
-			console.log('Results buffer size:', buf.byteLength);
 			if (buf.byteLength > 0) {
 				const arr = new Uint8Array(buf);
 				const table = tableFromIPC(arr);
-				columns = table.schema.fields.map((f) => f.name);
+				tabs[idx].columns = table.schema.fields.map(f => f.name);
 				const decoded: any[][] = [];
-				for (const row of table.toArray()) {
-					decoded.push(columns.map((c) => (row as any)[c]));
-				}
-				results = decoded;
-				rowCount = decoded.length;
-				console.log('Rows loaded:', decoded.length, 'Columns:', columns.length);
+				for (const row of table.toArray()) decoded.push(tabs[idx].columns.map(c => (row as any)[c]));
+				tabs[idx].results = decoded; tabs[idx].rowCount = decoded.length;
 			}
-		} catch (e: any) {
-			errorMsg = 'Fetch results: ' + (e.message || String(e));
-			console.error('fetchResults error:', e);
-		}
+		} catch (e: any) { /* results unavailable */ }
 	}
 
 	function formatSQL() {
 		try {
-			const formatted = formatSQLFormatter(sqlCode, {
-				language: 'postgresql',
-				keywordCase: 'upper',
-				indentStyle: 'standard',
-			});
-			sqlCode = formatted;
-			editorView.dispatch({
-				changes: { from: 0, to: editorView.state.doc.length, insert: formatted }
-			});
-		} catch { /* keep original on error */ }
+			const sql = editorView.state.doc.toString();
+			const f = formatSQLFormatter(sql, { language: 'postgresql', keywordCase: 'upper', indentStyle: 'standard' });
+			editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: f } });
+		} catch {}
 	}
 
 	function explainQuery() {
-		const current = sqlCode.trim();
-		if (!current.toUpperCase().startsWith('EXPLAIN')) {
-			sqlCode = 'EXPLAIN ' + current;
-			editorView.dispatch({
-				changes: { from: 0, to: editorView.state.doc.length, insert: sqlCode }
-			});
+		const sql = editorView.state.doc.toString().trim();
+		if (!sql.toUpperCase().startsWith('EXPLAIN')) {
+			editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: 'EXPLAIN ' + sql } });
 		}
 		runQuery();
+	}
+
+	async function saveQuery() {
+		if (!saveName.trim() || !workspaceId) return;
+		try {
+			const sql = editorView.state.doc.toString();
+			await fetch(`${apiBase}/workspaces/${workspaceId}/queries`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({ name: saveName.trim(), sql })
+			});
+			tabs[activeIdx].name = saveName.trim();
+			saveModalOpen = false; saveName = '';
+			window.dispatchEvent(new CustomEvent('query-saved'));
+		} catch (e: any) { tabs[activeIdx].errorMsg = 'Save failed: ' + e.message; }
 	}
 
 	async function catalogAutocomplete(context: CompletionContext) {
 		const word = context.matchBefore(/\w+/);
 		if (!word || word.from === word.to) return null;
-
-		const token = localStorage.getItem('token') || '';
-		const apiBase = '/api/v1';
-
 		try {
 			const connRes = await fetch(`${apiBase}/catalog-connections`, { headers: { Authorization: `Bearer ${token}` } });
 			if (!connRes.ok) return null;
-			const connections = await connRes.json();
-			if (!connections.length) return null;
-
-			const connId = connections[0].id;
-			const catRes = await fetch(`${apiBase}/connections/${connId}/catalogs`, { headers: { Authorization: `Bearer ${token}` } });
+			const cons = await connRes.json();
+			if (!cons.length) return null;
+			const cid = cons[0].id;
+			const catRes = await fetch(`${apiBase}/connections/${cid}/catalogs`, { headers: { Authorization: `Bearer ${token}` } });
 			if (!catRes.ok) return null;
 			const catalogs = await catRes.json();
 			if (!catalogs.length) return null;
-
 			const options: any[] = [];
 			for (const cat of catalogs.slice(0, 3)) {
 				try {
 					const nsRes = await fetch(`${apiBase}/catalogs/${cat.id}/namespaces`, { headers: { Authorization: `Bearer ${token}` } });
 					if (!nsRes.ok) continue;
-					const namespaces: string[][] = await nsRes.json();
-					for (const ns of namespaces.slice(0, 3)) {
+					const nss: string[][] = await nsRes.json();
+					for (const ns of nss.slice(0, 3)) {
 						const nsName = ns.join('.');
 						try {
 							const tRes = await fetch(`${apiBase}/catalogs/${cat.id}/namespaces/${nsName}/tables`, { headers: { Authorization: `Bearer ${token}` } });
 							if (!tRes.ok) continue;
 							const tables = await tRes.json();
-							for (const t of tables) {
-								options.push({ label: `${cat.name}.${nsName}.${t.name}`, type: 'table', detail: 'table' });
-							}
+							for (const t of tables) options.push({ label: `${cat.name}.${nsName}.${t.name}`, type: 'table' });
 						} catch {}
 					}
 				} catch {}
 			}
-
 			if (options.length === 0) return null;
 			return { from: word.from, options };
-		} catch {
-			return null;
-		}
+		} catch { return null; }
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-			e.preventDefault();
-			runQuery();
-		}
+		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
 	}
 
-	const pagedRows = $derived(results.slice((page - 1) * perPage, page * perPage));
-	const totalPages = $derived(Math.max(1, Math.ceil(results.length / perPage)));
+	const pagedRows = $derived(activeTab.results.slice((activeTab.page - 1) * perPage, activeTab.page * perPage));
+	const totalPages = $derived(Math.max(1, Math.ceil(activeTab.results.length / perPage)));
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="flex-1 flex flex-col overflow-hidden min-w-0">
-
-	<div class="flex items-stretch bg-bg-toolbar pt-1.5 px-2 gap-0.5 border-b border-border shrink-0">
-		<div class="py-1.5 px-3.5 flex items-center gap-1.5 text-xs rounded-t-md cursor-pointer -mb-px border border-transparent border-b-0
-			bg-bg-panel text-primary font-semibold" style="border-color: var(--color-border)">
-			<span class="overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">Untitled Query</span>
-			<span class="opacity-0 text-sm text-text-muted py-px px-1 rounded-[3px] group-hover:opacity-100 hover:bg-border hover:text-text-main">×</span>
-		</div>
-		<button class="flex items-center justify-center w-8 text-lg text-text-muted cursor-pointer shrink-0 transition-colors duration-150 bg-none border-none hover:text-primary">+</button>
+	<div class="flex items-stretch bg-bg-toolbar pt-1.5 px-2 gap-0.5 border-b border-border shrink-0 overflow-x-auto">
+		{#each tabs as tab, i (tab.id)}
+			<button class="py-1.5 px-3.5 flex items-center gap-1.5 text-xs rounded-t-md cursor-pointer -mb-px border border-transparent border-b-0 transition-colors duration-150
+				{i === activeIdx ? 'bg-bg-panel text-primary font-semibold border-border' : 'text-text-muted hover:bg-border/50'}"
+				onclick={() => switchTab(i)}>
+				<span class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">{tab.name}</span>
+				{#if tabs.length > 1}
+					<span class="text-sm text-text-muted py-px px-1 rounded-[3px] hover:bg-border hover:text-text-main" onclick={(e) => { e.stopPropagation(); closeTab(i); }}>×</span>
+				{/if}
+			</button>
+		{/each}
+		<button class="flex items-center justify-center w-8 text-lg text-text-muted cursor-pointer shrink-0 bg-none border-none hover:text-primary" onclick={newTab}>+</button>
 	</div>
 
 	<div class="flex items-center py-1.5 px-3 gap-1.5 border-b border-border bg-bg-toolbar shrink-0">
-		<button
-			onclick={runQuery}
-			disabled={executing}
-			class="bg-success text-white border-none py-[5px] px-3.5 text-xs font-bold rounded-[5px] cursor-pointer flex items-center gap-1.5 transition-colors duration-150
-				hover:enabled:bg-success-hover disabled:opacity-60 disabled:cursor-not-allowed">
+		<button onclick={runQuery} disabled={executing} class="bg-success text-white border-none py-[5px] px-3.5 text-xs font-bold rounded-[5px] cursor-pointer flex items-center gap-1.5 hover:enabled:bg-success-hover disabled:opacity-60 disabled:cursor-not-allowed">
 			<svg viewBox="0 0 24 24" class="w-2.5 h-2.5 fill-white stroke-none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
 			{executing ? 'Running...' : 'Run'}
 			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
 		</button>
-		<button onclick={explainQuery} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent transition-all duration-150 whitespace-nowrap hover:bg-border hover:text-text-main">
+		<button onclick={explainQuery} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap">
 			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 			Explain
 		</button>
 		<div class="w-px h-[18px] bg-border mx-1"></div>
-		<button onclick={formatSQL} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent transition-all duration-150 whitespace-nowrap hover:bg-border hover:text-text-main">
-			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><polyline points="6 9 12 15 18 9"/></svg>
-			Format
-		</button>
-		<button onclick={() => window.location.href = '/app'} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent transition-all duration-150 whitespace-nowrap hover:bg-border hover:text-text-main">
-			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-			Save
-		</button>
+		<button onclick={formatSQL} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap">Format</button>
+		<button onclick={() => saveModalOpen = true} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap">Save</button>
 		<div class="flex-1"></div>
 	</div>
 
 	<div bind:this={editorEl} class="flex-1 overflow-auto min-h-0"></div>
 
 	<div class="flex items-center gap-4 px-3.5 h-6 bg-bg-toolbar border-t border-b border-border text-[11px] text-text-muted shrink-0">
-		<span class="flex items-center gap-1"><span class="text-primary font-semibold">Trino SQL</span></span>
-		<span class="flex items-center gap-1">Ln 1, Col 1</span>
-		<span class="flex items-center gap-1">{statusText}</span>
-		{#if errorMsg}
-			<span class="flex items-center gap-1 text-red-600">{errorMsg}</span>
-		{/if}
+		<span class="text-primary font-semibold">Trino SQL</span>
+		<span>Ln 1, Col 1</span>
+		<span>{tabs[activeIdx].statusText}</span>
+		{#if tabs[activeIdx].errorMsg}<span class="text-red-600">{tabs[activeIdx].errorMsg}</span>{/if}
 	</div>
 
-	{#if results.length > 0 || executing}
+	{#if tabs[activeIdx].results.length > 0 || executing}
 		<div class="h-[42%] flex flex-col shrink-0">
 			<div class="flex items-stretch bg-bg-toolbar border-b border-border px-3 shrink-0">
-				<div class="py-[7px] px-3 text-xs font-semibold cursor-pointer -mb-px flex items-center gap-1.5 bg-none border-t-0 border-l-0 border-r-0 border-b-2
-					text-primary border-b-primary">
-					Result <span class="bg-blue-100 text-primary text-[10px] font-bold py-px px-[5px] rounded-full">{rowCount}</span>
-				</div>
-				<div class="ml-auto flex items-center">
-					<button class="flex items-center gap-1 py-1 px-2 text-[11px] rounded cursor-pointer text-text-muted bg-none border-none hover:bg-border hover:text-text-main">
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-						Export
-					</button>
-				</div>
+				<div class="py-[7px] px-3 text-xs font-semibold cursor-pointer -mb-px text-primary border-b-2 border-b-primary">Result <span class="bg-blue-100 text-primary text-[10px] font-bold py-px px-[5px] rounded-full">{tabs[activeIdx].rowCount}</span></div>
 			</div>
 			<div class="py-1.5 px-3.5 flex items-center gap-5 border-b border-border text-xs bg-bg-panel shrink-0">
 				<span class="flex items-center gap-[5px] text-text-muted"><span class="w-[7px] h-[7px] rounded-full bg-success"></span> Finished</span>
-				<span class="flex items-center gap-[5px] text-text-muted">{rowCount} rows</span>
-				<span class="flex items-center gap-[5px] text-text-muted">{durationMs}ms</span>
+				<span class="text-text-muted">{tabs[activeIdx].rowCount} rows</span>
+				<span class="text-text-muted">{tabs[activeIdx].durationMs}ms</span>
 			</div>
 			<div class="flex-1 overflow-auto">
 				<table class="w-full border-separate border-spacing-0 text-left text-xs">
-					<thead>
-						<tr>
-							<th class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] tracking-[0.3px] uppercase text-right w-9">#</th>
-							{#each columns as col}
-								<th class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] tracking-[0.3px] uppercase">{col}</th>
-							{/each}
-						</tr>
-					</thead>
+					<thead><tr><th class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] uppercase text-right w-9">#</th>
+					{#each activeTab.columns as col}<th class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] uppercase">{col}</th>{/each}</tr></thead>
 					<tbody>
 						{#each pagedRows as row, i}
 							<tr class="hover:[&>td]:bg-bg-toolbar">
-								<td class="py-[7px] px-3.5 border-b border-border font-mono text-xs text-text-muted w-9 text-right opacity-60">{(page - 1) * perPage + i + 1}</td>
-								{#each row as cell}
-									<td class="py-[7px] px-3.5 border-b border-border font-mono text-xs">
-										{#if cell === null}
-											<span class="text-slate-300 italic">NULL</span>
-										{:else}
-											{cell}
-										{/if}
-									</td>
-								{/each}
+								<td class="py-[7px] px-3.5 border-b border-border font-mono text-xs text-text-muted w-9 text-right opacity-60">{(activeTab.page - 1) * perPage + i + 1}</td>
+								{#each row as cell}<td class="py-[7px] px-3.5 border-b border-border font-mono text-xs">{cell === null ? '<null>' : cell}</td>{/each}
 							</tr>
 						{/each}
 					</tbody>
 				</table>
 			</div>
 			<div class="flex items-center gap-1.5 py-1.5 px-3 border-t border-border shrink-0 bg-bg-panel text-xs text-text-muted">
-				<button
-					disabled={page <= 1}
-					onclick={() => page--}
-					class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer transition-all duration-150 text-text-muted
-						hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed">
-					← Prev
-				</button>
-				<span class="text-[11px] text-text-muted">Page <b class="text-text-main">{page}</b> of <b class="text-text-main">{totalPages}</b></span>
-				<button
-					disabled={page >= totalPages}
-					onclick={() => page++}
-					class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer transition-all duration-150 text-text-muted
-						hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed">
-					Next →
-				</button>
+				<button disabled={activeTab.page <= 1} onclick={() => activeTab.page--} class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer text-text-muted hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
+				<span class="text-[11px]">Page <b class="text-text-main">{activeTab.page}</b> of <b class="text-text-main">{totalPages}</b></span>
+				<button disabled={activeTab.page >= totalPages} onclick={() => activeTab.page++} class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer text-text-muted hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
 				<span class="flex-1"></span>
-				<span class="flex items-center gap-[5px] text-[11px] text-text-muted">
-					Rows per page:
-					<select
-						bind:value={perPage}
-						onchange={() => page = 1}
-						class="border border-border rounded py-0.5 px-1.5 text-[11px] text-text-main bg-bg-panel outline-none cursor-pointer">
-						<option value={25}>25</option>
-						<option value={50}>50</option>
-						<option value={100}>100</option>
-					</select>
-				</span>
+				<select onchange={(e) => tabs[activeIdx].page = 1} class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer">
+					<option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+				</select>
+			</div>
+		</div>
+	{/if}
+
+	{#if saveModalOpen}
+		<div class="modal-overlay fixed inset-0 bg-black/30 backdrop-blur-[2px] z-[100] flex items-center justify-center p-6" onclick={(e) => e.target === e.currentTarget && (saveModalOpen = false)}>
+			<div class="modal bg-bg-panel border border-border rounded-xl w-full max-w-[360px] shadow-[0_24px_64px_rgba(0,0,0,.2)]">
+				<div class="modal-header flex items-center px-5 py-[18px] border-b border-border"><h2 class="text-sm font-semibold flex-1">Save Query</h2><button class="w-[26px] h-[26px] rounded-md border-none bg-transparent cursor-pointer flex items-center justify-center text-text-muted hover:bg-bg-toolbar" onclick={() => saveModalOpen = false}>×</button></div>
+				<div class="p-5">
+					<input class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary mb-3.5" type="text" placeholder="Query name" bind:value={saveName} onkeydown={(e) => e.key === 'Enter' && saveQuery()}>
+					<div class="flex justify-end gap-1.5">
+						<button class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer hover:border-border-hover" onclick={() => saveModalOpen = false}>Cancel</button>
+						<button class="h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer hover:bg-primary-hover" onclick={saveQuery}>Save</button>
+					</div>
+				</div>
 			</div>
 		</div>
 	{/if}

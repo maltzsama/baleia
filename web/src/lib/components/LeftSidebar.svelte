@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataSourceTree from './DataSourceTree.svelte';
+	import SavedQueriesList from './SavedQueriesList.svelte';
 
 	let { collapsed = $bindable(false), activeTab = $bindable<'datasources' | 'queries'>('datasources'), onSelectTable }: {
 		collapsed?: boolean;
@@ -53,10 +54,7 @@
 			{#if activeTab === 'datasources'}
 				<DataSourceTree {onSelectTable} />
 			{:else}
-				<div class="overflow-y-auto flex-1 px-1.5 pt-1.5 pb-2">
-					<div class="text-[10px] font-bold tracking-wide uppercase text-text-muted pt-2 px-1.5 pb-1 flex items-center gap-1.5 after:content-[''] after:flex-1 after:h-px after:bg-border">Saved Queries</div>
-					<p class="text-xs text-text-muted px-2 py-6 text-center">No saved queries yet.</p>
-				</div>
+				<SavedQueriesList />
 			{/if}
 		</div>
 	{/if}

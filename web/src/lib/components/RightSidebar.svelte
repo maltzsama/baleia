@@ -4,7 +4,7 @@
 	const token = localStorage.getItem('token') || '';
 	const apiBase = '/api/v1';
 
-	let { collapsed = $bindable(false), selectedTable }: {
+	let { collapsed = $bindable(true), selectedTable }: {
 		collapsed?: boolean;
 		selectedTable?: {catalog: string, namespace: string, table: string} | null;
 	} = $props();
