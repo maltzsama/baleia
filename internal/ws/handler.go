@@ -291,10 +291,19 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 			return false
 
 		case "failed":
+			errMsg := "query execution failed"
+			if statements, err := h.queries.ListQueryStatements(ctx, execID); err == nil {
+				for _, s := range statements {
+					if s.Status == "failed" && s.ErrorMessage != nil && *s.ErrorMessage != "" {
+						errMsg = *s.ErrorMessage
+						break
+					}
+				}
+			}
 			sendEvent(conn, WSEvent{
 				Type:        "failed",
 				ExecutionID: executionID,
-				Message:     "query execution failed",
+				Message:     errMsg,
 				Timestamp:   nowStr,
 			})
 			return false
