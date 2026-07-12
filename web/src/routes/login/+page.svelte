@@ -13,7 +13,7 @@
 	let shakeField = $state('');
 	let strengthScore = $state(0);
 
-	const apiBase = 'http://localhost:8080/api/v1';
+	const apiBase = '/api/v1';
 
 	function showError(msg: string, field = '') {
 		error = msg;

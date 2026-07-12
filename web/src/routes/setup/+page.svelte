@@ -26,7 +26,7 @@
 	let ssoEntityId = $state('');
 	let ssoCert = $state('');
 
-	const apiBase = 'http://localhost:8080/api/v1';
+	const apiBase = '/api/v1';
 
 	function checkStrength(val: string) {
 		let s = 0;
