@@ -10,7 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const AccessTokenTTL  = 15 * time.Minute
+const AccessTokenTTL  = 12 * time.Hour
 const RefreshTokenTTL = 30 * 24 * time.Hour
 
 type Claims struct {
