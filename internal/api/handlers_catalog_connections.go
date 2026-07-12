@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	trino_client "github.com/galileostudio/baleia/internal/trino"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -278,6 +279,18 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 		return nil, err
 	}
 
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, connID)
+	if err == nil {
+		props := trinoCatalogProperties(conn.Type, conn.Url, conn.CredentialsEnc, request.Body.Name)
+		if props != nil {
+			_ = h.trino.CreateCatalog(ctx, trino_client.CatalogParams{
+				Name:       request.Body.TrinoCatalogName,
+				Connector:  trinoConnector(conn.Type),
+				Properties: props,
+			})
+		}
+	}
+
 	id := openapi_types.UUID(catalog.ID.Bytes)
 	return CreateCatalog201JSONResponse(Catalog{
 		Id:               &id,
@@ -471,4 +484,65 @@ func (h *Handlers) resolveCatalogClient(ctx context.Context, catalogID openapi_t
 	}
 
 	return client, catalog.Name, nil
+}
+
+func trinoConnector(connType string) string {
+	switch connType {
+	case "postgresql", "postgres":
+		return "postgresql"
+	case "mysql":
+		return "mysql"
+	case "polaris", "iceberg", "nessie":
+		return "iceberg"
+	default:
+		return ""
+	}
+}
+
+func trinoCatalogProperties(connType, url string, credsEnc *string, warehouse string) map[string]string {
+	switch connType {
+	case "polaris", "iceberg", "nessie":
+		if credsEnc == nil {
+			return nil
+		}
+		var creds struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+			Realm        string `json:"realm"`
+		}
+		if err := json.Unmarshal([]byte(*credsEnc), &creds); err != nil {
+			return nil
+		}
+		realm := creds.Realm
+		if realm == "" {
+			realm = "POLARIS"
+		}
+		return map[string]string{
+			"iceberg.catalog.type":                     "rest",
+			"iceberg.rest-catalog.uri":                  url + "/api/catalog",
+			"iceberg.rest-catalog.warehouse":            warehouse,
+			"iceberg.rest-catalog.security":             "OAUTH2",
+			"iceberg.rest-catalog.oauth2.credential":    creds.ClientID + ":" + creds.ClientSecret,
+			"iceberg.rest-catalog.oauth2.scope":         "PRINCIPAL_ROLE:ALL",
+			"iceberg.rest-catalog.vended-credentials-enabled": "true",
+			"fs.native-s3.enabled":                      "true",
+		}
+	case "postgresql", "mysql":
+		props := map[string]string{
+			"connection-url": url,
+		}
+		if credsEnc != nil {
+			var creds struct {
+				Username string `json:"username"`
+				Password string `json:"password"`
+			}
+			if err := json.Unmarshal([]byte(*credsEnc), &creds); err == nil {
+				props["connection-user"] = creds.Username
+				props["connection-password"] = creds.Password
+			}
+		}
+		return props
+	default:
+		return nil
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/trino"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/client"
@@ -22,10 +23,17 @@ type Handlers struct {
 	cfg            *config.Config
 	temporalClient client.Client
 	s3             *storage.S3Client
+	trino          *trino.Client
 }
 
 func NewHandlers(queries *db.Queries, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
-	return &Handlers{queries: queries, cfg: cfg, temporalClient: temporalClient, s3: s3}
+	return &Handlers{
+		queries:        queries,
+		cfg:            cfg,
+		temporalClient: temporalClient,
+		s3:             s3,
+		trino:          trino.New(cfg.TrinoURL, "baleia"),
+	}
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
