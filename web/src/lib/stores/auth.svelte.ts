@@ -26,7 +26,10 @@ function createAuthStore() {
   async function load() {
     loading = true;
     try {
-      const res = await fetch("/api/v1/auth/me", { credentials: "include" });
+      const token = localStorage.getItem('token');
+      const res = await fetch("/api/v1/auth/me", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.ok) user = await res.json();
       else user = null;
     } finally {

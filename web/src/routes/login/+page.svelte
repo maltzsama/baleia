@@ -1,4 +1,10 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+
+	onMount(() => {
+		if (localStorage.getItem('token')) window.location.href = '/sql';
+	});
+
 	let dark = $state(false);
 	let screen = $state<'login' | 'sso' | 'forgot' | 'code' | 'newpw' | 'success'>('login');
 	let ssoProto = $state<'saml' | 'oidc'>('saml');
