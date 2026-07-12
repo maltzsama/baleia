@@ -182,6 +182,9 @@ func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*Que
 		if sr.Data != nil {
 			result.Data = append(result.Data, sr.Data...)
 		}
+		if sr.Columns != nil && len(result.Columns) == 0 {
+			result.Columns = sr.Columns
+		}
 	}
 
 	result.RowCount = int64(len(result.Data))
