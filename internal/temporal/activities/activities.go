@@ -9,6 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -25,6 +26,7 @@ type Activities struct {
 	queries *db.Queries
 	trino   *trino.Client
 	s3      *storage.S3Client
+	cfg     *config.Config
 }
 
 func New(pool *pgxpool.Pool, cfg *config.Config) *Activities {
@@ -32,6 +34,7 @@ func New(pool *pgxpool.Pool, cfg *config.Config) *Activities {
 		queries: db.New(pool),
 		trino:   trino.New(cfg.TrinoURL, "baleia"),
 		s3:      storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
+		cfg:     cfg,
 	}
 	defaultActivities = a
 	return a
@@ -85,7 +88,8 @@ func (a *Activities) ensureCatalog(ctx context.Context, params EnsureCatalogPara
 		ClientSecret string `json:"client_secret"`
 	}
 	if conn.CredentialsEnc != nil && *conn.CredentialsEnc != "" {
-		_ = json.Unmarshal([]byte(*conn.CredentialsEnc), &creds)
+		b := crypto.TryDecrypt(*conn.CredentialsEnc, a.cfg.JWTSecret)
+		_ = json.Unmarshal(b, &creds)
 	}
 
 	return a.trino.CreateIcebergCatalog(ctx, trino.IcebergCatalogParams{
