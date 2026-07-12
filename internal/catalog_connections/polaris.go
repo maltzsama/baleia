@@ -14,6 +14,14 @@ import (
 type polarisCredentials struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+	Realm        string `json:"realm"`
+}
+
+func (c polarisCredentials) realm() string {
+	if c.Realm == "" {
+		return "POLARIS"
+	}
+	return c.Realm
 }
 
 type polarisClient struct {
@@ -93,7 +101,7 @@ func (c *polarisClient) do(ctx context.Context, method, path string) (*http.Resp
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Polaris-Realm", "POLARIS")
+	req.Header.Set("Polaris-Realm", c.creds.realm())
 	return c.httpClient.Do(req)
 }
 
@@ -108,7 +116,7 @@ func (c *polarisClient) Ping(ctx context.Context) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Polaris-Realm", "POLARIS")
+	req.Header.Set("Polaris-Realm", c.creds.realm())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
