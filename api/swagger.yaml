@@ -355,36 +355,32 @@ components:
     Catalog:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        connection_id: { type: string, format: uuid }
-        name:
-          {
-            type: string,
-            description: "Nome do warehouse dentro do catalog manager",
-          }
-        description: { type: string }
-        trino_catalog_name:
-          { type: string, description: "Nome registrado no Trino" }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
+        id:                 { type: string, format: uuid }
+        connection_id:      { type: string, format: uuid }
+        name:               { type: string }
+        description:        { type: string }
+        created_at:         { type: string, format: date-time }
+        updated_at:         { type: string, format: date-time }
 
     CreateCatalogRequest:
       type: object
-      required: [name, trino_catalog_name]
+      required: [name]
       properties:
-        name: { type: string }
+        name:        { type: string }
         description: { type: string }
-        trino_catalog_name: { type: string }
 
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
       required: [id, name, type, url, default_readonly, created_at]
       properties:
-        id: { type: string, format: uuid }
+        id:   { type: string, format: uuid }
         name: { type: string }
-        type: { type: string, enum: [polaris, nessie, glue, hive] }
-        url: { type: string }
+        type: { type: string, enum: [polaris, nessie, glue, hive, iceberg, postgresql, mysql] }
+        url:  { type: string }
+        host: { type: string }
+        port: { type: string }
+        credentials: { type: object }
         default_readonly: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -407,6 +403,10 @@ components:
           $ref: "#/components/schemas/HiveCredentials"
         iceberg_credentials:
           $ref: "#/components/schemas/IcebergCredentials"
+        postgresql_credentials:
+          $ref: "#/components/schemas/SqlCredentials"
+        mysql_credentials:
+          $ref: "#/components/schemas/SqlCredentials"
 
     # ── Catalog Connection Credentials ───────────────────
 
@@ -476,7 +476,6 @@ components:
       properties:
         catalog_id: { type: string, format: uuid }
         catalog_name: { type: string }
-        trino_catalog_name: { type: string }
         permission: { type: string, enum: [read, write] }
         granted_at: { type: string, format: date-time }
 

@@ -164,7 +164,7 @@ func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListW
         result = append(result, WorkspaceCatalogAccess{
             CatalogId:         catalogID,
             CatalogName:        &a.CatalogName,
-            TrinoCatalogName:   &a.TrinoCatalogName,
+            
             Permission:         WorkspaceCatalogAccessPermission(a.Permission),
             GrantedAt:          pgTimestampToTime(a.GrantedAt),
         })
@@ -215,7 +215,7 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
     return GrantCatalogAccess201JSONResponse{
         CatalogId:        catalogUUID,
         CatalogName:       &catalog.Name,
-        TrinoCatalogName:  &catalog.TrinoCatalogName,
+        
         Permission:        WorkspaceCatalogAccessPermission(access.Permission),
         GrantedAt:         pgTimestampToTime(access.GrantedAt),
     }, nil

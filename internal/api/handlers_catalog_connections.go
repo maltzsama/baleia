@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 	"log/slog"
 	
 	catalog_connections "github.com/galileostudio/baleia/internal/catalog_connections"
+	"github.com/galileostudio/baleia/internal/crypto"
 
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -46,31 +48,43 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 		if request.Body.PolarisCredentials != nil {
 			b, err := json.Marshal(request.Body.PolarisCredentials)
 			if err != nil { return nil, err }
-			s := string(b); credsEnc = &s
+			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
 		}
 	case "nessie":
 		if request.Body.NessieCredentials != nil {
 			b, err := json.Marshal(request.Body.NessieCredentials)
 			if err != nil { return nil, err }
-			s := string(b); credsEnc = &s
+			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
 		}
 	case "glue":
 		if request.Body.GlueCredentials != nil {
 			b, err := json.Marshal(request.Body.GlueCredentials)
 			if err != nil { return nil, err }
-			s := string(b); credsEnc = &s
+			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
 		}
 	case "hive":
 		if request.Body.HiveCredentials != nil {
 			b, err := json.Marshal(request.Body.HiveCredentials)
 			if err != nil { return nil, err }
-			s := string(b); credsEnc = &s
+			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
 		}
 	case "iceberg":
 		if request.Body.IcebergCredentials != nil {
 			b, err := json.Marshal(request.Body.IcebergCredentials)
 			if err != nil { return nil, err }
-			s := string(b); credsEnc = &s
+			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
+		}
+	case "postgresql":
+		if request.Body.PostgresqlCredentials != nil {
+			b, err := json.Marshal(request.Body.PostgresqlCredentials)
+			if err != nil { return nil, err }
+			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
+		}
+	case "mysql":
+		if request.Body.MysqlCredentials != nil {
+			b, err := json.Marshal(request.Body.MysqlCredentials)
+			if err != nil { return nil, err }
+			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
 		}
 	}
 
@@ -104,7 +118,15 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	return GetCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
+	resp := dbCatalogConnectionToPublic(conn)
+	if conn.CredentialsEnc != nil {
+		b := crypto.TryDecrypt(*conn.CredentialsEnc, h.cfg.JWTSecret)
+		var creds map[string]interface{}
+		if json.Unmarshal(b, &creds) == nil {
+			resp.Credentials = &creds
+		}
+	}
+	return GetCatalogConnection200JSONResponse(resp), nil
 }
 
 func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
@@ -192,7 +214,12 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
     }
 
     start := time.Now()
-    client, err := catalog_connections.NewClient(conn.Type, conn.Url, conn.CredentialsEnc)
+    var rawCreds *string
+    if conn.CredentialsEnc != nil {
+        b := crypto.TryDecrypt(*conn.CredentialsEnc, h.cfg.JWTSecret)
+        s := string(b); rawCreds = &s
+    }
+    client, err := catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
     if err != nil {
         errMsg := err.Error()
         return TestCatalogConnection200JSONResponse{
@@ -253,7 +280,7 @@ func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequest
 		result = append(result, Catalog{
 			Id:               &id,
 			Name:             &c.Name,
-			TrinoCatalogName: &c.TrinoCatalogName,
+			
 		})
 	}
 	return ListCatalogs200JSONResponse(result), nil
@@ -272,7 +299,7 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 	catalog, err := h.queries.CreateCatalog(ctx, db.CreateCatalogParams{
 		ConnectionID:     connID,
 		Name:             request.Body.Name,
-		TrinoCatalogName: request.Body.TrinoCatalogName,
+		
 		Description:      desc,
 	})
 	if err != nil {
@@ -281,10 +308,10 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 
 	conn, err := h.queries.GetCatalogConnectionByID(ctx, connID)
 	if err == nil {
-		props := trinoCatalogProperties(conn.Type, conn.Url, conn.CredentialsEnc, request.Body.Name)
+		props := h.trinoCatalogProperties(conn.Type, conn.Url, conn.CredentialsEnc, request.Body.Name)
 		if props != nil {
 			_ = h.trino.CreateCatalog(ctx, trino_client.CatalogParams{
-				Name:       request.Body.TrinoCatalogName,
+				Name:       request.Body.Name,
 				Connector:  trinoConnector(conn.Type),
 				Properties: props,
 			})
@@ -295,7 +322,7 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 	return CreateCatalog201JSONResponse(Catalog{
 		Id:               &id,
 		Name:             &catalog.Name,
-		TrinoCatalogName: &catalog.TrinoCatalogName,
+		
 	}), nil
 }
 
@@ -313,7 +340,7 @@ func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObje
 	return GetCatalog200JSONResponse(Catalog{
 		Id:               &id,
 		Name:             &catalog.Name,
-		TrinoCatalogName: &catalog.TrinoCatalogName,
+		
 	}), nil
 }
 
@@ -330,7 +357,7 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	catalog, err := h.queries.UpdateCatalog(ctx, db.UpdateCatalogParams{
 		ID:               catalogID,
 		Name:             request.Body.Name,
-		TrinoCatalogName: request.Body.TrinoCatalogName,
+		
 		Description:      desc,
 	})
 	if err != nil {
@@ -341,7 +368,7 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	return UpdateCatalog200JSONResponse(Catalog{
 		Id:               &id,
 		Name:             &catalog.Name,
-		TrinoCatalogName: &catalog.TrinoCatalogName,
+		
 	}), nil
 }
 
@@ -358,12 +385,40 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 }
 
 func (h *Handlers) ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error) {
-	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	var catID pgtype.UUID
+	catID.Bytes = request.CatalogId
+	catID.Valid = true
+
+	catalog, err := h.queries.GetCatalogByID(ctx, catID)
+	if err != nil {
+		return ListNamespaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	}
+
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, catalog.ConnectionID)
+	if err != nil {
+		return ListNamespaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "connection not found"}}, nil
+	}
+
+	if conn.Type == "postgresql" || conn.Type == "mysql" {
+		result, err := h.trino.Execute(ctx, "SHOW SCHEMAS FROM "+catalog.Name, catalog.Name, "")
+		if err != nil {
+			return nil, err
+		}
+		namespaces := make([][]string, 0, len(result.Data))
+		for _, row := range result.Data {
+			if len(row) > 0 {
+				namespaces = append(namespaces, []string{fmt.Sprint(row[0])})
+			}
+		}
+		return ListNamespaces200JSONResponse(namespaces), nil
+	}
+
+	client, _, err := h.resolveCatalogClient(ctx, request.CatalogId)
 	if err != nil {
 		return ListNamespaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
 	}
 
-	namespaces, err := client.ListNamespaces(ctx, catName)
+	namespaces, err := client.ListNamespaces(ctx, catalog.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -372,12 +427,45 @@ func (h *Handlers) ListNamespaces(ctx context.Context, request ListNamespacesReq
 }
 
 func (h *Handlers) ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error) {
-	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	var catID pgtype.UUID
+	catID.Bytes = request.CatalogId
+	catID.Valid = true
+
+	catalog, err := h.queries.GetCatalogByID(ctx, catID)
+	if err != nil {
+		return ListTables404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	}
+
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, catalog.ConnectionID)
+	if err != nil {
+		return ListTables404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "connection not found"}}, nil
+	}
+
+	if conn.Type == "postgresql" || conn.Type == "mysql" {
+		result, err := h.trino.Execute(ctx, "SHOW TABLES FROM "+catalog.Name+"."+request.Namespace, catalog.Name, request.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		list := make(ListTables200JSONResponse, 0, len(result.Data))
+		for _, row := range result.Data {
+			if len(row) > 0 {
+				name := fmt.Sprint(row[0])
+				ns := []string{request.Namespace}
+				list = append(list, struct {
+					Name      *string   `json:"name,omitempty"`
+					Namespace *[]string `json:"namespace,omitempty"`
+				}{Name: &name, Namespace: &ns})
+			}
+		}
+		return list, nil
+	}
+
+	client, _, err := h.resolveCatalogClient(ctx, request.CatalogId)
 	if err != nil {
 		return ListTables404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
 	}
 
-	tables, err := client.ListTables(ctx, catName, request.Namespace)
+	tables, err := client.ListTables(ctx, catalog.Name, request.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -395,12 +483,30 @@ func (h *Handlers) ListTables(ctx context.Context, request ListTablesRequestObje
 }
 
 func (h *Handlers) ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error) {
-	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	var catID pgtype.UUID
+	catID.Bytes = request.CatalogId
+	catID.Valid = true
+
+	catalog, err := h.queries.GetCatalogByID(ctx, catID)
+	if err != nil {
+		return ListColumns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	}
+
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, catalog.ConnectionID)
+	if err != nil {
+		return ListColumns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "connection not found"}}, nil
+	}
+
+	if conn.Type == "postgresql" || conn.Type == "mysql" {
+		return listColumnsViaTrino(ctx, h, catalog.Name, request.Namespace, request.Table)
+	}
+
+	client, _, err := h.resolveCatalogClient(ctx, request.CatalogId)
 	if err != nil {
 		return ListColumns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
 	}
 
-	meta, err := client.LoadTable(ctx, catName, request.Namespace, request.Table)
+	meta, err := client.LoadTable(ctx, catalog.Name, request.Namespace, request.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -429,13 +535,53 @@ func (h *Handlers) ListColumns(ctx context.Context, request ListColumnsRequestOb
 	return result, nil
 }
 
+func listColumnsViaTrino(ctx context.Context, h *Handlers, catalog, schema, table string) (ListColumns200JSONResponse, error) {
+	result, err := h.trino.Execute(ctx, "DESCRIBE "+catalog+"."+schema+"."+table, catalog, schema)
+	if err != nil {
+		return nil, err
+	}
+	cols := make(ListColumns200JSONResponse, 0, len(result.Data))
+	for _, row := range result.Data {
+		if len(row) >= 2 {
+			name := fmt.Sprint(row[0])
+			typ := fmt.Sprint(row[1])
+			cols = append(cols, struct {
+				Doc      *string `json:"doc,omitempty"`
+				Id       *int    `json:"id,omitempty"`
+				Name     *string `json:"name,omitempty"`
+				Required *bool   `json:"required,omitempty"`
+				Type     *string `json:"type,omitempty"`
+			}{Name: &name, Type: &typ})
+		}
+	}
+	return cols, nil
+}
+
 func (h *Handlers) ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error) {
-	client, catName, err := h.resolveCatalogClient(ctx, request.CatalogId)
+	var catID pgtype.UUID
+	catID.Bytes = request.CatalogId
+	catID.Valid = true
+
+	catalog, err := h.queries.GetCatalogByID(ctx, catID)
+	if err != nil {
+		return ListTableSnapshots404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	}
+
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, catalog.ConnectionID)
+	if err != nil {
+		return ListTableSnapshots404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "connection not found"}}, nil
+	}
+
+	if conn.Type == "postgresql" || conn.Type == "mysql" {
+		return ListTableSnapshots200JSONResponse{}, nil
+	}
+
+	client, _, err := h.resolveCatalogClient(ctx, request.CatalogId)
 	if err != nil {
 		return ListTableSnapshots404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: err.Error()}}, nil
 	}
 
-	meta, err := client.LoadTable(ctx, catName, request.Namespace, request.Table)
+	meta, err := client.LoadTable(ctx, catalog.Name, request.Namespace, request.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +624,13 @@ func (h *Handlers) resolveCatalogClient(ctx context.Context, catalogID openapi_t
 		return nil, "", err
 	}
 
-	client, err := catalog_connections.NewClient(conn.Type, conn.Url, conn.CredentialsEnc)
+	var rawCreds *string
+	if conn.CredentialsEnc != nil {
+		b := crypto.TryDecrypt(*conn.CredentialsEnc, h.cfg.JWTSecret)
+		s := string(b); rawCreds = &s
+	}
+
+	client, err := catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
 	if err != nil {
 		return nil, "", err
 	}
@@ -499,10 +651,14 @@ func trinoConnector(connType string) string {
 	}
 }
 
-func trinoCatalogProperties(connType, url string, credsEnc *string, warehouse string) map[string]string {
+func (h *Handlers) trinoCatalogProperties(connType, url string, credsEnc *string, warehouse string) map[string]string {
+	var credsBytes []byte
+	if credsEnc != nil {
+		credsBytes = crypto.TryDecrypt(*credsEnc, h.cfg.JWTSecret)
+	}
 	switch connType {
 	case "polaris", "iceberg", "nessie":
-		if credsEnc == nil {
+		if credsBytes == nil {
 			return nil
 		}
 		var creds struct {
@@ -510,7 +666,7 @@ func trinoCatalogProperties(connType, url string, credsEnc *string, warehouse st
 			ClientSecret string `json:"client_secret"`
 			Realm        string `json:"realm"`
 		}
-		if err := json.Unmarshal([]byte(*credsEnc), &creds); err != nil {
+		if err := json.Unmarshal(credsBytes, &creds); err != nil {
 			return nil
 		}
 		realm := creds.Realm

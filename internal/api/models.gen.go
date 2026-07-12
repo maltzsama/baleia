@@ -34,10 +34,13 @@ func (e AddTeamMemberRequestRole) Valid() bool {
 
 // Defines values for CatalogConnectionType.
 const (
-	CatalogConnectionTypeGlue    CatalogConnectionType = "glue"
-	CatalogConnectionTypeHive    CatalogConnectionType = "hive"
-	CatalogConnectionTypeNessie  CatalogConnectionType = "nessie"
-	CatalogConnectionTypePolaris CatalogConnectionType = "polaris"
+	CatalogConnectionTypeGlue       CatalogConnectionType = "glue"
+	CatalogConnectionTypeHive       CatalogConnectionType = "hive"
+	CatalogConnectionTypeIceberg    CatalogConnectionType = "iceberg"
+	CatalogConnectionTypeMysql      CatalogConnectionType = "mysql"
+	CatalogConnectionTypeNessie     CatalogConnectionType = "nessie"
+	CatalogConnectionTypePolaris    CatalogConnectionType = "polaris"
+	CatalogConnectionTypePostgresql CatalogConnectionType = "postgresql"
 )
 
 // Valid indicates whether the value is a known member of the CatalogConnectionType enum.
@@ -47,9 +50,15 @@ func (e CatalogConnectionType) Valid() bool {
 		return true
 	case CatalogConnectionTypeHive:
 		return true
+	case CatalogConnectionTypeIceberg:
+		return true
+	case CatalogConnectionTypeMysql:
+		return true
 	case CatalogConnectionTypeNessie:
 		return true
 	case CatalogConnectionTypePolaris:
+		return true
+	case CatalogConnectionTypePostgresql:
 		return true
 	default:
 		return false
@@ -635,24 +644,22 @@ type Catalog struct {
 	CreatedAt    *time.Time          `json:"created_at,omitempty"`
 	Description  *string             `json:"description,omitempty"`
 	Id           *openapi_types.UUID `json:"id,omitempty"`
-
-	// Name Nome do warehouse dentro do catalog manager
-	Name *string `json:"name,omitempty"`
-
-	// TrinoCatalogName Nome registrado no Trino
-	TrinoCatalogName *string    `json:"trino_catalog_name,omitempty"`
-	UpdatedAt        *time.Time `json:"updated_at,omitempty"`
+	Name         *string             `json:"name,omitempty"`
+	UpdatedAt    *time.Time          `json:"updated_at,omitempty"`
 }
 
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
-	CreatedAt       time.Time             `json:"created_at"`
-	DefaultReadonly bool                  `json:"default_readonly"`
-	Id              openapi_types.UUID    `json:"id"`
-	Name            string                `json:"name"`
-	Type            CatalogConnectionType `json:"type"`
-	UpdatedAt       *time.Time            `json:"updated_at,omitempty"`
-	Url             string                `json:"url"`
+	CreatedAt       time.Time               `json:"created_at"`
+	Credentials     *map[string]interface{} `json:"credentials,omitempty"`
+	DefaultReadonly bool                    `json:"default_readonly"`
+	Host            *string                 `json:"host,omitempty"`
+	Id              openapi_types.UUID      `json:"id"`
+	Name            string                  `json:"name"`
+	Port            *string                 `json:"port,omitempty"`
+	Type            CatalogConnectionType   `json:"type"`
+	UpdatedAt       *time.Time              `json:"updated_at,omitempty"`
+	Url             string                  `json:"url"`
 }
 
 // CatalogConnectionType defines model for CatalogConnection.Type.
@@ -673,15 +680,17 @@ type CreateApiKeyRequest struct {
 
 // CreateCatalogConnectionRequest defines model for CreateCatalogConnectionRequest.
 type CreateCatalogConnectionRequest struct {
-	DefaultReadonly    *bool                              `json:"default_readonly,omitempty"`
-	GlueCredentials    *GlueCredentials                   `json:"glue_credentials,omitempty"`
-	HiveCredentials    *HiveCredentials                   `json:"hive_credentials,omitempty"`
-	IcebergCredentials *IcebergCredentials                `json:"iceberg_credentials,omitempty"`
-	Name               string                             `json:"name"`
-	NessieCredentials  *NessieCredentials                 `json:"nessie_credentials,omitempty"`
-	PolarisCredentials *PolarisCredentials                `json:"polaris_credentials,omitempty"`
-	Type               CreateCatalogConnectionRequestType `json:"type"`
-	Url                string                             `json:"url"`
+	DefaultReadonly       *bool                              `json:"default_readonly,omitempty"`
+	GlueCredentials       *GlueCredentials                   `json:"glue_credentials,omitempty"`
+	HiveCredentials       *HiveCredentials                   `json:"hive_credentials,omitempty"`
+	IcebergCredentials    *IcebergCredentials                `json:"iceberg_credentials,omitempty"`
+	MysqlCredentials      *SqlCredentials                    `json:"mysql_credentials,omitempty"`
+	Name                  string                             `json:"name"`
+	NessieCredentials     *NessieCredentials                 `json:"nessie_credentials,omitempty"`
+	PolarisCredentials    *PolarisCredentials                `json:"polaris_credentials,omitempty"`
+	PostgresqlCredentials *SqlCredentials                    `json:"postgresql_credentials,omitempty"`
+	Type                  CreateCatalogConnectionRequestType `json:"type"`
+	Url                   string                             `json:"url"`
 }
 
 // CreateCatalogConnectionRequestType defines model for CreateCatalogConnectionRequest.Type.
@@ -689,9 +698,8 @@ type CreateCatalogConnectionRequestType string
 
 // CreateCatalogRequest defines model for CreateCatalogRequest.
 type CreateCatalogRequest struct {
-	Description      *string `json:"description,omitempty"`
-	Name             string  `json:"name"`
-	TrinoCatalogName string  `json:"trino_catalog_name"`
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
 }
 
 // CreateFolderRequest defines model for CreateFolderRequest.
@@ -1032,6 +1040,12 @@ type SetupStatus struct {
 	Version      string `json:"version"`
 }
 
+// SqlCredentials defines model for SqlCredentials.
+type SqlCredentials struct {
+	Password *string `json:"password,omitempty"`
+	Username *string `json:"username,omitempty"`
+}
+
 // Team defines model for Team.
 type Team struct {
 	CreatedAt   time.Time          `json:"created_at"`
@@ -1157,11 +1171,10 @@ type WorkspaceType string
 
 // WorkspaceCatalogAccess defines model for WorkspaceCatalogAccess.
 type WorkspaceCatalogAccess struct {
-	CatalogId        openapi_types.UUID               `json:"catalog_id"`
-	CatalogName      *string                          `json:"catalog_name,omitempty"`
-	GrantedAt        time.Time                        `json:"granted_at"`
-	Permission       WorkspaceCatalogAccessPermission `json:"permission"`
-	TrinoCatalogName *string                          `json:"trino_catalog_name,omitempty"`
+	CatalogId   openapi_types.UUID               `json:"catalog_id"`
+	CatalogName *string                          `json:"catalog_name,omitempty"`
+	GrantedAt   time.Time                        `json:"granted_at"`
+	Permission  WorkspaceCatalogAccessPermission `json:"permission"`
 }
 
 // WorkspaceCatalogAccessPermission defines model for WorkspaceCatalogAccess.Permission.
