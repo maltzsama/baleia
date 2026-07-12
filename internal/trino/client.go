@@ -48,10 +48,10 @@ type StatementResponse struct {
 }
 
 type StatementError struct {
-	Message    string `json:"message"`
-	ErrorCode  string `json:"errorCode"`
-	ErrorName  string `json:"errorName"`
-	ErrorType  string `json:"errorType"`
+	Message    string      `json:"message"`
+	ErrorCode  interface{} `json:"errorCode"`
+	ErrorName  string      `json:"errorName"`
+	ErrorType  string      `json:"errorType"`
 }
 
 type QueryResult struct {
