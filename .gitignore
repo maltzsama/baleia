@@ -44,4 +44,4 @@ coverage.txt
 
 # Helm secrets
 /deploy/helm/**/secrets.yaml
-/deploy/helm/**/values.local.yaml
+/deploy/helm/**/values.local.yamlnode_modules/
