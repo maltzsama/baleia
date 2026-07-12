@@ -61,22 +61,42 @@ type QueryResult struct {
 	RowCount int64
 }
 
+// CatalogParams defines the configuration for registering any catalog in Trino.
+type CatalogParams struct {
+	Name         string
+	Connector    string // iceberg, postgresql, mysql, etc.
+	Properties   map[string]string
+}
+
 // IcebergCatalogParams configures a dynamic Iceberg REST catalog registration.
-// S3 access to the Iceberg data files is delegated to the catalog manager
-// (Polaris) via credential vending — Trino gets scoped S3 credentials from
-// Polaris, so no storage credentials belong here. (Baleia's own result bucket
-// is a separate concern, handled by the worker, not the catalog.)
 type IcebergCatalogParams struct {
 	Name       string
 	RestURI    string
 	Warehouse  string
-	Credential string // "<client_id>:<client_secret>"
+	Credential string
 	Scope      string
 }
 
-// CreateIcebergCatalog registers a catalog in Trino at runtime (requires
-// catalog.management=dynamic). Idempotent: an "already exists" error is
-// treated as success so it can run before every execution.
+// CreateCatalog registers a catalog in Trino at runtime (requires
+// catalog.management=dynamic). Idempotent: "already exists" errors are ignored.
+func (c *Client) CreateCatalog(ctx context.Context, p CatalogParams) error {
+	props := make([]string, 0, len(p.Properties))
+	for k, v := range p.Properties {
+		props = append(props, fmt.Sprintf(`"%s" = '%s'`, k, v))
+	}
+	ddl := fmt.Sprintf("CREATE CATALOG %s USING %s WITH (\n\t%s\n)",
+		p.Name, p.Connector, strings.Join(props, ",\n\t"))
+
+	if _, err := c.Execute(ctx, ddl, "", ""); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// CreateIcebergCatalog is a convenience wrapper for Iceberg REST catalogs.
 func (c *Client) CreateIcebergCatalog(ctx context.Context, p IcebergCatalogParams) error {
 	scope := p.Scope
 	if scope == "" {
