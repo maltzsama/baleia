@@ -58,11 +58,13 @@ func (e CatalogConnectionType) Valid() bool {
 
 // Defines values for CreateCatalogConnectionRequestType.
 const (
-	CreateCatalogConnectionRequestTypeGlue    CreateCatalogConnectionRequestType = "glue"
-	CreateCatalogConnectionRequestTypeHive    CreateCatalogConnectionRequestType = "hive"
-	CreateCatalogConnectionRequestTypeIceberg CreateCatalogConnectionRequestType = "iceberg"
-	CreateCatalogConnectionRequestTypeNessie  CreateCatalogConnectionRequestType = "nessie"
-	CreateCatalogConnectionRequestTypePolaris CreateCatalogConnectionRequestType = "polaris"
+	CreateCatalogConnectionRequestTypeGlue       CreateCatalogConnectionRequestType = "glue"
+	CreateCatalogConnectionRequestTypeHive       CreateCatalogConnectionRequestType = "hive"
+	CreateCatalogConnectionRequestTypeIceberg    CreateCatalogConnectionRequestType = "iceberg"
+	CreateCatalogConnectionRequestTypeMysql      CreateCatalogConnectionRequestType = "mysql"
+	CreateCatalogConnectionRequestTypeNessie     CreateCatalogConnectionRequestType = "nessie"
+	CreateCatalogConnectionRequestTypePolaris    CreateCatalogConnectionRequestType = "polaris"
+	CreateCatalogConnectionRequestTypePostgresql CreateCatalogConnectionRequestType = "postgresql"
 )
 
 // Valid indicates whether the value is a known member of the CreateCatalogConnectionRequestType enum.
@@ -74,9 +76,13 @@ func (e CreateCatalogConnectionRequestType) Valid() bool {
 		return true
 	case CreateCatalogConnectionRequestTypeIceberg:
 		return true
+	case CreateCatalogConnectionRequestTypeMysql:
+		return true
 	case CreateCatalogConnectionRequestTypeNessie:
 		return true
 	case CreateCatalogConnectionRequestTypePolaris:
+		return true
+	case CreateCatalogConnectionRequestTypePostgresql:
 		return true
 	default:
 		return false

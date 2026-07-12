@@ -3,17 +3,17 @@ info:
   title: "Baleia API"
   description: |
     First-class UI for Trino + Apache Iceberg catalog management platform.
-    
+
     ## Serialization
-    
+
     **JSON** (`application/json`) for application data: auth, users, teams,
     workspaces, catalog connections, retrievers, migrations.
-    
+
     **Arrow IPC** (`application/vnd.apache.arrow.stream`) for data originating
     from Trino: query results, explain plans, Iceberg catalog.
-    
+
     ## Authentication
-    
+
     JWT via `Authorization: Bearer <token>` or `token` cookie (for WebSocket).
     API Keys via `X-Api-Key` header.
 
@@ -25,7 +25,7 @@ servers:
 security:
   - BearerAuth: []
   - ApiKeyAuth: []
-  
+
 tags:
   - name: Setup
     description: "Initial system configuration"
@@ -86,27 +86,27 @@ components:
       description: "Missing or invalid credentials"
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
     Forbidden:
       description: "Insufficient permissions"
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
     NotFound:
       description: "Resource not found"
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
     Conflict:
       description: "Resource already exists"
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
     UnprocessableEntity:
       description: "Validation error"
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/ValidationError' }
+          schema: { $ref: "#/components/schemas/ValidationError" }
     ArrowStream:
       description: "Apache Arrow IPC stream"
       content:
@@ -118,30 +118,30 @@ components:
       type: object
       required: [code, message]
       properties:
-        code:    { type: string, example: "not_found" }
+        code: { type: string, example: "not_found" }
         message: { type: string }
 
     ValidationError:
       type: object
       required: [code, message, errors]
       properties:
-        code:    { type: string, example: "validation_error" }
+        code: { type: string, example: "validation_error" }
         message: { type: string }
         errors:
           type: array
           items:
             type: object
             properties:
-              field:   { type: string }
+              field: { type: string }
               message: { type: string }
 
     Pagination:
       type: object
       required: [page, per_page, total, total_pages]
       properties:
-        page:        { type: integer }
-        per_page:    { type: integer }
-        total:       { type: integer }
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
         total_pages: { type: integer }
 
     # ── Setup ──────────────────────────────────────────────────
@@ -150,32 +150,32 @@ components:
       required: [is_configured, version]
       properties:
         is_configured: { type: boolean }
-        version:       { type: string, example: "0.1.0" }
+        version: { type: string, example: "0.1.0" }
 
     CreateAdminRequest:
       type: object
       required: [name, email, password]
       properties:
-        name:     { type: string }
-        email:    { type: string, format: email }
-        password:  { type: string, minLength: 8 }
+        name: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
 
     # ── Auth ───────────────────────────────────────────────────
     LoginRequest:
       type: object
       required: [email, password]
       properties:
-        email:    { type: string, format: email }
+        email: { type: string, format: email }
         password: { type: string }
 
     LoginResponse:
       type: object
       required: [token, refresh_token, expires_at, user]
       properties:
-        token:         { type: string }
+        token: { type: string }
         refresh_token: { type: string }
-        expires_at:    { type: string, format: date-time }
-        user:          { $ref: '#/components/schemas/UserPublic' }
+        expires_at: { type: string, format: date-time }
+        user: { $ref: "#/components/schemas/UserPublic" }
 
     RefreshRequest:
       type: object
@@ -187,9 +187,9 @@ components:
       type: object
       required: [token, refresh_token, expires_at]
       properties:
-        token:         { type: string }
+        token: { type: string }
         refresh_token: { type: string }
-        expires_at:    { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
 
     LogoutRequest:
       type: object
@@ -200,7 +200,7 @@ components:
       type: object
       required: [id, name, type]
       properties:
-        id:   { type: string, format: uuid }
+        id: { type: string, format: uuid }
         name: { type: string, example: "Okta" }
         type: { type: string, enum: [oidc] }
 
@@ -214,7 +214,7 @@ components:
       type: object
       required: [token, new_password]
       properties:
-        token:        { type: string }
+        token: { type: string }
         new_password: { type: string, minLength: 8 }
 
     # ── API Keys ───────────────────────────────────────────────
@@ -222,15 +222,15 @@ components:
       type: object
       required: [id, name, key_prefix, created_at]
       properties:
-        id:          { type: string, format: uuid }
-        name:        { type: string }
-        key_prefix:  { type: string, example: "blw_live_abc..." }
-        expires_at:  { type: string, format: date-time, nullable: true }
-        created_at:  { type: string, format: date-time }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key_prefix: { type: string, example: "blw_live_abc..." }
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
 
     ApiKeyCreated:
       allOf:
-        - $ref: '#/components/schemas/ApiKey'
+        - $ref: "#/components/schemas/ApiKey"
         - type: object
           required: [secret]
           properties:
@@ -242,7 +242,7 @@ components:
       type: object
       required: [name]
       properties:
-        name:       { type: string }
+        name: { type: string }
         expires_at: { type: string, format: date-time, nullable: true }
 
     # ── Users ──────────────────────────────────────────────────
@@ -250,17 +250,17 @@ components:
       type: object
       required: [id, name, email, role, auth_provider, created_at]
       properties:
-        id:            { type: string, format: uuid }
-        name:          { type: string }
-        email:         { type: string, format: email }
-        role:          { type: string, enum: [admin, member] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, member] }
         auth_provider: { type: string, enum: [local, oidc] }
-        created_at:    { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
 
     UpdateProfileRequest:
       type: object
       properties:
-        name:  { type: string }
+        name: { type: string }
         email: { type: string, format: email }
 
     UpdatePasswordRequest:
@@ -268,14 +268,14 @@ components:
       required: [current_password, new_password]
       properties:
         current_password: { type: string }
-        new_password:     { type: string, minLength: 8 }
+        new_password: { type: string, minLength: 8 }
 
     InviteUserRequest:
       type: object
       required: [email, role]
       properties:
         email: { type: string, format: email }
-        role:  { type: string, enum: [admin, member] }
+        role: { type: string, enum: [admin, member] }
 
     UpdateUserRoleRequest:
       type: object
@@ -288,24 +288,24 @@ components:
       type: object
       required: [id, name, created_at]
       properties:
-        id:          { type: string, format: uuid }
-        name:        { type: string }
+        id: { type: string, format: uuid }
+        name: { type: string }
         description: { type: string, nullable: true }
-        created_at:  { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
 
     TeamMember:
       type: object
       required: [user, role, joined_at]
       properties:
-        user:      { $ref: '#/components/schemas/UserPublic' }
-        role:      { type: string, enum: [owner, member] }
+        user: { $ref: "#/components/schemas/UserPublic" }
+        role: { type: string, enum: [owner, member] }
         joined_at: { type: string, format: date-time }
 
     CreateTeamRequest:
       type: object
       required: [name]
       properties:
-        name:        { type: string }
+        name: { type: string }
         description: { type: string }
 
     AddTeamMemberRequest:
@@ -313,56 +313,67 @@ components:
       required: [user_id, role]
       properties:
         user_id: { type: string, format: uuid }
-        role:    { type: string, enum: [owner, member], default: member }
+        role: { type: string, enum: [owner, member], default: member }
 
     # ── Workspaces ─────────────────────────────────────────────
     Workspace:
       type: object
       required: [id, name, type, polaris_catalog_name, created_at]
       properties:
-        id:                   { type: string, format: uuid }
-        name:                 { type: string }
-        description:          { type: string, nullable: true }
-        type:                 { type: string, enum: [personal, shared] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        type: { type: string, enum: [personal, shared] }
         polaris_catalog_name: { type: string }
-        owner_user_id:        { type: string, format: uuid, nullable: true }
-        owner_team_id:        { type: string, format: uuid, nullable: true }
-        created_at:           { type: string, format: date-time }
-        updated_at:           { type: string, format: date-time }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        owner_team_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     CreateWorkspaceRequest:
       type: object
       required: [name, type]
       properties:
-        name:         { type: string }
-        description:  { type: string }
-        type:         { type: string, enum: [personal, shared] }
-        owner_team_id: { type: string, format: uuid, nullable: true, description: "Required when type=shared" }
+        name: { type: string }
+        description: { type: string }
+        type: { type: string, enum: [personal, shared] }
+        owner_team_id:
+          {
+            type: string,
+            format: uuid,
+            nullable: true,
+            description: "Required when type=shared",
+          }
 
     UpdateWorkspaceRequest:
       type: object
       properties:
-        name:        { type: string }
+        name: { type: string }
         description: { type: string }
 
     # ── Catalogs ─────────────────────────────────────────────────
     Catalog:
       type: object
       properties:
-        id:                 { type: string, format: uuid }
-        connection_id:      { type: string, format: uuid }
-        name:               { type: string, description: "Nome do warehouse dentro do catalog manager" }
-        description:        { type: string }
-        trino_catalog_name: { type: string, description: "Nome registrado no Trino" }
-        created_at:         { type: string, format: date-time }
-        updated_at:         { type: string, format: date-time }
+        id: { type: string, format: uuid }
+        connection_id: { type: string, format: uuid }
+        name:
+          {
+            type: string,
+            description: "Nome do warehouse dentro do catalog manager",
+          }
+        description: { type: string }
+        trino_catalog_name:
+          { type: string, description: "Nome registrado no Trino" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     CreateCatalogRequest:
       type: object
       required: [name, trino_catalog_name]
       properties:
-        name:               { type: string }
-        description:        { type: string }
+        name: { type: string }
+        description: { type: string }
         trino_catalog_name: { type: string }
 
     # ── Catalog Connections ────────────────────────────────────
@@ -370,50 +381,52 @@ components:
       type: object
       required: [id, name, type, url, default_readonly, created_at]
       properties:
-        id:              { type: string, format: uuid }
-        name:            { type: string }
-        type:            { type: string, enum: [polaris, nessie, glue, hive] }
-        url:             { type: string }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [polaris, nessie, glue, hive] }
+        url: { type: string }
         default_readonly: { type: boolean }
-        created_at:      { type: string, format: date-time }
-        updated_at:      { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     CreateCatalogConnectionRequest:
       type: object
       required: [name, type, url]
       properties:
-        name:             { type: string }
-        type:             { type: string, enum: [polaris, nessie, glue, hive, iceberg] }
-        url:              { type: string }
+        name: { type: string }
+        type:             { type: string, enum: [polaris, nessie, glue, hive, iceberg, postgresql, mysql] }
+        url: { type: string }
         default_readonly: { type: boolean, default: true }
         polaris_credentials:
-          $ref: '#/components/schemas/PolarisCredentials'
+          $ref: "#/components/schemas/PolarisCredentials"
         nessie_credentials:
-          $ref: '#/components/schemas/NessieCredentials'
+          $ref: "#/components/schemas/NessieCredentials"
         glue_credentials:
-          $ref: '#/components/schemas/GlueCredentials'
+          $ref: "#/components/schemas/GlueCredentials"
         hive_credentials:
-          $ref: '#/components/schemas/HiveCredentials'
+          $ref: "#/components/schemas/HiveCredentials"
         iceberg_credentials:
-          $ref: '#/components/schemas/IcebergCredentials'
-    
+          $ref: "#/components/schemas/IcebergCredentials"
+
     # ── Catalog Connection Credentials ───────────────────
 
     IcebergCredentials:
       type: object
       properties:
-        token:         { type: string, description: "Bearer token" }
-        client_id:     { type: string, description: "OAuth2 client ID" }
+        token: { type: string, description: "Bearer token" }
+        client_id: { type: string, description: "OAuth2 client ID" }
         client_secret: { type: string, description: "OAuth2 client secret" }
-        oauth2_server_uri: { type: string, description: "OAuth2 token endpoint custom" }
+        oauth2_server_uri:
+          { type: string, description: "OAuth2 token endpoint custom" }
 
     PolarisCredentials:
       type: object
       required: [client_id, client_secret]
       properties:
-        client_id:     { type: string }
+        client_id: { type: string }
         client_secret: { type: string }
-        realm:         { type: string, description: "Realm do Polaris. Default: POLARIS" }
+        realm:
+          { type: string, description: "Realm do Polaris. Default: POLARIS" }
 
     NessieCredentials:
       type: object
@@ -424,11 +437,17 @@ components:
       type: object
       required: [access_key_id, secret_access_key, region]
       properties:
-        access_key_id:     { type: string }
+        access_key_id: { type: string }
         secret_access_key: { type: string }
-        region:            { type: string }
+        region: { type: string }
 
     HiveCredentials:
+      type: object
+      properties:
+        username: { type: string }
+        password: { type: string }
+
+    SqlCredentials:
       type: object
       properties:
         username: { type: string }
@@ -437,219 +456,260 @@ components:
     UpdateCatalogConnectionRequest:
       type: object
       properties:
-        name:             { type: string }
-        url:              { type: string }
-        credentials:      { type: object }
+        name: { type: string }
+        url: { type: string }
+        credentials: { type: object }
         default_readonly: { type: boolean }
 
     TestCatalogConnectionResult:
       type: object
       required: [success, latency_ms]
       properties:
-        success:    { type: boolean }
+        success: { type: boolean }
         latency_ms: { type: integer }
-        error:      { type: string, nullable: true }
-        version:    { type: string, nullable: true }
+        error: { type: string, nullable: true }
+        version: { type: string, nullable: true }
 
     WorkspaceCatalogAccess:
       type: object
       required: [catalog_id, permission, granted_at]
       properties:
-        catalog_id:   { type: string, format: uuid }
-        catalog_name:  { type: string }
+        catalog_id: { type: string, format: uuid }
+        catalog_name: { type: string }
         trino_catalog_name: { type: string }
-        permission:    { type: string, enum: [read, write] }
-        granted_at:    { type: string, format: date-time }
+        permission: { type: string, enum: [read, write] }
+        granted_at: { type: string, format: date-time }
 
     GrantCatalogAccessRequest:
       type: object
       required: [catalog_id, permission]
       properties:
         catalog_id: { type: string, format: uuid }
-        permission:  { type: string, enum: [read, write] }
+        permission: { type: string, enum: [read, write] }
 
     # ── Query Editor ───────────────────────────────────────────
     QueryFolder:
       type: object
       required: [id, name, workspace_id, created_at]
       properties:
-        id:           { type: string, format: uuid }
-        name:         { type: string }
-        workspace_id:  { type: string, format: uuid }
-        parent_id:    { type: string, format: uuid, nullable: true }
-        created_at:   { type: string, format: date-time }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        workspace_id: { type: string, format: uuid }
+        parent_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
 
     CreateFolderRequest:
       type: object
       required: [name]
       properties:
-        name:      { type: string }
+        name: { type: string }
         parent_id: { type: string, format: uuid, nullable: true }
 
     SavedQuery:
       type: object
       required: [id, name, workspace_id, created_by, sql, created_at]
       properties:
-        id:           { type: string, format: uuid }
-        name:         { type: string }
+        id: { type: string, format: uuid }
+        name: { type: string }
         workspace_id: { type: string, format: uuid }
-        folder_id:    { type: string, format: uuid, nullable: true }
-        created_by:   { type: string, format: uuid }
-        sql:          { type: string }
-        created_at:   { type: string, format: date-time }
-        updated_at:   { type: string, format: date-time }
+        folder_id: { type: string, format: uuid, nullable: true }
+        created_by: { type: string, format: uuid }
+        sql: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     CreateSavedQueryRequest:
       type: object
       required: [name, sql]
       properties:
-        name:      { type: string }
+        name: { type: string }
         folder_id: { type: string, format: uuid, nullable: true }
-        sql:       { type: string }
+        sql: { type: string }
 
     UpdateSavedQueryRequest:
       type: object
       properties:
-        name:      { type: string }
+        name: { type: string }
         folder_id: { type: string, format: uuid, nullable: true }
-        sql:       { type: string }
+        sql: { type: string }
 
     # ── Executions ─────────────────────────────────────────────
     ExecutionRequest:
       type: object
       required: [workspace_id, sql]
       properties:
-        workspace_id:   { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
         saved_query_id: { type: string, format: uuid, nullable: true }
-        sql:            { type: string }
+        sql: { type: string }
 
     Execution:
       type: object
       required: [id, workspace_id, status, sql, created_at]
       properties:
-        id:             { type: string, format: uuid }
-        workspace_id:   { type: string, format: uuid }
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
         saved_query_id: { type: string, format: uuid, nullable: true }
-        status:         { type: string, enum: [running, finished, failed, cancelled] }
-        sql:            { type: string }
+        status: { type: string, enum: [running, finished, failed, cancelled] }
+        sql: { type: string }
         trino_query_id: { type: string, nullable: true }
-        rows_returned:  { type: integer, nullable: true }
-        duration_ms:    { type: integer, nullable: true }
-        started_at:     { type: string, format: date-time }
-        finished_at:    { type: string, format: date-time, nullable: true }
+        rows_returned: { type: integer, nullable: true }
+        duration_ms: { type: integer, nullable: true }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
 
     QueryStatement:
       type: object
       required: [id, execution_id, position, sql, status]
       properties:
-        id:             { type: string, format: uuid }
-        execution_id:   { type: string, format: uuid }
-        position:       { type: integer }
-        sql:            { type: string }
-        status:         { type: string, enum: [running, finished, failed, cancelled] }
+        id: { type: string, format: uuid }
+        execution_id: { type: string, format: uuid }
+        position: { type: integer }
+        sql: { type: string }
+        status: { type: string, enum: [running, finished, failed, cancelled] }
         trino_query_id: { type: string, nullable: true }
-        rows_returned:  { type: integer, nullable: true }
-        duration_ms:    { type: integer, nullable: true }
-        error_message:  { type: string, nullable: true }
-        started_at:     { type: string, format: date-time, nullable: true }
-        finished_at:    { type: string, format: date-time, nullable: true }
+        rows_returned: { type: integer, nullable: true }
+        duration_ms: { type: integer, nullable: true }
+        error_message: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
 
     # ── Retrievers ─────────────────────────────────────────────
     Retriever:
       type: object
-      required: [id, name, workspace_id, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, created_at]
+      required:
+        [
+          id,
+          name,
+          workspace_id,
+          definition_sql,
+          dest_catalog,
+          dest_namespace,
+          dest_table,
+          cron_schedule,
+          refresh_type,
+          status,
+          created_at,
+        ]
       properties:
-        id:               { type: string, format: uuid }
-        name:             { type: string }
-        workspace_id:     { type: string, format: uuid }
-        created_by:       { type: string, format: uuid }
-        definition_sql:   { type: string }
-        dest_catalog:     { type: string }
-        dest_namespace:   { type: string }
-        dest_table:       { type: string }
-        cron_schedule:    { type: string, example: "0 */6 * * *" }
-        refresh_type:     { type: string, enum: [incremental, full] }
-        status:           { type: string, enum: [active, paused, error] }
-        last_refresh_at:  { type: string, format: date-time, nullable: true }
-        next_refresh_at:  { type: string, format: date-time, nullable: true }
-        created_at:       { type: string, format: date-time }
-        updated_at:       { type: string, format: date-time }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        workspace_id: { type: string, format: uuid }
+        created_by: { type: string, format: uuid }
+        definition_sql: { type: string }
+        dest_catalog: { type: string }
+        dest_namespace: { type: string }
+        dest_table: { type: string }
+        cron_schedule: { type: string, example: "0 */6 * * *" }
+        refresh_type: { type: string, enum: [incremental, full] }
+        status: { type: string, enum: [active, paused, error] }
+        last_refresh_at: { type: string, format: date-time, nullable: true }
+        next_refresh_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     CreateRetrieverRequest:
       type: object
       required: [name, definition_sql, cron_schedule]
       properties:
-        name:           { type: string }
-        definition_sql: { type: string, description: "CREATE MATERIALIZED VIEW ... AS SELECT ... Destination is extracted from the query." }
-        cron_schedule:  { type: string }
-        refresh_type:   { type: string, enum: [incremental, full], default: incremental }
+        name: { type: string }
+        definition_sql:
+          {
+            type: string,
+            description: "CREATE MATERIALIZED VIEW ... AS SELECT ... Destination is extracted from the query.",
+          }
+        cron_schedule: { type: string }
+        refresh_type:
+          { type: string, enum: [incremental, full], default: incremental }
 
     UpdateRetrieverRequest:
       type: object
       properties:
-        name:          { type: string }
+        name: { type: string }
         cron_schedule: { type: string }
-        refresh_type:  { type: string, enum: [incremental, full] }
-        status:        { type: string, enum: [active, paused] }
+        refresh_type: { type: string, enum: [incremental, full] }
+        status: { type: string, enum: [active, paused] }
 
     RetrieverRefreshHistory:
       type: object
       required: [id, retriever_id, refresh_type, status, started_at]
       properties:
-        id:                   { type: string, format: uuid }
-        retriever_id:         { type: string, format: uuid }
+        id: { type: string, format: uuid }
+        retriever_id: { type: string, format: uuid }
         temporal_workflow_id: { type: string }
-        refresh_type:         { type: string, enum: [incremental, full] }
-        status:               { type: string, enum: [running, finished, failed] }
-        rows_processed:       { type: integer, nullable: true }
-        duration_ms:          { type: integer, nullable: true }
-        error_message:        { type: string, nullable: true }
-        started_at:           { type: string, format: date-time }
-        finished_at:          { type: string, format: date-time, nullable: true }
+        refresh_type: { type: string, enum: [incremental, full] }
+        status: { type: string, enum: [running, finished, failed] }
+        rows_processed: { type: integer, nullable: true }
+        duration_ms: { type: integer, nullable: true }
+        error_message: { type: string, nullable: true }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
 
     # ── Migrant ────────────────────────────────────────────────
     Migration:
       type: object
-      required: [id, name, source_type, source_url, target_catalog_connection_id, status, created_at]
+      required:
+        [
+          id,
+          name,
+          source_type,
+          source_url,
+          target_catalog_connection_id,
+          status,
+          created_at,
+        ]
       properties:
-        id:                          { type: string, format: uuid }
-        name:                        { type: string }
-        source_type:                 { type: string, enum: [nessie] }
-        source_url:                  { type: string }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        source_type: { type: string, enum: [nessie] }
+        source_url: { type: string }
         target_catalog_connection_id: { type: string, format: uuid }
-        status:                      { type: string, enum: [pending, running, finished, failed, cancelled] }
-        total_tables:                { type: integer }
-        migrated_tables:             { type: integer }
-        failed_tables:               { type: integer }
-        temporal_workflow_id:        { type: string, nullable: true }
-        started_at:                  { type: string, format: date-time, nullable: true }
-        finished_at:                 { type: string, format: date-time, nullable: true }
-        created_at:                  { type: string, format: date-time }
+        status:
+          {
+            type: string,
+            enum: [pending, running, finished, failed, cancelled],
+          }
+        total_tables: { type: integer }
+        migrated_tables: { type: integer }
+        failed_tables: { type: integer }
+        temporal_workflow_id: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
 
     CreateMigrationRequest:
       type: object
       required: [name, source_type, source_url, target_catalog_connection_id]
       properties:
-        name:                         { type: string }
-        source_type:                  { type: string, enum: [nessie] }
-        source_url:                   { type: string }
-        source_credentials:           { type: object, nullable: true }
+        name: { type: string }
+        source_type: { type: string, enum: [nessie] }
+        source_url: { type: string }
+        source_credentials: { type: object, nullable: true }
         target_catalog_connection_id: { type: string, format: uuid }
 
     MigrationItem:
       type: object
-      required: [id, migration_id, source_namespace, source_table, target_namespace, target_table, status]
+      required:
+        [
+          id,
+          migration_id,
+          source_namespace,
+          source_table,
+          target_namespace,
+          target_table,
+          status,
+        ]
       properties:
-        id:               { type: string, format: uuid }
-        migration_id:     { type: string, format: uuid }
+        id: { type: string, format: uuid }
+        migration_id: { type: string, format: uuid }
         source_namespace: { type: string }
-        source_table:     { type: string }
+        source_table: { type: string }
         target_namespace: { type: string }
-        target_table:     { type: string }
-        status:           { type: string, enum: [pending, running, finished, failed, skipped] }
-        error_message:    { type: string, nullable: true }
-        started_at:       { type: string, format: date-time, nullable: true }
-        finished_at:      { type: string, format: date-time, nullable: true }
+        target_table: { type: string }
+        status:
+          { type: string, enum: [pending, running, finished, failed, skipped] }
+        error_message: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
 
 # ═══════════════════════════════════════════════════════════════
 # PATHS
@@ -663,11 +723,11 @@ paths:
       summary: "System configuration status"
       security: []
       responses:
-        '200':
+        "200":
           description: "Status"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SetupStatus' }
+              schema: { $ref: "#/components/schemas/SetupStatus" }
 
   /setup/admin:
     post:
@@ -680,15 +740,15 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateAdminRequest' }
+            schema: { $ref: "#/components/schemas/CreateAdminRequest" }
       responses:
-        '201':
+        "201":
           description: "Admin created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/LoginResponse' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Auth ──────────────────────────────────────────────────────
   /auth/login:
@@ -701,15 +761,15 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/LoginRequest' }
+            schema: { $ref: "#/components/schemas/LoginRequest" }
       responses:
-        '200':
+        "200":
           description: "Session created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/LoginResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /auth/logout:
     post:
@@ -720,10 +780,10 @@ paths:
         required: false
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/LogoutRequest' }
+            schema: { $ref: "#/components/schemas/LogoutRequest" }
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /auth/refresh:
     post:
@@ -735,14 +795,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/RefreshRequest' }
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
       responses:
-        '200':
+        "200":
           description: "New token pair"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/RefreshResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/RefreshResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /auth/me:
     get:
@@ -750,12 +810,12 @@ paths:
       operationId: getMe
       summary: "Return authenticated user"
       responses:
-        '200':
+        "200":
           description: "Current user"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/UserPublic' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/UserPublic" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /auth/oidc/providers:
     get:
@@ -764,13 +824,13 @@ paths:
       summary: "List configured OIDC providers"
       security: []
       responses:
-        '200':
+        "200":
           description: "List of providers"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/OIDCProvider' }
+                items: { $ref: "#/components/schemas/OIDCProvider" }
 
   /auth/oidc/{provider_id}/login:
     get:
@@ -784,7 +844,7 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '302':
+        "302":
           description: "Redirect to provider"
 
   /auth/oidc/{provider_id}/callback:
@@ -807,7 +867,7 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '302':
+        "302":
           description: "Redirect to frontend with token"
 
   /auth/password-reset/request:
@@ -821,14 +881,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/PasswordResetRequestBody' }
+            schema: { $ref: "#/components/schemas/PasswordResetRequestBody" }
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '503':
+        "204": { $ref: "#/components/responses/NoContent" }
+        "503":
           description: "Email service unavailable"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: "#/components/schemas/Error" }
 
   /auth/password-reset/confirm:
     post:
@@ -840,11 +900,11 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/PasswordResetConfirmBody' }
+            schema: { $ref: "#/components/schemas/PasswordResetConfirmBody" }
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── API Keys ──────────────────────────────────────────────────
   /api-keys:
@@ -853,14 +913,14 @@ paths:
       operationId: listApiKeys
       summary: "List current user's API keys"
       responses:
-        '200':
+        "200":
           description: "List of keys"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/ApiKey' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                items: { $ref: "#/components/schemas/ApiKey" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [ApiKeys]
       operationId: createApiKey
@@ -869,26 +929,26 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateApiKeyRequest' }
+            schema: { $ref: "#/components/schemas/CreateApiKeyRequest" }
       responses:
-        '201':
+        "201":
           description: "Key created — secret displayed only once"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiKeyCreated' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/ApiKeyCreated" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api-keys/{id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     delete:
       tags: [ApiKeys]
       operationId: deleteApiKey
       summary: "Remove an API key"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Users ─────────────────────────────────────────────────────
   /users:
@@ -897,10 +957,10 @@ paths:
       operationId: listUsers
       summary: "List all users — admin only"
       parameters:
-        - $ref: '#/components/parameters/QueryPage'
-        - $ref: '#/components/parameters/QueryPerPage'
+        - $ref: "#/components/parameters/QueryPage"
+        - $ref: "#/components/parameters/QueryPerPage"
       responses:
-        '200':
+        "200":
           description: "Paginated list"
           content:
             application/json:
@@ -909,10 +969,10 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/UserPublic' }
-                  pagination: { $ref: '#/components/schemas/Pagination' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+                    items: { $ref: "#/components/schemas/UserPublic" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /users/invite:
     post:
@@ -923,20 +983,20 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/InviteUserRequest' }
+            schema: { $ref: "#/components/schemas/InviteUserRequest" }
       responses:
-        '201':
+        "201":
           description: "Invitation sent"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/UserPublic' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
+              schema: { $ref: "#/components/schemas/UserPublic" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /users/{id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     patch:
       tags: [Users]
       operationId: updateUserRole
@@ -945,25 +1005,25 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdateUserRoleRequest' }
+            schema: { $ref: "#/components/schemas/UpdateUserRoleRequest" }
       responses:
-        '200':
+        "200":
           description: "User updated"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/UserPublic' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/UserPublic" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Users]
       operationId: removeUser
       summary: "Remove a user — admin only"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /me:
     get:
@@ -971,12 +1031,12 @@ paths:
       operationId: getProfile
       summary: "Current user profile"
       responses:
-        '200':
+        "200":
           description: "Profile"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/UserPublic' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/UserPublic" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     patch:
       tags: [Users]
       operationId: updateProfile
@@ -985,14 +1045,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
       responses:
-        '200':
+        "200":
           description: "Profile updated"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/UserPublic' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/UserPublic" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /me/password:
     patch:
@@ -1003,11 +1063,11 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdatePasswordRequest' }
+            schema: { $ref: "#/components/schemas/UpdatePasswordRequest" }
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Teams ─────────────────────────────────────────────────────
   /teams:
@@ -1016,14 +1076,14 @@ paths:
       operationId: listTeams
       summary: "List all teams"
       responses:
-        '200':
+        "200":
           description: "Teams"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/Team' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                items: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Teams]
       operationId: createTeam
@@ -1032,58 +1092,58 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateTeamRequest' }
+            schema: { $ref: "#/components/schemas/CreateTeamRequest" }
       responses:
-        '201':
+        "201":
           description: "Team created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Team' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+              schema: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /teams/{id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Teams]
       operationId: getTeam
       summary: "Team details"
       responses:
-        '200':
+        "200":
           description: "Team"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Team' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Teams]
       operationId: deleteTeam
       summary: "Remove a team — admin only"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /teams/{id}/members:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Teams]
       operationId: listTeamMembers
       summary: "List team members"
       responses:
-        '200':
+        "200":
           description: "Members"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/TeamMember' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                items: { $ref: "#/components/schemas/TeamMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [Teams]
       operationId: addTeamMember
@@ -1092,21 +1152,21 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/AddTeamMemberRequest' }
+            schema: { $ref: "#/components/schemas/AddTeamMemberRequest" }
       responses:
-        '201':
+        "201":
           description: "Member added"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TeamMember' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+              schema: { $ref: "#/components/schemas/TeamMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /teams/{id}/members/{user_id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: user_id
         in: path
         required: true
@@ -1116,10 +1176,10 @@ paths:
       operationId: removeTeamMember
       summary: "Remove user from team — admin only"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Workspaces ────────────────────────────────────────────────
   /workspaces:
@@ -1128,14 +1188,14 @@ paths:
       operationId: listWorkspaces
       summary: "List workspaces accessible to current user"
       responses:
-        '200':
+        "200":
           description: "Workspaces"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/Workspace' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                items: { $ref: "#/components/schemas/Workspace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Workspaces]
       operationId: createWorkspace
@@ -1144,32 +1204,32 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateWorkspaceRequest' }
+            schema: { $ref: "#/components/schemas/CreateWorkspaceRequest" }
       responses:
-        '201':
+        "201":
           description: "Workspace created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Workspace' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+              schema: { $ref: "#/components/schemas/Workspace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Workspaces]
       operationId: getWorkspace
       summary: "Workspace details"
       responses:
-        '200':
+        "200":
           description: "Workspace"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Workspace' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Workspace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Workspaces]
       operationId: updateWorkspace
@@ -1178,33 +1238,33 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdateWorkspaceRequest' }
+            schema: { $ref: "#/components/schemas/UpdateWorkspaceRequest" }
       responses:
-        '200':
+        "200":
           description: "Workspace updated"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Workspace' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Workspace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/catalog-access:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Workspaces]
       operationId: listWorkspaceCatalogAccess
       summary: "List external catalogs accessible to the workspace"
       responses:
-        '200':
+        "200":
           description: "Access grants"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/WorkspaceCatalogAccess' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                items: { $ref: "#/components/schemas/WorkspaceCatalogAccess" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [Workspaces]
       operationId: grantCatalogAccess
@@ -1213,19 +1273,19 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/GrantCatalogAccessRequest' }
+            schema: { $ref: "#/components/schemas/GrantCatalogAccessRequest" }
       responses:
-        '201':
+        "201":
           description: "Access granted"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/WorkspaceCatalogAccess' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+              schema: { $ref: "#/components/schemas/WorkspaceCatalogAccess" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /workspaces/{id}/catalog-access/{catalog_id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: catalog_id
         in: path
         required: true
@@ -1235,10 +1295,10 @@ paths:
       operationId: revokeCatalogAccess
       summary: "Revoke access to an external catalog — admin only"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Catalog Connections ───────────────────────────────────────
   /catalog-connections:
@@ -1247,15 +1307,15 @@ paths:
       operationId: listCatalogConnections
       summary: "List all catalog connections — admin only"
       responses:
-        '200':
+        "200":
           description: "Connections"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/CatalogConnection' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+                items: { $ref: "#/components/schemas/CatalogConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [CatalogConnections]
       operationId: createCatalogConnection
@@ -1264,32 +1324,33 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateCatalogConnectionRequest' }
+            schema:
+              { $ref: "#/components/schemas/CreateCatalogConnectionRequest" }
       responses:
-        '201':
+        "201":
           description: "Connection created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CatalogConnection' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+              schema: { $ref: "#/components/schemas/CatalogConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /catalog-connections/{id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [CatalogConnections]
       operationId: getCatalogConnection
       summary: "Connection details"
       responses:
-        '200':
+        "200":
           description: "Connection"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CatalogConnection' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/CatalogConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [CatalogConnections]
       operationId: updateCatalogConnection
@@ -1298,41 +1359,43 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdateCatalogConnectionRequest' }
+            schema:
+              { $ref: "#/components/schemas/UpdateCatalogConnectionRequest" }
       responses:
-        '200':
+        "200":
           description: "Connection updated"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CatalogConnection' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/CatalogConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [CatalogConnections]
       operationId: deleteCatalogConnection
       summary: "Remove a connection — admin only"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /catalog-connections/{id}/test:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     post:
       tags: [CatalogConnections]
       operationId: testCatalogConnection
       summary: "Test catalog connectivity"
       responses:
-        '200':
+        "200":
           description: "Test result"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TestCatalogConnectionResult' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema:
+                { $ref: "#/components/schemas/TestCatalogConnectionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Catalog Explorer ──────────────────────────────────────────────
 
@@ -1347,14 +1410,14 @@ paths:
       operationId: listCatalogs
       summary: "List catalogs registered under a connection"
       responses:
-        '200':
+        "200":
           description: "List of catalogs"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/Catalog' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                items: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Catalog]
       operationId: createCatalog
@@ -1363,14 +1426,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateCatalogRequest' }
+            schema: { $ref: "#/components/schemas/CreateCatalogRequest" }
       responses:
-        '201':
+        "201":
           description: "Catalog created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Catalog' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /connections/{connection_id}/catalogs/{catalog_id}:
     parameters:
@@ -1387,13 +1450,13 @@ paths:
       operationId: getCatalog
       summary: "Catalog details"
       responses:
-        '200':
+        "200":
           description: "Catalog"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Catalog' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Catalog]
       operationId: updateCatalog
@@ -1402,23 +1465,23 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateCatalogRequest' }
+            schema: { $ref: "#/components/schemas/CreateCatalogRequest" }
       responses:
-        '200':
+        "200":
           description: "Catalog updated"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Catalog' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Catalog]
       operationId: deleteCatalog
       summary: "Remove a catalog"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /catalogs/{catalog_id}/namespaces:
     parameters:
       - name: catalog_id
@@ -1430,7 +1493,7 @@ paths:
       operationId: listNamespaces
       summary: "List namespaces in a catalog"
       responses:
-        '200':
+        "200":
           description: "List of namespaces"
           content:
             application/json:
@@ -1439,8 +1502,8 @@ paths:
                 items:
                   type: array
                   items: { type: string }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /catalogs/{catalog_id}/namespaces/{namespace}/tables:
     parameters:
@@ -1457,7 +1520,7 @@ paths:
       operationId: listTables
       summary: "List tables in a namespace"
       responses:
-        '200':
+        "200":
           description: "List of tables"
           content:
             application/json:
@@ -1467,9 +1530,9 @@ paths:
                   type: object
                   properties:
                     namespace: { type: array, items: { type: string } }
-                    name:      { type: string }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                    name: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns:
     parameters:
@@ -1490,7 +1553,7 @@ paths:
       operationId: listColumns
       summary: "List columns of a table"
       responses:
-        '200':
+        "200":
           description: "List of columns"
           content:
             application/json:
@@ -1499,13 +1562,13 @@ paths:
                 items:
                   type: object
                   properties:
-                    id:       { type: integer }
-                    name:     { type: string }
-                    type:     { type: string }
+                    id: { type: integer }
+                    name: { type: string }
+                    type: { type: string }
                     required: { type: boolean }
-                    doc:      { type: string }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                    doc: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots:
     parameters:
@@ -1526,7 +1589,7 @@ paths:
       operationId: listTableSnapshots
       summary: "List Iceberg snapshots for a table"
       responses:
-        '200':
+        "200":
           description: "List of snapshots"
           content:
             application/json:
@@ -1535,18 +1598,18 @@ paths:
                 items:
                   type: object
                   properties:
-                    snapshot_id:  { type: integer, format: int64 }
-                    parent_id:    { type: integer, format: int64, nullable: true }
+                    snapshot_id: { type: integer, format: int64 }
+                    parent_id: { type: integer, format: int64, nullable: true }
                     timestamp_ms: { type: integer, format: int64 }
-                    operation:    { type: string }
+                    operation: { type: string }
                     manifest_list: { type: string }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Query Editor ──────────────────────────────────────────────
   /workspaces/{id}/folders:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [QueryEditor]
       operationId: listFolders
@@ -1556,14 +1619,14 @@ paths:
           in: query
           schema: { type: string, format: uuid }
       responses:
-        '200':
+        "200":
           description: "Folders"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/QueryFolder' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                items: { $ref: "#/components/schemas/QueryFolder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [QueryEditor]
       operationId: createFolder
@@ -1572,18 +1635,18 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateFolderRequest' }
+            schema: { $ref: "#/components/schemas/CreateFolderRequest" }
       responses:
-        '201':
+        "201":
           description: "Folder created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/QueryFolder' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/QueryFolder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /workspaces/{id}/folders/{folder_id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: folder_id
         in: path
         required: true
@@ -1593,13 +1656,13 @@ paths:
       operationId: deleteFolder
       summary: "Remove a folder and its contents"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/queries:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [QueryEditor]
       operationId: listSavedQueries
@@ -1609,14 +1672,14 @@ paths:
           in: query
           schema: { type: string, format: uuid }
       responses:
-        '200':
+        "200":
           description: "Queries"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/SavedQuery' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                items: { $ref: "#/components/schemas/SavedQuery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [QueryEditor]
       operationId: createSavedQuery
@@ -1625,18 +1688,18 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateSavedQueryRequest' }
+            schema: { $ref: "#/components/schemas/CreateSavedQueryRequest" }
       responses:
-        '201':
+        "201":
           description: "Query saved"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SavedQuery' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/SavedQuery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /workspaces/{id}/queries/{query_id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: query_id
         in: path
         required: true
@@ -1646,13 +1709,13 @@ paths:
       operationId: getSavedQuery
       summary: "Return a saved query"
       responses:
-        '200':
+        "200":
           description: "Query"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SavedQuery' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/SavedQuery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [QueryEditor]
       operationId: updateSavedQuery
@@ -1661,28 +1724,28 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdateSavedQueryRequest' }
+            schema: { $ref: "#/components/schemas/UpdateSavedQueryRequest" }
       responses:
-        '200':
+        "200":
           description: "Query updated"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SavedQuery' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/SavedQuery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [QueryEditor]
       operationId: deleteSavedQuery
       summary: "Remove a saved query"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Executions ────────────────────────────────────────────────
   /workspaces/{id}/executions:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Executions]
       operationId: listExecutions
@@ -1691,10 +1754,10 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [running, finished, failed, cancelled] }
-        - $ref: '#/components/parameters/QueryPage'
-        - $ref: '#/components/parameters/QueryPerPage'
+        - $ref: "#/components/parameters/QueryPage"
+        - $ref: "#/components/parameters/QueryPerPage"
       responses:
-        '200':
+        "200":
           description: "Paginated executions"
           content:
             application/json:
@@ -1703,9 +1766,9 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/Execution' }
-                  pagination: { $ref: '#/components/schemas/Pagination' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                    items: { $ref: "#/components/schemas/Execution" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Executions]
       operationId: runQuery
@@ -1714,19 +1777,19 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ExecutionRequest' }
+            schema: { $ref: "#/components/schemas/ExecutionRequest" }
       responses:
-        '202':
+        "202":
           description: "Execution started"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Execution' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+              schema: { $ref: "#/components/schemas/Execution" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/executions/{execution_id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: execution_id
         in: path
         required: true
@@ -1736,17 +1799,17 @@ paths:
       operationId: getExecution
       summary: "Execution status and metadata"
       responses:
-        '200':
+        "200":
           description: "Execution"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Execution' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Execution" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/executions/{execution_id}/cancel:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: execution_id
         in: path
         required: true
@@ -1756,17 +1819,17 @@ paths:
       operationId: cancelExecution
       summary: "Cancel an ongoing execution"
       responses:
-        '200':
+        "200":
           description: "Execution cancelled"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Execution' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Execution" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/executions/{execution_id}/statements:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: execution_id
         in: path
         required: true
@@ -1776,19 +1839,19 @@ paths:
       operationId: listStatements
       summary: "List individual statements in a multi-statement execution"
       responses:
-        '200':
+        "200":
           description: "Statements"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/QueryStatement' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                items: { $ref: "#/components/schemas/QueryStatement" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/executions/{execution_id}/results:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: execution_id
         in: path
         required: true
@@ -1800,18 +1863,18 @@ paths:
       description: |
         Returns complete results via Arrow IPC. Uses Trino spooling protocol — segments are fetched in parallel from object storage.
       responses:
-        '200': { $ref: '#/components/responses/ArrowStream' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409':
+        "200": { $ref: "#/components/responses/ArrowStream" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
           description: "Execution not yet completed"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: "#/components/schemas/Error" }
 
   /ws/workspaces/{id}/executions/{execution_id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: execution_id
         in: path
         required: true
@@ -1822,7 +1885,7 @@ paths:
       summary: "WebSocket for real-time execution progress"
       description: |
         Authenticate via `?token=<jwt>`.
-        
+
         ## Server → Client Events
         ```json
         { "type": "running", "execution_id": "...", "ts": "..." }
@@ -1839,27 +1902,27 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '101':
+        "101":
           description: "WebSocket established"
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   # ── Retrievers ────────────────────────────────────────────────
   /workspaces/{id}/retrievers:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Retrievers]
       operationId: listRetrievers
       summary: "List workspace Retrievers"
       responses:
-        '200':
+        "200":
           description: "Retrievers"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/Retriever' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                items: { $ref: "#/components/schemas/Retriever" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Retrievers]
       operationId: createRetriever
@@ -1868,19 +1931,19 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateRetrieverRequest' }
+            schema: { $ref: "#/components/schemas/CreateRetrieverRequest" }
       responses:
-        '201':
+        "201":
           description: "Retriever created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Retriever' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+              schema: { $ref: "#/components/schemas/Retriever" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/retrievers/{retriever_id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: retriever_id
         in: path
         required: true
@@ -1890,13 +1953,13 @@ paths:
       operationId: getRetriever
       summary: "Retriever details"
       responses:
-        '200':
+        "200":
           description: "Retriever"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Retriever' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Retriever" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Retrievers]
       operationId: updateRetriever
@@ -1905,27 +1968,27 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdateRetrieverRequest' }
+            schema: { $ref: "#/components/schemas/UpdateRetrieverRequest" }
       responses:
-        '200':
+        "200":
           description: "Retriever updated"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Retriever' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Retriever" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Retrievers]
       operationId: deleteRetriever
       summary: "Remove a Retriever"
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/retrievers/{retriever_id}/refresh:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: retriever_id
         in: path
         required: true
@@ -1940,19 +2003,24 @@ paths:
             schema:
               type: object
               properties:
-                refresh_type: { type: string, enum: [incremental, full], default: incremental }
+                refresh_type:
+                  {
+                    type: string,
+                    enum: [incremental, full],
+                    default: incremental,
+                  }
       responses:
-        '202':
+        "202":
           description: "Refresh started"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/RetrieverRefreshHistory' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/RetrieverRefreshHistory" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/retrievers/{retriever_id}/history:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
       - name: retriever_id
         in: path
         required: true
@@ -1962,10 +2030,10 @@ paths:
       operationId: getRetrieverHistory
       summary: "Retriever refresh history"
       parameters:
-        - $ref: '#/components/parameters/QueryPage'
-        - $ref: '#/components/parameters/QueryPerPage'
+        - $ref: "#/components/parameters/QueryPage"
+        - $ref: "#/components/parameters/QueryPerPage"
       responses:
-        '200':
+        "200":
           description: "History"
           content:
             application/json:
@@ -1974,10 +2042,11 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/RetrieverRefreshHistory' }
-                  pagination: { $ref: '#/components/schemas/Pagination' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                    items:
+                      { $ref: "#/components/schemas/RetrieverRefreshHistory" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Migrant ───────────────────────────────────────────────────
   /migrations:
@@ -1986,15 +2055,15 @@ paths:
       operationId: listMigrations
       summary: "List migrations — admin only"
       responses:
-        '200':
+        "200":
           description: "Migrations"
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/Migration' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+                items: { $ref: "#/components/schemas/Migration" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Migrant]
       operationId: createMigration
@@ -2003,70 +2072,70 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateMigrationRequest' }
+            schema: { $ref: "#/components/schemas/CreateMigrationRequest" }
       responses:
-        '201':
+        "201":
           description: "Migration created"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Migration' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+              schema: { $ref: "#/components/schemas/Migration" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /migrations/{id}:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Migrant]
       operationId: getMigration
       summary: "Migration status"
       responses:
-        '200':
+        "200":
           description: "Migration"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Migration' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Migration" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /migrations/{id}/start:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     post:
       tags: [Migrant]
       operationId: startMigration
       summary: "Start migration execution — admin only"
       responses:
-        '202':
+        "202":
           description: "Migration started"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Migration' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Migration" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /migrations/{id}/cancel:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     post:
       tags: [Migrant]
       operationId: cancelMigration
       summary: "Cancel an ongoing migration — admin only"
       responses:
-        '200':
+        "200":
           description: "Migration cancelled"
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Migration' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/Migration" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /migrations/{id}/items:
     parameters:
-      - $ref: '#/components/parameters/PathId'
+      - $ref: "#/components/parameters/PathId"
     get:
       tags: [Migrant]
       operationId: listMigrationItems
@@ -2074,11 +2143,15 @@ paths:
       parameters:
         - name: status
           in: query
-          schema: { type: string, enum: [pending, running, finished, failed, skipped] }
-        - $ref: '#/components/parameters/QueryPage'
-        - $ref: '#/components/parameters/QueryPerPage'
+          schema:
+            {
+              type: string,
+              enum: [pending, running, finished, failed, skipped],
+            }
+        - $ref: "#/components/parameters/QueryPage"
+        - $ref: "#/components/parameters/QueryPerPage"
       responses:
-        '200':
+        "200":
           description: "Items"
           content:
             application/json:
@@ -2087,7 +2160,7 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/MigrationItem' }
-                  pagination: { $ref: '#/components/schemas/Pagination' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                    items: { $ref: "#/components/schemas/MigrationItem" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
