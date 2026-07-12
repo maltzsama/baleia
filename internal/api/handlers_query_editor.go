@@ -304,6 +304,15 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		}, nil
 	}
 
+	trinoCatalog := workspace.PolarisCatalogName
+	access, _ := h.queries.ListCatalogAccessByWorkspace(ctx, wsID)
+	if len(access) > 0 {
+		cat, err := h.queries.GetCatalogByID(ctx, access[0].CatalogID)
+		if err == nil {
+			trinoCatalog = cat.Name
+		}
+	}
+
 	var savedQueryID pgtype.UUID
 	if request.Body.SavedQueryId != nil {
 		savedQueryID.Bytes = *request.Body.SavedQueryId
@@ -314,8 +323,9 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		WorkspaceID:  workspaceIDFromRequest(request.Id),
 		UserID:       uid,
 		SavedQueryID: savedQueryID,
+		Status:       "running",
 		Sql:          request.Body.Sql,
-		TrinoCatalog: &workspace.PolarisCatalogName,
+		TrinoCatalog: &trinoCatalog,
 	})
 	if err != nil {
 		return nil, err
@@ -332,7 +342,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		executionID,
 		request.Id.String(),
 		request.Body.Sql,
-		workspace.PolarisCatalogName,
+		trinoCatalog,
 	)
 	if err != nil {
 		return nil, err
