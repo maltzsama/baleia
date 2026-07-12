@@ -28,13 +28,12 @@ type AuthProvider struct {
 }
 
 type Catalog struct {
-	ID               pgtype.UUID        `json:"id"`
-	ConnectionID     pgtype.UUID        `json:"connection_id"`
-	Name             string             `json:"name"`
-	Description      *string            `json:"description"`
-	TrinoCatalogName string             `json:"trino_catalog_name"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID           pgtype.UUID        `json:"id"`
+	ConnectionID pgtype.UUID        `json:"connection_id"`
+	Name         string             `json:"name"`
+	Description  *string            `json:"description"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type CatalogConnection struct {
@@ -46,6 +45,8 @@ type CatalogConnection struct {
 	DefaultReadonly bool               `json:"default_readonly"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	Host            *string            `json:"host"`
+	Port            *string            `json:"port"`
 }
 
 type ClusterSnapshot struct {

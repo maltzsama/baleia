@@ -12,32 +12,25 @@ import (
 )
 
 const createCatalog = `-- name: CreateCatalog :one
-INSERT INTO catalogs (connection_id, name, description, trino_catalog_name)
-VALUES ($1, $2, $3, $4)
-RETURNING id, connection_id, name, description, trino_catalog_name, created_at, updated_at
+INSERT INTO catalogs (connection_id, name, description)
+VALUES ($1, $2, $3)
+RETURNING id, connection_id, name, description, created_at, updated_at
 `
 
 type CreateCatalogParams struct {
-	ConnectionID     pgtype.UUID `json:"connection_id"`
-	Name             string      `json:"name"`
-	Description      *string     `json:"description"`
-	TrinoCatalogName string      `json:"trino_catalog_name"`
+	ConnectionID pgtype.UUID `json:"connection_id"`
+	Name         string      `json:"name"`
+	Description  *string     `json:"description"`
 }
 
 func (q *Queries) CreateCatalog(ctx context.Context, arg CreateCatalogParams) (Catalog, error) {
-	row := q.db.QueryRow(ctx, createCatalog,
-		arg.ConnectionID,
-		arg.Name,
-		arg.Description,
-		arg.TrinoCatalogName,
-	)
+	row := q.db.QueryRow(ctx, createCatalog, arg.ConnectionID, arg.Name, arg.Description)
 	var i Catalog
 	err := row.Scan(
 		&i.ID,
 		&i.ConnectionID,
 		&i.Name,
 		&i.Description,
-		&i.TrinoCatalogName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -54,7 +47,7 @@ func (q *Queries) DeleteCatalog(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getCatalogByID = `-- name: GetCatalogByID :one
-SELECT id, connection_id, name, description, trino_catalog_name, created_at, updated_at FROM catalogs WHERE id = $1
+SELECT id, connection_id, name, description, created_at, updated_at FROM catalogs WHERE id = $1
 `
 
 func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error) {
@@ -65,7 +58,6 @@ func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, 
 		&i.ConnectionID,
 		&i.Name,
 		&i.Description,
-		&i.TrinoCatalogName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -73,7 +65,7 @@ func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, 
 }
 
 const listCatalogsByConnection = `-- name: ListCatalogsByConnection :many
-SELECT id, connection_id, name, description, trino_catalog_name, created_at, updated_at FROM catalogs WHERE connection_id = $1 ORDER BY name
+SELECT id, connection_id, name, description, created_at, updated_at FROM catalogs WHERE connection_id = $1 ORDER BY name
 `
 
 func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error) {
@@ -90,7 +82,6 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 			&i.ConnectionID,
 			&i.Name,
 			&i.Description,
-			&i.TrinoCatalogName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -106,32 +97,25 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 
 const updateCatalog = `-- name: UpdateCatalog :one
 UPDATE catalogs
-SET name = $2, description = $3, trino_catalog_name = $4, updated_at = now()
+SET name = $2, description = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, connection_id, name, description, trino_catalog_name, created_at, updated_at
+RETURNING id, connection_id, name, description, created_at, updated_at
 `
 
 type UpdateCatalogParams struct {
-	ID               pgtype.UUID `json:"id"`
-	Name             string      `json:"name"`
-	Description      *string     `json:"description"`
-	TrinoCatalogName string      `json:"trino_catalog_name"`
+	ID          pgtype.UUID `json:"id"`
+	Name        string      `json:"name"`
+	Description *string     `json:"description"`
 }
 
 func (q *Queries) UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (Catalog, error) {
-	row := q.db.QueryRow(ctx, updateCatalog,
-		arg.ID,
-		arg.Name,
-		arg.Description,
-		arg.TrinoCatalogName,
-	)
+	row := q.db.QueryRow(ctx, updateCatalog, arg.ID, arg.Name, arg.Description)
 	var i Catalog
 	err := row.Scan(
 		&i.ID,
 		&i.ConnectionID,
 		&i.Name,
 		&i.Description,
-		&i.TrinoCatalogName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

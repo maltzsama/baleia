@@ -14,7 +14,7 @@ import (
 const createCatalogConnection = `-- name: CreateCatalogConnection :one
 INSERT INTO catalog_connections (name, type, url, credentials_enc, default_readonly)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at
+RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port
 `
 
 type CreateCatalogConnectionParams struct {
@@ -43,6 +43,8 @@ func (q *Queries) CreateCatalogConnection(ctx context.Context, arg CreateCatalog
 		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Host,
+		&i.Port,
 	)
 	return i, err
 }
@@ -81,7 +83,7 @@ func (q *Queries) GetCatalogAccess(ctx context.Context, arg GetCatalogAccessPara
 }
 
 const getCatalogConnectionByID = `-- name: GetCatalogConnectionByID :one
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at FROM catalog_connections WHERE id = $1
+SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port FROM catalog_connections WHERE id = $1
 `
 
 func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error) {
@@ -96,6 +98,8 @@ func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) 
 		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Host,
+		&i.Port,
 	)
 	return i, err
 }
@@ -135,7 +139,7 @@ func (q *Queries) GrantCatalogAccess(ctx context.Context, arg GrantCatalogAccess
 }
 
 const listCatalogAccessByWorkspace = `-- name: ListCatalogAccessByWorkspace :many
-SELECT wca.id, wca.workspace_id, wca.catalog_id, wca.permission, wca.granted_by, wca.granted_at, c.name AS catalog_name, c.trino_catalog_name, c.connection_id, cc.name AS connection_name, cc.type AS connection_type, cc.url AS connection_url
+SELECT wca.id, wca.workspace_id, wca.catalog_id, wca.permission, wca.granted_by, wca.granted_at, c.name AS catalog_name, c.connection_id, cc.name AS connection_name, cc.type AS connection_type, cc.url AS connection_url, cc.host, cc.port
 FROM workspace_catalog_access wca
 JOIN catalogs c ON c.id = wca.catalog_id
 JOIN catalog_connections cc ON cc.id = c.connection_id
@@ -144,18 +148,19 @@ ORDER BY c.name
 `
 
 type ListCatalogAccessByWorkspaceRow struct {
-	ID               pgtype.UUID        `json:"id"`
-	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
-	CatalogID        pgtype.UUID        `json:"catalog_id"`
-	Permission       string             `json:"permission"`
-	GrantedBy        pgtype.UUID        `json:"granted_by"`
-	GrantedAt        pgtype.Timestamptz `json:"granted_at"`
-	CatalogName      string             `json:"catalog_name"`
-	TrinoCatalogName string             `json:"trino_catalog_name"`
-	ConnectionID     pgtype.UUID        `json:"connection_id"`
-	ConnectionName   string             `json:"connection_name"`
-	ConnectionType   string             `json:"connection_type"`
-	ConnectionUrl    string             `json:"connection_url"`
+	ID             pgtype.UUID        `json:"id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	CatalogID      pgtype.UUID        `json:"catalog_id"`
+	Permission     string             `json:"permission"`
+	GrantedBy      pgtype.UUID        `json:"granted_by"`
+	GrantedAt      pgtype.Timestamptz `json:"granted_at"`
+	CatalogName    string             `json:"catalog_name"`
+	ConnectionID   pgtype.UUID        `json:"connection_id"`
+	ConnectionName string             `json:"connection_name"`
+	ConnectionType string             `json:"connection_type"`
+	ConnectionUrl  string             `json:"connection_url"`
+	Host           *string            `json:"host"`
+	Port           *string            `json:"port"`
 }
 
 func (q *Queries) ListCatalogAccessByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogAccessByWorkspaceRow, error) {
@@ -175,11 +180,12 @@ func (q *Queries) ListCatalogAccessByWorkspace(ctx context.Context, workspaceID 
 			&i.GrantedBy,
 			&i.GrantedAt,
 			&i.CatalogName,
-			&i.TrinoCatalogName,
 			&i.ConnectionID,
 			&i.ConnectionName,
 			&i.ConnectionType,
 			&i.ConnectionUrl,
+			&i.Host,
+			&i.Port,
 		); err != nil {
 			return nil, err
 		}
@@ -192,7 +198,7 @@ func (q *Queries) ListCatalogAccessByWorkspace(ctx context.Context, workspaceID 
 }
 
 const listCatalogConnections = `-- name: ListCatalogConnections :many
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at FROM catalog_connections ORDER BY name
+SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port FROM catalog_connections ORDER BY name
 `
 
 func (q *Queries) ListCatalogConnections(ctx context.Context) ([]CatalogConnection, error) {
@@ -213,6 +219,8 @@ func (q *Queries) ListCatalogConnections(ctx context.Context) ([]CatalogConnecti
 			&i.DefaultReadonly,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Host,
+			&i.Port,
 		); err != nil {
 			return nil, err
 		}
@@ -243,7 +251,7 @@ const updateCatalogConnection = `-- name: UpdateCatalogConnection :one
 UPDATE catalog_connections
 SET name = $2, url = $3, credentials_enc = $4, default_readonly = $5, updated_at = now()
 WHERE id = $1
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at
+RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port
 `
 
 type UpdateCatalogConnectionParams struct {
@@ -272,6 +280,8 @@ func (q *Queries) UpdateCatalogConnection(ctx context.Context, arg UpdateCatalog
 		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Host,
+		&i.Port,
 	)
 	return i, err
 }
