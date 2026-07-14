@@ -1,47 +1,376 @@
+# ==========================================
+# Binaries and Build Outputs
+# ==========================================
 /bin/
 /dist/
 *.exe
 *.exe~
 *.test
 
+# ==========================================
+# Dependencies
+# ==========================================
 /node_modules/
 /vendor/
+/web/node_modules/
+/web/.svelte-kit/
+/web/build/
 
+# ==========================================
+# Environment Variables
+# ==========================================
 .env
 .env.*
 !.env.example
 *.local
 
+# ==========================================
+# Data Directories
+# ==========================================
 /cockroach-data/
 /seaweedfs-data/
 /temporal-data/
 /polaris-data/
 /data/
 /tmp/
+/temp/
 
-# IDE
+# ==========================================
+# IDE Specific
+# ==========================================
+# IntelliJ / GoLand / WebStorm
 .idea/
-.vscode/
-*.swp
+*.iml
+*.iws
+*.ipr
+.idea_modules/
 
-# OS
+# VS Code
+.vscode/
+*.code-workspace
+.vscode-test/
+.history/
+
+# Vim / Emacs / Others
+*.swp
+*.swo
+*.swn
+*~
+.#*
+\#*#
+*.un~
 .DS_Store
 Thumbs.db
+Desktop.ini
 
+# ==========================================
+# Agent AI Tools
+# ==========================================
+# Cursor
+.cursor/
+.cursorrules
+.cursorignore
+
+# Continue
+.continue/
+continue-rules/
+
+# GitHub Copilot
+.github/copilot/
+*.copilot
+.copilot/
+
+# Windsurf
+.windsurf/
+.windsurfrules
+.windsurfignore
+
+# Aider
+.aider*
+aider*.md
+.aider.chat.history.md
+
+# Claude
+.claude/
+.claudeignore
+.claude-rules/
+
+# Cline
+.cline/
+.clinerules
+
+# Tabnine
+.tabnine/
+.tabnine-config.json
+
+# ==========================================
 # Logs
+# ==========================================
 *.log
 logs/
+/logs/
+log/
+/log/
 
+# ==========================================
 # Go
+# ==========================================
 /go.work
 /go.work.sum
+go.work
+go.work.sum
 *.cover
 coverage.txt
+coverage.html
+*.out
+*.prof
+*.test
+*.cov
+*.coverage
 
-# Web build
+# ==========================================
+# Web / Frontend Build
+# ==========================================
 /web/dist/
 /web/.svelte-kit/
+/web/build/
+/web/dist/
+/web/.vite/
+/web/node_modules/
+/web/package-lock.json
+/web/yarn.lock
+/web/pnpm-lock.yaml
 
-# Helm secrets
+# ==========================================
+# Deployment / Helm
+# ==========================================
 /deploy/helm/**/secrets.yaml
-/deploy/helm/**/values.local.yamlnode_modules/
+/deploy/helm/**/secrets.yml
+/deploy/helm/**/values.local.yaml
+/deploy/helm/**/values.local.yml
+/deploy/helm/**/values.*.local.yaml
+/deploy/helm/**/values.*.local.yml
+/deploy/helm/**/charts/
+/deploy/helm/**/Chart.lock
+
+# ==========================================
+# Kubernetes
+# ==========================================
+/deploy/k8s/**/*.generated.yaml
+/deploy/k8s/**/*.generated.yml
+/deploy/k8s/**/secret.yaml
+/deploy/k8s/**/secret.yml
+
+# ==========================================
+# Terraform
+# ==========================================
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+*.plan
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ==========================================
+# Database
+# ==========================================
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.bolt
+*.mdb
+/catalog/
+/metadata/
+/storage/
+/uploads/
+/downloads/
+/backups/
+*.dump
+*.sql.gz
+
+# ==========================================
+# Security & Certificates
+# ==========================================
+*.key
+*.pem
+*.crt
+*.cert
+*.priv
+*.pub
+*.p12
+*.pfx
+*.p7b
+*.p7r
+*.spc
+*.cer
+*.der
+*.jks
+*.keystore
+*.truststore
+*.p8
+*.csr
+secrets.yaml
+secrets.yml
+*.secret
+*.secrets.yaml
+*.secrets.yml
+config/credentials.yaml
+config/credentials.yml
+
+# ==========================================
+# Testing & Coverage
+# ==========================================
+*.cover
+coverage.txt
+coverage.html
+*.test
+*.test.html
+*.test.json
+junit.xml
+jest-results/
+test-results/
+cypress/videos/
+cypress/screenshots/
+playwright-report/
+
+# ==========================================
+# Profiling / Debug
+# ==========================================
+*.pprof
+*.memprof
+*.cpuprof
+*.blockprof
+*.mutexprof
+*.trace
+debug/
+profile/
+cpu.out
+mem.out
+
+# ==========================================
+# Backup & Temporary
+# ==========================================
+*.backup
+*.backup.*
+*.bak
+*.bak.*
+*.old
+*.old.*
+*.orig
+*.orig.*
+*.copy
+*.copy.*
+*~
+*.tmp
+*.temp
+*.lock
+*.pid
+*.swp
+*.swo
+*.swn
+
+# ==========================================
+# OS Specific
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*.temp
+*.swp
+*.swo
+*.~*
+.~lock.*
+._*.*
+.SyncBackup
+.SyncConflicts
+.SyncTemp
+
+# ==========================================
+# Temporal
+# ==========================================
+.temporal/
+temporal-data/
+temporal_*_data/
+
+# ==========================================
+# Trino
+# ==========================================
+trino_data/
+trino-data/
+trino-catalog/*.db
+*.trino
+/trino-catalog/*.db
+
+# ==========================================
+# Misc
+# ==========================================
+*.pid
+*.lock
+*.pid.lock
+*.semaphore
+.nfs*
+*.pdb
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+*.obj
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+wheels/
+*.tar.gz
+*.zip
+*.rar
+*.7z
+*.pdf
+*.docx
+*.odt
+*.xlsx
+*.pptx
+*.patch
+*.diff
+*.rej
+*.merge
+*.conflict
+
+# ==========================================
+# Documentation Generated
+# ==========================================
+docs/_build/
+docs/api/
+docs/generated/
+/api/swagger.yaml.bak
+/api/swagger.yml.bak
+/api/generated/
+/swagger/
+
+# ==========================================
+# Docker
+# ==========================================
+.dockerignore
+docker-compose.override.yaml
+docker-compose.override.yml
+*.dockerignore
+Dockerfile.*
+!Dockerfile
+
+hacks/
+tmp/
