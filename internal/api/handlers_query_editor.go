@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"math"
 	"net/http"
 
@@ -444,10 +445,7 @@ func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObje
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "no results available"}}, nil
 	}
 
-	// Proxy the Arrow IPC bytes through the API. The stored object's presigned
-	// URL points at the internal S3 host (ceph:8080), which the browser cannot
-	// reach — so we fetch server-side and stream it back on the same origin.
-	data, contentType, err := h.s3.Get(ctx, *execution.ResultKey)
+	reader, contentType, err := h.s3.GetReader(ctx, *execution.ResultKey)
 	if err != nil {
 		return nil, err
 	}
@@ -455,19 +453,20 @@ func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObje
 		contentType = "application/vnd.apache.arrow.stream"
 	}
 
-	return arrowStreamResponse{data: data, contentType: contentType}, nil
+	return arrowStreamResponse{reader: reader, contentType: contentType}, nil
 }
 
 type arrowStreamResponse struct {
-	data        []byte
+	reader      io.ReadCloser
 	contentType string
 }
 
 func (r arrowStreamResponse) VisitGetResultsResponse(w http.ResponseWriter) error {
+	defer r.reader.Close()
 	w.Header().Set("Content-Type", r.contentType)
 	w.WriteHeader(http.StatusOK)
-	w.Write(r.data)
-	return nil
+	_, err := io.Copy(w, r.reader)
+	return err
 }
 
 func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error) {

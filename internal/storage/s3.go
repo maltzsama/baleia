@@ -97,6 +97,34 @@ func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) 
 	return data, resp.Header.Get("Content-Type"), nil
 }
 
+func (c *S3Client) GetReader(ctx context.Context, key string) (io.ReadCloser, string, error) {
+	scheme := "http"
+	if c.useSSL {
+		scheme = "https"
+	}
+	u := fmt.Sprintf("%s://%s/%s/%s", scheme, c.endpoint, c.bucket, key)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("s3 get: %w", err)
+	}
+
+	c.signV2(req, key)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("s3 get: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("s3 get %d: %s", resp.StatusCode, string(body))
+	}
+
+	return resp.Body, resp.Header.Get("Content-Type"), nil
+}
+
 func (c *S3Client) PresignedGetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	scheme := "http"
 	if c.useSSL {
