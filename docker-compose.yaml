@@ -6,43 +6,62 @@ networks:
         - subnet: 172.28.0.0/16
 
 volumes:
-  icebergdata:
-  ceph-data:
   postgres-data:
+  rustfs-data:
 
 services:
-  # STORAGE LAYER - Ceph RGW (S3-compatible, all-in-one demo)
-  # RGW listens on :8080 inside the container (exposed on host :8333).
-  # Static IP + MON_IP required by the demo entrypoint; hostname/alias "ceph"
-  # so the demo's internal s3cmd can resolve the RGW endpoint.
-  ceph:
-    image: quay.io/ceph/demo:latest
-    platform: linux/amd64
-    container_name: baleia_ceph
-    hostname: ceph
-    environment:
-      - MON_IP=172.28.0.10
-      - CEPH_PUBLIC_NETWORK=172.28.0.0/16
-      - RGW_NAME=ceph
-      - CEPH_DEMO_UID=baleia
-      - CEPH_DEMO_ACCESS_KEY=seaweedfs
-      - CEPH_DEMO_SECRET_KEY=seaweedfs
-      - CEPH_DEMO_BUCKET=baleia
+  # ============================================
+  # OBJECT STORAGE - RustFS (S3-compatible)
+  # ============================================
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: baleia_rustfs
+    hostname: rustfs
     ports:
-      - "8333:8080" # S3 API (host:container)
+      - "8333:9000"
+      - "9001:9001"
     volumes:
-      - ceph-data:/var/lib/ceph
+      - rustfs-data:/data
     networks:
       app_net:
         ipv4_address: 172.28.0.10
     healthcheck:
-      test:
-        ["CMD-SHELL", "curl -s -o /dev/null http://localhost:8080 || exit 1"]
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:9000/"]
       interval: 15s
       timeout: 10s
       retries: 20
+      start_period: 20s
+    restart: unless-stopped
 
-  # DATABASE - CockroachDB (single node dev)
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    container_name: baleia_rustfs_init
+    environment:
+      - AWS_ACCESS_KEY_ID=rustfsadmin
+      - AWS_SECRET_ACCESS_KEY=rustfsadmin
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for RustFS..."
+        until aws s3api --endpoint-url http://rustfs:9000 list-buckets 2>/dev/null; do
+          sleep 2
+        done
+        echo "Creating bucket 'baleia'..."
+        aws s3 mb s3://baleia --endpoint-url http://rustfs:9000 --region us-east-1
+        echo "Bucket created."
+    networks:
+      - app_net
+    depends_on:
+      rustfs:
+        condition: service_started
+    restart: "no"
+
+  # ============================================
+  # DATABASE LAYER
+  # ============================================
+
   postgres:
     image: postgres:18
     container_name: baleia_postgres
@@ -74,8 +93,11 @@ services:
       - PGPASSWORD=baleia
     command: >
       sh -c "psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE temporal;' 2>/dev/null || true"
-
     restart: on-failure
+
+  # ============================================
+  # TEMPORAL LAYER
+  # ============================================
 
   temporal:
     image: temporalio/auto-setup:latest
@@ -115,11 +137,13 @@ services:
     depends_on:
       - temporal
 
-  # ICEBERG CATALOG - Apache Polaris
+  # ============================================
+  # ICEBERG CATALOG - Polaris
+  # ============================================
+
   polaris:
-    image: apache/polaris:1.5.0
+    image: apache/polaris:1.6.0
     container_name: baleia_polaris
-    platform: linux/arm64
     ports:
       - "8181:8181"
       - "8182:8182"
@@ -129,23 +153,33 @@ services:
       - QUARKUS_HTTP_CORS_METHODS=GET,POST,PUT,DELETE,PATCH,OPTIONS
       - QUARKUS_HTTP_CORS_HEADERS=Content-Type,Authorization,Polaris-Realm,X-Request-ID
       - polaris.features."ALLOW_INSECURE_STORAGE_TYPES"=true
-      - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
-      - polaris.realm-context.realms=POLARIS
-      - polaris.readiness.ignore-severe-issues=true
       - polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES"=["FILE","S3","GCS","AZURE"]
-      - POLARIS_S3_ENDPOINT=http://ceph:8080
-      - POLARIS_S3_ACCESS_KEY=seaweedfs
-      - POLARIS_S3_SECRET_KEY=seaweedfs
+      - polaris.readiness.ignore-severe-issues=true
+      - polaris.realm-context.realms=POLARIS
+      - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
+      - polaris.authorization.enabled=false
+      - POLARIS_AUTHORIZATION_ENABLED=false
+      - polaris.auth.enabled=true
+      - polaris.auth.type=basic
+      - polaris.auth.basic.users=admin:admin
+      - polaris.auth.default-realm=POLARIS
+      - POLARIS_S3_ENDPOINT=http://rustfs:9000
+      - POLARIS_S3_ACCESS_KEY=rustfsadmin
+      - POLARIS_S3_SECRET_KEY=rustfsadmin
       - POLARIS_S3_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://rustfs:9000
       - AWS_REGION=us-east-1
       - AWS_DEFAULT_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=seaweedfs
-      - AWS_SECRET_ACCESS_KEY=seaweedfs
+      - AWS_ACCESS_KEY_ID=rustfsadmin
+      - AWS_SECRET_ACCESS_KEY=rustfsadmin
+      - JAVA_OPTS_APPEND=-Daws.s3UsePathStyle=true
+    extra_hosts:
+      - "baleia.rustfs:172.28.0.10"
     networks:
       - app_net
     depends_on:
-      ceph:
-        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8182/q/health || exit 1"]
       interval: 10s
@@ -161,20 +195,22 @@ services:
       - VITE_POLARIS_API_URL=http://localhost:8181
       - VITE_OAUTH_TOKEN_URL=http://localhost:8181/api/catalog/v1/oauth/tokens
       - VITE_POLARIS_REALM=POLARIS
+      - VITE_AUTH_TYPE=basic
     networks:
       - app_net
     depends_on:
       - polaris
 
+  # ============================================
   # QUERY ENGINE - Trino
+  # ============================================
+
   trino:
     image: trinodb/trino:latest
     container_name: baleia_trino
     ports:
       - "8088:8080"
     environment:
-      # Enable runtime CREATE CATALOG / DROP CATALOG (no static .properties, no restart).
-      # This is what lets Baleia register catalog_connections as Trino catalogs on the fly.
       - CATALOG_MANAGEMENT=dynamic
     volumes:
       - ./trino_catalog:/etc/trino/catalog
@@ -189,16 +225,35 @@ services:
       timeout: 5s
       retries: 5
 
+  # ============================================
+  # EMAIL - Mailpit
+  # ============================================
+
   mailpit:
     image: axllent/mailpit:latest
     container_name: baleia_mailpit
     ports:
-      - "1025:1025" # SMTP
-      - "8025:8025" # UI web
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - app_net
 
+  # ============================================
   # BALEA SERVICES
+  # ============================================
+
+  migrate:
+    build: .
+    container_name: baleia_migrate
+    environment:
+      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
+    command: sh -c "sleep 5 && /migrate -cmd=up"
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
 
   api:
     build: .
@@ -216,9 +271,9 @@ services:
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
       - SMTP_FROM=noreply@baleia.io
-      - S3_ENDPOINT=ceph:8080
-      - S3_ACCESS_KEY=seaweedfs
-      - S3_SECRET_KEY=seaweedfs
+      - S3_ENDPOINT=rustfs:9000
+      - S3_ACCESS_KEY=rustfsadmin
+      - S3_SECRET_KEY=rustfsadmin
       - S3_BUCKET=baleia
       - S3_USE_SSL=false
     command: /api
@@ -229,6 +284,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      polaris:
+        condition: service_healthy
 
   worker:
     build: .
@@ -238,9 +295,9 @@ services:
       - TEMPORAL_HOST=temporal:7233
       - TRINO_URL=http://trino:8080
       - POLARIS_URL=http://polaris:8181
-      - S3_ENDPOINT=ceph:8080
-      - S3_ACCESS_KEY=seaweedfs
-      - S3_SECRET_KEY=seaweedfs
+      - S3_ENDPOINT=rustfs:9000
+      - S3_ACCESS_KEY=rustfsadmin
+      - S3_SECRET_KEY=rustfsadmin
       - S3_BUCKET=baleia
       - S3_USE_SSL=false
     command: /worker
@@ -251,16 +308,5 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
-
-  migrate:
-    build: .
-    container_name: baleia_migrate
-    environment:
-      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
-    command: sh -c "sleep 5 && /migrate -cmd=up"
-    networks:
-      - app_net
-    depends_on:
-      postgres:
+      polaris:
         condition: service_healthy
-    restart: on-failure

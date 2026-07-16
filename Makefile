@@ -38,7 +38,10 @@ compose-up:
 	docker compose up -d --build
 
 compose-down:
-	docker compose down
+	docker compose rm -fsv
+	docker compose down -v
+	docker container prune -f
+	docker volume prune -f
 
 compose-logs:
 	docker compose logs -f api worker

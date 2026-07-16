@@ -137,7 +137,7 @@ func TestWebSocketStreamFinished(t *testing.T) {
 		},
 	}
 
-	handler := ws.New(mock, "test-secret", "ceph:8080", "key", "secret", "bucket", false)
+	handler := ws.New(mock, "test-secret", "rustfs:9000", "key", "secret", "bucket", false)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.SetPathValue("id", wsID)
@@ -206,7 +206,7 @@ func TestWebSocketWithStatements(t *testing.T) {
 		},
 	}
 
-	handler := ws.New(mock, "test-secret", "ceph:8080", "key", "secret", "bucket", false)
+	handler := ws.New(mock, "test-secret", "rustfs:9000", "key", "secret", "bucket", false)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.SetPathValue("id", wsID)

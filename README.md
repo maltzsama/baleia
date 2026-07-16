@@ -154,9 +154,9 @@ All settings are environment variables. Defaults work for local development with
 | `TRINO_URL` | `http://localhost:8088` | Trino coordinator REST endpoint |
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |
 | `PUBLIC_URL` | `http://localhost:8080` | Externally reachable URL (used for presigned links) |
-| `S3_ENDPOINT` | `localhost:8333` | S3-compatible storage endpoint (SeaweedFS/Ceph RGW) |
-| `S3_ACCESS_KEY` | `seaweedfs` | S3 access key |
-| `S3_SECRET_KEY` | `seaweedfs` | S3 secret key |
+| `S3_ENDPOINT` | `localhost:9000` | S3-compatible storage endpoint (RustFS) |
+| `S3_ACCESS_KEY` | `rustfsadmin` | S3 access key |
+| `S3_SECRET_KEY` | `rustfsadmin` | S3 secret key |
 | `S3_BUCKET` | `baleia` | S3 bucket for query results |
 | `S3_USE_SSL` | `false` | Enable TLS for S3 connections |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outbound email (password reset, invites) |
