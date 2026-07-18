@@ -186,20 +186,20 @@ services:
       timeout: 5s
       retries: 5
 
-  polaris-console:
-    image: maltzsama/polaris-console:latest
-    container_name: baleia_polaris_ui
-    ports:
-      - "4000:80"
-    environment:
-      - VITE_POLARIS_API_URL=http://localhost:8181
-      - VITE_OAUTH_TOKEN_URL=http://localhost:8181/api/catalog/v1/oauth/tokens
-      - VITE_POLARIS_REALM=POLARIS
-      - VITE_AUTH_TYPE=basic
-    networks:
-      - app_net
-    depends_on:
-      - polaris
+  # polaris-console:
+  #   image: maltzsama/polaris-console:latest
+  #   container_name: baleia_polaris_ui
+  #   ports:
+  #     - "4000:80"
+  #   environment:
+  #     - VITE_POLARIS_API_URL=http://localhost:8181
+  #     - VITE_OAUTH_TOKEN_URL=http://localhost:8181/api/catalog/v1/oauth/tokens
+  #     - VITE_POLARIS_REALM=POLARIS
+  #     - VITE_AUTH_TYPE=basic
+  #   networks:
+  #     - app_net
+  #   depends_on:
+  #     - polaris
 
   # ============================================
   # QUERY ENGINE - Trino
