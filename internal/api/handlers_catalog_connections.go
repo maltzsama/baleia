@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 	"log/slog"
 	
 	catalog_connections "github.com/galileostudio/baleia/internal/catalog_connections"
 	"github.com/galileostudio/baleia/internal/crypto"
-
+	"github.com/google/uuid"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
@@ -19,12 +21,13 @@ import (
 )
 
 func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
-	role := auth.RoleFromContext(ctx)
-	if role != "admin" {
-		return ListCatalogConnections403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+	userID := auth.UserIDFromContext(ctx)
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 
-	conns, err := h.queries.ListCatalogConnections(ctx)
+	conns, err := h.queries.ListCatalogConnections(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -37,9 +40,10 @@ func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatal
 }
 
 func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error) {
-	role := auth.RoleFromContext(ctx)
-	if role != "admin" {
-		return CreateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+	userID := auth.UserIDFromContext(ctx)
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return CreateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 
 	var credsEnc *string
@@ -99,13 +103,74 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 		Url:             request.Body.Url,
 		CredentialsEnc:  credsEnc,
 		DefaultReadonly: defaultReadonly,
+		CreatedBy:       uid,
 	})
 	if err != nil {
 		slog.Error("CreateCatalogConnection failed", "err", err)
 		return nil, err
 	}
 
+	if conn.Type == "postgresql" || conn.Type == "mysql" {
+		cat := h.createSQLCatalog(ctx, conn)
+		if cat != nil {
+			ws := h.ensurePersonalWorkspace(ctx, uid)
+			if ws != nil {
+				_, err := h.queries.GrantCatalogAccess(ctx, db.GrantCatalogAccessParams{
+					WorkspaceID: ws.ID,
+					CatalogID:   cat.ID,
+					Permission:  "read",
+					GrantedBy:   uid,
+				})
+				if err != nil {
+					slog.Warn("auto-grant catalog failed", "err", err, "catalog", cat.ID.String(), "workspace", ws.ID.String())
+				}
+			}
+		}
+	}
+
 	return CreateCatalogConnection201JSONResponse(dbCatalogConnectionToPublic(conn)), nil
+}
+
+func (h *Handlers) createSQLCatalog(ctx context.Context, conn db.CatalogConnection) *db.Catalog {
+	catalogName := extractDBName(conn.Url)
+	if catalogName == "" {
+		catalogName = conn.Name
+	}
+
+	cat, err := h.queries.CreateCatalog(ctx, db.CreateCatalogParams{
+		ConnectionID: conn.ID,
+		Name:         catalogName,
+	})
+	if err != nil {
+		slog.Warn("auto-create catalog failed (DB)", "err", err, "conn", conn.ID.String())
+		return nil
+	}
+
+	props := h.trinoCatalogProperties(conn.Type, conn.Url, conn.CredentialsEnc, catalogName)
+	if props != nil {
+		if err := h.trino.CreateCatalog(ctx, trino_client.CatalogParams{
+			Name:       catalogName,
+			Connector:  trinoConnector(conn.Type),
+			Properties: props,
+		}); err != nil {
+			slog.Warn("auto-create catalog failed (Trino)", "err", err, "conn", conn.ID.String(), "catalog", catalogName)
+		}
+	}
+
+	return &cat
+}
+
+func extractDBName(rawURL string) string {
+	s := strings.TrimPrefix(rawURL, "jdbc:")
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimPrefix(u.Path, "/")
+	if idx := strings.IndexByte(name, '?'); idx >= 0 {
+		name = name[:idx]
+	}
+	return name
 }
 
 func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
@@ -130,18 +195,23 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 }
 
 func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
-	role := auth.RoleFromContext(ctx)
-	if role != "admin" {
-		return UpdateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+	userID := auth.UserIDFromContext(ctx)
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return UpdateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 
-	var uid pgtype.UUID
-	uid.Bytes = request.Id
-	uid.Valid = true
+	var connID pgtype.UUID
+	connID.Bytes = request.Id
+	connID.Valid = true
 
-	current, err := h.queries.GetCatalogConnectionByID(ctx, uid)
+	current, err := h.queries.GetCatalogConnectionByID(ctx, connID)
 	if err != nil {
 		return UpdateCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+	}
+
+	if current.CreatedBy.Valid && current.CreatedBy.Bytes != uid.Bytes {
+		return UpdateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not your connection"}}, nil
 	}
 
 	name := current.Name
@@ -168,7 +238,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	}
 
 	conn, err := h.queries.UpdateCatalogConnection(ctx, db.UpdateCatalogConnectionParams{
-		ID:              uid,
+		ID:              connID,
 		Name:            name,
 		Url:             url,
 		CredentialsEnc:  credsEnc,
@@ -182,21 +252,26 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 }
 
 func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {
-	role := auth.RoleFromContext(ctx)
-	if role != "admin" {
-		return DeleteCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+	userID := auth.UserIDFromContext(ctx)
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return DeleteCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 
-	var uid pgtype.UUID
-	uid.Bytes = request.Id
-	uid.Valid = true
+	var connID pgtype.UUID
+	connID.Bytes = request.Id
+	connID.Valid = true
 
-	_, err := h.queries.GetCatalogConnectionByID(ctx, uid)
+	current, err := h.queries.GetCatalogConnectionByID(ctx, connID)
 	if err != nil {
 		return DeleteCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	if err := h.queries.DeleteCatalogConnection(ctx, uid); err != nil {
+	if current.CreatedBy.Valid && current.CreatedBy.Bytes != uid.Bytes {
+		return DeleteCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not your connection"}}, nil
+	}
+
+	if err := h.queries.DeleteCatalogConnection(ctx, connID); err != nil {
 		return nil, err
 	}
 
@@ -214,6 +289,11 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
     }
 
     start := time.Now()
+
+    if conn.Type == "postgresql" || conn.Type == "mysql" {
+        return h.testSQLViaTrino(ctx, conn, start)
+    }
+
     var rawCreds *string
     if conn.CredentialsEnc != nil {
         b := crypto.TryDecrypt(*conn.CredentialsEnc, h.cfg.JWTSecret)
@@ -249,7 +329,77 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
     }, nil
 }
 
+func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnection, start time.Time) (TestCatalogConnectionResponseObject, error) {
+    testName := "baleia_test_" + uuid.NewString()[:8]
+
+    props := h.trinoCatalogProperties(conn.Type, conn.Url, conn.CredentialsEnc, testName)
+    if props == nil {
+        errMsg := "failed to build catalog properties"
+        return TestCatalogConnection200JSONResponse{
+            Success: false, LatencyMs: 0, Error: &errMsg,
+        }, nil
+    }
+
+    err := h.trino.CreateCatalog(ctx, trino_client.CatalogParams{
+        Name:       testName,
+        Connector:  trinoConnector(conn.Type),
+        Properties: props,
+    })
+    if err != nil {
+        errMsg := err.Error()
+        return TestCatalogConnection200JSONResponse{
+            Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg,
+        }, nil
+    }
+
+    defer h.trino.Execute(ctx, "DROP CATALOG IF EXISTS "+testName, "", "")
+
+    _, err = h.trino.Execute(ctx, "SHOW SCHEMAS FROM "+testName, testName, "")
+    if err != nil {
+        errMsg := err.Error()
+        return TestCatalogConnection200JSONResponse{
+            Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg,
+        }, nil
+    }
+
+    latencyMs := int(time.Since(start).Milliseconds())
+    v := conn.Type
+    return TestCatalogConnection200JSONResponse{
+        Success: true, LatencyMs: latencyMs, Version: &v,
+    }, nil
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+func (h *Handlers) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
+	workspaces, err := h.queries.ListWorkspacesByUser(ctx, userID)
+	if err == nil {
+		for _, w := range workspaces {
+			if w.Type == "personal" && w.OwnerUserID.Valid && w.OwnerUserID.Bytes == userID.Bytes {
+				return &w
+			}
+		}
+	}
+
+	polarisName := fmt.Sprintf("personal_%x_%d", userID.Bytes[:8], time.Now().UnixMilli()%10000)
+
+	wsName := "Personal"
+	if user, err := h.queries.GetUserByID(ctx, userID); err == nil && user.Name != "" {
+		wsName = user.Name + " - workspace"
+	}
+
+	ws, err := h.queries.CreateWorkspace(ctx, db.CreateWorkspaceParams{
+		Name:               wsName,
+		Type:               "personal",
+		PolarisCatalogName: polarisName,
+		OwnerUserID:        userID,
+	})
+	if err != nil {
+		slog.Warn("auto-create personal workspace failed", "err", err)
+		return nil
+	}
+	return &ws
+}
 
 func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 	id := openapi_types.UUID(c.ID.Bytes)
@@ -687,12 +837,12 @@ func (h *Handlers) trinoCatalogProperties(connType, url string, credsEnc *string
 		props := map[string]string{
 			"connection-url": url,
 		}
-		if credsEnc != nil {
+		if credsBytes != nil {
 			var creds struct {
 				Username string `json:"username"`
 				Password string `json:"password"`
 			}
-			if err := json.Unmarshal([]byte(*credsEnc), &creds); err == nil {
+			if err := json.Unmarshal(credsBytes, &creds); err == nil {
 				props["connection-user"] = creds.Username
 				props["connection-password"] = creds.Password
 			}

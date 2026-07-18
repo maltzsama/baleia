@@ -12,17 +12,18 @@ import (
 )
 
 const createCatalogConnection = `-- name: CreateCatalogConnection :one
-INSERT INTO catalog_connections (name, type, url, credentials_enc, default_readonly)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port
+INSERT INTO catalog_connections (name, type, url, credentials_enc, default_readonly, created_by)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by
 `
 
 type CreateCatalogConnectionParams struct {
-	Name            string  `json:"name"`
-	Type            string  `json:"type"`
-	Url             string  `json:"url"`
-	CredentialsEnc  *string `json:"credentials_enc"`
-	DefaultReadonly bool    `json:"default_readonly"`
+	Name            string      `json:"name"`
+	Type            string      `json:"type"`
+	Url             string      `json:"url"`
+	CredentialsEnc  *string     `json:"credentials_enc"`
+	DefaultReadonly bool        `json:"default_readonly"`
+	CreatedBy       pgtype.UUID `json:"created_by"`
 }
 
 func (q *Queries) CreateCatalogConnection(ctx context.Context, arg CreateCatalogConnectionParams) (CatalogConnection, error) {
@@ -32,6 +33,7 @@ func (q *Queries) CreateCatalogConnection(ctx context.Context, arg CreateCatalog
 		arg.Url,
 		arg.CredentialsEnc,
 		arg.DefaultReadonly,
+		arg.CreatedBy,
 	)
 	var i CatalogConnection
 	err := row.Scan(
@@ -45,6 +47,7 @@ func (q *Queries) CreateCatalogConnection(ctx context.Context, arg CreateCatalog
 		&i.UpdatedAt,
 		&i.Host,
 		&i.Port,
+		&i.CreatedBy,
 	)
 	return i, err
 }
@@ -83,7 +86,7 @@ func (q *Queries) GetCatalogAccess(ctx context.Context, arg GetCatalogAccessPara
 }
 
 const getCatalogConnectionByID = `-- name: GetCatalogConnectionByID :one
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port FROM catalog_connections WHERE id = $1
+SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by FROM catalog_connections WHERE id = $1
 `
 
 func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error) {
@@ -100,6 +103,7 @@ func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) 
 		&i.UpdatedAt,
 		&i.Host,
 		&i.Port,
+		&i.CreatedBy,
 	)
 	return i, err
 }
@@ -198,11 +202,11 @@ func (q *Queries) ListCatalogAccessByWorkspace(ctx context.Context, workspaceID 
 }
 
 const listCatalogConnections = `-- name: ListCatalogConnections :many
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port FROM catalog_connections ORDER BY name
+SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by FROM catalog_connections WHERE created_by = $1 ORDER BY name
 `
 
-func (q *Queries) ListCatalogConnections(ctx context.Context) ([]CatalogConnection, error) {
-	rows, err := q.db.Query(ctx, listCatalogConnections)
+func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error) {
+	rows, err := q.db.Query(ctx, listCatalogConnections, createdBy)
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +225,7 @@ func (q *Queries) ListCatalogConnections(ctx context.Context) ([]CatalogConnecti
 			&i.UpdatedAt,
 			&i.Host,
 			&i.Port,
+			&i.CreatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -251,7 +256,7 @@ const updateCatalogConnection = `-- name: UpdateCatalogConnection :one
 UPDATE catalog_connections
 SET name = $2, url = $3, credentials_enc = $4, default_readonly = $5, updated_at = now()
 WHERE id = $1
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port
+RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by
 `
 
 type UpdateCatalogConnectionParams struct {
@@ -282,6 +287,7 @@ func (q *Queries) UpdateCatalogConnection(ctx context.Context, arg UpdateCatalog
 		&i.UpdatedAt,
 		&i.Host,
 		&i.Port,
+		&i.CreatedBy,
 	)
 	return i, err
 }

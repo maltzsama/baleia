@@ -47,6 +47,7 @@ type CatalogConnection struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	Host            *string            `json:"host"`
 	Port            *string            `json:"port"`
+	CreatedBy       pgtype.UUID        `json:"created_by"`
 }
 
 type ClusterSnapshot struct {

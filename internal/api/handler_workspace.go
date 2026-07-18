@@ -173,11 +173,6 @@ func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListW
 }
 
 func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error) {
-	role := auth.RoleFromContext(ctx)
-	if role != "admin" {
-		return GrantCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
-	}
-
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return GrantCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "workspace not found"}}, nil
 	}
@@ -222,11 +217,6 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
 }
 
 func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error) {
-	role := auth.RoleFromContext(ctx)
-	if role != "admin" {
-		return RevokeCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
-	}
-
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
 	}

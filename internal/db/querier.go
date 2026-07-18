@@ -65,7 +65,7 @@ type Querier interface {
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	ListCatalogAccessByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogAccessByWorkspaceRow, error)
-	ListCatalogConnections(ctx context.Context) ([]CatalogConnection, error)
+	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error)
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
