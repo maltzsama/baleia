@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	const token = localStorage.getItem('token') || '';
 	let connections = $state<any[]>([]);
@@ -15,6 +16,9 @@
 		client_id: '', client_secret: '',
 		username: '', password: '',
 	});
+	let testStatus = $state<'idle' | 'testing' | 'success' | 'fail'>('idle');
+	let testMessage = $state('');
+	let verifiedId = $state('');
 
 	const engineLabels: Record<string, string> = {
 		polaris: 'Polaris', nessie: 'Nessie', iceberg: 'Iceberg',
@@ -67,22 +71,36 @@
 			}
 		} catch {}
 	}
-	function closeModal() { modalOpen = false; }
+	function closeModal() { modalOpen = false; testStatus = 'idle'; testMessage = ''; verifiedId = ''; }
+
+	function isFormValid() {
+		if (!form.name) return false;
+		if (isSqlType()) {
+			if (!form.host || !form.database || !form.username || !form.password) return false;
+		} else if (isIcebergType()) {
+			if (!form.url || !form.client_id || !form.client_secret) return false;
+		} else {
+			if (!form.url) return false;
+		}
+		return true;
+	}
 
 	function isSqlType() { return form.type === 'postgresql' || form.type === 'mysql'; }
 	function isIcebergType() { return ['polaris', 'nessie', 'iceberg'].includes(form.type); }
 	const showIcebergCreds = $derived(isIcebergType());
 	const showSqlCreds = $derived(isSqlType());
 
-	async function saveConnection() {
-		let connUrl = form.url;
+	function buildConnUrl() {
 		if (isSqlType()) {
 			const db = form.database || 'postgres';
-			connUrl = `jdbc:${form.type}://${form.host || 'localhost'}:${form.port || (form.type === 'postgresql' ? '5432' : '3306')}/${db}`;
+			return `jdbc:${form.type}://${form.host || 'localhost'}:${form.port || (form.type === 'postgresql' ? '5432' : '3306')}/${db}`;
 		}
+		return form.url;
+	}
+
+	function buildConnBody(connUrl: string) {
 		const body: any = { name: form.name, type: form.type, url: connUrl, default_readonly: false };
 		if (editingId) {
-			body.url = connUrl;
 			if (isIcebergType() || isSqlType()) {
 				const creds: any = {};
 				if (isIcebergType()) { creds.client_id = form.client_id; creds.client_secret = form.client_secret; }
@@ -99,10 +117,70 @@
 				else body.mysql_credentials = creds;
 			}
 		}
+		return body;
+	}
+
+	async function testConnection() {
+		testStatus = 'testing';
+		testMessage = '';
+		verifiedId = '';
+
+		const connUrl = buildConnUrl();
+		const body = buildConnBody(connUrl);
+		const method = editingId ? 'PATCH' : 'POST';
+		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
+
+		try {
+			const saveRes = await fetch(apiUrl, {
+				method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify(body)
+			});
+			if (!saveRes.ok) {
+				testStatus = 'fail';
+				testMessage = `Save failed (HTTP ${saveRes.status})`;
+				return;
+			}
+
+			const saved = await saveRes.json();
+			const testId = saved.id || editingId;
+
+			const testRes = await fetch(`/api/v1/catalog-connections/${testId}/test`, {
+				method: 'POST', headers: { Authorization: `Bearer ${token}` }
+			});
+			const testResult = await testRes.json();
+
+			if (testResult.success) {
+				testStatus = 'success';
+				testMessage = '';
+				verifiedId = testId;
+			} else {
+				testStatus = 'fail';
+				testMessage = testResult.error || 'Connection test failed';
+				if (!editingId) {
+					await fetch(`/api/v1/catalog-connections/${testId}`, {
+						method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
+					});
+				}
+			}
+		} catch (e: any) {
+			testStatus = 'fail';
+			testMessage = e.message || 'Connection error';
+		}
+	}
+
+	async function saveConnection() {
+		if (verifiedId) {
+			closeModal();
+			loadConnections();
+			workspaceStore.load();
+			return;
+		}
+		const connUrl = buildConnUrl();
+		const body = buildConnBody(connUrl);
 		const method = editingId ? 'PATCH' : 'POST';
 		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
 		await fetch(apiUrl, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
-		closeModal(); loadConnections();
+		closeModal(); loadConnections(); workspaceStore.load();
 	}
 
 	async function deleteConnection() {
@@ -232,10 +310,27 @@
 				{/if}
 			</div>
 			<div class="modal-footer flex items-center justify-between px-5 py-3.5 border-t border-border">
-				<span></span>
+				<div>
+					{#if testStatus === 'testing'}
+						<span class="text-xs text-text-muted">Testing connection…</span>
+					{:else if testStatus === 'success'}
+						<span class="text-xs text-green-600 font-medium">✓ Connection successful</span>
+					{:else if testStatus === 'fail'}
+						<span class="text-xs text-red-600 font-medium">✗ {testMessage}</span>
+					{/if}
+				</div>
 				<div class="flex gap-1.5">
+					<button class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer transition-colors duration-150 hover:border-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+						onclick={testConnection}
+						disabled={testStatus === 'testing' || !isFormValid()}>
+						{testStatus === 'testing' ? 'Testing…' : 'Test Connection'}
+					</button>
 					<button class="btn-cancel h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer transition-colors duration-150 hover:border-border-hover hover:text-text-main" onclick={closeModal}>Cancel</button>
-					<button class="btn-save flex items-center gap-1.5 h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer transition-colors duration-150 hover:bg-primary-hover" onclick={saveConnection}>Save</button>
+					<button class="btn-save flex items-center gap-1.5 h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer transition-colors duration-150 hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed"
+						onclick={saveConnection}
+						disabled={!editingId && testStatus !== 'success'}>
+						{editingId ? (testStatus === 'success' ? 'Save' : 'Save anyway') : (testStatus === 'success' ? 'Create' : 'Save anyway')}
+					</button>
 				</div>
 			</div>
 		</div>

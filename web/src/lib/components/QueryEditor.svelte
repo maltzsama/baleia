@@ -10,6 +10,7 @@
 	import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 	import { format as formatSQLFormatter } from 'sql-formatter';
 	import { tableFromIPC } from 'apache-arrow';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	type Tab = { id: string; name: string; sql: string; savedId: string | null;
 		results: any[]; columns: string[]; rowCount: number; durationMs: number; errorMsg: string; statusText: string; page: number; };
@@ -29,7 +30,7 @@
 	const activeTab = $derived(tabs[activeIdx]);
 	let tabCounter = $state(2);
 	const apiBase = '/api/v1';
-	let workspaceId = $state('');
+	const workspaceId = $derived(workspaceStore.current?.id || '');
 	const token = localStorage.getItem('token') || '';
 	let saveModalOpen = $state(false);
 	let saveName = $state('');
@@ -67,16 +68,7 @@
 	}
 
 	onMount(async () => {
-		if (!workspaceId) {
-			try {
-				const res = await fetch(`${apiBase}/workspaces`, { headers: { Authorization: `Bearer ${token}` } });
-				if (res.ok) {
-					const w = await res.json();
-					if (w.length > 0) workspaceId = w[0].id;
-				}
-			} catch {}
-		}
-
+		await workspaceStore.load();
 		const observer = new MutationObserver(() => {
 			dark = document.body.classList.contains('dark');
 		});
@@ -184,11 +176,23 @@
 		if (!saveName.trim() || !workspaceId) return;
 		try {
 			const sql = editorView.state.doc.toString();
-			await fetch(`${apiBase}/workspaces/${workspaceId}/queries`, {
-				method: 'POST',
+			const savedId = tabs[activeIdx].savedId;
+			const method = savedId ? 'PATCH' : 'POST';
+			const url = savedId
+				? `${apiBase}/workspaces/${workspaceId}/queries/${savedId}`
+				: `${apiBase}/workspaces/${workspaceId}/queries`;
+			const res = await fetch(url, {
+				method,
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
 				body: JSON.stringify({ name: saveName.trim(), sql })
 			});
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				tabs[activeIdx].errorMsg = body.message || body.error || 'Save failed';
+				return;
+			}
+			const saved = await res.json();
+			tabs[activeIdx].savedId = saved.id;
 			tabs[activeIdx].name = saveName.trim();
 			saveModalOpen = false; saveName = '';
 			window.dispatchEvent(new CustomEvent('query-saved'));
@@ -198,29 +202,28 @@
 	async function catalogAutocomplete(context: CompletionContext) {
 		const word = context.matchBefore(/\w+/);
 		if (!word || word.from === word.to) return null;
+		const wid = workspaceStore.current?.id;
+		if (!wid) return null;
 		try {
-			const connRes = await fetch(`${apiBase}/catalog-connections`, { headers: { Authorization: `Bearer ${token}` } });
-			if (!connRes.ok) return null;
-			const cons = await connRes.json();
-			if (!cons.length) return null;
-			const cid = cons[0].id;
-			const catRes = await fetch(`${apiBase}/connections/${cid}/catalogs`, { headers: { Authorization: `Bearer ${token}` } });
-			if (!catRes.ok) return null;
-			const catalogs = await catRes.json();
-			if (!catalogs.length) return null;
+			const accRes = await fetch(`${apiBase}/workspaces/${wid}/catalog-access`, { headers: { Authorization: `Bearer ${token}` } });
+			if (!accRes.ok) return null;
+			const access: any[] = await accRes.json();
+			if (!access.length) return null;
 			const options: any[] = [];
-			for (const cat of catalogs.slice(0, 3)) {
+			for (const item of access.slice(0, 3)) {
+				const catId = item.catalog_id;
+				const catName = item.catalog_name;
 				try {
-					const nsRes = await fetch(`${apiBase}/catalogs/${cat.id}/namespaces`, { headers: { Authorization: `Bearer ${token}` } });
+					const nsRes = await fetch(`${apiBase}/catalogs/${catId}/namespaces`, { headers: { Authorization: `Bearer ${token}` } });
 					if (!nsRes.ok) continue;
 					const nss: string[][] = await nsRes.json();
 					for (const ns of nss.slice(0, 3)) {
 						const nsName = ns.join('.');
 						try {
-							const tRes = await fetch(`${apiBase}/catalogs/${cat.id}/namespaces/${nsName}/tables`, { headers: { Authorization: `Bearer ${token}` } });
+							const tRes = await fetch(`${apiBase}/catalogs/${catId}/namespaces/${nsName}/tables`, { headers: { Authorization: `Bearer ${token}` } });
 							if (!tRes.ok) continue;
 							const tables = await tRes.json();
-							for (const t of tables) options.push({ label: `${cat.name}.${nsName}.${t.name}`, type: 'table' });
+							for (const t of tables) options.push({ label: `${catName}.${nsName}.${t.name}`, type: 'table' });
 						} catch {}
 					}
 				} catch {}

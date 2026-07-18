@@ -4,9 +4,9 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	let { children } = $props();
-	let datasource = $state('polaris-prod');
 	let dark = $state(browser && localStorage.getItem('theme') === 'dark');
 
 	$effect(() => {
@@ -15,15 +15,16 @@
 		localStorage.setItem('theme', dark ? 'dark' : 'light');
 	});
 
-	onMount(() => {
+	onMount(async () => {
 		authStore.load();
+		await workspaceStore.load();
 	});
 </script>
 
 <div class="h-screen flex overflow-hidden">
 	<GlobalNav {dark} onToggleDark={() => dark = !dark} />
 	<div class="flex-1 flex flex-col overflow-hidden">
-		<Header {datasource} onChangeDatasource={(ds) => datasource = ds} onToggleDark={() => dark = !dark} {dark} />
+		<Header onToggleDark={() => dark = !dark} {dark} />
 		{@render children()}
 	</div>
 </div>

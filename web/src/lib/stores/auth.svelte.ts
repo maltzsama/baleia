@@ -45,6 +45,23 @@ function createAuthStore() {
     user = null;
   }
 
+  async function logout() {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (refreshToken) {
+      try {
+        await fetch('/api/v1/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+      } catch { /* fallback */ }
+    }
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    clear();
+    window.location.href = '/login';
+  }
+
   return {
     get user() {
       return user;
@@ -58,6 +75,7 @@ function createAuthStore() {
     load,
     set,
     clear,
+    logout,
   };
 }
 

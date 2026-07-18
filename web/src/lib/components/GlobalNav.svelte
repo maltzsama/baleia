@@ -4,10 +4,38 @@
 
 	let { dark, onToggleDark }: { dark: boolean; onToggleDark: () => void } = $props();
 
+	let menuOpen = $state(false);
+
 	function isActive(path: string): boolean {
 		if (path === '/') return $page.url.pathname === '/';
 		return $page.url.pathname.startsWith(path);
 	}
+
+	function toggleMenu() {
+		menuOpen = !menuOpen;
+	}
+
+	function handleClickOutside(e: MouseEvent) {
+		const target = e.target as HTMLElement;
+		if (!target.closest('[data-avatar-menu]')) {
+			menuOpen = false;
+		}
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') menuOpen = false;
+	}
+
+	$effect(() => {
+		if (menuOpen) {
+			document.addEventListener('click', handleClickOutside);
+			document.addEventListener('keydown', handleKeydown);
+			return () => {
+				document.removeEventListener('click', handleClickOutside);
+				document.removeEventListener('keydown', handleKeydown);
+			};
+		}
+	});
 </script>
 
 <nav class="w-[52px] bg-brand-dark flex flex-col items-center py-3 justify-between z-10 shrink-0">
@@ -41,9 +69,28 @@
 		</a>
 	</div>
 
-	<a href="/profile"
-		title={authStore.user?.name ?? ''}
-		class="w-[30px] h-[30px] rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-200 no-underline">
-		{authStore.initials}
-	</a>
+	<div data-avatar-menu class="relative">
+		<button
+			onclick={toggleMenu}
+			title={authStore.user?.name ?? ''}
+			class="w-[30px] h-[30px] rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-200 no-underline border-none cursor-pointer">
+			{authStore.initials}
+		</button>
+		{#if menuOpen}
+			<div class="absolute bottom-full left-0 mb-2 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50">
+				<a href="/profile"
+					onclick={() => menuOpen = false}
+					class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-slate-200 no-underline transition-colors duration-150 hover:bg-slate-700">
+					<svg viewBox="0 0 24 24" class="w-4 h-4"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+					Profile
+				</a>
+				<button
+					onclick={authStore.logout}
+					class="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[13px] text-slate-200 transition-colors duration-150 hover:bg-slate-700 border-none bg-transparent cursor-pointer text-left">
+					<svg viewBox="0 0 24 24" class="w-4 h-4"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+					Logout
+				</button>
+			</div>
+		{/if}
+	</div>
 </nav>
