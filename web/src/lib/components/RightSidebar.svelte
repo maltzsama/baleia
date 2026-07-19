@@ -6,7 +6,7 @@
 
 	let { collapsed = $bindable(true), selectedTable }: {
 		collapsed?: boolean;
-		selectedTable?: {catalog: string, namespace: string, table: string} | null;
+		selectedTable?: {connectionId: string, catalog: string, namespace: string, table: string} | null;
 	} = $props();
 
 	let columns = $state<any[]>([]);
@@ -23,7 +23,7 @@
 		if (!selectedTable) return;
 		loading = true;
 		try {
-			const res = await fetch(`${apiBase}/catalogs/${selectedTable.catalog}/namespaces/${selectedTable.namespace}/tables/${selectedTable.table}/columns`, {
+			const res = await fetch(`${apiBase}/connections/${selectedTable.connectionId}/catalogs/${selectedTable.catalog}/namespaces/${selectedTable.namespace}/tables/${selectedTable.table}/columns`, {
 				headers: { Authorization: `Bearer ${token}` }
 			});
 			if (res.ok) {

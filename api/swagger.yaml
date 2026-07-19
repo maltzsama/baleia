@@ -393,6 +393,7 @@ components:
         type:             { type: string, enum: [polaris, nessie, glue, hive, iceberg, postgresql, mysql] }
         url: { type: string }
         default_readonly: { type: boolean, default: true }
+        credentials: { type: object }
         polaris_credentials:
           $ref: "#/components/schemas/PolarisCredentials"
         nessie_credentials:

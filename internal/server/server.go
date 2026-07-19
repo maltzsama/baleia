@@ -77,6 +77,15 @@ func (s *Server) routes() {
 		r.Use(RateLimitRefreshMiddleware(s.rl))
 		baleiaapi.HandlerFromMux(strictHandler, r)
 		baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg.JWTSecret, temporalClient)
+
+		// Dynamic catalog browsing (non-oapi routes, auth via chi middleware)
+		r.Group(func(r chi.Router) {
+			r.Use(chiAuthMiddleware(s.cfg.JWTSecret))
+			r.Get("/workspaces/{id}/catalogs", h.ListWorkspaceCatalogs)
+			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", h.HandleListNamespaces)
+			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", h.HandleListTables)
+			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables/{table}/columns", h.HandleListColumns)
+		})
 	})
 
 	fileServer := http.FileServer(http.Dir("web/build"))
@@ -155,6 +164,30 @@ func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
 			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
 			return f(ctx, w, r, args)
 		}
+	}
+}
+
+func chiAuthMiddleware(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := extractToken(r)
+			if token == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"code":"unauthorized","message":"missing token"}`))
+				return
+			}
+			claims, err := auth.ParseToken(token, secret)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"code":"unauthorized","message":"invalid token"}`))
+				return
+			}
+			ctx := context.WithValue(r.Context(), auth.ContextKeyUserID, claims.UserID)
+			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
 }
 

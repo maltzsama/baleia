@@ -27,15 +27,6 @@ type AuthProvider struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-type Catalog struct {
-	ID           pgtype.UUID        `json:"id"`
-	ConnectionID pgtype.UUID        `json:"connection_id"`
-	Name         string             `json:"name"`
-	Description  *string            `json:"description"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-}
-
 type CatalogConnection struct {
 	ID              pgtype.UUID        `json:"id"`
 	Name            string             `json:"name"`
@@ -266,11 +257,4 @@ type Workspace struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
-type WorkspaceCatalogAccess struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	CatalogID   pgtype.UUID        `json:"catalog_id"`
-	Permission  string             `json:"permission"`
-	GrantedBy   pgtype.UUID        `json:"granted_by"`
-	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
-}
+

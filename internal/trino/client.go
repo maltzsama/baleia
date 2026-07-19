@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -21,7 +22,7 @@ func New(baseURL, user string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		user:    user,
-		http:    &http.Client{},
+		http:    &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
@@ -110,8 +111,7 @@ func (c *Client) CreateIcebergCatalog(ctx context.Context, p IcebergCatalogParam
 	"iceberg.rest-catalog.security" = 'OAUTH2',
 	"iceberg.rest-catalog.oauth2.credential" = '%s',
 	"iceberg.rest-catalog.oauth2.scope" = '%s',
-	"iceberg.rest-catalog.vended-credentials-enabled" = 'true',
-	"fs.native-s3.enabled" = 'true'
+	"iceberg.rest-catalog.vended-credentials-enabled" = 'true'
 )`, p.Name, p.RestURI, p.Warehouse, p.Credential, scope)
 
 	if _, err := c.Execute(ctx, ddl, "", ""); err != nil {

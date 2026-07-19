@@ -61,30 +61,6 @@ func (q *Queries) DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) e
 	return err
 }
 
-const getCatalogAccess = `-- name: GetCatalogAccess :one
-SELECT id, workspace_id, catalog_id, permission, granted_by, granted_at FROM workspace_catalog_access
-WHERE workspace_id = $1 AND catalog_id = $2
-`
-
-type GetCatalogAccessParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	CatalogID   pgtype.UUID `json:"catalog_id"`
-}
-
-func (q *Queries) GetCatalogAccess(ctx context.Context, arg GetCatalogAccessParams) (WorkspaceCatalogAccess, error) {
-	row := q.db.QueryRow(ctx, getCatalogAccess, arg.WorkspaceID, arg.CatalogID)
-	var i WorkspaceCatalogAccess
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.CatalogID,
-		&i.Permission,
-		&i.GrantedBy,
-		&i.GrantedAt,
-	)
-	return i, err
-}
-
 const getCatalogConnectionByID = `-- name: GetCatalogConnectionByID :one
 SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by FROM catalog_connections WHERE id = $1
 `
@@ -106,99 +82,6 @@ func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) 
 		&i.CreatedBy,
 	)
 	return i, err
-}
-
-const grantCatalogAccess = `-- name: GrantCatalogAccess :one
-INSERT INTO workspace_catalog_access (workspace_id, catalog_id, permission, granted_by)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (workspace_id, catalog_id)
-DO UPDATE SET permission = $3, granted_by = $4, granted_at = now()
-RETURNING id, workspace_id, catalog_id, permission, granted_by, granted_at
-`
-
-type GrantCatalogAccessParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	CatalogID   pgtype.UUID `json:"catalog_id"`
-	Permission  string      `json:"permission"`
-	GrantedBy   pgtype.UUID `json:"granted_by"`
-}
-
-func (q *Queries) GrantCatalogAccess(ctx context.Context, arg GrantCatalogAccessParams) (WorkspaceCatalogAccess, error) {
-	row := q.db.QueryRow(ctx, grantCatalogAccess,
-		arg.WorkspaceID,
-		arg.CatalogID,
-		arg.Permission,
-		arg.GrantedBy,
-	)
-	var i WorkspaceCatalogAccess
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.CatalogID,
-		&i.Permission,
-		&i.GrantedBy,
-		&i.GrantedAt,
-	)
-	return i, err
-}
-
-const listCatalogAccessByWorkspace = `-- name: ListCatalogAccessByWorkspace :many
-SELECT wca.id, wca.workspace_id, wca.catalog_id, wca.permission, wca.granted_by, wca.granted_at, c.name AS catalog_name, c.connection_id, cc.name AS connection_name, cc.type AS connection_type, cc.url AS connection_url, cc.host, cc.port
-FROM workspace_catalog_access wca
-JOIN catalogs c ON c.id = wca.catalog_id
-JOIN catalog_connections cc ON cc.id = c.connection_id
-WHERE wca.workspace_id = $1
-ORDER BY c.name
-`
-
-type ListCatalogAccessByWorkspaceRow struct {
-	ID             pgtype.UUID        `json:"id"`
-	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	CatalogID      pgtype.UUID        `json:"catalog_id"`
-	Permission     string             `json:"permission"`
-	GrantedBy      pgtype.UUID        `json:"granted_by"`
-	GrantedAt      pgtype.Timestamptz `json:"granted_at"`
-	CatalogName    string             `json:"catalog_name"`
-	ConnectionID   pgtype.UUID        `json:"connection_id"`
-	ConnectionName string             `json:"connection_name"`
-	ConnectionType string             `json:"connection_type"`
-	ConnectionUrl  string             `json:"connection_url"`
-	Host           *string            `json:"host"`
-	Port           *string            `json:"port"`
-}
-
-func (q *Queries) ListCatalogAccessByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogAccessByWorkspaceRow, error) {
-	rows, err := q.db.Query(ctx, listCatalogAccessByWorkspace, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListCatalogAccessByWorkspaceRow
-	for rows.Next() {
-		var i ListCatalogAccessByWorkspaceRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.CatalogID,
-			&i.Permission,
-			&i.GrantedBy,
-			&i.GrantedAt,
-			&i.CatalogName,
-			&i.ConnectionID,
-			&i.ConnectionName,
-			&i.ConnectionType,
-			&i.ConnectionUrl,
-			&i.Host,
-			&i.Port,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listCatalogConnections = `-- name: ListCatalogConnections :many
@@ -235,21 +118,6 @@ func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.U
 		return nil, err
 	}
 	return items, nil
-}
-
-const revokeCatalogAccess = `-- name: RevokeCatalogAccess :exec
-DELETE FROM workspace_catalog_access
-WHERE workspace_id = $1 AND catalog_id = $2
-`
-
-type RevokeCatalogAccessParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	CatalogID   pgtype.UUID `json:"catalog_id"`
-}
-
-func (q *Queries) RevokeCatalogAccess(ctx context.Context, arg RevokeCatalogAccessParams) error {
-	_, err := q.db.Exec(ctx, revokeCatalogAccess, arg.WorkspaceID, arg.CatalogID)
-	return err
 }
 
 const updateCatalogConnection = `-- name: UpdateCatalogConnection :one

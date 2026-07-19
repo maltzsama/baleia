@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -9,10 +11,33 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/jackc/pgx/v5/pgconn"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/client"
 )
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// resolveDefaultTrinoCatalog discovers the first Iceberg-type catalog name
+// registered in Trino for the workspace owner's connections. Falls back to
+// workspace.PolarisCatalogName when no Iceberg connection is found (legacy).
+func (h *Handlers) resolveDefaultTrinoCatalog(ctx context.Context, workspace db.Workspace) string {
+	if workspace.OwnerUserID.Valid {
+		conns, err := h.queries.ListCatalogConnections(ctx, workspace.OwnerUserID)
+		if err == nil {
+			for _, conn := range conns {
+				if conn.Type == "polaris" || conn.Type == "iceberg" || conn.Type == "nessie" {
+					names, err := h.ensureTrinoCatalogs(ctx, conn)
+					if err == nil && len(names) > 0 {
+						return names[0]
+					}
+				}
+			}
+		}
+	}
+	return workspace.PolarisCatalogName
+}
 
 // ── Folders ───────────────────────────────────────────────────────────────────
 
@@ -137,6 +162,9 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 		Sql:         request.Body.Sql,
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			return savedQueryConflict("a saved query with this name already exists in this workspace"), nil
+		}
 		return nil, err
 	}
 
@@ -206,6 +234,9 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 		FolderID:    folderID,
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			return savedQueryUpdateConflict("a saved query with this name already exists in this workspace"), nil
+		}
 		return nil, err
 	}
 
@@ -305,14 +336,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		}, nil
 	}
 
-	trinoCatalog := workspace.PolarisCatalogName
-	access, _ := h.queries.ListCatalogAccessByWorkspace(ctx, wsID)
-	if len(access) > 0 {
-		cat, err := h.queries.GetCatalogByID(ctx, access[0].CatalogID)
-		if err == nil {
-			trinoCatalog = cat.Name
-		}
-	}
+	trinoCatalog := h.resolveDefaultTrinoCatalog(ctx, workspace)
 
 	var savedQueryID pgtype.UUID
 	if request.Body.SavedQueryId != nil {
@@ -565,4 +589,36 @@ func dbStatementToPublic(s db.QueryStatement) QueryStatement {
 		qs.ErrorMessage = s.ErrorMessage
 	}
 	return qs
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+
+type savedQueryConflictJSONResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (r savedQueryConflictJSONResponse) VisitCreateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	return json.NewEncoder(w).Encode(r)
+}
+
+func (r savedQueryConflictJSONResponse) VisitUpdateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	return json.NewEncoder(w).Encode(r)
+}
+
+func savedQueryConflict(msg string) savedQueryConflictJSONResponse {
+	return savedQueryConflictJSONResponse{Code: "conflict", Message: msg}
+}
+
+func savedQueryUpdateConflict(msg string) savedQueryConflictJSONResponse {
+	return savedQueryConflictJSONResponse{Code: "conflict", Message: msg}
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

@@ -73,6 +73,8 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		return nil, err
 	}
 
+	h.ensurePersonalWorkspace(ctx, user.ID)
+
 	return CreateFirstAdmin201JSONResponse{
 		Token:        accessToken,
 		RefreshToken: refreshToken,
@@ -114,6 +116,8 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (Login
 	}); err != nil {
 		return nil, err
 	}
+
+	h.ensurePersonalWorkspace(ctx, user.ID)
 
 	return Login200JSONResponse{
 		Token:        accessToken,

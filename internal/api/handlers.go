@@ -24,6 +24,7 @@ type Handlers struct {
 	temporalClient client.Client
 	s3             *storage.S3Client
 	trino          *trino.Client
+	catalogCache   *TTLStore[[]workspaceCatalogEntry]
 }
 
 func NewHandlers(queries *db.Queries, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
@@ -33,6 +34,7 @@ func NewHandlers(queries *db.Queries, cfg *config.Config, temporalClient client.
 		temporalClient: temporalClient,
 		s3:             s3,
 		trino:          trino.New(cfg.TrinoURL, "baleia"),
+		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 	}
 }
 

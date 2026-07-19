@@ -205,22 +205,22 @@
 		const wid = workspaceStore.current?.id;
 		if (!wid) return null;
 		try {
-			const accRes = await fetch(`${apiBase}/workspaces/${wid}/catalog-access`, { headers: { Authorization: `Bearer ${token}` } });
+			const accRes = await fetch(`${apiBase}/workspaces/${wid}/catalogs`, { headers: { Authorization: `Bearer ${token}` } });
 			if (!accRes.ok) return null;
 			const access: any[] = await accRes.json();
 			if (!access.length) return null;
 			const options: any[] = [];
 			for (const item of access.slice(0, 3)) {
-				const catId = item.catalog_id;
+				const connId = item.connection_id;
 				const catName = item.catalog_name;
 				try {
-					const nsRes = await fetch(`${apiBase}/catalogs/${catId}/namespaces`, { headers: { Authorization: `Bearer ${token}` } });
+					const nsRes = await fetch(`${apiBase}/connections/${connId}/catalogs/${catName}/namespaces`, { headers: { Authorization: `Bearer ${token}` } });
 					if (!nsRes.ok) continue;
 					const nss: string[][] = await nsRes.json();
 					for (const ns of nss.slice(0, 3)) {
 						const nsName = ns.join('.');
 						try {
-							const tRes = await fetch(`${apiBase}/catalogs/${catId}/namespaces/${nsName}/tables`, { headers: { Authorization: `Bearer ${token}` } });
+							const tRes = await fetch(`${apiBase}/connections/${connId}/catalogs/${catName}/namespaces/${nsName}/tables`, { headers: { Authorization: `Bearer ${token}` } });
 							if (!tRes.ok) continue;
 							const tables = await tRes.json();
 							for (const t of tables) options.push({ label: `${catName}.${nsName}.${t.name}`, type: 'table' });

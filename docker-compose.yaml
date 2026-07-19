@@ -92,7 +92,10 @@ services:
     environment:
       - PGPASSWORD=baleia
     command: >
-      sh -c "psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE temporal;' 2>/dev/null || true"
+      sh -c "
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE temporal;' 2>/dev/null || true;
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE polaris;' 2>/dev/null || true
+      "
     restart: on-failure
 
   # ============================================
@@ -140,6 +143,21 @@ services:
   # ============================================
   # ICEBERG CATALOG - Polaris
   # ============================================
+  polaris-bootstrap:
+    image: apache/polaris-admin-tool:1.6.0
+    container_name: baleia_polaris_bootstrap
+    environment:
+      - POLARIS_PERSISTENCE_TYPE=relational-jdbc
+      - QUARKUS_DATASOURCE_USERNAME=baleia
+      - QUARKUS_DATASOURCE_PASSWORD=baleia
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/polaris
+    command: ["bootstrap", "-r", "POLARIS", "-c", "POLARIS,admin,admin"]
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   polaris:
     image: apache/polaris:1.6.0
@@ -148,58 +166,89 @@ services:
       - "8181:8181"
       - "8182:8182"
     environment:
+      # PERSISTÊNCIA RELACIONAL (POSTGRES)
+      - POLARIS_PERSISTENCE_TYPE=relational-jdbc
+      - QUARKUS_DATASOURCE_USERNAME=baleia
+      - QUARKUS_DATASOURCE_PASSWORD=baleia
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/polaris
+      
+      # BOOTSTRAP (já feito, mas não faz mal)
+      - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
+      - polaris.realm-context.realms=POLARIS
+      
+      # CORS
       - QUARKUS_HTTP_CORS_ENABLED=true
-      - QUARKUS_HTTP_CORS_ORIGINS=http://localhost:4000
+      - QUARKUS_HTTP_CORS_ORIGINS=http://polaris-console:80,http://localhost:4000
       - QUARKUS_HTTP_CORS_METHODS=GET,POST,PUT,DELETE,PATCH,OPTIONS
       - QUARKUS_HTTP_CORS_HEADERS=Content-Type,Authorization,Polaris-Realm,X-Request-ID
+      
+      # FEATURES
       - polaris.features."ALLOW_INSECURE_STORAGE_TYPES"=true
       - polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES"=["FILE","S3","GCS","AZURE"]
       - polaris.readiness.ignore-severe-issues=true
-      - polaris.realm-context.realms=POLARIS
-      - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
+      
+      # AUTENTICAÇÃO
       - polaris.authorization.enabled=false
       - POLARIS_AUTHORIZATION_ENABLED=false
       - polaris.auth.enabled=true
       - polaris.auth.type=basic
       - polaris.auth.basic.users=admin:admin
       - polaris.auth.default-realm=POLARIS
-      - POLARIS_S3_ENDPOINT=http://rustfs:9000
-      - POLARIS_S3_ACCESS_KEY=rustfsadmin
-      - POLARIS_S3_SECRET_KEY=rustfsadmin
-      - POLARIS_S3_REGION=us-east-1
-      - AWS_ENDPOINT_URL=http://rustfs:9000
+      
+      # S3 (RustFS)
       - AWS_REGION=us-east-1
-      - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=rustfsadmin
       - AWS_SECRET_ACCESS_KEY=rustfsadmin
       - JAVA_OPTS_APPEND=-Daws.s3UsePathStyle=true
-    extra_hosts:
-      - "baleia.rustfs:172.28.0.10"
+      
     networks:
       - app_net
     depends_on:
-      rustfs-init:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8182/q/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://polaris:8182/q/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
-  # polaris-console:
-  #   image: maltzsama/polaris-console:latest
-  #   container_name: baleia_polaris_ui
-  #   ports:
-  #     - "4000:80"
-  #   environment:
-  #     - VITE_POLARIS_API_URL=http://localhost:8181
-  #     - VITE_OAUTH_TOKEN_URL=http://localhost:8181/api/catalog/v1/oauth/tokens
-  #     - VITE_POLARIS_REALM=POLARIS
-  #     - VITE_AUTH_TYPE=basic
-  #   networks:
-  #     - app_net
-  #   depends_on:
-  #     - polaris
+  seed-polaris:
+    image: python:3.11-slim
+    container_name: baleia_seed_polaris
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        pip install --quiet pyiceberg pyarrow requests
+        python /scripts/seed_polaris.py
+    environment:
+      - POLARIS_URL=http://polaris:8181
+    volumes:
+      - ./scripts:/scripts:ro
+    networks:
+      - app_net
+    depends_on:
+      polaris:
+        condition: service_healthy
+    restart: "no"
+
+  polaris-console:
+    image: maltzsama/polaris-console:latest
+    container_name: baleia_polaris_ui
+    ports:
+      - "4000:80"
+    environment:
+      - VITE_POLARIS_API_URL=http://localhost:8181
+      - VITE_POLARIS_REALM=POLARIS
+    command: >
+      /bin/sh -c '
+      find /usr/share/nginx/html -type f -name "*.js" -exec sed -i "s|http://localhost:4000|http://localhost:8181|g; s|localhost:4000|localhost:8181|g" {} \; &&
+      nginx -g "daemon off;"
+      '
+    networks:
+      - app_net
+    depends_on:
+      - polaris
 
   # ============================================
   # QUERY ENGINE - Trino

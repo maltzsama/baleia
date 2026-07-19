@@ -680,6 +680,7 @@ type CreateApiKeyRequest struct {
 
 // CreateCatalogConnectionRequest defines model for CreateCatalogConnectionRequest.
 type CreateCatalogConnectionRequest struct {
+	Credentials           *map[string]interface{}            `json:"credentials,omitempty"`
 	DefaultReadonly       *bool                              `json:"default_readonly,omitempty"`
 	GlueCredentials       *GlueCredentials                   `json:"glue_credentials,omitempty"`
 	HiveCredentials       *HiveCredentials                   `json:"hive_credentials,omitempty"`

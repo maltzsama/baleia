@@ -15,7 +15,6 @@ type Querier interface {
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
-	CreateCatalog(ctx context.Context, arg CreateCatalogParams) (Catalog, error)
 	CreateCatalogConnection(ctx context.Context, arg CreateCatalogConnectionParams) (CatalogConnection, error)
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) (Migration, error)
 	CreateMigrationItem(ctx context.Context, arg CreateMigrationItemParams) (MigrationItem, error)
@@ -30,7 +29,6 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
-	DeleteCatalog(ctx context.Context, id pgtype.UUID) error
 	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error
@@ -40,8 +38,6 @@ type Querier interface {
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
-	GetCatalogAccess(ctx context.Context, arg GetCatalogAccessParams) (WorkspaceCatalogAccess, error)
-	GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)
 	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
@@ -58,15 +54,13 @@ type Querier interface {
 	GetUserByResetToken(ctx context.Context, passwordResetToken *string) (User, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
-	GrantCatalogAccess(ctx context.Context, arg GrantCatalogAccessParams) (WorkspaceCatalogAccess, error)
+
 	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
-	ListCatalogAccessByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogAccessByWorkspaceRow, error)
 	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error)
-	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
@@ -87,12 +81,10 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
-	RevokeCatalogAccess(ctx context.Context, arg RevokeCatalogAccessParams) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
-	UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (Catalog, error)
 	UpdateCatalogConnection(ctx context.Context, arg UpdateCatalogConnectionParams) (CatalogConnection, error)
 	UpdateMigrationItem(ctx context.Context, arg UpdateMigrationItemParams) error
 	UpdateMigrationProgress(ctx context.Context, arg UpdateMigrationProgressParams) error

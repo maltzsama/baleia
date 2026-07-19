@@ -109,7 +109,9 @@
 			}
 		} else {
 			if (isIcebergType()) {
-				body.polaris_credentials = { client_id: form.client_id, client_secret: form.client_secret };
+				const icebergCreds = { client_id: form.client_id, client_secret: form.client_secret };
+				body.polaris_credentials = icebergCreds;
+				body.credentials = icebergCreds;
 			}
 			if (isSqlType()) {
 				const creds = { username: form.username, password: form.password };
@@ -130,6 +132,8 @@
 		const method = editingId ? 'PATCH' : 'POST';
 		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
 
+		console.log('testConnection body:', JSON.stringify(body));
+
 		try {
 			const saveRes = await fetch(apiUrl, {
 				method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -137,7 +141,8 @@
 			});
 			if (!saveRes.ok) {
 				testStatus = 'fail';
-				testMessage = `Save failed (HTTP ${saveRes.status})`;
+				const body = await saveRes.json().catch(() => ({}));
+				testMessage = body.message || body.error || `Save failed (HTTP ${saveRes.status})`;
 				return;
 			}
 
@@ -179,6 +184,7 @@
 		const body = buildConnBody(connUrl);
 		const method = editingId ? 'PATCH' : 'POST';
 		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
+		console.log('saveConnection body:', JSON.stringify(body));
 		await fetch(apiUrl, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
 		closeModal(); loadConnections(); workspaceStore.load();
 	}

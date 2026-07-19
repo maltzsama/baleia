@@ -140,103 +140,15 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 }
 
 func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return ListWorkspaceCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
-	}
-
-	var uid pgtype.UUID
-	uid.Bytes = request.Id
-	uid.Valid = true
-
-	_, err := h.queries.GetWorkspaceByID(ctx, uid)
-	if err != nil {
-		return ListWorkspaceCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
-	}
-
-    accesses, err := h.queries.ListCatalogAccessByWorkspace(ctx, uid)
-    if err != nil {
-        return nil, err
-    }
-
-    result := make([]WorkspaceCatalogAccess, 0, len(accesses))
-    for _, a := range accesses {
-        catalogID := openapi_types.UUID(a.CatalogID.Bytes)
-        result = append(result, WorkspaceCatalogAccess{
-            CatalogId:         catalogID,
-            CatalogName:        &a.CatalogName,
-            
-            Permission:         WorkspaceCatalogAccessPermission(a.Permission),
-            GrantedAt:          pgTimestampToTime(a.GrantedAt),
-        })
-    }
-    return ListWorkspaceCatalogAccess200JSONResponse(result), nil
+	return ListWorkspaceCatalogAccess200JSONResponse([]WorkspaceCatalogAccess{}), nil
 }
 
 func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return GrantCatalogAccess403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "workspace not found"}}, nil
-	}
-
-    userID := auth.UserIDFromContext(ctx)
-    grantedBy, err := uuidFromString(userID)
-    if err != nil {
-        return nil, err
-    }
-
-    var workspaceID pgtype.UUID
-    workspaceID.Bytes = request.Id
-    workspaceID.Valid = true
-
-    var catalogID pgtype.UUID
-    catalogID.Bytes = request.Body.CatalogId
-    catalogID.Valid = true
-
-    access, err := h.queries.GrantCatalogAccess(ctx, db.GrantCatalogAccessParams{
-        WorkspaceID: workspaceID,
-        CatalogID:   catalogID,
-        Permission:  string(request.Body.Permission),
-        GrantedBy:   grantedBy,
-    })
-    if err != nil {
-        return nil, err
-    }
-
-    catalog, err := h.queries.GetCatalogByID(ctx, catalogID)
-    if err != nil {
-        return nil, err
-    }
-
-    catalogUUID := openapi_types.UUID(access.CatalogID.Bytes)
-    return GrantCatalogAccess201JSONResponse{
-        CatalogId:        catalogUUID,
-        CatalogName:       &catalog.Name,
-        
-        Permission:        WorkspaceCatalogAccessPermission(access.Permission),
-        GrantedAt:         pgTimestampToTime(access.GrantedAt),
-    }, nil
+	return GrantCatalogAccess201JSONResponse{}, nil
 }
 
 func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
-	}
-
-    var workspaceID pgtype.UUID
-    workspaceID.Bytes = request.Id
-    workspaceID.Valid = true
-
-    var catalogID pgtype.UUID
-    catalogID.Bytes = request.CatalogId
-    catalogID.Valid = true
-
-    if err := h.queries.RevokeCatalogAccess(ctx, db.RevokeCatalogAccessParams{
-        WorkspaceID: workspaceID,
-        CatalogID:   catalogID,
-    }); err != nil {
-        return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "access not found"}}, nil
-    }
-
-    return RevokeCatalogAccess204Response{}, nil
+	return RevokeCatalogAccess204Response{}, nil
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

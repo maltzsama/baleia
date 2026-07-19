@@ -12,12 +12,12 @@
 
 	let engine = $state('polaris');
 	let connName = $state('');
-	let connHost = $state('');
-	let connPort = $state('8181');
+	let connUrl = $state('http://polaris:8181');
 	let connUser = $state('');
 	let connPass = $state('');
 	let testStatus = $state<'idle' | 'testing' | 'ok' | 'err'>('idle');
 	let testMsg = $state('');
+	let verifiedId = $state('');
 
 	let ssoIssuer = $state('');
 	let ssoClientId = $state('');
@@ -27,6 +27,9 @@
 	let ssoCert = $state('');
 
 	const apiBase = '/api/v1';
+	const token = () => localStorage.getItem('token') || '';
+
+	function isIcebergType() { return ['polaris', 'nessie', 'iceberg'].includes(engine); }
 
 	function checkStrength(val: string) {
 		let s = 0;
@@ -34,6 +37,16 @@
 		if (/[A-Z]/.test(val) && /[0-9]/.test(val)) s++;
 		if (/[^A-Za-z0-9]/.test(val) && val.length >= 12) s++;
 		strengthScore = s;
+	}
+
+	function buildConnBody() {
+		const body: any = { name: connName, type: engine, url: connUrl, default_readonly: true };
+		if (isIcebergType()) {
+			const creds = { client_id: connUser, client_secret: connPass };
+			body.polaris_credentials = creds;
+			body.credentials = creds;
+		}
+		return body;
 	}
 
 	async function nextStep() {
@@ -61,22 +74,16 @@
 				return;
 			}
 		}
-		if (step === 2 && connName && connHost) {
-			try {
-				await fetch(`${apiBase}/catalog-connections`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${localStorage.getItem('token')}`
-					},
-					body: JSON.stringify({
-						name: connName,
-						type: engine,
-						url: `http://${connHost}:${connPort}`,
-						default_readonly: true
-					})
-				});
-			} catch { /* optional */ }
+		if (step === 2 && connName) {
+			if (!verifiedId) {
+				try {
+					await fetch(`${apiBase}/catalog-connections`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token()}` },
+						body: JSON.stringify(buildConnBody())
+					});
+				} catch { /* optional */ }
+			}
 		}
 		if (step === 3) {
 			// SSO config saved if filled
@@ -99,24 +106,60 @@
 		else step = 4;
 	}
 
-	function selectEngine(code: string, port: string) {
+	function selectEngine(code: string) {
 		engine = code;
-		connPort = port;
 	}
 
 	async function testConnection() {
+		if (!connName || !connUrl || !connUser || !connPass) {
+			testStatus = 'err';
+			testMsg = 'Fill in all fields first.';
+			return;
+		}
 		testStatus = 'testing';
-		await new Promise(r => setTimeout(r, 1200));
-		testStatus = Math.random() > 0.3 ? 'ok' : 'err';
-		testMsg = testStatus === 'ok' ? 'Connection successful — 6ms' : 'Connection refused — check host and port';
+		testMsg = '';
+		verifiedId = '';
+		try {
+			const saveRes = await fetch(`${apiBase}/catalog-connections`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token()}` },
+				body: JSON.stringify(buildConnBody())
+			});
+			if (!saveRes.ok) {
+				const body = await saveRes.json().catch(() => ({}));
+				testStatus = 'err';
+				testMsg = body.message || body.error || `Save failed (HTTP ${saveRes.status})`;
+				return;
+			}
+			const saved = await saveRes.json();
+			const testId = saved.id;
+			const testRes = await fetch(`${apiBase}/catalog-connections/${testId}/test`, {
+				method: 'POST', headers: { 'Authorization': `Bearer ${token()}` }
+			});
+			const testResult = await testRes.json();
+			if (testResult.success) {
+				testStatus = 'ok';
+				testMsg = `Connection successful — ${testResult.latency_ms}ms`;
+				verifiedId = testId;
+			} else {
+				testStatus = 'err';
+				testMsg = testResult.error || 'Connection test failed';
+				await fetch(`${apiBase}/catalog-connections/${testId}`, {
+					method: 'DELETE', headers: { 'Authorization': `Bearer ${token()}` }
+				});
+			}
+		} catch (e: any) {
+			testStatus = 'err';
+			testMsg = e.message || 'Connection error';
+		}
 	}
 
 	let engines = [
-		{ code: 'polaris', label: 'Polaris', port: '8181', cls: 'bg-blue-50 text-blue-700' },
-		{ code: 'nessie', label: 'Nessie', port: '19120', cls: 'bg-green-50 text-green-700' },
-		{ code: 'iceberg', label: 'Iceberg', port: '8080', cls: 'bg-fuchsia-50 text-purple-700' },
-		{ code: 'glue', label: 'Glue', port: '443', cls: 'bg-red-50 text-red-700' },
-		{ code: 'hive', label: 'Hive', port: '9083', cls: 'bg-orange-50 text-orange-700' },
+		{ code: 'polaris', label: 'Polaris', cls: 'bg-blue-50 text-blue-700' },
+		{ code: 'nessie', label: 'Nessie', cls: 'bg-green-50 text-green-700' },
+		{ code: 'iceberg', label: 'Iceberg', cls: 'bg-fuchsia-50 text-purple-700' },
+		{ code: 'glue', label: 'Glue', cls: 'bg-orange-50 text-orange-700' },
+		{ code: 'hive', label: 'Hive', cls: 'bg-red-50 text-red-700' },
 	];
 
 	const inputBase = "w-full h-10 bg-bg-app border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-text-muted focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)] focus:bg-bg-panel";
@@ -240,7 +283,7 @@
 					<div class="grid grid-cols-3 gap-2 mb-3.5">
 						{#each engines as e}
 							<div
-								onclick={() => selectEngine(e.code, e.port)}
+								onclick={() => selectEngine(e.code)}
 								class="flex flex-col items-center gap-[5px] py-2.5 px-1.5 rounded-[7px] border cursor-pointer transition-all duration-150
 									{engine === e.code ? 'border-primary bg-blue-50' : 'border-border hover:border-border-hover'}">
 								<div class="w-7 h-7 rounded-md flex items-center justify-center font-mono text-[10px] font-bold {e.cls}">{e.code.slice(0,2).toUpperCase()}</div>
@@ -252,10 +295,7 @@
 						<label class="text-[11px] font-semibold">Connection name</label>
 						<input class={inputBase} type="text" bind:value={connName} placeholder="e.g. analytics-prod">
 					</div>
-					<div class="grid grid-cols-2 gap-3 mb-3.5">
-						<div class="flex flex-col gap-[5px]"><label class="text-[11px] font-semibold">Host</label><input class="{inputBase} font-mono text-xs" type="text" bind:value={connHost} placeholder="hostname or IP"></div>
-						<div class="flex flex-col gap-[5px]"><label class="text-[11px] font-semibold">Port</label><input class="{inputBase} font-mono text-xs" type="text" bind:value={connPort}></div>
-					</div>
+					<div class="flex flex-col gap-[5px] mb-3.5"><label class="text-[11px] font-semibold">URL</label><input class="{inputBase} font-mono text-xs" type="text" bind:value={connUrl} placeholder="http://polaris:8181"></div>
 					<div class="grid grid-cols-2 gap-3 mb-3.5">
 						<div class="flex flex-col gap-[5px]"><label class="text-[11px] font-semibold">Username</label><input class={inputBase} type="text" bind:value={connUser} placeholder="user"></div>
 						<div class="flex flex-col gap-[5px]"><label class="text-[11px] font-semibold">Password</label><input class={inputBase} type="password" bind:value={connPass} placeholder="••••••••"></div>
@@ -263,8 +303,10 @@
 					<div class="flex items-center gap-2.5 my-3 mb-1">
 						<button
 							onclick={testConnection}
+							disabled={testStatus === 'testing' || !connName || !connUrl || !connUser || !connPass}
 							class="flex items-center gap-1.5 h-9 px-3.5 rounded-md border text-xs font-semibold cursor-pointer transition-all duration-150
-								{testStatus === 'testing' ? 'text-primary border-blue-200' : 'border-border text-text-muted hover:border-border-hover hover:text-text-main'} bg-transparent">
+								{testStatus === 'testing' ? 'text-primary border-blue-200' : 'border-border text-text-muted hover:border-border-hover hover:text-text-main'} bg-transparent
+								disabled:opacity-40 disabled:cursor-not-allowed">
 							<svg viewBox="0 0 24 24" class="w-3 h-3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
 							{testStatus === 'testing' ? 'Testing...' : 'Test connection'}
 						</button>

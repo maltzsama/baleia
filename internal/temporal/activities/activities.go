@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/arrowipc"
+	catalog_connections "github.com/galileostudio/baleia/internal/catalog_connections"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
@@ -61,47 +63,75 @@ func (a *Activities) ensureCatalog(ctx context.Context, params EnsureCatalogPara
 		return err
 	}
 
-	access, err := a.queries.ListCatalogAccessByWorkspace(ctx, wsID)
+	ws, err := a.queries.GetWorkspaceByID(ctx, wsID)
 	if err != nil {
-		return fmt.Errorf("list catalog access: %w", err)
-	}
-	if len(access) == 0 {
-		return fmt.Errorf("workspace has no catalog connection")
+		return fmt.Errorf("get workspace: %w", err)
 	}
 
-	// Prefer a REST-based Iceberg catalog manager; fall back to the first.
-	chosen := access[0]
-	for _, ac := range access {
-		if ac.ConnectionType == "polaris" || ac.ConnectionType == "iceberg" || ac.ConnectionType == "nessie" {
-			chosen = ac
-			break
+	if !ws.OwnerUserID.Valid {
+		return fmt.Errorf("workspace has no owner")
+	}
+
+	conns, err := a.queries.ListCatalogConnections(ctx, ws.OwnerUserID)
+	if err != nil {
+		return fmt.Errorf("list connections: %w", err)
+	}
+
+	for _, conn := range conns {
+		if conn.Type != "polaris" && conn.Type != "iceberg" && conn.Type != "nessie" {
+			continue
+		}
+
+		remoteCatalogs, err := a.listRemoteCatalogs(ctx, conn)
+		if err != nil {
+			slog.Warn("list remote catalogs", "conn", conn.ID.String(), "err", err)
+			continue
+		}
+
+		for _, rc := range remoteCatalogs {
+			if rc == params.CatalogName {
+				var creds struct {
+					ClientID     string `json:"client_id"`
+					ClientSecret string `json:"client_secret"`
+				}
+				if conn.CredentialsEnc != nil && *conn.CredentialsEnc != "" {
+					b := crypto.TryDecrypt(*conn.CredentialsEnc, a.cfg.JWTSecret)
+					_ = json.Unmarshal(b, &creds)
+				}
+
+				return a.trino.CreateIcebergCatalog(ctx, trino.IcebergCatalogParams{
+					Name:       params.CatalogName,
+					RestURI:    strings.TrimRight(conn.Url, "/") + "/api/catalog",
+					Warehouse:  rc,
+					Credential: creds.ClientID + ":" + creds.ClientSecret,
+				})
+			}
 		}
 	}
 
-	if chosen.ConnectionType != "polaris" && chosen.ConnectionType != "iceberg" && chosen.ConnectionType != "nessie" {
-		return nil
-	}
+	return fmt.Errorf("no connection found for catalog %s", params.CatalogName)
+}
 
-	conn, err := a.queries.GetCatalogConnectionByID(ctx, chosen.ConnectionID)
-	if err != nil {
-		return fmt.Errorf("load catalog connection: %w", err)
-	}
-
-	var creds struct {
-		ClientID     string `json:"client_id"`
-		ClientSecret string `json:"client_secret"`
-	}
-	if conn.CredentialsEnc != nil && *conn.CredentialsEnc != "" {
+func (a *Activities) listRemoteCatalogs(ctx context.Context, conn db.CatalogConnection) ([]string, error) {
+	var rawCreds *string
+	if conn.CredentialsEnc != nil {
 		b := crypto.TryDecrypt(*conn.CredentialsEnc, a.cfg.JWTSecret)
-		_ = json.Unmarshal(b, &creds)
+		s := string(b)
+		rawCreds = &s
 	}
-
-	return a.trino.CreateIcebergCatalog(ctx, trino.IcebergCatalogParams{
-		Name:       params.CatalogName,
-		RestURI:    strings.TrimRight(conn.Url, "/") + "/api/catalog",
-		Warehouse:  chosen.CatalogName,
-		Credential: creds.ClientID + ":" + creds.ClientSecret,
-	})
+	client, err := catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
+	if err != nil {
+		return nil, err
+	}
+	catalogs, err := client.ListCatalogs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(catalogs))
+	for i, c := range catalogs {
+		names[i] = c.Name
+	}
+	return names, nil
 }
 
 func Register(w worker.Worker, a *Activities) {
