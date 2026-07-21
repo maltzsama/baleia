@@ -11,6 +11,7 @@ import (
 	"log/slog"
 
 	catalog_connections "github.com/galileostudio/baleia/internal/catalog_connections"
+	catalogs "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/google/uuid"
 
@@ -297,33 +298,82 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
     return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
 }
 
+// testSQLViaTrino registers a throwaway catalog in Trino using catalogs.Project
+// (the canonical property builder) + @baleia-secret[...] placeholder, runs a
+// SHOW SCHEMAS as a smoke test, then DROPs the catalog and the throwaway
+// registry row. L2 (CR-017): Polaris connections are tested via REST Ping at
+// the TestCatalogConnection level, so this path is only used for postgresql/
+// mysql connections today.
+//
+// Note: the placeholder the DDL carries resolves against the catalog name we
+// just registered in trino_catalog_registry. So we must write a temporary
+// registry row BEFORE emitting the DDL — the plugin reads it at boot-time
+// AND at createCatalogProperties-time. For the test, we upsert a row with
+// sync_status='pending', issue the CREATE CATALOG, then DROP CATALOG and
+// soft-delete the registry row.
 func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnection, start time.Time) (TestCatalogConnectionResponseObject, error) {
-    testName := "baleia_test_" + uuid.NewString()[:8]
-    props := h.trinoCatalogProperties(conn.Type, conn.Url, conn.CredentialsEnc, testName)
-    if props == nil {
-        errMsg := "failed to build catalog properties (check credentials)"
-        return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
-    }
-    trinoCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-    defer cancel()
-    err := h.trino.CreateCatalog(trinoCtx, trino_client.CatalogParams{
-        Name:       testName,
-        Connector:  trinoConnector(conn.Type),
-        Properties: props,
-    })
-    if err != nil {
-        errMsg := err.Error()
-        return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
-    }
-    defer h.trino.Execute(ctx, "DROP CATALOG IF EXISTS "+testName, "", "")
-    _, err = h.trino.Execute(trinoCtx, "SHOW SCHEMAS FROM "+testName, testName, "")
-    if err != nil {
-        errMsg := err.Error()
-        return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
-    }
-    latencyMs := int(time.Since(start).Milliseconds())
-    v := conn.Type
-    return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
+	testName := "baleia_test_" + uuid.NewString()[:8]
+
+	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get default cluster: %w", err)
+	}
+	creds, err := catalogs.DecodeCredentials(conn, h.cfg.JWTSecret)
+	if err != nil {
+		errMsg := err.Error()
+		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
+	}
+
+	// Build a throwaway catalog row for Project to consume. Use a bogus
+	// connection id pointing back at conn so Project works.
+	throw := db.Catalog{
+		ConnectionID:      conn.ID,
+		TrinoCatalogName: testName,
+		ClusterID:         cluster.ID,
+		Warehouse:         testName,
+		Connector:         trinoConnector(conn.Type),
+	}
+	proj, err := catalogs.Project(conn, throw, creds)
+	if err != nil {
+		errMsg := err.Error()
+		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
+	}
+	propsJSON, _ := json.Marshal(proj.Row.Properties)
+	_ = h.queries.UpsertTrinoCatalogRegistry(ctx, db.UpsertTrinoCatalogRegistryParams{
+		ClusterID:      pgtype.UUID{Bytes: proj.Row.ClusterID, Valid: true},
+		CatalogName:    proj.Row.CatalogName,
+		ConnectorName:  proj.Row.ConnectorName,
+		Column4:        propsJSON,
+	})
+	defer func() {
+		_ = h.queries.SoftDeleteTrinoCatalogRegistry(ctx, db.SoftDeleteTrinoCatalogRegistryParams{
+			ClusterID:   cluster.ID,
+			CatalogName: testName,
+		})
+		_ = h.trino.DropCatalog(ctx, testName)
+	}()
+
+	trinoCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	if err := h.trino.CreateCatalog(trinoCtx, trino_client.CatalogSpec{
+		Name:       proj.Row.CatalogName,
+		Connector:  proj.Row.ConnectorName,
+		Properties: proj.Row.Properties,
+		SecretKeys: proj.SecretKeys,
+	}); err != nil {
+		errMsg := err.Error()
+		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
+	}
+
+	if _, err := h.trino.Execute(trinoCtx, "SHOW SCHEMAS FROM "+testName, testName, ""); err != nil {
+		errMsg := err.Error()
+		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
+	}
+
+	latencyMs := int(time.Since(start).Milliseconds())
+	v := conn.Type
+	return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
 }
 
 func (h *Handlers) connectionClient(conn db.CatalogConnection) (catalog_connections.Client, error) {
@@ -380,45 +430,9 @@ func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 	}
 }
 
-func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error) {
-	var connID pgtype.UUID
-	connID.Bytes = request.ConnectionId
-	connID.Valid = true
-
-	conn, err := h.queries.GetCatalogConnectionByID(ctx, connID)
-	if err != nil {
-		return ListCatalogs200JSONResponse([]Catalog{}), nil
-	}
-
-	names, err := h.ensureTrinoCatalogs(ctx, conn)
-	if err != nil {
-		slog.Warn("register catalog in trino", "err", err, "conn", conn.ID.String())
-		return ListCatalogs200JSONResponse([]Catalog{}), nil
-	}
-
-	result := make([]Catalog, 0, len(names))
-	for _, n := range names {
-		name := n
-		result = append(result, Catalog{Name: &name})
-	}
-	return ListCatalogs200JSONResponse(result), nil
-}
-
-func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogRequestObject) (CreateCatalogResponseObject, error) {
-	return nil, fmt.Errorf("catalog creation is no longer supported; catalogs are loaded dynamically")
-}
-
-func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObject) (GetCatalogResponseObject, error) {
-	return GetCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found (dynamic)"}}, nil
-}
-
-func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error) {
-	return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found (dynamic)"}}, nil
-}
-
-func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogRequestObject) (DeleteCatalogResponseObject, error) {
-	return DeleteCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found (dynamic)"}}, nil
-}
+// Catalog handlers (ListCatalogs, CreateCatalog, GetCatalog, UpdateCatalog,
+// DeleteCatalog, SyncCatalog, ReconcileTrino) and the write-through flow
+// (Project + UpsertRegistry + DDL) live in handlers_catalogs_write.go.
 
 func (h *Handlers) ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error) {
 	return ListNamespaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "use /connections/{id}/catalogs/{name}/namespaces"}}, nil
@@ -449,59 +463,16 @@ func trinoConnector(connType string) string {
 	}
 }
 
-func (h *Handlers) trinoCatalogProperties(connType, url string, credsEnc *string, warehouse string) map[string]string {
-	var credsBytes []byte
-	if credsEnc != nil {
-		credsBytes = crypto.TryDecrypt(*credsEnc, h.cfg.JWTSecret)
-	}
-	switch connType {
-	case "polaris", "iceberg", "nessie":
-		if credsBytes == nil {
-			return nil
-		}
-		var creds struct {
-			ClientID     string `json:"client_id"`
-			ClientSecret string `json:"client_secret"`
-			Realm        string `json:"realm"`
-		}
-		if err := json.Unmarshal(credsBytes, &creds); err != nil {
-			return nil
-		}
-		realm := creds.Realm
-		if realm == "" {
-			realm = "POLARIS"
-		}
-		return map[string]string{
-			"iceberg.catalog.type":                     "rest",
-			"iceberg.rest-catalog.uri":                  url + "/api/catalog",
-			"iceberg.rest-catalog.warehouse":            warehouse,
-			"iceberg.rest-catalog.security":             "OAUTH2",
-			"iceberg.rest-catalog.oauth2.credential":    creds.ClientID + ":" + creds.ClientSecret,
-			"iceberg.rest-catalog.oauth2.scope":         "PRINCIPAL_ROLE:ALL",
-			"iceberg.rest-catalog.vended-credentials-enabled": "true",
-		}
-	case "postgresql", "mysql":
-		props := map[string]string{
-			"connection-url": url,
-		}
-		if credsBytes != nil {
-			var creds struct {
-				Username string `json:"username"`
-				Password string `json:"password"`
-			}
-			if err := json.Unmarshal(credsBytes, &creds); err == nil {
-				props["connection-user"] = creds.Username
-				props["connection-password"] = creds.Password
-			}
-		}
-		return props
-	default:
-		return nil
-	}
-}
+// trinoCatalogProperties was the old inline builder for connector properties
+// from the pre-plugin era. It has been replaced by internal/catalogs.Project,
+// which lives alongside the write-through handlers in handlers_catalogs_write.go.
+// (CR-017 §L1: the dynamic catalog-discovery path via Polaris REST has been
+// removed — catalogs are now discovered via the registry table that the
+// plugin loads at Trino boot.)
 
-// ── Dynamic catalog browsing (chi handlers) ──────────────────────────
-
+// workspaceCatalogEntry describes one catalog-row in the per-workspace
+// listing exposed to the UI. Fields mirror what the frontend DataSourceTree
+// expects.
 type workspaceCatalogEntry struct {
 	ConnectionID   string `json:"connection_id"`
 	ConnectionName string `json:"connection_name"`
@@ -509,71 +480,10 @@ type workspaceCatalogEntry struct {
 	CatalogName    string `json:"catalog_name"`
 }
 
-func (h *Handlers) discoverCatalogs(ctx context.Context, conn db.CatalogConnection) ([]string, error) {
-	client, err := h.connectionClient(conn)
-	if err != nil {
-		return nil, err
-	}
-	remoteCatalogs, err := client.ListCatalogs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(remoteCatalogs))
-	for _, c := range remoteCatalogs {
-		names = append(names, c.Name)
-	}
-	return names, nil
-}
-
-func (h *Handlers) ensureTrinoCatalogs(ctx context.Context, conn db.CatalogConnection) ([]string, error) {
-	bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	connector := trinoConnector(conn.Type)
-	if connector == "" {
-		return nil, fmt.Errorf("no trino connector for type: %s", conn.Type)
-	}
-
-	var catalogNames []string
-	if conn.Type == "polaris" || conn.Type == "nessie" || conn.Type == "iceberg" {
-		dcCtx, dcCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer dcCancel()
-		names, err := h.discoverCatalogs(dcCtx, conn)
-		if err != nil {
-			slog.Warn("catalog discovery failed, using connection name", "conn", conn.Name, "err", err)
-			catalogNames = []string{conn.Name}
-		} else if len(names) == 0 {
-			slog.Warn("no catalogs discovered, using connection name", "conn", conn.Name)
-			catalogNames = []string{conn.Name}
-		} else {
-			catalogNames = names
-		}
-	} else {
-		catalogNames = []string{conn.Name}
-	}
-
-	for _, cn := range catalogNames {
-		props := h.trinoCatalogProperties(conn.Type, conn.Url, conn.CredentialsEnc, cn)
-		if props == nil {
-			slog.Warn("skip catalog: failed to build props", "conn", conn.Name, "catalog", cn)
-			continue
-		}
-		if err := h.trino.CreateCatalog(bgCtx, trino_client.CatalogParams{
-			Name:       cn,
-			Connector:  connector,
-			Properties: props,
-		}); err != nil {
-			slog.Warn("skip catalog: trino registration failed", "conn", conn.Name, "catalog", cn, "err", err)
-			continue
-		}
-	}
-
-	if len(catalogNames) == 0 {
-		return nil, fmt.Errorf("no catalogs could be registered for %s", conn.Name)
-	}
-	return catalogNames, nil
-}
-
+// ListWorkspaceCatalogs lists catalogs visible to a workspace. Source of
+// truth is the catalogs table in PostgreSQL; the plugin loads them into
+// Trino at boot. No more dynamic discovery via Polaris REST, no more
+// ensureTrinoCatalogs — that was the path L1 of CR-017 removed.
 func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request) {
 	wsID := chiURLParam(r, "id")
 	userID := auth.UserIDFromContext(r.Context())
@@ -615,17 +525,21 @@ func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request)
 
 	var entries []workspaceCatalogEntry
 	for _, conn := range conns {
-		catalogNames, err := h.ensureTrinoCatalogs(r.Context(), conn)
+		// The catalogs table is the source of truth — no Polaris REST call.
+		rows, err := h.queries.ListCatalogsByConnection(r.Context(), conn.ID)
 		if err != nil {
-			slog.Warn("skip connection in workspace catalogs", "conn", conn.Name, "err", err)
+			slog.Warn("list catalogs for connection", "conn", conn.Name, "err", err)
 			continue
 		}
-		for _, cn := range catalogNames {
+		for _, row := range rows {
+			if !row.Enabled {
+				continue
+			}
 			entries = append(entries, workspaceCatalogEntry{
 				ConnectionID:   uuidStr(conn.ID),
 				ConnectionName: conn.Name,
 				ConnectionType: conn.Type,
-				CatalogName:    cn,
+				CatalogName:    row.TrinoCatalogName,
 			})
 		}
 	}
@@ -737,6 +651,10 @@ func (h *Handlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(cols)
 }
 
+// ensureConnectionAndCatalog fetches the catalog connection row and verifies
+// that there is an enabled catalogs row matching the requested trino_catalog_name.
+// The plugin already loaded the catalog into Trino at boot (or it will after
+// the next Trino restart) — no CREATE CATALOG is issued here.
 func (h *Handlers) ensureConnectionAndCatalog(ctx context.Context, connID, catalogName string) (*db.CatalogConnection, error) {
 	var id pgtype.UUID
 	if err := id.Scan(connID); err != nil {
@@ -746,8 +664,15 @@ func (h *Handlers) ensureConnectionAndCatalog(ctx context.Context, connID, catal
 	if err != nil {
 		return nil, err
 	}
-	if _, err := h.ensureTrinoCatalogs(ctx, conn); err != nil {
+	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
+	if err != nil {
 		return nil, err
+	}
+	if _, err := h.queries.GetCatalogByTrinoName(ctx, db.GetCatalogByTrinoNameParams{
+		ClusterID:        cluster.ID,
+		TrinoCatalogName: catalogName,
+	}); err != nil {
+		return nil, fmt.Errorf("catalog %q not registered under connection %s", catalogName, conn.Name)
 	}
 	return &conn, nil
 }

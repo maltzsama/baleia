@@ -19,18 +19,25 @@ import (
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// resolveDefaultTrinoCatalog discovers the first Iceberg-type catalog name
-// registered in Trino for the workspace owner's connections. Falls back to
-// workspace.PolarisCatalogName when no Iceberg connection is found (legacy).
+// resolveDefaultTrinoCatalog returns the first enabled Iceberg-type catalog
+// registered under the workspace owner's connections. With the plugin in
+// place, looking up the catalogs table is sufficient — Trino already has
+// the catalog loaded at boot (or will after the next restart).
 func (h *Handlers) resolveDefaultTrinoCatalog(ctx context.Context, workspace db.Workspace) string {
 	if workspace.OwnerUserID.Valid {
 		conns, err := h.queries.ListCatalogConnections(ctx, workspace.OwnerUserID)
 		if err == nil {
 			for _, conn := range conns {
-				if conn.Type == "polaris" || conn.Type == "iceberg" || conn.Type == "nessie" {
-					names, err := h.ensureTrinoCatalogs(ctx, conn)
-					if err == nil && len(names) > 0 {
-						return names[0]
+				if conn.Type != "polaris" && conn.Type != "iceberg" && conn.Type != "nessie" {
+					continue
+				}
+				rows, err := h.queries.ListCatalogsByConnection(ctx, conn.ID)
+				if err != nil {
+					continue
+				}
+				for _, r := range rows {
+					if r.Enabled {
+						return r.TrinoCatalogName
 					}
 				}
 			}

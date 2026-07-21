@@ -15,17 +15,13 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	// Register the workspace's catalog in Trino before running anything.
-	if err := workflow.ExecuteActivity(ctx, activities.EnsureCatalog, activities.EnsureCatalogParams{
-		WorkspaceID: workspaceID,
-		CatalogName: trinoCatalog,
-	}).Get(ctx, nil); err != nil {
-		_ = workflow.ExecuteActivity(ctx, activities.FailExecution, activities.FailExecutionParams{
-			ExecutionID:  executionID,
-			ErrorMessage: err.Error(),
-		}).Get(ctx, nil)
-		return err
-	}
+	// (Removed the EnsureCatalog activity call — CR-017 §I3/T1.)
+	// With the baleia-trino-catalog-store plugin, Trino loads all catalogs
+	// from trino_catalog_registry at boot. The write-through flow of the
+	// CreateCatalog handler + the plugin's addOrReplaceCatalog callback
+	// cover both boot-time and runtime catalog enrollment. There is no
+	// longer a "Trino lost the catalog after a restart" scenario that
+	// the activity used to cover.
 
 	var splitResult activities.SplitSQLResult
 	if err := workflow.ExecuteActivity(ctx, activities.SplitSQL, activities.SplitSQLParams{
@@ -100,7 +96,9 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 
 		totalRows += execResult.RowsReturned
 		totalDurationMs += execResult.DurationMs
-		allColumns = execResult.Columns
+		if len(allColumns) == 0 {
+			allColumns = execResult.Columns
+		}
 		allRows = append(allRows, execResult.Rows...)
 	}
 

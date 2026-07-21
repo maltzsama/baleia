@@ -27,6 +27,21 @@ type AuthProvider struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Catalog struct {
+	ID               pgtype.UUID        `json:"id"`
+	ConnectionID     pgtype.UUID        `json:"connection_id"`
+	Name             string             `json:"name"`
+	Description      *string            `json:"description"`
+	TrinoCatalogName string             `json:"trino_catalog_name"`
+	ClusterID        pgtype.UUID        `json:"cluster_id"`
+	Warehouse        string             `json:"warehouse"`
+	Connector        string             `json:"connector"`
+	ExtraProps       []byte             `json:"extra_props"`
+	Enabled          bool               `json:"enabled"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CatalogConnection struct {
 	ID              pgtype.UUID        `json:"id"`
 	Name            string             `json:"name"`
@@ -208,6 +223,29 @@ type TeamMember struct {
 	JoinedAt pgtype.Timestamptz `json:"joined_at"`
 }
 
+// Projeção plana lida pelo plugin baleia-trino-catalog-store no boot do Trino. Escrita pelo Baleia (write-through) e pelo plugin (CREATE/DROP CATALOG). NUNCA alterar o formato sem versionar o plugin junto.
+type TrinoCatalogRegistry struct {
+	ClusterID      pgtype.UUID        `json:"cluster_id"`
+	CatalogName    string             `json:"catalog_name"`
+	ConnectorName  string             `json:"connector_name"`
+	Properties     []byte             `json:"properties"`
+	CatalogVersion *string            `json:"catalog_version"`
+	Enabled        bool               `json:"enabled"`
+	SyncStatus     string             `json:"sync_status"`
+	SyncError      *string            `json:"sync_error"`
+	UpdatedBy      string             `json:"updated_by"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TrinoCluster struct {
+	ID             pgtype.UUID        `json:"id"`
+	Name           string             `json:"name"`
+	CoordinatorUrl string             `json:"coordinator_url"`
+	NodeVersion    *string            `json:"node_version"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type TrinoQuerySnapshot struct {
 	ID                 pgtype.UUID        `json:"id"`
 	TrinoQueryID       string             `json:"trino_query_id"`
@@ -256,5 +294,3 @@ type Workspace struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
-
-

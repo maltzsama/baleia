@@ -2,16 +2,11 @@ package activities
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/arrowipc"
-	catalog_connections "github.com/galileostudio/baleia/internal/catalog_connections"
 	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -42,101 +37,16 @@ func New(pool *pgxpool.Pool, cfg *config.Config) *Activities {
 	return a
 }
 
-// EnsureCatalogParams tells the worker which Trino catalog to register for a
-// workspace before its statements run.
-type EnsureCatalogParams struct {
-	WorkspaceID string
-	CatalogName string
-}
-
-// EnsureCatalog registers the workspace's Polaris catalog in Trino (idempotent).
-// Trino talks to Polaris over the Iceberg REST protocol and gets S3 credentials
-// for the data files from Polaris via credential vending — the result bucket is
-// unrelated and never referenced here.
-func EnsureCatalog(ctx context.Context, params EnsureCatalogParams) error {
-	return defaultActivities.ensureCatalog(ctx, params)
-}
-
-func (a *Activities) ensureCatalog(ctx context.Context, params EnsureCatalogParams) error {
-	var wsID pgtype.UUID
-	if err := wsID.Scan(params.WorkspaceID); err != nil {
-		return err
-	}
-
-	ws, err := a.queries.GetWorkspaceByID(ctx, wsID)
-	if err != nil {
-		return fmt.Errorf("get workspace: %w", err)
-	}
-
-	if !ws.OwnerUserID.Valid {
-		return fmt.Errorf("workspace has no owner")
-	}
-
-	conns, err := a.queries.ListCatalogConnections(ctx, ws.OwnerUserID)
-	if err != nil {
-		return fmt.Errorf("list connections: %w", err)
-	}
-
-	for _, conn := range conns {
-		if conn.Type != "polaris" && conn.Type != "iceberg" && conn.Type != "nessie" {
-			continue
-		}
-
-		remoteCatalogs, err := a.listRemoteCatalogs(ctx, conn)
-		if err != nil {
-			slog.Warn("list remote catalogs", "conn", conn.ID.String(), "err", err)
-			continue
-		}
-
-		for _, rc := range remoteCatalogs {
-			if rc == params.CatalogName {
-				var creds struct {
-					ClientID     string `json:"client_id"`
-					ClientSecret string `json:"client_secret"`
-				}
-				if conn.CredentialsEnc != nil && *conn.CredentialsEnc != "" {
-					b := crypto.TryDecrypt(*conn.CredentialsEnc, a.cfg.JWTSecret)
-					_ = json.Unmarshal(b, &creds)
-				}
-
-				return a.trino.CreateIcebergCatalog(ctx, trino.IcebergCatalogParams{
-					Name:       params.CatalogName,
-					RestURI:    strings.TrimRight(conn.Url, "/") + "/api/catalog",
-					Warehouse:  rc,
-					Credential: creds.ClientID + ":" + creds.ClientSecret,
-				})
-			}
-		}
-	}
-
-	return fmt.Errorf("no connection found for catalog %s", params.CatalogName)
-}
-
-func (a *Activities) listRemoteCatalogs(ctx context.Context, conn db.CatalogConnection) ([]string, error) {
-	var rawCreds *string
-	if conn.CredentialsEnc != nil {
-		b := crypto.TryDecrypt(*conn.CredentialsEnc, a.cfg.JWTSecret)
-		s := string(b)
-		rawCreds = &s
-	}
-	client, err := catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
-	if err != nil {
-		return nil, err
-	}
-	catalogs, err := client.ListCatalogs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, len(catalogs))
-	for i, c := range catalogs {
-		names[i] = c.Name
-	}
-	return names, nil
-}
+// (EnsureCatalog activity and listRemoteCatalogs helper were removed in
+// CR-017 §I3. With the baleia-trino-catalog-store plugin in place, Trino
+// loads catalogs from trino_catalog_registry at boot — there is no longer a
+// "Trino lost the catalog after a restart" scenario that the activity used
+// to cover. Creating a catalog row is now the write-through flow in the
+// CreateCatalog handler (handlers_catalogs_write.go), which also handles
+// runtime propagation via CREATE CATALOG.)
 
 func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SplitSQL)
-	w.RegisterActivity(EnsureCatalog)
 	w.RegisterActivity(CreateStatementRecords)
 	w.RegisterActivity(ExecuteStatement)
 	w.RegisterActivity(UpdateStatementRecord)
@@ -167,6 +77,16 @@ func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*Spli
 	stmts := sqlsplitter.Split(params.SQL)
 	if len(stmts) == 0 {
 		stmts = []string{params.SQL}
+	}
+	// I5 (CR-017): catalog management goes through the Baleia UI, never the
+	// SQL editor. With dynamic catalog.management — which is global — any
+	// user with query access could CREATE CATALOG pointed at arbitrary hosts
+	// (exfiltration) or DROP another user's catalog. Reject it here, per
+	// statement, before the workflow starts any statement.
+	for _, stmt := range stmts {
+		if sqlsplitter.IsCatalogDDL(stmt) {
+			return nil, fmt.Errorf("catalog management is performed via the Baleia UI, not the SQL editor")
+		}
 	}
 	return &SplitSQLResult{Statements: stmts}, nil
 }
@@ -228,6 +148,15 @@ func ExecuteStatement(ctx context.Context, params ExecuteStatementParams) (*Exec
 func (a *Activities) executeStatement(ctx context.Context, params ExecuteStatementParams) (*ExecuteStatementResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("executing statement", "execution_id", params.ExecutionID, "position", params.Position)
+
+	// I5 (CR-017): defense in depth. splitSQL already rejects catalog DDL,
+	// but ensure that any path that bypasses splitting (single-statement
+	// fast path, future callers) still cannot issue CREATE/DROP CATALOG.
+	if sqlsplitter.IsCatalogDDL(params.SQL) {
+		return &ExecuteStatementResult{
+			Error: "catalog management is performed via the Baleia UI, not the SQL editor",
+		}, nil
+	}
 
 	start := time.Now()
 	result, err := a.trino.Execute(ctx, params.SQL, params.TrinoCatalog, "")

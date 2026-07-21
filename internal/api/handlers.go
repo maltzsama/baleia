@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/trino"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
 
@@ -20,6 +21,7 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	queries        *db.Queries
+	pool           *pgxpool.Pool
 	cfg            *config.Config
 	temporalClient client.Client
 	s3             *storage.S3Client
@@ -27,9 +29,10 @@ type Handlers struct {
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
 }
 
-func NewHandlers(queries *db.Queries, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
+func NewHandlers(queries *db.Queries, pool *pgxpool.Pool, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
 	return &Handlers{
 		queries:        queries,
+		pool:           pool,
 		cfg:            cfg,
 		temporalClient: temporalClient,
 		s3:             s3,

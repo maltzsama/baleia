@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalog_connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 )
@@ -30,6 +31,15 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 	}
 
 	for _, q := range queries {
+		// I4 (CR-017): discard catalog-management DDL from observability.
+		// These statements are infrastructure, not user queries, and (until
+		// the placeholder plumbing of I2 is in place) they leak credentials
+		// in clear. Even after I2 the discard stays: it is defense in depth
+		// and the DDL carries no user-observability value.
+		if sqlsplitter.IsCatalogDDL(q.Query) {
+			continue
+		}
+
 		var elapsedMs *int32
 		var cpuMs *int32
 		var physBytes *int64
