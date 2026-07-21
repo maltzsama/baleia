@@ -99,6 +99,9 @@ aider*.md
 .cline/
 .clinerules
 
+# Opencode
+.opencode/
+
 # Tabnine
 .tabnine/
 .tabnine-config.json
