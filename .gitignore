@@ -192,6 +192,9 @@ override.tf.json
 /downloads/
 /backups/
 *.dump
+*.dump.*
+dump*.md
+dump*.sh
 *.sql.gz
 
 # ==========================================

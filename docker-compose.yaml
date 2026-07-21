@@ -255,17 +255,34 @@ services:
   # ============================================
 
   trino:
-    image: trinodb/trino:latest
+    # Pinned to 482 — the SPI contracts the baleia-trino-catalog-store plugin
+    # was compiled against (CatalogStore/CatalogStoreFactory) live in Trino 482
+    # and can still evolve. A silent `latest` bump could change property names
+    # (fs.native-s3.enabled → fs.s3.enabled between 481→482 is proof enough)
+    # and break every catalog registration. Do not bump without re-running the
+    # Phase 0 port of the plugin (see CR-014 rev.3).
+    image: trinodb/trino:482
     container_name: baleia_trino
     ports:
       - "8088:8080"
-    environment:
-      - CATALOG_MANAGEMENT=dynamic
     volumes:
-      - ./trino_catalog:/etc/trino/catalog
+      # baleia-trino-catalog-store plugin: built in the sibling repo and
+      # bind-mounted here. See ~/Workspace/baleia-trino-catalog-store for
+      # build instructions (mvn package produces target/baleia-catalog-store/).
+      - ../baleia-trino-catalog-store/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
+      # Plugin configuration — only config.properties (which carries
+      # catalog.management=dynamic and catalog.store=baleia) and
+      # catalog-store.properties (jdbc URL + creds) need to override the
+      # image defaults. node.properties and jvm.config use the image defaults.
+      - ../baleia-trino-catalog-store/docker/trino/config.properties:/etc/trino/config.properties:ro
+      - ../baleia-trino-catalog-store/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
+      # etc/catalog/ is NOT mounted — must stay empty. Catalogs come from
+      # trino_catalog_registry via the plugin, not from static .properties.
     networks:
       - app_net
     depends_on:
+      postgres:
+        condition: service_healthy
       polaris:
         condition: service_healthy
     healthcheck:

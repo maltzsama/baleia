@@ -355,19 +355,49 @@ components:
     Catalog:
       type: object
       properties:
-        id:                 { type: string, format: uuid }
-        connection_id:      { type: string, format: uuid }
-        name:               { type: string }
-        description:        { type: string }
-        created_at:         { type: string, format: date-time }
-        updated_at:         { type: string, format: date-time }
+        id:                  { type: string, format: uuid }
+        connection_id:       { type: string, format: uuid }
+        name:                { type: string }
+        description:         { type: string, nullable: true }
+        trino_catalog_name:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{0,62}$'
+          description: Trino catalog identifier (lowercase, letters/digits/underscore).
+        warehouse:           { type: string, description: Iceberg warehouse identifier }
+        connector:
+          type: string
+          default: iceberg
+          pattern: '^[a-z][a-z0-9_]{0,62}$'
+        enabled:             { type: boolean, default: true }
+        sync_status:
+          type: string
+          enum: [pending, synced, error, draining]
+          readOnly: true
+          description: State of the baleia-trino-catalog-store plugin's view of this catalog.
+        sync_error:          { type: string, nullable: true, readOnly: true }
+        catalog_version:    { type: string, nullable: true, readOnly: true, description: SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion) }
+        created_at:          { type: string, format: date-time }
+        updated_at:          { type: string, format: date-time }
 
     CreateCatalogRequest:
       type: object
-      required: [name]
+      required: [name, trino_catalog_name, warehouse]
       properties:
-        name:        { type: string }
-        description: { type: string }
+        name:               { type: string }
+        trino_catalog_name:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{0,62}$'
+        warehouse:          { type: string }
+        connector:
+          type: string
+          default: iceberg
+          pattern: '^[a-z][a-z0-9_]{0,62}$'
+        description:        { type: string }
+        extra_props:
+          type: object
+          additionalProperties: { type: string }
+          description: Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
+        enabled:            { type: boolean, default: true }
 
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
@@ -1482,6 +1512,60 @@ paths:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/sync:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Catalog]
+      operationId: syncCatalog
+      summary: "Force re-sync of a catalog against the Trino cluster"
+      description: |
+        Re-emits the CREATE CATALOG DDL for the catalog, then verifies that
+        the baleia-trino-catalog-store plugin persisted the row with
+        `updated_by='trino'` and the matching `catalog_version`. Use after
+        fixing a `sync_status='error'` row or when the Trino coordinator
+        lost this catalog after a crash.
+      responses:
+        "200":
+          description: "Catalog synced"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "Sync attempted but the registry diverged"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+
+  /trino/reconcile:
+    post:
+      tags: [Catalog]
+      operationId: reconcileTrino
+      summary: "Compare the registry against the live Trino catalogs and report divergences"
+      description: |
+        On-demand verification (NOT a loop). Lists every catalog row whose
+        `sync_status` is not `synced`, and every live Trino catalog with no
+        matching enabled row. Does not re-issue DDL by itself; callers use
+        the per-row /catalogs/{id}/sync endpoint to fix drift.
+      responses:
+        "200":
+          description: "Reconcile report"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:    { type: array, items: { $ref: "#/components/schemas/Catalog" }, description: "Registry rows with sync_status != synced" }
+                  orphan_in_trino: { type: array, items: { type: string }, description: "Live Trino catalog names with no enabled registry row" }
+                  ok:         { type: array, items: { $ref: "#/components/schemas/Catalog" }, description: "Registry rows confirmed present in Trino and at the right version" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /catalogs/{catalog_id}/namespaces:
     parameters:
       - name: catalog_id

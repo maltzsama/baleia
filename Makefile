@@ -1,4 +1,4 @@
-.PHONY: dev worker migrate sqlc lint build
+.PHONY: dev worker migrate sqlc lint build seed-tpch
 
 dev:
 	SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -18,6 +18,11 @@ migrate-status:
 
 migrate-reset:
 	go run ./cmd/migrate -cmd=reset
+
+# Insere a linha de teste tpch_teste em trino_catalog_registry, usada pelos
+# testes de aceitação T1-T9 do plugin baleia-trino-catalog-store. Idempotente.
+seed-tpch:
+	docker compose exec -T postgres psql -U baleia -d baleia < db/seed/tpch_teste.sql
 
 sqlc:
 	sqlc generate
