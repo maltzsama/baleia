@@ -1,0 +1,45 @@
+[
+  {
+    "name": "tpch_teste",
+    "connector": "tpch",
+    "properties": { "tpch.splits-per-node": "4" },
+    "expected_hash": "c4927418429a39beae1c13b2c9f02adba0c554e8f7d450d170d323b1997c3b82",
+    "note": "The original golden vector - pinned since CR-014. If this changes, the Java-Go contract is broken."
+  },
+  {
+    "name": "empty_properties",
+    "connector": "tpch",
+    "properties": {},
+    "expected_hash": "b129702bfcdcda443f6e4bd9ba0112a592babd890cbca05a6ab8a3d0a7c9ae66",
+    "note": "Covers putInt(properties.size()) with size 0 and no iteration. Catches an off-by-one on the count."
+  },
+  {
+    "name": "multibyte_bmp_ascii_compatible_keys",
+    "connector": "iceberg",
+    "properties": {
+      "iceberg.token": "snowman_unicode_\u2603"
+    },
+    "expected_hash": "ebdd159f200821a5e49d19f25353230c2e80d2c7ddf885586d8593e0dbfaaa71",
+    "note": "Values containing a non-ASCII character that is still in the BMP (\u2603 snowman). Java String.length() counts UTF-16 code units (= 1 here). A buggy Go impl that uses UTF-8 byte count (= 3 bytes) diverges."
+  },
+  {
+    "name": "surrogate_pair_emoji",
+    "connector": "iceberg",
+    "properties": {
+      "iceberg.tag": "rocket_launch_\uD83D\uDE80"
+    },
+    "expected_hash": "dc89e4f554f3ad0bd43e5a9f5eacaf392958fb7895ffd2711e22b2658ff11265",
+    "note": "Values containing an astral-plane character (\uD83D\uDE80 rocket emoji). Java String.length() counts 2 UTF-16 surrogate code units; UTF-8 takes 4 bytes. The most reliable way to catch both glyph-count and byte-count implementations on the Go side."
+  },
+  {
+    "name": "multiple_keys_sorted_order_check",
+    "connector": "iceberg",
+    "properties": {
+      "iceberg.zeta": "z",
+      "iceberg.alpha": "a",
+      "iceberg.middle": "m"
+    },
+    "expected_hash": "1b7ee34ebc65330138f5d15675b063db8667801e3244181f3584a0399b2bee73",
+    "note": "Map out of alphabetical order on purpose. ImmutableSortedMap.copyOf reorders; catches a Go impl that iterates Go's randomized map order."
+  }
+]

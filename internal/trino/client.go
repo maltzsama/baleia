@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -62,34 +64,85 @@ type QueryResult struct {
 	RowCount int64
 }
 
-// CatalogParams defines the configuration for registering any catalog in Trino.
-type CatalogParams struct {
-	Name         string
-	Connector    string // iceberg, postgresql, mysql, etc.
-	Properties   map[string]string
+// CatalogSpec describes a catalog to register in Trino at runtime via
+// CREATE CATALOG (requires catalog.management=dynamic). DDL is generated
+// from validated fields — see buildCreateCatalogDDL — and never accepts
+// bind parameters, so validation is the only defense against injection.
+//
+// Secrets handling:
+//   - Properties carries REAL values (these are written to the registry).
+//   - SecretKeys lists property keys whose value must be replaced with the
+//     @baleia-secret[<Name>:<key>] placeholder in the DDL text. The
+//     placeholder is resolved by the baleia-trino-catalog-store plugin's
+//     SecretResolver at createCatalogProperties() time, by reading the
+//     real value back from trino_catalog_registry.
+//
+// "already exists" with an identical version is treated as success (the
+// catalog is already registered with the right config); "already exists"
+// with a DIVERGENT version or hash is surfaced as ErrCatalogExists.
+// Callers must DROP then CREATE in that case; there is no ALTER CATALOG
+// in Trino OSS (CR-014 §8.4).
+type CatalogSpec struct {
+	Name       string
+	Connector  string            // iceberg, postgresql, mysql, etc.
+	Properties map[string]string // REAL values; secrets in cleartext
+	SecretKeys []string          // keys that become @baleia-secret[...] in DDL
 }
 
-// IcebergCatalogParams configures a dynamic Iceberg REST catalog registration.
-type IcebergCatalogParams struct {
-	Name       string
-	RestURI    string
-	Warehouse  string
-	Credential string
-	Scope      string
-}
+// ErrCatalogExists is returned by CreateCatalog when the catalog name
+// is already registered with a DIFFERENT configuration. Callers must
+// DropCatalog then CreateCatalog again; there is no ALTER CATALOG.
+var ErrCatalogExists = errors.New("catalog already exists with different configuration; DROP then CREATE")
+
+// catalogNameRe matches Trino's identifiers for both catalog and connector
+// names: lowercase ASCII, starts with a letter, may contain lowercase
+// letters/digits/underscore, up to 63 characters. Identical to the CHECK
+// constraint on trino_catalog_registry and the regex used by the Java side
+// (CatalogRow / FileCatalogStore).
+var catalogNameRe = regexp.MustCompile("^[a-z][a-z0-9_]{0,62}$")
 
 // CreateCatalog registers a catalog in Trino at runtime (requires
-// catalog.management=dynamic). Idempotent: "already exists" errors are ignored.
-func (c *Client) CreateCatalog(ctx context.Context, p CatalogParams) error {
-	props := make([]string, 0, len(p.Properties))
-	for k, v := range p.Properties {
-		props = append(props, fmt.Sprintf(`"%s" = '%s'`, k, v))
+// catalog.management=dynamic). The DDL is built with:
+//   - Name and Connector validated against catalogNameRe BEFORE interpolation
+//     (no sanitization — fail fast).
+//   - Property keys double-quoted (required because keys contain hyphens).
+//   - Property values single-quoted with ' escaped as ''.
+//   - Property keys iterated in sorted alphabetical order, so the generated
+//     text is deterministic and the catalog_version hash (catalogs.Version)
+//     is reproducible.
+//   - Secrets in spec.SecretKeys replaced with the
+//     @baleia-secret[<Name>:<key>] placeholder in the DDL text ONLY.
+//
+// This function never logs or returns the real secret values.
+func (c *Client) CreateCatalog(ctx context.Context, spec CatalogSpec) error {
+	if err := validateCatalogName(spec.Name); err != nil {
+		return fmt.Errorf("invalid catalog name: %w", err)
 	}
-	ddl := fmt.Sprintf("CREATE CATALOG %s USING %s WITH (\n\t%s\n)",
-		p.Name, p.Connector, strings.Join(props, ",\n\t"))
-
+	if err := validateCatalogName(spec.Connector); err != nil {
+		return fmt.Errorf("invalid connector name: %w", err)
+	}
+	ddl := buildCreateCatalogDDL(spec)
 	if _, err := c.Execute(ctx, ddl, "", ""); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
+			return ErrCatalogExists
+		}
+		return err
+	}
+	return nil
+}
+
+// DropCatalog removes a runtime-registered catalog. DROP CATALOG does not
+// interrupt running queries that use the catalog but makes it unavailable
+// to new queries (Trino docs + CR-014 §8.3 — draining is a server concern).
+// "does not exist" is treated as success.
+func (c *Client) DropCatalog(ctx context.Context, name string) error {
+	if err := validateCatalogName(name); err != nil {
+		return fmt.Errorf("invalid catalog name: %w", err)
+	}
+	ddl := fmt.Sprintf("DROP CATALOG IF EXISTS %s", name)
+	if _, err := c.Execute(ctx, ddl, "", ""); err != nil {
+		if strings.Contains(err.Error(), "does not exist") ||
+			strings.Contains(err.Error(), "not found") {
 			return nil
 		}
 		return err
@@ -97,32 +150,69 @@ func (c *Client) CreateCatalog(ctx context.Context, p CatalogParams) error {
 	return nil
 }
 
-// CreateIcebergCatalog is a convenience wrapper for Iceberg REST catalogs.
-func (c *Client) CreateIcebergCatalog(ctx context.Context, p IcebergCatalogParams) error {
-	scope := p.Scope
-	if scope == "" {
-		scope = "PRINCIPAL_ROLE:ALL"
+// ListCatalogs returns the names of all catalogs currently registered in
+// Trino. Used by the reconcile endpoint (POST /trino/reconcile) to
+// compare the registry's enabled set against Trino's live set.
+func (c *Client) ListCatalogs(ctx context.Context) ([]string, error) {
+	res, err := c.Execute(ctx, "SELECT catalog_name FROM system.metadata.catalogs ORDER BY catalog_name", "", "")
+	if err != nil {
+		return nil, err
 	}
-
-	ddl := fmt.Sprintf(`CREATE CATALOG %s USING iceberg WITH (
-	"iceberg.catalog.type" = 'rest',
-	"iceberg.rest-catalog.uri" = '%s',
-	"iceberg.rest-catalog.warehouse" = '%s',
-	"iceberg.rest-catalog.security" = 'OAUTH2',
-	"iceberg.rest-catalog.oauth2.credential" = '%s',
-	"iceberg.rest-catalog.oauth2.scope" = '%s',
-	"iceberg.rest-catalog.vended-credentials-enabled" = 'true'
-)`, p.Name, p.RestURI, p.Warehouse, p.Credential, scope)
-
-	if _, err := c.Execute(ctx, ddl, "", ""); err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			return nil
+	names := make([]string, 0, len(res.Data))
+	for _, row := range res.Data {
+		if len(row) == 0 {
+			continue
 		}
-		return err
+		if s, ok := row[0].(string); ok {
+			names = append(names, s)
+		}
+	}
+	return names, nil
+}
+
+// validateCatalogName enforces the Trino identifier rules BEFORE interpolation.
+func validateCatalogName(name string) error {
+	if name == "" {
+		return errors.New("empty")
+	}
+	if !catalogNameRe.MatchString(name) {
+		return fmt.Errorf("must match %s (got %q)", catalogNameRe, name)
 	}
 	return nil
 }
 
+// buildCreateCatalogDDL renders spec into a CREATE CATALOG statement.
+// Secrets in spec.SecretKeys are replaced with @baleia-secret[...] in the
+// DDL text only; spec.Properties retains the real value (callers must
+// already have written that to the registry via catalogs.Project).
+func buildCreateCatalogDDL(spec CatalogSpec) string {
+	secretKeySet := make(map[string]struct{}, len(spec.SecretKeys))
+	for _, k := range spec.SecretKeys {
+		secretKeySet[k] = struct{}{}
+	}
+
+	propNames := make([]string, 0, len(spec.Properties))
+	for k := range spec.Properties {
+		propNames = append(propNames, k)
+	}
+	sort.Strings(propNames)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "CREATE CATALOG %s USING %s WITH (", spec.Name, spec.Connector)
+	for i, k := range propNames {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		v := spec.Properties[k]
+		if _, redact := secretKeySet[k]; redact {
+			v = SecretPlaceholder(spec.Name, k)
+		}
+		escapedValue := strings.ReplaceAll(v, "'", "''")
+		fmt.Fprintf(&b, "\n\t\"%s\" = '%s'", k, escapedValue)
+	}
+	b.WriteString("\n)")
+	return b.String()
+}
 func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*QueryResult, error) {
 	reqURL := c.baseURL + "/v1/statement"
 
