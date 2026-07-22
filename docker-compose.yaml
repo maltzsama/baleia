@@ -261,23 +261,23 @@ services:
     # (fs.native-s3.enabled → fs.s3.enabled between 481→482 is proof enough)
     # and break every catalog registration. Do not bump without re-running the
     # Phase 0 port of the plugin (see CR-014 rev.3).
-    image: trinodb/trino:482
+    #
+    # O plugin baleia-catalog-store é compilado do repositório irmão
+    # (baleia-trino-catalog-store) via `make plugin-build` e montado como bind
+    # mount. Sem o repositório irmão compilado, o Trino sobe sem o plugin e
+    # catalogs não carregam. Use `make up` (que roda plugin-build primeiro).
+    image: trinodb/trino:${TRINO_VERSION:-482}
     container_name: baleia_trino
     ports:
       - "8088:8080"
     volumes:
-      # baleia-trino-catalog-store plugin: built in the sibling repo and
-      # bind-mounted here. See ~/Workspace/baleia-trino-catalog-store for
-      # build instructions (mvn package produces target/baleia-catalog-store/).
-      - ../baleia-trino-catalog-store/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
-      # Plugin configuration — only config.properties (which carries
-      # catalog.management=dynamic and catalog.store=baleia) and
-      # catalog-store.properties (jdbc URL + creds) need to override the
-      # image defaults. node.properties and jvm.config use the image defaults.
-      - ../baleia-trino-catalog-store/docker/trino/config.properties:/etc/trino/config.properties:ro
-      - ../baleia-trino-catalog-store/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
-      # etc/catalog/ is NOT mounted — must stay empty. Catalogs come from
-      # trino_catalog_registry via the plugin, not from static .properties.
+      # Plugin JARs compilados. Requer `make plugin-build` antes do compose.
+      - ${BALEIA_PLUGIN_DIR:-../baleia-trino-catalog-store}/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
+      # Config do plugin (catalog.management=dynamic, catalog.store=baleia,
+      # JDBC URL + creds). Vem do repositório do plugin.
+      - ${BALEIA_PLUGIN_DIR:-../baleia-trino-catalog-store}/docker/trino/config.properties:/etc/trino/config.properties:ro
+      - ${BALEIA_PLUGIN_DIR:-../baleia-trino-catalog-store}/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
+      # etc/catalog/ NÃO é montado — catalogs vêm da registry via plugin.
     networks:
       - app_net
     depends_on:
