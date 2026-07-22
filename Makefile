@@ -45,11 +45,17 @@ clean-plugin:
 up: plugin-build
 	docker compose up -d
 
+# down: derruba o stack sem destruir volumes (dados persistem).
 down:
 	docker compose down
 
+# down-v: derruba o stack e remove volumes nomeados + containers parados +
+# volumes órfãos. CUIDADO: destrói dados do postgres, temporal, etc.
 down-v:
+	docker compose rm -fsv
 	docker compose down -v
+	docker container prune -f
+	docker volume prune -f
 
 logs:
 	docker compose logs -f api worker
