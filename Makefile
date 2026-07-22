@@ -1,5 +1,5 @@
 BALEIA_DIR ?= $(CURDIR)
-PLUGIN_DIR ?= $(abspath $(BALEIA_DIR)/../baleia-trino-catalog-store)
+PLUGIN_DIR ?= $(BALEIA_DIR)/.plugin/baleia-trino-catalog-store
 PLUGIN_REPO ?= https://github.com/maltzsama/baleia-trino-catalog-store.git
 PLUGIN_TAG  ?= v0.1.0
 PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
@@ -33,7 +33,7 @@ plugin-build: plugin-clone
 		-w /plugin \
 		$(PLUGIN_JAVA_IMAGE) \
 		sh -c 'apt-get update -qq && apt-get install -y -qq maven 2>/dev/null && mvn clean package -q -DskipTests'
-	@echo ">>> Plugin compilado: $$(ls $(PLUGIN_DIR)/target/baleia-catalog-store/*.jar 2>/dev/null | head -1)"
+	@echo ">>> Plugin compilado: $$(ls $(PLUGIN_DIR)/target/baleia-catalog-store/baleia-trino-catalog-store-*.jar 2>/dev/null)"
 
 .PHONY: clean-plugin
 clean-plugin:

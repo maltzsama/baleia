@@ -271,12 +271,12 @@ services:
     ports:
       - "8088:8080"
     volumes:
-      # Plugin JARs compilados. Requer `make plugin-build` antes do compose.
-      - ${BALEIA_PLUGIN_DIR:-../baleia-trino-catalog-store}/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
+      # Plugin JARs compilados (make plugin-build clona + compila).
+      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
       # Config do plugin (catalog.management=dynamic, catalog.store=baleia,
-      # JDBC URL + creds). Vem do repositório do plugin.
-      - ${BALEIA_PLUGIN_DIR:-../baleia-trino-catalog-store}/docker/trino/config.properties:/etc/trino/config.properties:ro
-      - ${BALEIA_PLUGIN_DIR:-../baleia-trino-catalog-store}/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
+      # JDBC URL + creds).
+      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/config.properties:/etc/trino/config.properties:ro
+      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
       # etc/catalog/ NÃO é montado — catalogs vêm da registry via plugin.
     networks:
       - app_net
