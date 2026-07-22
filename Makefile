@@ -1,8 +1,10 @@
 BALEIA_DIR ?= $(CURDIR)
 PLUGIN_DIR ?= $(abspath $(BALEIA_DIR)/../baleia-trino-catalog-store)
+PLUGIN_REPO ?= https://github.com/maltzsama/baleia-trino-catalog-store.git
+PLUGIN_TAG  ?= v0.1.0
 PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 
-.PHONY: dev worker migrate sqlc lint build seed-tpch plugin-build up down logs
+.PHONY: dev worker migrate sqlc lint build seed-tpch plugin-clone plugin-build clean-plugin up down logs restart-trino
 
 dev:
 	SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -11,18 +13,20 @@ worker:
 	go run ./cmd/worker
 
 # ── Plugin Trino ──────────────────────────────────────────────────────────────
-# Compila o baleia-trino-catalog-store no repositório irmão usando Docker
-# (JDK 25 + Maven instalado no container). O resultado vai para
-# $(PLUGIN_DIR)/target/baleia-catalog-store/ e é consumido pelo Trino no compose
-# via bind mount (docker-compose.yaml).
-.PHONY: plugin-build
-plugin-build:
+# Clona e compila o baleia-trino-catalog-store usando Docker.
+# O resultado vai para $(PLUGIN_DIR)/target/baleia-catalog-store/ e é consumido
+# pelo Trino no compose via bind mount (docker-compose.yaml).
+.PHONY: plugin-clone
+plugin-clone:
 	@if [ ! -d "$(PLUGIN_DIR)" ]; then \
-		echo "ERRO: repositório do plugin não encontrado em $(PLUGIN_DIR)"; \
-		echo "Clone o repositório irmão:"; \
-		echo "  git clone git@github.com:maltzsama/baleia-trino-catalog-store.git $(PLUGIN_DIR)"; \
-		exit 1; \
+		echo ">>> Clonando plugin $(PLUGIN_TAG) de $(PLUGIN_REPO)..."; \
+		git clone --depth 1 --branch $(PLUGIN_TAG) $(PLUGIN_REPO) $(PLUGIN_DIR); \
+	else \
+		echo ">>> Plugin já clonado em $(PLUGIN_DIR)"; \
 	fi
+
+.PHONY: plugin-build
+plugin-build: plugin-clone
 	@echo ">>> Compilando plugin em $(PLUGIN_DIR)..."
 	docker run --rm \
 		-v "$(PLUGIN_DIR):/plugin" \
@@ -30,6 +34,10 @@ plugin-build:
 		$(PLUGIN_JAVA_IMAGE) \
 		sh -c 'apt-get update -qq && apt-get install -y -qq maven 2>/dev/null && mvn clean package -q -DskipTests'
 	@echo ">>> Plugin compilado: $$(ls $(PLUGIN_DIR)/target/baleia-catalog-store/*.jar 2>/dev/null | head -1)"
+
+.PHONY: clean-plugin
+clean-plugin:
+	rm -rf $(PLUGIN_DIR)
 
 # ── Compose ───────────────────────────────────────────────────────────────────
 
