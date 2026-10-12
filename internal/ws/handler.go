@@ -28,8 +28,8 @@ var upgrader = websocket.Upgrader{
 
 type Querier interface {
 	CheckWorkspaceAccess(ctx context.Context, arg QuerierCheckWorkspaceAccessParams) (bool, error)
-	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QuerierQueryExecution, error)
-	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QuerierQueryStatement, error)
+	GetQueryExecutionByIDAndWorkspace(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (QuerierQueryExecution, error)
+	ListQueryStatementsByWorkspace(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]QuerierQueryStatement, error)
 }
 
 type QuerierCheckWorkspaceAccessParams struct {
@@ -175,18 +175,18 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-pollTicker.C:
-			if !h.poll(ctx, conn, executionID, &lastStatus, &seenStatements) {
+			if !h.poll(ctx, conn, executionID, wsID, &lastStatus, &seenStatements) {
 				return
 			}
 		}
 	}
 }
 
-func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, lastStatus *string, seenStatements *map[int32]string) bool {
+func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID pgtype.UUID, lastStatus *string, seenStatements *map[int32]string) bool {
 	var execID pgtype.UUID
 	execID.Scan(executionID)
 
-	execution, err := h.queries.GetQueryExecutionByID(ctx, execID)
+	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, execID, workspaceID)
 	if err != nil {
 		sendEvent(conn, WSEvent{
 			Type:      "failed",
@@ -206,7 +206,7 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 		})
 	}
 
-	statements, err := h.queries.ListQueryStatements(ctx, execID)
+	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, execID, workspaceID)
 	if err == nil {
 		if *seenStatements == nil {
 			*seenStatements = make(map[int32]string)
@@ -292,7 +292,7 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 
 		case "failed":
 			errMsg := "query execution failed"
-			if statements, err := h.queries.ListQueryStatements(ctx, execID); err == nil {
+			if statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, execID, workspaceID); err == nil {
 				for _, s := range statements {
 					if s.Status == "failed" && s.ErrorMessage != nil && *s.ErrorMessage != "" {
 						errMsg = *s.ErrorMessage

@@ -12,6 +12,10 @@ import (
 
 type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
+	// Conditional cancel: only a running execution transitions to cancelled, so a
+	// concurrent completion or failure activity cannot be overwritten. Zero matched
+	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+	CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
@@ -47,6 +51,10 @@ type Querier interface {
 	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
 	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
+	// Workspace-scoped lookup: an execution id from another workspace must not be
+	// readable. Callers use this instead of GetQueryExecutionByID for user-facing
+	// reads so a cross-workspace id yields ErrNoRows (mapped to 404).
+	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg GetQueryExecutionByIDAndWorkspaceParams) (QueryExecution, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
@@ -75,6 +83,8 @@ type Querier interface {
 	ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQueryExecutionsByWorkspaceParams) ([]QueryExecution, error)
 	ListQueryFolders(ctx context.Context, arg ListQueryFoldersParams) ([]QueryFolder, error)
 	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error)
+	// Only returns statements of an execution that belongs to the given workspace.
+	ListQueryStatementsByWorkspace(ctx context.Context, arg ListQueryStatementsByWorkspaceParams) ([]QueryStatement, error)
 	ListRetrieverRefreshHistory(ctx context.Context, arg ListRetrieverRefreshHistoryParams) ([]RetrieverRefreshHistory, error)
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
@@ -103,6 +113,9 @@ type Querier interface {
 	UpdateMigrationItem(ctx context.Context, arg UpdateMigrationItemParams) error
 	UpdateMigrationProgress(ctx context.Context, arg UpdateMigrationProgressParams) error
 	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error
+	// Only a running execution transitions, so a late completion or failure can
+	// never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
+	// execution was already terminal; callers treat that as a no-op.
 	UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecutionParams) (QueryExecution, error)
 	UpdateQueryStatement(ctx context.Context, arg UpdateQueryStatementParams) (QueryStatement, error)
 	UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams) (Retriever, error)

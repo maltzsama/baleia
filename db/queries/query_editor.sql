@@ -39,9 +39,21 @@ VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: UpdateQueryExecution :one
+-- Only a running execution transitions, so a late completion or failure can
+-- never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
+-- execution was already terminal; callers treat that as a no-op.
 UPDATE query_executions
 SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
-WHERE id = $1
+WHERE id = $1 AND status = 'running'
+RETURNING *;
+
+-- name: CancelQueryExecution :one
+-- Conditional cancel: only a running execution transitions to cancelled, so a
+-- concurrent completion or failure activity cannot be overwritten. Zero matched
+-- rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+UPDATE query_executions
+SET status = 'cancelled', finished_at = now()
+WHERE id = $1 AND workspace_id = $2 AND status = 'running'
 RETURNING *;
 
 -- name: SetExecutionResult :exec
@@ -51,6 +63,12 @@ WHERE id = $1;
 
 -- name: GetQueryExecutionByID :one
 SELECT * FROM query_executions WHERE id = $1;
+
+-- name: GetQueryExecutionByIDAndWorkspace :one
+-- Workspace-scoped lookup: an execution id from another workspace must not be
+-- readable. Callers use this instead of GetQueryExecutionByID for user-facing
+-- reads so a cross-workspace id yields ErrNoRows (mapped to 404).
+SELECT * FROM query_executions WHERE id = $1 AND workspace_id = $2;
 
 -- name: ListQueryExecutionsByWorkspace :many
 SELECT * FROM query_executions
@@ -73,3 +91,10 @@ RETURNING *;
 SELECT * FROM query_statements
 WHERE execution_id = $1
 ORDER BY position;
+
+-- name: ListQueryStatementsByWorkspace :many
+-- Only returns statements of an execution that belongs to the given workspace.
+SELECT s.* FROM query_statements s
+JOIN query_executions e ON e.id = s.execution_id
+WHERE s.execution_id = $1 AND e.workspace_id = $2
+ORDER BY s.position;

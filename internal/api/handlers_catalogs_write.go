@@ -115,7 +115,7 @@ func (h *Handlers) createCatalogTx(ctx context.Context, params db.CreateCatalogP
 	var version string
 
 	txErr := withTx(ctx, h.pool, func(tx pgx.Tx) error {
-		qtx := h.queries.WithTx(tx)
+		qtx := db.New(tx)
 		c, err := qtx.CreateCatalog(ctx, params)
 		if err != nil {
 			return err
@@ -275,7 +275,7 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 	}
 
 	txErr := withTx(ctx, h.pool, func(tx pgx.Tx) error {
-		qtx := h.queries.WithTx(tx)
+		qtx := db.New(tx)
 		if err := qtx.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: id, Enabled: false}); err != nil {
 			return err
 		}

@@ -20,7 +20,7 @@ import (
 var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
-	queries        *db.Queries
+	queries        db.Querier
 	pool           *pgxpool.Pool
 	cfg            *config.Config
 	temporalClient client.Client
@@ -29,7 +29,7 @@ type Handlers struct {
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
 }
 
-func NewHandlers(queries *db.Queries, pool *pgxpool.Pool, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
+func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
 	return &Handlers{
 		queries:        queries,
 		pool:           pool,
@@ -73,7 +73,7 @@ func workspaceIDFromRequest(id openapi_types.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: id, Valid: true}
 }
 
-func requireWorkspaceAccess(ctx context.Context, queries *db.Queries, workspaceID openapi_types.UUID) error {
+func requireWorkspaceAccess(ctx context.Context, queries db.Querier, workspaceID openapi_types.UUID) error {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {

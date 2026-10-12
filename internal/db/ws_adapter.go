@@ -22,8 +22,8 @@ func (a *wsQuerierAdapter) CheckWorkspaceAccess(ctx context.Context, arg ws.Quer
 	})
 }
 
-func (a *wsQuerierAdapter) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (ws.QuerierQueryExecution, error) {
-	e, err := a.q.GetQueryExecutionByID(ctx, id)
+func (a *wsQuerierAdapter) GetQueryExecutionByIDAndWorkspace(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (ws.QuerierQueryExecution, error) {
+	e, err := a.q.GetQueryExecutionByIDAndWorkspace(ctx, GetQueryExecutionByIDAndWorkspaceParams{ID: id, WorkspaceID: workspaceID})
 	if err != nil {
 		return ws.QuerierQueryExecution{}, err
 	}
@@ -35,8 +35,8 @@ func (a *wsQuerierAdapter) GetQueryExecutionByID(ctx context.Context, id pgtype.
 	}, nil
 }
 
-func (a *wsQuerierAdapter) ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
-	stmts, err := a.q.ListQueryStatements(ctx, executionID)
+func (a *wsQuerierAdapter) ListQueryStatementsByWorkspace(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
+	stmts, err := a.q.ListQueryStatementsByWorkspace(ctx, ListQueryStatementsByWorkspaceParams{ExecutionID: executionID, WorkspaceID: workspaceID})
 	if err != nil {
 		return nil, err
 	}

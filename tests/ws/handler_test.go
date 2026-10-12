@@ -17,8 +17,8 @@ import (
 
 type mockQuerier struct {
 	accessCheck func(ctx context.Context, arg ws.QuerierCheckWorkspaceAccessParams) (bool, error)
-	execution   func(ctx context.Context, id pgtype.UUID) (ws.QuerierQueryExecution, error)
-	statements  func(ctx context.Context, executionID pgtype.UUID) ([]ws.QuerierQueryStatement, error)
+	execution   func(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (ws.QuerierQueryExecution, error)
+	statements  func(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]ws.QuerierQueryStatement, error)
 }
 
 func (m *mockQuerier) CheckWorkspaceAccess(ctx context.Context, arg ws.QuerierCheckWorkspaceAccessParams) (bool, error) {
@@ -28,16 +28,16 @@ func (m *mockQuerier) CheckWorkspaceAccess(ctx context.Context, arg ws.QuerierCh
 	return true, nil
 }
 
-func (m *mockQuerier) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (ws.QuerierQueryExecution, error) {
+func (m *mockQuerier) GetQueryExecutionByIDAndWorkspace(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (ws.QuerierQueryExecution, error) {
 	if m.execution != nil {
-		return m.execution(ctx, id)
+		return m.execution(ctx, id, workspaceID)
 	}
 	return ws.QuerierQueryExecution{Status: "running"}, nil
 }
 
-func (m *mockQuerier) ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
+func (m *mockQuerier) ListQueryStatementsByWorkspace(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
 	if m.statements != nil {
-		return m.statements(ctx, executionID)
+		return m.statements(ctx, executionID, workspaceID)
 	}
 	return nil, nil
 }
@@ -129,10 +129,10 @@ func TestWebSocketStreamFinished(t *testing.T) {
 		accessCheck: func(ctx context.Context, arg ws.QuerierCheckWorkspaceAccessParams) (bool, error) {
 			return true, nil
 		},
-		execution: func(ctx context.Context, id pgtype.UUID) (ws.QuerierQueryExecution, error) {
+		execution: func(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (ws.QuerierQueryExecution, error) {
 			return finishedExecution(), nil
 		},
-		statements: func(ctx context.Context, executionID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
+		statements: func(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
 			return finishedStatements(), nil
 		},
 	}
@@ -191,14 +191,14 @@ func TestWebSocketWithStatements(t *testing.T) {
 		accessCheck: func(ctx context.Context, arg ws.QuerierCheckWorkspaceAccessParams) (bool, error) {
 			return true, nil
 		},
-		execution: func(ctx context.Context, id pgtype.UUID) (ws.QuerierQueryExecution, error) {
+		execution: func(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (ws.QuerierQueryExecution, error) {
 			callCount++
 			if callCount < 3 {
 				return ws.QuerierQueryExecution{Status: "running"}, nil
 			}
 			return finishedExecution(), nil
 		},
-		statements: func(ctx context.Context, executionID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
+		statements: func(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
 			if callCount < 2 {
 				return nil, nil
 			}
