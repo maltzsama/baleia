@@ -96,6 +96,9 @@ type Querier interface {
 	SoftDeleteTrinoCatalogRegistry(ctx context.Context, arg SoftDeleteTrinoCatalogRegistryParams) error
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
 	UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (Catalog, error)
+	// Partial update: only fields present in the request are written. COALESCE with
+	// a NULL narg leaves omitted columns untouched, so concurrent PATCH requests to
+	// different fields no longer overwrite each other.
 	UpdateCatalogConnection(ctx context.Context, arg UpdateCatalogConnectionParams) (CatalogConnection, error)
 	UpdateMigrationItem(ctx context.Context, arg UpdateMigrationItemParams) error
 	UpdateMigrationProgress(ctx context.Context, arg UpdateMigrationProgressParams) error

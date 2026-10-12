@@ -10,9 +10,16 @@ SELECT * FROM catalog_connections WHERE id = $1;
 SELECT * FROM catalog_connections WHERE created_by = $1 ORDER BY name;
 
 -- name: UpdateCatalogConnection :one
+-- Partial update: only fields present in the request are written. COALESCE with
+-- a NULL narg leaves omitted columns untouched, so concurrent PATCH requests to
+-- different fields no longer overwrite each other.
 UPDATE catalog_connections
-SET name = $2, url = $3, credentials_enc = $4, default_readonly = $5, updated_at = now()
-WHERE id = $1
+SET name             = COALESCE(sqlc.narg('name'), name),
+    url              = COALESCE(sqlc.narg('url'), url),
+    credentials_enc  = COALESCE(sqlc.narg('credentials_enc'), credentials_enc),
+    default_readonly = COALESCE(sqlc.narg('default_readonly'), default_readonly),
+    updated_at       = now()
+WHERE id = sqlc.arg('id')
 RETURNING *;
 
 -- name: DeleteCatalogConnection :exec
