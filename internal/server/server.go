@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -39,9 +40,10 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 }
 
 func (s *Server) routes() {
-	s.mux.Use(middleware.Logger)
-	s.mux.Use(middleware.Recoverer)
 	s.mux.Use(middleware.RequestID)
+	s.mux.Use(RequestIDHeader)
+	s.mux.Use(StructuredLogger(slog.Default()))
+	s.mux.Use(middleware.Recoverer)
 
 	s.mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

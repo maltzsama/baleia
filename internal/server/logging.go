@@ -1,0 +1,88 @@
+package server
+
+import (
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
+
+// responseRecorder captures the status code and body size for logging.
+type responseRecorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (r *responseRecorder) WriteHeader(code int) {
+	if r.status == 0 {
+		r.status = code
+	}
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *responseRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	n, err := r.ResponseWriter.Write(b)
+	r.bytes += n
+	return n, err
+}
+
+// StructuredLogger emits one JSON log line per request with the fields operators
+// filter on. It is deliberately conservative: it never logs request bodies,
+// headers, query parameters, or credentials, so secrets cannot reach logs here.
+func StructuredLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			rec := &responseRecorder{ResponseWriter: w}
+
+			next.ServeHTTP(rec, r)
+
+			if rec.status == 0 {
+				rec.status = http.StatusOK
+			}
+
+			attrs := []any{
+				"request_id", middleware.GetReqID(r.Context()),
+				"method", r.Method,
+				"route", routePattern(r),
+				"status", rec.status,
+				"duration_ms", time.Since(start).Milliseconds(),
+				"bytes", rec.bytes,
+			}
+			if actor := auth.UserIDFromContext(r.Context()); actor != "" {
+				attrs = append(attrs, "actor_id", actor)
+			}
+
+			logger.Info("http_request", attrs...)
+		})
+	}
+}
+
+// RequestIDHeader copies the chi request id into the X-Request-ID response
+// header so callers can correlate a response with the server log line.
+func RequestIDHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if id := middleware.GetReqID(r.Context()); id != "" {
+			w.Header().Set("X-Request-ID", id)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// routePattern returns the matched chi route template (low cardinality) when
+// available, otherwise the raw path. The query string is never included.
+func routePattern(r *http.Request) string {
+	if rc := chi.RouteContext(r.Context()); rc != nil {
+		if pattern := rc.RoutePattern(); pattern != "" {
+			return pattern
+		}
+	}
+	return r.URL.Path
+}
