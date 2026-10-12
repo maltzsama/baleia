@@ -392,7 +392,10 @@ func (h *Handlers) GetExecution(ctx context.Context, request GetExecutionRequest
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	execution, err := h.queries.GetQueryExecutionByID(ctx, executionID)
+	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
+		ID:          executionID,
+		WorkspaceID: workspaceIDFromRequest(request.Id),
+	})
 	if err != nil {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}
@@ -409,7 +412,10 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	execution, err := h.queries.GetQueryExecutionByID(ctx, executionID)
+	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
+		ID:          executionID,
+		WorkspaceID: workspaceIDFromRequest(request.Id),
+	})
 	if err != nil {
 		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}
@@ -438,7 +444,10 @@ func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsReq
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	statements, err := h.queries.ListQueryStatements(ctx, executionID)
+	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, db.ListQueryStatementsByWorkspaceParams{
+		ExecutionID: executionID,
+		WorkspaceID: workspaceIDFromRequest(request.Id),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +469,10 @@ func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObje
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	execution, err := h.queries.GetQueryExecutionByID(ctx, executionID)
+	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
+		ID:          executionID,
+		WorkspaceID: workspaceIDFromRequest(request.Id),
+	})
 	if err != nil {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}

@@ -205,6 +205,39 @@ func (q *Queries) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (Qu
 	return i, err
 }
 
+const getQueryExecutionByIDAndWorkspace = `-- name: GetQueryExecutionByIDAndWorkspace :one
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key FROM query_executions WHERE id = $1 AND workspace_id = $2
+`
+
+type GetQueryExecutionByIDAndWorkspaceParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Workspace-scoped lookup: an execution id from another workspace must not be
+// readable. Callers use this instead of GetQueryExecutionByID for user-facing
+// reads so a cross-workspace id yields ErrNoRows (mapped to 404).
+func (q *Queries) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg GetQueryExecutionByIDAndWorkspaceParams) (QueryExecution, error) {
+	row := q.db.QueryRow(ctx, getQueryExecutionByIDAndWorkspace, arg.ID, arg.WorkspaceID)
+	var i QueryExecution
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.SavedQueryID,
+		&i.Status,
+		&i.Sql,
+		&i.TrinoQueryID,
+		&i.RowsReturned,
+		&i.DurationMs,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.TrinoCatalog,
+		&i.ResultKey,
+	)
+	return i, err
+}
+
 const getSavedQueryByID = `-- name: GetSavedQueryByID :one
 SELECT id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at FROM saved_queries WHERE id = $1 AND workspace_id = $2
 `
@@ -322,6 +355,51 @@ ORDER BY position
 
 func (q *Queries) ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error) {
 	rows, err := q.db.Query(ctx, listQueryStatements, executionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []QueryStatement
+	for rows.Next() {
+		var i QueryStatement
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExecutionID,
+			&i.Position,
+			&i.Sql,
+			&i.Status,
+			&i.TrinoQueryID,
+			&i.RowsReturned,
+			&i.DurationMs,
+			&i.ErrorMessage,
+			&i.StartedAt,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listQueryStatementsByWorkspace = `-- name: ListQueryStatementsByWorkspace :many
+SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.trino_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at FROM query_statements s
+JOIN query_executions e ON e.id = s.execution_id
+WHERE s.execution_id = $1 AND e.workspace_id = $2
+ORDER BY s.position
+`
+
+type ListQueryStatementsByWorkspaceParams struct {
+	ExecutionID pgtype.UUID `json:"execution_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Only returns statements of an execution that belongs to the given workspace.
+func (q *Queries) ListQueryStatementsByWorkspace(ctx context.Context, arg ListQueryStatementsByWorkspaceParams) ([]QueryStatement, error) {
+	rows, err := q.db.Query(ctx, listQueryStatementsByWorkspace, arg.ExecutionID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}

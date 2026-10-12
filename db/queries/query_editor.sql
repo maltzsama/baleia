@@ -52,6 +52,12 @@ WHERE id = $1;
 -- name: GetQueryExecutionByID :one
 SELECT * FROM query_executions WHERE id = $1;
 
+-- name: GetQueryExecutionByIDAndWorkspace :one
+-- Workspace-scoped lookup: an execution id from another workspace must not be
+-- readable. Callers use this instead of GetQueryExecutionByID for user-facing
+-- reads so a cross-workspace id yields ErrNoRows (mapped to 404).
+SELECT * FROM query_executions WHERE id = $1 AND workspace_id = $2;
+
 -- name: ListQueryExecutionsByWorkspace :many
 SELECT * FROM query_executions
 WHERE workspace_id = $1
@@ -73,3 +79,10 @@ RETURNING *;
 SELECT * FROM query_statements
 WHERE execution_id = $1
 ORDER BY position;
+
+-- name: ListQueryStatementsByWorkspace :many
+-- Only returns statements of an execution that belongs to the given workspace.
+SELECT s.* FROM query_statements s
+JOIN query_executions e ON e.id = s.execution_id
+WHERE s.execution_id = $1 AND e.workspace_id = $2
+ORDER BY s.position;
