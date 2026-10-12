@@ -17,12 +17,23 @@ func (f *fakeConnQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUID)
 	return f.conn, nil
 }
 
-func connectionWith(stored bool) db.CatalogConnection {
+func ownerUUID(t *testing.T, s string) pgtype.UUID {
+	t.Helper()
+	u, err := uuidFromString(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+func testConnection(t *testing.T, stored bool, owner string) db.CatalogConnection {
+	t.Helper()
 	c := db.CatalogConnection{
-		ID:   pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true},
-		Name: "prod",
-		Type: "polaris",
-		Url:  "http://polaris:8181",
+		ID:        pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true},
+		Name:      "prod",
+		Type:      "polaris",
+		Url:       "http://polaris:8181",
+		CreatedBy: ownerUUID(t, owner),
 	}
 	if stored {
 		enc := "<stored-ciphertext>"
@@ -34,9 +45,9 @@ func connectionWith(stored bool) db.CatalogConnection {
 // TestGetCatalogConnectionNeverReturnsSecrets pins the fix: the response carries
 // only has_credentials, never the stored (decrypted) secret.
 func TestGetCatalogConnectionNeverReturnsSecrets(t *testing.T) {
-	h := &Handlers{queries: &fakeConnQuerier{conn: connectionWith(true)}}
+	h := &Handlers{queries: &fakeConnQuerier{conn: testConnection(t, true, testUserID)}}
 
-	resp, err := h.GetCatalogConnection(context.Background(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
+	resp, err := h.GetCatalogConnection(testContext(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -50,9 +61,9 @@ func TestGetCatalogConnectionNeverReturnsSecrets(t *testing.T) {
 }
 
 func TestGetCatalogConnectionReportsNoCredentials(t *testing.T) {
-	h := &Handlers{queries: &fakeConnQuerier{conn: connectionWith(false)}}
+	h := &Handlers{queries: &fakeConnQuerier{conn: testConnection(t, false, testUserID)}}
 
-	resp, err := h.GetCatalogConnection(context.Background(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
+	resp, err := h.GetCatalogConnection(testContext(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,5 +73,20 @@ func TestGetCatalogConnectionReportsNoCredentials(t *testing.T) {
 	}
 	if got.HasCredentials {
 		t.Fatal("has_credentials = true, want false (no secret stored)")
+	}
+}
+
+// TestGetCatalogConnectionHidesOtherUsersConnections pins the ownership fix: a
+// caller cannot read another user's connection (404, not the details).
+func TestGetCatalogConnectionHidesOtherUsersConnections(t *testing.T) {
+	other := "99999999-9999-9999-9999-999999999999"
+	h := &Handlers{queries: &fakeConnQuerier{conn: testConnection(t, true, other)}}
+
+	resp, err := h.GetCatalogConnection(testContext(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := resp.(GetCatalogConnection404JSONResponse); !ok {
+		t.Fatalf("want 404 for another user's connection, got %T", resp)
 	}
 }

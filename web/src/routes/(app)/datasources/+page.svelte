@@ -19,6 +19,7 @@
 	let testStatus = $state<'idle' | 'testing' | 'success' | 'fail'>('idle');
 	let testMessage = $state('');
 	let verifiedId = $state('');
+	let hasStoredCredentials = $state(false);
 
 	const engineLabels: Record<string, string> = {
 		polaris: 'Polaris', nessie: 'Nessie', iceberg: 'Iceberg',
@@ -51,6 +52,7 @@
 	}
 	function openEdit(c: any) {
 		editingId = c.id;
+		hasStoredCredentials = !!c.has_credentials;
 		// Secrets are never returned by the API. Leave the credential fields
 		// blank to keep the stored values, or fill them to replace.
 		form = { name: c.name, type: c.type, url: c.url || '', host: c.host || '', port: c.port || '', database: '', client_id: '', client_secret: '', username: '', password: '' };
@@ -68,15 +70,23 @@
 		return false;
 	}
 
+	// A credential pair is required on create, when the user is entering them,
+	// or when the connection has none stored yet. It is only optional when an
+	// existing connection already has stored credentials we are keeping.
+	function needsCredentialPair() {
+		if (!editingId) return true;
+		if (credentialsProvided()) return true;
+		return !hasStoredCredentials;
+	}
+
 	function isFormValid() {
 		if (!form.name) return false;
 		if (isSqlType()) {
 			if (!form.host || !form.database) return false;
-			// Creating, or replacing credentials, requires both halves.
-			if ((!editingId || credentialsProvided()) && (!form.username || !form.password)) return false;
+			if (needsCredentialPair() && (!form.username || !form.password)) return false;
 		} else if (isIcebergType()) {
 			if (!form.url) return false;
-			if ((!editingId || credentialsProvided()) && (!form.client_id || !form.client_secret)) return false;
+			if (needsCredentialPair() && (!form.client_id || !form.client_secret)) return false;
 		} else {
 			if (!form.url) return false;
 		}

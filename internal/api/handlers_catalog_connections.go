@@ -53,8 +53,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	var credsEnc *string
 	switch string(request.Body.Type) {
 	case "polaris":
-		bodyJSON, _ := json.Marshal(request.Body)
-		slog.Info("polaris case hit", "creds_nil", request.Body.PolarisCredentials == nil, "creds_generic", request.Body.Credentials != nil, "body", string(bodyJSON))
+		slog.Info("polaris case hit", "creds_nil", request.Body.PolarisCredentials == nil, "creds_generic", request.Body.Credentials != nil)
 		credsJSON := marshalCreds(request.Body.PolarisCredentials, request.Body.Credentials)
 		if credsJSON != nil {
 			enc, err := crypto.Encrypt(credsJSON, h.cfg.JWTSecret)
@@ -136,7 +135,7 @@ func marshalCreds(typed interface{}, generic *map[string]interface{}) []byte {
 			slog.Info("creds: using typed credentials")
 			return b
 		}
-		slog.Warn("creds: typed marshal failed or nil, falling through", "err", err, "json", string(b))
+		slog.Warn("creds: typed marshal failed or nil, falling through", "err", err)
 	}
 	if generic != nil && len(*generic) > 0 {
 		b, err := json.Marshal(generic)
@@ -159,12 +158,23 @@ func marshalCreds(typed interface{}, generic *map[string]interface{}) []byte {
 }
 
 func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
-	var uid pgtype.UUID
-	uid.Bytes = request.Id
-	uid.Valid = true
-
-	conn, err := h.queries.GetCatalogConnectionByID(ctx, uid)
+	callerID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
+		return GetCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+
+	var connID pgtype.UUID
+	connID.Bytes = request.Id
+	connID.Valid = true
+
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, connID)
+	if err != nil {
+		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+	}
+
+	// Only the creator may read a connection. Answer 404 (not 403) so the
+	// existence of another user's connection is not revealed.
+	if conn.CreatedBy.Valid && conn.CreatedBy.Bytes != callerID.Bytes {
 		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
