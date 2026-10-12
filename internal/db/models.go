@@ -113,6 +113,7 @@ type QueryExecution struct {
 	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
 	TrinoCatalog *string            `json:"trino_catalog"`
 	ResultKey    *string            `json:"result_key"`
+	RequestID    *string            `json:"request_id"`
 }
 
 type QueryFolder struct {

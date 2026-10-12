@@ -8,7 +8,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog string) error {
+func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog, requestID string) error {
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Minute,
 		HeartbeatTimeout:    30 * time.Second,
@@ -59,6 +59,7 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 			Position:     position,
 			SQL:          stmt,
 			TrinoCatalog: trinoCatalog,
+			RequestID:    requestID,
 		}).Get(ctx, &execResult)
 
 		if err != nil || execResult.Error != "" {
@@ -111,6 +112,7 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 		ExecutionID: executionID,
 		Columns:     allColumns,
 		Rows:        allRows,
+		RequestID:   requestID,
 	}).Get(ctx, nil)
 
 	return workflow.ExecuteActivity(ctx, activities.CompleteExecution, activities.CompleteExecutionParams{

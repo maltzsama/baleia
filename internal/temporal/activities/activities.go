@@ -127,6 +127,7 @@ type ExecuteStatementParams struct {
 	Position     int32
 	SQL          string
 	TrinoCatalog string
+	RequestID    string
 }
 
 type ExecuteStatementResult struct {
@@ -149,7 +150,7 @@ func ExecuteStatement(ctx context.Context, params ExecuteStatementParams) (*Exec
 
 func (a *Activities) executeStatement(ctx context.Context, params ExecuteStatementParams) (*ExecuteStatementResult, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("executing statement", "execution_id", params.ExecutionID, "position", params.Position)
+	logger.Info("executing statement", "execution_id", params.ExecutionID, "request_id", params.RequestID, "position", params.Position)
 
 	// I5 (CR-017): defense in depth. splitSQL already rejects catalog DDL,
 	// but ensure that any path that bypasses splitting (single-statement
@@ -295,6 +296,7 @@ type StoreResultsParams struct {
 	ExecutionID string
 	Columns     []ColumnResult
 	Rows        [][]interface{}
+	RequestID   string
 }
 
 type StoreResultsResult struct {
@@ -307,7 +309,7 @@ func StoreResults(ctx context.Context, params StoreResultsParams) (*StoreResults
 
 func (a *Activities) storeResults(ctx context.Context, params StoreResultsParams) (*StoreResultsResult, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("storeResults input", "columns", len(params.Columns), "rows", len(params.Rows))
+	logger.Info("storeResults input", "request_id", params.RequestID, "columns", len(params.Columns), "rows", len(params.Rows))
 	if len(params.Rows) > 0 {
 		logger.Info("first row", "len", len(params.Rows[0]), "val", params.Rows[0])
 	}
