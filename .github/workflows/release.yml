@@ -53,7 +53,10 @@ jobs:
     steps:
       - name: Resolve release tag
         id: rel
-        run: echo "tag=${{ inputs.tag || needs.release-please.outputs.tag_name }}" >> "$GITHUB_OUTPUT"
+        run: |
+          tag="${{ inputs.tag || needs.release-please.outputs.tag_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         with:
@@ -82,4 +85,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.rel.outputs.tag }}
+            VERSION=${{ steps.rel.outputs.version }}
