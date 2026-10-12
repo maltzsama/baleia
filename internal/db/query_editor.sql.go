@@ -525,7 +525,7 @@ func (q *Queries) SetExecutionResult(ctx context.Context, arg SetExecutionResult
 const updateQueryExecution = `-- name: UpdateQueryExecution :one
 UPDATE query_executions
 SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
-WHERE id = $1
+WHERE id = $1 AND status = 'running'
 RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key
 `
 
@@ -538,6 +538,9 @@ type UpdateQueryExecutionParams struct {
 	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
 }
 
+// Only a running execution transitions, so a late completion or failure can
+// never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
+// execution was already terminal; callers treat that as a no-op.
 func (q *Queries) UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecutionParams) (QueryExecution, error) {
 	row := q.db.QueryRow(ctx, updateQueryExecution,
 		arg.ID,

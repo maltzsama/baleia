@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/activity"
@@ -20,7 +22,7 @@ import (
 var defaultActivities *Activities
 
 type Activities struct {
-	queries *db.Queries
+	queries db.Querier
 	trino   *trino.Client
 	s3      *storage.S3Client
 	cfg     *config.Config
@@ -256,6 +258,10 @@ func (a *Activities) completeExecution(ctx context.Context, params CompleteExecu
 		RowsReturned: &params.RowsReturned,
 		DurationMs:   &params.DurationMs,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The execution was cancelled (or already terminal); do not overwrite it.
+		return nil
+	}
 	return err
 }
 
@@ -278,6 +284,10 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 		ID:     execID,
 		Status: "failed",
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The execution was cancelled (or already terminal); do not overwrite it.
+		return nil
+	}
 	return err
 }
 

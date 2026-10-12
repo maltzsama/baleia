@@ -113,6 +113,9 @@ type Querier interface {
 	UpdateMigrationItem(ctx context.Context, arg UpdateMigrationItemParams) error
 	UpdateMigrationProgress(ctx context.Context, arg UpdateMigrationProgressParams) error
 	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error
+	// Only a running execution transitions, so a late completion or failure can
+	// never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
+	// execution was already terminal; callers treat that as a no-op.
 	UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecutionParams) (QueryExecution, error)
 	UpdateQueryStatement(ctx context.Context, arg UpdateQueryStatementParams) (QueryStatement, error)
 	UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams) (Retriever, error)

@@ -39,9 +39,12 @@ VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: UpdateQueryExecution :one
+-- Only a running execution transitions, so a late completion or failure can
+-- never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
+-- execution was already terminal; callers treat that as a no-op.
 UPDATE query_executions
 SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
-WHERE id = $1
+WHERE id = $1 AND status = 'running'
 RETURNING *;
 
 -- name: CancelQueryExecution :one

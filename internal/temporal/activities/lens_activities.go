@@ -318,7 +318,7 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 	return nil
 }
 
-func recordMaintenanceSnapshot(queries *db.Queries, ctx context.Context, executionID, sql, state string, rows int64, elapsedMs int32, errMsg string) {
+func recordMaintenanceSnapshot(queries db.Querier, ctx context.Context, executionID, sql, state string, rows int64, elapsedMs int32, errMsg string) {
 	var execID pgtype.UUID
 	execID.Scan(executionID)
 
