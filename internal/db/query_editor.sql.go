@@ -11,6 +11,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelQueryExecution = `-- name: CancelQueryExecution :one
+UPDATE query_executions
+SET status = 'cancelled', finished_at = now()
+WHERE id = $1 AND workspace_id = $2 AND status = 'running'
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key
+`
+
+type CancelQueryExecutionParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Conditional cancel: only a running execution transitions to cancelled, so a
+// concurrent completion or failure activity cannot be overwritten. Zero matched
+// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+func (q *Queries) CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error) {
+	row := q.db.QueryRow(ctx, cancelQueryExecution, arg.ID, arg.WorkspaceID)
+	var i QueryExecution
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.SavedQueryID,
+		&i.Status,
+		&i.Sql,
+		&i.TrinoQueryID,
+		&i.RowsReturned,
+		&i.DurationMs,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.TrinoCatalog,
+		&i.ResultKey,
+	)
+	return i, err
+}
+
 const createQueryExecution = `-- name: CreateQueryExecution :one
 INSERT INTO query_executions (workspace_id, user_id, saved_query_id, status, sql, trino_catalog)
 VALUES ($1, $2, $3, $4, $5, $6)

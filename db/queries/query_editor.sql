@@ -44,6 +44,15 @@ SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, fini
 WHERE id = $1
 RETURNING *;
 
+-- name: CancelQueryExecution :one
+-- Conditional cancel: only a running execution transitions to cancelled, so a
+-- concurrent completion or failure activity cannot be overwritten. Zero matched
+-- rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+UPDATE query_executions
+SET status = 'cancelled', finished_at = now()
+WHERE id = $1 AND workspace_id = $2 AND status = 'running'
+RETURNING *;
+
 -- name: SetExecutionResult :exec
 UPDATE query_executions
 SET result_key = $2

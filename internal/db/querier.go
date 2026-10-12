@@ -12,6 +12,10 @@ import (
 
 type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
+	// Conditional cancel: only a running execution transitions to cancelled, so a
+	// concurrent completion or failure activity cannot be overwritten. Zero matched
+	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+	CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)

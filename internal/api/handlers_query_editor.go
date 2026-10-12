@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -411,28 +412,31 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 	var executionID pgtype.UUID
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
+	wsID := workspaceIDFromRequest(request.Id)
 
-	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
+	// Conditional cancel: only a running execution transitions to cancelled, so
+	// a completion or failure that races after this call cannot be overwritten.
+	updated, err := h.queries.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{
 		ID:          executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
+		WorkspaceID: wsID,
+	})
+	if err == nil {
+		return CancelExecution200JSONResponse(dbExecutionToPublic(updated)), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	// Nothing was cancelled: the execution is gone, foreign, or already
+	// terminal. Return its current scoped state, or 404 when it is absent.
+	current, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
+		ID:          executionID,
+		WorkspaceID: wsID,
 	})
 	if err != nil {
 		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}
-
-	if execution.Status != "running" {
-		return CancelExecution200JSONResponse(dbExecutionToPublic(execution)), nil
-	}
-
-	updated, err := h.queries.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
-		ID:     executionID,
-		Status: "cancelled",
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return CancelExecution200JSONResponse(dbExecutionToPublic(updated)), nil
+	return CancelExecution200JSONResponse(dbExecutionToPublic(current)), nil
 }
 
 func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
@@ -443,10 +447,21 @@ func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsReq
 	var executionID pgtype.UUID
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
+	wsID := workspaceIDFromRequest(request.Id)
+
+	// The join-based statements query returns an empty slice for a foreign or
+	// absent execution, which would hide a cross-workspace id behind a 200.
+	// Verify the execution belongs to this workspace first so we can answer 404.
+	if _, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
+		ID:          executionID,
+		WorkspaceID: wsID,
+	}); err != nil {
+		return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+	}
 
 	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, db.ListQueryStatementsByWorkspaceParams{
 		ExecutionID: executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
+		WorkspaceID: wsID,
 	})
 	if err != nil {
 		return nil, err
