@@ -168,15 +168,8 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	resp := dbCatalogConnectionToPublic(conn)
-	if conn.CredentialsEnc != nil {
-		b := crypto.TryDecrypt(*conn.CredentialsEnc, h.cfg.JWTSecret)
-		var creds map[string]interface{}
-		if json.Unmarshal(b, &creds) == nil {
-			resp.Credentials = &creds
-		}
-	}
-	return GetCatalogConnection200JSONResponse(resp), nil
+	// Never return the stored secret. Callers see only has_credentials.
+	return GetCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
 }
 
 func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
@@ -402,6 +395,7 @@ func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 		Name:            c.Name,
 		Type:            CatalogConnectionType(c.Type),
 		Url:             c.Url,
+		HasCredentials:  c.CredentialsEnc != nil && *c.CredentialsEnc != "",
 		DefaultReadonly: c.DefaultReadonly,
 		CreatedAt:       pgTimestampToTime(c.CreatedAt),
 		UpdatedAt:       func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),

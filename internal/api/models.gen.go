@@ -279,16 +279,18 @@ type CatalogSyncStatus string
 
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
-	CreatedAt       time.Time               `json:"created_at"`
-	Credentials     *map[string]interface{} `json:"credentials,omitempty"`
-	DefaultReadonly bool                    `json:"default_readonly"`
-	Host            *string                 `json:"host,omitempty"`
-	Id              openapi_types.UUID      `json:"id"`
-	Name            string                  `json:"name"`
-	Port            *string                 `json:"port,omitempty"`
-	Type            CatalogConnectionType   `json:"type"`
-	UpdatedAt       *time.Time              `json:"updated_at,omitempty"`
-	Url             string                  `json:"url"`
+	CreatedAt       time.Time `json:"created_at"`
+	DefaultReadonly bool      `json:"default_readonly"`
+
+	// HasCredentials Whether stored credentials exist; the secret itself is never returned
+	HasCredentials bool                  `json:"has_credentials"`
+	Host           *string               `json:"host,omitempty"`
+	Id             openapi_types.UUID    `json:"id"`
+	Name           string                `json:"name"`
+	Port           *string               `json:"port,omitempty"`
+	Type           CatalogConnectionType `json:"type"`
+	UpdatedAt      *time.Time            `json:"updated_at,omitempty"`
+	Url            string                `json:"url"`
 }
 
 // CatalogConnectionType defines model for CatalogConnection.Type.
