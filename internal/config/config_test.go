@@ -3,7 +3,7 @@ package config
 import "testing"
 
 func TestValidateRejectsInsecureJWTSecret(t *testing.T) {
-	for _, secret := range []string{"", defaultJWTSecret} {
+	for _, secret := range []string{"", defaultJWTSecret, "short"} {
 		c := &Config{JWTSecret: secret}
 		if err := c.Validate(); err == nil {
 			t.Fatalf("Validate accepted insecure JWT_SECRET %q", secret)

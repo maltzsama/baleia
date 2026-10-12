@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -10,6 +11,10 @@ import (
 // It signs JWTs and derives the credential-encryption key, so Validate rejects
 // it at startup.
 const defaultJWTSecret = "change-me-in-production"
+
+// minJWTSecretLen is the minimum accepted length for JWT_SECRET. Short secrets
+// are guessable and the key is reused for credential encryption.
+const minJWTSecretLen = 16
 
 type Config struct {
 	Port         string
@@ -63,6 +68,9 @@ func Load() *Config {
 func (c *Config) Validate() error {
 	if c.JWTSecret == "" || c.JWTSecret == defaultJWTSecret {
 		return errors.New("JWT_SECRET must be set to a non-default, high-entropy value")
+	}
+	if len(c.JWTSecret) < minJWTSecretLen {
+		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLen)
 	}
 	return nil
 }
