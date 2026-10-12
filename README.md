@@ -227,9 +227,21 @@ The OpenAPI spec is served at `GET /openapi.yaml` and is the single source of tr
 - Registering arbitrary Trino connectors (PostgreSQL, MySQL, Delta Lake, MongoDB, Kafka…) as ad-hoc data sources via Trino's dynamic catalog API, without restarts
 - Remaining screens: admin, datasources management, query history/monitoring
 
+## Releasing
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please). On every push to `main`:
+
+1. `.github/workflows/release.yml` runs the test gate (`go vet` + `go test`), then release-please opens or updates a **Release PR** that bumps `.release-please-manifest.json` and writes `CHANGELOG.md` from Conventional Commits.
+2. Merging the Release PR creates a **GitHub Release** and a `vX.Y.Z` tag, and the same workflow then publishes the container image to GHCR (`ghcr.io/<owner>/baleia:vX.Y.Z`), stamped with the release version via `-ldflags` (`internal/version`).
+3. A failed image publish can be retried with `workflow_dispatch`, passing the existing `vX.Y.Z` tag.
+
+Commit conventions drive the version: `feat:` → minor, `fix:` → patch, `feat!:` / `BREAKING CHANGE:` → major.
+
 ## Contributing
 
 Baleia is a solo effort right now. If you know Svelte/SvelteKit and want to help shape the frontend, open an issue or reach out — this is an open invitation, not a filter.
+
+All code, comments, documentation, and fixtures in this repository are English-only.
 
 ## License
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/version"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -24,7 +25,7 @@ func (h *Handlers) GetSetupStatus(ctx context.Context, request GetSetupStatusReq
 	}
 	return GetSetupStatus200JSONResponse{
 		IsConfigured: len(users) > 0,
-		Version:      "0.1.0",
+		Version:      version.Version,
 	}, nil
 }
 
