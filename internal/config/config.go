@@ -1,9 +1,15 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strconv"
 )
+
+// defaultJWTSecret is the insecure placeholder shipped for local development.
+// It signs JWTs and derives the credential-encryption key, so Validate rejects
+// it at startup.
+const defaultJWTSecret = "change-me-in-production"
 
 type Config struct {
 	Port         string
@@ -34,7 +40,7 @@ func Load() *Config {
 		TemporalHost: getEnv("TEMPORAL_HOST", "localhost:7233"),
 		PolarisURL:   getEnv("POLARIS_URL", "http://localhost:8181"),
 		TrinoURL:     getEnv("TRINO_URL", "http://localhost:8088"),
-		JWTSecret:    getEnv("JWT_SECRET", "change-me-in-production"),
+		JWTSecret:    getEnv("JWT_SECRET", defaultJWTSecret),
 		PublicURL:    getEnv("PUBLIC_URL", "http://localhost:8080"),
 		SMTPHost:     getEnv("SMTP_HOST", ""),
 		SMTPPort:     getEnv("SMTP_PORT", ""),
@@ -49,6 +55,16 @@ func Load() *Config {
 		RateLimitRPS:   getEnvInt("RATE_LIMIT_RPS", 60),
 		RateLimitBurst: getEnvInt("RATE_LIMIT_BURST", 10),
 	}
+}
+
+// Validate rejects configuration that must not reach production: a missing or
+// default JWT_SECRET would let anyone with the database recover stored
+// credentials and forge tokens.
+func (c *Config) Validate() error {
+	if c.JWTSecret == "" || c.JWTSecret == defaultJWTSecret {
+		return errors.New("JWT_SECRET must be set to a non-default, high-entropy value")
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

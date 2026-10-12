@@ -337,7 +337,7 @@ services:
       - TEMPORAL_HOST=temporal:7233
       - TRINO_URL=http://trino:8080
       - POLARIS_URL=http://polaris:8181
-      - JWT_SECRET=change-me-in-production
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
       - PUBLIC_URL=http://localhost:8080
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
@@ -366,6 +366,7 @@ services:
       - TEMPORAL_HOST=temporal:7233
       - TRINO_URL=http://trino:8080
       - POLARIS_URL=http://polaris:8181
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
       - S3_ENDPOINT=rustfs:9000
       - S3_ACCESS_KEY=rustfsadmin
       - S3_SECRET_KEY=rustfsadmin

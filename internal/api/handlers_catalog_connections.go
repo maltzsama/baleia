@@ -209,6 +209,8 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		return nil, err
 	}
 
+	h.catalogCache.Clear()
+
 	return UpdateCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
 }
 

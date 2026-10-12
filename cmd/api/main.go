@@ -21,6 +21,11 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
+	if err := cfg.Validate(); err != nil {
+		slog.Error("invalid configuration", "err", err)
+		os.Exit(1)
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 

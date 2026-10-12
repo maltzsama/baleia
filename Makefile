@@ -7,10 +7,10 @@ PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 .PHONY: dev worker migrate sqlc lint build seed-tpch plugin-clone plugin-build clean-plugin up down logs restart-trino
 
 dev:
-	SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
+	JWT_SECRET=dev-secret-not-for-production SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
 
 worker:
-	go run ./cmd/worker
+	JWT_SECRET=dev-secret-not-for-production go run ./cmd/worker
 
 # ── Trino plugin ──────────────────────────────────────────────────────────────
 # Clones and builds the baleia-trino-catalog-store plugin using Docker.

@@ -50,8 +50,8 @@ func TestEncodeCredentialsEncrypts(t *testing.T) {
 }
 
 // TestEncodeCredentialsWrongKeyFailsClosed ensures a wrong key cannot recover
-// the secret (TryDecrypt falls back to the raw ciphertext, which will not parse
-// as the original JSON).
+// the secret: TryDecrypt falls back to the raw ciphertext, which must not
+// contain the secret in cleartext and must not parse as the original JSON.
 func TestEncodeCredentialsWrongKeyFailsClosed(t *testing.T) {
 	creds := map[string]interface{}{"password": "s3cr3t-value"}
 	enc, err := encodeCredentials(creds, "right-key")
@@ -59,6 +59,10 @@ func TestEncodeCredentialsWrongKeyFailsClosed(t *testing.T) {
 		t.Fatalf("encodeCredentials: %v", err)
 	}
 	raw := crypto.TryDecrypt(*enc, "wrong-key")
+
+	if strings.Contains(string(raw), "s3cr3t-value") {
+		t.Fatalf("wrong key recovered the secret in cleartext: %q", string(raw))
+	}
 
 	var decoded map[string]interface{}
 	if err := json.Unmarshal(raw, &decoded); err == nil {
