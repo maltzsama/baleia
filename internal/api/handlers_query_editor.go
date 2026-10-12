@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -352,6 +353,15 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		savedQueryID.Valid = true
 	}
 
+	// Correlate the execution with the inbound HTTP request so the row, the
+	// Temporal workflow, and the activity logs can be joined back to the
+	// request log line.
+	requestID := middleware.GetReqID(ctx)
+	var requestIDPtr *string
+	if requestID != "" {
+		requestIDPtr = &requestID
+	}
+
 	execution, err := h.queries.CreateQueryExecution(ctx, db.CreateQueryExecutionParams{
 		WorkspaceID:  workspaceIDFromRequest(request.Id),
 		UserID:       uid,
@@ -359,6 +369,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		Status:       "running",
 		Sql:          request.Body.Sql,
 		TrinoCatalog: &trinoCatalog,
+		RequestID:    requestIDPtr,
 	})
 	if err != nil {
 		return nil, err
@@ -376,6 +387,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		request.Id.String(),
 		request.Body.Sql,
 		trinoCatalog,
+		requestID,
 	)
 	if err != nil {
 		return nil, err

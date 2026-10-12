@@ -15,7 +15,7 @@ const cancelQueryExecution = `-- name: CancelQueryExecution :one
 UPDATE query_executions
 SET status = 'cancelled', finished_at = now()
 WHERE id = $1 AND workspace_id = $2 AND status = 'running'
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id
 `
 
 type CancelQueryExecutionParams struct {
@@ -43,14 +43,15 @@ func (q *Queries) CancelQueryExecution(ctx context.Context, arg CancelQueryExecu
 		&i.FinishedAt,
 		&i.TrinoCatalog,
 		&i.ResultKey,
+		&i.RequestID,
 	)
 	return i, err
 }
 
 const createQueryExecution = `-- name: CreateQueryExecution :one
-INSERT INTO query_executions (workspace_id, user_id, saved_query_id, status, sql, trino_catalog)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key
+INSERT INTO query_executions (workspace_id, user_id, saved_query_id, status, sql, trino_catalog, request_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id
 `
 
 type CreateQueryExecutionParams struct {
@@ -60,6 +61,7 @@ type CreateQueryExecutionParams struct {
 	Status       string      `json:"status"`
 	Sql          string      `json:"sql"`
 	TrinoCatalog *string     `json:"trino_catalog"`
+	RequestID    *string     `json:"request_id"`
 }
 
 func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecutionParams) (QueryExecution, error) {
@@ -70,6 +72,7 @@ func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecu
 		arg.Status,
 		arg.Sql,
 		arg.TrinoCatalog,
+		arg.RequestID,
 	)
 	var i QueryExecution
 	err := row.Scan(
@@ -86,6 +89,7 @@ func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecu
 		&i.FinishedAt,
 		&i.TrinoCatalog,
 		&i.ResultKey,
+		&i.RequestID,
 	)
 	return i, err
 }
@@ -217,7 +221,7 @@ func (q *Queries) DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryPara
 }
 
 const getQueryExecutionByID = `-- name: GetQueryExecutionByID :one
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key FROM query_executions WHERE id = $1
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id FROM query_executions WHERE id = $1
 `
 
 func (q *Queries) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error) {
@@ -237,12 +241,13 @@ func (q *Queries) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (Qu
 		&i.FinishedAt,
 		&i.TrinoCatalog,
 		&i.ResultKey,
+		&i.RequestID,
 	)
 	return i, err
 }
 
 const getQueryExecutionByIDAndWorkspace = `-- name: GetQueryExecutionByIDAndWorkspace :one
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key FROM query_executions WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id FROM query_executions WHERE id = $1 AND workspace_id = $2
 `
 
 type GetQueryExecutionByIDAndWorkspaceParams struct {
@@ -270,6 +275,7 @@ func (q *Queries) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg Get
 		&i.FinishedAt,
 		&i.TrinoCatalog,
 		&i.ResultKey,
+		&i.RequestID,
 	)
 	return i, err
 }
@@ -300,7 +306,7 @@ func (q *Queries) GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDPa
 }
 
 const listQueryExecutionsByWorkspace = `-- name: ListQueryExecutionsByWorkspace :many
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key FROM query_executions
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id FROM query_executions
 WHERE workspace_id = $1
 ORDER BY started_at DESC
 LIMIT $2 OFFSET $3
@@ -335,6 +341,7 @@ func (q *Queries) ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQu
 			&i.FinishedAt,
 			&i.TrinoCatalog,
 			&i.ResultKey,
+			&i.RequestID,
 		); err != nil {
 			return nil, err
 		}
@@ -526,7 +533,7 @@ const updateQueryExecution = `-- name: UpdateQueryExecution :one
 UPDATE query_executions
 SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
 WHERE id = $1 AND status = 'running'
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id
 `
 
 type UpdateQueryExecutionParams struct {
@@ -565,6 +572,7 @@ func (q *Queries) UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecu
 		&i.FinishedAt,
 		&i.TrinoCatalog,
 		&i.ResultKey,
+		&i.RequestID,
 	)
 	return i, err
 }
