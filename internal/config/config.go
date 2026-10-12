@@ -7,14 +7,14 @@ import (
 	"strconv"
 )
 
-// defaultJWTSecret is the insecure placeholder shipped for local development.
-// It signs JWTs and derives the credential-encryption key, so Validate rejects
-// it at startup.
-const defaultJWTSecret = "change-me-in-production"
+// DefaultJWTSecret is the insecure placeholder shipped for local development.
+// It signs JWTs and derives the credential-encryption key, so ValidateSecret
+// rejects it.
+const DefaultJWTSecret = "change-me-in-production"
 
-// minJWTSecretLen is the minimum accepted length for JWT_SECRET. Short secrets
+// MinJWTSecretLen is the minimum accepted length for JWT_SECRET. Short secrets
 // are guessable and the key is reused for credential encryption.
-const minJWTSecretLen = 16
+const MinJWTSecretLen = 16
 
 type Config struct {
 	Port         string
@@ -45,7 +45,7 @@ func Load() *Config {
 		TemporalHost: getEnv("TEMPORAL_HOST", "localhost:7233"),
 		PolarisURL:   getEnv("POLARIS_URL", "http://localhost:8181"),
 		TrinoURL:     getEnv("TRINO_URL", "http://localhost:8088"),
-		JWTSecret:    getEnv("JWT_SECRET", defaultJWTSecret),
+		JWTSecret:    getEnv("JWT_SECRET", DefaultJWTSecret),
 		PublicURL:    getEnv("PUBLIC_URL", "http://localhost:8080"),
 		SMTPHost:     getEnv("SMTP_HOST", ""),
 		SMTPPort:     getEnv("SMTP_PORT", ""),
@@ -65,14 +65,21 @@ func Load() *Config {
 // Validate rejects configuration that must not reach production: a missing or
 // default JWT_SECRET would let anyone with the database recover stored
 // credentials and forge tokens.
-func (c *Config) Validate() error {
-	if c.JWTSecret == "" || c.JWTSecret == defaultJWTSecret {
+// ValidateSecret reports why s is unacceptable as JWT_SECRET, or nil when it is
+// safe for signing and credential encryption.
+func ValidateSecret(s string) error {
+	if s == "" || s == DefaultJWTSecret {
 		return errors.New("JWT_SECRET must be set to a non-default, high-entropy value")
 	}
-	if len(c.JWTSecret) < minJWTSecretLen {
-		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLen)
+	if len(s) < MinJWTSecretLen {
+		return fmt.Errorf("JWT_SECRET must be at least %d characters", MinJWTSecretLen)
 	}
 	return nil
+}
+
+// Validate rejects configuration that must not reach production.
+func (c *Config) Validate() error {
+	return ValidateSecret(c.JWTSecret)
 }
 
 func getEnv(key, fallback string) string {

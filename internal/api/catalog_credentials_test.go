@@ -5,11 +5,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 )
 
+// testSecret is a valid-length secret for the credential-encoding tests.
+const testSecret = "test-secret-0123456789abcdef"
+
 func TestEncodeCredentialsNil(t *testing.T) {
-	got, err := encodeCredentials(nil, "test-key")
+	got, err := encodeCredentials(nil, testSecret)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -18,11 +22,22 @@ func TestEncodeCredentialsNil(t *testing.T) {
 	}
 }
 
+// TestEncodeCredentialsRejectsWeakKey ensures the encryption boundary itself
+// refuses a missing or weak key, independent of startup validation.
+func TestEncodeCredentialsRejectsWeakKey(t *testing.T) {
+	creds := map[string]interface{}{"password": "s3cr3t-value"}
+	for _, key := range []string{"", config.DefaultJWTSecret, "short"} {
+		if _, err := encodeCredentials(creds, key); err == nil {
+			t.Fatalf("encodeCredentials accepted weak key %q", key)
+		}
+	}
+}
+
 // TestEncodeCredentialsEncrypts pins the security invariant of the update path:
 // the stored value is ciphertext that never contains the secret in cleartext,
 // and it round-trips back to the original credentials.
 func TestEncodeCredentialsEncrypts(t *testing.T) {
-	key := "test-key"
+	key := testSecret
 	creds := map[string]interface{}{
 		"username": "alice",
 		"password": "s3cr3t-value",
@@ -54,11 +69,11 @@ func TestEncodeCredentialsEncrypts(t *testing.T) {
 // contain the secret in cleartext and must not parse as the original JSON.
 func TestEncodeCredentialsWrongKeyFailsClosed(t *testing.T) {
 	creds := map[string]interface{}{"password": "s3cr3t-value"}
-	enc, err := encodeCredentials(creds, "right-key")
+	enc, err := encodeCredentials(creds, testSecret)
 	if err != nil {
 		t.Fatalf("encodeCredentials: %v", err)
 	}
-	raw := crypto.TryDecrypt(*enc, "wrong-key")
+	raw := crypto.TryDecrypt(*enc, "wrong-key-0123456789abcdef")
 
 	if strings.Contains(string(raw), "s3cr3t-value") {
 		t.Fatalf("wrong key recovered the secret in cleartext: %q", string(raw))

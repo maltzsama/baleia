@@ -12,7 +12,7 @@ import (
 // omitted columns fall through to the SQL COALESCE and keep their stored value.
 func TestBuildConnectionUpdateParams_OnlyPresentFields(t *testing.T) {
 	id := pgtype.UUID{Bytes: [16]byte{0xAB}, Valid: true}
-	key := "test-key"
+	key := testSecret
 
 	t.Run("name only leaves the rest nil", func(t *testing.T) {
 		name := "renamed"
