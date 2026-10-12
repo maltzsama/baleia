@@ -211,15 +211,11 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		url = *request.Body.Url
 	}
 	if request.Body.Credentials != nil {
-		b, err := json.Marshal(request.Body.Credentials)
+		enc, err := encodeCredentials(*request.Body.Credentials, h.cfg.JWTSecret)
 		if err != nil {
 			return nil, err
 		}
-		enc, err := crypto.Encrypt(b, h.cfg.JWTSecret)
-		if err != nil {
-			return nil, err
-		}
-		credsEnc = &enc
+		credsEnc = enc
 	}
 	if request.Body.DefaultReadonly != nil {
 		defaultReadonly = *request.Body.DefaultReadonly
