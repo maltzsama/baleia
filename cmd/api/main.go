@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/server"
@@ -41,6 +42,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	// Set the baleia_trino password from BALEIA_TRINO_DB_PASSWORD so the role and
+	// the Trino plugin's connection stay in sync (no secret in a migration).
+	if err := bootstrap.SetTrinoRolePassword(ctx, pool, cfg.TrinoDBPassword); err != nil {
+		slog.Error("failed to set baleia_trino password", "err", err)
+		os.Exit(1)
+	}
 
 	srv := server.New(cfg, pool)
 	if err := srv.Run(ctx); err != nil {
