@@ -215,8 +215,11 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		if err != nil {
 			return nil, err
 		}
-		s := string(b)
-		credsEnc = &s
+		enc, err := crypto.Encrypt(b, h.cfg.JWTSecret)
+		if err != nil {
+			return nil, err
+		}
+		credsEnc = &enc
 	}
 	if request.Body.DefaultReadonly != nil {
 		defaultReadonly = *request.Body.DefaultReadonly
