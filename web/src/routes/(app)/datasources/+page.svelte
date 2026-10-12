@@ -19,6 +19,7 @@
 	let testStatus = $state<'idle' | 'testing' | 'success' | 'fail'>('idle');
 	let testMessage = $state('');
 	let verifiedId = $state('');
+	let hasStoredCredentials = $state(false);
 
 	const engineLabels: Record<string, string> = {
 		polaris: 'Polaris', nessie: 'Nessie', iceberg: 'Iceberg',
@@ -49,36 +50,43 @@
 		form = { name: '', type: 'polaris', url: '', client_id: '', client_secret: '', username: '', password: '' };
 		modalOpen = true;
 	}
-	async function openEdit(c: any) {
+	function openEdit(c: any) {
 		editingId = c.id;
+		hasStoredCredentials = !!c.has_credentials;
+		// Secrets are never returned by the API. Leave the credential fields
+		// blank to keep the stored values, or fill them to replace.
 		form = { name: c.name, type: c.type, url: c.url || '', host: c.host || '', port: c.port || '', database: '', client_id: '', client_secret: '', username: '', password: '' };
 		if (!c.host && c.url) {
 			const m = c.url.match(/jdbc:[a-z]+:\/\/([^:]+):(\d+)\/(.+)/);
 			if (m) { form.host = m[1]; form.port = m[2]; form.database = m[3]; }
 		}
 		modalOpen = true;
-		try {
-			const res = await fetch(`/api/v1/catalog-connections/${c.id}`, { headers: { Authorization: `Bearer ${token}` } });
-			if (res.ok) {
-				const detail = await res.json();
-				if (detail.credentials) {
-					const creds = detail.credentials as any;
-					if (creds.client_id) form.client_id = creds.client_id;
-					if (creds.client_secret) form.client_secret = creds.client_secret;
-					if (creds.username) form.username = creds.username;
-					if (creds.password) form.password = creds.password;
-				}
-			}
-		} catch {}
 	}
 	function closeModal() { modalOpen = false; testStatus = 'idle'; testMessage = ''; verifiedId = ''; }
+
+	function credentialsProvided() {
+		if (isIcebergType()) return !!(form.client_id || form.client_secret);
+		if (isSqlType()) return !!(form.username || form.password);
+		return false;
+	}
+
+	// A credential pair is required on create, when the user is entering them,
+	// or when the connection has none stored yet. It is only optional when an
+	// existing connection already has stored credentials we are keeping.
+	function needsCredentialPair() {
+		if (!editingId) return true;
+		if (credentialsProvided()) return true;
+		return !hasStoredCredentials;
+	}
 
 	function isFormValid() {
 		if (!form.name) return false;
 		if (isSqlType()) {
-			if (!form.host || !form.database || !form.username || !form.password) return false;
+			if (!form.host || !form.database) return false;
+			if (needsCredentialPair() && (!form.username || !form.password)) return false;
 		} else if (isIcebergType()) {
-			if (!form.url || !form.client_id || !form.client_secret) return false;
+			if (!form.url) return false;
+			if (needsCredentialPair() && (!form.client_id || !form.client_secret)) return false;
 		} else {
 			if (!form.url) return false;
 		}
@@ -101,7 +109,9 @@
 	function buildConnBody(connUrl: string) {
 		const body: any = { name: form.name, type: form.type, url: connUrl, default_readonly: false };
 		if (editingId) {
-			if (isIcebergType() || isSqlType()) {
+			// Only send credentials when the user typed them; otherwise the
+			// stored secret is preserved by the partial update.
+			if (credentialsProvided()) {
 				const creds: any = {};
 				if (isIcebergType()) { creds.client_id = form.client_id; creds.client_secret = form.client_secret; }
 				if (isSqlType()) { creds.username = form.username; creds.password = form.password; }
@@ -131,8 +141,6 @@
 		const body = buildConnBody(connUrl);
 		const method = editingId ? 'PATCH' : 'POST';
 		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
-
-		console.log('testConnection body:', JSON.stringify(body));
 
 		try {
 			const saveRes = await fetch(apiUrl, {
@@ -184,7 +192,6 @@
 		const body = buildConnBody(connUrl);
 		const method = editingId ? 'PATCH' : 'POST';
 		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
-		console.log('saveConnection body:', JSON.stringify(body));
 		await fetch(apiUrl, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
 		closeModal(); loadConnections(); workspaceStore.load();
 	}

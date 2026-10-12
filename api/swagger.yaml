@@ -402,7 +402,7 @@ components:
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
-      required: [id, name, type, url, default_readonly, created_at]
+      required: [id, name, type, url, default_readonly, has_credentials, created_at]
       properties:
         id:   { type: string, format: uuid }
         name: { type: string }
@@ -410,7 +410,7 @@ components:
         url:  { type: string }
         host: { type: string }
         port: { type: string }
-        credentials: { type: object }
+        has_credentials: { type: boolean, description: "Whether stored credentials exist; the secret itself is never returned" }
         default_readonly: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

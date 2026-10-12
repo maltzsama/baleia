@@ -53,8 +53,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	var credsEnc *string
 	switch string(request.Body.Type) {
 	case "polaris":
-		bodyJSON, _ := json.Marshal(request.Body)
-		slog.Info("polaris case hit", "creds_nil", request.Body.PolarisCredentials == nil, "creds_generic", request.Body.Credentials != nil, "body", string(bodyJSON))
+		slog.Info("polaris case hit", "creds_nil", request.Body.PolarisCredentials == nil, "creds_generic", request.Body.Credentials != nil)
 		credsJSON := marshalCreds(request.Body.PolarisCredentials, request.Body.Credentials)
 		if credsJSON != nil {
 			enc, err := crypto.Encrypt(credsJSON, h.cfg.JWTSecret)
@@ -136,7 +135,7 @@ func marshalCreds(typed interface{}, generic *map[string]interface{}) []byte {
 			slog.Info("creds: using typed credentials")
 			return b
 		}
-		slog.Warn("creds: typed marshal failed or nil, falling through", "err", err, "json", string(b))
+		slog.Warn("creds: typed marshal failed or nil, falling through", "err", err)
 	}
 	if generic != nil && len(*generic) > 0 {
 		b, err := json.Marshal(generic)
@@ -159,24 +158,28 @@ func marshalCreds(typed interface{}, generic *map[string]interface{}) []byte {
 }
 
 func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
-	var uid pgtype.UUID
-	uid.Bytes = request.Id
-	uid.Valid = true
+	callerID, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return GetCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
 
-	conn, err := h.queries.GetCatalogConnectionByID(ctx, uid)
+	var connID pgtype.UUID
+	connID.Bytes = request.Id
+	connID.Valid = true
+
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, connID)
 	if err != nil {
 		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	resp := dbCatalogConnectionToPublic(conn)
-	if conn.CredentialsEnc != nil {
-		b := crypto.TryDecrypt(*conn.CredentialsEnc, h.cfg.JWTSecret)
-		var creds map[string]interface{}
-		if json.Unmarshal(b, &creds) == nil {
-			resp.Credentials = &creds
-		}
+	// Only the creator may read a connection. Answer 404 (not 403) so the
+	// existence of another user's connection is not revealed.
+	if conn.CreatedBy.Valid && conn.CreatedBy.Bytes != callerID.Bytes {
+		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
-	return GetCatalogConnection200JSONResponse(resp), nil
+
+	// Never return the stored secret. Callers see only has_credentials.
+	return GetCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
 }
 
 func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
@@ -402,6 +405,7 @@ func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 		Name:            c.Name,
 		Type:            CatalogConnectionType(c.Type),
 		Url:             c.Url,
+		HasCredentials:  c.CredentialsEnc != nil && *c.CredentialsEnc != "",
 		DefaultReadonly: c.DefaultReadonly,
 		CreatedAt:       pgTimestampToTime(c.CreatedAt),
 		UpdatedAt:       func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),
