@@ -64,9 +64,15 @@
 	}
 	function closeModal() { modalOpen = false; testStatus = 'idle'; testMessage = ''; verifiedId = ''; }
 
-	function credentialsProvided() {
+	function credentialsTouched() {
 		if (isIcebergType()) return !!(form.client_id || form.client_secret);
 		if (isSqlType()) return !!(form.username || form.password);
+		return false;
+	}
+
+	function credentialsComplete() {
+		if (isIcebergType()) return !!form.client_id && !!form.client_secret;
+		if (isSqlType()) return !!form.username && !!form.password;
 		return false;
 	}
 
@@ -75,7 +81,7 @@
 	// existing connection already has stored credentials we are keeping.
 	function needsCredentialPair() {
 		if (!editingId) return true;
-		if (credentialsProvided()) return true;
+		if (credentialsTouched()) return true;
 		return !hasStoredCredentials;
 	}
 
@@ -109,9 +115,9 @@
 	function buildConnBody(connUrl: string) {
 		const body: any = { name: form.name, type: form.type, url: connUrl, default_readonly: false };
 		if (editingId) {
-			// Only send credentials when the user typed them; otherwise the
-			// stored secret is preserved by the partial update.
-			if (credentialsProvided()) {
+			// Only send credentials when the complete pair is present; otherwise
+			// the stored secret is preserved by the partial update.
+			if (credentialsComplete()) {
 				const creds: any = {};
 				if (isIcebergType()) { creds.client_id = form.client_id; creds.client_secret = form.client_secret; }
 				if (isSqlType()) { creds.username = form.username; creds.password = form.password; }
