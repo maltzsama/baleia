@@ -1,0 +1,19 @@
+meta {
+  name: List Statements
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}/statements
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}

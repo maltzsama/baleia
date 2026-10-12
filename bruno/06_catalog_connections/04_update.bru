@@ -1,0 +1,21 @@
+meta {
+  name: Update Catalog Connection
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/catalog-connections/{{catalog_connection_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Local Polaris Updated"
+  }
+}

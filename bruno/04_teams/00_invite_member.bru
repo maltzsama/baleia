@@ -1,0 +1,26 @@
+meta {
+  name: Invite Member for Teams
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{base_url}}/users/invite
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "email": "member01_teams@baleia.io",
+    "role": "member"
+  }
+}
+
+vars:post-response {
+  team_member_id: res.body.id
+}

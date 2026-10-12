@@ -1,0 +1,24 @@
+meta {
+  name: List Tables
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/catalog/{{catalog_connection_id}}/catalogs/{{catalog_name}}/namespaces/{{namespace_name}}/tables
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].name: eq events
+}
+
+vars:post-response {
+  table_name: res.body[0].name
+}

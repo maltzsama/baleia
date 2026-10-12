@@ -1,0 +1,22 @@
+meta {
+  name: Add Team Member
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/teams/{{team_id}}/members
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "user_id": "{{team_member_id}}",
+    "role": "member"
+  }
+}

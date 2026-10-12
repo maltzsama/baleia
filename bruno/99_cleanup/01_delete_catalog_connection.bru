@@ -1,0 +1,15 @@
+meta {
+  name: Delete Catalog Connection
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{base_url}}/catalog-connections/{{catalog_connection_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

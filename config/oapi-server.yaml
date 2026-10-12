@@ -1,0 +1,7 @@
+package: api
+generate:
+  chi-server: true
+  strict-server: true
+output: internal/api/server.gen.go
+import-mapping:
+  "github.com/deepmap/oapi-codegen/pkg/runtime": "github.com/oapi-codegen/runtime"

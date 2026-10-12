@@ -1,0 +1,19 @@
+meta {
+  name: Get Execution
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}

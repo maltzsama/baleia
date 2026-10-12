@@ -1,0 +1,15 @@
+meta {
+  name: List Workspace Catalog Access
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/catalog-access
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

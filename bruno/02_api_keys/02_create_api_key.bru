@@ -1,0 +1,26 @@
+meta {
+  name: Create API Key
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api-keys
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Test Key"
+  }
+}
+
+vars:post-response {
+  api_key_id: res.body.id
+  api_key_secret: res.body.secret
+}

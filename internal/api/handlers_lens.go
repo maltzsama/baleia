@@ -1,0 +1,304 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+
+	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"go.temporal.io/sdk/client"
+)
+
+func RegisterLensRoutes(mux chi.Router, queries *db.Queries, jwtSecret string, temporalClient client.Client) {
+	mux.Group(func(r chi.Router) {
+		r.Use(authMiddleware(jwtSecret))
+
+		h := &lensHandlers{queries: queries, temporalClient: temporalClient}
+
+		r.Get("/lens/queries", h.listQueries)
+		r.Get("/lens/queries/{id}", h.getQuery)
+		r.Get("/lens/cluster", h.getCluster)
+		r.Get("/lens/cluster/history", h.listClusterHistory)
+		r.Get("/lens/tables/health", h.listTableHealth)
+		r.Get("/lens/tables/health/{conn_id}", h.listTableHealthByConnection)
+		r.Get("/lens/analytics/queries", h.queryAnalytics)
+		r.Post("/lens/tables/{conn_id}/{catalog}/{namespace}/{table}/maintain", h.triggerMaintenance)
+	})
+}
+
+func authMiddleware(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := extractBearer(r)
+			if token == "" {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "unauthorized", "message": "missing token"})
+				return
+			}
+			claims, err := auth.ParseToken(token, secret)
+			if err != nil {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "unauthorized", "message": "invalid token"})
+				return
+			}
+			ctx := context.WithValue(r.Context(), auth.ContextKeyUserID, claims.UserID)
+			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+type lensHandlers struct {
+	queries        *db.Queries
+	temporalClient client.Client
+}
+
+func (h *lensHandlers) listQueries(w http.ResponseWriter, r *http.Request) {
+	page := 1
+	perPage := 20
+
+	snapshots, err := h.queries.ListTrinoQuerySnapshots(r.Context(), db.ListTrinoQuerySnapshotsParams{
+		Limit:  int32(perPage),
+		Offset: int32((page - 1) * perPage),
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "internal_error", "message": err.Error()})
+		return
+	}
+
+	result := make([]map[string]interface{}, len(snapshots))
+	for i, s := range snapshots {
+		result[i] = snapshotToMap(s)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data":       result,
+		"pagination": map[string]int{"page": page, "per_page": perPage, "total": len(result)},
+	})
+}
+
+func (h *lensHandlers) getQuery(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	snapshot, err := h.queries.GetTrinoQuerySnapshot(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "query not found"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, snapshotToMap(snapshot))
+}
+
+func (h *lensHandlers) getCluster(w http.ResponseWriter, r *http.Request) {
+	snapshot, err := h.queries.GetLatestClusterSnapshot(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "no cluster data available"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"active_workers":   snapshot.ActiveWorkers,
+		"running_queries":  snapshot.RunningQueries,
+		"queued_queries":   snapshot.QueuedQueries,
+		"blocked_queries":  snapshot.BlockedQueries,
+		"total_memory_bytes":  snapshot.TotalMemoryBytes,
+		"free_memory_bytes":   snapshot.FreeMemoryBytes,
+		"captured_at":      snapshot.CapturedAt,
+	})
+}
+
+func (h *lensHandlers) listClusterHistory(w http.ResponseWriter, r *http.Request) {
+	snapshots, err := h.queries.ListClusterSnapshots(r.Context(), db.ListClusterSnapshotsParams{
+		Limit:  100,
+		Offset: 0,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "internal_error", "message": err.Error()})
+		return
+	}
+
+	result := make([]map[string]interface{}, len(snapshots))
+	for i, s := range snapshots {
+		result[i] = map[string]interface{}{
+			"id":                s.ID,
+			"captured_at":       s.CapturedAt,
+			"active_workers":    s.ActiveWorkers,
+			"running_queries":   s.RunningQueries,
+			"queued_queries":    s.QueuedQueries,
+			"blocked_queries":   s.BlockedQueries,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *lensHandlers) listTableHealth(w http.ResponseWriter, r *http.Request) {
+	snapshots, err := h.queries.ListTableHealthSnapshots(r.Context(), db.ListTableHealthSnapshotsParams{
+		Limit:  50,
+		Offset: 0,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "internal_error", "message": err.Error()})
+		return
+	}
+
+	result := make([]map[string]interface{}, len(snapshots))
+	for i, s := range snapshots {
+		result[i] = healthToMap(s)
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *lensHandlers) listTableHealthByConnection(w http.ResponseWriter, r *http.Request) {
+	connID := r.PathValue("conn_id")
+	var uid pgtype.UUID
+	if err := uid.Scan(connID); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"code": "bad_request", "message": "invalid connection id"})
+		return
+	}
+
+	snapshots, err := h.queries.ListTableHealthByConnection(r.Context(), db.ListTableHealthByConnectionParams{
+		CatalogConnectionID: uid,
+		Limit:               50,
+		Offset:              0,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "internal_error", "message": err.Error()})
+		return
+	}
+
+	result := make([]map[string]interface{}, len(snapshots))
+	for i, s := range snapshots {
+		result[i] = healthToMap(s)
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request) {
+	catalog := r.PathValue("catalog")
+	namespace := r.PathValue("namespace")
+	table := r.PathValue("table")
+
+	var body struct {
+		Retention string `json:"retention"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Retention == "" {
+		body.Retention = "7d"
+	}
+
+	executionID := uuid.New().String()
+
+	wo := client.StartWorkflowOptions{
+		ID:        "lens-maint-" + executionID,
+		TaskQueue: "baleia-task-queue",
+	}
+
+	_, err := h.temporalClient.ExecuteWorkflow(r.Context(), wo, workflows.LensMaintenanceWorkflow,
+		executionID, catalog, namespace, table, body.Retention,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "internal_error", "message": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"execution_id": executionID,
+		"status":       "running",
+		"retention":    body.Retention,
+	})
+}
+
+func (h *lensHandlers) queryAnalytics(w http.ResponseWriter, r *http.Request) {
+	snapshots, err := h.queries.ListTrinoQuerySnapshots(r.Context(), db.ListTrinoQuerySnapshotsParams{
+		Limit:  1000,
+		Offset: 0,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "internal_error", "message": err.Error()})
+		return
+	}
+
+	userCounts := map[string]int{}
+	var totalDuration int64
+	var errorCount int
+
+	for _, s := range snapshots {
+		userCounts[s.User]++
+		if s.ElapsedMs != nil {
+			totalDuration += int64(*s.ElapsedMs)
+		}
+		if s.State == "failed" {
+			errorCount++
+		}
+	}
+
+	avgDuration := int64(0)
+	if len(snapshots) > 0 {
+		avgDuration = totalDuration / int64(len(snapshots))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"total_queries":  len(snapshots),
+		"error_count":    errorCount,
+		"avg_duration_ms": avgDuration,
+		"users_active":   len(userCounts),
+	})
+}
+
+func snapshotToMap(s db.TrinoQuerySnapshot) map[string]interface{} {
+	return map[string]interface{}{
+		"id":              s.ID,
+		"trino_query_id":  s.TrinoQueryID,
+		"origin":          s.Origin,
+		"user":            s.User,
+		"state":           s.State,
+		"sql":             s.Sql,
+		"catalog":         s.Catalog,
+		"created_at":      s.CreatedAt,
+		"elapsed_ms":      s.ElapsedMs,
+		"cpu_ms":          s.CpuMs,
+		"physical_input_bytes": s.PhysicalInputBytes,
+		"output_rows":     s.OutputRows,
+		"error_message":   s.ErrorMessage,
+	}
+}
+
+func healthToMap(s db.TableHealthSnapshot) map[string]interface{} {
+	return map[string]interface{}{
+		"id":                    s.ID,
+		"catalog_connection_id": s.CatalogConnectionID,
+		"catalog":               s.Catalog,
+		"namespace":             s.Namespace,
+		"table_name":            s.TableName,
+		"snapshot_count":        s.SnapshotCount,
+		"file_count":            s.FileCount,
+		"total_size_bytes":      s.TotalSizeBytes,
+		"oldest_snapshot_age_h": s.OldestSnapshotAgeHours,
+		"health_score":          s.HealthScore,
+		"needs_compaction":      s.NeedsCompaction,
+		"needs_snapshot_expiry": s.NeedsSnapshotExpiry,
+		"needs_orphan_cleanup":  s.NeedsOrphanCleanup,
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+func extractBearer(r *http.Request) string {
+	bearer := r.Header.Get("Authorization")
+	if len(bearer) > 7 && bearer[:7] == "Bearer " {
+		return bearer[7:]
+	}
+	if c, err := r.Cookie("token"); err == nil {
+		return c.Value
+	}
+	return ""
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Update Workspace
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/workspaces/{{workspace_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "My Workspace Updated"
+  }
+}

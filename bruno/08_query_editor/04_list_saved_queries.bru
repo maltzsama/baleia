@@ -1,0 +1,19 @@
+meta {
+  name: List Saved Queries
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/queries
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}

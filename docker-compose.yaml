@@ -1,77 +1,237 @@
 networks:
   app_net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
 
 volumes:
-  icebergdata:
-  seaweedfs-data:
+  postgres-data:
+  rustfs-data:
 
 services:
-  
-  # STORAGE LAYER - SeaweedFS
-  seaweedfs:
-    environment:
-      - AWS_REGION=us-east-1
-      - AWS_DEFAULT_REGION=us-east-1
-    image: chrislusf/seaweedfs:latest
-    container_name: baleia_seaweedfs
+  # ============================================
+  # OBJECT STORAGE - RustFS (S3-compatible)
+  # ============================================
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: baleia_rustfs
+    hostname: rustfs
     ports:
-      - "8333:8333"  # S3 API
-      - "9333:9333"  # Master
-      - "8888:8888"  # Filer UI
+      - "8333:9000"
+      - "9001:9001"
     volumes:
-      - ./s3.json:/etc/seaweedfs/s3.json
-      - seaweedfs-data:/data
-    command: 'server -s3 -filer -dir="/data" -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -filer.port=8888 -master.port=9333 -volume.port=8082 -s3.domainName=seaweedfs'
+      - rustfs-data:/data
     networks:
-      - app_net
+      app_net:
+        ipv4_address: 172.28.0.10
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
-      interval: 10s
-      retries: 5
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:9000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
 
-
-  # ICEBERG CATALOG - Apache Polaris
-  polaris:
-    image: apache/polaris:1.3.0-incubating
-    container_name: baleia_polaris
-    platform: linux/arm64
-    ports:
-      - "8181:8181"
-      - "8182:8182"
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    container_name: baleia_rustfs_init
     environment:
-      # --- FIX DO CORS PARA A UI NÃO DAR NETWORK ERROR ---
-      - QUARKUS_HTTP_CORS_ENABLED=true
-      - QUARKUS_HTTP_CORS_ORIGINS=http://localhost:4000
-      - QUARKUS_HTTP_CORS_METHODS=GET,POST,PUT,DELETE,PATCH,OPTIONS
-      - QUARKUS_HTTP_CORS_HEADERS=Content-Type,Authorization,Polaris-Realm,X-Request-ID
-      # ---------------------------------------------------
-      - POLARIS_FEATURES_SKIP_CREDENTIAL_SUBSCOPING_INDIRECTION=true
-      - POLARIS_FEATURES_ALLOW_INSECURE_STORAGE_TYPES=true
-      
-      - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
-      - polaris.realm-context.realms=POLARIS
-      - polaris.readiness.ignore-severe-issues=true
-      - polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES"=["FILE","S3","GCS","AZURE"]
-      - POLARIS_S3_ENDPOINT=http://seaweedfs:8333
-      - POLARIS_S3_ACCESS_KEY=seaweedfs
-      - POLARIS_S3_SECRET_KEY=seaweedfs
-      - POLARIS_S3_REGION=us-east-1
-      
-      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=rustfsadmin
+      - AWS_SECRET_ACCESS_KEY=rustfsadmin
       - AWS_DEFAULT_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=seaweedfs
-      - AWS_SECRET_ACCESS_KEY=seaweedfs
-      
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for RustFS..."
+        until aws s3api --endpoint-url http://rustfs:9000 list-buckets 2>/dev/null; do
+          sleep 2
+        done
+        echo "Creating bucket 'baleia'..."
+        aws s3 mb s3://baleia --endpoint-url http://rustfs:9000 --region us-east-1
+        echo "Bucket created."
+    networks:
+      - app_net
+    depends_on:
+      rustfs:
+        condition: service_started
+    restart: "no"
+
+  # ============================================
+  # DATABASE LAYER
+  # ============================================
+
+  postgres:
+    image: postgres:18
+    container_name: baleia_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=baleia
+      - POSTGRES_PASSWORD=baleia
+      - POSTGRES_DB=baleia
+    volumes:
+      - ./tmp/postgres-data:/var/lib/postgresql
     networks:
       - app_net
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8182/q/health || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U baleia"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # POLARIS UI - Console
+  postgres-init:
+    image: postgres:18
+    container_name: baleia_postgres_init
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGPASSWORD=baleia
+    command: >
+      sh -c "
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE temporal;' 2>/dev/null || true;
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE polaris;' 2>/dev/null || true
+      "
+    restart: on-failure
+
+  # ============================================
+  # TEMPORAL LAYER
+  # ============================================
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: baleia_temporal
+    ports:
+      - "7233:7233"
+    volumes:
+      - ./config/dynamicconfig:/etc/temporal/config/dynamicconfig
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=baleia
+      - POSTGRES_PWD=baleia
+      - POSTGRES_SEEDS=postgres
+      - TEMPORAL_DBNAME=temporal
+      - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig/development-sql.yaml
+    networks:
+      - app_net
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'temporal-server' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: baleia_temporal_ui
+    ports:
+      - "8233:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    networks:
+      - app_net
+    depends_on:
+      - temporal
+
+  # ============================================
+  # ICEBERG CATALOG - Polaris
+  # ============================================
+  polaris-bootstrap:
+    image: apache/polaris-admin-tool:1.6.0
+    container_name: baleia_polaris_bootstrap
+    environment:
+      - POLARIS_PERSISTENCE_TYPE=relational-jdbc
+      - QUARKUS_DATASOURCE_USERNAME=baleia
+      - QUARKUS_DATASOURCE_PASSWORD=baleia
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/polaris
+    command: ["bootstrap", "-r", "POLARIS", "-c", "POLARIS,admin,admin"]
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  polaris:
+    image: apache/polaris:1.6.0
+    container_name: baleia_polaris
+    ports:
+      - "8181:8181"
+      - "8182:8182"
+    environment:
+      # RELATIONAL PERSISTENCE (POSTGRES)
+      - POLARIS_PERSISTENCE_TYPE=relational-jdbc
+      - QUARKUS_DATASOURCE_USERNAME=baleia
+      - QUARKUS_DATASOURCE_PASSWORD=baleia
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/polaris
+      
+      # BOOTSTRAP (already done, but harmless)
+      - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
+      - polaris.realm-context.realms=POLARIS
+      
+      # CORS
+      - QUARKUS_HTTP_CORS_ENABLED=true
+      - QUARKUS_HTTP_CORS_ORIGINS=http://polaris-console:80,http://localhost:4000
+      - QUARKUS_HTTP_CORS_METHODS=GET,POST,PUT,DELETE,PATCH,OPTIONS
+      - QUARKUS_HTTP_CORS_HEADERS=Content-Type,Authorization,Polaris-Realm,X-Request-ID
+      
+      # FEATURES
+      - polaris.features."ALLOW_INSECURE_STORAGE_TYPES"=true
+      - polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES"=["FILE","S3","GCS","AZURE"]
+      - polaris.readiness.ignore-severe-issues=true
+      
+      # AUTHENTICATION
+      - polaris.authorization.enabled=false
+      - POLARIS_AUTHORIZATION_ENABLED=false
+      - polaris.auth.enabled=true
+      - polaris.auth.type=basic
+      - polaris.auth.basic.users=admin:admin
+      - polaris.auth.default-realm=POLARIS
+      
+      # S3 (RustFS)
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=rustfsadmin
+      - AWS_SECRET_ACCESS_KEY=rustfsadmin
+      - JAVA_OPTS_APPEND=-Daws.s3UsePathStyle=true
+      
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://polaris:8182/q/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  seed-polaris:
+    image: python:3.11-slim
+    container_name: baleia_seed_polaris
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        pip install --quiet pyiceberg pyarrow requests
+        python /scripts/seed_polaris.py
+    environment:
+      - POLARIS_URL=http://polaris:8181
+    volumes:
+      - ./scripts:/scripts:ro
+    networks:
+      - app_net
+    depends_on:
+      polaris:
+        condition: service_healthy
+    restart: "no"
+
   polaris-console:
     image: maltzsama/polaris-console:latest
     container_name: baleia_polaris_ui
@@ -79,25 +239,55 @@ services:
       - "4000:80"
     environment:
       - VITE_POLARIS_API_URL=http://localhost:8181
-      - VITE_OAUTH_TOKEN_URL=http://localhost:8181/api/catalog/v1/oauth/tokens
       - VITE_POLARIS_REALM=POLARIS
+    command: >
+      /bin/sh -c '
+      find /usr/share/nginx/html -type f -name "*.js" -exec sed -i "s|http://localhost:4000|http://localhost:8181|g; s|localhost:4000|localhost:8181|g" {} \; &&
+      nginx -g "daemon off;"
+      '
     networks:
       - app_net
     depends_on:
       - polaris
 
-
+  # ============================================
   # QUERY ENGINE - Trino
+  # ============================================
+
   trino:
-    image: trinodb/trino:latest
+    # Pinned to 482 — the SPI contracts the baleia-trino-catalog-store plugin
+    # was compiled against (CatalogStore/CatalogStoreFactory) live in Trino 482
+    # and can still evolve. A silent `latest` bump could change property names
+    # (fs.native-s3.enabled → fs.s3.enabled between 481→482 is proof enough)
+    # and break every catalog registration. Do not bump without re-running the
+    # Phase 0 port of the plugin (see CR-014 rev.3).
+    #
+    # The baleia-catalog-store plugin is built from the sibling repository
+    # (baleia-trino-catalog-store) via `make plugin-build` and mounted as a bind
+    # mount. Without the built sibling repository, Trino starts without the
+    # plugin and catalogs do not load. Use `make up` (which runs plugin-build first).
+    image: trinodb/trino:${TRINO_VERSION:-482}
     container_name: baleia_trino
+    environment:
+      - AWS_REGION=us-east-1
+      # Matches the baleia_trino role password created by migration 00018.
+      # catalog-store.properties resolves ${ENV:BALEIA_TRINO_DB_PASSWORD} at boot.
+      - BALEIA_TRINO_DB_PASSWORD=${BALEIA_TRINO_DB_PASSWORD:-admin}
     ports:
       - "8088:8080"
     volumes:
-      - ./trino_catalog:/etc/trino/catalog
+      # Plugin JARs compilados (make plugin-build clona + compila).
+      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
+      # Config do plugin (catalog.management=dynamic, catalog.store=baleia,
+      # JDBC URL + creds).
+      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/config.properties:/etc/trino/config.properties:ro
+      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
+      # etc/catalog/ is NOT mounted — catalogs come from the registry via the plugin.
     networks:
       - app_net
     depends_on:
+      postgres:
+        condition: service_healthy
       polaris:
         condition: service_healthy
     healthcheck:
@@ -105,3 +295,89 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ============================================
+  # EMAIL - Mailpit
+  # ============================================
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: baleia_mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - app_net
+
+  # ============================================
+  # BALEA SERVICES
+  # ============================================
+
+  migrate:
+    build: .
+    container_name: baleia_migrate
+    environment:
+      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
+    command: sh -c "sleep 5 && /migrate -cmd=up"
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  api:
+    build: .
+    container_name: baleia_api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
+      - TEMPORAL_HOST=temporal:7233
+      - TRINO_URL=http://trino:8080
+      - POLARIS_URL=http://polaris:8181
+      - JWT_SECRET=change-me-in-production
+      - PUBLIC_URL=http://localhost:8080
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_FROM=noreply@baleia.io
+      - S3_ENDPOINT=rustfs:9000
+      - S3_ACCESS_KEY=rustfsadmin
+      - S3_SECRET_KEY=rustfsadmin
+      - S3_BUCKET=baleia
+      - S3_USE_SSL=false
+    command: /api
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      polaris:
+        condition: service_healthy
+
+  worker:
+    build: .
+    container_name: baleia_worker
+    environment:
+      - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
+      - TEMPORAL_HOST=temporal:7233
+      - TRINO_URL=http://trino:8080
+      - POLARIS_URL=http://polaris:8181
+      - S3_ENDPOINT=rustfs:9000
+      - S3_ACCESS_KEY=rustfsadmin
+      - S3_SECRET_KEY=rustfsadmin
+      - S3_BUCKET=baleia
+      - S3_USE_SSL=false
+    command: /worker
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      polaris:
+        condition: service_healthy

@@ -1,0 +1,30 @@
+meta {
+  name: Create Saved Query
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/queries
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "My Query",
+    "sql": "SELECT 1"
+  }
+}
+
+vars:post-response {
+  query_id: res.body.id
+}
+
+assert {
+  res.status: eq 201
+}

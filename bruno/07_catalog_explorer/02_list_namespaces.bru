@@ -1,0 +1,24 @@
+meta {
+  name: List Namespaces
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/catalog/{{catalog_connection_id}}/catalogs/{{catalog_name}}/namespaces
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0][0]: eq analytics
+}
+
+vars:post-response {
+  namespace_name: res.body[0][0]
+}

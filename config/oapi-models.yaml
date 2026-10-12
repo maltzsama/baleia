@@ -1,0 +1,6 @@
+package: api
+generate:
+  models: true
+output: internal/api/models.gen.go
+import-mapping:
+  "github.com/deepmap/oapi-codegen/pkg/runtime": "github.com/oapi-codegen/runtime"

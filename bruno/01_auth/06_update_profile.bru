@@ -1,0 +1,21 @@
+meta {
+  name: Update Profile
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{base_url}}/me
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Admin Updated"
+  }
+}
