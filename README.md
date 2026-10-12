@@ -162,6 +162,31 @@ All settings are environment variables. Defaults work for local development with
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outbound email (password reset, invites) |
 | `RATE_LIMIT_RPS` | `60` | Max requests per second (rate limiter) |
 | `RATE_LIMIT_BURST` | `10` | Rate limiter burst size |
+| `BALEIA_METRICS_ENABLED` | `true` | Serve `GET /metrics` in Prometheus exposition format |
+| `BALEIA_METRICS_TOKEN` | — | When set, `GET /metrics` requires `Authorization: Bearer <token>` or `X-Metrics-Token` |
+
+## Metrics
+
+The API exposes Prometheus metrics on `GET /metrics`. Set `BALEIA_METRICS_TOKEN`
+so scraping is not open to anyone on the network.
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `baleia_http_requests_total` | `route`, `method`, `status_class` | HTTP request count by route template |
+| `baleia_http_request_duration_seconds` | `route`, `method` | HTTP latency histogram |
+| `baleia_auth_attempts_total` | `outcome` | `success`, `missing_token`, `invalid_token`, `rate_limited` |
+| `baleia_engine_queries_total` | `engine`, `adapter`, `outcome` | Statements sent to a query engine |
+| `baleia_engine_errors_total` | `engine`, `code` | Engine failures by a bounded error class |
+| `baleia_storage_operations_total` | `operation`, `outcome` | Object-storage operations |
+| `baleia_storage_bytes_total` | `operation` | Bytes written to object storage |
+| `baleia_cache_lookups_total` | `cache`, `outcome` | In-process cache `hit` / `miss` |
+
+Labels are deliberately bounded — `route` is the chi route template, never the
+concrete path, and no label ever carries SQL, a user id, an execution id, an
+email, a table or a catalog name. `internal/metrics/metrics_test.go` enforces
+this.
+
+Example alert rules live in `deploy/prometheus/baleia-alerts.yml`.
 
 ## Project structure
 

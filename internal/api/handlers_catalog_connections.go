@@ -17,6 +17,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/metrics"
 	trino_client "github.com/galileostudio/baleia/internal/trino"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -482,10 +483,12 @@ func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request)
 
 	cacheKey := wsID + ":" + userID
 	if cached, ok := h.catalogCache.Get(cacheKey); ok {
+		metrics.CacheLookups.WithLabelValues("catalogs", "hit").Inc()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(cached)
 		return
 	}
+	metrics.CacheLookups.WithLabelValues("catalogs", "miss").Inc()
 
 	var wsUUID pgtype.UUID
 	if err := wsUUID.Scan(wsID); err != nil {

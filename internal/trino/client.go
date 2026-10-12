@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/metrics"
 )
 
 type Client struct {
@@ -213,7 +215,41 @@ func buildCreateCatalogDDL(spec CatalogSpec) string {
 	b.WriteString("\n)")
 	return b.String()
 }
+// Execute runs a statement against Trino and records engine metrics. The
+// outcome label is bounded (success/error) and the failure code is a fixed
+// classification — never SQL, catalog or message text.
 func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*QueryResult, error) {
+	result, err := c.execute(ctx, sql, catalog, schema)
+	outcome := "success"
+	if err != nil {
+		outcome = "error"
+		metrics.EngineErrors.WithLabelValues("trino", classifyError(err)).Inc()
+	}
+	metrics.EngineQueries.WithLabelValues("trino", "trino_rest", outcome).Inc()
+	return result, err
+}
+
+// classifyError maps a failure onto a fixed, bounded label value.
+func classifyError(err error) string {
+	if errors.Is(err, context.Canceled) {
+		return "cancelled"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	switch {
+	case strings.Contains(err.Error(), "trino execute:"):
+		return "transport"
+	case strings.Contains(err.Error(), "trino decode:"):
+		return "decode"
+	case strings.Contains(err.Error(), "trino error:"):
+		return "trino"
+	default:
+		return "unknown"
+	}
+}
+
+func (c *Client) execute(ctx context.Context, sql, catalog, schema string) (*QueryResult, error) {
 	reqURL := c.baseURL + "/v1/statement"
 
 	body := bytes.NewBufferString(sql)

@@ -39,6 +39,12 @@ type Config struct {
 	S3UseSSL     bool
 	RateLimitRPS   int
 	RateLimitBurst int
+	// MetricsEnabled serves GET /metrics for Prometheus scraping. When false
+	// the endpoint is not registered at all.
+	MetricsEnabled bool
+	// MetricsToken, when non-empty, requires the caller to present it on
+	// GET /metrics via "Authorization: Bearer <token>" or "X-Metrics-Token".
+	MetricsToken string
 }
 
 func Load() *Config {
@@ -63,6 +69,8 @@ func Load() *Config {
 		S3UseSSL:     getEnv("S3_USE_SSL", "false") == "true",
 		RateLimitRPS:   getEnvInt("RATE_LIMIT_RPS", 60),
 		RateLimitBurst: getEnvInt("RATE_LIMIT_BURST", 10),
+		MetricsEnabled: getEnv("BALEIA_METRICS_ENABLED", "true") == "true",
+		MetricsToken:   getEnv("BALEIA_METRICS_TOKEN", ""),
 	}
 }
 

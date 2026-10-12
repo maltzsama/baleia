@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/ws"
 	"github.com/go-chi/chi/v5"
@@ -42,12 +43,17 @@ func New(cfg *config.Config, pool *pgxpool.Pool) *Server {
 func (s *Server) routes() {
 	s.mux.Use(middleware.RequestID)
 	s.mux.Use(RequestIDHeader)
+	s.mux.Use(HTTPMetrics)
 	s.mux.Use(StructuredLogger(slog.Default()))
 	s.mux.Use(middleware.Recoverer)
 
 	s.mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+
+	if s.cfg.MetricsEnabled {
+		s.mux.Get("/metrics", s.metricsHandler())
+	}
 
 	s.mux.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "api/swagger.yaml")
@@ -69,7 +75,6 @@ func (s *Server) routes() {
 	// WebSocket needs a raw connection
 	wsHandler := ws.New(s.queries.AsWSQuerier(), s.cfg.JWTSecret, s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
-
 
 	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret),
@@ -148,6 +153,7 @@ func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
 
 			token := extractToken(r)
 			if token == "" {
+				metrics.AuthAttempts.WithLabelValues("missing_token").Inc()
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte(`{"code":"unauthorized","message":"missing token"}`))
@@ -156,12 +162,14 @@ func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
 
 			claims, err := auth.ParseToken(token, secret)
 			if err != nil {
+				metrics.AuthAttempts.WithLabelValues("invalid_token").Inc()
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte(`{"code":"unauthorized","message":"invalid token"}`))
 				return nil, nil
 			}
 
+			metrics.AuthAttempts.WithLabelValues("success").Inc()
 			ctx = context.WithValue(ctx, auth.ContextKeyUserID, claims.UserID)
 			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
 			return f(ctx, w, r, args)
@@ -174,6 +182,7 @@ func chiAuthMiddleware(secret string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := extractToken(r)
 			if token == "" {
+				metrics.AuthAttempts.WithLabelValues("missing_token").Inc()
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte(`{"code":"unauthorized","message":"missing token"}`))
@@ -181,11 +190,13 @@ func chiAuthMiddleware(secret string) func(http.Handler) http.Handler {
 			}
 			claims, err := auth.ParseToken(token, secret)
 			if err != nil {
+				metrics.AuthAttempts.WithLabelValues("invalid_token").Inc()
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte(`{"code":"unauthorized","message":"invalid token"}`))
 				return
 			}
+			metrics.AuthAttempts.WithLabelValues("success").Inc()
 			ctx := context.WithValue(r.Context(), auth.ContextKeyUserID, claims.UserID)
 			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))

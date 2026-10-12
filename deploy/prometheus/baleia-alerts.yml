@@ -1,0 +1,123 @@
+# Example Prometheus alert rules for Baleia.
+#
+# Scrape the API with:
+#   - job_name: baleia
+#     metrics_path: /metrics
+#     authorization:
+#       type: Bearer
+#       credentials: <BALEIA_METRICS_TOKEN>
+#
+# Adjust the thresholds to your SLOs before enabling in production.
+
+groups:
+  - name: baleia.availability
+    rules:
+      - alert: BaleiaAPIScraperCannotReachMetrics
+        expr: up{job="baleia"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Baleia API metrics endpoint is unreachable"
+          description: "Prometheus cannot scrape {{ $labels.instance }}. The API is down or the scrape token is wrong."
+
+      - alert: BaleiaAPIHighErrorRate
+        expr: |
+          sum by (route) (rate(baleia_http_requests_total{status_class="5xx"}[5m]))
+            /
+          sum by (route) (rate(baleia_http_requests_total[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx rate on {{ $labels.route }}"
+          description: "More than 5% of requests on this route are failing."
+
+  - name: baleia.latency
+    rules:
+      - alert: BaleiaAPISlowRequests
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, route) (rate(baleia_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p99 latency above 2s on {{ $labels.route }}"
+          description: "The 99th percentile for this route has been over 2s for 10 minutes."
+
+  - name: baleia.auth
+    rules:
+      - alert: BaleiaAuthFailureSpike
+        expr: |
+          sum(rate(baleia_auth_attempts_total{outcome!="success"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spike in authentication failures"
+          description: "More than one failed authentication per second for 5 minutes — possible credential stuffing."
+
+  - name: baleia.engines
+    rules:
+      - alert: BaleiaEngineFailing
+        expr: |
+          sum by (engine) (rate(baleia_engine_errors_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.engine }} query failures"
+          description: "The query engine is returning errors on more than 0.1 failures/second."
+
+      - alert: BaleiaEngineSaturation
+        expr: |
+          sum by (engine) (rate(baleia_engine_queries_total{outcome="success"}[5m]))
+            /
+          sum by (engine) (rate(baleia_engine_queries_total[5m])) < 0.95
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.engine }} success rate degraded"
+          description: "Fewer than 95% of statements are succeeding against this engine."
+
+  - name: baleia.storage
+    rules:
+      - alert: BaleiaResultStorageFailing
+        expr: |
+          sum(rate(baleia_storage_operations_total{outcome="error"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Object storage operations are failing"
+          description: "Query results cannot be written or read from S3-compatible storage."
+
+      - alert: BaleiaResultStorageStalled
+        expr: |
+          increase(baleia_storage_bytes_total{operation="put"}[15m]) == 0
+            and
+          increase(baleia_http_requests_total{route=~".*/executions"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Results are not being written to storage"
+          description: "Executions are being served but no result bytes are reaching S3."
+
+  - name: baleia.operations
+    rules:
+      - alert: BaleiaCatalogCacheNeverHit
+        expr: |
+          sum(rate(baleia_cache_lookups_total{cache="catalogs",outcome="hit"}[1h])) == 0
+            and
+          sum(rate(baleia_cache_lookups_total{cache="catalogs",outcome="miss"}[1h])) > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Catalog cache is never serving hits"
+          description: "Every catalog lookup is a miss — the cache TTL or the invalidation path may be wrong."

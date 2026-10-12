@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/metrics"
 	"golang.org/x/time/rate"
 )
 
@@ -111,6 +112,7 @@ func RateLimitRefreshMiddleware(rl *RateLimiter) func(http.Handler) http.Handler
 			}
 
 			if !rl.Allow(ip) {
+				metrics.AuthAttempts.WithLabelValues("rate_limited").Inc()
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
 				w.Write([]byte(`{"code":"rate_limited","message":"too many refresh requests"}`))

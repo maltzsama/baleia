@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/metrics"
 )
 
 const (
@@ -69,7 +71,22 @@ func (c *S3Client) MakeBucket(ctx context.Context) error {
 	return nil
 }
 
+// Put stores an object and records storage metrics. The operation and outcome
+// labels are bounded; the object key is never a label.
 func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType string) error {
+	err := c.put(ctx, key, data, contentType)
+	outcome := "success"
+	if err != nil {
+		outcome = "error"
+	}
+	metrics.StorageOperations.WithLabelValues("put", outcome).Inc()
+	if err == nil {
+		metrics.StorageBytes.WithLabelValues("put").Add(float64(len(data)))
+	}
+	return err
+}
+
+func (c *S3Client) put(ctx context.Context, key string, data []byte, contentType string) error {
 	scheme := "http"
 	if c.useSSL {
 		scheme = "https"
@@ -131,7 +148,18 @@ func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) 
 	return data, resp.Header.Get("Content-Type"), nil
 }
 
+// GetReader fetches an object and records storage metrics.
 func (c *S3Client) GetReader(ctx context.Context, key string) (io.ReadCloser, string, error) {
+	rc, contentType, err := c.getReader(ctx, key)
+	outcome := "success"
+	if err != nil {
+		outcome = "error"
+	}
+	metrics.StorageOperations.WithLabelValues("get", outcome).Inc()
+	return rc, contentType, err
+}
+
+func (c *S3Client) getReader(ctx context.Context, key string) (io.ReadCloser, string, error) {
 	scheme := "http"
 	if c.useSSL {
 		scheme = "https"
