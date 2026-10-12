@@ -172,9 +172,9 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	// Only the creator may read a connection. Answer 404 (not 403) so the
-	// existence of another user's connection is not revealed.
-	if conn.CreatedBy.Valid && conn.CreatedBy.Bytes != callerID.Bytes {
+	// Only the creator may read a connection. A missing created_by is treated as
+	// unauthorized. Answer 404 (not 403) so existence is not revealed.
+	if !conn.CreatedBy.Valid || conn.CreatedBy.Bytes != callerID.Bytes {
 		return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
@@ -198,8 +198,8 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		return UpdateCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	if current.CreatedBy.Valid && current.CreatedBy.Bytes != uid.Bytes {
-		return UpdateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not your connection"}}, nil
+	if !current.CreatedBy.Valid || current.CreatedBy.Bytes != uid.Bytes {
+		return UpdateCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
 	params, err := buildConnectionUpdateParams(connID, *request.Body, h.cfg.JWTSecret)
@@ -233,8 +233,8 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 		return DeleteCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	if current.CreatedBy.Valid && current.CreatedBy.Bytes != uid.Bytes {
-		return DeleteCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not your connection"}}, nil
+	if !current.CreatedBy.Valid || current.CreatedBy.Bytes != uid.Bytes {
+		return DeleteCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
 	if err := h.queries.DeleteCatalogConnection(ctx, connID); err != nil {
@@ -247,16 +247,26 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 }
 
 func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error) {
-    var uid pgtype.UUID
-    uid.Bytes = request.Id
-    uid.Valid = true
+	callerID, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return TestCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
 
-    conn, err := h.queries.GetCatalogConnectionByID(ctx, uid)
-    if err != nil {
-        return TestCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
-    }
+	var connID pgtype.UUID
+	connID.Bytes = request.Id
+	connID.Valid = true
 
-    start := time.Now()
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, connID)
+	if err != nil {
+		return TestCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+	}
+
+	// Only the owner may trigger a probe with the stored credentials.
+	if !conn.CreatedBy.Valid || conn.CreatedBy.Bytes != callerID.Bytes {
+		return TestCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+	}
+
+	start := time.Now()
 
     if conn.Type == "postgresql" || conn.Type == "mysql" {
         return h.testSQLViaTrino(ctx, conn, start)
@@ -404,7 +414,7 @@ func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 		Id:              id,
 		Name:            c.Name,
 		Type:            CatalogConnectionType(c.Type),
-		Url:             c.Url,
+		Url:             redactURLSecrets(c.Url),
 		HasCredentials:  c.CredentialsEnc != nil && *c.CredentialsEnc != "",
 		DefaultReadonly: c.DefaultReadonly,
 		CreatedAt:       pgTimestampToTime(c.CreatedAt),

@@ -338,6 +338,9 @@ services:
       - TRINO_URL=http://trino:8080
       - POLARIS_URL=http://polaris:8181
       - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
+      # Same value the Trino service reads; the API sets the baleia_trino role
+      # password from it at boot so the role and Trino cannot diverge.
+      - BALEIA_TRINO_DB_PASSWORD=${BALEIA_TRINO_DB_PASSWORD:-admin}
       - PUBLIC_URL=http://localhost:8080
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025

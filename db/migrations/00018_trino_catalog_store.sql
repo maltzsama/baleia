@@ -69,13 +69,14 @@ COMMENT ON TABLE trino_catalog_registry IS
     'NEVER change the format without versioning the plugin alongside.';
 
 -- ── dedicated role for Trino to read/write the projection ────────────────────
--- Password rotated at deploy via env BALEIA_TRINO_DB_PASSWORD (and in the
--- catalog-store.properties of the baleia-trino-catalog-store plugin).
+-- The role is created without a password. The API sets it at boot from
+-- BALEIA_TRINO_DB_PASSWORD (internal/bootstrap) — the same env var the
+-- baleia-trino-catalog-store plugin reads — so no secret is committed here.
 -- +goose StatementBegin
 DO $baleia$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'baleia_trino') THEN
-        CREATE ROLE baleia_trino LOGIN PASSWORD 'admin';
+        CREATE ROLE baleia_trino LOGIN;
     END IF;
 END
 $baleia$;

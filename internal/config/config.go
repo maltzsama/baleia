@@ -22,6 +22,9 @@ type Config struct {
 	TemporalHost string
 	PolarisURL   string
 	TrinoURL     string
+	// TrinoDBPassword is the password for the dedicated baleia_trino role, from
+	// the same env var the Trino plugin reads. Empty means "leave it unchanged".
+	TrinoDBPassword string
 	JWTSecret    string
 	PublicURL    string
 	SMTPHost     string
@@ -45,6 +48,7 @@ func Load() *Config {
 		TemporalHost: getEnv("TEMPORAL_HOST", "localhost:7233"),
 		PolarisURL:   getEnv("POLARIS_URL", "http://localhost:8181"),
 		TrinoURL:     getEnv("TRINO_URL", "http://localhost:8088"),
+		TrinoDBPassword: getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
 		JWTSecret:    getEnv("JWT_SECRET", DefaultJWTSecret),
 		PublicURL:    getEnv("PUBLIC_URL", "http://localhost:8080"),
 		SMTPHost:     getEnv("SMTP_HOST", ""),
