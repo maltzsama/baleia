@@ -24,7 +24,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// migrations automáticas na subida
+	// run migrations automatically on startup
 	if err := migrate.Up(ctx, cfg.DatabaseURL); err != nil {
 		slog.Error("migration failed", "err", err)
 		os.Exit(1)

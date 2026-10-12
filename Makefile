@@ -1,7 +1,7 @@
 BALEIA_DIR ?= $(CURDIR)
 PLUGIN_DIR ?= $(BALEIA_DIR)/.plugin/baleia-trino-catalog-store
 PLUGIN_REPO ?= https://github.com/maltzsama/baleia-trino-catalog-store.git
-PLUGIN_TAG  ?= v0.1.0
+PLUGIN_TAG  ?= v0.6.1
 PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 
 .PHONY: dev worker migrate sqlc lint build seed-tpch plugin-clone plugin-build clean-plugin up down logs restart-trino
@@ -12,28 +12,28 @@ dev:
 worker:
 	go run ./cmd/worker
 
-# ── Plugin Trino ──────────────────────────────────────────────────────────────
-# Clona e compila o baleia-trino-catalog-store usando Docker.
-# O resultado vai para $(PLUGIN_DIR)/target/baleia-catalog-store/ e é consumido
-# pelo Trino no compose via bind mount (docker-compose.yaml).
+# ── Trino plugin ──────────────────────────────────────────────────────────────
+# Clones and builds the baleia-trino-catalog-store plugin using Docker.
+# The output goes to $(PLUGIN_DIR)/target/baleia-catalog-store/ and is consumed
+# by Trino in the compose file via a bind mount (docker-compose.yaml).
 .PHONY: plugin-clone
 plugin-clone:
 	@if [ ! -d "$(PLUGIN_DIR)" ]; then \
-		echo ">>> Clonando plugin $(PLUGIN_TAG) de $(PLUGIN_REPO)..."; \
+		echo ">>> Cloning plugin $(PLUGIN_TAG) from $(PLUGIN_REPO)..."; \
 		git clone --depth 1 --branch $(PLUGIN_TAG) $(PLUGIN_REPO) $(PLUGIN_DIR); \
 	else \
-		echo ">>> Plugin já clonado em $(PLUGIN_DIR)"; \
+		echo ">>> Plugin already cloned at $(PLUGIN_DIR)"; \
 	fi
 
 .PHONY: plugin-build
 plugin-build: plugin-clone
-	@echo ">>> Compilando plugin em $(PLUGIN_DIR)..."
+	@echo ">>> Building plugin in $(PLUGIN_DIR)..."
 	docker run --rm \
 		-v "$(PLUGIN_DIR):/plugin" \
 		-w /plugin \
 		$(PLUGIN_JAVA_IMAGE) \
 		sh -c 'apt-get update -qq && apt-get install -y -qq maven 2>/dev/null && mvn clean package -q -DskipTests'
-	@echo ">>> Plugin compilado: $$(ls $(PLUGIN_DIR)/target/baleia-catalog-store/baleia-trino-catalog-store-*.jar 2>/dev/null)"
+	@echo ">>> Plugin built: $$(ls $(PLUGIN_DIR)/target/baleia-catalog-store/baleia-trino-catalog-store-*.jar 2>/dev/null)"
 
 .PHONY: clean-plugin
 clean-plugin:
@@ -41,16 +41,16 @@ clean-plugin:
 
 # ── Compose ───────────────────────────────────────────────────────────────────
 
-# up: compila o plugin e sobe o stack completo.
+# up: builds the plugin and brings up the full stack.
 up: plugin-build
 	docker compose up -d
 
-# down: derruba o stack sem destruir volumes (dados persistem).
+# down: tears down the stack without destroying volumes (data persists).
 down:
 	docker compose down
 
-# down-v: derruba o stack e remove volumes nomeados + containers parados +
-# volumes órfãos. CUIDADO: destrói dados do postgres, temporal, etc.
+# down-v: tears down the stack and removes named volumes + stopped containers +
+# orphaned volumes. WARNING: destroys postgres, temporal, etc. data.
 down-v:
 	docker compose rm -fsv
 	docker compose down -v
@@ -79,10 +79,10 @@ migrate-reset:
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
 
-# Insere a linha de teste tpch_teste em trino_catalog_registry, usada pelos
-# testes de aceitação T1-T9 do plugin baleia-trino-catalog-store. Idempotente.
+# Inserts the tpch_test test row into trino_catalog_registry, used by the
+# T1-T9 acceptance tests of the baleia-trino-catalog-store plugin. Idempotent.
 seed-tpch:
-	docker compose exec -T postgres psql -U baleia -d baleia < db/seed/tpch_teste.sql
+	docker compose exec -T postgres psql -U baleia -d baleia < db/seed/tpch_test.sql
 
 # ── Code Generation ───────────────────────────────────────────────────────────
 

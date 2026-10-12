@@ -57,7 +57,7 @@ func (c *nessieClient) Ping(ctx context.Context) error {
 }
 
 func (c *nessieClient) ListCatalogs(ctx context.Context) ([]Catalog, error) {
-	// Nessie não tem o conceito de múltiplos catálogos — é um catálogo único
+	// Nessie has no concept of multiple catalogs — it is a single catalog
 	return []Catalog{{Name: "nessie", Type: "nessie"}}, nil
 }
 

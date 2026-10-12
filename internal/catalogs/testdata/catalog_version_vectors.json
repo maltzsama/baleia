@@ -1,10 +1,10 @@
 [
   {
-    "name": "tpch_teste",
+    "name": "tpch_test",
     "connector": "tpch",
     "properties": { "tpch.splits-per-node": "4" },
-    "expected_hash": "c4927418429a39beae1c13b2c9f02adba0c554e8f7d450d170d323b1997c3b82",
-    "note": "The original golden vector - pinned since CR-014. If this changes, the Java-Go contract is broken."
+    "expected_hash": "2f8450cf6bb5940875d1a8d60a13e7d0541a4bb3b9eaa46a1063de16b108f636",
+    "note": "Golden vector - pinned since CR-014. Catalog name renamed from tpch_teste to tpch_test; hash recomputed for the new name. If the algorithm changes, the Java-Go contract is broken."
   },
   {
     "name": "empty_properties",

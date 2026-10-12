@@ -223,7 +223,7 @@ type TeamMember struct {
 	JoinedAt pgtype.Timestamptz `json:"joined_at"`
 }
 
-// Projeção plana lida pelo plugin baleia-trino-catalog-store no boot do Trino. Escrita pelo Baleia (write-through) e pelo plugin (CREATE/DROP CATALOG). NUNCA alterar o formato sem versionar o plugin junto.
+// Flat projection read by the baleia-trino-catalog-store plugin at Trino boot. Written by Baleia (write-through) and by the plugin (CREATE/DROP CATALOG). NEVER change the format without versioning the plugin alongside.
 type TrinoCatalogRegistry struct {
 	ClusterID      pgtype.UUID        `json:"cluster_id"`
 	CatalogName    string             `json:"catalog_name"`

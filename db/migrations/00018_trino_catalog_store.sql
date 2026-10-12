@@ -13,7 +13,7 @@ CREATE TABLE trino_clusters (
 INSERT INTO trino_clusters (name, coordinator_url)
 VALUES ('default', 'http://trino:8080');
 
--- ── domínio: catalogs (recriada com colunas do CR-014 rev.3 §4.1) ─────────────
+-- ── domain: catalogs (recreated with CR-014 rev.3 §4.1 columns) ─────────────
 CREATE TABLE catalogs (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     connection_id       UUID NOT NULL REFERENCES catalog_connections(id) ON DELETE CASCADE,
@@ -37,7 +37,7 @@ CREATE TABLE catalogs (
         CHECK (connector ~ '^[a-z][a-z0-9_]{0,62}$')
 );
 
--- ── projeção lida pelo plugin baleia-trino-catalog-store no boot do Trino ───
+-- ── projection read by the baleia-trino-catalog-store plugin at Trino boot ───
 CREATE TABLE trino_catalog_registry (
     cluster_id      UUID NOT NULL REFERENCES trino_clusters(id) ON DELETE CASCADE,
     catalog_name    TEXT NOT NULL,
@@ -64,13 +64,13 @@ CREATE INDEX trino_catalog_registry_enabled_idx
     ON trino_catalog_registry (cluster_id) WHERE enabled;
 
 COMMENT ON TABLE trino_catalog_registry IS
-    'Projeção plana lida pelo plugin baleia-trino-catalog-store no boot do Trino. '
-    'Escrita pelo Baleia (write-through) e pelo plugin (CREATE/DROP CATALOG). '
-    'NUNCA alterar o formato sem versionar o plugin junto.';
+    'Flat projection read by the baleia-trino-catalog-store plugin at Trino boot. '
+    'Written by Baleia (write-through) and by the plugin (CREATE/DROP CATALOG). '
+    'NEVER change the format without versioning the plugin alongside.';
 
--- ── role dedicada para o Trino ler/escrever a projeção ───────────────────────
--- Senha trocada no deploy via env BALEIA_TRINO_DB_PASSWORD (e no
--- catalog-store.properties do plugin baleia-trino-catalog-store).
+-- ── dedicated role for Trino to read/write the projection ────────────────────
+-- Password rotated at deploy via env BALEIA_TRINO_DB_PASSWORD (and in the
+-- catalog-store.properties of the baleia-trino-catalog-store plugin).
 -- +goose StatementBegin
 DO $baleia$
 BEGIN

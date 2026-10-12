@@ -13,13 +13,17 @@ import (
 // trino_catalog_registry and catalogs trino_catalog_name.
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
-// reservedNames lists Trino built-in catalog names that cannot be reused.
+// reservedNames lists Trino built-in catalog names that cannot be reused, plus
+// the "env" and "file" origins reserved by the baleia-trino-catalog-store
+// SecretResolver's @baleia-secret[<origin>:<key>] syntax (v0.3.0+).
 var reservedNames = map[string]struct{}{
 	"system": {},
 	"jmx":    {},
 	"tpch":   {},
 	"tpcds":  {},
 	"memory": {},
+	"env":    {},
+	"file":   {},
 }
 
 // isReserved reports whether name collides with a Trino built-in.

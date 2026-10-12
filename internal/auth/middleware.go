@@ -61,7 +61,7 @@ func extractToken(r *http.Request) string {
 	if strings.HasPrefix(bearer, "Bearer ") {
 		return strings.TrimPrefix(bearer, "Bearer ")
 	}
-	// fallback: cookie (útil pra SSE/WebSocket)
+	// fallback: cookie (useful for SSE/WebSocket)
 	if c, err := r.Cookie("token"); err == nil {
 		return c.Value
 	}

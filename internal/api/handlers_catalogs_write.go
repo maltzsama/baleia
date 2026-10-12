@@ -101,6 +101,7 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 		return CreateCatalog201JSONResponse(c), nil
 	}
 
+	h.catalogCache.Clear()
 	c := dbCatalogToPublic(cat)
 	c.CatalogVersion = &version
 	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusSynced)

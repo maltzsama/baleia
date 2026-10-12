@@ -109,7 +109,7 @@ func errConflict(msg string) Error {
 	return Error{Code: "conflict", Message: msg}
 }
 
-// respondError é usado apenas pelas rotas manuais (OIDC).
+// respondError is only used by the manual (OIDC) routes.
 func respondError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

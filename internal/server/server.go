@@ -60,11 +60,11 @@ func (s *Server) routes() {
 
 	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, temporalClient, s3Client)
 
-	// OIDC precisa de cookie + redirect
+	// OIDC needs cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/callback", h.HandleOIDCCallback)
 
-	// WebSocket precisa de raw connection
+	// WebSocket needs a raw connection
 	wsHandler := ws.New(s.queries.AsWSQuerier(), s.cfg.JWTSecret, s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
 

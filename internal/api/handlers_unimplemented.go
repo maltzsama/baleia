@@ -1,8 +1,8 @@
 package api
 
-// Este arquivo contém stubs de todos os métodos ainda não implementados.
-// Cada método retorna 501 Not Implemented.
-// Implemente os métodos movendo-os para arquivos específicos por domínio:
+// This file contains stubs for every handler that is not implemented yet.
+// Each method returns 501 Not Implemented.
+// Implement them by moving them to domain-specific files:
 //   handlers_users.go, handlers_teams.go, handlers_workspaces.go, etc.
 
 import "context"

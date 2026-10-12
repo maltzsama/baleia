@@ -166,13 +166,13 @@ services:
       - "8181:8181"
       - "8182:8182"
     environment:
-      # PERSISTÊNCIA RELACIONAL (POSTGRES)
+      # RELATIONAL PERSISTENCE (POSTGRES)
       - POLARIS_PERSISTENCE_TYPE=relational-jdbc
       - QUARKUS_DATASOURCE_USERNAME=baleia
       - QUARKUS_DATASOURCE_PASSWORD=baleia
       - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/polaris
       
-      # BOOTSTRAP (já feito, mas não faz mal)
+      # BOOTSTRAP (already done, but harmless)
       - POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,admin,admin
       - polaris.realm-context.realms=POLARIS
       
@@ -187,7 +187,7 @@ services:
       - polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES"=["FILE","S3","GCS","AZURE"]
       - polaris.readiness.ignore-severe-issues=true
       
-      # AUTENTICAÇÃO
+      # AUTHENTICATION
       - polaris.authorization.enabled=false
       - POLARIS_AUTHORIZATION_ENABLED=false
       - polaris.auth.enabled=true
@@ -262,12 +262,17 @@ services:
     # and break every catalog registration. Do not bump without re-running the
     # Phase 0 port of the plugin (see CR-014 rev.3).
     #
-    # O plugin baleia-catalog-store é compilado do repositório irmão
-    # (baleia-trino-catalog-store) via `make plugin-build` e montado como bind
-    # mount. Sem o repositório irmão compilado, o Trino sobe sem o plugin e
-    # catalogs não carregam. Use `make up` (que roda plugin-build primeiro).
+    # The baleia-catalog-store plugin is built from the sibling repository
+    # (baleia-trino-catalog-store) via `make plugin-build` and mounted as a bind
+    # mount. Without the built sibling repository, Trino starts without the
+    # plugin and catalogs do not load. Use `make up` (which runs plugin-build first).
     image: trinodb/trino:${TRINO_VERSION:-482}
     container_name: baleia_trino
+    environment:
+      - AWS_REGION=us-east-1
+      # Matches the baleia_trino role password created by migration 00018.
+      # catalog-store.properties resolves ${ENV:BALEIA_TRINO_DB_PASSWORD} at boot.
+      - BALEIA_TRINO_DB_PASSWORD=${BALEIA_TRINO_DB_PASSWORD:-admin}
     ports:
       - "8088:8080"
     volumes:
@@ -277,7 +282,7 @@ services:
       # JDBC URL + creds).
       - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/config.properties:/etc/trino/config.properties:ro
       - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
-      # etc/catalog/ NÃO é montado — catalogs vêm da registry via plugin.
+      # etc/catalog/ is NOT mounted — catalogs come from the registry via the plugin.
     networks:
       - app_net
     depends_on:

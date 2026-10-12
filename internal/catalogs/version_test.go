@@ -82,27 +82,27 @@ func TestVersion_PropOrderMatters(t *testing.T) {
 	}
 }
 
-// TestVersion_HashesResolvedValuesNotPlaceholders trava a invariante mais
-// fácil de quebrar do contrato Java↔Go: o catalog_version é SEMPRE computado
-// sobre os valores reais gravados em trino_catalog_registry, NUNCA sobre o
-// texto com placeholder que vai para o DDL.
+// TestVersion_HashesResolvedValuesNotPlaceholders pins the easiest-to-break
+// invariant of the Java<->Go contract: catalog_version is ALWAYS computed
+// over the real values stored in trino_catalog_registry, NEVER over the
+// placeholder text that goes into the DDL.
 //
-// O plugin resolve os segredos ANTES de chamar computeCatalogVersion
-// (BaleiaCatalogStore.createCatalogProperties). Se o Go hashear o mapa
-// redigido, os dois lados divergem em 100% dos catálogos com segredo e a
-// conferência do #23557 vira falso positivo permanente.
+// The plugin resolves secrets BEFORE calling computeCatalogVersion
+// (BaleiaCatalogStore.createCatalogProperties). If Go hashes the redacted
+// map, the two sides diverge for every catalog with a secret and the #23557
+// check becomes a permanent false positive.
 func TestVersion_HashesResolvedValuesNotPlaceholders(t *testing.T) {
 	real := map[string]string{
 		"iceberg.catalog.type":                   "rest",
 		"iceberg.rest-catalog.oauth2.credential": "abc:def",
 	}
-	redigido := map[string]string{
+	redacted := map[string]string{
 		"iceberg.catalog.type":                   "rest",
 		"iceberg.rest-catalog.oauth2.credential": "@baleia-secret[cat:iceberg.rest-catalog.oauth2.credential]",
 	}
 
-	if Version("cat", "iceberg", real) == Version("cat", "iceberg", redigido) {
-		t.Fatal("hash idêntico para valor real e placeholder — impossível; revise Version()")
+	if Version("cat", "iceberg", real) == Version("cat", "iceberg", redacted) {
+		t.Fatal("identical hash for real value and placeholder — impossible; review Version()")
 	}
 }
 

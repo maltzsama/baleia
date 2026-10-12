@@ -93,16 +93,21 @@ func TestProject_PolarisBuildsPolarisShape(t *testing.T) {
 }
 
 // TestProject_RejectsReservedName verifies the validation guards against
-// catalog names that collide with Trino built-ins.
+// catalog names that collide with Trino built-ins and the plugin's reserved
+// secret origins ("env", "file").
 func TestProject_RejectsReservedName(t *testing.T) {
-	conn := db.CatalogConnection{Type: "polaris"}
-	cat := db.Catalog{
-		TrinoCatalogName: "system",
-		Connector:        "iceberg",
-		ClusterID:        pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
-	}
-	if _, err := Project(conn, cat, Credentials{}); err == nil {
-		t.Fatal("Project accepted reserved name 'system'")
+	for _, name := range []string{"system", "jmx", "tpch", "tpcds", "memory", "env", "file"} {
+		t.Run(name, func(t *testing.T) {
+			conn := db.CatalogConnection{Type: "polaris"}
+			cat := db.Catalog{
+				TrinoCatalogName: name,
+				Connector:        "iceberg",
+				ClusterID:        pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
+			}
+			if _, err := Project(conn, cat, Credentials{}); err == nil {
+				t.Fatalf("Project accepted reserved name %q", name)
+			}
+		})
 	}
 }
 

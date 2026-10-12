@@ -21,10 +21,10 @@ import (
 // replaced by the @baleia-secret[...] placeholder, and it does so only in
 // the DDL text — never in the registry.
 type RegistryRow struct {
-	ClusterID      [16]byte
-	CatalogName    string
-	ConnectorName  string
-	Properties     map[string]string
+	ClusterID     [16]byte
+	CatalogName   string
+	ConnectorName string
+	Properties    map[string]string
 }
 
 // Projection bundles the registry row (real values) with the list of
@@ -87,7 +87,7 @@ func Project(conn db.CatalogConnection, cat db.Catalog, creds Credentials) (Proj
 	}
 
 	var (
-		props     map[string]string
+		props      map[string]string
 		secretKeys []string
 	)
 	switch conn.Type {
@@ -153,14 +153,14 @@ func buildIcebergRestProperties(conn db.CatalogConnection, cat db.Catalog, creds
 	url := strings.TrimRight(conn.Url, "/") + "/api/catalog"
 	credential := creds.ClientID + ":" + creds.ClientSecret
 	props := map[string]string{
-		"iceberg.catalog.type":                          "rest",
-		"iceberg.rest-catalog.uri":                     url,
-		"iceberg.rest-catalog.warehouse":                cat.Warehouse,
-		"iceberg.rest-catalog.security":                "OAUTH2",
-		"iceberg.rest-catalog.oauth2.credential":        credential,
-		"iceberg.rest-catalog.oauth2.scope":             "PRINCIPAL_ROLE:ALL",
+		"iceberg.catalog.type":                            "rest",
+		"iceberg.rest-catalog.uri":                        url,
+		"iceberg.rest-catalog.warehouse":                  cat.Warehouse,
+		"iceberg.rest-catalog.security":                   "OAUTH2",
+		"iceberg.rest-catalog.oauth2.credential":          credential,
+		"iceberg.rest-catalog.oauth2.scope":               "PRINCIPAL_ROLE:ALL",
 		"iceberg.rest-catalog.vended-credentials-enabled": "true",
-		"fs.s3.enabled":                                 "true",
+		"fs.s3.enabled":                                   "true",
 	}
 	secretKeys := []string{"iceberg.rest-catalog.oauth2.credential"}
 	return props, secretKeys
