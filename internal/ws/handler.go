@@ -99,6 +99,10 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Make the authenticated actor visible to the request-logging middleware,
+	// which logs after this handler returns.
+	auth.SetLogActor(r.Context(), claims.UserID)
+
 	workspaceID := r.PathValue("id")
 	executionID := r.PathValue("execution_id")
 

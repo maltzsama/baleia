@@ -18,6 +18,13 @@ type responseRecorder struct {
 }
 
 func (r *responseRecorder) WriteHeader(code int) {
+	// Informational responses (1xx) precede the final status; only the final
+	// status is recorded. 101 Switching Protocols is a terminal status for an
+	// upgrade (WebSocket), so it is recorded.
+	if code >= 100 && code < 200 && code != http.StatusSwitchingProtocols {
+		r.ResponseWriter.WriteHeader(code)
+		return
+	}
 	if r.status == 0 {
 		r.status = code
 	}
@@ -42,6 +49,10 @@ func StructuredLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			rec := &responseRecorder{ResponseWriter: w}
 
+			// Give handlers a place to record an actor resolved downstream (the
+			// WebSocket token flow) for the request log.
+			r = r.WithContext(auth.WithLogActorHolder(r.Context()))
+
 			next.ServeHTTP(rec, r)
 
 			if rec.status == 0 {
@@ -56,7 +67,11 @@ func StructuredLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				"duration_ms", time.Since(start).Milliseconds(),
 				"bytes", rec.bytes,
 			}
-			if actor := auth.UserIDFromContext(r.Context()); actor != "" {
+			actor := auth.LogActor(r.Context())
+			if actor == "" {
+				actor = auth.UserIDFromContext(r.Context())
+			}
+			if actor != "" {
 				attrs = append(attrs, "actor_id", actor)
 			}
 
