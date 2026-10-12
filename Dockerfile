@@ -15,8 +15,9 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . ./
-RUN CGO_ENABLED=0 go build -o /api ./cmd/api
-RUN CGO_ENABLED=0 go build -o /worker ./cmd/worker
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION}" -o /api ./cmd/api
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION}" -o /worker ./cmd/worker
 RUN CGO_ENABLED=0 go build -o /migrate ./cmd/migrate
 
 FROM alpine:latest
