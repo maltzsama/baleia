@@ -4,13 +4,17 @@ PLUGIN_REPO ?= https://github.com/maltzsama/baleia-trino-catalog-store.git
 PLUGIN_TAG  ?= v0.6.1
 PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 
+# Fallback secret for local development. An exported or command-line
+# JWT_SECRET wins, so credentials encrypted under a custom key stay readable.
+JWT_SECRET ?= dev-secret-not-for-production
+
 .PHONY: dev worker migrate sqlc lint build seed-tpch plugin-clone plugin-build clean-plugin up down logs restart-trino
 
 dev:
-	SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
+	JWT_SECRET=$(JWT_SECRET) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
 
 worker:
-	go run ./cmd/worker
+	JWT_SECRET=$(JWT_SECRET) go run ./cmd/worker
 
 # ── Trino plugin ──────────────────────────────────────────────────────────────
 # Clones and builds the baleia-trino-catalog-store plugin using Docker.

@@ -122,26 +122,33 @@ func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.U
 
 const updateCatalogConnection = `-- name: UpdateCatalogConnection :one
 UPDATE catalog_connections
-SET name = $2, url = $3, credentials_enc = $4, default_readonly = $5, updated_at = now()
-WHERE id = $1
+SET name             = COALESCE($1, name),
+    url              = COALESCE($2, url),
+    credentials_enc  = COALESCE($3, credentials_enc),
+    default_readonly = COALESCE($4, default_readonly),
+    updated_at       = now()
+WHERE id = $5
 RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by
 `
 
 type UpdateCatalogConnectionParams struct {
-	ID              pgtype.UUID `json:"id"`
-	Name            string      `json:"name"`
-	Url             string      `json:"url"`
+	Name            *string     `json:"name"`
+	Url             *string     `json:"url"`
 	CredentialsEnc  *string     `json:"credentials_enc"`
-	DefaultReadonly bool        `json:"default_readonly"`
+	DefaultReadonly *bool       `json:"default_readonly"`
+	ID              pgtype.UUID `json:"id"`
 }
 
+// Partial update: only fields present in the request are written. COALESCE with
+// a NULL narg leaves omitted columns untouched, so concurrent PATCH requests to
+// different fields no longer overwrite each other.
 func (q *Queries) UpdateCatalogConnection(ctx context.Context, arg UpdateCatalogConnectionParams) (CatalogConnection, error) {
 	row := q.db.QueryRow(ctx, updateCatalogConnection,
-		arg.ID,
 		arg.Name,
 		arg.Url,
 		arg.CredentialsEnc,
 		arg.DefaultReadonly,
+		arg.ID,
 	)
 	var i CatalogConnection
 	err := row.Scan(

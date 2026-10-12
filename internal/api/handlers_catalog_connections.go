@@ -199,39 +199,17 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		return UpdateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not your connection"}}, nil
 	}
 
-	name := current.Name
-	url := current.Url
-	credsEnc := current.CredentialsEnc
-	defaultReadonly := current.DefaultReadonly
-
-	if request.Body.Name != nil {
-		name = *request.Body.Name
-	}
-	if request.Body.Url != nil {
-		url = *request.Body.Url
-	}
-	if request.Body.Credentials != nil {
-		b, err := json.Marshal(request.Body.Credentials)
-		if err != nil {
-			return nil, err
-		}
-		s := string(b)
-		credsEnc = &s
-	}
-	if request.Body.DefaultReadonly != nil {
-		defaultReadonly = *request.Body.DefaultReadonly
-	}
-
-	conn, err := h.queries.UpdateCatalogConnection(ctx, db.UpdateCatalogConnectionParams{
-		ID:              connID,
-		Name:            name,
-		Url:             url,
-		CredentialsEnc:  credsEnc,
-		DefaultReadonly: defaultReadonly,
-	})
+	params, err := buildConnectionUpdateParams(connID, *request.Body, h.cfg.JWTSecret)
 	if err != nil {
 		return nil, err
 	}
+
+	conn, err := h.queries.UpdateCatalogConnection(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	h.catalogCache.Clear()
 
 	return UpdateCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
 }
