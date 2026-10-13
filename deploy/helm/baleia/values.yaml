@@ -57,4 +57,5 @@ trino:
     image: ""             # optional small image with /baleia-catalog-store (air-gapped)
     imagePullPolicy: ""
   jvmHeap: 2G
+  awsRegion: us-east-1    # set explicitly: S3 region auto-detection hangs without EC2 metadata
   resources: {}

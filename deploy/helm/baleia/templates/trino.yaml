@@ -90,6 +90,11 @@ spec:
                   key: BALEIA_TRINO_DB_PASSWORD
             - name: JAVA_OPTS
               value: "-Xmx{{ .Values.trino.jvmHeap }}"
+            # Trino's S3 filesystem auto-detects the region through the EC2
+            # instance metadata endpoint when none is set, which hangs
+            # CREATE CATALOG on clusters where that address is unreachable.
+            - name: AWS_REGION
+              value: {{ .Values.trino.awsRegion | quote }}
           ports:
             - { name: http, containerPort: 8080 }
           readinessProbe:
