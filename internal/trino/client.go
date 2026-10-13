@@ -243,24 +243,61 @@ func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*Que
 // statement progresses. When ctx is cancelled mid-poll it abandons the query on
 // Trino with a DELETE to the last nextUri before returning ctx.Err().
 func (c *Client) ExecuteWithOptions(ctx context.Context, sql string, opts ExecuteOptions) (*QueryResult, error) {
+	result := &QueryResult{}
+
+	queryID, err := c.pumpStatement(ctx, sql, opts, func(cols []Column, rows [][]interface{}) error {
+		if len(result.Columns) == 0 && len(cols) > 0 {
+			result.Columns = cols
+		}
+		if rows != nil {
+			result.Data = append(result.Data, rows...)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result.QueryID = queryID
+	result.RowCount = int64(len(result.Data))
+	return result, nil
+}
+
+// ExecuteStream runs a single statement and hands every page of rows to onPage
+// as it arrives. Columns are delivered on the first page that carries them.
+// The Trino query id is returned once it is assigned.
+//
+// onPage callback errors abort the polling loop and are returned as-is,
+// abandoning the query on Trino (same as context cancellation).
+func (c *Client) ExecuteStream(ctx context.Context, sql string, opts ExecuteOptions,
+	onPage func(cols []Column, rows [][]interface{}) error) (string, error) {
+	return c.pumpStatement(ctx, sql, opts, onPage)
+}
+
+// pumpStatement drives the Trino statement protocol, calling onPage for the
+// initial response and every subsequent page.
+func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOptions,
+	onPage func(cols []Column, rows [][]interface{}) error) (string, error) {
 	reqURL := c.baseURL + "/v1/statement"
 
 	body := bytes.NewBufferString(sql)
 	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	c.setStatementHeaders(req, opts)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("trino execute: %w", err)
+		return "", fmt.Errorf("trino execute: %w", err)
 	}
 	defer resp.Body.Close()
 
 	var sr StatementResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		return nil, fmt.Errorf("trino decode: %w", err)
+	dec := json.NewDecoder(resp.Body)
+	dec.UseNumber()
+	if err := dec.Decode(&sr); err != nil {
+		return "", fmt.Errorf("trino decode: %w", err)
 	}
 
 	if sr.ID != "" && opts.OnQueryID != nil {
@@ -268,16 +305,11 @@ func (c *Client) ExecuteWithOptions(ctx context.Context, sql string, opts Execut
 	}
 
 	if sr.Error != nil {
-		return nil, fmt.Errorf("trino error: %s (%s)", sr.Error.Message, sr.Error.ErrorName)
+		return sr.ID, fmt.Errorf("trino error: %s (%s)", sr.Error.Message, sr.Error.ErrorName)
 	}
 
-	result := &QueryResult{
-		QueryID: sr.ID,
-		Columns: sr.Columns,
-	}
-
-	if sr.Data != nil {
-		result.Data = append(result.Data, sr.Data...)
+	if err := c.onPage(onPage, sr.Columns, sr.Data); err != nil {
+		return sr.ID, err
 	}
 	if opts.OnProgress != nil {
 		opts.OnProgress()
@@ -287,25 +319,22 @@ func (c *Client) ExecuteWithOptions(ctx context.Context, sql string, opts Execut
 	for nextURI != "" {
 		if err := ctx.Err(); err != nil {
 			c.cancelAbandoned(nextURI)
-			return nil, err
+			return "", err
 		}
 
 		sr, err = c.next(ctx, nextURI)
 		if err != nil {
 			if ctx.Err() != nil {
 				c.cancelAbandoned(nextURI)
-				return nil, ctx.Err()
+				return "", ctx.Err()
 			}
-			return nil, err
+			return "", err
 		}
 		if sr.Error != nil {
-			return nil, fmt.Errorf("trino error: %s (%s)", sr.Error.Message, sr.Error.ErrorName)
+			return "", fmt.Errorf("trino error: %s (%s)", sr.Error.Message, sr.Error.ErrorName)
 		}
-		if sr.Data != nil {
-			result.Data = append(result.Data, sr.Data...)
-		}
-		if sr.Columns != nil && len(result.Columns) == 0 {
-			result.Columns = sr.Columns
+		if err := c.onPage(onPage, sr.Columns, sr.Data); err != nil {
+			return "", err
 		}
 		nextURI = sr.NextURI
 		if opts.OnProgress != nil {
@@ -313,8 +342,14 @@ func (c *Client) ExecuteWithOptions(ctx context.Context, sql string, opts Execut
 		}
 	}
 
-	result.RowCount = int64(len(result.Data))
-	return result, nil
+	return sr.ID, nil
+}
+
+func (c *Client) onPage(onPage func(cols []Column, rows [][]interface{}) error, cols []Column, rows [][]interface{}) error {
+	if onPage == nil {
+		return nil
+	}
+	return onPage(cols, rows)
 }
 
 // setStatementHeaders applies the identity, catalog/schema and session
@@ -407,7 +442,9 @@ func (c *Client) next(ctx context.Context, uri string) (StatementResponse, error
 	defer resp.Body.Close()
 
 	var sr StatementResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+	dec := json.NewDecoder(resp.Body)
+	dec.UseNumber()
+	if err := dec.Decode(&sr); err != nil {
 		return StatementResponse{}, fmt.Errorf("trino next decode: %w", err)
 	}
 	return sr, nil

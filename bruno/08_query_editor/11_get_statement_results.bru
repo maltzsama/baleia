@@ -1,0 +1,20 @@
+meta {
+  name: Get Statement Results
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}/statements/1/results
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.content-type: eq application/vnd.apache.arrow.stream
+}

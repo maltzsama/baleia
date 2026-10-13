@@ -555,11 +555,60 @@ type arrowStreamResponse struct {
 }
 
 func (r arrowStreamResponse) VisitGetResultsResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
+func (r arrowStreamResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
+func (r arrowStreamResponse) write(w http.ResponseWriter) error {
 	defer r.reader.Close()
 	w.Header().Set("Content-Type", r.contentType)
 	w.WriteHeader(http.StatusOK)
 	_, err := io.Copy(w, r.reader)
 	return err
+}
+
+// GetStatementResults streams a single statement's result set, scoped to the
+// requesting workspace. Same auth and delivery model as GetResults.
+func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error) {
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		return GetStatementResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+	}
+
+	var executionID pgtype.UUID
+	executionID.Bytes = request.ExecutionId
+	executionID.Valid = true
+
+	statement, err := h.queries.GetQueryStatementByPosition(ctx, db.GetQueryStatementByPositionParams{
+		ExecutionID: executionID,
+		WorkspaceID: workspaceIDFromRequest(request.Id),
+		Position:    int32(request.Position),
+	})
+	if err != nil {
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement not found"}}, nil
+	}
+
+	if statement.Status != "finished" {
+		return GetStatementResults409JSONResponse{
+			Code:    "conflict",
+			Message: "statement has no result yet",
+		}, nil
+	}
+	if statement.ResultKey == nil || *statement.ResultKey == "" {
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement produced no result set"}}, nil
+	}
+
+	reader, contentType, err := h.s3.GetReader(ctx, *statement.ResultKey)
+	if err != nil {
+		return nil, err
+	}
+	if contentType == "" {
+		contentType = "application/vnd.apache.arrow.stream"
+	}
+
+	return arrowStreamResponse{reader: reader, contentType: contentType}, nil
 }
 
 func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error) {
@@ -653,6 +702,14 @@ func dbStatementToPublic(s db.QueryStatement) QueryStatement {
 	if s.DurationMs != nil {
 		dur := int(*s.DurationMs)
 		qs.DurationMs = &dur
+	}
+	if s.ResultBytes != nil {
+		sz := int(*s.ResultBytes)
+		qs.ResultBytes = &sz
+	}
+	if s.Truncated {
+		tr := true
+		qs.Truncated = &tr
 	}
 	if s.ErrorMessage != nil {
 		qs.ErrorMessage = s.ErrorMessage

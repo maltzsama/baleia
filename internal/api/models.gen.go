@@ -594,11 +594,13 @@ type QueryStatement struct {
 	FinishedAt   *time.Time           `json:"finished_at"`
 	Id           openapi_types.UUID   `json:"id"`
 	Position     int                  `json:"position"`
+	ResultBytes  *int                 `json:"result_bytes"`
 	RowsReturned *int                 `json:"rows_returned"`
 	Sql          string               `json:"sql"`
 	StartedAt    *time.Time           `json:"started_at"`
 	Status       QueryStatementStatus `json:"status"`
 	TrinoQueryId *string              `json:"trino_query_id"`
+	Truncated    *bool                `json:"truncated"`
 }
 
 // QueryStatementStatus defines model for QueryStatement.Status.

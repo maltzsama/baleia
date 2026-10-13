@@ -136,6 +136,9 @@ type QueryStatement struct {
 	ErrorMessage *string            `json:"error_message"`
 	StartedAt    pgtype.Timestamptz `json:"started_at"`
 	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
+	ResultKey    *string            `json:"result_key"`
+	ResultBytes  *int64             `json:"result_bytes"`
+	Truncated    bool               `json:"truncated"`
 }
 
 type RefreshToken struct {

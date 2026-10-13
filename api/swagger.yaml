@@ -598,6 +598,8 @@ components:
         status: { type: string, enum: [running, finished, failed, cancelled] }
         trino_query_id: { type: string, nullable: true }
         rows_returned: { type: integer, nullable: true }
+        result_bytes: { type: integer, nullable: true }
+        truncated: { type: boolean, nullable: true }
         duration_ms: { type: integer, nullable: true }
         error_message: { type: string, nullable: true }
         started_at: { type: string, format: date-time, nullable: true }
@@ -1932,6 +1934,34 @@ paths:
                 items: { $ref: "#/components/schemas/QueryStatement" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/executions/{execution_id}/statements/{position}/results:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: execution_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: position
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Executions]
+      operationId: getStatementResults
+      summary: "Single-statement result as Arrow IPC stream"
+      description: |
+        Streams one statement's result set from object storage. A statement
+        whose result was truncated returns the buffered prefix.
+      responses:
+        "200": { $ref: "#/components/responses/ArrowStream" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "Statement has no result set yet"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /workspaces/{id}/executions/{execution_id}/results:
     parameters:

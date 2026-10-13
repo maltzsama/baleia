@@ -51,8 +51,6 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 
 	var totalRows int64
 	var totalDurationMs int64
-	var allColumns []activities.ColumnResult
-	var allRows [][]interface{}
 
 	for i, stmt := range splitResult.Statements {
 		position := int32(i + 1)
@@ -103,29 +101,16 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 			Position:     position,
 			Status:       "finished",
 			TrinoQueryID: execResult.TrinoQueryID,
-			RowsReturned: execResult.RowsReturned,
+			RowsReturned: execResult.RowCount,
 			DurationMs:   execResult.DurationMs,
+			ResultKey:    execResult.ResultKey,
+			ResultBytes:  execResult.ResultBytes,
+			Truncated:    execResult.Truncated,
 		}).Get(bookkeepingCtx, nil)
 
-		totalRows += execResult.RowsReturned
+		totalRows += execResult.RowCount
 		totalDurationMs += execResult.DurationMs
-		if len(allColumns) == 0 {
-			allColumns = execResult.Columns
-		}
-		allRows = append(allRows, execResult.Rows...)
 	}
-
-	storeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Second,
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-	})
-
-	_ = workflow.ExecuteActivity(storeCtx, activities.StoreResults, activities.StoreResultsParams{
-		ExecutionID: executionID,
-		Columns:     allColumns,
-		Rows:        allRows,
-		RequestID:   requestID,
-	}).Get(storeCtx, nil)
 
 	return workflow.ExecuteActivity(bookkeepingCtx, activities.CompleteExecution, activities.CompleteExecutionParams{
 		ExecutionID:  executionID,

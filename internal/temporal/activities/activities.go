@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -27,6 +28,8 @@ var defaultActivities *Activities
 // interface so tests can inject a fake that blocks, fails, or records calls.
 type trinoClient interface {
 	ExecuteWithOptions(ctx context.Context, sql string, opts trino.ExecuteOptions) (*trino.QueryResult, error)
+	ExecuteStream(ctx context.Context, sql string, opts trino.ExecuteOptions,
+		onPage func(cols []trino.Column, rows [][]interface{}) error) (string, error)
 	Execute(ctx context.Context, sql, catalog, schema string) (*trino.QueryResult, error)
 	KillQuery(ctx context.Context, queryID, message string) error
 	ListQueries(ctx context.Context) ([]trino.QueryInfo, error)
@@ -36,8 +39,14 @@ type trinoClient interface {
 type Activities struct {
 	queries db.Querier
 	trino   trinoClient
-	s3      *storage.S3Client
+	s3      s3Client
 	cfg     *config.Config
+}
+
+// s3Client is the slice of the storage client result streaming needs. It is an
+// interface so tests can inject a fake.
+type s3Client interface {
+	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
 func New(pool *pgxpool.Pool, cfg *config.Config) *Activities {
@@ -66,7 +75,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(UpdateStatementRecord)
 	w.RegisterActivity(CompleteExecution)
 	w.RegisterActivity(FailExecution)
-	w.RegisterActivity(StoreResults)
+	w.RegisterActivity(SetExecutionResult)
 	w.RegisterActivity(LensPollTrinoQueries)
 	w.RegisterActivity(LensPollTrinoCluster)
 	w.RegisterActivity(LensAnalyzeTableHealth)
@@ -159,12 +168,23 @@ type heartbeatDetails struct {
 	TrinoQueryID string
 }
 
+// arrowContentType is the MIME type used for stored Arrow IPC streams.
+const arrowContentType = "application/vnd.apache.arrow.stream"
+
+// errResultCapReached signals that a statement hit the row/byte cap. It is an
+// internal sentinel, converted to a truncated (not failed) result.
+var errResultCapReached = errors.New("statement result cap reached")
+
+// ExecuteStatementResult is the control-plane summary of one statement. Result
+// rows are never part of it; they live in object storage under ResultKey.
 type ExecuteStatementResult struct {
 	TrinoQueryID string
-	RowsReturned int64
+	RowCount     int64
 	DurationMs   int64
 	Columns      []ColumnResult
-	Rows         [][]interface{}
+	ResultKey    string // "" when the statement returns no result set (DDL/DML)
+	ResultBytes  int64
+	Truncated    bool
 	Error        string
 }
 
@@ -175,6 +195,24 @@ type ColumnResult struct {
 
 func ExecuteStatement(ctx context.Context, params ExecuteStatementParams) (*ExecuteStatementResult, error) {
 	return defaultActivities.executeStatement(ctx, params)
+}
+
+// countingWriter counts bytes while proxying to the underlying pipe.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// s3ResultKey lays out result objects per statement so future result sets
+// (result_index > 0) fit the same layout.
+func s3ResultKey(executionID string, position, resultIndex int) string {
+	return fmt.Sprintf("query-results/%s/%d/%d.arrow", executionID, position, resultIndex)
 }
 
 func (a *Activities) executeStatement(ctx context.Context, params ExecuteStatementParams) (*ExecuteStatementResult, error) {
@@ -215,15 +253,83 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 		OnProgress: func() { beat(false) },
 	}
 
+	// Streaming pipeline: Trino page -> typed Arrow builders -> io.Pipe ->
+	// S3 multipart upload. One Arrow object per statement. The stream is
+	// created lazily on the first page that carries columns, so DDL/DML
+	// statements (no schema) upload nothing.
+	var columns []ColumnResult
+	var sw *arrowipc.StreamWriter
+	var pw *io.PipeWriter
+	var pr *io.PipeReader
+	var cw *countingWriter
+	var resultKey string
+	var uploadedBytes int64
+	var uploadErr error
+	var uploadDone chan struct{}
+	var rowTotal int64
+	var truncated bool
+
+	onPage := func(cols []trino.Column, rows [][]interface{}) error {
+		if len(cols) > 0 && columns == nil {
+			columns = make([]ColumnResult, len(cols))
+			aCols := make([]arrowipc.ColumnInfo, len(cols))
+			for i, c := range cols {
+				columns[i] = ColumnResult{Name: c.Name, Type: c.Type}
+				aCols[i] = arrowipc.ColumnInfo{Name: c.Name, Type: c.Type}
+			}
+
+			resultKey = s3ResultKey(params.ExecutionID, int(params.Position), 0)
+			pr, pw = io.Pipe()
+			cw = &countingWriter{w: pw}
+			s, err := arrowipc.NewStreamWriter(cw, aCols)
+			if err != nil {
+				_ = pw.Close()
+				_ = pr.Close()
+				return err
+			}
+			sw = s
+			uploadDone = make(chan struct{})
+			go func() {
+				defer close(uploadDone)
+				n, err := a.s3.PutStream(ctx, resultKey, pr, arrowContentType)
+				if err != nil {
+					uploadErr = err
+					return
+				}
+				uploadedBytes = n
+			}()
+		}
+
+		if len(rows) == 0 {
+			return nil
+		}
+		if sw == nil {
+			return errors.New("statement returned rows without a result schema")
+		}
+
+		for _, row := range rows {
+			if rowTotal >= a.cfg.ResultMaxRows || (cw != nil && cw.n >= a.cfg.ResultMaxBytes) {
+				return errResultCapReached
+			}
+			if err := sw.AppendRows([][]interface{}{row}); err != nil {
+				return err
+			}
+			rowTotal++
+			if cw != nil && cw.n >= a.cfg.ResultMaxBytes {
+				return errResultCapReached
+			}
+		}
+		return nil
+	}
+
 	// A statement is never retried once Trino has accepted it: retrying an
 	// INSERT/CREATE could write twice. Only a transport failure before the
 	// query id is known is retried, and with a bounded backoff.
 	backoff := statementTransportBackoff
-	var result *trino.QueryResult
 	var err error
 	for attempt := 0; ; attempt++ {
 		queryID = ""
-		result, err = a.trino.ExecuteWithOptions(ctx, params.SQL, opts)
+		_, err = a.trino.ExecuteStream(ctx, params.SQL, opts, onPage)
 		if err == nil || ctx.Err() != nil || queryID != "" || attempt >= len(backoff) {
 			break
 		}
@@ -235,31 +341,73 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 
 	durationMs := time.Since(start).Milliseconds()
 
+	// On cancellation finalize the pipe first so the upload goroutine sees EOF
+	// and cannot deadlock, then abandon the query on Trino.
 	if ctx.Err() != nil {
-		// The client already abandoned the query on Trino; report the cancel
-		// so the workflow marks the statement and execution cancelled.
+		if pw != nil {
+			_ = pw.Close()
+		}
+		if uploadDone != nil {
+			<-uploadDone
+		}
+		if queryID != "" {
+			killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = a.trino.KillQuery(killCtx, queryID, "cancelled by baleia")
+			killCancel()
+		}
 		return nil, temporal.NewCanceledError()
+	}
+
+	if errors.Is(err, errResultCapReached) {
+		if queryID != "" {
+			killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = a.trino.KillQuery(killCtx, queryID, "statement result cap reached")
+			killCancel()
+		}
+		truncated = true
+		err = nil
+	}
+
+	if sw != nil {
+		if cerr := sw.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}
+	if pw != nil {
+		_ = pw.Close()
+	}
+	if uploadDone != nil {
+		<-uploadDone
 	}
 
 	if err != nil {
 		return &ExecuteStatementResult{
-			DurationMs: durationMs,
-			Error:      err.Error(),
+			TrinoQueryID: queryID,
+			DurationMs:   durationMs,
+			Error:        err.Error(),
+		}, nil
+	}
+	if uploadErr != nil {
+		return &ExecuteStatementResult{
+			TrinoQueryID: queryID,
+			RowCount:     rowTotal,
+			DurationMs:   durationMs,
+			Error:        fmt.Sprintf("store results: %v", uploadErr),
 		}, nil
 	}
 
-	cols := make([]ColumnResult, len(result.Columns))
-	for i, c := range result.Columns {
-		cols[i] = ColumnResult{Name: c.Name, Type: c.Type}
-	}
-
-	return &ExecuteStatementResult{
-		TrinoQueryID: result.QueryID,
-		RowsReturned: result.RowCount,
+	res := &ExecuteStatementResult{
+		TrinoQueryID: queryID,
+		RowCount:     rowTotal,
 		DurationMs:   durationMs,
-		Columns:      cols,
-		Rows:         result.Data,
-	}, nil
+		Columns:      columns,
+		Truncated:    truncated,
+	}
+	if sw != nil {
+		res.ResultKey = resultKey
+		res.ResultBytes = uploadedBytes
+	}
+	return res, nil
 }
 
 // statementSessionProperties renders the per-statement Trino session
@@ -282,6 +430,9 @@ type UpdateStatementRecordParams struct {
 	RowsReturned int64
 	DurationMs   int64
 	ErrorMessage string
+	ResultKey    string
+	ResultBytes  int64
+	Truncated    bool
 }
 
 func UpdateStatementRecord(ctx context.Context, params UpdateStatementRecordParams) error {
@@ -300,28 +451,82 @@ func (a *Activities) updateStatementRecord(ctx context.Context, params UpdateSta
 	}
 
 	for _, s := range statements {
-		if s.Position == params.Position {
-			var errMsg *string
-			if params.ErrorMessage != "" {
-				errMsg = &params.ErrorMessage
-			}
-			var trinoID *string
-			if params.TrinoQueryID != "" {
-				trinoID = &params.TrinoQueryID
-			}
+		if s.Position != params.Position {
+			continue
+		}
 
-			_, err := a.queries.UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{
-				ID:           s.ID,
-				Status:       params.Status,
-				TrinoQueryID: trinoID,
-				RowsReturned: &params.RowsReturned,
-				DurationMs:   &params.DurationMs,
-				ErrorMessage: errMsg,
-			})
+		var errMsg *string
+		if params.ErrorMessage != "" {
+			errMsg = &params.ErrorMessage
+		}
+		var trinoID *string
+		if params.TrinoQueryID != "" {
+			trinoID = &params.TrinoQueryID
+		}
+		var resultKey *string
+		if params.ResultKey != "" {
+			resultKey = &params.ResultKey
+		}
+		var finishedAt pgtype.Timestamptz
+		if params.Status == "finished" || params.Status == "failed" || params.Status == "cancelled" {
+			finishedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+		}
+
+		_, err := a.queries.UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{
+			ID:           s.ID,
+			Status:       params.Status,
+			TrinoQueryID: trinoID,
+			RowsReturned: &params.RowsReturned,
+			DurationMs:   &params.DurationMs,
+			ErrorMessage: errMsg,
+			FinishedAt:   finishedAt,
+			ResultKey:    resultKey,
+			ResultBytes:  &params.ResultBytes,
+			Truncated:    params.Truncated,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The statement was already terminal (cancelled); a late update
+			// must not overwrite it.
+			return nil
+		}
+		if err != nil {
 			return err
 		}
+
+		// The execution's result_key points at the last statement that
+		// produced a result set; runs are processed in statement order so
+		// later statements naturally win.
+		if resultKey != nil {
+			if err := a.queries.SetExecutionResult(ctx, db.SetExecutionResultParams{
+				ID:        execID,
+				ResultKey: resultKey,
+			}); err != nil {
+				return fmt.Errorf("set execution result: %w", err)
+			}
+		}
+		return nil
 	}
 	return nil
+}
+
+type SetExecutionResultParams struct {
+	ExecutionID string
+	ResultKey   string
+}
+
+func SetExecutionResult(ctx context.Context, params SetExecutionResultParams) error {
+	return defaultActivities.setExecutionResult(ctx, params)
+}
+
+func (a *Activities) setExecutionResult(ctx context.Context, params SetExecutionResultParams) error {
+	var execID pgtype.UUID
+	if err := execID.Scan(params.ExecutionID); err != nil {
+		return err
+	}
+	return a.queries.SetExecutionResult(ctx, db.SetExecutionResultParams{
+		ID:        execID,
+		ResultKey: &params.ResultKey,
+	})
 }
 
 type CompleteExecutionParams struct {
@@ -378,56 +583,4 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 		return nil
 	}
 	return err
-}
-
-type StoreResultsParams struct {
-	ExecutionID string
-	Columns     []ColumnResult
-	Rows        [][]interface{}
-	RequestID   string
-}
-
-type StoreResultsResult struct {
-	ResultKey string
-}
-
-func StoreResults(ctx context.Context, params StoreResultsParams) (*StoreResultsResult, error) {
-	return defaultActivities.storeResults(ctx, params)
-}
-
-func (a *Activities) storeResults(ctx context.Context, params StoreResultsParams) (*StoreResultsResult, error) {
-	logger := activity.GetLogger(ctx)
-	logger.Info("storeResults input", "request_id", params.RequestID, "columns", len(params.Columns), "rows", len(params.Rows))
-	if len(params.Rows) > 0 {
-		logger.Info("first row", "len", len(params.Rows[0]), "val", params.Rows[0])
-	}
-	arrowCols := make([]arrowipc.ColumnInfo, len(params.Columns))
-	for i, c := range params.Columns {
-		arrowCols[i] = arrowipc.ColumnInfo{Name: c.Name, Type: c.Type}
-	}
-
-	data, err := arrowipc.TrinoToArrow(arrowCols, params.Rows)
-	if err != nil {
-		return nil, fmt.Errorf("arrow conversion: %w", err)
-	}
-	logger.Info("storeResults arrow", "bytes", len(data))
-
-	key := fmt.Sprintf("query-results/%s/result.arrow", params.ExecutionID)
-	if err := a.s3.Put(ctx, key, data, "application/vnd.apache.arrow.stream"); err != nil {
-		return nil, fmt.Errorf("s3 put: %w", err)
-	}
-
-	var execID pgtype.UUID
-	if err := execID.Scan(params.ExecutionID); err != nil {
-		return nil, err
-	}
-
-	if err := a.queries.SetExecutionResult(ctx, db.SetExecutionResultParams{
-		ID:        execID,
-		ResultKey: &key,
-	}); err != nil {
-		return nil, fmt.Errorf("set result key: %w", err)
-	}
-
-	return &StoreResultsResult{ResultKey: key}, nil
 }

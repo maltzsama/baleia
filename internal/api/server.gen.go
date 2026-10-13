@@ -210,6 +210,9 @@ type ServerInterface interface {
 	// List individual statements in a multi-statement execution
 	// (GET /workspaces/{id}/executions/{execution_id}/statements)
 	ListStatements(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
+	// Single-statement result as Arrow IPC stream
+	// (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
+	GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int)
 	// List workspace folders
 	// (GET /workspaces/{id}/folders)
 	ListFolders(w http.ResponseWriter, r *http.Request, id PathId, params ListFoldersParams)
@@ -645,6 +648,12 @@ func (_ Unimplemented) GetResults(w http.ResponseWriter, r *http.Request, id Pat
 // List individual statements in a multi-statement execution
 // (GET /workspaces/{id}/executions/{execution_id}/statements)
 func (_ Unimplemented) ListStatements(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Single-statement result as Arrow IPC stream
+// (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
+func (_ Unimplemented) GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2752,6 +2761,57 @@ func (siw *ServerInterfaceWrapper) ListStatements(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetStatementResults operation middleware
+func (siw *ServerInterfaceWrapper) GetStatementResults(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "execution_id" -------------
+	var executionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "execution_id", chi.URLParam(r, "execution_id"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "execution_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "position" -------------
+	var position int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "position", chi.URLParam(r, "position"), &position, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "position", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStatementResults(w, r, id, executionId, position)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListFolders operation middleware
 func (siw *ServerInterfaceWrapper) ListFolders(w http.ResponseWriter, r *http.Request) {
 
@@ -3733,6 +3793,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/executions/{execution_id}/statements", wrapper.ListStatements)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/executions/{execution_id}/statements/{position}/results", wrapper.GetStatementResults)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/folders", wrapper.ListFolders)
@@ -6049,6 +6112,61 @@ func (response ListStatements404JSONResponse) VisitListStatementsResponse(w http
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetStatementResultsRequestObject struct {
+	Id          PathId             `json:"id"`
+	ExecutionId openapi_types.UUID `json:"execution_id"`
+	Position    int                `json:"position"`
+}
+
+type GetStatementResultsResponseObject interface {
+	VisitGetStatementResultsResponse(w http.ResponseWriter) error
+}
+
+type GetStatementResults200ApplicationvndApacheArrowStreamResponse struct {
+	ArrowStreamApplicationvndApacheArrowStreamResponse
+}
+
+func (response GetStatementResults200ApplicationvndApacheArrowStreamResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/vnd.apache.arrow.stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetStatementResults401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetStatementResults401JSONResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetStatementResults404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetStatementResults404JSONResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetStatementResults409JSONResponse Error
+
+func (response GetStatementResults409JSONResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListFoldersRequestObject struct {
 	Id     PathId `json:"id"`
 	Params ListFoldersParams
@@ -6767,6 +6885,9 @@ type StrictServerInterface interface {
 	// List individual statements in a multi-statement execution
 	// (GET /workspaces/{id}/executions/{execution_id}/statements)
 	ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error)
+	// Single-statement result as Arrow IPC stream
+	// (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
+	GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error)
 	// List workspace folders
 	// (GET /workspaces/{id}/folders)
 	ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error)
@@ -8626,6 +8747,34 @@ func (sh *strictHandler) ListStatements(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListStatementsResponseObject); ok {
 		if err := validResponse.VisitListStatementsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStatementResults operation middleware
+func (sh *strictHandler) GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int) {
+	var request GetStatementResultsRequestObject
+
+	request.Id = id
+	request.ExecutionId = executionId
+	request.Position = position
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStatementResults(ctx, request.(GetStatementResultsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStatementResults")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStatementResultsResponseObject); ok {
+		if err := validResponse.VisitGetStatementResultsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
