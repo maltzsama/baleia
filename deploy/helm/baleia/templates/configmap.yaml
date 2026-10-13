@@ -17,6 +17,6 @@ data:
   SMTP_PORT: {{ .Values.config.SMTP_PORT | quote }}
   SMTP_USER: {{ .Values.config.SMTP_USER | quote }}
   SMTP_FROM: {{ .Values.config.SMTP_FROM | quote }}
-  BALEIA_RESULT_MAX_ROWS: "1000000"
-  BALEIA_RESULT_MAX_BYTES: "536870912"
-  BALEIA_STATEMENT_TIMEOUT: "30m"
+  BALEIA_RESULT_MAX_ROWS: {{ .Values.config.BALEIA_RESULT_MAX_ROWS | quote }}
+  BALEIA_RESULT_MAX_BYTES: {{ .Values.config.BALEIA_RESULT_MAX_BYTES | quote }}
+  BALEIA_STATEMENT_TIMEOUT: {{ .Values.config.BALEIA_STATEMENT_TIMEOUT | quote }}

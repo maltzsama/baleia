@@ -31,6 +31,10 @@ config:
   SMTP_PORT: ""
   SMTP_USER: ""
   SMTP_FROM: ""
+  # Execution limits (api and worker). Defaults match the binary's own.
+  BALEIA_STATEMENT_TIMEOUT: "30m"
+  BALEIA_RESULT_MAX_ROWS: "1000000"
+  BALEIA_RESULT_MAX_BYTES: "536870912"
 
 api:
   replicas: 1
@@ -57,4 +61,5 @@ trino:
     image: ""             # optional small image with /baleia-catalog-store (air-gapped)
     imagePullPolicy: ""
   jvmHeap: 2G
+  awsRegion: us-east-1    # set explicitly: S3 region auto-detection hangs without EC2 metadata
   resources: {}
