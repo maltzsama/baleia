@@ -8,41 +8,45 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog, requestID string) error {
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
+// QueryExecutionWorkflow runs every statement of a query sequentially against
+// Trino, stopping on the first error. It carries control only; result rows live
+// in object storage (#89).
+//
+// statementTimeout bounds each statement. It is passed as input because
+// workflow code must stay deterministic and never read the environment.
+func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog, requestID string, statementTimeout time.Duration) error {
+	// Bookkeeping activities are idempotent DB updates and may be retried.
+	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+
+	// Statement execution is never retried automatically: a retried INSERT or
+	// CREATE TABLE AS would write twice.
+	statementCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: statementTimeout,
 		HeartbeatTimeout:    30 * time.Second,
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
 
 	// (Removed the EnsureCatalog activity call — CR-017 §I3/T1.)
 	// With the baleia-trino-catalog-store plugin, Trino loads all catalogs
 	// from trino_catalog_registry at boot. The write-through flow of the
 	// CreateCatalog handler + the plugin's addOrReplaceCatalog callback
-	// cover both boot-time and runtime catalog enrollment. There is no
-	// longer a "Trino lost the catalog after a restart" scenario that
-	// the activity used to cover.
+	// cover both boot-time and runtime catalog enrollment.
 
 	var splitResult activities.SplitSQLResult
-	if err := workflow.ExecuteActivity(ctx, activities.SplitSQL, activities.SplitSQLParams{
+	if err := workflow.ExecuteActivity(bookkeepingCtx, activities.SplitSQL, activities.SplitSQLParams{
 		SQL: sql,
-	}).Get(ctx, &splitResult); err != nil {
-		_ = workflow.ExecuteActivity(ctx, activities.FailExecution, activities.FailExecutionParams{
-			ExecutionID:  executionID,
-			ErrorMessage: err.Error(),
-		}).Get(ctx, nil)
-		return err
+	}).Get(bookkeepingCtx, &splitResult); err != nil {
+		return failExecution(bookkeepingCtx, executionID, err)
 	}
 
-	if err := workflow.ExecuteActivity(ctx, activities.CreateStatementRecords, activities.CreateStatementRecordsParams{
+	if err := workflow.ExecuteActivity(bookkeepingCtx, activities.CreateStatementRecords, activities.CreateStatementRecordsParams{
 		ExecutionID: executionID,
 		Statements:  splitResult.Statements,
-	}).Get(ctx, nil); err != nil {
-		_ = workflow.ExecuteActivity(ctx, activities.FailExecution, activities.FailExecutionParams{
-			ExecutionID:  executionID,
-			ErrorMessage: err.Error(),
-		}).Get(ctx, nil)
-		return err
+	}).Get(bookkeepingCtx, nil); err != nil {
+		return failExecution(bookkeepingCtx, executionID, err)
 	}
 
 	var totalRows int64
@@ -54,13 +58,21 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 		position := int32(i + 1)
 
 		var execResult activities.ExecuteStatementResult
-		err := workflow.ExecuteActivity(ctx, activities.ExecuteStatement, activities.ExecuteStatementParams{
+		err := workflow.ExecuteActivity(statementCtx, activities.ExecuteStatement, activities.ExecuteStatementParams{
 			ExecutionID:  executionID,
 			Position:     position,
 			SQL:          stmt,
 			TrinoCatalog: trinoCatalog,
 			RequestID:    requestID,
-		}).Get(ctx, &execResult)
+			Timeout:      statementTimeout,
+		}).Get(statementCtx, &execResult)
+
+		// A cancelled workflow (UI cancel, timeout) cancels the statement
+		// activity, which kills the Trino query. Record the cancellation on a
+		// disconnected context and stop.
+		if temporal.IsCanceledError(err) {
+			return markCancelled(ctx, executionID, position)
+		}
 
 		if err != nil || execResult.Error != "" {
 			errMsg := execResult.Error
@@ -68,32 +80,32 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 				errMsg = err.Error()
 			}
 
-			_ = workflow.ExecuteActivity(ctx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
+			_ = workflow.ExecuteActivity(bookkeepingCtx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
 				ExecutionID:  executionID,
 				Position:     position,
 				Status:       "failed",
 				ErrorMessage: errMsg,
 				DurationMs:   execResult.DurationMs,
-			}).Get(ctx, nil)
+			}).Get(bookkeepingCtx, nil)
 
-			_ = workflow.ExecuteActivity(ctx, activities.FailExecution, activities.FailExecutionParams{
+			_ = workflow.ExecuteActivity(bookkeepingCtx, activities.FailExecution, activities.FailExecutionParams{
 				ExecutionID:  executionID,
 				ErrorMessage: errMsg,
-			}).Get(ctx, nil)
+			}).Get(bookkeepingCtx, nil)
 			if err != nil {
 				return err
 			}
 			return nil
 		}
 
-		_ = workflow.ExecuteActivity(ctx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
+		_ = workflow.ExecuteActivity(bookkeepingCtx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
 			ExecutionID:  executionID,
 			Position:     position,
 			Status:       "finished",
 			TrinoQueryID: execResult.TrinoQueryID,
 			RowsReturned: execResult.RowsReturned,
 			DurationMs:   execResult.DurationMs,
-		}).Get(ctx, nil)
+		}).Get(bookkeepingCtx, nil)
 
 		totalRows += execResult.RowsReturned
 		totalDurationMs += execResult.DurationMs
@@ -113,12 +125,49 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 		Columns:     allColumns,
 		Rows:        allRows,
 		RequestID:   requestID,
-	}).Get(ctx, nil)
+	}).Get(storeCtx, nil)
 
-	return workflow.ExecuteActivity(ctx, activities.CompleteExecution, activities.CompleteExecutionParams{
+	return workflow.ExecuteActivity(bookkeepingCtx, activities.CompleteExecution, activities.CompleteExecutionParams{
 		ExecutionID:  executionID,
 		Status:       "finished",
 		RowsReturned: totalRows,
 		DurationMs:   totalDurationMs,
+	}).Get(bookkeepingCtx, nil)
+}
+
+// failExecution marks the execution failed with a bounded-retry bookkeeping
+// context and returns the original error.
+func failExecution(ctx workflow.Context, executionID string, cause error) error {
+	_ = workflow.ExecuteActivity(ctx, activities.FailExecution, activities.FailExecutionParams{
+		ExecutionID:  executionID,
+		ErrorMessage: cause.Error(),
 	}).Get(ctx, nil)
+	return cause
+}
+
+// markCancelled records the cancellation of the in-flight statement and the
+// execution. It runs on a disconnected context because the workflow context is
+// already cancelled by the time it is called.
+func markCancelled(ctx workflow.Context, executionID string, position int32) error {
+	dctx, cancel := workflow.NewDisconnectedContext(ctx)
+	defer cancel()
+	dctx = workflow.WithActivityOptions(dctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+
+	_ = workflow.ExecuteActivity(dctx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
+		ExecutionID: executionID,
+		Position:    position,
+		Status:      "cancelled",
+	}).Get(dctx, nil)
+
+	// The cancel endpoint already flipped the execution to cancelled; this is
+	// a no-op in that case (the update is conditional on status='running').
+	_ = workflow.ExecuteActivity(dctx, activities.CompleteExecution, activities.CompleteExecutionParams{
+		ExecutionID: executionID,
+		Status:      "cancelled",
+	}).Get(dctx, nil)
+
+	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 // DefaultJWTSecret is the insecure placeholder shipped for local development.
@@ -37,6 +38,10 @@ type Config struct {
 	S3SecretKey  string
 	S3Bucket     string
 	S3UseSSL     bool
+	// StatementTimeout bounds a single statement execution. It is used as the
+	// activity StartToCloseTimeout and sent to Trino as the session property
+	// query_max_execution_time so the cluster enforces it too.
+	StatementTimeout time.Duration
 	RateLimitRPS   int
 	RateLimitBurst int
 }
@@ -61,6 +66,7 @@ func Load() *Config {
 		S3SecretKey:  getEnv("S3_SECRET_KEY", "rustfsadmin"),
 		S3Bucket:     getEnv("S3_BUCKET", "baleia"),
 		S3UseSSL:     getEnv("S3_USE_SSL", "false") == "true",
+		StatementTimeout: getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
 		RateLimitRPS:   getEnvInt("RATE_LIMIT_RPS", 60),
 		RateLimitBurst: getEnvInt("RATE_LIMIT_BURST", 10),
 	}
@@ -83,12 +89,27 @@ func ValidateSecret(s string) error {
 
 // Validate rejects configuration that must not reach production.
 func (c *Config) Validate() error {
-	return ValidateSecret(c.JWTSecret)
+	if err := ValidateSecret(c.JWTSecret); err != nil {
+		return err
+	}
+	if c.StatementTimeout != 0 && c.StatementTimeout < time.Minute {
+		return fmt.Errorf("BALEIA_STATEMENT_TIMEOUT must be at least 1m (got %s)", c.StatementTimeout)
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
 	}
 	return fallback
 }

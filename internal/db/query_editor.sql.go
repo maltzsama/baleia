@@ -580,7 +580,7 @@ func (q *Queries) UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecu
 const updateQueryStatement = `-- name: UpdateQueryStatement :one
 UPDATE query_statements
 SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7
-WHERE id = $1
+WHERE id = $1 AND status = 'running'
 RETURNING id, execution_id, position, sql, status, trino_query_id, rows_returned, duration_ms, error_message, started_at, finished_at
 `
 
@@ -594,6 +594,9 @@ type UpdateQueryStatementParams struct {
 	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
 }
 
+// Conditional update: only a running statement transitions, so a late
+// completion can never overwrite a cancellation. Zero matched rows means the
+// statement was already terminal; callers treat that as a no-op.
 func (q *Queries) UpdateQueryStatement(ctx context.Context, arg UpdateQueryStatementParams) (QueryStatement, error) {
 	row := q.db.QueryRow(ctx, updateQueryStatement,
 		arg.ID,

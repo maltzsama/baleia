@@ -117,6 +117,9 @@ type Querier interface {
 	// never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
 	// execution was already terminal; callers treat that as a no-op.
 	UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecutionParams) (QueryExecution, error)
+	// Conditional update: only a running statement transitions, so a late
+	// completion can never overwrite a cancellation. Zero matched rows means the
+	// statement was already terminal; callers treat that as a no-op.
 	UpdateQueryStatement(ctx context.Context, arg UpdateQueryStatementParams) (QueryStatement, error)
 	UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams) (Retriever, error)
 	UpdateRetrieverAfterRefresh(ctx context.Context, arg UpdateRetrieverAfterRefreshParams) error

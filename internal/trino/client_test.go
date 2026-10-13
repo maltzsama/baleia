@@ -1,8 +1,16 @@
 package trino
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestBuildCreateCatalogDDL_RedactsSecretKeys(t *testing.T) {
@@ -144,5 +152,65 @@ func TestCreateCatalog_RejectsInvalidNameBeforeExecute(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "invalid catalog name") {
 		t.Errorf("expected validation error, got %v", err)
+	}
+}
+
+// TestExecute_CancelSendsDelete pins the orphaned-query fix: when the context
+// is cancelled mid-poll, the client abandons the query on Trino with exactly
+// one DELETE to the last nextUri before returning ctx.Err().
+func TestExecute_CancelSendsDelete(t *testing.T) {
+	var deleteCalls int32
+
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/statement":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"id":"20240101_000000_00000_abcde","nextUri":%q}`, srv.URL+"/next1"))
+		case r.Method == http.MethodGet && r.URL.Path == "/next1":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"nextUri":%q}`, srv.URL+"/next2"))
+		case r.Method == http.MethodGet && r.URL.Path == "/next2":
+			// Simulate a long-running query: block until the client aborts.
+			<-r.Context().Done()
+		case r.Method == http.MethodDelete && r.URL.Path == "/next2":
+			atomic.AddInt32(&deleteCalls, 1)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "testuser")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := c.Execute(ctx, "SELECT 1", "", "")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for atomic.LoadInt32(&deleteCalls) == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := atomic.LoadInt32(&deleteCalls); got != 1 {
+		t.Fatalf("expected exactly one DELETE to /next2 on cancel, got %d", got)
+	}
+}
+
+// TestKillQuery_RejectsBadID pins the injection guard on kill_query: an id that
+// does not match Trino's format returns an error and never reaches HTTP.
+func TestKillQuery_RejectsBadID(t *testing.T) {
+	c := &Client{baseURL: "http://invalid:1", user: "test", http: &http.Client{}}
+
+	err := c.KillQuery(context.Background(), "not-an-id", "cancel")
+	if err == nil || !strings.Contains(err.Error(), "invalid trino query id") {
+		t.Fatalf("expected an id validation error, got %v", err)
 	}
 }

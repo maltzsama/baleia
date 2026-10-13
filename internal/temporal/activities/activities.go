@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/arrowipc"
@@ -16,14 +17,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
 )
 
 var defaultActivities *Activities
 
+// trinoClient is the slice of the Trino client the activities use. It is an
+// interface so tests can inject a fake that blocks, fails, or records calls.
+type trinoClient interface {
+	ExecuteWithOptions(ctx context.Context, sql string, opts trino.ExecuteOptions) (*trino.QueryResult, error)
+	Execute(ctx context.Context, sql, catalog, schema string) (*trino.QueryResult, error)
+	KillQuery(ctx context.Context, queryID, message string) error
+	ListQueries(ctx context.Context) ([]trino.QueryInfo, error)
+	GetClusterStats(ctx context.Context) (*trino.ClusterStats, error)
+}
+
 type Activities struct {
 	queries db.Querier
-	trino   *trino.Client
+	trino   trinoClient
 	s3      *storage.S3Client
 	cfg     *config.Config
 }
@@ -128,6 +140,23 @@ type ExecuteStatementParams struct {
 	SQL          string
 	TrinoCatalog string
 	RequestID    string
+	// Timeout bounds the statement. It is sent to Trino as the session
+	// property query_max_execution_time so the cluster enforces it too.
+	Timeout time.Duration
+}
+
+// heartbeatInterval throttles activity heartbeats; the workflow's heartbeat
+// timeout is 3x this interval.
+const heartbeatInterval = 10 * time.Second
+
+// statementTransportBackoff bounds retries of transport failures that happen
+// before Trino accepted a statement. It is a package var so tests can shrink it.
+var statementTransportBackoff = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
+
+// heartbeatDetails travels with the heartbeat so a cancellation or a recovered
+// attempt knows which Trino query to abandon.
+type heartbeatDetails struct {
+	TrinoQueryID string
 }
 
 type ExecuteStatementResult struct {
@@ -162,8 +191,55 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	}
 
 	start := time.Now()
-	result, err := a.trino.Execute(ctx, params.SQL, params.TrinoCatalog, "")
+
+	// Heartbeats let Temporal deliver a cancellation to this attempt and prove
+	// liveness. They are throttled to heartbeatInterval.
+	var queryID string
+	var lastBeat time.Time
+	beat := func(force bool) {
+		now := time.Now()
+		if !force && now.Sub(lastBeat) < heartbeatInterval {
+			return
+		}
+		lastBeat = now
+		activity.RecordHeartbeat(ctx, heartbeatDetails{TrinoQueryID: queryID})
+	}
+
+	opts := trino.ExecuteOptions{
+		Catalog:           params.TrinoCatalog,
+		SessionProperties: statementSessionProperties(params.Timeout),
+		OnQueryID: func(id string) {
+			queryID = id
+			beat(true)
+		},
+		OnProgress: func() { beat(false) },
+	}
+
+	// A statement is never retried once Trino has accepted it: retrying an
+	// INSERT/CREATE could write twice. Only a transport failure before the
+	// query id is known is retried, and with a bounded backoff.
+	backoff := statementTransportBackoff
+	var result *trino.QueryResult
+	var err error
+	for attempt := 0; ; attempt++ {
+		queryID = ""
+		result, err = a.trino.ExecuteWithOptions(ctx, params.SQL, opts)
+		if err == nil || ctx.Err() != nil || queryID != "" || attempt >= len(backoff) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(backoff[attempt]):
+		}
+	}
+
 	durationMs := time.Since(start).Milliseconds()
+
+	if ctx.Err() != nil {
+		// The client already abandoned the query on Trino; report the cancel
+		// so the workflow marks the statement and execution cancelled.
+		return nil, temporal.NewCanceledError()
+	}
 
 	if err != nil {
 		return &ExecuteStatementResult{
@@ -184,6 +260,18 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 		Columns:      cols,
 		Rows:         result.Data,
 	}, nil
+}
+
+// statementSessionProperties renders the per-statement Trino session
+// properties. Trino parses query_max_execution_time as a duration such as
+// "1800s".
+func statementSessionProperties(timeout time.Duration) map[string]string {
+	if timeout <= 0 {
+		return nil
+	}
+	return map[string]string{
+		"query_max_execution_time": strconv.FormatInt(int64(timeout.Seconds()), 10) + "s",
+	}
 }
 
 type UpdateStatementRecordParams struct {

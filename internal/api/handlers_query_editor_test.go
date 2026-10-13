@@ -2,12 +2,17 @@ package api
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+	"go.temporal.io/sdk/client"
 )
 
 // fakeQuerier embeds db.Querier so only the methods a test exercises need an
@@ -104,7 +109,7 @@ func TestGetExecutionReturnsOwnExecution(t *testing.T) {
 
 func TestCancelExecutionCancelsRunning(t *testing.T) {
 	fake := &fakeQuerier{hasWorkspaceAccess: true, cancelResult: db.QueryExecution{Status: "cancelled"}}
-	h := &Handlers{queries: fake}
+	h := &Handlers{queries: fake, temporalClient: &fakeTemporalClient{}}
 	wsID, execID := execRequest()
 
 	resp, err := h.CancelExecution(testContext(), CancelExecutionRequestObject{Id: wsID, ExecutionId: execID})
@@ -155,5 +160,70 @@ func TestListStatementsReturns404ForForeignExecution(t *testing.T) {
 	}
 	if _, ok := resp.(ListStatements404JSONResponse); !ok {
 		t.Fatalf("want 404 for a foreign execution, got %T", resp)
+	}
+}
+
+// fakeRunQueryQuerier supports the RunQuery start-failure path: it answers the
+// workspace and creates the running execution.
+type fakeRunQueryQuerier struct {
+	db.Querier
+	exec         db.QueryExecution
+	markStatuses []string
+}
+
+func (f *fakeRunQueryQuerier) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAccessParams) (bool, error) {
+	return true, nil
+}
+
+func (f *fakeRunQueryQuerier) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Workspace, error) {
+	return db.Workspace{PolarisCatalogName: "cat"}, nil
+}
+
+func (f *fakeRunQueryQuerier) CreateQueryExecution(context.Context, db.CreateQueryExecutionParams) (db.QueryExecution, error) {
+	return f.exec, nil
+}
+
+func (f *fakeRunQueryQuerier) UpdateQueryExecution(_ context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error) {
+	f.markStatuses = append(f.markStatuses, arg.Status)
+	return f.exec, nil
+}
+
+// fakeTemporalClient lets a test make ExecuteWorkflow fail at start or accept
+// CancelWorkflow without a real Temporal server.
+type fakeTemporalClient struct {
+	client.Client
+	startErr error
+}
+
+func (f *fakeTemporalClient) ExecuteWorkflow(ctx context.Context, options client.StartWorkflowOptions, wf interface{}, args ...interface{}) (client.WorkflowRun, error) {
+	return nil, f.startErr
+}
+
+func (f *fakeTemporalClient) CancelWorkflow(ctx context.Context, workflowID, runID string) error {
+	return nil
+}
+
+// TestRunQuery_WorkflowStartFailureFailsRow pins the orphan-row fix: when the
+// workflow cannot start, the running execution row is failed instead of stuck.
+func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
+	fake := &fakeRunQueryQuerier{
+		exec: db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+	}
+	h := &Handlers{
+		queries:        fake,
+		cfg:            &config.Config{StatementTimeout: 30 * time.Minute},
+		temporalClient: &fakeTemporalClient{startErr: errors.New("temporal down")},
+	}
+
+	_, err := h.RunQuery(testContext(), RunQueryRequestObject{
+		Id:   PathId{0xAA},
+		Body: &RunQueryJSONRequestBody{Sql: "SELECT 1"},
+	})
+	if err == nil {
+		t.Fatal("expected an error when the workflow fails to start")
+	}
+
+	if len(fake.markStatuses) != 1 || fake.markStatuses[0] != "failed" {
+		t.Fatalf("execution row mark statuses = %v, want [failed]", fake.markStatuses)
 	}
 }
