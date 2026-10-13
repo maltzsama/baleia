@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -137,11 +136,7 @@ func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
 	}
 
 	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
-		fmt.Printf("DEBUG registering operationID: %s", operationID)
-
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
-			fmt.Printf("DEBUG request operationID: %s", operationID)
-
 			if publicOps[operationID] {
 				return f(ctx, w, r, args)
 			}

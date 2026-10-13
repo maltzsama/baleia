@@ -78,6 +78,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SetExecutionResult)
 	w.RegisterActivity(LensPollTrinoQueries)
 	w.RegisterActivity(LensPollTrinoCluster)
+	w.RegisterActivity(ListEnabledIcebergCatalogs)
 	w.RegisterActivity(LensAnalyzeTableHealth)
 	w.RegisterActivity(LensRunMaintenance)
 	w.RegisterActivity(RetrieverRefresh)

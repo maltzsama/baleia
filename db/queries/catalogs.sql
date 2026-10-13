@@ -23,6 +23,15 @@ SELECT * FROM catalogs WHERE connection_id = $1 ORDER BY name;
 -- name: ListEnabledCatalogs :many
 SELECT * FROM catalogs WHERE enabled ORDER BY name;
 
+-- name: ListEnabledIcebergCatalogs :many
+-- Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
+-- Iceberg REST, Nessie), used by the Lens table-health fan-out.
+SELECT c.id, c.connection_id, c.name, c.trino_catalog_name
+FROM catalogs c
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE c.enabled AND cc.type IN ('polaris', 'iceberg', 'nessie')
+ORDER BY c.name;
+
 -- name: UpdateCatalog :one
 UPDATE catalogs SET
     name = $2,
