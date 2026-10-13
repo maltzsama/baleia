@@ -1,7 +1,7 @@
 BALEIA_DIR ?= $(CURDIR)
 PLUGIN_DIR ?= $(BALEIA_DIR)/.plugin/baleia-trino-catalog-store
 PLUGIN_REPO ?= https://github.com/maltzsama/baleia-trino-catalog-store.git
-PLUGIN_TAG  ?= v0.7.0
+PLUGIN_TAG  ?= v0.8.0
 PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 
 # Fallback secret for local development. An exported or command-line
@@ -125,7 +125,7 @@ build-all: build-web build
 K8S_PROFILE ?= baleia
 K8S_NS      ?= baleia-dev
 K8S_PLUGIN_IMAGE      ?= baleia-plugins
-K8S_PLUGIN_VERSION    ?= 0.7.0
+K8S_PLUGIN_VERSION    ?= 0.8.0
 # The bundle image is tagged with the plugin release it carries (the plugin repo
 # owns that version), so it matches trino.plugin.image in deploy/dev/values-dev.yaml.
 K8S_PLUGIN_TAG        ?= $(K8S_PLUGIN_VERSION)

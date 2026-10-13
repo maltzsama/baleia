@@ -20,3 +20,4 @@ data:
   BALEIA_RESULT_MAX_ROWS: {{ .Values.config.BALEIA_RESULT_MAX_ROWS | quote }}
   BALEIA_RESULT_MAX_BYTES: {{ .Values.config.BALEIA_RESULT_MAX_BYTES | quote }}
   BALEIA_STATEMENT_TIMEOUT: {{ .Values.config.BALEIA_STATEMENT_TIMEOUT | quote }}
+  BALEIA_TRINO_ADMIN_USER: {{ .Values.config.BALEIA_TRINO_ADMIN_USER | quote }}

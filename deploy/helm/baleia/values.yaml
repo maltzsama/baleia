@@ -35,6 +35,9 @@ config:
   BALEIA_STATEMENT_TIMEOUT: "30m"
   BALEIA_RESULT_MAX_ROWS: "1000000"
   BALEIA_RESULT_MAX_BYTES: "536870912"
+  # Trino identity that may manage catalogs. One value: Baleia's DDL emitter
+  # runs as it and the chart's catalog guard lists it as the only admin user.
+  BALEIA_TRINO_ADMIN_USER: baleia_admin
 
 api:
   replicas: 1
@@ -54,7 +57,7 @@ trino:
   enabled: false
   image:
     repository: trinodb/trino
-    tag: "482"
+    tag: "483"
   plugin:
     version: ""           # required when trino.enabled (and plugin.image unset)
     url: ""               # default: GitHub release URL built from version

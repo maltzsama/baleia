@@ -10,8 +10,10 @@ data:
 {{ .Files.Get "files/trino/config.properties" | indent 4 }}
   catalog-store.properties: |
 {{ .Files.Get "files/trino/catalog-store.properties" | indent 4 }}
+  baleia-base-access-control.properties: |
+{{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}
   baleia-catalog-guard.properties: |
-{{ .Files.Get "files/trino/baleia-catalog-guard.properties" | indent 4 }}
+{{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -115,6 +117,9 @@ spec:
             - name: trino-config
               mountPath: /etc/trino/catalog-store.properties
               subPath: catalog-store.properties
+            - name: trino-config
+              mountPath: /etc/trino/baleia-base-access-control.properties
+              subPath: baleia-base-access-control.properties
             - name: trino-config
               mountPath: /etc/trino/baleia-catalog-guard.properties
               subPath: baleia-catalog-guard.properties
