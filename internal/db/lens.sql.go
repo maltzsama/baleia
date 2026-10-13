@@ -434,6 +434,17 @@ const upsertTableHealthSnapshot = `-- name: UpsertTableHealthSnapshot :one
 
 INSERT INTO table_health_snapshots (catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+ON CONFLICT (catalog_connection_id, catalog, namespace, table_name) DO UPDATE
+SET captured_at               = now(),
+    snapshot_count            = EXCLUDED.snapshot_count,
+    file_count                = EXCLUDED.file_count,
+    total_size_bytes          = EXCLUDED.total_size_bytes,
+    oldest_snapshot_age_hours = EXCLUDED.oldest_snapshot_age_hours,
+    last_maintenance_at       = COALESCE(EXCLUDED.last_maintenance_at, table_health_snapshots.last_maintenance_at),
+    health_score              = EXCLUDED.health_score,
+    needs_compaction          = EXCLUDED.needs_compaction,
+    needs_snapshot_expiry     = EXCLUDED.needs_snapshot_expiry,
+    needs_orphan_cleanup      = EXCLUDED.needs_orphan_cleanup
 RETURNING id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup
 `
 
