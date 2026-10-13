@@ -50,7 +50,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := server.New(cfg, pool)
+	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET). With
+	// stored credentials and no key, refuse to start rather than serve rows we
+	// cannot read.
+	keyring, err := bootstrap.LoadKeyring(ctx, cfg, func(ctx context.Context) (int64, error) {
+		var n int64
+		err := pool.QueryRow(ctx, "SELECT count(*) FROM catalog_connections WHERE credentials_enc IS NOT NULL").Scan(&n)
+		return n, err
+	})
+	if err != nil {
+		slog.Error("credential keyring", "err", err)
+		os.Exit(1)
+	}
+
+	srv := server.New(cfg, pool, keyring)
 	if err := srv.Run(ctx); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)

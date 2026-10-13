@@ -9,6 +9,7 @@ secrets:
   create: true
   values:
     JWT_SECRET: dev-secret-not-for-production-123456
+    BALEIA_ENCRYPTION_KEY: dev-encryption-key-not-for-production-0123
     DATABASE_URL: "postgresql://baleia:baleia@postgres.baleia-dev.svc:5432/baleia?sslmode=disable"
     BALEIA_TRINO_DB_PASSWORD: admin
     S3_ACCESS_KEY: rustfsadmin

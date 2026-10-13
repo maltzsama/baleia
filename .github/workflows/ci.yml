@@ -59,7 +59,7 @@ jobs:
       - name: Lint chart (dev values + defaults)
         run: |
           helm lint deploy/helm/baleia --strict \
-            --set secrets.create=true --set secrets.values.JWT_SECRET=abcdef0123456789abcdef --set secrets.values.DATABASE_URL=postgresql://b
+            --set secrets.create=true --set secrets.values.JWT_SECRET=abcdef0123456789abcdef --set secrets.values.BALEIA_ENCRYPTION_KEY=fedcba9876543210fedcba9876543210 --set secrets.values.DATABASE_URL=postgresql://b
           helm lint deploy/helm/baleia --strict --set existingSecret=x
       - name: Install kubeconform
         run: |
@@ -69,7 +69,7 @@ jobs:
       - name: Validate rendered manifests
         run: |
           helm template baleia deploy/helm/baleia \
-            --set secrets.create=true --set secrets.values.JWT_SECRET=abcdef0123456789abcdef --set secrets.values.DATABASE_URL=postgresql://b \
+            --set secrets.create=true --set secrets.values.JWT_SECRET=abcdef0123456789abcdef --set secrets.values.BALEIA_ENCRYPTION_KEY=fedcba9876543210fedcba9876543210 --set secrets.values.DATABASE_URL=postgresql://b \
             | kubeconform -strict -summary -ignore-missing-schemas
           helm template baleia deploy/helm/baleia --set existingSecret=x | kubeconform -strict -summary -ignore-missing-schemas
           kubectl kustomize deploy/dev | kubeconform -strict -summary -ignore-missing-schemas

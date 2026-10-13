@@ -8,10 +8,14 @@ PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 # JWT_SECRET wins, so credentials encrypted under a custom key stay readable.
 JWT_SECRET ?= dev-secret-not-for-production
 
-.PHONY: dev worker migrate migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down
+# Credentials are sealed with BALEIA_ENCRYPTION_KEY, never JWT_SECRET. Same
+# override rule: an exported or command-line value wins.
+BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
+
+.PHONY: dev worker migrate migrate-credentials migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down
 
 dev:
-	JWT_SECRET=$(JWT_SECRET) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
+	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
 
 worker:
 	JWT_SECRET=$(JWT_SECRET) go run ./cmd/worker
@@ -80,6 +84,11 @@ migrate-status:
 
 migrate-reset:
 	go run ./cmd/migrate -cmd=reset
+
+# One-shot: re-seal legacy connection credentials (encrypted under JWT_SECRET)
+# as v1 envelopes under BALEIA_ENCRYPTION_KEY. Idempotent. Needs DATABASE_URL.
+migrate-credentials:
+	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) go run ./cmd/migrate -cmd=credentials
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
 

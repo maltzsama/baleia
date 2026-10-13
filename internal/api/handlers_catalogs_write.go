@@ -60,9 +60,10 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 	if err != nil {
 		return CreateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "connection not found"}}, nil
 	}
-	creds, err := catalogs.DecodeCredentials(conn, h.cfg.JWTSecret)
+	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
 	if err != nil {
 		slog.Error("decode creds for create", "err", err)
+		return nil, err
 	}
 
 	connector := "iceberg"
@@ -188,7 +189,11 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	if err != nil {
 		return nil, fmt.Errorf("get connection: %w", err)
 	}
-	creds, _ := catalogs.DecodeCredentials(conn, h.cfg.JWTSecret)
+	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
+	if err != nil {
+		slog.Error("decode creds for update", "err", err)
+		return nil, err
+	}
 
 	newTrinoName := existing.TrinoCatalogName
 	if body.TrinoCatalogName != "" {
@@ -303,7 +308,22 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 	if err != nil {
 		return nil, fmt.Errorf("get connection: %w", err)
 	}
-	creds, _ := catalogs.DecodeCredentials(conn, h.cfg.JWTSecret)
+	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
+	if err != nil {
+		// Fail closed before touching Trino: the live catalog is left as is and
+		// the registry row records why it could not be re-synced.
+		slog.Error("decode creds for sync", "err", err)
+		errMsg := err.Error()
+		_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
+			ClusterID:   cat.ClusterID,
+			CatalogName: cat.TrinoCatalogName,
+			SyncError:   &errMsg,
+		})
+		c := dbCatalogToPublic(cat)
+		c.SyncStatus = ptrSyncStatus(CatalogSyncStatusError)
+		c.SyncError = &errMsg
+		return SyncCatalog409JSONResponse(c), nil
+	}
 
 	_ = h.trino.DropCatalog(ctx, cat.TrinoCatalogName)
 	if err := h.emitCreateCatalog(ctx, cat, conn, creds); err != nil {

@@ -9,13 +9,15 @@ import (
 )
 
 // DefaultJWTSecret is the insecure placeholder shipped for local development.
-// It signs JWTs and derives the credential-encryption key, so ValidateSecret
-// rejects it.
+// It signs JWTs, so ValidateSecret rejects it.
 const DefaultJWTSecret = "change-me-in-production"
 
 // MinJWTSecretLen is the minimum accepted length for JWT_SECRET. Short secrets
-// are guessable and the key is reused for credential encryption.
+// are guessable.
 const MinJWTSecretLen = 16
+
+// MinEncryptionKeyLen is the minimum accepted length for BALEIA_ENCRYPTION_KEY.
+const MinEncryptionKeyLen = 32
 
 type Config struct {
 	Port         string
@@ -36,6 +38,11 @@ type Config struct {
 	// identity for their queries: "uuid" (u_<uuid>) or "email".
 	TrinoUserIdentity string
 	JWTSecret    string
+	// EncryptionKey seals connection credentials at rest. It is deliberately
+	// separate from JWTSecret so rotating the signing secret never touches stored
+	// credentials. EncryptionKeyPrevious is set only during a key rotation.
+	EncryptionKey         string
+	EncryptionKeyPrevious string
 	PublicURL    string
 	SMTPHost     string
 	SMTPPort     string
@@ -74,6 +81,8 @@ func Load() *Config {
 		TrinoServiceUser:  getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
 		TrinoUserIdentity: getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
 		JWTSecret:    getEnv("JWT_SECRET", DefaultJWTSecret),
+		EncryptionKey:         getEnv("BALEIA_ENCRYPTION_KEY", ""),
+		EncryptionKeyPrevious: getEnv("BALEIA_ENCRYPTION_KEY_PREVIOUS", ""),
 		PublicURL:    getEnv("PUBLIC_URL", "http://localhost:8080"),
 		SMTPHost:     getEnv("SMTP_HOST", ""),
 		SMTPPort:     getEnv("SMTP_PORT", ""),
@@ -109,9 +118,34 @@ func ValidateSecret(s string) error {
 	return nil
 }
 
+// ValidateEncryptionKeys checks the credential-encryption keys when set. An
+// absent key is not an error here: whether one is required depends on whether
+// the database already holds credentials (see bootstrap.LoadKeyring).
+func (c *Config) ValidateEncryptionKeys() error {
+	if c.EncryptionKey == "" {
+		if c.EncryptionKeyPrevious != "" {
+			return errors.New("BALEIA_ENCRYPTION_KEY_PREVIOUS is set without BALEIA_ENCRYPTION_KEY")
+		}
+		return nil
+	}
+	if len(c.EncryptionKey) < MinEncryptionKeyLen {
+		return fmt.Errorf("BALEIA_ENCRYPTION_KEY must be at least %d characters", MinEncryptionKeyLen)
+	}
+	if c.EncryptionKey == c.JWTSecret {
+		return errors.New("BALEIA_ENCRYPTION_KEY must differ from JWT_SECRET")
+	}
+	if c.EncryptionKeyPrevious != "" && len(c.EncryptionKeyPrevious) < MinEncryptionKeyLen {
+		return fmt.Errorf("BALEIA_ENCRYPTION_KEY_PREVIOUS must be at least %d characters", MinEncryptionKeyLen)
+	}
+	return nil
+}
+
 // Validate rejects configuration that must not reach production.
 func (c *Config) Validate() error {
 	if err := ValidateSecret(c.JWTSecret); err != nil {
+		return err
+	}
+	if err := c.ValidateEncryptionKeys(); err != nil {
 		return err
 	}
 	if c.StatementTimeout != 0 && c.StatementTimeout < time.Minute {

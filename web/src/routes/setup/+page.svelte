@@ -43,7 +43,6 @@
 		const body: any = { name: connName, type: engine, url: connUrl, default_readonly: true };
 		if (isIcebergType()) {
 			const creds = { client_id: connUser, client_secret: connPass };
-			body.polaris_credentials = creds;
 			body.credentials = creds;
 		}
 		return body;

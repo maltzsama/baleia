@@ -173,7 +173,9 @@ All settings are environment variables. Defaults work for local development with
 |---|---|---|
 | `PORT` | `8080` | HTTP listen port |
 | `DATABASE_URL` | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` | PostgreSQL connection string |
-| `JWT_SECRET` | `change-me-in-production` | Key for signing JWTs and encrypting stored credentials |
+| `JWT_SECRET` | `change-me-in-production` | Key for signing JWTs |
+| `BALEIA_ENCRYPTION_KEY` | _(unset)_ | Key that encrypts stored connection credentials (≥ 32 characters, must differ from `JWT_SECRET`). Required once any credential is stored; the API refuses to start without it. Derived with HKDF-SHA256; each value is bound to its connection row |
+| `BALEIA_ENCRYPTION_KEY_PREVIOUS` | _(unset)_ | Previous encryption key, set only during rotation: values are read with the current or previous key and always written with the current one |
 | `TEMPORAL_HOST` | `localhost:7233` | Temporal server address |
 | `TRINO_URL` | `http://localhost:8088` | Trino coordinator REST endpoint |
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |
@@ -193,6 +195,14 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_TRINO_ADMIN_USER` | `baleia_admin` | Trino identity for catalog DDL/reconcile/maintenance (never user SQL) |
 | `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |
 | `BALEIA_TRINO_USER_IDENTITY` | `uuid` | Map Baleia users to Trino users: `uuid`→`u_<uuid>` or `email` |
+
+### Credential encryption
+
+Connection credentials are stored as `v1:<key-id>:<base64>` envelopes: AES-256-GCM under a key derived (HKDF-SHA256) from `BALEIA_ENCRYPTION_KEY`, with the connection id as additional authenticated data, so a ciphertext copied to another connection does not open. A value that cannot be opened is reported as `credentials_unreadable`; it is never used as if it were the secret.
+
+- **Fresh install:** set `BALEIA_ENCRYPTION_KEY` before saving the first credential. Without it the API starts with a warning and refuses to store credentials.
+- **Upgrading from `JWT_SECRET`-encrypted credentials:** set `BALEIA_ENCRYPTION_KEY`, keep the existing `JWT_SECRET`, then run the one-shot, idempotent migration (`make migrate-credentials`, or `/migrate -cmd=credentials` in the image). Rows that cannot be decrypted are listed by id and left untouched; re-enter those credentials.
+- **Rotating the key:** move the old value to `BALEIA_ENCRYPTION_KEY_PREVIOUS`, set the new `BALEIA_ENCRYPTION_KEY`; values are read with either key and rewritten with the new one when a connection's credentials are next saved.
 
 ## Project structure
 

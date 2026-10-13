@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -13,7 +14,7 @@ import (
 // clobbering each other with a stale full-row write.
 //
 // Credentials are encrypted before they leave this function.
-func buildConnectionUpdateParams(id pgtype.UUID, body UpdateCatalogConnectionRequest, secret string) (db.UpdateCatalogConnectionParams, error) {
+func buildConnectionUpdateParams(id pgtype.UUID, body UpdateCatalogConnectionRequest, kr *crypto.Keyring) (db.UpdateCatalogConnectionParams, error) {
 	params := db.UpdateCatalogConnectionParams{ID: id}
 
 	if body.Name != nil {
@@ -26,7 +27,7 @@ func buildConnectionUpdateParams(id pgtype.UUID, body UpdateCatalogConnectionReq
 		params.DefaultReadonly = body.DefaultReadonly
 	}
 	if body.Credentials != nil {
-		enc, err := encodeCredentials(*body.Credentials, secret)
+		enc, err := encodeCredentials(kr, *body.Credentials, id)
 		if err != nil {
 			return db.UpdateCatalogConnectionParams{}, err
 		}
