@@ -31,6 +31,10 @@ config:
   SMTP_PORT: ""
   SMTP_USER: ""
   SMTP_FROM: ""
+  # Execution limits (api and worker). Defaults match the binary's own.
+  BALEIA_STATEMENT_TIMEOUT: "30m"
+  BALEIA_RESULT_MAX_ROWS: "1000000"
+  BALEIA_RESULT_MAX_BYTES: "536870912"
 
 api:
   replicas: 1
