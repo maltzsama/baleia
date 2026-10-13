@@ -2,17 +2,23 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/robfig/cron"
 	"go.temporal.io/sdk/client"
 )
+
+var destIdentifierRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 func (h *Handlers) ListRetrievers(ctx context.Context, request ListRetrieversRequestObject) (ListRetrieversResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
@@ -42,9 +48,53 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 		return nil, err
 	}
 
-	refreshType := "incremental"
+	for _, field := range []struct {
+		value, name string
+	}{
+		{request.Body.DestCatalog, "dest_catalog"},
+		{request.Body.DestNamespace, "dest_namespace"},
+		{request.Body.DestTable, "dest_table"},
+	} {
+		if err := validateDestIdentifier(field.value, field.name); err != nil {
+			return CreateRetriever422JSONResponse{
+				UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+					Code:    "validation_error",
+					Message: err.Error(),
+				},
+			}, nil
+		}
+	}
+
+	if err := validateRetrieverDefinition(request.Body.DefinitionSql); err != nil {
+		return CreateRetriever422JSONResponse{
+			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+				Code:    "validation_error",
+				Message: err.Error(),
+			},
+		}, nil
+	}
+
+	refreshType := "full"
 	if request.Body.RefreshType != nil {
 		refreshType = string(*request.Body.RefreshType)
+	}
+	if refreshType != "full" {
+		return CreateRetriever422JSONResponse{
+			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+				Code:    "not_supported",
+				Message: "only 'full' refresh is supported in v1; 'incremental' requires a separate design",
+			},
+		}, nil
+	}
+
+	wsID := workspaceIDFromRequest(request.Id)
+	if !h.workspaceHasEnabledCatalog(ctx, wsID, request.Body.DestCatalog) {
+		return CreateRetriever422JSONResponse{
+			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+				Code:    "validation_error",
+				Message: "dest_catalog is not an enabled catalog available to this workspace",
+			},
+		}, nil
 	}
 
 	cronExpr := request.Body.CronSchedule
@@ -57,20 +107,28 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 			},
 		}, nil
 	}
+	if err := validateCronInterval(schedule); err != nil {
+		return CreateRetriever422JSONResponse{
+			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+				Code:    "validation_error",
+				Message: err.Error(),
+			},
+		}, nil
+	}
 
 	nextRun := schedule.Next(time.Now())
 
 	retriever, err := h.queries.CreateRetriever(ctx, db.CreateRetrieverParams{
-		WorkspaceID:    workspaceIDFromRequest(request.Id),
-		CreatedBy:      uid,
-		Name:           request.Body.Name,
-		DefinitionSql:  request.Body.DefinitionSql,
-		DestCatalog:    extractDestCatalog(request.Body.DefinitionSql),
-		DestNamespace:  "",
-		DestTable:      "",
-		CronSchedule:   cronExpr,
-		RefreshType:    refreshType,
-		NextRefreshAt:  pgtype.Timestamptz{Time: nextRun, Valid: true},
+		WorkspaceID:   wsID,
+		CreatedBy:     uid,
+		Name:          request.Body.Name,
+		DefinitionSql: request.Body.DefinitionSql,
+		DestCatalog:   request.Body.DestCatalog,
+		DestNamespace: request.Body.DestNamespace,
+		DestTable:     request.Body.DestTable,
+		CronSchedule:  cronExpr,
+		RefreshType:   refreshType,
+		NextRefreshAt: pgtype.Timestamptz{Time: nextRun, Valid: true},
 	})
 	if err != nil {
 		return nil, err
@@ -131,6 +189,12 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 	if request.Body.RefreshType != nil {
 		refreshType = string(*request.Body.RefreshType)
 	}
+	if refreshType != "full" {
+		return UpdateRetriever422JSONResponse{
+			Code:    "not_supported",
+			Message: "only 'full' refresh is supported in v1; 'incremental' requires a separate design",
+		}, nil
+	}
 	if request.Body.Status != nil {
 		status = string(*request.Body.Status)
 	}
@@ -143,14 +207,14 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 	nextRun := schedule.Next(time.Now())
 
 	updated, err := h.queries.UpdateRetriever(ctx, db.UpdateRetrieverParams{
-		WorkspaceID:    workspaceIDFromRequest(request.Id),
-		ID:             retrieverID,
-		Name:           name,
-		DefinitionSql:  sql,
-		CronSchedule:   cronExpr,
-		RefreshType:    refreshType,
-		Status:         status,
-		NextRefreshAt:  pgtype.Timestamptz{Time: nextRun, Valid: true},
+		WorkspaceID:   workspaceIDFromRequest(request.Id),
+		ID:            retrieverID,
+		Name:          name,
+		DefinitionSql: sql,
+		CronSchedule:  cronExpr,
+		RefreshType:   refreshType,
+		Status:        status,
+		NextRefreshAt: pgtype.Timestamptz{Time: nextRun, Valid: true},
 	})
 	if err != nil {
 		return nil, err
@@ -252,18 +316,18 @@ func dbRetrieverToPublic(r db.Retriever) Retriever {
 	createdBy := openapi_types.UUID(r.CreatedBy.Bytes)
 
 	ret := Retriever{
-		Id:             id,
-		WorkspaceId:    workspaceID,
-		CreatedBy:      &createdBy,
-		Name:           r.Name,
-		DefinitionSql:  r.DefinitionSql,
-		DestCatalog:    r.DestCatalog,
-		DestNamespace:  r.DestNamespace,
-		DestTable:      r.DestTable,
-		CronSchedule:   r.CronSchedule,
-		RefreshType:    RetrieverRefreshType(r.RefreshType),
-		Status:         RetrieverStatus(r.Status),
-		CreatedAt:      pgTimestampToTime(r.CreatedAt),
+		Id:            id,
+		WorkspaceId:   workspaceID,
+		CreatedBy:     &createdBy,
+		Name:          r.Name,
+		DefinitionSql: r.DefinitionSql,
+		DestCatalog:   r.DestCatalog,
+		DestNamespace: r.DestNamespace,
+		DestTable:     r.DestTable,
+		CronSchedule:  r.CronSchedule,
+		RefreshType:   RetrieverRefreshType(r.RefreshType),
+		Status:        RetrieverStatus(r.Status),
+		CreatedAt:     pgTimestampToTime(r.CreatedAt),
 	}
 	if r.LastRefreshAt.Valid {
 		ret.LastRefreshAt = &r.LastRefreshAt.Time
@@ -296,19 +360,89 @@ func dbRetrieverHistoryToPublic(h db.RetrieverRefreshHistory) RetrieverRefreshHi
 	}
 
 	return RetrieverRefreshHistory{
-		Id:                   id,
-		RetrieverId:         retrieverID,
-		TemporalWorkflowId:  &h.TemporalWorkflowID,
-		RefreshType:         RetrieverRefreshHistoryRefreshType(h.RefreshType),
-		Status:              RetrieverRefreshHistoryStatus(h.Status),
-		RowsProcessed:       rowsProcessed,
-		DurationMs:          durationMs,
-		ErrorMessage:        h.ErrorMessage,
-		StartedAt:           pgTimestampToTime(h.StartedAt),
-		FinishedAt:          finishedAt,
+		Id:                 id,
+		RetrieverId:        retrieverID,
+		TemporalWorkflowId: &h.TemporalWorkflowID,
+		RefreshType:        RetrieverRefreshHistoryRefreshType(h.RefreshType),
+		Status:             RetrieverRefreshHistoryStatus(h.Status),
+		RowsProcessed:      rowsProcessed,
+		DurationMs:         durationMs,
+		ErrorMessage:       h.ErrorMessage,
+		StartedAt:          pgTimestampToTime(h.StartedAt),
+		FinishedAt:         finishedAt,
 	}
 }
 
-func extractDestCatalog(sql string) string {
-	return ""
+// workspaceHasEnabledCatalog reports whether the workspace's owner has an
+// enabled Iceberg-family catalog whose Trino name matches catalogName (#16
+// workspace access rules, as used by resolveDefaultTrinoCatalog).
+func (h *Handlers) workspaceHasEnabledCatalog(ctx context.Context, workspaceID pgtype.UUID, catalogName string) bool {
+	workspace, err := h.queries.GetWorkspaceByID(ctx, workspaceID)
+	if err != nil || !workspace.OwnerUserID.Valid {
+		return false
+	}
+	conns, err := h.queries.ListCatalogConnections(ctx, workspace.OwnerUserID)
+	if err != nil {
+		return false
+	}
+	for _, conn := range conns {
+		if conn.Type != "polaris" && conn.Type != "iceberg" && conn.Type != "nessie" {
+			continue
+		}
+		rows, err := h.queries.ListCatalogsByConnection(ctx, conn.ID)
+		if err != nil {
+			continue
+		}
+		for _, r := range rows {
+			if r.Enabled && (r.TrinoCatalogName == catalogName || r.Name == catalogName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// validateDestIdentifier checks a destination identifier (catalog, namespace or
+// table) against Trino's relaxed identifier rules before it is quoted into SQL.
+func validateDestIdentifier(value, field string) error {
+	if value == "" {
+		return fmt.Errorf("%s is required", field)
+	}
+	// Trino quoted identifiers allow more, but v1 restricts the shape the
+	// retriever UI needs.
+	if !destIdentifierRe.MatchString(value) {
+		return fmt.Errorf("%s must match ^[a-zA-Z_][a-zA-Z0-9_]*$", field)
+	}
+	return nil
+}
+
+// validateRetrieverDefinition requires exactly one SELECT/WITH statement and
+// rejects catalog DDL.
+func validateRetrieverDefinition(def string) error {
+	stmts := sqlsplitter.Split(def)
+	if len(stmts) != 1 {
+		return errors.New("definition_sql must be exactly one statement")
+	}
+	if sqlsplitter.IsCatalogDDL(stmts[0]) {
+		return errors.New("catalog management is not allowed in a retriever definition")
+	}
+	lower := strings.ToLower(strings.TrimSpace(stmts[0]))
+	if !strings.HasPrefix(lower, "select ") && !strings.HasPrefix(lower, "with ") &&
+		lower != "select" && lower != "with" {
+		return errors.New("definition_sql must start with SELECT or WITH")
+	}
+	return nil
+}
+
+// validateCronInterval rejects schedules whose runs are closer than 5 minutes,
+// sampled across three consecutive runs.
+func validateCronInterval(schedule cron.Schedule) error {
+	ref := time.Now()
+	t1 := schedule.Next(ref)
+	t2 := schedule.Next(t1)
+	t3 := schedule.Next(t2)
+	if t2.Sub(t1) < 5*time.Minute || t3.Sub(t2) < 5*time.Minute {
+		return errors.New("cron minimum interval is 5 minutes")
+	}
+	return nil
 }

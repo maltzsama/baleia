@@ -82,7 +82,8 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(LensAnalyzeTableHealth)
 	w.RegisterActivity(LensRunMaintenance)
 	w.RegisterActivity(RetrieverRefresh)
-	w.RegisterActivity(RetrieverPoll)
+	w.RegisterActivity(RetrieverDispatch)
+	w.RegisterActivity(AdvanceRetrieverSchedule)
 }
 
 type SplitSQLParams struct {

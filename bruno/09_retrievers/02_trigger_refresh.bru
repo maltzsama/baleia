@@ -1,0 +1,19 @@
+meta {
+  name: Trigger Retriever Refresh
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/retrievers/{{retriever_id}}/refresh
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 202
+}

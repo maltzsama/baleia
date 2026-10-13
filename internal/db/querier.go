@@ -12,6 +12,10 @@ import (
 
 type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
+	// Fired by the dispatcher when a refresh run is started: schedule the next run
+	// from the cron expression immediately, so a long refresh never triggers a
+	// burst of runs afterwards.
+	AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetrieverScheduleParams) error
 	// Conditional cancel: only a running execution transitions to cancelled, so a
 	// concurrent completion or failure activity cannot be overwritten. Zero matched
 	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
@@ -59,6 +63,9 @@ type Querier interface {
 	GetQueryStatementByPosition(ctx context.Context, arg GetQueryStatementByPositionParams) (QueryStatement, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)
+	// Worker-only lookup: the refresh activity runs off a due list, so it does not
+	// have (and must not trust) a caller-supplied workspace id.
+	GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
@@ -127,6 +134,9 @@ type Querier interface {
 	// statement was already terminal; callers treat that as a no-op.
 	UpdateQueryStatement(ctx context.Context, arg UpdateQueryStatementParams) (QueryStatement, error)
 	UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams) (Retriever, error)
+	// Fired by the refresh activity when a run finishes: status flips to active or
+	// error, last_refresh_at advances. next_refresh_at is advanced by the
+	// dispatcher when the run is *started* (AdvanceRetrieverSchedule), never here.
 	UpdateRetrieverAfterRefresh(ctx context.Context, arg UpdateRetrieverAfterRefreshParams) error
 	UpdateRetrieverRefreshHistory(ctx context.Context, arg UpdateRetrieverRefreshHistoryParams) error
 	UpdateSavedQuery(ctx context.Context, arg UpdateSavedQueryParams) (SavedQuery, error)

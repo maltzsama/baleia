@@ -1,0 +1,23 @@
+meta {
+  name: Retriever Refresh History
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/retrievers/{{retriever_id}}/history
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:after-response {
+  bru.setVar("history_item", res.body.data[0])
+}

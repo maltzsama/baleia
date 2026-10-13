@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const advanceRetrieverSchedule = `-- name: AdvanceRetrieverSchedule :exec
+UPDATE retrievers
+SET next_refresh_at = $2, updated_at = now()
+WHERE id = $1
+`
+
+type AdvanceRetrieverScheduleParams struct {
+	ID            pgtype.UUID        `json:"id"`
+	NextRefreshAt pgtype.Timestamptz `json:"next_refresh_at"`
+}
+
+// Fired by the dispatcher when a refresh run is started: schedule the next run
+// from the cron expression immediately, so a long refresh never triggers a
+// burst of runs afterwards.
+func (q *Queries) AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetrieverScheduleParams) error {
+	_, err := q.db.Exec(ctx, advanceRetrieverSchedule, arg.ID, arg.NextRefreshAt)
+	return err
+}
+
 const createRetriever = `-- name: CreateRetriever :one
 INSERT INTO retrievers (
     workspace_id, created_by, name,
@@ -135,6 +154,35 @@ func (q *Queries) GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDPara
 	return i, err
 }
 
+const getRetrieverForRefresh = `-- name: GetRetrieverForRefresh :one
+SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at FROM retrievers WHERE id = $1
+`
+
+// Worker-only lookup: the refresh activity runs off a due list, so it does not
+// have (and must not trust) a caller-supplied workspace id.
+func (q *Queries) GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error) {
+	row := q.db.QueryRow(ctx, getRetrieverForRefresh, id)
+	var i Retriever
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.CreatedBy,
+		&i.Name,
+		&i.DefinitionSql,
+		&i.DestCatalog,
+		&i.DestNamespace,
+		&i.DestTable,
+		&i.CronSchedule,
+		&i.RefreshType,
+		&i.Status,
+		&i.LastRefreshAt,
+		&i.NextRefreshAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listRetrieverRefreshHistory = `-- name: ListRetrieverRefreshHistory :many
 SELECT id, retriever_id, temporal_workflow_id, refresh_type, status, rows_processed, duration_ms, error_message, started_at, finished_at FROM retriever_refresh_history
 WHERE retriever_id = $1
@@ -224,6 +272,7 @@ const listRetrieversDue = `-- name: ListRetrieversDue :many
 SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at FROM retrievers
 WHERE status = 'active' AND next_refresh_at <= now()
 ORDER BY next_refresh_at
+LIMIT 50
 `
 
 func (q *Queries) ListRetrieversDue(ctx context.Context) ([]Retriever, error) {
@@ -315,18 +364,20 @@ func (q *Queries) UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams
 
 const updateRetrieverAfterRefresh = `-- name: UpdateRetrieverAfterRefresh :exec
 UPDATE retrievers
-SET status = $2, last_refresh_at = now(), next_refresh_at = $3, updated_at = now()
+SET status = $2, last_refresh_at = now(), updated_at = now()
 WHERE id = $1
 `
 
 type UpdateRetrieverAfterRefreshParams struct {
-	ID            pgtype.UUID        `json:"id"`
-	Status        string             `json:"status"`
-	NextRefreshAt pgtype.Timestamptz `json:"next_refresh_at"`
+	ID     pgtype.UUID `json:"id"`
+	Status string      `json:"status"`
 }
 
+// Fired by the refresh activity when a run finishes: status flips to active or
+// error, last_refresh_at advances. next_refresh_at is advanced by the
+// dispatcher when the run is *started* (AdvanceRetrieverSchedule), never here.
 func (q *Queries) UpdateRetrieverAfterRefresh(ctx context.Context, arg UpdateRetrieverAfterRefreshParams) error {
-	_, err := q.db.Exec(ctx, updateRetrieverAfterRefresh, arg.ID, arg.Status, arg.NextRefreshAt)
+	_, err := q.db.Exec(ctx, updateRetrieverAfterRefresh, arg.ID, arg.Status)
 	return err
 }
 

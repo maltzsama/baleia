@@ -1,0 +1,32 @@
+meta {
+  name: Create Retriever
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/retrievers
+  body: json
+  auth: bearer
+}
+
+body:json {
+  {
+    "name": "daily_lineitem_snapshot",
+    "definition_sql": "SELECT l_orderkey, l_partkey, l_quantity FROM tpch.sf1.lineitem",
+    "dest_catalog": "baleia_polaris",
+    "dest_namespace": "analytics",
+    "dest_table": "daily_lineitem",
+    "cron_schedule": "0 */6 * * *",
+    "refresh_type": "full"
+  }
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 201
+  res.body.dest_table: eq daily_lineitem
+}

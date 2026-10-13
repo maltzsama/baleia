@@ -6587,6 +6587,15 @@ func (response UpdateRetriever404JSONResponse) VisitUpdateRetrieverResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateRetriever422JSONResponse Error
+
+func (response UpdateRetriever422JSONResponse) VisitUpdateRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetRetrieverHistoryRequestObject struct {
 	Id          PathId             `json:"id"`
 	RetrieverId openapi_types.UUID `json:"retriever_id"`
