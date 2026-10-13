@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 	"log/slog"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	trino_client "github.com/galileostudio/baleia/internal/trino"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -266,7 +269,11 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
 	}
 
-	if _, err := h.trino.Execute(trinoCtx, "SHOW SCHEMAS FROM "+testName, testName, ""); err != nil {
+	testTarget, err := trino_client.QualifiedName(testName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := h.trino.Execute(trinoCtx, "SHOW SCHEMAS FROM "+testTarget, testName, ""); err != nil {
 		errMsg := err.Error()
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
 	}
@@ -458,22 +465,84 @@ func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(entries)
 }
 
-func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) {
-	connID := chiURLParam(r, "connection_id")
-	catalogName := chiURLParam(r, "catalog_name")
+// writeAPIError answers with a JSON error built by json.Marshal. The cause is
+// logged, never returned: Trino and database error text can carry identifiers,
+// paths and credentials.
+func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, message string, cause error) {
+	rid := middleware.GetReqID(r.Context())
+	if cause != nil {
+		slog.Error("explorer request failed", "code", code, "request_id", rid, "err", cause)
+	}
+	writeJSON(w, status, map[string]string{"code": code, "message": message, "request_id": rid})
+}
 
-	if _, err := h.ensureConnectionAndCatalog(r.Context(), connID, catalogName); err != nil {
-		slog.Warn("list namespaces: ensure failed", "conn", connID, "catalog", catalogName, "err", err)
-		http.Error(w, `{"code":"connection_error","message":"`+err.Error()+`"}`, http.StatusBadGateway)
+// explorerTarget authorizes an explorer request and returns the catalog it
+// addresses. The catalog must belong to the connection in the path, and the
+// caller must be allowed to read it; anything else is 404 (no existence oracle).
+// It writes the error response itself and returns ok=false.
+func (h *Handlers) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalog, bool) {
+	ctx := r.Context()
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "invalid user", nil)
+		return db.Catalog{}, false
+	}
+	var connID pgtype.UUID
+	if err := connID.Scan(chiURLParam(r, "connection_id")); err != nil || !connID.Valid {
+		writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
+		return db.Catalog{}, false
+	}
+	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
+	if err != nil {
+		writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
+		return db.Catalog{}, false
+	}
+	found, err := h.queries.GetCatalogByTrinoName(ctx, db.GetCatalogByTrinoNameParams{
+		ClusterID:        cluster.ID,
+		TrinoCatalogName: chiURLParam(r, "catalog_name"),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
+		} else {
+			writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
+		}
+		return db.Catalog{}, false
+	}
+	cat, _, err := h.authz().CatalogOfConnection(ctx, p, connID, found.ID, authz.ActRead)
+	if err != nil {
+		if errors.Is(err, authz.ErrNotFound) {
+			writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
+		} else {
+			writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
+		}
+		return db.Catalog{}, false
+	}
+	return cat, true
+}
+
+// exploreQuery runs one metadata statement under the request context with a
+// 30 s deadline, so a client disconnect cancels the Trino call.
+func (h *Handlers) exploreQuery(r *http.Request, sql string) (*trino_client.QueryResult, error) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	return h.trino.Execute(ctx, sql, "", "")
+}
+
+func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) {
+	cat, ok := h.explorerTarget(w, r)
+	if !ok {
+		return
+	}
+	target, err := trino_client.QualifiedName(cat.TrinoCatalogName)
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid catalog name", err)
 		return
 	}
 
-	qCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	result, err := h.trino.Execute(qCtx, "SHOW SCHEMAS FROM "+catalogName, catalogName, "")
+	result, err := h.exploreQuery(r, "SHOW SCHEMAS FROM "+target)
 	if err != nil {
-		slog.Error("list schemas via trino", "err", err, "catalog", catalogName)
-		http.Error(w, `{"code":"error","message":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
 		return
 	}
 	namespaces := make([][]string, 0, len(result.Data))
@@ -482,27 +551,28 @@ func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) 
 			namespaces = append(namespaces, []string{fmt.Sprint(row[0])})
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(namespaces)
+	writeJSON(w, http.StatusOK, namespaces)
 }
 
 func (h *Handlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
-	connID := chiURLParam(r, "connection_id")
-	catalogName := chiURLParam(r, "catalog_name")
-	namespace := chiURLParam(r, "namespace")
-
-	if _, err := h.ensureConnectionAndCatalog(r.Context(), connID, catalogName); err != nil {
-		slog.Warn("list tables: ensure failed", "conn", connID, "catalog", catalogName, "err", err)
-		http.Error(w, `{"code":"connection_error","message":"`+err.Error()+`"}`, http.StatusBadGateway)
+	cat, ok := h.explorerTarget(w, r)
+	if !ok {
+		return
+	}
+	namespace, err := pathParam(r, "namespace")
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
+		return
+	}
+	target, err := trino_client.QualifiedName(cat.TrinoCatalogName, namespace)
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
 	}
 
-	qCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	result, err := h.trino.Execute(qCtx, "SHOW TABLES FROM "+catalogName+"."+namespace, catalogName, namespace)
+	result, err := h.exploreQuery(r, "SHOW TABLES FROM "+target)
 	if err != nil {
-		slog.Error("list tables via trino", "err", err)
-		http.Error(w, `{"code":"error","message":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
 		return
 	}
 	type tableEntry struct {
@@ -517,27 +587,33 @@ func (h *Handlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
 			tables = append(tables, tableEntry{Name: &name, Namespace: &ns})
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tables)
+	writeJSON(w, http.StatusOK, tables)
 }
 
 func (h *Handlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
-	connID := chiURLParam(r, "connection_id")
-	catalogName := chiURLParam(r, "catalog_name")
-	namespace := chiURLParam(r, "namespace")
-	table := chiURLParam(r, "table")
-
-	if _, err := h.ensureConnectionAndCatalog(r.Context(), connID, catalogName); err != nil {
-		slog.Warn("list columns: ensure failed", "conn", connID, "catalog", catalogName, "err", err)
-		http.Error(w, `{"code":"connection_error","message":"`+err.Error()+`"}`, http.StatusBadGateway)
+	cat, ok := h.explorerTarget(w, r)
+	if !ok {
+		return
+	}
+	namespace, err := pathParam(r, "namespace")
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
+		return
+	}
+	table, err := pathParam(r, "table")
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid table", err)
+		return
+	}
+	target, err := trino_client.QualifiedName(cat.TrinoCatalogName, namespace, table)
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace or table", err)
 		return
 	}
 
-	qCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	meta, err := h.trino.Execute(qCtx, "DESCRIBE "+catalogName+"."+namespace+"."+table, catalogName, namespace)
+	meta, err := h.exploreQuery(r, "DESCRIBE "+target)
 	if err != nil {
-		http.Error(w, `{"code":"error","message":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
 		return
 	}
 	type colEntry struct {
@@ -552,38 +628,19 @@ func (h *Handlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
 			cols = append(cols, colEntry{Name: &name, Type: &typ})
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cols)
-}
-
-// ensureConnectionAndCatalog fetches the catalog connection row and verifies
-// that there is an enabled catalogs row matching the requested trino_catalog_name.
-// The plugin already loaded the catalog into Trino at boot (or it will after
-// the next Trino restart) — no CREATE CATALOG is issued here.
-func (h *Handlers) ensureConnectionAndCatalog(ctx context.Context, connID, catalogName string) (*db.CatalogConnection, error) {
-	var id pgtype.UUID
-	if err := id.Scan(connID); err != nil {
-		return nil, err
-	}
-	conn, err := h.queries.GetCatalogConnectionByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := h.queries.GetCatalogByTrinoName(ctx, db.GetCatalogByTrinoNameParams{
-		ClusterID:        cluster.ID,
-		TrinoCatalogName: catalogName,
-	}); err != nil {
-		return nil, fmt.Errorf("catalog %q not registered under connection %s", catalogName, conn.Name)
-	}
-	return &conn, nil
+	writeJSON(w, http.StatusOK, cols)
 }
 
 func chiURLParam(r *http.Request, key string) string {
 	return chi.URLParam(r, key)
+}
+
+// pathParam returns a route parameter percent-decoded. chi returns it still
+// encoded whenever net/http preserved RawPath (an escape that differs from the
+// default encoding, e.g. %24 for $ or %3B for ;), which would send
+// "events%24snapshots" to Trino instead of "events$snapshots".
+func pathParam(r *http.Request, key string) (string, error) {
+	return url.PathUnescape(chi.URLParam(r, key))
 }
 
 func uuidStr(u pgtype.UUID) string {

@@ -109,6 +109,8 @@ type Querier interface {
 	ListTeams(ctx context.Context) ([]Team, error)
 	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Team, error)
 	ListTrinoQuerySnapshots(ctx context.Context, arg ListTrinoQuerySnapshotsParams) ([]TrinoQuerySnapshot, error)
+	// Lens shows non-admins only the queries run under their own Trino identity.
+	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	MarkTrinoCatalogRegistryError(ctx context.Context, arg MarkTrinoCatalogRegistryErrorParams) error

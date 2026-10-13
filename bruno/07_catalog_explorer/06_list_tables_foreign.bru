@@ -1,0 +1,19 @@
+meta {
+  name: List Tables (foreign user -> 404)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/connections/{{catalog_connection_id}}/catalogs/{{catalog_name}}/namespaces/{{namespace_name}}/tables
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 404
+}

@@ -377,6 +377,59 @@ func (q *Queries) ListTrinoQuerySnapshots(ctx context.Context, arg ListTrinoQuer
 	return items, nil
 }
 
+const listTrinoQuerySnapshotsByUser = `-- name: ListTrinoQuerySnapshotsByUser :many
+SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at FROM trino_query_snapshots
+WHERE "user" = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListTrinoQuerySnapshotsByUserParams struct {
+	User   string `json:"user"`
+	Limit  int32  `json:"limit"`
+	Offset int32  `json:"offset"`
+}
+
+// Lens shows non-admins only the queries run under their own Trino identity.
+func (q *Queries) ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error) {
+	rows, err := q.db.Query(ctx, listTrinoQuerySnapshotsByUser, arg.User, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrinoQuerySnapshot
+	for rows.Next() {
+		var i TrinoQuerySnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.TrinoQueryID,
+			&i.ExecutionID,
+			&i.Origin,
+			&i.User,
+			&i.State,
+			&i.Sql,
+			&i.Catalog,
+			&i.Schema,
+			&i.CreatedAt,
+			&i.ElapsedMs,
+			&i.CpuMs,
+			&i.PhysicalInputBytes,
+			&i.OutputRows,
+			&i.ErrorMessage,
+			&i.RawTrinoPayload,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertTableHealthSnapshot = `-- name: UpsertTableHealthSnapshot :one
 
 INSERT INTO table_health_snapshots (catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup)
