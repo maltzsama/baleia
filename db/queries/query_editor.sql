@@ -82,9 +82,12 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpdateQueryStatement :one
+-- Conditional update: only a running statement transitions, so a late
+-- completion can never overwrite a cancellation. Zero matched rows means the
+-- statement was already terminal; callers treat that as a no-op.
 UPDATE query_statements
 SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7
-WHERE id = $1
+WHERE id = $1 AND status = 'running'
 RETURNING *;
 
 -- name: ListQueryStatements :many

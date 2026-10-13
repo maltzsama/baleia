@@ -162,6 +162,7 @@ All settings are environment variables. Defaults work for local development with
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outbound email (password reset, invites) |
 | `RATE_LIMIT_RPS` | `60` | Max requests per second (rate limiter) |
 | `RATE_LIMIT_BURST` | `10` | Rate limiter burst size |
+| `BALEIA_STATEMENT_TIMEOUT` | `30m` | Per-statement execution timeout; enforced by Temporal and by Trino (`query_max_execution_time`) |
 
 ## Project structure
 

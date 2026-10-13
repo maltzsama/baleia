@@ -213,7 +213,36 @@ func buildCreateCatalogDDL(spec CatalogSpec) string {
 	b.WriteString("\n)")
 	return b.String()
 }
+// ExecuteOptions configures a single statement execution.
+type ExecuteOptions struct {
+	Catalog string
+	Schema  string
+	// OnQueryID is called once, as soon as Trino assigns a query id. The
+	// activity uses it to heartbeat the id before polling begins.
+	OnQueryID func(id string)
+	// OnProgress is called after every poll response, so the activity can
+	// heartbeat and therefore receive cancellation.
+	OnProgress func()
+	// SessionProperties are sent as X-Trino-Session: k=v, ...
+	SessionProperties map[string]string
+}
+
+// trinoQueryIDRe matches Trino's query id format, e.g.
+// 20240101_120000_00001_abcde. kill_query interpolates the id into SQL, so it
+// is validated before use.
+var trinoQueryIDRe = regexp.MustCompile(`^[0-9]{8}_[0-9]{6}_[0-9]{5}_[a-z0-9]{5}$`)
+
+// Execute runs sql with a catalog and schema, buffering the whole result.
+// It is a thin wrapper over ExecuteWithOptions retained for the browsing call
+// sites that do not need progress callbacks or per-statement identity.
 func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*QueryResult, error) {
+	return c.ExecuteWithOptions(ctx, sql, ExecuteOptions{Catalog: catalog, Schema: schema})
+}
+
+// ExecuteWithOptions runs a single statement, invoking the callbacks as the
+// statement progresses. When ctx is cancelled mid-poll it abandons the query on
+// Trino with a DELETE to the last nextUri before returning ctx.Err().
+func (c *Client) ExecuteWithOptions(ctx context.Context, sql string, opts ExecuteOptions) (*QueryResult, error) {
 	reqURL := c.baseURL + "/v1/statement"
 
 	body := bytes.NewBufferString(sql)
@@ -221,15 +250,7 @@ func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*Que
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Set("X-Trino-User", c.user)
-	if catalog != "" {
-		req.Header.Set("X-Trino-Catalog", catalog)
-	}
-	if schema != "" {
-		req.Header.Set("X-Trino-Schema", schema)
-	}
-	req.Header.Set("Content-Type", "text/plain")
+	c.setStatementHeaders(req, opts)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -240,6 +261,10 @@ func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*Que
 	var sr StatementResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
 		return nil, fmt.Errorf("trino decode: %w", err)
+	}
+
+	if sr.ID != "" && opts.OnQueryID != nil {
+		opts.OnQueryID(sr.ID)
 	}
 
 	if sr.Error != nil {
@@ -254,16 +279,23 @@ func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*Que
 	if sr.Data != nil {
 		result.Data = append(result.Data, sr.Data...)
 	}
+	if opts.OnProgress != nil {
+		opts.OnProgress()
+	}
 
-	for sr.NextURI != "" {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
+	nextURI := sr.NextURI
+	for nextURI != "" {
+		if err := ctx.Err(); err != nil {
+			c.cancelAbandoned(nextURI)
+			return nil, err
 		}
 
-		sr, err = c.next(ctx, sr.NextURI)
+		sr, err = c.next(ctx, nextURI)
 		if err != nil {
+			if ctx.Err() != nil {
+				c.cancelAbandoned(nextURI)
+				return nil, ctx.Err()
+			}
 			return nil, err
 		}
 		if sr.Error != nil {
@@ -275,10 +307,70 @@ func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*Que
 		if sr.Columns != nil && len(result.Columns) == 0 {
 			result.Columns = sr.Columns
 		}
+		nextURI = sr.NextURI
+		if opts.OnProgress != nil {
+			opts.OnProgress()
+		}
 	}
 
 	result.RowCount = int64(len(result.Data))
 	return result, nil
+}
+
+// setStatementHeaders applies the identity, catalog/schema and session
+// properties to a statement request.
+func (c *Client) setStatementHeaders(req *http.Request, opts ExecuteOptions) {
+	req.Header.Set("X-Trino-User", c.user)
+	if opts.Catalog != "" {
+		req.Header.Set("X-Trino-Catalog", opts.Catalog)
+	}
+	if opts.Schema != "" {
+		req.Header.Set("X-Trino-Schema", opts.Schema)
+	}
+	if len(opts.SessionProperties) > 0 {
+		req.Header.Set("X-Trino-Session", encodeSessionProperties(opts.SessionProperties))
+	}
+	req.Header.Set("Content-Type", "text/plain")
+}
+
+// encodeSessionProperties renders session properties deterministically so the
+// generated request is stable across calls.
+func encodeSessionProperties(props map[string]string) string {
+	keys := make([]string, 0, len(props))
+	for k := range props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%s", k, props[k]))
+	}
+	return strings.Join(parts, ",")
+}
+
+// cancelAbandoned sends DELETE to the last nextUri with a fresh context: the
+// caller's context is already cancelled, so the request needs its own.
+func (c *Client) cancelAbandoned(nextURI string) {
+	reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = c.Cancel(reqCtx, nextURI)
+}
+
+// KillQuery cancels a running query by id. It uses system.runtime.kill_query,
+// the only handle available when the caller did not keep the statement's
+// nextUri. The query id is validated against Trino's format before it reaches
+// the SQL text.
+func (c *Client) KillQuery(ctx context.Context, queryID, message string) error {
+	if !trinoQueryIDRe.MatchString(queryID) {
+		return fmt.Errorf("invalid trino query id %q", queryID)
+	}
+	if message == "" {
+		message = "cancelled by baleia"
+	}
+	escaped := strings.ReplaceAll(message, "'", "''")
+	sql := fmt.Sprintf("CALL system.runtime.kill_query(query_id => '%s', message => '%s')", queryID, escaped)
+	_, err := c.Execute(ctx, sql, "", "")
+	return err
 }
 
 func (c *Client) Cancel(ctx context.Context, nextURI string) error {

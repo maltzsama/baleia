@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
@@ -16,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
 
@@ -388,8 +391,21 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		request.Body.Sql,
 		trinoCatalog,
 		requestID,
+		h.cfg.StatementTimeout,
 	)
 	if err != nil {
+		// The workflow failed to start; fail the row so it does not stay
+		// `running` forever. Use a context detached from the request in case
+		// the request was cancelled mid-call.
+		failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if _, ferr := h.queries.UpdateQueryExecution(failCtx, db.UpdateQueryExecutionParams{
+			ID:     execution.ID,
+			Status: "failed",
+		}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
+			slog.Error("failed to mark execution failed after workflow start error",
+				"execution_id", executionID, "start_err", err, "mark_err", ferr)
+		}
 		return nil, err
 	}
 
@@ -433,6 +449,13 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 		WorkspaceID: wsID,
 	})
 	if err == nil {
+		// Cancel the Temporal workflow so the running statement stops and its
+		// Trino query is killed. A NotFound means the workflow already ended.
+		cancelErr := h.temporalClient.CancelWorkflow(ctx, "exec-"+executionID.String(), "")
+		var notFoundErr *serviceerror.NotFound
+		if cancelErr != nil && !errors.As(cancelErr, &notFoundErr) {
+			slog.Warn("failed to cancel temporal workflow", "execution_id", executionID.String(), "err", cancelErr)
+		}
 		return CancelExecution200JSONResponse(dbExecutionToPublic(updated)), nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
