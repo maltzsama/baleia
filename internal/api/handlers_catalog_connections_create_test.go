@@ -82,3 +82,23 @@ func TestCreateConnection_StoresEnvelopeBoundToItsID(t *testing.T) {
 		})
 	}
 }
+
+// TestUpdateConnection_EncryptionFailureIs500: a credentials PATCH with no key
+// answers a typed 500 and writes nothing.
+func TestUpdateConnection_EncryptionFailureIs500(t *testing.T) {
+	owner := ownerUUID(t, testUserID)
+	q := &fakeConnQuerier{conn: testConnection(t, true, owner)}
+	h := &Handlers{queries: q}
+	creds := map[string]interface{}{"password": "p-s3cr3t"}
+	resp, err := h.UpdateCatalogConnection(testContext(), UpdateCatalogConnectionRequestObject{Id: [16]byte{0x01}, Body: &UpdateCatalogConnectionRequest{Credentials: &creds}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	if err := resp.VisitUpdateCatalogConnectionResponse(rec); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 500 || !strings.Contains(rec.Body.String(), `"encryption_failed"`) {
+		t.Fatalf("response = %d %s, want 500 encryption_failed", rec.Code, rec.Body)
+	}
+}

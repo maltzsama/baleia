@@ -97,3 +97,32 @@ func TestCredentialsMigration_Idempotent(t *testing.T) {
 		}
 	}
 }
+
+// TestCredentialsMigration_CompletesKeyRotation: v1 rows sealed under the
+// previous key are re-sealed under the current one, so the previous key can
+// then be dropped.
+func TestCredentialsMigration_CompletesKeyRotation(t *testing.T) {
+	const oldKey = "old-key-0123456789abcdef0123456789"
+	oldKR, _ := crypto.NewKeyring(oldKey, "")
+	rotated, err := crypto.NewKeyring(encKey, oldKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.New()
+	aad := catalogs.CredentialsAAD(pgtype.UUID{Bytes: id, Valid: true})
+	sealed, _ := oldKR.Seal([]byte(`{"client_secret":"alpha"}`), aad)
+	store := &memStore{rows: map[string]string{id.String(): sealed}}
+
+	res, err := MigrateCredentials(context.Background(), store, rotated, jwtSecret)
+	if err != nil || res.Resealed != 1 || res.Migrated != 0 || len(res.Failed) != 0 {
+		t.Fatalf("result = %+v, %v", res, err)
+	}
+	// With the previous key dropped, the row still opens.
+	onlyNew, _ := crypto.NewKeyring(encKey, "")
+	if plain, err := onlyNew.Open(store.rows[id.String()], aad); err != nil || !strings.Contains(string(plain), "alpha") {
+		t.Fatalf("after rotation: %q, %v", plain, err)
+	}
+	if res, _ = MigrateCredentials(context.Background(), store, onlyNew, jwtSecret); res.Skipped != 1 || res.Resealed != 0 {
+		t.Fatalf("second run = %+v", res)
+	}
+}

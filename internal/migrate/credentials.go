@@ -27,13 +27,16 @@ type CredentialStore interface {
 // CredentialsResult reports what MigrateCredentials did.
 type CredentialsResult struct {
 	Migrated int
-	Skipped  int      // already v1 envelopes
+	Resealed int      // v1 envelopes moved from the previous key to the current one
+	Skipped  int      // already v1 under the current key
 	Failed   []string // ids that could not be decrypted; left untouched
 }
 
 // MigrateCredentials re-seals every legacy credential (AES-GCM under
 // sha256(JWT_SECRET), no AAD) as a v1 envelope under the keyring, bound to its
-// row id. It is idempotent: v1 rows are skipped. Rows that fail legacy
+// row id, and moves v1 envelopes sealed under the previous key to the current
+// one (completing a key rotation). It is idempotent: v1 rows already under the
+// current key are skipped. Rows that fail legacy
 // decryption are reported and left untouched so the operator can re-enter them.
 // This is the only place legacy values are ever decrypted.
 func MigrateCredentials(ctx context.Context, store CredentialStore, kr *crypto.Keyring, legacySecret string) (CredentialsResult, error) {
@@ -43,7 +46,8 @@ func MigrateCredentials(ctx context.Context, store CredentialStore, kr *crypto.K
 		return res, fmt.Errorf("list credentials: %w", err)
 	}
 	for _, r := range rows {
-		if strings.HasPrefix(r.Enc, "v1:") {
+		isV1 := strings.HasPrefix(r.Enc, "v1:")
+		if isV1 && kr.IsCurrent(r.Enc) {
 			res.Skipped++
 			continue
 		}
@@ -52,19 +56,30 @@ func MigrateCredentials(ctx context.Context, store CredentialStore, kr *crypto.K
 			res.Failed = append(res.Failed, r.ID)
 			continue
 		}
-		plain, err := crypto.OpenLegacy(r.Enc, legacySecret)
+		aad := catalogs.CredentialsAAD(pgtype.UUID{Bytes: id, Valid: true})
+		var plain []byte
+		if isV1 {
+			// Sealed under the previous key: open it and re-seal under the current.
+			plain, err = kr.Open(r.Enc, aad)
+		} else {
+			plain, err = crypto.OpenLegacy(r.Enc, legacySecret)
+		}
 		if err != nil {
 			res.Failed = append(res.Failed, r.ID)
 			continue
 		}
-		sealed, err := kr.Seal(plain, catalogs.CredentialsAAD(pgtype.UUID{Bytes: id, Valid: true}))
+		sealed, err := kr.Seal(plain, aad)
 		if err != nil {
 			return res, fmt.Errorf("seal %s: %w", r.ID, err)
 		}
 		if err := store.UpdateCredentials(ctx, r.ID, sealed); err != nil {
 			return res, fmt.Errorf("update %s: %w", r.ID, err)
 		}
-		res.Migrated++
+		if isV1 {
+			res.Resealed++
+		} else {
+			res.Migrated++
+		}
 	}
 	return res, nil
 }

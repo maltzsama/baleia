@@ -67,6 +67,11 @@ func migrateCredentials(ctx context.Context, db *sql.DB, cfg *config.Config) err
 	if cfg.EncryptionKey == "" {
 		return fmt.Errorf("BALEIA_ENCRYPTION_KEY must be set")
 	}
+	// Legacy values are opened with JWT_SECRET; a missing or default one would
+	// silently fail every row.
+	if err := config.ValidateSecret(cfg.JWTSecret); err != nil {
+		return err
+	}
 	kr, err := crypto.NewKeyring(cfg.EncryptionKey, cfg.EncryptionKeyPrevious)
 	if err != nil {
 		return err
@@ -84,7 +89,7 @@ func migrateCredentials(ctx context.Context, db *sql.DB, cfg *config.Config) err
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	slog.Info("credentials migrated", "migrated", res.Migrated, "already_v1", res.Skipped, "failed", len(res.Failed))
+	slog.Info("credentials migrated", "migrated", res.Migrated, "resealed", res.Resealed, "already_v1", res.Skipped, "failed", len(res.Failed))
 	for _, id := range res.Failed {
 		slog.Warn("credentials left untouched: could not be decrypted with JWT_SECRET, re-enter them", "connection_id", id)
 	}

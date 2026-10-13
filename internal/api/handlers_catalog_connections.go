@@ -132,7 +132,8 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 
 	params, err := buildConnectionUpdateParams(connID, *request.Body, h.keyring)
 	if err != nil {
-		return nil, err
+		slog.Error("encrypt connection credentials", "err", err)
+		return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
 	}
 
 	conn, err := h.queries.UpdateCatalogConnection(ctx, params)
@@ -610,14 +611,20 @@ func uuidStr(u pgtype.UUID) string {
 }
 
 // catalogConnectionEncryptionFailedJSONResponse is the 500 returned when the
-// credentials of a new connection cannot be sealed (no key configured, or a
-// crypto failure). Nothing is stored.
+// credentials of a connection cannot be sealed on create or update (no key
+// configured, or a crypto failure). Nothing is stored.
 type catalogConnectionEncryptionFailedJSONResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
 func (r catalogConnectionEncryptionFailedJSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	return json.NewEncoder(w).Encode(r)
+}
+
+func (r catalogConnectionEncryptionFailedJSONResponse) VisitUpdateCatalogConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	return json.NewEncoder(w).Encode(r)

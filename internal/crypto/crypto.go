@@ -42,7 +42,7 @@ var (
 	ErrCorrupt = errors.New("crypto: envelope corrupt or tampered")
 	// ErrLegacyFormat means the value predates the versioned envelope and must
 	// be converted with `baleia migrate-credentials`.
-	ErrLegacyFormat = errors.New("crypto: legacy envelope; run `baleia migrate-credentials`")
+	ErrLegacyFormat = errors.New("crypto: legacy envelope; run `make migrate-credentials` (or `/migrate -cmd=credentials` in the image)")
 )
 
 type derivedKey struct {
@@ -131,6 +131,13 @@ func (k *Keyring) Open(envelope, aad string) ([]byte, error) {
 		return nil, ErrCorrupt
 	}
 	return plain, nil
+}
+
+// IsCurrent reports whether envelope was sealed with the current key. Anything
+// else (legacy, previous key, unknown) needs re-sealing during a rotation.
+func (k *Keyring) IsCurrent(envelope string) bool {
+	parts := strings.SplitN(envelope, ":", 3)
+	return len(parts) == 3 && parts[0] == envelopeV1 && parts[1] == k.current.id
 }
 
 func (k *Keyring) lookup(id string) *derivedKey {

@@ -201,8 +201,8 @@ All settings are environment variables. Defaults work for local development with
 Connection credentials are stored as `v1:<key-id>:<base64>` envelopes: AES-256-GCM under a key derived (HKDF-SHA256) from `BALEIA_ENCRYPTION_KEY`, with the connection id as additional authenticated data, so a ciphertext copied to another connection does not open. A value that cannot be opened is reported as `credentials_unreadable`; it is never used as if it were the secret.
 
 - **Fresh install:** set `BALEIA_ENCRYPTION_KEY` before saving the first credential. Without it the API starts with a warning and refuses to store credentials.
-- **Upgrading from `JWT_SECRET`-encrypted credentials:** set `BALEIA_ENCRYPTION_KEY`, keep the existing `JWT_SECRET`, then run the one-shot, idempotent migration (`make migrate-credentials`, or `/migrate -cmd=credentials` in the image). Rows that cannot be decrypted are listed by id and left untouched; re-enter those credentials.
-- **Rotating the key:** move the old value to `BALEIA_ENCRYPTION_KEY_PREVIOUS`, set the new `BALEIA_ENCRYPTION_KEY`; values are read with either key and rewritten with the new one when a connection's credentials are next saved.
+- **Upgrading from `JWT_SECRET`-encrypted credentials:** set `BALEIA_ENCRYPTION_KEY`, keep the existing `JWT_SECRET`, then run the one-shot, idempotent migration (`make migrate-credentials`, or `/migrate -cmd=credentials` in the image). It requires a valid `JWT_SECRET` to open the legacy values. Rows that cannot be decrypted are listed by id and left untouched; re-enter those credentials.
+- **Rotating the key:** move the old value to `BALEIA_ENCRYPTION_KEY_PREVIOUS` and set the new `BALEIA_ENCRYPTION_KEY`. Values are read with either key, but reading never re-seals them. Run `make migrate-credentials` (or `/migrate -cmd=credentials`) to move every envelope to the new key; only after it reports no failures is it safe to drop `BALEIA_ENCRYPTION_KEY_PREVIOUS`. Envelopes left on the old key become `credentials_unreadable` once it is removed.
 
 ## Project structure
 
