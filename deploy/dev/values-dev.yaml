@@ -2,7 +2,7 @@
 # The image is built into minikube with `minikube image build -t baleia:dev .`.
 image:
   repository: baleia
-  tag: dev-next
+  tag: dev
   pullPolicy: Never
 
 secrets:
@@ -48,7 +48,7 @@ trino:
     tag: "482"
   plugin:
     version: "0.7.0"              # baleia-trino-catalog-store release
-    image: "baleia-plugins:0.7.0"
+    image: "baleia-plugins:0.7.0"  # built by `make k8s-plugin-bundle`; tag = plugin release version
     imagePullPolicy: Never
   jvmHeap: 1G
   resources:
