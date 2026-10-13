@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
@@ -43,7 +44,20 @@ func main() {
 
 	w := worker.New(c, taskQueue, worker.Options{})
 
-	act := activities.New(pool, cfg)
+	// The worker opens stored connection credentials (Lens table health), so it
+	// follows the same key policy as the API: refuse to start without a key
+	// once credentials exist.
+	keyring, err := bootstrap.LoadKeyring(context.Background(), cfg, func(ctx context.Context) (int64, error) {
+		var n int64
+		err := pool.QueryRow(ctx, "SELECT count(*) FROM catalog_connections WHERE credentials_enc IS NOT NULL").Scan(&n)
+		return n, err
+	})
+	if err != nil {
+		slog.Error("credential keyring", "err", err)
+		os.Exit(1)
+	}
+
+	act := activities.New(pool, cfg, keyring)
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflow)

@@ -18,7 +18,7 @@ dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
 
 worker:
-	JWT_SECRET=$(JWT_SECRET) go run ./cmd/worker
+	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) go run ./cmd/worker
 
 # ── Trino plugin ──────────────────────────────────────────────────────────────
 # Clones and builds the baleia-trino-catalog-store plugin using Docker.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/catalog_connections"
+	credcat "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/trino"
@@ -180,7 +181,18 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 		return fmt.Errorf("get catalog connection: %w", err)
 	}
 
-	client, err := catalog_connections.NewClient(conn.Type, conn.Url, conn.CredentialsEnc)
+	// Open the stored envelope; the raw column value is ciphertext and must
+	// never reach the catalog client.
+	plain, err := credcat.OpenCredentials(conn, a.keyring)
+	if err != nil {
+		return fmt.Errorf("connection %s: %w", params.CatalogConnectionID, err)
+	}
+	var rawCreds *string
+	if plain != nil {
+		s := string(plain)
+		rawCreds = &s
+	}
+	client, err := catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
 	if err != nil {
 		return err
 	}
