@@ -5,6 +5,9 @@ set -euo pipefail
 
 pairs=(
   "scripts/seed_polaris.py deploy/dev/files/seed_polaris.py"
+  "deploy/trino/config.properties deploy/helm/baleia/files/trino/config.properties"
+  "deploy/trino/catalog-store.properties deploy/helm/baleia/files/trino/catalog-store.properties"
+  "deploy/trino/baleia-catalog-guard.properties deploy/helm/baleia/files/trino/baleia-catalog-guard.properties"
 )
 
 fail=0

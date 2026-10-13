@@ -2,12 +2,15 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "baleia.fullname" . }}-migrate
+  # Jobs are immutable; a fresh job per release revision runs the (idempotent)
+  # migrations on every install/upgrade. Old ones expire via ttlSecondsAfterFinished.
+  name: {{ include "baleia.fullname" . }}-migrate-{{ .Release.Revision }}
   labels:
     {{- include "baleia.labels" . | nindent 4 }}
     app.kubernetes.io/component: migrate
 spec:
   backoffLimit: 8
+  ttlSecondsAfterFinished: 120
   template:
     metadata:
       labels:

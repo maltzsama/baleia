@@ -1,0 +1,136 @@
+{{- if .Values.trino.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "baleia.fullname" . }}-trino-config
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+data:
+  config.properties: |
+{{ .Files.Get "files/trino/config.properties" | indent 4 }}
+  catalog-store.properties: |
+{{ .Files.Get "files/trino/catalog-store.properties" | indent 4 }}
+  baleia-catalog-guard.properties: |
+{{ .Files.Get "files/trino/baleia-catalog-guard.properties" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "baleia.fullname" . }}-trino
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trino
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "baleia.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: trino
+  template:
+    metadata:
+      labels:
+        {{- include "baleia.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: trino
+    spec:
+      initContainers:
+        # The plugin is either bundled (trino.plugin.image: a small image with
+        # /baleia-catalog-store, for air-gapped/restricted networks) or
+        # downloaded from the release tarball (default), verified by sha256 and
+        # unpacked into the shared emptyDir. Official Trino image, never a custom
+        # one.
+        {{- if .Values.trino.plugin.image }}
+        - name: install-plugin
+          image: {{ .Values.trino.plugin.image }}
+          imagePullPolicy: {{ .Values.trino.plugin.imagePullPolicy | default .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args: ["cp -a /baleia-catalog-store/. /plugin/"]
+          volumeMounts:
+            - { name: plugin, mountPath: /plugin }
+        {{- else }}
+        - name: install-plugin
+          image: alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              PLUGIN_URL="{{ include "baleia.pluginURL" . }}"
+              wget -qO /tmp/p.tgz "$PLUGIN_URL"
+              wget -qO /tmp/p.sha256 "$PLUGIN_URL.sha256"
+              echo "$(cat /tmp/p.sha256)  /tmp/p.tgz" | sha256sum -c -
+              tar -xzf /tmp/p.tgz -C /tmp
+              cp -a /tmp/baleia-catalog-store/. /plugin/
+          env:
+            - name: PLUGIN_URL
+              value: {{ include "baleia.pluginURL" . | quote }}
+          volumeMounts:
+            - { name: plugin, mountPath: /plugin }
+        {{- end }}
+        # Trino cannot authenticate to the registry until the API has set the
+        # baleia_trino role password (bootstrap). Wait for the registry table.
+        - name: wait-for-registry
+          image: postgres:18
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              REGISTRY_URL="postgresql://baleia_trino:${BALEIA_TRINO_DB_PASSWORD}@postgres.baleia-dev.svc:5432/baleia?sslmode=disable"
+              until psql "$REGISTRY_URL" -tAc 'SELECT 1 FROM trino_catalog_registry LIMIT 1' >/dev/null 2>&1; do echo waiting for registry; sleep 3; done
+          env:
+            - name: BALEIA_TRINO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_TRINO_DB_PASSWORD
+      containers:
+        - name: trino
+          image: {{ .Values.trino.image.repository }}:{{ .Values.trino.image.tag }}
+          env:
+            - name: BALEIA_TRINO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_TRINO_DB_PASSWORD
+            - name: JAVA_OPTS
+              value: "-Xmx{{ .Values.trino.jvmHeap }}"
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /v1/info, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          {{- if .Values.trino.resources }}
+          resources:
+            {{- toYaml .Values.trino.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: plugin
+              mountPath: /usr/lib/trino/plugin/baleia-catalog-store
+              readOnly: true
+            - name: trino-config
+              mountPath: /etc/trino/config.properties
+              subPath: config.properties
+            - name: trino-config
+              mountPath: /etc/trino/catalog-store.properties
+              subPath: catalog-store.properties
+            - name: trino-config
+              mountPath: /etc/trino/baleia-catalog-guard.properties
+              subPath: baleia-catalog-guard.properties
+      volumes:
+        - name: plugin
+          emptyDir: {}
+        - name: trino-config
+          configMap:
+            name: {{ include "baleia.fullname" . }}-trino-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "baleia.fullname" . }}-trino
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trino
+spec:
+  selector:
+    {{- include "baleia.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: trino
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+{{- end }}

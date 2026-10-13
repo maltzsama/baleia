@@ -8,7 +8,7 @@ PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 # JWT_SECRET wins, so credentials encrypted under a custom key stay readable.
 JWT_SECRET ?= dev-secret-not-for-production
 
-.PHONY: dev worker migrate migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-forward k8s-logs k8s-seed-tpch k8s-down
+.PHONY: dev worker migrate migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -115,6 +115,18 @@ build-all: build-web build
 
 K8S_PROFILE ?= baleia
 K8S_NS      ?= baleia-dev
+K8S_PLUGIN_IMAGE      ?= baleia-plugins
+K8S_PLUGIN_TAG        ?= dev
+K8S_PLUGIN_VERSION    ?= 0.7.0
+
+# Bundle the RELEASED catalog-store plugin (deploy/dev/plugins.Dockerfile
+# downloads the GitHub-release tarball and verifies its sha256) into a sidecar
+# image for the Trino initContainer. Builds on the host docker and loads into
+# minikube (the node's overlay is small and GitHub may be blocked there).
+k8s-plugin-bundle:
+	docker build --build-arg K8S_PLUGIN_VERSION=$(K8S_PLUGIN_VERSION) \
+		-t $(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) -f deploy/dev/plugins.Dockerfile .
+	minikube -p $(K8S_PROFILE) image load $(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG)
 
 # Start minikube, deploy the dependency stack, build baleia:dev into the node,
 # then install the chart.
@@ -122,6 +134,7 @@ k8s-up:
 	minikube start -p $(K8S_PROFILE) --cpus=6 --memory=12g
 	kubectl apply -k deploy/dev
 	minikube -p $(K8S_PROFILE) image build -t baleia:dev .
+	$(MAKE) k8s-plugin-bundle
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
 		-f deploy/dev/values-dev.yaml --wait --timeout 10m
 	@echo ">>> api:   kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080"
@@ -137,7 +150,7 @@ k8s-logs:
 	kubectl -n $(K8S_NS) logs -f -l app.kubernetes.io/name=baleia --all-containers
 
 k8s-seed-tpch:
-	kubectl -n $(K8S_NS) exec -i deploy/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql
+	kubectl -n $(K8S_NS) exec -i statefulset/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql
 
 k8s-down:
 	helm -n $(K8S_NS) uninstall baleia || true
