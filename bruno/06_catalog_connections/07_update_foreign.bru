@@ -1,0 +1,23 @@
+meta {
+  name: Update Catalog Connection (foreign user -> 404)
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{base_url}}/catalog-connections/{{catalog_connection_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+body:json {
+  {"name": "hijacked"}
+}
+
+assert {
+  res.status: eq 404
+}

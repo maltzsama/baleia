@@ -1,0 +1,19 @@
+meta {
+  name: Test Catalog Connection (foreign user -> 404)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/catalog-connections/{{catalog_connection_id}}/test
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 404
+}
