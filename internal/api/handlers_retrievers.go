@@ -98,16 +98,8 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 	}
 
 	cronExpr := request.Body.CronSchedule
-	schedule, err := cron.Parse(cronExpr)
+	schedule, err := parseRetrieverCron(cronExpr)
 	if err != nil {
-		return CreateRetriever422JSONResponse{
-			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-				Code:    "validation_error",
-				Message: "invalid cron expression: " + err.Error(),
-			},
-		}, nil
-	}
-	if err := validateCronInterval(schedule); err != nil {
 		return CreateRetriever422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "validation_error",
@@ -199,9 +191,9 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 		status = string(*request.Body.Status)
 	}
 
-	schedule, err := cron.Parse(cronExpr)
+	schedule, err := parseRetrieverCron(cronExpr)
 	if err != nil {
-		return UpdateRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "invalid cron: " + err.Error()}}, nil
+		return UpdateRetriever422JSONResponse{Code: "validation_error", Message: err.Error()}, nil
 	}
 
 	nextRun := schedule.Next(time.Now())
@@ -262,6 +254,14 @@ func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerR
 	refreshType := retriever.RefreshType
 	if request.Body != nil && request.Body.RefreshType != nil {
 		refreshType = string(*request.Body.RefreshType)
+	}
+	if refreshType != "full" {
+		return TriggerRetrieverRefresh422JSONResponse{
+			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+				Code:    "not_supported",
+				Message: "only 'full' refresh is supported in v1; 'incremental' requires a separate design",
+			},
+		}, nil
 	}
 
 	executionID := fmt.Sprintf("%x-%s", retrieverID.Bytes, time.Now().Format("20060102150405"))
@@ -432,6 +432,20 @@ func validateRetrieverDefinition(def string) error {
 		return errors.New("definition_sql must start with SELECT or WITH")
 	}
 	return nil
+}
+
+// parseRetrieverCron parses a standard five-field cron expression
+// (minute hour day-of-month month day-of-week) and enforces the 5-minute
+// minimum interval. Create and update share it.
+func parseRetrieverCron(expr string) (cron.Schedule, error) {
+	schedule, err := cron.ParseStandard(expr)
+	if err != nil {
+		return nil, errors.New("invalid cron expression: " + err.Error())
+	}
+	if err := validateCronInterval(schedule); err != nil {
+		return nil, err
+	}
+	return schedule, nil
 }
 
 // validateCronInterval rejects schedules whose runs are closer than 5 minutes,

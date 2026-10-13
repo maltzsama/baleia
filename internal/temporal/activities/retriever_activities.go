@@ -3,11 +3,13 @@ package activities
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron"
 	"go.temporal.io/sdk/activity"
@@ -65,7 +67,7 @@ func (a *Activities) advanceRetrieverSchedule(ctx context.Context, params Advanc
 		return fmt.Errorf("get retriever: %w", err)
 	}
 
-	schedule, err := cron.Parse(retriever.CronSchedule)
+	schedule, err := cron.ParseStandard(retriever.CronSchedule)
 	if err != nil {
 		return fmt.Errorf("parse cron %q: %w", retriever.CronSchedule, err)
 	}
@@ -134,7 +136,21 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		},
 	}
 
-	result, err := a.trino.ExecuteWithOptions(ctx, sql, opts)
+	// The refresh runs as the retriever owner, never the service identity. An
+	// owner that no longer exists fails the run and flips the retriever to
+	// 'error' without executing anything.
+	mode := ""
+	if a.cfg != nil {
+		mode = a.cfg.TrinoUserIdentity
+	}
+	var result *trino.QueryResult
+	identity, idErr := trinoidentity.For(ctx, a.queries, mode, retriever.CreatedBy)
+	if idErr != nil {
+		err = fmt.Errorf("retriever owner unavailable: %w", idErr)
+	} else {
+		opts.User = identity
+		result, err = a.trino.ExecuteWithOptions(ctx, sql, opts)
+	}
 	durationMs := time.Since(start).Milliseconds()
 
 	status := "finished"
@@ -148,7 +164,8 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		msg := err.Error()
 		errorMsg = &msg
 	} else {
-		rowsProcessed = &result.RowCount
+		n := rowsWritten(result)
+		rowsProcessed = &n
 	}
 
 	// A failed refresh flips the retriever to 'error' (the schema only allows
@@ -179,6 +196,18 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		return fmt.Errorf("refresh failed: %s", *errorMsg)
 	}
 	return nil
+}
+
+// rowsWritten returns the number of rows a CREATE TABLE AS wrote: Trino answers
+// with one row holding that count. It falls back to the result's row count for
+// any other shape.
+func rowsWritten(r *trino.QueryResult) int64 {
+	if len(r.Data) == 1 && len(r.Data[0]) == 1 {
+		if n, err := strconv.ParseInt(fmt.Sprint(r.Data[0][0]), 10, 64); err == nil {
+			return n
+		}
+	}
+	return r.RowCount
 }
 
 // buildRefreshSQL renders the atomic full-refresh statement

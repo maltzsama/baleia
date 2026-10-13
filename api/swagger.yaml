@@ -650,7 +650,7 @@ components:
         dest_catalog: { type: string, description: "Destination catalog (lowercase identifier)." }
         dest_namespace: { type: string, description: "Destination namespace/schema (identifier)." }
         dest_table: { type: string, description: "Destination table name (identifier)." }
-        cron_schedule: { type: string }
+        cron_schedule: { type: string, description: "Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes." }
         refresh_type:
           { type: string, enum: [incremental, full], default: full }
 
@@ -658,7 +658,7 @@ components:
       type: object
       properties:
         name: { type: string }
-        cron_schedule: { type: string }
+        cron_schedule: { type: string, description: "Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes." }
         refresh_type: { type: string, enum: [incremental, full] }
         status: { type: string, enum: [active, paused] }
 
@@ -2134,7 +2134,7 @@ paths:
                   {
                     type: string,
                     enum: [incremental, full],
-                    default: incremental,
+                    default: full,
                   }
       responses:
         "202":
@@ -2144,6 +2144,7 @@ paths:
               schema: { $ref: "#/components/schemas/RetrieverRefreshHistory" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/retrievers/{retriever_id}/history:
     parameters:

@@ -360,6 +360,7 @@ type CreateMigrationRequestSourceType string
 
 // CreateRetrieverRequest defines model for CreateRetrieverRequest.
 type CreateRetrieverRequest struct {
+	// CronSchedule Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes.
 	CronSchedule string `json:"cron_schedule"`
 
 	// DefinitionSql A single SELECT (or WITH ... SELECT) statement. Full refresh replaces the destination table atomically (CREATE OR REPLACE TABLE ... AS SELECT).
@@ -734,6 +735,7 @@ type UpdateProfileRequest struct {
 
 // UpdateRetrieverRequest defines model for UpdateRetrieverRequest.
 type UpdateRetrieverRequest struct {
+	// CronSchedule Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes.
 	CronSchedule *string                            `json:"cron_schedule,omitempty"`
 	Name         *string                            `json:"name,omitempty"`
 	RefreshType  *UpdateRetrieverRequestRefreshType `json:"refresh_type,omitempty"`

@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -636,12 +637,9 @@ func (h *Handlers) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (strin
 func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UUID) (string, error) {
 	switch mode {
 	case "email":
-		u, err := q.GetUserByID(ctx, uid)
-		if err != nil {
-			return "", err
-		}
-		return u.Email, nil
+		return trinoidentity.For(ctx, q, mode, uid)
 	default:
+		// The API derives the uuid identity from the token without a lookup.
 		return "u_" + uid.String(), nil
 	}
 }

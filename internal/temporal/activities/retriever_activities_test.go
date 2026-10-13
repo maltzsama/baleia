@@ -2,12 +2,16 @@ package activities
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
@@ -22,6 +26,16 @@ type retrieverFakeQuerier struct {
 	historyStatus string
 	advanceCalled bool
 	refreshType   string
+	rowsProcessed *int64
+	historyError  *string
+	ownerMissing  bool
+}
+
+func (f *retrieverFakeQuerier) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+	if f.ownerMissing {
+		return db.User{}, pgx.ErrNoRows
+	}
+	return db.User{ID: id, Email: "owner@example.test"}, nil
 }
 
 func (f *retrieverFakeQuerier) GetRetrieverForRefresh(context.Context, pgtype.UUID) (db.Retriever, error) {
@@ -54,6 +68,8 @@ func (f *retrieverFakeQuerier) UpdateRetrieverAfterRefresh(_ context.Context, ar
 
 func (f *retrieverFakeQuerier) UpdateRetrieverRefreshHistory(_ context.Context, arg db.UpdateRetrieverRefreshHistoryParams) error {
 	f.historyStatus = arg.Status
+	f.rowsProcessed = arg.RowsProcessed
+	f.historyError = arg.ErrorMessage
 	return nil
 }
 
@@ -175,5 +191,61 @@ func TestAdvanceRetrieverSchedule_ComputesNext(t *testing.T) {
 	}
 	if !fakeQuery.advanceCalled {
 		t.Fatal("AdvanceRetrieverSchedule was not called")
+	}
+}
+
+// TestRetrieverRefresh_RunsAsTheOwner pins #141: the statement runs under the
+// owner's Trino identity, never the service user, and the history records the
+// number of rows the CTAS wrote (#142), not the one-row result.
+func TestRetrieverRefresh_RunsAsTheOwner(t *testing.T) {
+	r := fakeRetriever()
+	owner := pgtype.UUID{Bytes: [16]byte{0xA1, 0xB2}, Valid: true}
+	r.CreatedBy = owner
+	fakeQuery := &retrieverFakeQuerier{retriever: r}
+	fakeTrino := &fakeTrinoClient{ctasCount: "25"}
+	if err := runRetrieverRefresh(fakeQuery, fakeTrino); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if want := "u_" + owner.String(); fakeTrino.lastUser != want {
+		t.Fatalf("statement ran as %q, want %q", fakeTrino.lastUser, want)
+	}
+	if fakeQuery.rowsProcessed == nil || *fakeQuery.rowsProcessed != 25 {
+		t.Fatalf("rows_processed = %v, want 25", fakeQuery.rowsProcessed)
+	}
+}
+
+// TestRetrieverRefresh_MissingOwnerFailsWithoutRunning: an owner that no longer
+// exists records a failed run and flips the retriever to error; Trino is never
+// called.
+func TestRetrieverRefresh_MissingOwnerFailsWithoutRunning(t *testing.T) {
+	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever(), ownerMissing: true}
+	fakeTrino := &fakeTrinoClient{assignID: true}
+	if err := runRetrieverRefresh(fakeQuery, fakeTrino); err == nil {
+		t.Fatal("expected an error for a missing owner")
+	}
+	if fakeTrino.callCount != 0 {
+		t.Fatalf("Trino was called %d times for a retriever without an owner", fakeTrino.callCount)
+	}
+	if fakeQuery.historyStatus != "failed" || fakeQuery.afterStatus != "error" {
+		t.Fatalf("history=%q retriever=%q, want failed/error", fakeQuery.historyStatus, fakeQuery.afterStatus)
+	}
+	if fakeQuery.historyError == nil || !strings.Contains(*fakeQuery.historyError, "owner") {
+		t.Fatalf("history error = %v, want it to name the owner", fakeQuery.historyError)
+	}
+}
+
+func TestRowsWritten(t *testing.T) {
+	for name, tc := range map[string]struct {
+		res  *trino.QueryResult
+		want int64
+	}{
+		"ctas count":      {&trino.QueryResult{Data: [][]interface{}{{json.Number("25")}}, RowCount: 1}, 25},
+		"float count":     {&trino.QueryResult{Data: [][]interface{}{{float64(7)}}, RowCount: 1}, 7},
+		"other shape":     {&trino.QueryResult{Data: [][]interface{}{{"a"}, {"b"}}, RowCount: 2}, 2},
+		"non numeric one": {&trino.QueryResult{Data: [][]interface{}{{"x"}}, RowCount: 1}, 1},
+	} {
+		if got := rowsWritten(tc.res); got != tc.want {
+			t.Errorf("%s: %d, want %d", name, got, tc.want)
+		}
 	}
 }
