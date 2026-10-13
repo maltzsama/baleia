@@ -89,7 +89,10 @@ func TestRetrieverRefresh_QuotesIdentifiers(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got := buildRefreshSQL(c.catalog, c.namespace, c.table, c.definition)
+		got, err := buildRefreshSQL(c.catalog, c.namespace, c.table, c.definition)
+		if err != nil {
+			t.Fatalf("[%s] unexpected error: %v", c.name, err)
+		}
 		if got != c.want {
 			t.Fatalf("[%s]\n got: %s\nwant: %s", c.name, got, c.want)
 		}

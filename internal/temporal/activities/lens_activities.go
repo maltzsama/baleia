@@ -331,21 +331,27 @@ func LensRunMaintenance(ctx context.Context, params LensRunMaintenanceParams) er
 func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaintenanceParams) error {
 	logger := activity.GetLogger(ctx)
 
+	// The identifiers and retention reach this activity from an HTTP request:
+	// validate again here (the API checks first, but a workflow input is not a
+	// trust boundary) and quote instead of concatenating.
+	if err := trino.ValidateRetention(params.Retention); err != nil {
+		return fmt.Errorf("invalid retention: %w", err)
+	}
+	table, err := trino.QualifiedName(params.Catalog, params.Namespace, params.Table)
+	if err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+	retention := trino.QuoteString(params.Retention)
 	commands := []string{
-		fmt.Sprintf("ALTER TABLE %s.%s.%s EXECUTE optimize",
-			params.Catalog, params.Namespace, params.Table),
-		fmt.Sprintf("ALTER TABLE %s.%s.%s EXECUTE expire_snapshots(retention_threshold => '%s')",
-			params.Catalog, params.Namespace, params.Table, params.Retention),
-		fmt.Sprintf("ALTER TABLE %s.%s.%s EXECUTE remove_orphan_files(retention_threshold => '%s')",
-			params.Catalog, params.Namespace, params.Table, params.Retention),
+		fmt.Sprintf("ALTER TABLE %s EXECUTE optimize", table),
+		fmt.Sprintf("ALTER TABLE %s EXECUTE expire_snapshots(retention_threshold => %s)", table, retention),
+		fmt.Sprintf("ALTER TABLE %s EXECUTE remove_orphan_files(retention_threshold => %s)", table, retention),
 	}
 
 	// Heartbeats make the run cancellable: without them a long OPTIMIZE is
 	// declared dead after the heartbeat timeout and re-executed.
 	var lastBeat time.Time
 	opts := trino.ExecuteOptions{
-		Catalog: params.Catalog,
-		Schema:  params.Namespace,
 		OnProgress: func() {
 			now := time.Now()
 			if now.Sub(lastBeat) >= heartbeatInterval {

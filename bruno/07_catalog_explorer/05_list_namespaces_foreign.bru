@@ -1,0 +1,19 @@
+meta {
+  name: List Namespaces (foreign user -> 404)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/connections/{{catalog_connection_id}}/catalogs/{{catalog_name}}/namespaces
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 404
+}

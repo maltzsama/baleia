@@ -629,9 +629,14 @@ func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionR
 // queries, according to BALEIA_TRINO_USER_IDENTITY ("uuid" default: u_<uuid>,
 // "email": the user's e-mail). Never an admin or service identity.
 func (h *Handlers) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
-	switch h.cfg.TrinoUserIdentity {
+	return trinoIdentity(ctx, h.queries, h.cfg.TrinoUserIdentity, uid)
+}
+
+// trinoIdentity is trinoIdentityFor without the Handlers, for the Lens handlers.
+func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UUID) (string, error) {
+	switch mode {
 	case "email":
-		u, err := h.queries.GetUserByID(ctx, uid)
+		u, err := q.GetUserByID(ctx, uid)
 		if err != nil {
 			return "", err
 		}

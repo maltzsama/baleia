@@ -5,7 +5,7 @@ meta {
 }
 
 get {
-  url: {{base_url}}/catalog/{{catalog_connection_id}}/catalogs
+  url: {{base_url}}/connections/{{catalog_connection_id}}/catalogs
   body: none
   auth: bearer
 }
@@ -20,5 +20,5 @@ assert {
 }
 
 vars:post-response {
-  catalog_name: res.body[0].name
+  catalog_name: res.body[0].trino_catalog_name
 }

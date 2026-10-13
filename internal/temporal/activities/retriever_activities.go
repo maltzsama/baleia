@@ -113,7 +113,10 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	}
 
 	// v1 refresh: one atomic statement replaced under a new Iceberg snapshot.
-	sql := buildRefreshSQL(retriever.DestCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
+	sql, err := buildRefreshSQL(retriever.DestCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
+	if err != nil {
+		return fmt.Errorf("retriever %s has an invalid destination: %w", retriever.ID, err)
+	}
 	logger.Info("refreshing retriever", "sql", sql)
 
 	start := time.Now()
@@ -181,13 +184,11 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 // buildRefreshSQL renders the atomic full-refresh statement
 // `CREATE OR REPLACE TABLE <dest> AS <definition>` with each identifier
 // double-quoted. The definition is a single SELECT/WITH validated at create.
-func buildRefreshSQL(catalog, namespace, table, definition string) string {
-	dest := quoteIdent(catalog) + "." + quoteIdent(namespace) + "." + quoteIdent(table)
+func buildRefreshSQL(catalog, namespace, table, definition string) (string, error) {
+	dest, err := trino.QualifiedName(catalog, namespace, table)
+	if err != nil {
+		return "", err
+	}
 	def := strings.TrimSuffix(strings.TrimSpace(definition), ";")
-	return fmt.Sprintf("CREATE OR REPLACE TABLE %s AS %s", dest, def)
-}
-
-// quoteIdent double-quotes a Trino identifier, escaping embedded quotes.
-func quoteIdent(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	return fmt.Sprintf("CREATE OR REPLACE TABLE %s AS %s", dest, def), nil
 }

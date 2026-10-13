@@ -21,6 +21,13 @@ SELECT * FROM trino_query_snapshots
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: ListTrinoQuerySnapshotsByUser :many
+-- Lens shows non-admins only the queries run under their own Trino identity.
+SELECT * FROM trino_query_snapshots
+WHERE "user" = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
 -- name: ListActiveTrinoQueries :many
 SELECT * FROM trino_query_snapshots
 WHERE state = 'running'
