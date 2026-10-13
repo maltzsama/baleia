@@ -1,7 +1,7 @@
 BALEIA_DIR ?= $(CURDIR)
 PLUGIN_DIR ?= $(BALEIA_DIR)/.plugin/baleia-trino-catalog-store
 PLUGIN_REPO ?= https://github.com/maltzsama/baleia-trino-catalog-store.git
-PLUGIN_TAG  ?= v0.6.1
+PLUGIN_TAG  ?= v0.7.0
 PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 
 # Fallback secret for local development. An exported or command-line
