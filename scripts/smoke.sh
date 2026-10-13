@@ -12,6 +12,7 @@ set -euo pipefail
 
 STACK="${STACK:-compose}"
 API="${API:-http://localhost:8080/api/v1}"
+READY_URL="${API%/api/v1}/readyz"
 TRINO_SQL="SELECT count(*) FROM tpch_test.tiny.nation"
 EXPECTED=25
 
@@ -29,10 +30,10 @@ trino_sql() {
 # ── 1. API ready ─────────────────────────────────────────────────────────────
 step "wait for API /readyz"
 for _ in {1..60}; do
-  if curl -sf "$API/../readyz" | grep -q ok; then break; fi
+  if curl -sf "$READY_URL" | grep -q ok; then break; fi
   sleep 2
 done
-curl -sf "$API/../readyz" | grep -q ok || { echo "FAIL api not ready"; exit 1; }
+curl -sf "$READY_URL" | grep -q ok || { echo "FAIL api not ready"; exit 1; }
 
 # ── 2. First admin (or reuse) ───────────────────────────────────────────────
 step "create/login admin"
@@ -52,9 +53,11 @@ TOKEN=$(jq -r '.token' <<<"$resp")
 # ── 3. Seed tpch registry row ───────────────────────────────────────────────
 step "seed tpch_test"
 if [[ "$STACK" == "k8s" ]]; then
-  kubectl -n baleia-dev exec -i deploy/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql >/dev/null
-  # Trino loads catalogs from the registry at boot; make it pick it up.
-  trino_sql "SELECT 1" >/dev/null || true
+  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql >/dev/null
+  # Trino loads catalogs from the registry at boot; restart it so it picks up
+  # the row that was just seeded.
+  kubectl -n baleia-dev rollout restart deploy/baleia-trino >/dev/null
+  kubectl -n baleia-dev rollout status deploy/baleia-trino --timeout=300s >/dev/null
 else
   (cd "$(dirname "$0")/.." && make seed-tpch >/dev/null)
 fi
