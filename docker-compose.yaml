@@ -375,6 +375,7 @@ services:
       - TRINO_URL=http://trino:8080
       - POLARIS_URL=http://polaris:8181
       - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
+      - BALEIA_ENCRYPTION_KEY=${BALEIA_ENCRYPTION_KEY:-dev-encryption-key-not-for-production-0123}
       - S3_ENDPOINT=rustfs:9000
       - S3_ACCESS_KEY=rustfsadmin
       - S3_SECRET_KEY=rustfsadmin
