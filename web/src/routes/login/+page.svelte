@@ -1,6 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
+	// Retry-After is either a number of seconds or an HTTP-date. Returns the
+	// remaining delay in whole seconds, capped at one hour; 0 when absent,
+	// malformed or already elapsed.
+	function retryAfterSeconds(raw: string | null): number {
+		if (!raw) return 0;
+		let wait = parseInt(raw, 10);
+		if (Number.isNaN(wait)) {
+			const at = Date.parse(raw);
+			wait = Number.isNaN(at) ? 0 : Math.ceil((at - Date.now()) / 1000);
+		}
+		return Math.min(Math.max(wait, 0), 3600);
+	}
+
 	type Provider = { id: string; name: string; type: string };
 
 	let dark = $state(false);
@@ -89,7 +102,7 @@
 				return;
 			}
 			if (res.status === 429) {
-				const wait = parseInt(res.headers.get('Retry-After') ?? '', 10);
+				const wait = retryAfterSeconds(res.headers.get('Retry-After'));
 				if (wait > 0) startRetryCountdown(wait);
 				else showError('Too many attempts. Try again later.');
 				return;
