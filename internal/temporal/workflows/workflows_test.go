@@ -42,7 +42,7 @@ func TestQueryExecutionWorkflowPropagatesRequestID(t *testing.T) {
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).
 		Return(nil)
 
-	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-1", "ws-1", "SELECT 1; SELECT 2", "cat", requestID, testStatementTimeout)
+	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-1", "ws-1", "SELECT 1; SELECT 2", "cat", requestID, "u_123", testStatementTimeout)
 
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
@@ -67,7 +67,7 @@ func TestQueryExecutionWorkflowEmptyRequestID(t *testing.T) {
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).
 		Return(nil)
 
-	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-2", "ws-1", "SELECT 1", "cat", "", testStatementTimeout)
+	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-2", "ws-1", "SELECT 1", "cat", "", "u_123", testStatementTimeout)
 
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
@@ -103,7 +103,7 @@ func TestWorkflow_ResultKeyPropagatesToStatement(t *testing.T) {
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).
 		Return(nil)
 
-	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-5", "ws-1", "SELECT 1", "cat", "req", testStatementTimeout)
+	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-5", "ws-1", "SELECT 1", "cat", "req", "u_123", testStatementTimeout)
 
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
@@ -142,7 +142,7 @@ func TestWorkflow_StatementNotRetried(t *testing.T) {
 			return nil
 		})
 
-	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-3", "ws-1", "INSERT INTO t SELECT 1", "cat", "req", testStatementTimeout)
+	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-3", "ws-1", "INSERT INTO t SELECT 1", "cat", "req", "u_123", testStatementTimeout)
 
 	require.True(t, env.IsWorkflowCompleted())
 	require.Equal(t, int32(1), atomic.LoadInt32(&execCalls), "a failed statement must not be re-executed")
@@ -187,7 +187,7 @@ func TestWorkflow_CancelMarksCancelled(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-4", "ws-1", "SELECT 1", "cat", "req", testStatementTimeout)
+		env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-4", "ws-1", "SELECT 1", "cat", "req", "u_123", testStatementTimeout)
 		close(done)
 	}()
 

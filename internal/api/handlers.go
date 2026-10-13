@@ -36,8 +36,11 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, tem
 		cfg:            cfg,
 		temporalClient: temporalClient,
 		s3:             s3,
-		trino:          trino.New(cfg.TrinoURL, "baleia"),
-		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		// Catalog DDL, reconciliation and Lens maintenance run as the admin
+		// identity. User SQL never goes through this client (the worker uses
+		// its own client; per-user identity is set per statement).
+		trino:        trino.New(cfg.TrinoURL, cfg.TrinoAdminUser),
+		catalogCache: NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 	}
 }
 

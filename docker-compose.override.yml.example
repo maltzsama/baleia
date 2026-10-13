@@ -1,0 +1,11 @@
+# Local debugging override: publish Trino on the host so you can query it
+# directly (e.g. `docker compose exec trino trino`).
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   docker compose up -d trino
+#
+# The default stack keeps Trino private (expose only); this override is opt-in.
+services:
+  trino:
+    ports:
+      - "8088:8080"

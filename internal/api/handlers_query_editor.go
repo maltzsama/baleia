@@ -365,6 +365,13 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		requestIDPtr = &requestID
 	}
 
+	// Per-user Trino identity: user SQL reaches Trino as the Baleia user, never
+	// as the admin or service identity.
+	trinoUser, err := h.trinoIdentityFor(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+
 	execution, err := h.queries.CreateQueryExecution(ctx, db.CreateQueryExecutionParams{
 		WorkspaceID:  workspaceIDFromRequest(request.Id),
 		UserID:       uid,
@@ -391,6 +398,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		request.Body.Sql,
 		trinoCatalog,
 		requestID,
+		trinoUser,
 		h.cfg.StatementTimeout,
 	)
 	if err != nil {
@@ -616,6 +624,22 @@ func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionR
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+// trinoIdentityFor maps a Baleia user to the Trino identity used for their
+// queries, according to BALEIA_TRINO_USER_IDENTITY ("uuid" default: u_<uuid>,
+// "email": the user's e-mail). Never an admin or service identity.
+func (h *Handlers) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
+	switch h.cfg.TrinoUserIdentity {
+	case "email":
+		u, err := h.queries.GetUserByID(ctx, uid)
+		if err != nil {
+			return "", err
+		}
+		return u.Email, nil
+	default:
+		return "u_" + uid.String(), nil
+	}
+}
 
 func dbFolderToPublic(f db.QueryFolder) QueryFolder {
 	id := openapi_types.UUID(f.ID.Bytes)

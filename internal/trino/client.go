@@ -217,6 +217,10 @@ func buildCreateCatalogDDL(spec CatalogSpec) string {
 type ExecuteOptions struct {
 	Catalog string
 	Schema  string
+	// User overrides the client's configured identity for this statement. The
+	// admin client never sets it (it runs catalog DDL); per-user executions
+	// set it to the mapped Baleia user identity.
+	User string
 	// OnQueryID is called once, as soon as Trino assigns a query id. The
 	// activity uses it to heartbeat the id before polling begins.
 	OnQueryID func(id string)
@@ -279,6 +283,7 @@ func (c *Client) ExecuteStream(ctx context.Context, sql string, opts ExecuteOpti
 func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOptions,
 	onPage func(cols []Column, rows [][]interface{}) error) (string, error) {
 	reqURL := c.baseURL + "/v1/statement"
+	user := c.resolveUser(opts)
 
 	body := bytes.NewBufferString(sql)
 	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, body)
@@ -318,14 +323,14 @@ func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOpti
 	nextURI := sr.NextURI
 	for nextURI != "" {
 		if err := ctx.Err(); err != nil {
-			c.cancelAbandoned(nextURI)
+			c.cancelAbandoned(nextURI, user)
 			return "", err
 		}
 
-		sr, err = c.next(ctx, nextURI)
+		sr, err = c.next(ctx, nextURI, user)
 		if err != nil {
 			if ctx.Err() != nil {
-				c.cancelAbandoned(nextURI)
+				c.cancelAbandoned(nextURI, user)
 				return "", ctx.Err()
 			}
 			return "", err
@@ -345,6 +350,15 @@ func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOpti
 	return sr.ID, nil
 }
 
+// resolveUser returns the per-statement identity when set, else the client's
+// configured user.
+func (c *Client) resolveUser(opts ExecuteOptions) string {
+	if opts.User != "" {
+		return opts.User
+	}
+	return c.user
+}
+
 func (c *Client) onPage(onPage func(cols []Column, rows [][]interface{}) error, cols []Column, rows [][]interface{}) error {
 	if onPage == nil {
 		return nil
@@ -355,7 +369,7 @@ func (c *Client) onPage(onPage func(cols []Column, rows [][]interface{}) error, 
 // setStatementHeaders applies the identity, catalog/schema and session
 // properties to a statement request.
 func (c *Client) setStatementHeaders(req *http.Request, opts ExecuteOptions) {
-	req.Header.Set("X-Trino-User", c.user)
+	req.Header.Set("X-Trino-User", c.resolveUser(opts))
 	if opts.Catalog != "" {
 		req.Header.Set("X-Trino-Catalog", opts.Catalog)
 	}
@@ -385,10 +399,10 @@ func encodeSessionProperties(props map[string]string) string {
 
 // cancelAbandoned sends DELETE to the last nextUri with a fresh context: the
 // caller's context is already cancelled, so the request needs its own.
-func (c *Client) cancelAbandoned(nextURI string) {
+func (c *Client) cancelAbandoned(nextURI, user string) {
 	reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = c.Cancel(reqCtx, nextURI)
+	_ = c.deleteURI(reqCtx, nextURI, user)
 }
 
 // KillQuery cancels a running query by id. It uses system.runtime.kill_query,
@@ -408,12 +422,18 @@ func (c *Client) KillQuery(ctx context.Context, queryID, message string) error {
 	return err
 }
 
+// Cancel abandons a statement via DELETE on its nextUri, as the client's
+// configured user.
 func (c *Client) Cancel(ctx context.Context, nextURI string) error {
+	return c.deleteURI(ctx, nextURI, c.user)
+}
+
+func (c *Client) deleteURI(ctx context.Context, nextURI, user string) error {
 	req, err := http.NewRequestWithContext(ctx, "DELETE", nextURI, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-Trino-User", c.user)
+	req.Header.Set("X-Trino-User", user)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -428,12 +448,12 @@ func (c *Client) Cancel(ctx context.Context, nextURI string) error {
 	return nil
 }
 
-func (c *Client) next(ctx context.Context, uri string) (StatementResponse, error) {
+func (c *Client) next(ctx context.Context, uri, user string) (StatementResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	if err != nil {
 		return StatementResponse{}, err
 	}
-	req.Header.Set("X-Trino-User", c.user)
+	req.Header.Set("X-Trino-User", user)
 
 	resp, err := c.http.Do(req)
 	if err != nil {

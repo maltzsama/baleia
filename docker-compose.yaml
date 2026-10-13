@@ -273,8 +273,11 @@ services:
       # Matches the baleia_trino role password created by migration 00018.
       # catalog-store.properties resolves ${ENV:BALEIA_TRINO_DB_PASSWORD} at boot.
       - BALEIA_TRINO_DB_PASSWORD=${BALEIA_TRINO_DB_PASSWORD:-admin}
-    ports:
-      - "8088:8080"
+    # Trino is private: only the API/worker reach it over the compose network.
+    # To debug directly, copy docker-compose.override.yml.example and uncomment
+    # the port mapping — never publish it in the default stack.
+    expose:
+      - "8080"
     volumes:
       # Plugin JARs compilados (make plugin-build clona + compila).
       - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro

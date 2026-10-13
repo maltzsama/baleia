@@ -14,7 +14,7 @@ import (
 //
 // statementTimeout bounds each statement. It is passed as input because
 // workflow code must stay deterministic and never read the environment.
-func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog, requestID string, statementTimeout time.Duration) error {
+func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog, requestID, user string, statementTimeout time.Duration) error {
 	// Bookkeeping activities are idempotent DB updates and may be retried.
 	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
@@ -62,6 +62,7 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 			SQL:          stmt,
 			TrinoCatalog: trinoCatalog,
 			RequestID:    requestID,
+			User:         user,
 			Timeout:      statementTimeout,
 		}).Get(statementCtx, &execResult)
 
