@@ -363,10 +363,19 @@ type CreateMigrationRequestSourceType string
 type CreateRetrieverRequest struct {
 	CronSchedule string `json:"cron_schedule"`
 
-	// DefinitionSql CREATE MATERIALIZED VIEW ... AS SELECT ... Destination is extracted from the query.
-	DefinitionSql string                             `json:"definition_sql"`
-	Name          string                             `json:"name"`
-	RefreshType   *CreateRetrieverRequestRefreshType `json:"refresh_type,omitempty"`
+	// DefinitionSql A single SELECT (or WITH ... SELECT) statement. Full refresh replaces the destination table atomically (CREATE OR REPLACE TABLE ... AS SELECT).
+	DefinitionSql string `json:"definition_sql"`
+
+	// DestCatalog Destination catalog (lowercase identifier).
+	DestCatalog string `json:"dest_catalog"`
+
+	// DestNamespace Destination namespace/schema (identifier).
+	DestNamespace string `json:"dest_namespace"`
+
+	// DestTable Destination table name (identifier).
+	DestTable   string                             `json:"dest_table"`
+	Name        string                             `json:"name"`
+	RefreshType *CreateRetrieverRequestRefreshType `json:"refresh_type,omitempty"`
 }
 
 // CreateRetrieverRequestRefreshType defines model for CreateRetrieverRequest.RefreshType.

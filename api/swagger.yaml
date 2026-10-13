@@ -641,17 +641,20 @@ components:
 
     CreateRetrieverRequest:
       type: object
-      required: [name, definition_sql, cron_schedule]
+      required: [name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule]
       properties:
         name: { type: string }
         definition_sql:
           {
             type: string,
-            description: "CREATE MATERIALIZED VIEW ... AS SELECT ... Destination is extracted from the query.",
+            description: "A single SELECT (or WITH ... SELECT) statement. Full refresh replaces the destination table atomically (CREATE OR REPLACE TABLE ... AS SELECT).",
           }
+        dest_catalog: { type: string, description: "Destination catalog (lowercase identifier)." }
+        dest_namespace: { type: string, description: "Destination namespace/schema (identifier)." }
+        dest_table: { type: string, description: "Destination table name (identifier)." }
         cron_schedule: { type: string }
         refresh_type:
-          { type: string, enum: [incremental, full], default: incremental }
+          { type: string, enum: [incremental, full], default: full }
 
     UpdateRetrieverRequest:
       type: object
@@ -2091,6 +2094,11 @@ paths:
               schema: { $ref: "#/components/schemas/Retriever" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "Unsupported refresh type or invalid payload"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
     delete:
       tags: [Retrievers]
       operationId: deleteRetriever

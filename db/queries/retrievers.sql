@@ -9,6 +9,11 @@ RETURNING *;
 -- name: GetRetrieverByID :one
 SELECT * FROM retrievers WHERE id = $1 AND workspace_id = $2;
 
+-- name: GetRetrieverForRefresh :one
+-- Worker-only lookup: the refresh activity runs off a due list, so it does not
+-- have (and must not trust) a caller-supplied workspace id.
+SELECT * FROM retrievers WHERE id = $1;
+
 -- name: ListRetrieversByWorkspace :many
 SELECT * FROM retrievers
 WHERE workspace_id = $1
@@ -17,7 +22,8 @@ ORDER BY name;
 -- name: ListRetrieversDue :many
 SELECT * FROM retrievers
 WHERE status = 'active' AND next_refresh_at <= now()
-ORDER BY next_refresh_at;
+ORDER BY next_refresh_at
+LIMIT 50;
 
 -- name: UpdateRetriever :one
 UPDATE retrievers
@@ -27,8 +33,19 @@ WHERE id = $1 AND workspace_id = $2
 RETURNING *;
 
 -- name: UpdateRetrieverAfterRefresh :exec
+-- Fired by the refresh activity when a run finishes: status flips to active or
+-- error, last_refresh_at advances. next_refresh_at is advanced by the
+-- dispatcher when the run is *started* (AdvanceRetrieverSchedule), never here.
 UPDATE retrievers
-SET status = $2, last_refresh_at = now(), next_refresh_at = $3, updated_at = now()
+SET status = $2, last_refresh_at = now(), updated_at = now()
+WHERE id = $1;
+
+-- name: AdvanceRetrieverSchedule :exec
+-- Fired by the dispatcher when a refresh run is started: schedule the next run
+-- from the cron expression immediately, so a long refresh never triggers a
+-- burst of runs afterwards.
+UPDATE retrievers
+SET next_refresh_at = $2, updated_at = now()
 WHERE id = $1;
 
 -- name: CreateRetrieverRefreshHistory :one
