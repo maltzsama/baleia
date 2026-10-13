@@ -52,9 +52,11 @@ type s3Client interface {
 func New(pool *pgxpool.Pool, cfg *config.Config) *Activities {
 	a := &Activities{
 		queries: db.New(pool),
-		trino:   trino.New(cfg.TrinoURL, "baleia"),
-		s3:      storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
-		cfg:     cfg,
+		// The worker's client runs user queries. Its configured user is the
+		// service fallback; per-statement identity is set via ExecuteOptions.
+		trino: trino.New(cfg.TrinoURL, cfg.TrinoServiceUser),
+		s3:    storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
+		cfg:   cfg,
 	}
 	defaultActivities = a
 	return a
@@ -107,10 +109,12 @@ func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*Spli
 	// SQL editor. With dynamic catalog.management — which is global — any
 	// user with query access could CREATE CATALOG pointed at arbitrary hosts
 	// (exfiltration) or DROP another user's catalog. Reject it here, per
-	// statement, before the workflow starts any statement.
+	// statement, before the workflow starts any statement. The editor gate also
+	// rejects EXECUTE IMMEDIATE smuggling catalog DDL and SET SESSION
+	// AUTHORIZATION.
 	for _, stmt := range stmts {
-		if sqlsplitter.IsCatalogDDL(stmt) {
-			return nil, fmt.Errorf("catalog management is performed via the Baleia UI, not the SQL editor")
+		if sqlsplitter.IsForbiddenInEditor(stmt) {
+			return nil, fmt.Errorf("catalog management and session authorization are not allowed in the SQL editor")
 		}
 	}
 	return &SplitSQLResult{Statements: stmts}, nil
@@ -151,6 +155,9 @@ type ExecuteStatementParams struct {
 	SQL          string
 	TrinoCatalog string
 	RequestID    string
+	// User is the per-statement Trino identity (the mapped Baleia user), empty
+	// to fall back to the service user. Never the admin identity.
+	User string
 	// Timeout bounds the statement. It is sent to Trino as the session
 	// property query_max_execution_time so the cluster enforces it too.
 	Timeout time.Duration
@@ -221,12 +228,13 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	logger := activity.GetLogger(ctx)
 	logger.Info("executing statement", "execution_id", params.ExecutionID, "request_id", params.RequestID, "position", params.Position)
 
-	// I5 (CR-017): defense in depth. splitSQL already rejects catalog DDL,
-	// but ensure that any path that bypasses splitting (single-statement
-	// fast path, future callers) still cannot issue CREATE/DROP CATALOG.
-	if sqlsplitter.IsCatalogDDL(params.SQL) {
+	// I5 (CR-017): defense in depth. splitSQL already rejects catalog DDL and
+	// forbidden editor statements, but ensure that any path that bypasses
+	// splitting (single-statement fast path, future callers) still cannot issue
+	// them.
+	if sqlsplitter.IsForbiddenInEditor(params.SQL) {
 		return &ExecuteStatementResult{
-			Error: "catalog management is performed via the Baleia UI, not the SQL editor",
+			Error: "catalog management and session authorization are not allowed in the SQL editor",
 		}, nil
 	}
 
@@ -247,6 +255,7 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 
 	opts := trino.ExecuteOptions{
 		Catalog:           params.TrinoCatalog,
+		User:              params.User,
 		SessionProperties: statementSessionProperties(params.Timeout),
 		OnQueryID: func(id string) {
 			queryID = id

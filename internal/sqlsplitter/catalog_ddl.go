@@ -38,6 +38,63 @@ func IsCatalogDDL(sql string) bool {
 		strings.HasPrefix(s, "drop catalog ") || s == "drop catalog"
 }
 
+// IsForbiddenInEditor reports whether sql must be rejected by the SQL editor:
+//   - catalog DDL (CREATE/DROP CATALOG, handled by IsCatalogDDL);
+//   - EXECUTE IMMEDIATE whose string literal body is catalog DDL (the parser
+//     would otherwise execute the mismatched grammar without us touching it);
+//   - SET SESSION AUTHORIZATION, which would let a user impersonate an admin
+//     target (e.g. baleia_admin) the guard grants to.
+//
+// The Trino catalog guard is the real control; this is UX and defense in depth.
+func IsForbiddenInEditor(sql string) bool {
+	if sql == "" {
+		return false
+	}
+	s := trimLeadingComments(sql)
+	lower := strings.ToLower(collapseWhitespace(s))
+
+	if lower == "set session authorization" || strings.HasPrefix(lower, "set session authorization ") {
+		return true
+	}
+	if IsCatalogDDL(s) {
+		return true
+	}
+	if strings.HasPrefix(lower, "execute immediate") {
+		body := extractExecuteImmediateLiteral(s)
+		if body != "" && IsCatalogDDL(body) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractExecuteImmediateLiteral pulls the first single-quoted string literal
+// out of an EXECUTE IMMEDIATE statement, honoring '' as an escaped quote. The
+// closing quote is consumed; the returned body has no surrounding quotes.
+func extractExecuteImmediateLiteral(s string) string {
+	i := strings.IndexByte(s, '\'')
+	if i < 0 {
+		return ""
+	}
+	var b strings.Builder
+	i++ // skip the opening quote
+	for i < len(s) {
+		switch s[i] {
+		case '\'':
+			if i+1 < len(s) && s[i+1] == '\'' {
+				b.WriteByte('\'')
+				i += 2
+				continue
+			}
+			return strings.TrimSpace(b.String())
+		default:
+			b.WriteByte(s[i])
+			i++
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
 // collapseWhitespace replaces every run of whitespace with a single space
 // and strips leading/trailing whitespace.
 func collapseWhitespace(s string) string {

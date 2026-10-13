@@ -79,6 +79,13 @@ graph TB
 - **No Flight SQL proxy, no JDBC implementation, no cross-database joins.** External clients that need direct SQL access (Python, JDBC/ODBC tools) talk to Trino directly; Polaris enforces their permissions.
 - **Catalog managers ≠ Trino connectors.** Registering an external Trino connector (MySQL, PostgreSQL, Delta Lake, etc.) as an ad-hoc data source is a separate, planned capability (see Roadmap) — it is not the same thing as an Iceberg catalog manager.
 
+### Trino security model
+
+- **Three identities.** `BALEIA_TRINO_ADMIN_USER` (default `baleia_admin`) runs catalog DDL, reconciliation and Lens maintenance — it is **never** used to run user SQL. `BALEIA_TRINO_SERVICE_USER` (default `baleia`) is the worker's fallback identity. User queries run as the logged-in Baleia user's Trino identity (`BALEIA_TRINO_USER_IDENTITY`: `uuid` → `u_<uuid>`, or `email`) so `system.runtime.queries.user` reflects the real user.
+- **The catalog guard is the control.** The `baleia-catalog-guard` access control (shipped by the catalog-store plugin) denies `CREATE/DROP CATALOG` and `SET SESSION AUTHORIZATION` to non-admin identities at the Trino level. The SQL editor's `IsForbiddenInEditor` gate (catalog DDL, `EXECUTE IMMEDIATE` smuggling catalog DDL, `SET SESSION AUTHORIZATION`) is UX and defense in depth, never the security boundary.
+- **Trino is private.** The default compose stack does not publish Trino on the host; only the API/worker reach it via `expose`. Copy `docker-compose.override.yml.example` to publish it for local debugging.
+- **Read-only mode.** A session opened with the read-only credential `baleia.mode=readonly` is denied every write/DDL check by the guard.
+
 ## Stack
 
 | Layer | Technology |
@@ -166,6 +173,9 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_RESULT_MAX_ROWS` | `1000000` | Max rows buffered per statement result before truncation |
 | `BALEIA_RESULT_MAX_BYTES` | `536870912` | Max Arrow bytes per statement result before truncation |
 | `BALEIA_SCHEDULES_ENABLED` | `true` | Ensure recurring Temporal Schedules (Lens pollers, table health, retriever) at worker boot |
+| `BALEIA_TRINO_ADMIN_USER` | `baleia_admin` | Trino identity for catalog DDL/reconcile/maintenance (never user SQL) |
+| `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |
+| `BALEIA_TRINO_USER_IDENTITY` | `uuid` | Map Baleia users to Trino users: `uuid`→`u_<uuid>` or `email` |
 
 ## Project structure
 

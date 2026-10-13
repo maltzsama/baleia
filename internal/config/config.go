@@ -26,6 +26,15 @@ type Config struct {
 	// TrinoDBPassword is the password for the dedicated baleia_trino role, from
 	// the same env var the Trino plugin reads. Empty means "leave it unchanged".
 	TrinoDBPassword string
+	// TrinoAdminUser runs catalog DDL, reconciliation and Lens maintenance.
+	// Never used to run user SQL.
+	TrinoAdminUser string
+	// TrinoServiceUser is the fallback identity for executions when per-user
+	// identity is disabled.
+	TrinoServiceUser string
+	// TrinoUserIdentity selects how a logged-in Baleia user maps to a Trino
+	// identity for their queries: "uuid" (u_<uuid>) or "email".
+	TrinoUserIdentity string
 	JWTSecret    string
 	PublicURL    string
 	SMTPHost     string
@@ -61,6 +70,9 @@ func Load() *Config {
 		PolarisURL:   getEnv("POLARIS_URL", "http://localhost:8181"),
 		TrinoURL:     getEnv("TRINO_URL", "http://localhost:8088"),
 		TrinoDBPassword: getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
+		TrinoAdminUser:    getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
+		TrinoServiceUser:  getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
+		TrinoUserIdentity: getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
 		JWTSecret:    getEnv("JWT_SECRET", DefaultJWTSecret),
 		PublicURL:    getEnv("PUBLIC_URL", "http://localhost:8080"),
 		SMTPHost:     getEnv("SMTP_HOST", ""),

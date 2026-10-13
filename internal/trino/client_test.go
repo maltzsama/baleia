@@ -216,6 +216,32 @@ func TestKillQuery_RejectsBadID(t *testing.T) {
 	}
 }
 
+// TestExecuteOptions_UserSentAsIdentity pins the per-user identity fix: a
+// statement executed with ExecuteOptions.User reaches Trino with that
+// X-Trino-User, not the client's configured user.
+func TestExecuteOptions_UserSentAsIdentity(t *testing.T) {
+	var gotUser string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/statement" {
+			gotUser = r.Header.Get("X-Trino-User")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"id":"20240101_000000_00000_abcde","nextUri":""}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "baleia")
+	if _, err := c.ExecuteWithOptions(context.Background(), "SELECT 1",
+		ExecuteOptions{User: "u_123e4567-e89b-12d3-a456-426614174000"}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if gotUser != "u_123e4567-e89b-12d3-a456-426614174000" {
+		t.Fatalf("X-Trino-User = %q, want the per-call user", gotUser)
+	}
+}
+
 // TestDecodeUseNumber pins the precision fix: JSON decoding must keep bigint
 // values as json.Number so values above 2^53 survive the wire intact.
 func TestDecodeUseNumber(t *testing.T) {
