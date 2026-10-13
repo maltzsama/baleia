@@ -63,8 +63,9 @@ jobs:
           helm lint deploy/helm/baleia --strict --set existingSecret=x
       - name: Install kubeconform
         run: |
-          curl -sSLo /usr/local/bin/kubeconform https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64
-          chmod +x /usr/local/bin/kubeconform
+          curl -sSLo /tmp/kubeconform.tgz https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tgz -C /tmp
+          sudo install -m 0755 /tmp/kubeconform /usr/local/bin/kubeconform
       - name: Validate rendered manifests
         run: |
           helm template baleia deploy/helm/baleia \
