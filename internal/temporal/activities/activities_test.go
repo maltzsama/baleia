@@ -40,12 +40,19 @@ type fakeTrinoClient struct {
 	deliver   int
 	noColumns bool
 	killCalls int
+	lastUser  string
+	ctasCount string // when set, the result is one row holding this count
 }
 
 func (f *fakeTrinoClient) ExecuteWithOptions(ctx context.Context, sql string, opts trino.ExecuteOptions) (*trino.QueryResult, error) {
 	f.mu.Lock()
 	f.callCount++
+	f.lastUser = opts.User
 	f.mu.Unlock()
+
+	if f.ctasCount != "" {
+		return &trino.QueryResult{Data: [][]interface{}{{json.Number(f.ctasCount)}}, RowCount: 1}, nil
+	}
 
 	if f.assignID && opts.OnQueryID != nil {
 		opts.OnQueryID(testQueryID)

@@ -6736,6 +6736,17 @@ func (response TriggerRetrieverRefresh404JSONResponse) VisitTriggerRetrieverRefr
 	return json.NewEncoder(w).Encode(response)
 }
 
+type TriggerRetrieverRefresh422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response TriggerRetrieverRefresh422JSONResponse) VisitTriggerRetrieverRefreshResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type StreamExecutionRequestObject struct {
 	Id          PathId             `json:"id"`
 	ExecutionId openapi_types.UUID `json:"execution_id"`

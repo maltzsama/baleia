@@ -58,9 +58,9 @@ func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring) *Activ
 		queries: db.New(pool),
 		// The worker's client runs user queries. Its configured user is the
 		// service fallback; per-statement identity is set via ExecuteOptions.
-		trino: trino.New(cfg.TrinoURL, cfg.TrinoServiceUser),
-		s3:    storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
-		cfg:   cfg,
+		trino:   trino.New(cfg.TrinoURL, cfg.TrinoServiceUser),
+		s3:      storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
+		cfg:     cfg,
 		keyring: keyring,
 	}
 	defaultActivities = a
