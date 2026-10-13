@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: baleia-dev
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - temporal.yaml
+  - rustfs.yaml
+  - polaris.yaml
+  - mailpit.yaml
+
+# Single-source ConfigMaps generated from files kept in sync with the originals
+# (see CI's verify step and scripts/verify-dev-sync.sh).
+configMapGenerator:
+  - name: polaris-seed
+    files:
+      - seed_polaris.py=files/seed_polaris.py

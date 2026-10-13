@@ -1,0 +1,142 @@
+# Polaris bootstrap: seeds root principals (idempotent).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: polaris-bootstrap
+spec:
+  backoffLimit: 8
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: apache/polaris-admin-tool:1.6.0
+          env:
+            - { name: POLARIS_PERSISTENCE_TYPE, value: relational-jdbc }
+            - { name: QUARKUS_DATASOURCE_USERNAME, value: baleia }
+            - { name: QUARKUS_DATASOURCE_PASSWORD, value: baleia }
+            - { name: QUARKUS_DATASOURCE_JDBC_URL, value: "jdbc:postgresql://postgres:5432/polaris" }
+          args: ["bootstrap", "-r", "POLARIS", "-c", "POLARIS,admin,admin"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: polaris
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: polaris }
+  template:
+    metadata:
+      labels: { app: polaris }
+    spec:
+      containers:
+        - name: polaris
+          image: apache/polaris:1.6.0
+          env:
+            - { name: POLARIS_PERSISTENCE_TYPE, value: relational-jdbc }
+            - { name: QUARKUS_DATASOURCE_USERNAME, value: baleia }
+            - { name: QUARKUS_DATASOURCE_PASSWORD, value: baleia }
+            - { name: QUARKUS_DATASOURCE_JDBC_URL, value: "jdbc:postgresql://postgres:5432/polaris" }
+            - { name: POLARIS_BOOTSTRAP_CREDENTIALS, value: "POLARIS,admin,admin" }
+            - { name: "polaris.realm-context.realms", value: POLARIS }
+            - { name: QUARKUS_HTTP_CORS_ENABLED, value: "true" }
+            - { name: QUARKUS_HTTP_CORS_ORIGINS, value: "http://polaris-console:80,http://localhost:4000" }
+            - { name: POLARIS_FEATURES_ALLOW_INSECURE_STORAGE_TYPES, value: "true" }
+            - { name: POLARIS_FEATURES_SUPPORTED_CATALOG_STORAGE_TYPES, value: '["FILE","S3","GCS","AZURE"]' }
+            - { name: "polaris.readiness.ignore-severe-issues", value: "true" }
+            - { name: POLARIS_AUTHORIZATION_ENABLED, value: "false" }
+            - { name: "polaris.auth.enabled", value: "true" }
+            - { name: "polaris.auth.type", value: basic }
+            - { name: "polaris.auth.basic.users", value: "admin:admin" }
+            - { name: "polaris.auth.default-realm", value: POLARIS }
+            - { name: AWS_REGION, value: us-east-1 }
+            - { name: AWS_ACCESS_KEY_ID, value: rustfsadmin }
+            - { name: AWS_SECRET_ACCESS_KEY, value: rustfsadmin }
+            - { name: JAVA_OPTS_APPEND, value: "-Daws.s3UsePathStyle=true" }
+          ports:
+            - { containerPort: 8181 }
+            - { containerPort: 8182 }
+          readinessProbe:
+            httpGet: { path: /q/health, port: 8182 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 300m, memory: 512Mi }
+            limits: { memory: 1.5Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: polaris
+spec:
+  selector: { app: polaris }
+  ports:
+    - { name: api, port: 8181, targetPort: 8181 }
+    - { name: health, port: 8182, targetPort: 8182 }
+---
+# Seeds the baleia_polaris catalog/namespace/table via scripts/seed_polaris.py.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: polaris-seed
+spec:
+  backoffLimit: 8
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: python:3.11-slim
+          env:
+            - { name: POLARIS_URL, value: "http://polaris:8181" }
+            - { name: POLARIS_REALM, value: POLARIS }
+            - { name: POLARIS_CLIENT_ID, value: admin }
+            - { name: POLARIS_CLIENT_SECRET, value: admin }
+            - { name: S3_ENDPOINT, value: "http://rustfs:9000" }
+            - { name: BUCKET, value: baleia }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              pip install --quiet pyiceberg pyarrow requests
+              python /scripts/seed_polaris.py
+          volumeMounts:
+            - { name: seed, mountPath: /scripts }
+      volumes:
+        - name: seed
+          configMap: { name: polaris-seed }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: polaris-console
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: polaris-console }
+  template:
+    metadata:
+      labels: { app: polaris-console }
+    spec:
+      containers:
+        - name: console
+          image: maltzsama/polaris-console:latest
+          env:
+            - { name: VITE_POLARIS_API_URL, value: "http://localhost:8181" }
+            - { name: VITE_POLARIS_REALM, value: POLARIS }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              find /usr/share/nginx/html -type f -name "*.js" -exec sed -i "s|http://localhost:4000|http://localhost:8181|g; s|localhost:4000|localhost:8181|g" {} \;
+              nginx -g "daemon off;"
+          ports:
+            - { containerPort: 80 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: polaris-console
+spec:
+  selector: { app: polaris-console }
+  ports:
+    - { port: 80, targetPort: 80 }
