@@ -470,36 +470,6 @@ func (c *Client) next(ctx context.Context, uri, user string) (StatementResponse,
 	return sr, nil
 }
 
-type QueryInfo struct {
-	QueryID              string `json:"queryId"`
-	Session              string `json:"session"`
-	State                string `json:"state"`
-	Query                string `json:"query"`
-	User                 string `json:"user"`
-	Catalog              string `json:"catalog"`
-	Schema               string `json:"schema"`
-	ResourceGroupID      []string `json:"resourceGroupId"`
-	QueryType            string   `json:"queryType"`
-	Created              string   `json:"createTime"`
-	Ended                string   `json:"endTime"`
-	ElapsedMs            *int     `json:"elapsedTimeMillis"`
-	CPUMs                *int     `json:"cpuTimeMillis"`
-	PhysicalInputBytes   *int64   `json:"physicalInputBytes"`
-	OutputRows           *int64   `json:"outputRows"`
-	ErrorCode            string   `json:"errorCode"`
-	ErrorType            string   `json:"errorType"`
-	FailureMessage       string   `json:"failureMessage"`
-}
-
-type ClusterStats struct {
-	RunningQueries  int `json:"runningQueries"`
-	QueuedQueries   int `json:"queuedQueries"`
-	BlockedQueries  int `json:"blockedQueries"`
-	ActiveWorkers   int `json:"activeWorkers"`
-	TotalMemoryBytes    *int64 `json:"totalMemoryBytes"`
-	FreeMemoryBytes     *int64 `json:"freeMemoryBytes"`
-}
-
 func (c *Client) ListQueries(ctx context.Context) ([]QueryInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/v1/query", nil)
 	if err != nil {
@@ -538,41 +508,4 @@ func (c *Client) GetQuery(ctx context.Context, queryID string) (*QueryInfo, erro
 		return nil, fmt.Errorf("trino decode query: %w", err)
 	}
 	return &qi, nil
-}
-
-func (c *Client) GetClusterStats(ctx context.Context) (*ClusterStats, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/v1/cluster", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("X-Trino-User", c.user)
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("trino get cluster: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var raw interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("trino decode cluster: %w", err)
-	}
-
-	cs := &ClusterStats{}
-	if m, ok := raw.(map[string]interface{}); ok {
-		if v, ok := m["runningQueries"].(float64); ok {
-			cs.RunningQueries = int(v)
-		}
-		if v, ok := m["queuedQueries"].(float64); ok {
-			cs.QueuedQueries = int(v)
-		}
-		if v, ok := m["blockedQueries"].(float64); ok {
-			cs.BlockedQueries = int(v)
-		}
-		if v, ok := m["activeWorkers"].(float64); ok {
-			cs.ActiveWorkers = int(v)
-		}
-	}
-
-	return cs, nil
 }

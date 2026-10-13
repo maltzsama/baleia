@@ -40,38 +40,33 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		if sqlsplitter.IsCatalogDDL(q.Query) {
 			continue
 		}
+		// The cluster poller's own node-count statement is not user activity.
+		if q.Query == trino.ClusterNodesSQL {
+			continue
+		}
 
 		var elapsedMs *int32
 		var cpuMs *int32
-		var physBytes *int64
-		var outputRows *int64
 		var errMsg *string
 
-		if q.ElapsedMs != nil {
-			val := int32(*q.ElapsedMs)
+		if v := q.ElapsedMs(); v != nil {
+			val := int32(*v)
 			elapsedMs = &val
 		}
-		if q.CPUMs != nil {
-			val := int32(*q.CPUMs)
+		if v := q.CPUMs(); v != nil {
+			val := int32(*v)
 			cpuMs = &val
 		}
-		if q.PhysicalInputBytes != nil {
-			physBytes = q.PhysicalInputBytes
-		}
-		if q.OutputRows != nil {
-			outputRows = q.OutputRows
-		}
-		if q.FailureMessage != "" {
-			errMsg = &q.FailureMessage
+		physBytes := q.PhysicalInputBytes()
+		if msg := q.FailureMessage(); msg != "" {
+			errMsg = &msg
 		}
 
 		rawPayload, _ := json.Marshal(q)
 
-		createdAt := time.Now()
-		if q.Created != "" {
-			if t, err := time.Parse(time.RFC3339, q.Created); err == nil {
-				createdAt = t
-			}
+		createdAt, ok := q.CreatedAt()
+		if !ok {
+			createdAt = time.Now()
 		}
 
 		state := mapTrinoState(q.State)
@@ -80,16 +75,16 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		_, err := a.queries.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
 			TrinoQueryID:       q.QueryID,
 			Origin:             origin,
-			User:               q.User,
+			User:               q.User(),
 			State:              state,
 			Sql:                q.Query,
-			Catalog:            strPtr(q.Catalog),
-			Schema:             strPtr(q.Schema),
+			Catalog:            strPtr(q.Catalog()),
+			Schema:             strPtr(q.Schema()),
 			CreatedAt:          pgtype.Timestamptz{Time: createdAt, Valid: true},
 			ElapsedMs:          elapsedMs,
 			CpuMs:              cpuMs,
 			PhysicalInputBytes: physBytes,
-			OutputRows:         outputRows,
+			OutputRows:         nil, // not exposed by Trino's query list
 			ErrorMessage:       errMsg,
 			RawTrinoPayload:    rawPayload,
 		})
