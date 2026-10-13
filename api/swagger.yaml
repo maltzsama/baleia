@@ -1451,6 +1451,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Catalog" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [Catalog]
       operationId: createCatalog
@@ -1467,6 +1468,8 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Catalog" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /connections/{connection_id}/catalogs/{catalog_id}:
     parameters:
@@ -1506,6 +1509,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Catalog" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Catalog]
@@ -1514,6 +1518,7 @@ paths:
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /catalogs/{catalog_id}/sync:
@@ -1539,6 +1544,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Catalog" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: "Sync attempted but the registry diverged"
@@ -1568,6 +1574,7 @@ paths:
                   orphan_in_trino: { type: array, items: { type: string }, description: "Live Trino catalog names with no enabled registry row" }
                   ok:         { type: array, items: { $ref: "#/components/schemas/Catalog" }, description: "Registry rows confirmed present in Trino and at the right version" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /catalogs/{catalog_id}/namespaces:
     parameters:

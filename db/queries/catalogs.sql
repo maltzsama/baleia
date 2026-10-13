@@ -39,6 +39,7 @@ UPDATE catalogs SET
     warehouse = $4,
     connector = $5,
     extra_props = $6,
+    trino_catalog_name = $7,
     updated_at = now()
 WHERE id = $1
 RETURNING *;

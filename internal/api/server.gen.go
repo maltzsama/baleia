@@ -4595,6 +4595,15 @@ func (response SyncCatalog401JSONResponse) VisitSyncCatalogResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type SyncCatalog403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SyncCatalog403JSONResponse) VisitSyncCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type SyncCatalog404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response SyncCatalog404JSONResponse) VisitSyncCatalogResponse(w http.ResponseWriter) error {
@@ -4639,6 +4648,15 @@ func (response ListCatalogs401JSONResponse) VisitListCatalogsResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListCatalogs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogs404JSONResponse) VisitListCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateCatalogRequestObject struct {
 	ConnectionId openapi_types.UUID `json:"connection_id"`
 	Body         *CreateCatalogJSONRequestBody
@@ -4666,6 +4684,24 @@ func (response CreateCatalog401JSONResponse) VisitCreateCatalogResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateCatalog403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateCatalog403JSONResponse) VisitCreateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalog404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateCatalog404JSONResponse) VisitCreateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteCatalogRequestObject struct {
 	ConnectionId openapi_types.UUID `json:"connection_id"`
 	CatalogId    openapi_types.UUID `json:"catalog_id"`
@@ -4687,6 +4723,15 @@ type DeleteCatalog401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response DeleteCatalog401JSONResponse) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalog403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteCatalog403JSONResponse) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -4760,6 +4805,15 @@ type UpdateCatalog401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response UpdateCatalog401JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalog403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateCatalog403JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -5453,6 +5507,15 @@ type ReconcileTrino401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response ReconcileTrino401JSONResponse) VisitReconcileTrinoResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReconcileTrino403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReconcileTrino403JSONResponse) VisitReconcileTrinoResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }

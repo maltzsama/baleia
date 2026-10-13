@@ -327,18 +327,20 @@ UPDATE catalogs SET
     warehouse = $4,
     connector = $5,
     extra_props = $6,
+    trino_catalog_name = $7,
     updated_at = now()
 WHERE id = $1
 RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at
 `
 
 type UpdateCatalogParams struct {
-	ID          pgtype.UUID `json:"id"`
-	Name        string      `json:"name"`
-	Description *string     `json:"description"`
-	Warehouse   string      `json:"warehouse"`
-	Connector   string      `json:"connector"`
-	ExtraProps  []byte      `json:"extra_props"`
+	ID               pgtype.UUID `json:"id"`
+	Name             string      `json:"name"`
+	Description      *string     `json:"description"`
+	Warehouse        string      `json:"warehouse"`
+	Connector        string      `json:"connector"`
+	ExtraProps       []byte      `json:"extra_props"`
+	TrinoCatalogName string      `json:"trino_catalog_name"`
 }
 
 func (q *Queries) UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (Catalog, error) {
@@ -349,6 +351,7 @@ func (q *Queries) UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (C
 		arg.Warehouse,
 		arg.Connector,
 		arg.ExtraProps,
+		arg.TrinoCatalogName,
 	)
 	var i Catalog
 	err := row.Scan(
