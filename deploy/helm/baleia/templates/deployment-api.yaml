@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "baleia.fullname" . }}-api
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "baleia.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "baleia.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      {{- include "baleia.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: api
+          image: {{ include "baleia.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/api"]
+          {{- include "baleia.containerSecurityContext" . | nindent 10 }}
+          env:
+            - name: PORT
+              value: {{ .Values.api.port | quote }}
+            {{- range $key, $_ := .Values.config }}
+            - name: {{ $key }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "baleia.fullname" $ }}-config
+                  key: {{ $key }}
+            {{- end }}
+            {{- include "baleia.secretEnv" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.port }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "baleia.fullname" . }}-worker
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "baleia.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "baleia.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      {{- include "baleia.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: worker
+          image: {{ include "baleia.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/worker"]
+          {{- include "baleia.containerSecurityContext" . | nindent 10 }}
+          env:
+            - name: WORKER_HEALTH_PORT
+              value: {{ .Values.worker.healthPort | quote }}
+            {{- range $key, $_ := .Values.config }}
+            - name: {{ $key }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "baleia.fullname" $ }}-config
+                  key: {{ $key }}
+            {{- end }}
+            {{- include "baleia.secretEnv" . | nindent 12 }}
+          {{- if .Values.migrate.enabled }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 2"]
+          {{- end }}
+          ports:
+            - name: health
+              containerPort: {{ .Values.worker.healthPort }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: health }
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

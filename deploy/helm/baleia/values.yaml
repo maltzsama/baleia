@@ -1,0 +1,57 @@
+# Baleia Helm values.
+# Secrets keys when secrets.create is true or existingSecret is set:
+#   JWT_SECRET, DATABASE_URL, BALEIA_TRINO_DB_PASSWORD,
+#   S3_ACCESS_KEY, S3_SECRET_KEY, SMTP_PASSWORD (optional)
+
+image:
+  # Single image containing /api, /worker and /migrate (see Dockerfile).
+  repository: ghcr.io/maltzsama/baleia
+  fullImageName: ""
+  tag: ""                 # default: .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+# Name of an existing Secret with the keys above. Required unless secrets.create.
+existingSecret: ""
+
+secrets:
+  create: false           # dev only: generate in-chart Secret from `values`
+  values: {}
+
+# Environment variables surfaced as a ConfigMap (env, not secrets).
+config:
+  PUBLIC_URL: ""
+  TEMPORAL_HOST: ""       # default: temporal.<namespace>.svc:7233
+  TRINO_URL: ""           # empty + trino.enabled -> in-chart service
+  POLARIS_URL: ""         # default: http://baleia-polaris.<namespace>.svc:8181
+  S3_ENDPOINT: ""
+  S3_BUCKET: baleia-results
+  S3_USE_SSL: "false"
+  SMTP_HOST: ""
+  SMTP_PORT: ""
+  SMTP_USER: ""
+  SMTP_FROM: ""
+
+api:
+  replicas: 1
+  resources: {}
+  port: 8080
+
+worker:
+  replicas: 1
+  resources: {}
+  healthPort: 8081
+
+migrate:
+  enabled: true
+
+# Trino (PR3): official image + plugin init container.
+trino:
+  enabled: false
+  image:
+    repository: trinodb/trino
+    tag: "482"
+  plugin:
+    version: ""           # required when trino.enabled
+    url: ""               # default: GitHub release URL built from version
+  jvmHeap: 2G
+  resources: {}

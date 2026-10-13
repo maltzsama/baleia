@@ -49,3 +49,25 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint chart (dev values + defaults)
+        run: |
+          helm lint deploy/helm/baleia --strict \
+            --set secrets.create=true --set secrets.values.JWT_SECRET=x --set secrets.values.DATABASE_URL=postgresql://b
+          helm lint deploy/helm/baleia --strict --set existingSecret=x
+      - name: Install kubeconform
+        run: |
+          curl -sSLo /usr/local/bin/kubeconform https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64
+          chmod +x /usr/local/bin/kubeconform
+      - name: Validate rendered manifests
+        run: |
+          helm template baleia deploy/helm/baleia \
+            --set secrets.create=true --set secrets.values.JWT_SECRET=x --set secrets.values.DATABASE_URL=postgresql://b \
+            | kubeconform -strict -summary -ignore-missing-schemas
+          helm template baleia deploy/helm/baleia --set existingSecret=x | kubeconform -strict -summary -ignore-missing-schemas

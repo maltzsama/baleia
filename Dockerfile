@@ -10,7 +10,7 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM golang:latest AS go
+FROM golang:1.26-alpine AS go
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -20,8 +20,8 @@ RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal
 RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION}" -o /worker ./cmd/worker
 RUN CGO_ENABLED=0 go build -o /migrate ./cmd/migrate
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
+FROM alpine:3.20
+RUN apk --no-cache add ca-certificates && adduser -D -u 10001 baleia
 WORKDIR /
 COPY --from=go /api /api
 COPY --from=go /worker /worker
@@ -29,3 +29,4 @@ COPY --from=go /migrate /migrate
 COPY --from=web /web/build /web/build
 COPY api/ /api-spec/
 COPY db/migrations/ /db/migrations/
+USER 10001

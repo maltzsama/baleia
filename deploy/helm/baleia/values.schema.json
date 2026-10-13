@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string" },
+        "fullImageName": { "type": "string" },
+        "tag": { "type": "string" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "existingSecret": { "type": "string" },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "values": {
+          "type": "object",
+          "properties": {
+            "JWT_SECRET": { "minLength": 16 },
+            "DATABASE_URL": { "type": "string" },
+            "BALEIA_TRINO_DB_PASSWORD": { "type": "string" },
+            "S3_ACCESS_KEY": { "type": "string" },
+            "S3_SECRET_KEY": { "type": "string" },
+            "SMTP_PASSWORD": { "type": "string" }
+          }
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "api": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "port": { "type": "integer" },
+        "resources": { "type": "object" }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "healthPort": { "type": "integer" },
+        "resources": { "type": "object" }
+      }
+    },
+    "migrate": { "type": "object", "properties": { "enabled": { "type": "boolean" } } },
+    "trino": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": { "type": "string" },
+            "tag": { "type": "string" }
+          }
+        },
+        "plugin": {
+          "type": "object",
+          "properties": {
+            "version": { "type": "string" },
+            "url": { "type": "string" }
+          }
+        },
+        "jvmHeap": { "type": "string" },
+        "resources": { "type": "object" }
+      }
+    }
+  }
+}
