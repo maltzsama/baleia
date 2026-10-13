@@ -4,33 +4,35 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-func RetrieverSchedulerWorkflow(ctx workflow.Context) error {
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
+// RetrieverDispatchWorkflow is one pass of the due-retriever sweeper, driven by
+// the retriever-scheduler Temporal Schedule. Full dispatch semantics land with
+// #90; today it polls for due retrievers so the schedule is live.
+func RetrieverDispatchWorkflow(ctx workflow.Context) error {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 2 * time.Minute,
 		HeartbeatTimeout:    30 * time.Second,
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
 
-	for {
-		if err := workflow.ExecuteActivity(ctx, activities.RetrieverPoll, activities.RetrieverPollParams{}).Get(ctx, nil); err != nil {
-			workflow.GetLogger(ctx).Error("retriever poll failed", "err", err)
-		}
-
-		if err := workflow.Sleep(ctx, 60*time.Second); err != nil {
-			return err
-		}
+	if err := workflow.ExecuteActivity(ctx, activities.RetrieverPoll, activities.RetrieverPollParams{}).Get(ctx, nil); err != nil {
+		workflow.GetLogger(ctx).Error("retriever dispatch pass failed", "err", err)
+		return err
 	}
+	return nil
 }
 
+// RetrieverRefreshWorkflow runs a single retriever refresh. Refreshes are never
+// retried automatically: re-running an expensive materialization is not safe.
 func RetrieverRefreshWorkflow(ctx workflow.Context, retrieverID, refreshType string) error {
-	ao := workflow.ActivityOptions{
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Minute,
 		HeartbeatTimeout:    60 * time.Second,
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
 
 	return workflow.ExecuteActivity(ctx, activities.RetrieverRefresh, activities.RetrieverRefreshParams{
 		RetrieverID: retrieverID,

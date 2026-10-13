@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron"
 	"go.temporal.io/sdk/activity"
@@ -42,7 +43,22 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 
 	logger.Info("refreshing materialized view", "sql", sql)
 
-	result, err := a.trino.Execute(ctx, sql, retriever.DestCatalog, retriever.DestNamespace)
+	// Heartbeats let a long refresh receive cancellation and never be declared
+	// dead and re-run.
+	var lastBeat time.Time
+	opts := trino.ExecuteOptions{
+		Catalog: retriever.DestCatalog,
+		Schema:  retriever.DestNamespace,
+		OnProgress: func() {
+			now := time.Now()
+			if now.Sub(lastBeat) >= heartbeatInterval {
+				lastBeat = now
+				activity.RecordHeartbeat(ctx)
+			}
+		},
+	}
+
+	result, err := a.trino.ExecuteWithOptions(ctx, sql, opts)
 	durationMs := time.Since(start).Milliseconds()
 
 	status := "finished"
@@ -50,6 +66,9 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	var errorMsg *string
 
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		status = "failed"
 		msg := err.Error()
 		errorMsg = &msg
@@ -68,10 +87,10 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	}
 
 	history, err := a.queries.CreateRetrieverRefreshHistory(ctx, db.CreateRetrieverRefreshHistoryParams{
-		RetrieverID:         retrieverID,
-		TemporalWorkflowID:  activity.GetInfo(ctx).WorkflowExecution.ID,
-		RefreshType:         params.RefreshType,
-		Status:              status,
+		RetrieverID:        retrieverID,
+		TemporalWorkflowID: activity.GetInfo(ctx).WorkflowExecution.ID,
+		RefreshType:        params.RefreshType,
+		Status:             status,
 	})
 	if err != nil {
 		return fmt.Errorf("create refresh history: %w", err)
@@ -85,8 +104,8 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		ErrorMessage:  errorMsg,
 	})
 
-	if err != nil {
-		return fmt.Errorf("refresh failed: %w", err)
+	if errorMsg != nil {
+		return fmt.Errorf("refresh failed: %s", *errorMsg)
 	}
 
 	return nil

@@ -79,6 +79,9 @@ type Querier interface {
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
 	ListEnabledCatalogs(ctx context.Context) ([]Catalog, error)
+	// Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
+	// Iceberg REST, Nessie), used by the Lens table-health fan-out.
+	ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)

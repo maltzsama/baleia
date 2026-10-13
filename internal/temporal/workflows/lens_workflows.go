@@ -4,59 +4,82 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-func LensQueryPollerWorkflow(ctx workflow.Context) error {
-	ao := workflow.ActivityOptions{
+// LensQueryPollWorkflow is one pass of the query-history poller. It is driven
+// by a Temporal Schedule (see internal/temporal/schedules), so it must return
+// after a single activity call.
+func LensQueryPollWorkflow(ctx workflow.Context) error {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 2 * time.Minute,
 		HeartbeatTimeout:    30 * time.Second,
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
 
-	for {
-		if err := workflow.ExecuteActivity(ctx, activities.LensPollTrinoQueries, activities.LensPollTrinoQueriesParams{}).Get(ctx, nil); err != nil {
-			workflow.GetLogger(ctx).Error("poll trino queries failed", "err", err)
-		}
-
-		if err := workflow.Sleep(ctx, 30*time.Second); err != nil {
-			return err
-		}
+	if err := workflow.ExecuteActivity(ctx, activities.LensPollTrinoQueries, activities.LensPollTrinoQueriesParams{}).Get(ctx, nil); err != nil {
+		workflow.GetLogger(ctx).Error("poll trino queries failed", "err", err)
+		return err
 	}
+	return nil
 }
 
-func LensClusterPollerWorkflow(ctx workflow.Context) error {
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 1 * time.Minute,
+// LensClusterPollWorkflow is one pass of the cluster-stats poller.
+func LensClusterPollWorkflow(ctx workflow.Context) error {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute,
 		HeartbeatTimeout:    15 * time.Second,
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
 
-	for {
-		if err := workflow.ExecuteActivity(ctx, activities.LensPollTrinoCluster, activities.LensPollTrinoClusterParams{}).Get(ctx, nil); err != nil {
-			workflow.GetLogger(ctx).Error("poll trino cluster failed", "err", err)
-		}
-
-		if err := workflow.Sleep(ctx, 30*time.Second); err != nil {
-			return err
-		}
+	if err := workflow.ExecuteActivity(ctx, activities.LensPollTrinoCluster, activities.LensPollTrinoClusterParams{}).Get(ctx, nil); err != nil {
+		workflow.GetLogger(ctx).Error("poll trino cluster failed", "err", err)
+		return err
 	}
+	return nil
 }
 
+// LensTableHealthWorkflow scans enabled Iceberg-family catalogs and runs table
+// health analysis per catalog, bounded to 4 concurrent calls. A failing
+// catalog does not cancel the others.
 func LensTableHealthWorkflow(ctx workflow.Context) error {
+	listCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 2 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+	var catalogs []activities.EnabledIcebergCatalog
+	if err := workflow.ExecuteActivity(listCtx, activities.ListEnabledIcebergCatalogs, activities.ListEnabledIcebergCatalogsParams{}).Get(listCtx, &catalogs); err != nil {
+		workflow.GetLogger(ctx).Error("list enabled iceberg catalogs failed", "err", err)
+		return err
+	}
+
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
+		StartToCloseTimeout: 30 * time.Minute,
 		HeartbeatTimeout:    60 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	for {
-		if err := workflow.ExecuteActivity(ctx, activities.LensAnalyzeTableHealth, activities.LensAnalyzeTableHealthParams{}).Get(ctx, nil); err != nil {
-			workflow.GetLogger(ctx).Error("analyze table health failed", "err", err)
-		}
+	semCh := make(chan struct{}, 4)
+	latch := workflow.NewWaitGroup(ctx)
+	for _, cat := range catalogs {
+		cat := cat
+		latch.Add(1)
+		workflow.Go(ctx, func(ctx workflow.Context) {
+			defer latch.Done()
+			semCh <- struct{}{}
+			defer func() { <-semCh }()
 
-		if err := workflow.Sleep(ctx, 1*time.Hour); err != nil {
-			return err
-		}
+			actCtx := workflow.WithActivityOptions(ctx, ao)
+			if err := workflow.ExecuteActivity(actCtx, activities.LensAnalyzeTableHealth, activities.LensAnalyzeTableHealthParams{
+				CatalogConnectionID: cat.CatalogConnectionID,
+				Catalog:             cat.Catalog,
+			}).Get(actCtx, nil); err != nil {
+				workflow.GetLogger(ctx).Error("analyze table health failed",
+					"catalog", cat.Catalog, "err", err)
+			}
+		})
 	}
+	latch.Wait(ctx)
+	return nil
 }

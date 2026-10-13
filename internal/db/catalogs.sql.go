@@ -231,6 +231,48 @@ func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
 	return items, nil
 }
 
+const listEnabledIcebergCatalogs = `-- name: ListEnabledIcebergCatalogs :many
+SELECT c.id, c.connection_id, c.name, c.trino_catalog_name
+FROM catalogs c
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE c.enabled AND cc.type IN ('polaris', 'iceberg', 'nessie')
+ORDER BY c.name
+`
+
+type ListEnabledIcebergCatalogsRow struct {
+	ID               pgtype.UUID `json:"id"`
+	ConnectionID     pgtype.UUID `json:"connection_id"`
+	Name             string      `json:"name"`
+	TrinoCatalogName string      `json:"trino_catalog_name"`
+}
+
+// Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
+// Iceberg REST, Nessie), used by the Lens table-health fan-out.
+func (q *Queries) ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error) {
+	rows, err := q.db.Query(ctx, listEnabledIcebergCatalogs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEnabledIcebergCatalogsRow
+	for rows.Next() {
+		var i ListEnabledIcebergCatalogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConnectionID,
+			&i.Name,
+			&i.TrinoCatalogName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markTrinoCatalogRegistryError = `-- name: MarkTrinoCatalogRegistryError :exec
 UPDATE trino_catalog_registry
    SET sync_status = 'error', sync_error = $3, updated_by = 'baleia', updated_at = now()

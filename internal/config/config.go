@@ -46,8 +46,11 @@ type Config struct {
 	// hit the remaining query is killed and the result is marked truncated.
 	ResultMaxRows  int64
 	ResultMaxBytes int64
-	RateLimitRPS   int
-	RateLimitBurst int
+	// SchedulesEnabled drives whether the worker ensures its recurring Temporal
+	// Schedules at boot. Disabled for tests and local dev that lack Temporal.
+	SchedulesEnabled bool
+	RateLimitRPS     int
+	RateLimitBurst   int
 }
 
 func Load() *Config {
@@ -73,6 +76,7 @@ func Load() *Config {
 		StatementTimeout: getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
 		ResultMaxRows:    getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
 		ResultMaxBytes:   getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
+		SchedulesEnabled: getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
 		RateLimitRPS:     getEnvInt("RATE_LIMIT_RPS", 60),
 		RateLimitBurst:   getEnvInt("RATE_LIMIT_BURST", 10),
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/catalog_connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
+	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 )
@@ -83,7 +84,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 			State:              state,
 			Sql:                q.Query,
 			Catalog:            strPtr(q.Catalog),
-			Schema:            strPtr(q.Schema),
+			Schema:             strPtr(q.Schema),
 			CreatedAt:          pgtype.Timestamptz{Time: createdAt, Valid: true},
 			ElapsedMs:          elapsedMs,
 			CpuMs:              cpuMs,
@@ -132,6 +133,36 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 type LensAnalyzeTableHealthParams struct {
 	CatalogConnectionID string
 	Catalog             string
+}
+
+type ListEnabledIcebergCatalogsParams struct{}
+
+// EnabledIcebergCatalog is one target for the table-health fan-out.
+type EnabledIcebergCatalog struct {
+	CatalogConnectionID string
+	Catalog             string
+	TrinoCatalogName    string
+}
+
+func ListEnabledIcebergCatalogs(ctx context.Context, params ListEnabledIcebergCatalogsParams) ([]EnabledIcebergCatalog, error) {
+	return defaultActivities.listEnabledIcebergCatalogs(ctx)
+}
+
+func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledIcebergCatalog, error) {
+	rows, err := a.queries.ListEnabledIcebergCatalogs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list enabled iceberg catalogs: %w", err)
+	}
+
+	out := make([]EnabledIcebergCatalog, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, EnabledIcebergCatalog{
+			CatalogConnectionID: r.ConnectionID.String(),
+			Catalog:             r.Name,
+			TrinoCatalogName:    r.TrinoCatalogName,
+		})
+	}
+	return out, nil
 }
 
 func LensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthParams) error {
@@ -235,18 +266,18 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 				}
 
 				_, err = a.queries.UpsertTableHealthSnapshot(ctx, db.UpsertTableHealthSnapshotParams{
-					CatalogConnectionID:      connID,
-					Catalog:                  cat.Name,
-					Namespace:                nsName,
-					TableName:                tbl.Name,
-					SnapshotCount:            snapshotCount,
-					FileCount:                fileCount,
-					TotalSizeBytes:           totalSize,
-					OldestSnapshotAgeHours:   oldestAgeHours,
-					HealthScore:              healthScore,
-					NeedsCompaction:          needsCompaction,
-					NeedsSnapshotExpiry:      needsExpiry,
-					NeedsOrphanCleanup:       false,
+					CatalogConnectionID:    connID,
+					Catalog:                cat.Name,
+					Namespace:              nsName,
+					TableName:              tbl.Name,
+					SnapshotCount:          snapshotCount,
+					FileCount:              fileCount,
+					TotalSizeBytes:         totalSize,
+					OldestSnapshotAgeHours: oldestAgeHours,
+					HealthScore:            healthScore,
+					NeedsCompaction:        needsCompaction,
+					NeedsSnapshotExpiry:    needsExpiry,
+					NeedsOrphanCleanup:     false,
 				})
 				if err != nil {
 					return fmt.Errorf("upsert table health: %w", err)
@@ -302,14 +333,31 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 			params.Catalog, params.Namespace, params.Table, params.Retention),
 	}
 
+	// Heartbeats make the run cancellable: without them a long OPTIMIZE is
+	// declared dead after the heartbeat timeout and re-executed.
+	var lastBeat time.Time
+	opts := trino.ExecuteOptions{
+		Catalog: params.Catalog,
+		Schema:  params.Namespace,
+		OnProgress: func() {
+			now := time.Now()
+			if now.Sub(lastBeat) >= heartbeatInterval {
+				lastBeat = now
+				activity.RecordHeartbeat(ctx)
+			}
+		},
+	}
+
 	for _, cmd := range commands {
 		logger.Info("running maintenance", "sql", cmd)
 
-		result, err := a.trino.Execute(ctx, cmd, params.Catalog, params.Namespace)
+		result, err := a.trino.ExecuteWithOptions(ctx, cmd, opts)
 		if err != nil {
-			logger.Error("maintenance command failed", "sql", cmd, "err", err)
 			recordMaintenanceSnapshot(a.queries, ctx, params.ExecutionID, cmd, "failed", 0, 0, err.Error())
 			return fmt.Errorf("maintenance %q: %w", cmd, err)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
 		recordMaintenanceSnapshot(a.queries, ctx, params.ExecutionID, cmd, "finished", result.RowCount, 0, "")
