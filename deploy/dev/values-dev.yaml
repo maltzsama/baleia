@@ -2,7 +2,7 @@
 # The image is built into minikube with `minikube image build -t baleia:dev .`.
 image:
   repository: baleia
-  tag: dev
+  tag: dev-next
   pullPolicy: Never
 
 secrets:
@@ -39,6 +39,17 @@ worker:
 migrate:
   enabled: true
 
-# Trino is wired in PR3 of #64 (plugin init container + official image).
+# Trino (official image + plugin init container) wired by PR 3 of #64.
 trino:
-  enabled: false
+  enabled: true
+  image:
+    repository: trinodb/trino
+    tag: "482"
+  plugin:
+    version: "0.7.0"              # baleia-trino-catalog-store release
+    image: "baleia-plugins:0.7.0"
+    imagePullPolicy: Never
+  jvmHeap: 1G
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 2Gi }

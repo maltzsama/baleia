@@ -65,6 +65,12 @@ func Ensure(ctx context.Context, c client.Client, taskQueue string, specs []Spec
 					Schedule: &client.Schedule{
 						Spec:   &spec,
 						Action: action,
+						// convertToPBSchedule dereferences these; leaving them
+						// nil panics the worker.
+						Policy: &client.SchedulePolicies{
+							Overlap: enumspb.SCHEDULE_OVERLAP_POLICY_SKIP,
+						},
+						State: &client.ScheduleState{},
 					},
 				}, nil
 			},

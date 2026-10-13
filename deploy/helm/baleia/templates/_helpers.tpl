@@ -37,6 +37,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- else }}http://{{ include "baleia.polarisService" . }}:8181{{ end }}
 {{- end }}
 
+{{- define "baleia.pluginURL" -}}
+{{- if .Values.trino.plugin.url }}{{ .Values.trino.plugin.url }}
+{{- else if .Values.trino.plugin.version }}https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v{{ .Values.trino.plugin.version }}/baleia-catalog-store-{{ .Values.trino.plugin.version }}+trino{{ .Values.trino.image.tag }}.tar.gz
+{{- else }}{{ fail "trino.plugin.version is required when trino.enabled is true" }}{{ end }}
+{{- end }}
+
 {{- define "baleia.requireSecret" -}}
 {{- if not .Values.existingSecret }}{{ if not .Values.secrets.create }}{{ fail "existingSecret or secrets.create=true is required" }}{{ end }}{{ end }}
 {{- end -}}

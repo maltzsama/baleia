@@ -51,7 +51,9 @@ trino:
     repository: trinodb/trino
     tag: "482"
   plugin:
-    version: ""           # required when trino.enabled
+    version: ""           # required when trino.enabled (and plugin.image unset)
     url: ""               # default: GitHub release URL built from version
+    image: ""             # optional small image with /baleia-catalog-store (air-gapped)
+    imagePullPolicy: ""
   jvmHeap: 2G
   resources: {}
