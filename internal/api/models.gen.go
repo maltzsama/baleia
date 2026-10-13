@@ -319,7 +319,6 @@ type CreateCatalogConnectionRequest struct {
 	MysqlCredentials      *SqlCredentials                    `json:"mysql_credentials,omitempty"`
 	Name                  string                             `json:"name"`
 	NessieCredentials     *NessieCredentials                 `json:"nessie_credentials,omitempty"`
-	PolarisCredentials    *PolarisCredentials                `json:"polaris_credentials,omitempty"`
 	PostgresqlCredentials *SqlCredentials                    `json:"postgresql_credentials,omitempty"`
 	Type                  CreateCatalogConnectionRequestType `json:"type"`
 	Url                   string                             `json:"url"`
@@ -575,15 +574,6 @@ type PasswordResetConfirmBody struct {
 // PasswordResetRequestBody defines model for PasswordResetRequestBody.
 type PasswordResetRequestBody struct {
 	Email openapi_types.Email `json:"email"`
-}
-
-// PolarisCredentials defines model for PolarisCredentials.
-type PolarisCredentials struct {
-	ClientId     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-
-	// Realm Realm do Polaris. Default: POLARIS
-	Realm *string `json:"realm,omitempty"`
 }
 
 // QueryFolder defines model for QueryFolder.

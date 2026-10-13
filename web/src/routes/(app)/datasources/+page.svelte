@@ -126,7 +126,6 @@
 		} else {
 			if (isIcebergType()) {
 				const icebergCreds = { client_id: form.client_id, client_secret: form.client_secret };
-				body.polaris_credentials = icebergCreds;
 				body.credentials = icebergCreds;
 			}
 			if (isSqlType()) {

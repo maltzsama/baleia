@@ -424,8 +424,6 @@ components:
         url: { type: string }
         default_readonly: { type: boolean, default: true }
         credentials: { type: object }
-        polaris_credentials:
-          $ref: "#/components/schemas/PolarisCredentials"
         nessie_credentials:
           $ref: "#/components/schemas/NessieCredentials"
         glue_credentials:

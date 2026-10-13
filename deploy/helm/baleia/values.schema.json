@@ -20,6 +20,8 @@
           "type": "object",
           "properties": {
             "JWT_SECRET": { "minLength": 16 },
+            "BALEIA_ENCRYPTION_KEY": { "minLength": 32 },
+            "BALEIA_ENCRYPTION_KEY_PREVIOUS": { "type": "string" },
             "DATABASE_URL": { "type": "string" },
             "BALEIA_TRINO_DB_PASSWORD": { "type": "string" },
             "S3_ACCESS_KEY": { "type": "string" },

@@ -6,13 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 	"log/slog"
 
 	catalog_connections "github.com/galileostudio/baleia/internal/catalog_connections"
 	catalogs "github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/google/uuid"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -50,55 +48,13 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 		return CreateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 
-	var credsEnc *string
-	switch string(request.Body.Type) {
-	case "polaris":
-		slog.Info("polaris case hit", "creds_nil", request.Body.PolarisCredentials == nil, "creds_generic", request.Body.Credentials != nil)
-		credsJSON := marshalCreds(request.Body.PolarisCredentials, request.Body.Credentials)
-		if credsJSON != nil {
-			enc, err := crypto.Encrypt(credsJSON, h.cfg.JWTSecret)
-			if err != nil {
-				slog.Error("polaris encrypt failed", "err", err)
-			} else {
-				credsEnc = &enc
-			}
-		}
-	case "nessie":
-		if request.Body.NessieCredentials != nil {
-			b, err := json.Marshal(request.Body.NessieCredentials)
-			if err != nil { return nil, err }
-			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
-		}
-	case "glue":
-		if request.Body.GlueCredentials != nil {
-			b, err := json.Marshal(request.Body.GlueCredentials)
-			if err != nil { return nil, err }
-			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
-		}
-	case "hive":
-		if request.Body.HiveCredentials != nil {
-			b, err := json.Marshal(request.Body.HiveCredentials)
-			if err != nil { return nil, err }
-			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
-		}
-	case "iceberg":
-		if request.Body.IcebergCredentials != nil {
-			b, err := json.Marshal(request.Body.IcebergCredentials)
-			if err != nil { return nil, err }
-			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
-		}
-	case "postgresql":
-		if request.Body.PostgresqlCredentials != nil {
-			b, err := json.Marshal(request.Body.PostgresqlCredentials)
-			if err != nil { return nil, err }
-			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
-		}
-	case "mysql":
-		if request.Body.MysqlCredentials != nil {
-			b, err := json.Marshal(request.Body.MysqlCredentials)
-			if err != nil { return nil, err }
-			enc, _ := crypto.Encrypt(b, h.cfg.JWTSecret); credsEnc = &enc
-		}
+	// The connection id is generated here, not by the database default: the
+	// credentials are sealed with it as additional authenticated data.
+	connID := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	credsEnc, err := encodeCredentials(h.keyring, createCredentials(request.Body), connID)
+	if err != nil {
+		slog.Error("encrypt connection credentials", "err", err)
+		return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
 	}
 
 	defaultReadonly := true
@@ -107,6 +63,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	}
 
 	conn, err := h.queries.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID:              connID,
 		Name:            request.Body.Name,
 		Type:            string(request.Body.Type),
 		Url:             request.Body.Url,
@@ -126,35 +83,6 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	h.catalogCache.Clear()
 
 	return CreateCatalogConnection201JSONResponse(dbCatalogConnectionToPublic(conn)), nil
-}
-
-func marshalCreds(typed interface{}, generic *map[string]interface{}) []byte {
-	if typed != nil {
-		b, err := json.Marshal(typed)
-		if err == nil && string(b) != "null" {
-			slog.Info("creds: using typed credentials")
-			return b
-		}
-		slog.Warn("creds: typed marshal failed or nil, falling through", "err", err)
-	}
-	if generic != nil && len(*generic) > 0 {
-		b, err := json.Marshal(generic)
-		if err == nil {
-			slog.Info("creds: using generic credentials", "fields", len(*generic))
-			return b
-		}
-		slog.Warn("creds: generic marshal failed, falling through", "err", err)
-	}
-	if cid := os.Getenv("POLARIS_CLIENT_ID"); cid != "" {
-		if cs := os.Getenv("POLARIS_CLIENT_SECRET"); cs != "" {
-			m := map[string]string{"client_id": cid, "client_secret": cs}
-			b, _ := json.Marshal(m)
-			slog.Info("creds: using env var fallback")
-			return b
-		}
-	}
-	slog.Warn("creds: no credentials found from any source")
-	return nil
 }
 
 func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
@@ -202,9 +130,10 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		return UpdateCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 	}
 
-	params, err := buildConnectionUpdateParams(connID, *request.Body, h.cfg.JWTSecret)
+	params, err := buildConnectionUpdateParams(connID, *request.Body, h.keyring)
 	if err != nil {
-		return nil, err
+		slog.Error("encrypt connection credentials", "err", err)
+		return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
 	}
 
 	conn, err := h.queries.UpdateCatalogConnection(ctx, params)
@@ -309,7 +238,7 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 	if err != nil {
 		return nil, fmt.Errorf("get default cluster: %w", err)
 	}
-	creds, err := catalogs.DecodeCredentials(conn, h.cfg.JWTSecret)
+	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
 	if err != nil {
 		errMsg := err.Error()
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
@@ -368,10 +297,14 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 }
 
 func (h *Handlers) connectionClient(conn db.CatalogConnection) (catalog_connections.Client, error) {
+	plain, err := catalogs.OpenCredentials(conn, h.keyring)
+	if err != nil {
+		return nil, err
+	}
 	var rawCreds *string
-	if conn.CredentialsEnc != nil {
-		b := crypto.TryDecrypt(*conn.CredentialsEnc, h.cfg.JWTSecret)
-		s := string(b); rawCreds = &s
+	if plain != nil {
+		s := string(plain)
+		rawCreds = &s
 	}
 	return catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
 }
@@ -675,6 +608,26 @@ func chiURLParam(r *http.Request, key string) string {
 
 func uuidStr(u pgtype.UUID) string {
 	return openapi_types.UUID(u.Bytes).String()
+}
+
+// catalogConnectionEncryptionFailedJSONResponse is the 500 returned when the
+// credentials of a connection cannot be sealed on create or update (no key
+// configured, or a crypto failure). Nothing is stored.
+type catalogConnectionEncryptionFailedJSONResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (r catalogConnectionEncryptionFailedJSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	return json.NewEncoder(w).Encode(r)
+}
+
+func (r catalogConnectionEncryptionFailedJSONResponse) VisitUpdateCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	return json.NewEncoder(w).Encode(r)
 }
 
 type catalogConnectionConflictJSONResponse struct {

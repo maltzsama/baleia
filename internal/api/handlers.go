@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/trino"
@@ -23,17 +24,19 @@ type Handlers struct {
 	queries        db.Querier
 	pool           *pgxpool.Pool
 	cfg            *config.Config
+	keyring        *crypto.Keyring
 	temporalClient client.Client
 	s3             *storage.S3Client
 	trino          *trino.Client
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
 }
 
-func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
+func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
 	return &Handlers{
 		queries:        queries,
 		pool:           pool,
 		cfg:            cfg,
+		keyring:        keyring,
 		temporalClient: temporalClient,
 		s3:             s3,
 		// Catalog DDL, reconciliation and Lens maintenance run as the admin
