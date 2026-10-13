@@ -86,7 +86,8 @@ RETURNING *;
 -- completion can never overwrite a cancellation. Zero matched rows means the
 -- statement was already terminal; callers treat that as a no-op.
 UPDATE query_statements
-SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7
+SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7,
+    result_key = $8, result_bytes = $9, truncated = $10
 WHERE id = $1 AND status = 'running'
 RETURNING *;
 
@@ -101,3 +102,9 @@ SELECT s.* FROM query_statements s
 JOIN query_executions e ON e.id = s.execution_id
 WHERE s.execution_id = $1 AND e.workspace_id = $2
 ORDER BY s.position;
+
+-- name: GetQueryStatementByPosition :one
+-- Single statement of an execution that belongs to the given workspace.
+SELECT s.* FROM query_statements s
+JOIN query_executions e ON e.id = s.execution_id
+WHERE s.execution_id = $1 AND e.workspace_id = $2 AND s.position = $3;

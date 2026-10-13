@@ -42,6 +42,10 @@ type Config struct {
 	// activity StartToCloseTimeout and sent to Trino as the session property
 	// query_max_execution_time so the cluster enforces it too.
 	StatementTimeout time.Duration
+	// ResultMaxRows / ResultMaxBytes cap one statement's result. When a cap is
+	// hit the remaining query is killed and the result is marked truncated.
+	ResultMaxRows  int64
+	ResultMaxBytes int64
 	RateLimitRPS   int
 	RateLimitBurst int
 }
@@ -65,10 +69,12 @@ func Load() *Config {
 		S3AccessKey:  getEnv("S3_ACCESS_KEY", "rustfsadmin"),
 		S3SecretKey:  getEnv("S3_SECRET_KEY", "rustfsadmin"),
 		S3Bucket:     getEnv("S3_BUCKET", "baleia"),
-		S3UseSSL:     getEnv("S3_USE_SSL", "false") == "true",
+		S3UseSSL:         getEnv("S3_USE_SSL", "false") == "true",
 		StatementTimeout: getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
-		RateLimitRPS:   getEnvInt("RATE_LIMIT_RPS", 60),
-		RateLimitBurst: getEnvInt("RATE_LIMIT_BURST", 10),
+		ResultMaxRows:    getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
+		ResultMaxBytes:   getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
+		RateLimitRPS:     getEnvInt("RATE_LIMIT_RPS", 60),
+		RateLimitBurst:   getEnvInt("RATE_LIMIT_BURST", 10),
 	}
 }
 
@@ -109,6 +115,15 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 	if v := os.Getenv(key); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d
+		}
+	}
+	return fallback
+}
+
+func getEnvInt64(key string, fallback int64) int64 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return n
 		}
 	}
 	return fallback

@@ -2,6 +2,7 @@ package trino
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -212,5 +213,35 @@ func TestKillQuery_RejectsBadID(t *testing.T) {
 	err := c.KillQuery(context.Background(), "not-an-id", "cancel")
 	if err == nil || !strings.Contains(err.Error(), "invalid trino query id") {
 		t.Fatalf("expected an id validation error, got %v", err)
+	}
+}
+
+// TestDecodeUseNumber pins the precision fix: JSON decoding must keep bigint
+// values as json.Number so values above 2^53 survive the wire intact.
+func TestDecodeUseNumber(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/statement" {
+			_, _ = io.WriteString(w, `{"id":"20240101_000000_00000_abcde","columns":[{"name":"n","type":"bigint"}],"data":[[9007199254740993]]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "testuser")
+	res, err := c.Execute(context.Background(), "SELECT 9007199254740993", "", "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(res.Data) != 1 || len(res.Data[0]) != 1 {
+		t.Fatalf("unexpected data shape: %#v", res.Data)
+	}
+	num, ok := res.Data[0][0].(json.Number)
+	if !ok {
+		t.Fatalf("cell type = %T, want json.Number", res.Data[0][0])
+	}
+	if num.String() != "9007199254740993" {
+		t.Fatalf("bigint lost precision: %s", num.String())
 	}
 }

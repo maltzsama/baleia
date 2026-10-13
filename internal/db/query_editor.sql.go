@@ -122,7 +122,7 @@ func (q *Queries) CreateQueryFolder(ctx context.Context, arg CreateQueryFolderPa
 const createQueryStatement = `-- name: CreateQueryStatement :one
 INSERT INTO query_statements (execution_id, position, sql, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, execution_id, position, sql, status, trino_query_id, rows_returned, duration_ms, error_message, started_at, finished_at
+RETURNING id, execution_id, position, sql, status, trino_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated
 `
 
 type CreateQueryStatementParams struct {
@@ -152,6 +152,9 @@ func (q *Queries) CreateQueryStatement(ctx context.Context, arg CreateQueryState
 		&i.ErrorMessage,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.ResultKey,
+		&i.ResultBytes,
+		&i.Truncated,
 	)
 	return i, err
 }
@@ -280,6 +283,41 @@ func (q *Queries) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg Get
 	return i, err
 }
 
+const getQueryStatementByPosition = `-- name: GetQueryStatementByPosition :one
+SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.trino_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at, s.result_key, s.result_bytes, s.truncated FROM query_statements s
+JOIN query_executions e ON e.id = s.execution_id
+WHERE s.execution_id = $1 AND e.workspace_id = $2 AND s.position = $3
+`
+
+type GetQueryStatementByPositionParams struct {
+	ExecutionID pgtype.UUID `json:"execution_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Position    int32       `json:"position"`
+}
+
+// Single statement of an execution that belongs to the given workspace.
+func (q *Queries) GetQueryStatementByPosition(ctx context.Context, arg GetQueryStatementByPositionParams) (QueryStatement, error) {
+	row := q.db.QueryRow(ctx, getQueryStatementByPosition, arg.ExecutionID, arg.WorkspaceID, arg.Position)
+	var i QueryStatement
+	err := row.Scan(
+		&i.ID,
+		&i.ExecutionID,
+		&i.Position,
+		&i.Sql,
+		&i.Status,
+		&i.TrinoQueryID,
+		&i.RowsReturned,
+		&i.DurationMs,
+		&i.ErrorMessage,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.ResultKey,
+		&i.ResultBytes,
+		&i.Truncated,
+	)
+	return i, err
+}
+
 const getSavedQueryByID = `-- name: GetSavedQueryByID :one
 SELECT id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at FROM saved_queries WHERE id = $1 AND workspace_id = $2
 `
@@ -391,7 +429,7 @@ func (q *Queries) ListQueryFolders(ctx context.Context, arg ListQueryFoldersPara
 }
 
 const listQueryStatements = `-- name: ListQueryStatements :many
-SELECT id, execution_id, position, sql, status, trino_query_id, rows_returned, duration_ms, error_message, started_at, finished_at FROM query_statements
+SELECT id, execution_id, position, sql, status, trino_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated FROM query_statements
 WHERE execution_id = $1
 ORDER BY position
 `
@@ -417,6 +455,9 @@ func (q *Queries) ListQueryStatements(ctx context.Context, executionID pgtype.UU
 			&i.ErrorMessage,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.ResultKey,
+			&i.ResultBytes,
+			&i.Truncated,
 		); err != nil {
 			return nil, err
 		}
@@ -429,7 +470,7 @@ func (q *Queries) ListQueryStatements(ctx context.Context, executionID pgtype.UU
 }
 
 const listQueryStatementsByWorkspace = `-- name: ListQueryStatementsByWorkspace :many
-SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.trino_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at FROM query_statements s
+SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.trino_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at, s.result_key, s.result_bytes, s.truncated FROM query_statements s
 JOIN query_executions e ON e.id = s.execution_id
 WHERE s.execution_id = $1 AND e.workspace_id = $2
 ORDER BY s.position
@@ -462,6 +503,9 @@ func (q *Queries) ListQueryStatementsByWorkspace(ctx context.Context, arg ListQu
 			&i.ErrorMessage,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.ResultKey,
+			&i.ResultBytes,
+			&i.Truncated,
 		); err != nil {
 			return nil, err
 		}
@@ -579,9 +623,10 @@ func (q *Queries) UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecu
 
 const updateQueryStatement = `-- name: UpdateQueryStatement :one
 UPDATE query_statements
-SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7
+SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7,
+    result_key = $8, result_bytes = $9, truncated = $10
 WHERE id = $1 AND status = 'running'
-RETURNING id, execution_id, position, sql, status, trino_query_id, rows_returned, duration_ms, error_message, started_at, finished_at
+RETURNING id, execution_id, position, sql, status, trino_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated
 `
 
 type UpdateQueryStatementParams struct {
@@ -592,6 +637,9 @@ type UpdateQueryStatementParams struct {
 	DurationMs   *int64             `json:"duration_ms"`
 	ErrorMessage *string            `json:"error_message"`
 	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
+	ResultKey    *string            `json:"result_key"`
+	ResultBytes  *int64             `json:"result_bytes"`
+	Truncated    bool               `json:"truncated"`
 }
 
 // Conditional update: only a running statement transitions, so a late
@@ -606,6 +654,9 @@ func (q *Queries) UpdateQueryStatement(ctx context.Context, arg UpdateQueryState
 		arg.DurationMs,
 		arg.ErrorMessage,
 		arg.FinishedAt,
+		arg.ResultKey,
+		arg.ResultBytes,
+		arg.Truncated,
 	)
 	var i QueryStatement
 	err := row.Scan(
@@ -620,6 +671,9 @@ func (q *Queries) UpdateQueryStatement(ctx context.Context, arg UpdateQueryState
 		&i.ErrorMessage,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.ResultKey,
+		&i.ResultBytes,
+		&i.Truncated,
 	)
 	return i, err
 }

@@ -55,6 +55,8 @@ type Querier interface {
 	// readable. Callers use this instead of GetQueryExecutionByID for user-facing
 	// reads so a cross-workspace id yields ErrNoRows (mapped to 404).
 	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg GetQueryExecutionByIDAndWorkspaceParams) (QueryExecution, error)
+	// Single statement of an execution that belongs to the given workspace.
+	GetQueryStatementByPosition(ctx context.Context, arg GetQueryStatementByPositionParams) (QueryStatement, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)

@@ -24,7 +24,6 @@ func TestQueryExecutionWorkflowPropagatesRequestID(t *testing.T) {
 	const requestID = "req-abc-123"
 
 	var execReqIDs []string
-	var storeReqID string
 
 	env.OnActivity(activities.SplitSQL, mock.Anything, mock.Anything).
 		Return(&activities.SplitSQLResult{Statements: []string{"SELECT 1", "SELECT 2"}}, nil)
@@ -33,13 +32,13 @@ func TestQueryExecutionWorkflowPropagatesRequestID(t *testing.T) {
 	env.OnActivity(activities.ExecuteStatement, mock.Anything, mock.MatchedBy(func(p activities.ExecuteStatementParams) bool {
 		execReqIDs = append(execReqIDs, p.RequestID)
 		return true
-	})).Return(&activities.ExecuteStatementResult{RowsReturned: 1, DurationMs: 1}, nil)
+	})).Return(&activities.ExecuteStatementResult{
+		ResultKey:  "query-results/exec-1/1/0.arrow",
+		RowCount:   1,
+		DurationMs: 1,
+	}, nil).Times(2)
 	env.OnActivity(activities.UpdateStatementRecord, mock.Anything, mock.Anything).
 		Return(nil)
-	env.OnActivity(activities.StoreResults, mock.Anything, mock.MatchedBy(func(p activities.StoreResultsParams) bool {
-		storeReqID = p.RequestID
-		return true
-	})).Return(&activities.StoreResultsResult{ResultKey: "query-results/exec-1/result.arrow"}, nil)
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).
 		Return(nil)
 
@@ -49,7 +48,6 @@ func TestQueryExecutionWorkflowPropagatesRequestID(t *testing.T) {
 	require.NoError(t, env.GetWorkflowError())
 
 	require.Equal(t, []string{requestID, requestID}, execReqIDs, "every statement execution carries the request id")
-	require.Equal(t, requestID, storeReqID, "the results upload carries the request id")
 }
 
 // TestQueryExecutionWorkflowEmptyRequestID covers the no-inbound-id path (a
@@ -63,11 +61,9 @@ func TestQueryExecutionWorkflowEmptyRequestID(t *testing.T) {
 	env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).
 		Return(nil)
 	env.OnActivity(activities.ExecuteStatement, mock.Anything, mock.Anything).
-		Return(&activities.ExecuteStatementResult{RowsReturned: 1}, nil)
+		Return(&activities.ExecuteStatementResult{RowCount: 1}, nil)
 	env.OnActivity(activities.UpdateStatementRecord, mock.Anything, mock.Anything).
 		Return(nil)
-	env.OnActivity(activities.StoreResults, mock.Anything, mock.Anything).
-		Return(&activities.StoreResultsResult{ResultKey: "k"}, nil)
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).
 		Return(nil)
 
@@ -75,6 +71,47 @@ func TestQueryExecutionWorkflowEmptyRequestID(t *testing.T) {
 
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
+}
+
+// TestWorkflow_NoRowsInPayloads documents the Temporal-carries-control contract:
+// the statement activity result carries only metadata (a result object key),
+// never rows, and that key is recorded on the statement row.
+func TestWorkflow_ResultKeyPropagatesToStatement(t *testing.T) {
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+
+	var gotUpdate *activities.UpdateStatementRecordParams
+
+	env.OnActivity(activities.SplitSQL, mock.Anything, mock.Anything).
+		Return(&activities.SplitSQLResult{Statements: []string{"SELECT 1"}}, nil)
+	env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).
+		Return(nil)
+	env.OnActivity(activities.ExecuteStatement, mock.Anything, mock.Anything).
+		Return(&activities.ExecuteStatementResult{
+			RowCount:    41,
+			ResultKey:   "query-results/exec-5/1/0.arrow",
+			ResultBytes: 1234,
+			Truncated:   false,
+			Columns:     []activities.ColumnResult{{Name: "c", Type: "bigint"}},
+		}, nil)
+	env.OnActivity(activities.UpdateStatementRecord, mock.Anything, mock.Anything).
+		Return(func(ctx context.Context, p activities.UpdateStatementRecordParams) error {
+			c := p
+			gotUpdate = &c
+			return nil
+		})
+	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).
+		Return(nil)
+
+	env.ExecuteWorkflow(QueryExecutionWorkflow, "exec-5", "ws-1", "SELECT 1", "cat", "req", testStatementTimeout)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+	require.NotNil(t, gotUpdate)
+	require.Equal(t, "query-results/exec-5/1/0.arrow", gotUpdate.ResultKey)
+	require.Equal(t, int64(41), gotUpdate.RowsReturned)
+	require.Equal(t, int64(1234), gotUpdate.ResultBytes)
+	require.False(t, gotUpdate.Truncated)
 }
 
 // TestWorkflow_StatementNotRetried pins the data-corruption fix: a statement
