@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: temporal }
+  template:
+    metadata:
+      labels: { app: temporal }
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:latest
+          env:
+            - { name: DB, value: postgres12 }
+            - { name: DB_PORT, value: "5432" }
+            - { name: POSTGRES_USER, value: baleia }
+            - { name: POSTGRES_PWD, value: baleia }
+            - { name: POSTGRES_SEEDS, value: postgres }
+            - { name: TEMPORAL_DBNAME, value: temporal }
+            - { name: DYNAMIC_CONFIG_FILE_PATH, value: /etc/temporal/config/dynamicconfig/development-sql.yaml }
+          ports:
+            - { containerPort: 7233 }
+          readinessProbe:
+            tcpSocket: { port: 7233 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: dynamicconfig
+              mountPath: /etc/temporal/config/dynamicconfig
+      volumes:
+        - name: dynamicconfig
+          configMap:
+            name: temporal-dynamicconfig
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-dynamicconfig
+data:
+  development-sql.yaml: |
+    # Temporal dynamic config - development
+    system.forceSearchAttributesCacheRefreshOnRead:
+      - value: true
+        constraints: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+spec:
+  selector: { app: temporal }
+  ports:
+    - { port: 7233, targetPort: 7233 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: temporal-ui }
+  template:
+    metadata:
+      labels: { app: temporal-ui }
+    spec:
+      containers:
+        - name: ui
+          image: temporalio/ui:latest
+          env:
+            - { name: TEMPORAL_ADDRESS, value: "temporal.baleia-dev.svc:7233" }
+          ports:
+            - { containerPort: 8080 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-ui
+spec:
+  selector: { app: temporal-ui }
+  ports:
+    - { port: 8080, targetPort: 8080 }

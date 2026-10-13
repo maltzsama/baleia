@@ -72,3 +72,6 @@ jobs:
             --set secrets.create=true --set secrets.values.JWT_SECRET=abcdef0123456789abcdef --set secrets.values.DATABASE_URL=postgresql://b \
             | kubeconform -strict -summary -ignore-missing-schemas
           helm template baleia deploy/helm/baleia --set existingSecret=x | kubeconform -strict -summary -ignore-missing-schemas
+          kubectl kustomize deploy/dev | kubeconform -strict -summary -ignore-missing-schemas
+      - name: Verify tracked dev files are in sync
+        run: ./scripts/verify-dev-sync.sh

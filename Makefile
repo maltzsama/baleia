@@ -8,7 +8,7 @@ PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 # JWT_SECRET wins, so credentials encrypted under a custom key stay readable.
 JWT_SECRET ?= dev-secret-not-for-production
 
-.PHONY: dev worker migrate migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino
+.PHONY: dev worker migrate migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-forward k8s-logs k8s-seed-tpch k8s-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -110,3 +110,38 @@ build-web:
 	cd web && npm run build
 
 build-all: build-web build
+
+# ── Kubernetes (minikube) ─────────────────────────────────────────────────────
+
+K8S_PROFILE ?= baleia
+K8S_NS      ?= baleia-dev
+
+# Start minikube, deploy the dependency stack, build baleia:dev into the node,
+# then install the chart.
+k8s-up:
+	minikube start -p $(K8S_PROFILE) --cpus=6 --memory=12g
+	kubectl apply -k deploy/dev
+	minikube -p $(K8S_PROFILE) image build -t baleia:dev .
+	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
+		-f deploy/dev/values-dev.yaml --wait --timeout 10m
+	@echo ">>> api:   kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080"
+	@echo ">>> usage: make k8s-forward && scripts/smoke.sh"
+
+# Port-forward the UIs for local debugging.
+k8s-forward:
+	kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080 &
+	kubectl -n $(K8S_NS) port-forward svc/polaris-console 4000:80 &
+	kubectl -n $(K8S_NS) port-forward svc/mailpit 8025:8025 &
+
+k8s-logs:
+	kubectl -n $(K8S_NS) logs -f -l app.kubernetes.io/name=baleia --all-containers
+
+k8s-seed-tpch:
+	kubectl -n $(K8S_NS) exec -i deploy/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql
+
+k8s-down:
+	helm -n $(K8S_NS) uninstall baleia || true
+	kubectl delete -k deploy/dev || true
+	if [ -n "$${K8S_PURGE:-}" ]; then \
+		minikube -p $(K8S_PROFILE) delete; \
+	fi
