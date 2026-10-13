@@ -47,7 +47,7 @@ trino:
     tag: "482"
   plugin:
     version: "0.7.0"              # baleia-trino-catalog-store release
-    image: "baleia-plugins:dev"   # built by `make k8s-plugin-bundle` (K8S_PLUGIN_TAG)
+    image: "baleia-plugins:0.7.0"  # built by `make k8s-plugin-bundle`; tag = plugin release version
     imagePullPolicy: Never
   jvmHeap: 1G
   resources:

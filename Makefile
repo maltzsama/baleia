@@ -116,8 +116,10 @@ build-all: build-web build
 K8S_PROFILE ?= baleia
 K8S_NS      ?= baleia-dev
 K8S_PLUGIN_IMAGE      ?= baleia-plugins
-K8S_PLUGIN_TAG        ?= dev
 K8S_PLUGIN_VERSION    ?= 0.7.0
+# The bundle image is tagged with the plugin release it carries (the plugin repo
+# owns that version), so it matches trino.plugin.image in deploy/dev/values-dev.yaml.
+K8S_PLUGIN_TAG        ?= $(K8S_PLUGIN_VERSION)
 
 # Bundle the RELEASED catalog-store plugin (deploy/dev/plugins.Dockerfile
 # downloads the GitHub-release tarball and verifies its sha256) into a sidecar
