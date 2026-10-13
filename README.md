@@ -140,11 +140,28 @@ cd web && npm run dev
 |---|---|
 | `make dev` | Run API on :9000 with local SMTP |
 | `make worker` | Run Temporal worker |
-| `make migrate` | Apply pending DB migrations |
+| `make up` | Build the Trino plugin and bring up the compose stack |
+| `make logs` | Follow api/worker logs from compose |
+| `make down` / `make down-v` | Stop compose (down-v also destroys volumes) |
+| `make migrate` / `migrate-down` / `migrate-status` / `migrate-reset` | Apply / revert / inspect / reset DB migrations |
+| `make seed-tpch` | Insert the `tpch_test` registry row (used by plugin acceptance) |
 | `make sqlc` | Regenerate Go code from SQL queries |
 | `make generate` | Regenerate API handlers from the OpenAPI spec |
 | `make lint` | Run golangci-lint |
-| `make build` | Compile Go binaries to `bin/` |
+| `make build` / `build-web` / `build-all` | Compile Go binaries / frontend / both |
+
+The compose stack is the 5-minute quickstart. A Kubernetes (minikube) development
+environment is provided under `deploy/` — see ``Kubernetes (minikube)`` in the
+Development notes.
+
+### Kubernetes (minikube)
+
+```bash
+make k8s-up          # start minikube, install dependencies + the Baleia chart
+make k8s-forward     # port-forward api/trino/temporal-ui/mailpit/polaris
+make k8s-logs        # follow all baleia pod logs
+make k8s-down        # uninstall (keeps PVCs unless K8S_PURGE=1)
+```
 | `make compose-up` | Build and start all Docker services |
 | `make compose-logs` | Tail logs from api + worker containers |
 

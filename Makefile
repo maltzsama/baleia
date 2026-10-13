@@ -8,7 +8,7 @@ PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
 # JWT_SECRET wins, so credentials encrypted under a custom key stay readable.
 JWT_SECRET ?= dev-secret-not-for-production
 
-.PHONY: dev worker migrate sqlc lint build seed-tpch plugin-clone plugin-build clean-plugin up down logs restart-trino
+.PHONY: dev worker migrate migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api

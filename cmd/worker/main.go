@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/config"
@@ -68,8 +70,32 @@ func main() {
 	}
 
 	slog.Info("worker started", "queue", taskQueue, "schedules_enabled", cfg.SchedulesEnabled)
+
+	go serveHealth("WORKER_HEALTH_PORT", "8081")
+
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		slog.Error("worker error", "err", err)
 		os.Exit(1)
+	}
+}
+
+// serveHealth exposes a liveness endpoint Kubernetes can probe. If the port
+// cannot be bound the worker still starts; the probe simply stays down.
+func serveHealth(envKey, fallback string) {
+	port := os.Getenv(envKey)
+	if port == "" {
+		port = fallback
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		slog.Error("invalid health port", "port", port, "err", err)
+		return
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
+		slog.Error("health server", "port", port, "err", err)
 	}
 }

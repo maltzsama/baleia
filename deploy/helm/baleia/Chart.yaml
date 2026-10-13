@@ -1,0 +1,14 @@
+apiVersion: v2
+name: baleia
+description: Self-hosted SQL IDE and Iceberg catalog management platform for Trino
+type: application
+version: 0.1.0
+appVersion: "dev"
+keywords:
+  - sql
+  - iceberg
+  - trino
+  - lakehouse
+home: https://github.com/maltzsama/baleia
+sources:
+  - https://github.com/maltzsama/baleia

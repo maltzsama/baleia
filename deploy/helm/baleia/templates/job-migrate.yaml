@@ -1,0 +1,48 @@
+{{- if .Values.migrate.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "baleia.fullname" . }}-migrate
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-weight": "-5"
+spec:
+  backoffLimit: 8
+  template:
+    metadata:
+      labels:
+        {{- include "baleia.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: OnFailure
+      {{- include "baleia.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: migrate
+          image: {{ include "baleia.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/migrate", "-cmd=up"]
+          {{- include "baleia.containerSecurityContext" . | nindent 10 }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: DATABASE_URL
+            {{- range $key, $_ := .Values.config }}
+            - name: {{ $key }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "baleia.fullname" $ }}-config
+                  key: {{ $key }}
+            {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}
