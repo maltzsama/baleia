@@ -553,19 +553,21 @@ type Error struct {
 
 // Execution defines model for Execution.
 type Execution struct {
-	DurationMs   *int                `json:"duration_ms"`
-	FinishedAt   *time.Time          `json:"finished_at"`
-	Id           openapi_types.UUID  `json:"id"`
-	RowsReturned *int                `json:"rows_returned"`
-	SavedQueryId *openapi_types.UUID `json:"saved_query_id"`
-	Sql          string              `json:"sql"`
-	StartedAt    *time.Time          `json:"started_at,omitempty"`
-	Status       ExecutionStatus     `json:"status"`
+	DurationMs *int `json:"duration_ms"`
+
+	// EngineQueryId The statement's id on its engine (a Trino query id, …). Was trino_query_id
+	EngineQueryId *string             `json:"engine_query_id"`
+	FinishedAt    *time.Time          `json:"finished_at"`
+	Id            openapi_types.UUID  `json:"id"`
+	RowsReturned  *int                `json:"rows_returned"`
+	SavedQueryId  *openapi_types.UUID `json:"saved_query_id"`
+	Sql           string              `json:"sql"`
+	StartedAt     *time.Time          `json:"started_at,omitempty"`
+	Status        ExecutionStatus     `json:"status"`
 
 	// Target The target an execution ran on, as recorded when it started
-	Target       *ExecutionTarget   `json:"target,omitempty"`
-	TrinoQueryId *string            `json:"trino_query_id"`
-	WorkspaceId  openapi_types.UUID `json:"workspace_id"`
+	Target      *ExecutionTarget   `json:"target,omitempty"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
 // ExecutionStatus defines model for Execution.Status.
@@ -745,18 +747,28 @@ type QueryFolder struct {
 
 // QueryStatement defines model for QueryStatement.
 type QueryStatement struct {
-	DurationMs   *int                 `json:"duration_ms"`
-	ErrorMessage *string              `json:"error_message"`
-	ExecutionId  openapi_types.UUID   `json:"execution_id"`
-	FinishedAt   *time.Time           `json:"finished_at"`
-	Id           openapi_types.UUID   `json:"id"`
-	Position     int                  `json:"position"`
-	ResultBytes  *int                 `json:"result_bytes"`
+	DurationMs *int `json:"duration_ms"`
+
+	// EngineQueryId The statement's id on its engine. Was trino_query_id
+	EngineQueryId *string            `json:"engine_query_id"`
+	ErrorMessage  *string            `json:"error_message"`
+	ExecutionId   openapi_types.UUID `json:"execution_id"`
+	FinishedAt    *time.Time         `json:"finished_at"`
+	Id            openapi_types.UUID `json:"id"`
+	Position      int                `json:"position"`
+	ResultBytes   *int               `json:"result_bytes"`
+
+	// ResultSets Stored results of the statement, one per result set
+	ResultSets *[]struct {
+		Bytes       int  `json:"bytes"`
+		ResultIndex int  `json:"result_index"`
+		Rows        int  `json:"rows"`
+		Truncated   bool `json:"truncated"`
+	} `json:"result_sets,omitempty"`
 	RowsReturned *int                 `json:"rows_returned"`
 	Sql          string               `json:"sql"`
 	StartedAt    *time.Time           `json:"started_at"`
 	Status       QueryStatementStatus `json:"status"`
-	TrinoQueryId *string              `json:"trino_query_id"`
 	Truncated    *bool                `json:"truncated"`
 }
 

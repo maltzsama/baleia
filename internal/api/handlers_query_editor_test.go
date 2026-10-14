@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -234,5 +235,44 @@ func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
 
 	if len(fake.markStatuses) != 1 || fake.markStatuses[0] != "failed" {
 		t.Fatalf("execution row mark statuses = %v, want [failed]", fake.markStatuses)
+	}
+}
+
+type handlesQuerier struct {
+	*fakeQuerier
+	rows []db.ListRunningStatementHandlesRow
+}
+
+func (q *handlesQuerier) ListRunningStatementHandles(context.Context, pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error) {
+	return q.rows, nil
+}
+
+// cancelRecorder is an engine that records Cancel calls.
+type cancelRecorder struct {
+	queryengine.Engine
+	handles []queryengine.QueryHandle
+}
+
+func (c *cancelRecorder) Cancel(_ context.Context, h queryengine.QueryHandle) error {
+	c.handles = append(c.handles, h)
+	return nil
+}
+
+// TestCancelExecutionCancelsOnTheEngine: the running statement is also
+// cancelled through its persisted handle, so a dead worker cannot leave it
+// running.
+func TestCancelExecutionCancelsOnTheEngine(t *testing.T) {
+	q := &handlesQuerier{
+		fakeQuerier: &fakeQuerier{hasWorkspaceAccess: true, cancelResult: db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "cancelled"}},
+		rows:        []db.ListRunningStatementHandlesRow{{Position: 1, QueryHandle: []byte(`{"engine_id":"e","query_id":"20260101_000000_00001_abcde"}`)}},
+	}
+	rec := &cancelRecorder{}
+	h := &Handlers{queries: q, temporalClient: &fakeTemporalClient{}, engines: fixedEngines{rec}}
+	wsID, execID := execRequest()
+	if _, err := h.CancelExecution(testContext(), CancelExecutionRequestObject{Id: wsID, ExecutionId: execID}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.handles) != 1 || rec.handles[0].QueryID != "20260101_000000_00001_abcde" {
+		t.Fatalf("engine cancels = %+v", rec.handles)
 	}
 }

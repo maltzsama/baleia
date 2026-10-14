@@ -139,6 +139,7 @@ type Querier interface {
 	ListRetrieverRefreshHistory(ctx context.Context, arg ListRetrieverRefreshHistoryParams) ([]RetrieverRefreshHistory, error)
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
+	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]ListRunningStatementHandlesRow, error)
 	ListSavedQueries(ctx context.Context, arg ListSavedQueriesParams) ([]SavedQuery, error)
 	ListTableHealthByConnection(ctx context.Context, arg ListTableHealthByConnectionParams) ([]TableHealthSnapshot, error)
 	ListTableHealthSnapshots(ctx context.Context, arg ListTableHealthSnapshotsParams) ([]TableHealthSnapshot, error)
@@ -167,6 +168,9 @@ type Querier interface {
 	// context for history and carries no secret.
 	SetExecutionTarget(ctx context.Context, arg SetExecutionTargetParams) error
 	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
+	// Persists the engine's handle of a running statement as soon as it is known,
+	// so the API can cancel it from another process.
+	SetStatementQueryHandle(ctx context.Context, arg SetStatementQueryHandleParams) error
 	SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error
 	SoftDeleteTrinoCatalogRegistry(ctx context.Context, arg SoftDeleteTrinoCatalogRegistryParams) error
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)

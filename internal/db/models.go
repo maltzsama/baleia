@@ -136,7 +136,7 @@ type QueryExecution struct {
 	SavedQueryID    pgtype.UUID        `json:"saved_query_id"`
 	Status          string             `json:"status"`
 	Sql             string             `json:"sql"`
-	TrinoQueryID    *string            `json:"trino_query_id"`
+	EngineQueryID   *string            `json:"engine_query_id"`
 	RowsReturned    *int64             `json:"rows_returned"`
 	DurationMs      *int64             `json:"duration_ms"`
 	StartedAt       pgtype.Timestamptz `json:"started_at"`
@@ -160,20 +160,22 @@ type QueryFolder struct {
 }
 
 type QueryStatement struct {
-	ID           pgtype.UUID        `json:"id"`
-	ExecutionID  pgtype.UUID        `json:"execution_id"`
-	Position     int32              `json:"position"`
-	Sql          string             `json:"sql"`
-	Status       string             `json:"status"`
-	TrinoQueryID *string            `json:"trino_query_id"`
-	RowsReturned *int64             `json:"rows_returned"`
-	DurationMs   *int64             `json:"duration_ms"`
-	ErrorMessage *string            `json:"error_message"`
-	StartedAt    pgtype.Timestamptz `json:"started_at"`
-	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
-	ResultKey    *string            `json:"result_key"`
-	ResultBytes  *int64             `json:"result_bytes"`
-	Truncated    bool               `json:"truncated"`
+	ID            pgtype.UUID        `json:"id"`
+	ExecutionID   pgtype.UUID        `json:"execution_id"`
+	Position      int32              `json:"position"`
+	Sql           string             `json:"sql"`
+	Status        string             `json:"status"`
+	EngineQueryID *string            `json:"engine_query_id"`
+	RowsReturned  *int64             `json:"rows_returned"`
+	DurationMs    *int64             `json:"duration_ms"`
+	ErrorMessage  *string            `json:"error_message"`
+	StartedAt     pgtype.Timestamptz `json:"started_at"`
+	FinishedAt    pgtype.Timestamptz `json:"finished_at"`
+	ResultKey     *string            `json:"result_key"`
+	ResultBytes   *int64             `json:"result_bytes"`
+	Truncated     bool               `json:"truncated"`
+	QueryHandle   []byte             `json:"query_handle"`
+	ResultSets    []byte             `json:"result_sets"`
 }
 
 type RefreshToken struct {

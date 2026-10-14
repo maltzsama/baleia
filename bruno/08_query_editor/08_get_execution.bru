@@ -17,3 +17,9 @@ auth:bearer {
 assert {
   res.status: eq 200
 }
+
+docs {
+  `engine_query_id` (formerly `trino_query_id`) is the statement's id on its
+  engine. Statements also list their stored `result_sets`
+  ({result_index, rows, bytes, truncated}).
+}

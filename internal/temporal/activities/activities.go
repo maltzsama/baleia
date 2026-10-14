@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -186,7 +187,7 @@ var statementTransportBackoff = []time.Duration{time.Second, 2 * time.Second, 4 
 // heartbeatDetails travels with the heartbeat so a cancellation or a recovered
 // attempt knows which Trino query to abandon.
 type heartbeatDetails struct {
-	TrinoQueryID string
+	EngineQueryID string
 }
 
 // arrowContentType is the MIME type used for stored Arrow IPC streams.
@@ -199,14 +200,14 @@ var errResultCapReached = errors.New("statement result cap reached")
 // ExecuteStatementResult is the control-plane summary of one statement. Result
 // rows are never part of it; they live in object storage under ResultKey.
 type ExecuteStatementResult struct {
-	TrinoQueryID string
-	RowCount     int64
-	DurationMs   int64
-	Columns      []ColumnResult
-	ResultKey    string // "" when the statement returns no result set (DDL/DML)
-	ResultBytes  int64
-	Truncated    bool
-	Error        string
+	EngineQueryID string
+	RowCount      int64
+	DurationMs    int64
+	Columns       []ColumnResult
+	ResultKey     string // "" when the statement returns no result set (DDL/DML)
+	ResultBytes   int64
+	Truncated     bool
+	Error         string
 }
 
 type ColumnResult struct {
@@ -266,10 +267,14 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 			return
 		}
 		lastBeat = now
-		activity.RecordHeartbeat(ctx, heartbeatDetails{TrinoQueryID: handle.QueryID})
+		activity.RecordHeartbeat(ctx, heartbeatDetails{EngineQueryID: handle.QueryID})
 	}
 	cb := queryengine.Callbacks{
-		OnStart:    func(h queryengine.QueryHandle) { handle = h; beat(true) },
+		OnStart: func(h queryengine.QueryHandle) {
+			handle = h
+			beat(true)
+			a.persistHandle(ctx, params, h)
+		},
 		OnProgress: func(queryengine.Progress) { beat(false) },
 	}
 	spec := queryengine.SessionSpec{
@@ -336,32 +341,50 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	// A failed upload also fails the writes into its pipe: report the upload.
 	if sink.uploadErr != nil {
 		return &ExecuteStatementResult{
-			TrinoQueryID: handle.QueryID,
-			RowCount:     sink.rows,
-			DurationMs:   durationMs,
-			Error:        fmt.Sprintf("store results: %v", sink.uploadErr),
+			EngineQueryID: handle.QueryID,
+			RowCount:      sink.rows,
+			DurationMs:    durationMs,
+			Error:         fmt.Sprintf("store results: %v", sink.uploadErr),
 		}, nil
 	}
 	if err != nil {
 		return &ExecuteStatementResult{
-			TrinoQueryID: handle.QueryID,
-			DurationMs:   durationMs,
-			Error:        err.Error(),
+			EngineQueryID: handle.QueryID,
+			DurationMs:    durationMs,
+			Error:         err.Error(),
 		}, nil
 	}
 
 	res := &ExecuteStatementResult{
-		TrinoQueryID: handle.QueryID,
-		RowCount:     sink.rows,
-		DurationMs:   durationMs,
-		Columns:      sink.columns,
-		Truncated:    sink.truncated,
+		EngineQueryID: handle.QueryID,
+		RowCount:      sink.rows,
+		DurationMs:    durationMs,
+		Columns:       sink.columns,
+		Truncated:     sink.truncated,
 	}
 	if sink.writer != nil {
 		res.ResultKey = sink.key
 		res.ResultBytes = sink.uploaded
 	}
 	return res, nil
+}
+
+// persistHandle stores the statement's engine handle so the API can cancel it
+// from another process (#20). A failure only loses that ability: logged.
+func (a *Activities) persistHandle(ctx context.Context, params ExecuteStatementParams, h queryengine.QueryHandle) {
+	var execID pgtype.UUID
+	if err := execID.Scan(params.ExecutionID); err != nil {
+		return
+	}
+	raw, err := json.Marshal(h)
+	if err != nil {
+		return
+	}
+	if err := a.queries.SetStatementQueryHandle(ctx, db.SetStatementQueryHandleParams{
+		ExecutionID: execID, Position: params.Position, QueryHandle: raw,
+	}); err != nil {
+		activity.GetLogger(ctx).Warn("could not persist the query handle", "execution_id", params.ExecutionID, "err", err)
+	}
 }
 
 // resultSink streams the first result set of a statement to object storage as
@@ -466,16 +489,36 @@ func (s *resultSink) abort() {
 }
 
 type UpdateStatementRecordParams struct {
-	ExecutionID  string
-	Position     int32
-	Status       string
-	TrinoQueryID string
-	RowsReturned int64
-	DurationMs   int64
-	ErrorMessage string
-	ResultKey    string
-	ResultBytes  int64
-	Truncated    bool
+	ExecutionID   string
+	Position      int32
+	Status        string
+	EngineQueryID string
+	RowsReturned  int64
+	DurationMs    int64
+	ErrorMessage  string
+	ResultKey     string
+	ResultBytes   int64
+	Truncated     bool
+}
+
+// resultSet is one entry of query_statements.result_sets.
+type resultSet struct {
+	ResultIndex int    `json:"result_index"`
+	ResultKey   string `json:"result_key"`
+	Rows        int64  `json:"rows"`
+	Bytes       int64  `json:"bytes"`
+	Truncated   bool   `json:"truncated"`
+}
+
+// resultSets renders the stored results of a statement: today at most one,
+// at result_index 0 (the layout already allows more).
+func resultSets(p UpdateStatementRecordParams) []byte {
+	sets := []resultSet{}
+	if p.ResultKey != "" {
+		sets = append(sets, resultSet{ResultKey: p.ResultKey, Rows: p.RowsReturned, Bytes: p.ResultBytes, Truncated: p.Truncated})
+	}
+	out, _ := json.Marshal(sets)
+	return out
 }
 
 func UpdateStatementRecord(ctx context.Context, params UpdateStatementRecordParams) error {
@@ -502,9 +545,9 @@ func (a *Activities) updateStatementRecord(ctx context.Context, params UpdateSta
 		if params.ErrorMessage != "" {
 			errMsg = &params.ErrorMessage
 		}
-		var trinoID *string
-		if params.TrinoQueryID != "" {
-			trinoID = &params.TrinoQueryID
+		var engineID *string
+		if params.EngineQueryID != "" {
+			engineID = &params.EngineQueryID
 		}
 		var resultKey *string
 		if params.ResultKey != "" {
@@ -516,16 +559,17 @@ func (a *Activities) updateStatementRecord(ctx context.Context, params UpdateSta
 		}
 
 		_, err := a.queries.UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{
-			ID:           s.ID,
-			Status:       params.Status,
-			TrinoQueryID: trinoID,
-			RowsReturned: &params.RowsReturned,
-			DurationMs:   &params.DurationMs,
-			ErrorMessage: errMsg,
-			FinishedAt:   finishedAt,
-			ResultKey:    resultKey,
-			ResultBytes:  &params.ResultBytes,
-			Truncated:    params.Truncated,
+			ID:            s.ID,
+			Status:        params.Status,
+			EngineQueryID: engineID,
+			ResultSets:    resultSets(params),
+			RowsReturned:  &params.RowsReturned,
+			DurationMs:    &params.DurationMs,
+			ErrorMessage:  errMsg,
+			FinishedAt:    finishedAt,
+			ResultKey:     resultKey,
+			ResultBytes:   &params.ResultBytes,
+			Truncated:     params.Truncated,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The statement was already terminal (cancelled); a late update

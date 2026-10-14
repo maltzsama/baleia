@@ -12,6 +12,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/go-chi/chi/v5/middleware"
@@ -470,6 +471,10 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 		if cancelErr != nil && !errors.As(cancelErr, &notFoundErr) {
 			slog.Warn("failed to cancel temporal workflow", "execution_id", executionID.String(), "err", cancelErr)
 		}
+		// The worker running it may be gone: stop the statement on its engine
+		// through the persisted handle too. Cancelling a finished statement is
+		// not an error.
+		h.cancelOnEngine(ctx, updated)
 		return CancelExecution200JSONResponse(dbExecutionToPublic(updated)), nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -486,6 +491,39 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}
 	return CancelExecution200JSONResponse(dbExecutionToPublic(current)), nil
+}
+
+// cancelOnEngine cancels the running statements of an execution by their
+// persisted handles, best effort and bounded in time.
+func (h *Handlers) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
+	if h.engines == nil {
+		return
+	}
+	rows, err := h.queries.ListRunningStatementHandles(ctx, e.ID)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	var eng queryengine.Engine
+	if e.EngineID.Valid {
+		eng, err = h.engines.Get(ctx, e.EngineID)
+	} else {
+		eng, err = h.engines.DefaultTrino(ctx)
+	}
+	if err != nil {
+		slog.Warn("cancel on engine: no engine", "execution_id", e.ID.String(), "err", err)
+		return
+	}
+	for _, r := range rows {
+		var handle queryengine.QueryHandle
+		if json.Unmarshal(r.QueryHandle, &handle) != nil {
+			continue
+		}
+		if err := eng.Cancel(ctx, handle); err != nil {
+			slog.Warn("cancel on engine failed", "execution_id", e.ID.String(), "position", r.Position, "err", err)
+		}
+	}
 }
 
 func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
@@ -699,8 +737,8 @@ func dbExecutionToPublic(e db.QueryExecution) Execution {
 		sqid := openapi_types.UUID(e.SavedQueryID.Bytes)
 		exec.SavedQueryId = &sqid
 	}
-	if e.TrinoQueryID != nil {
-		exec.TrinoQueryId = e.TrinoQueryID
+	if e.EngineQueryID != nil {
+		exec.EngineQueryId = e.EngineQueryID
 	}
 	if e.RowsReturned != nil {
 		rows := int(*e.RowsReturned)
@@ -746,8 +784,17 @@ func dbStatementToPublic(s db.QueryStatement) QueryStatement {
 		Sql:         s.Sql,
 		Status:      QueryStatementStatus(s.Status),
 	}
-	if s.TrinoQueryID != nil {
-		qs.TrinoQueryId = s.TrinoQueryID
+	if s.EngineQueryID != nil {
+		qs.EngineQueryId = s.EngineQueryID
+	}
+	var sets []struct {
+		Bytes       int  `json:"bytes"`
+		ResultIndex int  `json:"result_index"`
+		Rows        int  `json:"rows"`
+		Truncated   bool `json:"truncated"`
+	}
+	if len(s.ResultSets) > 0 && json.Unmarshal(s.ResultSets, &sets) == nil {
+		qs.ResultSets = &sets
 	}
 	if s.RowsReturned != nil {
 		rows := int(*s.RowsReturned)
