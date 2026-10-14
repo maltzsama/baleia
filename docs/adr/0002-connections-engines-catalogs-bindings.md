@@ -66,9 +66,14 @@ maintained copy.
 
 ## Current compliance
 
-Not compliant yet.
+Partially compliant.
 
-- There are no `engines`, `catalog_bindings` or logical `catalogs` tables in the new sense (#13).
+- `engines` and `catalog_bindings` exist and `catalogs` has `origin`/`source_ref` (#13 PR 1,
+  migration 00024). Every Trino cluster is backed by a system-owned `trino` connection and a
+  federated engine; every catalog has a `managed` binding. A transitional trigger keeps that
+  binding in step while the catalog handlers still write the Trino columns of `catalogs`; it is
+  dropped when those writes move to bindings (#13 PR 2, #80). Executions and workspaces have
+  target columns, not yet written by the API (#13 PR 2).
 - The engine is the concrete `*trino.Client`, constructed in `internal/api/handlers.go` and
   `internal/temporal/activities/activities.go` (#20).
 - The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql

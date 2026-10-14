@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const catalogConnectionNameExists = `-- name: CatalogConnectionNameExists :one
+SELECT EXISTS (SELECT 1 FROM catalog_connections WHERE name = $1)
+`
+
+func (q *Queries) CatalogConnectionNameExists(ctx context.Context, name string) (bool, error) {
+	row := q.db.QueryRow(ctx, catalogConnectionNameExists, name)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createCatalogConnection = `-- name: CreateCatalogConnection :one
 INSERT INTO catalog_connections (id, name, type, url, config, credentials_enc, default_readonly, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

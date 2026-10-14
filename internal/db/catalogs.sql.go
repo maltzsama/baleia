@@ -16,7 +16,7 @@ INSERT INTO catalogs (
     connection_id, name, description, trino_catalog_name,
     cluster_id, warehouse, connector, extra_props
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
 `
 
 type CreateCatalogParams struct {
@@ -55,6 +55,8 @@ func (q *Queries) CreateCatalog(ctx context.Context, arg CreateCatalogParams) (C
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Origin,
+		&i.SourceRef,
 	)
 	return i, err
 }
@@ -69,7 +71,7 @@ func (q *Queries) DeleteCatalog(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getCatalogByID = `-- name: GetCatalogByID :one
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at FROM catalogs WHERE id = $1
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE id = $1
 `
 
 func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error) {
@@ -88,12 +90,14 @@ func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, 
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Origin,
+		&i.SourceRef,
 	)
 	return i, err
 }
 
 const getCatalogByTrinoName = `-- name: GetCatalogByTrinoName :one
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = $2
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = $2
 `
 
 type GetCatalogByTrinoNameParams struct {
@@ -117,12 +121,14 @@ func (q *Queries) GetCatalogByTrinoName(ctx context.Context, arg GetCatalogByTri
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Origin,
+		&i.SourceRef,
 	)
 	return i, err
 }
 
 const getDefaultTrinoCluster = `-- name: GetDefaultTrinoCluster :one
-SELECT id, name, coordinator_url, node_version, created_at, updated_at FROM trino_clusters WHERE name = 'default'
+SELECT id, name, coordinator_url, node_version, created_at, updated_at, engine_id FROM trino_clusters WHERE name = 'default'
 `
 
 func (q *Queries) GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, error) {
@@ -135,12 +141,13 @@ func (q *Queries) GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, err
 		&i.NodeVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EngineID,
 	)
 	return i, err
 }
 
 const getTrinoClusterByID = `-- name: GetTrinoClusterByID :one
-SELECT id, name, coordinator_url, node_version, created_at, updated_at FROM trino_clusters WHERE id = $1
+SELECT id, name, coordinator_url, node_version, created_at, updated_at, engine_id FROM trino_clusters WHERE id = $1
 `
 
 func (q *Queries) GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (TrinoCluster, error) {
@@ -153,12 +160,13 @@ func (q *Queries) GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (Trin
 		&i.NodeVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EngineID,
 	)
 	return i, err
 }
 
 const listCatalogsByConnection = `-- name: ListCatalogsByConnection :many
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at FROM catalogs WHERE connection_id = $1 ORDER BY name
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE connection_id = $1 ORDER BY name
 `
 
 func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error) {
@@ -183,6 +191,8 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Origin,
+			&i.SourceRef,
 		); err != nil {
 			return nil, err
 		}
@@ -195,7 +205,7 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 }
 
 const listEnabledCatalogs = `-- name: ListEnabledCatalogs :many
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at FROM catalogs WHERE enabled ORDER BY name
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE enabled ORDER BY name
 `
 
 func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
@@ -220,6 +230,8 @@ func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Origin,
+			&i.SourceRef,
 		); err != nil {
 			return nil, err
 		}
@@ -330,7 +342,7 @@ UPDATE catalogs SET
     trino_catalog_name = $7,
     updated_at = now()
 WHERE id = $1
-RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
 `
 
 type UpdateCatalogParams struct {
@@ -367,6 +379,8 @@ func (q *Queries) UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (C
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Origin,
+		&i.SourceRef,
 	)
 	return i, err
 }

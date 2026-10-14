@@ -40,6 +40,21 @@ type Catalog struct {
 	Enabled          bool               `json:"enabled"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	Origin           string             `json:"origin"`
+	SourceRef        *string            `json:"source_ref"`
+}
+
+type CatalogBinding struct {
+	ID                pgtype.UUID        `json:"id"`
+	CatalogID         pgtype.UUID        `json:"catalog_id"`
+	EngineID          pgtype.UUID        `json:"engine_id"`
+	EngineCatalogName string             `json:"engine_catalog_name"`
+	Connector         *string            `json:"connector"`
+	ExtraProps        []byte             `json:"extra_props"`
+	Mode              string             `json:"mode"`
+	Enabled           bool               `json:"enabled"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
 type CatalogConnection struct {
@@ -68,6 +83,19 @@ type ClusterSnapshot struct {
 	TotalMemoryBytes *int64             `json:"total_memory_bytes"`
 	FreeMemoryBytes  *int64             `json:"free_memory_bytes"`
 	RawPayload       []byte             `json:"raw_payload"`
+}
+
+type Engine struct {
+	ID           pgtype.UUID        `json:"id"`
+	Name         string             `json:"name"`
+	Kind         string             `json:"kind"`
+	Class        string             `json:"class"`
+	ConnectionID pgtype.UUID        `json:"connection_id"`
+	IdentityMode string             `json:"identity_mode"`
+	Enabled      bool               `json:"enabled"`
+	CreatedBy    pgtype.UUID        `json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Migration struct {
@@ -102,20 +130,25 @@ type MigrationItem struct {
 }
 
 type QueryExecution struct {
-	ID           pgtype.UUID        `json:"id"`
-	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
-	UserID       pgtype.UUID        `json:"user_id"`
-	SavedQueryID pgtype.UUID        `json:"saved_query_id"`
-	Status       string             `json:"status"`
-	Sql          string             `json:"sql"`
-	TrinoQueryID *string            `json:"trino_query_id"`
-	RowsReturned *int64             `json:"rows_returned"`
-	DurationMs   *int64             `json:"duration_ms"`
-	StartedAt    pgtype.Timestamptz `json:"started_at"`
-	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
-	TrinoCatalog *string            `json:"trino_catalog"`
-	ResultKey    *string            `json:"result_key"`
-	RequestID    *string            `json:"request_id"`
+	ID              pgtype.UUID        `json:"id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	SavedQueryID    pgtype.UUID        `json:"saved_query_id"`
+	Status          string             `json:"status"`
+	Sql             string             `json:"sql"`
+	TrinoQueryID    *string            `json:"trino_query_id"`
+	RowsReturned    *int64             `json:"rows_returned"`
+	DurationMs      *int64             `json:"duration_ms"`
+	StartedAt       pgtype.Timestamptz `json:"started_at"`
+	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
+	TrinoCatalog    *string            `json:"trino_catalog"`
+	ResultKey       *string            `json:"result_key"`
+	RequestID       *string            `json:"request_id"`
+	EngineID        pgtype.UUID        `json:"engine_id"`
+	TargetBindingID pgtype.UUID        `json:"target_binding_id"`
+	TargetCatalogID pgtype.UUID        `json:"target_catalog_id"`
+	TargetSchema    *string            `json:"target_schema"`
+	TargetSnapshot  []byte             `json:"target_snapshot"`
 }
 
 type QueryFolder struct {
@@ -250,6 +283,7 @@ type TrinoCluster struct {
 	NodeVersion    *string            `json:"node_version"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	EngineID       pgtype.UUID        `json:"engine_id"`
 }
 
 type TrinoQuerySnapshot struct {
@@ -299,6 +333,8 @@ type Workspace struct {
 	OwnerTeamID        pgtype.UUID        `json:"owner_team_id"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DefaultBindingID   pgtype.UUID        `json:"default_binding_id"`
+	DefaultSchema      *string            `json:"default_schema"`
 }
 
 type WorkspaceCatalogGrant struct {
