@@ -180,16 +180,16 @@ type ServerInterface interface {
 	// Workspace details
 	// (GET /workspaces/{id})
 	GetWorkspace(w http.ResponseWriter, r *http.Request, id PathId)
-	// Update a workspace
+	// Update a workspace — workspace owners and admins
 	// (PATCH /workspaces/{id})
 	UpdateWorkspace(w http.ResponseWriter, r *http.Request, id PathId)
-	// List external catalogs accessible to the workspace
+	// List the catalogs granted to the workspace — workspace members
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId)
-	// Grant access to an external catalog — admin only
+	// Grant a catalog to the workspace — needs the catalog's connection owner (or admin) and a workspace owner (or admin)
 	// (POST /workspaces/{id}/catalog-access)
 	GrantCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId)
-	// Revoke access to an external catalog — admin only
+	// Revoke a catalog grant — same rule as granting
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 	RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID)
 	// Workspace execution history
@@ -591,25 +591,25 @@ func (_ Unimplemented) GetWorkspace(w http.ResponseWriter, r *http.Request, id P
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Update a workspace
+// Update a workspace — workspace owners and admins
 // (PATCH /workspaces/{id})
 func (_ Unimplemented) UpdateWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List external catalogs accessible to the workspace
+// List the catalogs granted to the workspace — workspace members
 // (GET /workspaces/{id}/catalog-access)
 func (_ Unimplemented) ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Grant access to an external catalog — admin only
+// Grant a catalog to the workspace — needs the catalog's connection owner (or admin) and a workspace owner (or admin)
 // (POST /workspaces/{id}/catalog-access)
 func (_ Unimplemented) GrantCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Revoke access to an external catalog — admin only
+// Revoke a catalog grant — same rule as granting
 // (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 func (_ Unimplemented) RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -5822,6 +5822,15 @@ func (response UpdateWorkspace401JSONResponse) VisitUpdateWorkspaceResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateWorkspace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateWorkspace403JSONResponse) VisitUpdateWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type UpdateWorkspace404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateWorkspace404JSONResponse) VisitUpdateWorkspaceResponse(w http.ResponseWriter) error {
@@ -5898,6 +5907,26 @@ type GrantCatalogAccess403JSONResponse struct{ ForbiddenJSONResponse }
 func (response GrantCatalogAccess403JSONResponse) VisitGrantCatalogAccessResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GrantCatalogAccess404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GrantCatalogAccess404JSONResponse) VisitGrantCatalogAccessResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GrantCatalogAccess422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response GrantCatalogAccess422JSONResponse) VisitGrantCatalogAccessResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -6938,16 +6967,16 @@ type StrictServerInterface interface {
 	// Workspace details
 	// (GET /workspaces/{id})
 	GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error)
-	// Update a workspace
+	// Update a workspace — workspace owners and admins
 	// (PATCH /workspaces/{id})
 	UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error)
-	// List external catalogs accessible to the workspace
+	// List the catalogs granted to the workspace — workspace members
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error)
-	// Grant access to an external catalog — admin only
+	// Grant a catalog to the workspace — needs the catalog's connection owner (or admin) and a workspace owner (or admin)
 	// (POST /workspaces/{id}/catalog-access)
 	GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error)
-	// Revoke access to an external catalog — admin only
+	// Revoke a catalog grant — same rule as granting
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 	RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error)
 	// Workspace execution history

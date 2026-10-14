@@ -1266,7 +1266,7 @@ paths:
     patch:
       tags: [Workspaces]
       operationId: updateWorkspace
-      summary: "Update a workspace"
+      summary: "Update a workspace — workspace owners and admins"
       requestBody:
         required: true
         content:
@@ -1279,6 +1279,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Workspace" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/catalog-access:
@@ -1287,7 +1288,7 @@ paths:
     get:
       tags: [Workspaces]
       operationId: listWorkspaceCatalogAccess
-      summary: "List external catalogs accessible to the workspace"
+      summary: "List the catalogs granted to the workspace — workspace members"
       responses:
         "200":
           description: "Access grants"
@@ -1301,7 +1302,7 @@ paths:
     post:
       tags: [Workspaces]
       operationId: grantCatalogAccess
-      summary: "Grant access to an external catalog — admin only"
+      summary: "Grant a catalog to the workspace — needs the catalog's connection owner (or admin) and a workspace owner (or admin)"
       requestBody:
         required: true
         content:
@@ -1315,6 +1316,8 @@ paths:
               schema: { $ref: "#/components/schemas/WorkspaceCatalogAccess" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/catalog-access/{catalog_id}:
     parameters:
@@ -1326,7 +1329,7 @@ paths:
     delete:
       tags: [Workspaces]
       operationId: revokeCatalogAccess
-      summary: "Revoke access to an external catalog — admin only"
+      summary: "Revoke a catalog grant — same rule as granting"
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
