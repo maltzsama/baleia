@@ -14,7 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -180,7 +179,7 @@ func TestExplorer_TrinoErrorsAreNotReturned(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"q","error":{"message":"line 1:1: Catalog \"secret-name\" /etc/trino " broke","errorName":"X"}}`)
 	}))
 	defer failing.Close()
-	h.trino = trino.New(failing.URL, "baleia_admin")
+	h.engines, h.catalogDDL = trinoBackends(failing.URL)
 	router := explorerRouter(h, ownerID, "member")
 	code, body := get(t, router, "/connections/"+conn+"/catalogs/wh/namespaces")
 	if code != 502 {
@@ -199,7 +198,7 @@ func lensRouter(q db.Querier, tc client.Client, userID, role string) http.Handle
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
 		r.Use(func(next http.Handler) http.Handler { return asUser(userID, role, next) })
-		RegisterLensRoutes(r, q, &config.Config{TrinoUserIdentity: "uuid"}, tc)
+		RegisterLensRoutes(r, q, &config.Config{TrinoUserIdentity: "uuid"}, tc, testEngines())
 	})
 	return r
 }
@@ -316,7 +315,7 @@ func TestTriggerMaintenance(t *testing.T) {
 func TestLensRoutesRequireAnIdentity(t *testing.T) {
 	q := &explorerFake{}
 	r := chi.NewRouter()
-	RegisterLensRoutes(r, q, &config.Config{}, nil) // no auth middleware in front: no identity in ctx
+	RegisterLensRoutes(r, q, &config.Config{}, nil, nil) // no auth middleware in front: no identity in ctx
 	for _, p := range []string{"/lens/queries", "/lens/analytics/queries"} {
 		if code, _ := get(t, r, p); code != 401 {
 			t.Errorf("%s without identity: %d, want 401", p, code)

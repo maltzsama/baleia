@@ -18,7 +18,8 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	trino_client "github.com/galileostudio/baleia/internal/trino"
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
@@ -288,13 +289,13 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 			ClusterID:   cluster.ID,
 			CatalogName: testName,
 		})
-		_ = h.trino.DropCatalog(ctx, testName)
+		_ = h.catalogDDL.DropCatalog(ctx, testName)
 	}()
 
 	trinoCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	if err := h.trino.CreateCatalog(trinoCtx, trino_client.CatalogSpec{
+	if err := h.catalogDDL.CreateCatalog(trinoCtx, bindtrino.CatalogSpec{
 		Name:       proj.Row.CatalogName,
 		Connector:  proj.Row.ConnectorName,
 		Properties: proj.Row.Properties,
@@ -304,11 +305,16 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
 	}
 
-	testTarget, err := trino_client.QualifiedName(testName)
+	eng, err := h.engines.DefaultTrino(trinoCtx)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := h.trino.Execute(trinoCtx, "SHOW SCHEMAS FROM "+testTarget, testName, ""); err != nil {
+	testTarget, err := eng.Dialect().QualifiedName(testName)
+	if err != nil {
+		return nil, err
+	}
+	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "connection-test", RequestID: middleware.GetReqID(ctx)}}
+	if _, err := queryengine.CollectStrings(trinoCtx, eng, spec, "SHOW SCHEMAS FROM "+testTarget, 10000); err != nil {
 		errMsg := err.Error()
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
 	}
@@ -604,12 +610,30 @@ func (h *Handlers) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Ca
 	return cat, true
 }
 
-// exploreQuery runs one metadata statement under the request context with a
-// 30 s deadline, so a client disconnect cancels the Trino call.
-func (h *Handlers) exploreQuery(r *http.Request, sql string) (*trino_client.QueryResult, error) {
+// exploreMaxRows bounds one explorer listing.
+const exploreMaxRows = 100000
+
+// exploreEngine returns the engine explorer statements run on (the default
+// Trino engine until targets reach the explorer, #23).
+func (h *Handlers) exploreEngine(r *http.Request) (queryengine.Engine, error) {
+	return h.engines.DefaultTrino(r.Context())
+}
+
+// exploreQuery runs one metadata statement as the caller's Trino identity
+// under the request context with a 30 s deadline, so a client disconnect
+// cancels it.
+func (h *Handlers) exploreQuery(r *http.Request, eng queryengine.Engine, sql string) ([][]string, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	return h.trino.Execute(ctx, sql, "", "")
+	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "explorer", RequestID: middleware.GetReqID(ctx)}}
+	if p, err := authz.PrincipalFromContext(ctx); err == nil {
+		identity, err := h.trinoIdentityFor(ctx, p.UserID)
+		if err != nil {
+			return nil, err
+		}
+		spec.Identity = queryengine.Identity{UserID: identity}
+	}
+	return queryengine.CollectStrings(ctx, eng, spec, sql, exploreMaxRows)
 }
 
 func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) {
@@ -617,21 +641,26 @@ func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	target, err := trino_client.QualifiedName(cat.TrinoName())
+	eng, err := h.exploreEngine(r)
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
+		return
+	}
+	target, err := eng.Dialect().QualifiedName(cat.TrinoName())
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid catalog name", err)
 		return
 	}
 
-	result, err := h.exploreQuery(r, "SHOW SCHEMAS FROM "+target)
+	rows, err := h.exploreQuery(r, eng, "SHOW SCHEMAS FROM "+target)
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
 		return
 	}
-	namespaces := make([][]string, 0, len(result.Data))
-	for _, row := range result.Data {
+	namespaces := make([][]string, 0, len(rows))
+	for _, row := range rows {
 		if len(row) > 0 {
-			namespaces = append(namespaces, []string{fmt.Sprint(row[0])})
+			namespaces = append(namespaces, []string{row[0]})
 		}
 	}
 	writeJSON(w, http.StatusOK, namespaces)
@@ -647,13 +676,18 @@ func (h *Handlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
 	}
-	target, err := trino_client.QualifiedName(cat.TrinoName(), namespace)
+	eng, err := h.exploreEngine(r)
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
+		return
+	}
+	target, err := eng.Dialect().QualifiedName(cat.TrinoName(), namespace)
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
 	}
 
-	result, err := h.exploreQuery(r, "SHOW TABLES FROM "+target)
+	rows, err := h.exploreQuery(r, eng, "SHOW TABLES FROM "+target)
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
 		return
@@ -662,10 +696,10 @@ func (h *Handlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
 		Name      *string   `json:"name,omitempty"`
 		Namespace *[]string `json:"namespace,omitempty"`
 	}
-	tables := make([]tableEntry, 0, len(result.Data))
-	for _, row := range result.Data {
+	tables := make([]tableEntry, 0, len(rows))
+	for _, row := range rows {
 		if len(row) > 0 {
-			name := fmt.Sprint(row[0])
+			name := row[0]
 			ns := []string{namespace}
 			tables = append(tables, tableEntry{Name: &name, Namespace: &ns})
 		}
@@ -688,13 +722,18 @@ func (h *Handlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid table", err)
 		return
 	}
-	target, err := trino_client.QualifiedName(cat.TrinoName(), namespace, table)
+	eng, err := h.exploreEngine(r)
+	if err != nil {
+		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
+		return
+	}
+	target, err := eng.Dialect().QualifiedName(cat.TrinoName(), namespace, table)
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace or table", err)
 		return
 	}
 
-	meta, err := h.exploreQuery(r, "DESCRIBE "+target)
+	meta, err := h.exploreQuery(r, eng, "DESCRIBE "+target)
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
 		return
@@ -703,11 +742,11 @@ func (h *Handlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
 		Name *string `json:"name,omitempty"`
 		Type *string `json:"type,omitempty"`
 	}
-	cols := make([]colEntry, 0, len(meta.Data))
-	for _, row := range meta.Data {
+	cols := make([]colEntry, 0, len(meta))
+	for _, row := range meta {
 		if len(row) >= 2 {
-			name := fmt.Sprint(row[0])
-			typ := fmt.Sprint(row[1])
+			name := row[0]
+			typ := row[1]
 			cols = append(cols, colEntry{Name: &name, Type: &typ})
 		}
 	}

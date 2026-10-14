@@ -82,13 +82,12 @@ Partially compliant.
   `direct_engine` role; their native catalogs (`origin = native`, no Trino columns, migration
   00025) and native bindings are created with them. Federated engines are only the default Trino
   engine Baleia bootstraps; registering others needs a Trino provider (#11 PR 3).
-- The engine contract exists (`internal/queryengine`: `Engine`/`Session`, Arrow record sinks,
-  cross-process `QueryHandle`, typed errors, kind registry, `Manager`, conformance suite; #20 PR 1),
-  and the Trino adapter implements it (`internal/queryengine/trino`, #25; conformance suite green
-  against the compose Trino), but every call site still uses the concrete `*trino.Client`,
-  constructed in
-  `internal/api/handlers.go` and `internal/temporal/activities/activities.go`, until the Trino
-  adapter lands (#20 PR 2). `TestNoTrinoImportsInDomain` lists those files and may only shrink.
+- The engine contract (`internal/queryengine`) and the Trino adapter (`internal/queryengine/trino`)
+  are in place, and `internal/api` and `internal/temporal` run SQL only through them (#20 PR 2,
+  #25): statements, the explorer, connection tests, retrievers and Iceberg maintenance. Catalog
+  DDL goes through `internal/bindings/trino` (the binder contract is #80) and Lens monitoring
+  through `internal/trino/monitor`. Until executions carry their target's engine (#13 PR 3), they
+  run on the default Trino engine.
 - The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql
   and mysql. Create and update validate through `Provider.Validate`, store non-secret values in
   `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the

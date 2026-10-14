@@ -31,12 +31,12 @@ to substitute a fake in tests or add a second engine without editing those call 
 
 ## Current compliance
 
-Not compliant yet. `trino.New` is called in `internal/api/handlers.go` and
-`internal/temporal/activities/activities.go`. Both are allow-listed in `internal/arch_test.go` until
-#20 moves construction to the wiring sites. `queryengine.Manager` builds engine instances from
-`engines` rows through registered kind factories, given the shared dialer; driver packages may be
-imported only under `internal/queryengine/<kind>` and `internal/connections/<kind>`
-(`TestNoDriversOutsideAdapters`).
+Compliant. `trino.New`/`NewWithHTTPClient` are called only at the wiring sites and in the Trino
+adapter and binder packages; `queryengine.Manager` builds engine instances from `engines` rows
+through registered kind factories with the shared dialer; driver packages are imported only under
+`internal/queryengine/<kind>` and `internal/connections/<kind>`. The architecture tests
+(`TestAdapterConstructionOnlyInWiring`, `TestNoDriversOutsideAdapters`,
+`TestNoTrinoImportsInDomain`) have no exceptions left.
 
 ## Alternatives considered
 

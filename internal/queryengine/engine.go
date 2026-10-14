@@ -159,7 +159,36 @@ type Capabilities struct {
 	IcebergMaintenance bool // ALTER TABLE … EXECUTE optimize/expire_snapshots
 }
 
-// Dialect is how an engine spells SQL. #14 defines its content.
+// Dialect is how an engine spells SQL. #14 adds the capabilities and
+// SQL-generation primitives.
 type Dialect interface {
 	Name() string
+	// QualifiedName quotes each part and joins them; invalid parts are an
+	// error (never silently altered).
+	QualifiedName(parts ...string) (string, error)
+	// Literal renders a string literal.
+	Literal(s string) string
+}
+
+// IcebergMaintainer is implemented by engines with
+// Capabilities.IcebergMaintenance. It renders the statements of one
+// maintenance run; invalid input is an error before anything runs.
+type IcebergMaintainer interface {
+	MaintenanceStatements(table []string, retention string) ([]string, error)
+}
+
+// As finds an extension or concrete type behind the Manager's wrappers.
+func As[T any](e Engine) (T, bool) {
+	for e != nil {
+		if v, ok := e.(T); ok {
+			return v, true
+		}
+		u, ok := e.(interface{ Unwrap() Engine })
+		if !ok {
+			break
+		}
+		e = u.Unwrap()
+	}
+	var zero T
+	return zero, false
 }

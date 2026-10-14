@@ -11,8 +11,9 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/trino"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,13 +29,29 @@ type Handlers struct {
 	keyring        *crypto.Keyring
 	temporalClient client.Client
 	s3             *storage.S3Client
-	trino          *trino.Client
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
 	// connections holds every connection provider (docs/adr/0002).
 	connections *connections.Registry
+	// engines runs SQL (docs/adr/0002); catalogDDL manages Trino catalogs as
+	// the admin identity (docs/adr/0005). Both are built at the wiring site.
+	engines    engineSource
+	catalogDDL catalogDDL
 }
 
-func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry) *Handlers {
+// engineSource returns engines; *queryengine.Manager implements it.
+type engineSource interface {
+	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
+	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
+}
+
+// catalogDDL creates and drops Trino catalogs; *bindings/trino.DDL implements it.
+type catalogDDL interface {
+	CreateCatalog(ctx context.Context, spec bindtrino.CatalogSpec) error
+	DropCatalog(ctx context.Context, name string) error
+	ListCatalogs(ctx context.Context) ([]string, error)
+}
+
+func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, ddl catalogDDL) *Handlers {
 	return &Handlers{
 		connections:    conns,
 		queries:        queries,
@@ -43,11 +60,9 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		keyring:        keyring,
 		temporalClient: temporalClient,
 		s3:             s3,
-		// Catalog DDL, reconciliation and Lens maintenance run as the admin
-		// identity. User SQL never goes through this client (the worker uses
-		// its own client; per-user identity is set per statement).
-		trino:        trino.New(cfg.TrinoURL, cfg.TrinoAdminUser),
-		catalogCache: NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		engines:        engines,
+		catalogDDL:     ddl,
+		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 	}
 }
 

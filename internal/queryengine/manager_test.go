@@ -18,6 +18,13 @@ type store struct {
 	row *db.GetEngineWithConnectionRow
 }
 
+func (s *store) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngineRow, error) {
+	if s.row == nil {
+		return db.GetDefaultTrinoEngineRow{}, pgx.ErrNoRows
+	}
+	return db.GetDefaultTrinoEngineRow{Engine: s.row.Engine, CatalogConnection: s.row.CatalogConnection}, nil
+}
+
 func (s *store) GetEngineWithConnection(context.Context, pgtype.UUID) (db.GetEngineWithConnectionRow, error) {
 	if s.row == nil {
 		return db.GetEngineWithConnectionRow{}, pgx.ErrNoRows
@@ -182,6 +189,10 @@ func init() {
 
 type multiStore map[[16]byte]*db.GetEngineWithConnectionRow
 
+func (s multiStore) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngineRow, error) {
+	return db.GetDefaultTrinoEngineRow{}, pgx.ErrNoRows
+}
+
 func (s multiStore) GetEngineWithConnection(_ context.Context, id pgtype.UUID) (db.GetEngineWithConnectionRow, error) {
 	r, ok := s[id.Bytes]
 	if !ok {
@@ -220,5 +231,21 @@ func TestManager_SeveralInstancesAndKinds(t *testing.T) {
 	}
 	if len(seen) != 3 {
 		t.Fatalf("%d distinct instances, want 3", len(seen))
+	}
+}
+
+func TestManager_DefaultTrinoAndCollectStrings(t *testing.T) {
+	m, _ := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
+	e, err := m.DefaultTrino(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := queryengine.CollectStrings(context.Background(), e, queryengine.SessionSpec{}, "ROWS 3", 10)
+	if err != nil || len(rows) != 3 || rows[2][0] != "2" {
+		t.Fatalf("rows = %v, %v", rows, err)
+	}
+	none, _ := newManager(t, &store{})
+	if _, err := none.DefaultTrino(context.Background()); queryengine.CodeOf(err) != queryengine.CodeUnavailable {
+		t.Fatalf("no default engine: %v", err)
 	}
 }

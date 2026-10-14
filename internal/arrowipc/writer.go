@@ -28,6 +28,37 @@ type ColumnInfo struct {
 	Type string
 }
 
+// NativeTypeKey is the field metadata key holding the engine's own type name
+// (e.g. "decimal(38,10)"), shown to users next to the Arrow type.
+const NativeTypeKey = "baleia.native_type"
+
+// NativeType returns a field's engine type name, or its Arrow type.
+func NativeType(f arrow.Field) string {
+	if v, ok := f.Metadata.GetValue(NativeTypeKey); ok {
+		return v
+	}
+	return f.Type.String()
+}
+
+// RecordWriter writes Arrow record batches as one IPC stream.
+type RecordWriter struct{ w *ipc.Writer }
+
+// NewRecordWriter starts an IPC stream with the schema.
+func NewRecordWriter(w io.Writer, schema *arrow.Schema) *RecordWriter {
+	return &RecordWriter{w: ipc.NewWriter(w, ipc.WithSchema(schema), ipc.WithAllocator(memory.NewGoAllocator()))}
+}
+
+// Write appends a batch; the caller keeps ownership of rec.
+func (r *RecordWriter) Write(rec arrow.RecordBatch) error {
+	if err := r.w.Write(rec); err != nil {
+		return fmt.Errorf("write arrow batch: %w", err)
+	}
+	return nil
+}
+
+// Close writes the end-of-stream marker.
+func (r *RecordWriter) Close() error { return r.w.Close() }
+
 // Batcher converts Trino result rows into Arrow record batches of at most
 // recordBatchSize rows, preserving exact types (decimal128, exact integers,
 // timestamps with unit). It never holds more than one batch in memory.
@@ -52,7 +83,8 @@ func NewBatcher(cols []ColumnInfo) (*Batcher, error) {
 		}
 		types[i] = typ
 		names[i] = c.Name
-		fields[i] = arrow.Field{Name: c.Name, Type: typ, Nullable: true}
+		fields[i] = arrow.Field{Name: c.Name, Type: typ, Nullable: true,
+			Metadata: arrow.NewMetadata([]string{NativeTypeKey}, []string{c.Type})}
 	}
 	pool := memory.NewGoAllocator()
 	builders := make([]array.Builder, len(fields))

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -146,9 +146,10 @@ func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
 	h := &Handlers{
 		queries:      q,
 		keyring:      kr,
-		trino:        trino.New(ft.srv.URL, "baleia_admin"),
+		cfg:          &config.Config{TrinoUserIdentity: "uuid"},
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 	}
+	h.engines, h.catalogDDL = trinoBackends(ft.srv.URL)
 	return h, q, ft
 }
 
@@ -310,7 +311,7 @@ func TestSyncCatalog_FailedRecreateIsASyncError(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"q","stats":{"state":"FINISHED"}}`)
 	}))
 	defer failing.Close()
-	h.trino = trino.New(failing.URL, "baleia_admin")
+	h.engines, h.catalogDDL = trinoBackends(failing.URL)
 	_, cat := reqIDs(q)
 	resp, err := h.SyncCatalog(ctxAs(ownerID, "member"), SyncCatalogRequestObject{CatalogId: cat})
 	if err != nil {
@@ -487,7 +488,7 @@ func TestSyncCatalog_StuckDDLTimesOut(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"q","stats":{"state":"FINISHED"}}`)
 	}))
 	defer stuck.Close()
-	h.trino = trino.New(stuck.URL, "baleia_admin")
+	h.engines, h.catalogDDL = trinoBackends(stuck.URL)
 
 	_, cat := reqIDs(q)
 	start := time.Now()

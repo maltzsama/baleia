@@ -139,3 +139,28 @@ func queryGone(qe *trinoclient.QueryError) bool {
 type dialect struct{}
 
 func (dialect) Name() string { return "trino" }
+
+func (dialect) QualifiedName(parts ...string) (string, error) {
+	return trinoclient.QualifiedName(parts...)
+}
+
+func (dialect) Literal(s string) string { return trinoclient.QuoteString(s) }
+
+// MaintenanceStatements renders an Iceberg maintenance run: optimize, then
+// expire snapshots and remove orphan files older than retention (a Trino
+// duration such as "7d").
+func (e *Engine) MaintenanceStatements(table []string, retention string) ([]string, error) {
+	if err := trinoclient.ValidateRetention(retention); err != nil {
+		return nil, fmt.Errorf("invalid retention: %w", err)
+	}
+	name, err := trinoclient.QualifiedName(table...)
+	if err != nil {
+		return nil, fmt.Errorf("invalid table name: %w", err)
+	}
+	r := trinoclient.QuoteString(retention)
+	return []string{
+		fmt.Sprintf("ALTER TABLE %s EXECUTE optimize", name),
+		fmt.Sprintf("ALTER TABLE %s EXECUTE expire_snapshots(retention_threshold => %s)", name, r),
+		fmt.Sprintf("ALTER TABLE %s EXECUTE remove_orphan_files(retention_threshold => %s)", name, r),
+	}, nil
+}

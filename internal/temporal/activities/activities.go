@@ -5,17 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 
+	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,21 +27,24 @@ import (
 
 var defaultActivities *Activities
 
-// trinoClient is the slice of the Trino client the activities use. It is an
-// interface so tests can inject a fake that blocks, fails, or records calls.
-type trinoClient interface {
-	ExecuteWithOptions(ctx context.Context, sql string, opts trino.ExecuteOptions) (*trino.QueryResult, error)
-	ExecuteStream(ctx context.Context, sql string, opts trino.ExecuteOptions,
-		onPage func(cols []trino.Column, rows [][]interface{}) error) (string, error)
-	Execute(ctx context.Context, sql, catalog, schema string) (*trino.QueryResult, error)
-	KillQuery(ctx context.Context, queryID, message string) error
-	ListQueries(ctx context.Context) ([]trino.QueryInfo, error)
-	GetClusterStats(ctx context.Context) (*trino.ClusterStats, error)
+// engineSource returns the engine statements run on; *queryengine.Manager
+// implements it. Until executions carry their target's engine (#13 PR 3),
+// everything runs on the default Trino engine.
+type engineSource interface {
+	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
+}
+
+// lensMonitor reads the Trino coordinator's runtime state for Lens;
+// *trino/monitor.Monitor implements it.
+type lensMonitor interface {
+	ListQueries(ctx context.Context) ([]monitor.QueryInfo, error)
+	ClusterStats(ctx context.Context) (*monitor.ClusterStats, error)
 }
 
 type Activities struct {
 	queries db.Querier
-	trino   trinoClient
+	engines engineSource
+	monitor lensMonitor
 	s3      s3Client
 	cfg     *config.Config
 	// keyring opens stored connection credentials (table health talks to the
@@ -56,13 +60,12 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry) *Activities {
+func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor) *Activities {
 	a := &Activities{
-		queries: db.New(pool),
-		// The worker's client runs user queries. Its configured user is the
-		// service fallback; per-statement identity is set via ExecuteOptions.
-		trino:   trino.New(cfg.TrinoURL, cfg.TrinoServiceUser),
-		s3:      storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
+		queries:     db.New(pool),
+		engines:     engines,
+		monitor:     mon,
+		s3:          storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
 		cfg:         cfg,
 		keyring:     keyring,
 		connections: conns,
@@ -248,10 +251,14 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	}
 
 	start := time.Now()
+	eng, err := a.engines.DefaultTrino(ctx)
+	if err != nil {
+		return &ExecuteStatementResult{Error: err.Error()}, nil
+	}
 
 	// Heartbeats let Temporal deliver a cancellation to this attempt and prove
 	// liveness. They are throttled to heartbeatInterval.
-	var queryID string
+	var handle queryengine.QueryHandle
 	var lastBeat time.Time
 	beat := func(force bool) {
 		now := time.Now()
@@ -259,98 +266,35 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 			return
 		}
 		lastBeat = now
-		activity.RecordHeartbeat(ctx, heartbeatDetails{TrinoQueryID: queryID})
+		activity.RecordHeartbeat(ctx, heartbeatDetails{TrinoQueryID: handle.QueryID})
+	}
+	cb := queryengine.Callbacks{
+		OnStart:    func(h queryengine.QueryHandle) { handle = h; beat(true) },
+		OnProgress: func(queryengine.Progress) { beat(false) },
+	}
+	spec := queryengine.SessionSpec{
+		Catalog:  params.TrinoCatalog,
+		Identity: queryengine.Identity{UserID: params.User},
+		Timeout:  params.Timeout,
+		Tags:     queryengine.Tags{ExecutionID: params.ExecutionID, RequestID: params.RequestID, Source: "editor"},
 	}
 
-	opts := trino.ExecuteOptions{
-		Catalog:           params.TrinoCatalog,
-		User:              params.User,
-		SessionProperties: statementSessionProperties(params.Timeout),
-		OnQueryID: func(id string) {
-			queryID = id
-			beat(true)
-		},
-		OnProgress: func() { beat(false) },
-	}
-
-	// Streaming pipeline: Trino page -> typed Arrow builders -> io.Pipe ->
-	// S3 multipart upload. One Arrow object per statement. The stream is
-	// created lazily on the first page that carries columns, so DDL/DML
-	// statements (no schema) upload nothing.
-	var columns []ColumnResult
-	var sw *arrowipc.StreamWriter
-	var pw *io.PipeWriter
-	var pr *io.PipeReader
-	var cw *countingWriter
-	var resultKey string
-	var uploadedBytes int64
-	var uploadErr error
-	var uploadDone chan struct{}
-	var rowTotal int64
-	var truncated bool
-
-	onPage := func(cols []trino.Column, rows [][]interface{}) error {
-		if len(cols) > 0 && columns == nil {
-			columns = make([]ColumnResult, len(cols))
-			aCols := make([]arrowipc.ColumnInfo, len(cols))
-			for i, c := range cols {
-				columns[i] = ColumnResult{Name: c.Name, Type: c.Type}
-				aCols[i] = arrowipc.ColumnInfo{Name: c.Name, Type: c.Type}
-			}
-
-			resultKey = s3ResultKey(params.ExecutionID, int(params.Position), 0)
-			pr, pw = io.Pipe()
-			cw = &countingWriter{w: pw}
-			s, err := arrowipc.NewStreamWriter(cw, aCols)
-			if err != nil {
-				_ = pw.Close()
-				_ = pr.Close()
-				return err
-			}
-			sw = s
-			uploadDone = make(chan struct{})
-			go func() {
-				defer close(uploadDone)
-				n, err := a.s3.PutStream(ctx, resultKey, pr, arrowContentType)
-				if err != nil {
-					uploadErr = err
-					return
-				}
-				uploadedBytes = n
-			}()
-		}
-
-		if len(rows) == 0 {
-			return nil
-		}
-		if sw == nil {
-			return errors.New("statement returned rows without a result schema")
-		}
-
-		for _, row := range rows {
-			if rowTotal >= a.cfg.ResultMaxRows || (cw != nil && cw.n >= a.cfg.ResultMaxBytes) {
-				return errResultCapReached
-			}
-			if err := sw.AppendRows([][]interface{}{row}); err != nil {
-				return err
-			}
-			rowTotal++
-			if cw != nil && cw.n >= a.cfg.ResultMaxBytes {
-				return errResultCapReached
-			}
-		}
-		return nil
-	}
-
-	// A statement is never retried once Trino has accepted it: retrying an
-	// INSERT/CREATE could write twice. Only a transport failure before the
-	// query id is known is retried, and with a bounded backoff.
+	// A statement is never retried once the engine has accepted it: retrying
+	// an INSERT/CREATE could write twice. Only an unavailable engine before
+	// the statement got a handle is retried, with a bounded backoff.
+	sink := &resultSink{a: a, ctx: ctx, params: params}
 	backoff := statementTransportBackoff
-	var err error
 	for attempt := 0; ; attempt++ {
-		queryID = ""
-		_, err = a.trino.ExecuteStream(ctx, params.SQL, opts, onPage)
-		if err == nil || ctx.Err() != nil || queryID != "" || attempt >= len(backoff) {
+		handle = queryengine.QueryHandle{}
+		sess, oerr := eng.OpenSession(ctx, spec)
+		if oerr != nil {
+			err = oerr
+		} else {
+			err = sess.Execute(ctx, params.SQL, cb, sink)
+			_ = sess.Close()
+		}
+		if err == nil || ctx.Err() != nil || handle.QueryID != "" || sink.began ||
+			queryengine.CodeOf(err) != queryengine.CodeUnavailable || attempt >= len(backoff) {
 			break
 		}
 		select {
@@ -360,86 +304,165 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	}
 
 	durationMs := time.Since(start).Milliseconds()
+	cancelOnEngine := func(reason string) {
+		if handle.QueryID == "" {
+			return
+		}
+		killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer killCancel()
+		if kerr := eng.Cancel(killCtx, handle); kerr != nil {
+			logger.Warn("cancel on the engine failed", "reason", reason, "query_id", handle.QueryID, "err", kerr)
+		}
+	}
 
-	// On cancellation finalize the pipe first so the upload goroutine sees EOF
-	// and cannot deadlock, then abandon the query on Trino.
+	// On cancellation finalize the upload first so it cannot deadlock, then
+	// stop the statement on the engine.
 	if ctx.Err() != nil {
-		if pw != nil {
-			_ = pw.Close()
-		}
-		if uploadDone != nil {
-			<-uploadDone
-		}
-		if queryID != "" {
-			killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = a.trino.KillQuery(killCtx, queryID, "cancelled by baleia")
-			killCancel()
-		}
+		sink.abort()
+		cancelOnEngine("cancelled by baleia")
 		return nil, temporal.NewCanceledError()
 	}
 
 	if errors.Is(err, errResultCapReached) {
-		if queryID != "" {
-			killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = a.trino.KillQuery(killCtx, queryID, "statement result cap reached")
-			killCancel()
-		}
-		truncated = true
+		cancelOnEngine("statement result cap reached")
+		sink.truncated = true
 		err = nil
 	}
 
-	if sw != nil {
-		if cerr := sw.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}
-	if pw != nil {
-		_ = pw.Close()
-	}
-	if uploadDone != nil {
-		<-uploadDone
+	if cerr := sink.finish(); cerr != nil && err == nil {
+		err = cerr
 	}
 
+	// A failed upload also fails the writes into its pipe: report the upload.
+	if sink.uploadErr != nil {
+		return &ExecuteStatementResult{
+			TrinoQueryID: handle.QueryID,
+			RowCount:     sink.rows,
+			DurationMs:   durationMs,
+			Error:        fmt.Sprintf("store results: %v", sink.uploadErr),
+		}, nil
+	}
 	if err != nil {
 		return &ExecuteStatementResult{
-			TrinoQueryID: queryID,
+			TrinoQueryID: handle.QueryID,
 			DurationMs:   durationMs,
 			Error:        err.Error(),
 		}, nil
 	}
-	if uploadErr != nil {
-		return &ExecuteStatementResult{
-			TrinoQueryID: queryID,
-			RowCount:     rowTotal,
-			DurationMs:   durationMs,
-			Error:        fmt.Sprintf("store results: %v", uploadErr),
-		}, nil
-	}
 
 	res := &ExecuteStatementResult{
-		TrinoQueryID: queryID,
-		RowCount:     rowTotal,
+		TrinoQueryID: handle.QueryID,
+		RowCount:     sink.rows,
 		DurationMs:   durationMs,
-		Columns:      columns,
-		Truncated:    truncated,
+		Columns:      sink.columns,
+		Truncated:    sink.truncated,
 	}
-	if sw != nil {
-		res.ResultKey = resultKey
-		res.ResultBytes = uploadedBytes
+	if sink.writer != nil {
+		res.ResultKey = sink.key
+		res.ResultBytes = sink.uploaded
 	}
 	return res, nil
 }
 
-// statementSessionProperties renders the per-statement Trino session
-// properties. Trino parses query_max_execution_time as a duration such as
-// "1800s".
-func statementSessionProperties(timeout time.Duration) map[string]string {
-	if timeout <= 0 {
+// resultSink streams the first result set of a statement to object storage as
+// one Arrow IPC object: batch -> IPC writer -> io.Pipe -> S3 multipart upload.
+// A result set without columns (DDL/DML) uploads nothing. Past the row or byte
+// cap it stops the statement with errResultCapReached; the stored result is
+// then truncated, not failed.
+type resultSink struct {
+	a      *Activities
+	ctx    context.Context
+	params ExecuteStatementParams
+
+	began     bool
+	sets      int
+	columns   []ColumnResult
+	key       string
+	writer    *arrowipc.RecordWriter
+	pw        *io.PipeWriter
+	cw        *countingWriter
+	done      chan struct{}
+	uploaded  int64
+	uploadErr error
+	rows      int64
+	truncated bool
+}
+
+func (s *resultSink) Begin(schema *arrow.Schema) error {
+	s.began = true
+	s.sets++
+	if s.sets > 1 || schema.NumFields() == 0 {
+		return nil // one stored result per statement; result_sets is #20 PR 3
+	}
+	s.columns = make([]ColumnResult, schema.NumFields())
+	for i, f := range schema.Fields() {
+		s.columns[i] = ColumnResult{Name: f.Name, Type: arrowipc.NativeType(f)}
+	}
+	s.key = s3ResultKey(s.params.ExecutionID, int(s.params.Position), 0)
+	pr, pw := io.Pipe()
+	s.pw = pw
+	s.cw = &countingWriter{w: pw}
+	s.writer = arrowipc.NewRecordWriter(s.cw, schema)
+	s.done = make(chan struct{})
+	go func() {
+		defer close(s.done)
+		n, err := s.a.s3.PutStream(s.ctx, s.key, pr, arrowContentType)
+		if err != nil {
+			s.uploadErr = err
+			_ = pr.CloseWithError(err)
+			return
+		}
+		s.uploaded = n
+	}()
+	return nil
+}
+
+func (s *resultSink) Write(rec arrow.RecordBatch) error {
+	defer rec.Release()
+	if s.sets > 1 || s.writer == nil {
 		return nil
 	}
-	return map[string]string{
-		"query_max_execution_time": strconv.FormatInt(int64(timeout.Seconds()), 10) + "s",
+	maxRows, maxBytes := s.a.cfg.ResultMaxRows, s.a.cfg.ResultMaxBytes
+	if s.rows >= maxRows || s.cw.n >= maxBytes {
+		return errResultCapReached
 	}
+	batch := rec
+	capped := false
+	if remaining := maxRows - s.rows; rec.NumRows() > remaining {
+		batch = rec.NewSlice(0, remaining)
+		defer batch.Release()
+		capped = true
+	}
+	if err := s.writer.Write(batch); err != nil {
+		return err
+	}
+	s.rows += batch.NumRows()
+	if capped || s.cw.n >= maxBytes {
+		return errResultCapReached
+	}
+	return nil
+}
+
+func (s *resultSink) End(queryengine.Stats) error { return nil }
+
+// finish closes the IPC stream and waits for the upload.
+func (s *resultSink) finish() error {
+	if s.writer == nil {
+		return nil
+	}
+	err := s.writer.Close()
+	_ = s.pw.Close()
+	<-s.done
+	return err
+}
+
+// abort ends the upload without completing the stream.
+func (s *resultSink) abort() {
+	if s.pw == nil {
+		return
+	}
+	_ = s.pw.Close()
+	<-s.done
 }
 
 type UpdateStatementRecordParams struct {

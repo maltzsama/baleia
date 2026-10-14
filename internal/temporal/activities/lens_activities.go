@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	credcat "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
-	credcat "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 )
@@ -27,7 +28,7 @@ func LensPollTrinoQueries(ctx context.Context, params LensPollTrinoQueriesParams
 func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 	logger := activity.GetLogger(ctx)
 
-	queries, err := a.trino.ListQueries(ctx)
+	queries, err := a.monitor.ListQueries(ctx)
 	if err != nil {
 		logger.Error("failed to list trino queries", "err", err)
 		return err
@@ -43,7 +44,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 			continue
 		}
 		// The cluster poller's own node-count statement is not user activity.
-		if q.Query == trino.ClusterNodesSQL {
+		if q.Query == monitor.ClusterNodesSQL {
 			continue
 		}
 
@@ -105,7 +106,7 @@ func LensPollTrinoCluster(ctx context.Context, params LensPollTrinoClusterParams
 }
 
 func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
-	stats, err := a.trino.GetClusterStats(ctx)
+	stats, err := a.monitor.ClusterStats(ctx)
 	if err != nil {
 		return err
 	}
@@ -383,39 +384,37 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 	logger := activity.GetLogger(ctx)
 
 	// The identifiers and retention reach this activity from an HTTP request:
-	// validate again here (the API checks first, but a workflow input is not a
-	// trust boundary) and quote instead of concatenating.
-	if err := trino.ValidateRetention(params.Retention); err != nil {
-		return fmt.Errorf("invalid retention: %w", err)
-	}
-	table, err := trino.QualifiedName(params.Catalog, params.Namespace, params.Table)
+	// rendering validates them again (the API checks first, but a workflow
+	// input is not a trust boundary) and quotes instead of concatenating.
+	eng, err := a.engines.DefaultTrino(ctx)
 	if err != nil {
-		return fmt.Errorf("invalid table name: %w", err)
+		return err
 	}
-	retention := trino.QuoteString(params.Retention)
-	commands := []string{
-		fmt.Sprintf("ALTER TABLE %s EXECUTE optimize", table),
-		fmt.Sprintf("ALTER TABLE %s EXECUTE expire_snapshots(retention_threshold => %s)", table, retention),
-		fmt.Sprintf("ALTER TABLE %s EXECUTE remove_orphan_files(retention_threshold => %s)", table, retention),
+	maintainer, ok := queryengine.As[queryengine.IcebergMaintainer](eng)
+	if !ok {
+		return fmt.Errorf("engine %s has no Iceberg maintenance", eng.Kind())
+	}
+	commands, err := maintainer.MaintenanceStatements([]string{params.Catalog, params.Namespace, params.Table}, params.Retention)
+	if err != nil {
+		return err
 	}
 
 	// Heartbeats make the run cancellable: without them a long OPTIMIZE is
 	// declared dead after the heartbeat timeout and re-executed.
 	var lastBeat time.Time
-	opts := trino.ExecuteOptions{
-		OnProgress: func() {
-			now := time.Now()
-			if now.Sub(lastBeat) >= heartbeatInterval {
-				lastBeat = now
-				activity.RecordHeartbeat(ctx)
-			}
-		},
-	}
+	cb := queryengine.Callbacks{OnProgress: func(queryengine.Progress) {
+		now := time.Now()
+		if now.Sub(lastBeat) >= heartbeatInterval {
+			lastBeat = now
+			activity.RecordHeartbeat(ctx)
+		}
+	}}
+	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "maintenance", ExecutionID: params.ExecutionID}}
 
 	for _, cmd := range commands {
 		logger.Info("running maintenance", "sql", cmd)
 
-		result, err := a.trino.ExecuteWithOptions(ctx, cmd, opts)
+		result, err := queryengine.CollectStringsWith(ctx, eng, spec, cmd, maintenanceMaxResultRows, cb)
 		if err != nil {
 			recordMaintenanceSnapshot(a.queries, ctx, params.ExecutionID, cmd, "failed", 0, 0, err.Error())
 			return fmt.Errorf("maintenance %q: %w", cmd, err)
@@ -424,11 +423,14 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 			return ctx.Err()
 		}
 
-		recordMaintenanceSnapshot(a.queries, ctx, params.ExecutionID, cmd, "finished", result.RowCount, 0, "")
+		recordMaintenanceSnapshot(a.queries, ctx, params.ExecutionID, cmd, "finished", int64(len(result)), 0, "")
 	}
 
 	return nil
 }
+
+// maintenanceMaxResultRows bounds what a maintenance statement may return.
+const maintenanceMaxResultRows = 10000
 
 func recordMaintenanceSnapshot(queries db.Querier, ctx context.Context, executionID, sql, state string, rows int64, elapsedMs int32, errMsg string) {
 	var execID pgtype.UUID

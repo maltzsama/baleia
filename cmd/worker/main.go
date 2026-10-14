@@ -12,9 +12,15 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
+	// Engine kinds register themselves.
+	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -76,7 +82,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	act := activities.New(pool, cfg, keyring, conns)
+	// Statements run on engines (docs/adr/0002); Lens reads the Trino
+	// coordinator's runtime state as the service identity.
+	engines := queryengine.NewManager(db.New(pool), keyring, conns, dialer)
+	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, dialer.HTTPClient(60*time.Second)))
+
+	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor)
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflow)

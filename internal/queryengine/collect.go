@@ -13,6 +13,11 @@ import (
 // set as an in-memory table. Past maxRows the statement is cancelled and the
 // error is resource_exhausted. The caller releases the table.
 func Collect(ctx context.Context, e Engine, spec SessionSpec, sql string, maxRows int64) (arrow.Table, error) {
+	return CollectWith(ctx, e, spec, sql, maxRows, Callbacks{})
+}
+
+// CollectWith is Collect with callbacks (heartbeats, handles).
+func CollectWith(ctx context.Context, e Engine, spec SessionSpec, sql string, maxRows int64, cb Callbacks) (arrow.Table, error) {
 	sess, err := e.OpenSession(ctx, spec)
 	if err != nil {
 		return nil, err
@@ -24,7 +29,7 @@ func Collect(ctx context.Context, e Engine, spec SessionSpec, sql string, maxRow
 	sink := &collectSink{maxRows: maxRows, cancel: cancel}
 	defer sink.release()
 
-	err = sess.Execute(ctx, sql, Callbacks{}, sink)
+	err = sess.Execute(ctx, sql, cb, sink)
 	if sink.exceeded {
 		return nil, NewError(CodeResource, e.Kind(), "", fmt.Sprintf("result exceeds %d rows", maxRows))
 	}
@@ -79,4 +84,35 @@ func (s *collectSink) release() {
 		r.Release()
 	}
 	s.records = nil
+}
+
+// CollectStrings is Collect rendered as text, for listings: one row per
+// result row, NULL as "".
+func CollectStrings(ctx context.Context, e Engine, spec SessionSpec, sql string, maxRows int64) ([][]string, error) {
+	return CollectStringsWith(ctx, e, spec, sql, maxRows, Callbacks{})
+}
+
+// CollectStringsWith is CollectStrings with callbacks.
+func CollectStringsWith(ctx context.Context, e Engine, spec SessionSpec, sql string, maxRows int64, cb Callbacks) ([][]string, error) {
+	tbl, err := CollectWith(ctx, e, spec, sql, maxRows, cb)
+	if err != nil {
+		return nil, err
+	}
+	defer tbl.Release()
+	rows := make([][]string, tbl.NumRows())
+	for i := range rows {
+		rows[i] = make([]string, tbl.NumCols())
+	}
+	for c := 0; c < int(tbl.NumCols()); c++ {
+		offset := 0
+		for _, chunk := range tbl.Column(c).Data().Chunks() {
+			for i := 0; i < chunk.Len(); i++ {
+				if !chunk.IsNull(i) {
+					rows[offset+i][c] = chunk.ValueStr(i)
+				}
+			}
+			offset += chunk.Len()
+		}
+	}
+	return rows, nil
 }
