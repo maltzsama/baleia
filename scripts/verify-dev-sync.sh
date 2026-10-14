@@ -8,6 +8,7 @@ pairs=(
   "deploy/trino/config.properties deploy/helm/baleia/files/trino/config.properties"
   "deploy/trino/catalog-store.properties deploy/helm/baleia/files/trino/catalog-store.properties"
   "deploy/trino/baleia-catalog-guard.properties deploy/helm/baleia/files/trino/baleia-catalog-guard.properties"
+  "deploy/trino/baleia-base-access-control.properties deploy/helm/baleia/files/trino/baleia-base-access-control.properties"
 )
 
 fail=0

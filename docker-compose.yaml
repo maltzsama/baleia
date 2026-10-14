@@ -255,8 +255,8 @@ services:
   # ============================================
 
   trino:
-    # Pinned to 482 — the SPI contracts the baleia-trino-catalog-store plugin
-    # was compiled against (CatalogStore/CatalogStoreFactory) live in Trino 482
+    # Pinned to 483 — the SPI contracts the baleia-trino-catalog-store plugin
+    # was compiled against (CatalogStore/CatalogStoreFactory) live in Trino 483
     # and can still evolve. A silent `latest` bump could change property names
     # (fs.native-s3.enabled → fs.s3.enabled between 481→482 is proof enough)
     # and break every catalog registration. Do not bump without re-running the
@@ -266,7 +266,7 @@ services:
     # (baleia-trino-catalog-store) via `make plugin-build` and mounted as a bind
     # mount. Without the built sibling repository, Trino starts without the
     # plugin and catalogs do not load. Use `make up` (which runs plugin-build first).
-    image: trinodb/trino:${TRINO_VERSION:-482}
+    image: trinodb/trino:${TRINO_VERSION:-483}
     container_name: baleia_trino
     environment:
       - AWS_REGION=us-east-1
@@ -281,10 +281,13 @@ services:
     volumes:
       # Plugin JARs compilados (make plugin-build clona + compila).
       - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
-      # Config do plugin (catalog.management=dynamic, catalog.store=baleia,
-      # JDBC URL + creds).
-      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/config.properties:/etc/trino/config.properties:ro
-      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/docker/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
+      # Baleia owns its Trino configuration (deploy/trino/*, the same files the
+      # chart ships): dynamic catalogs, the catalog store, and the catalog guard
+      # as the active access control.
+      - ./deploy/trino/config.properties:/etc/trino/config.properties:ro
+      - ./deploy/trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
+      - ./deploy/trino/baleia-base-access-control.properties:/etc/trino/baleia-base-access-control.properties:ro
+      - ./deploy/trino/baleia-catalog-guard.properties:/etc/trino/baleia-catalog-guard.properties:ro
       # etc/catalog/ is NOT mounted — catalogs come from the registry via the plugin.
     networks:
       - app_net
