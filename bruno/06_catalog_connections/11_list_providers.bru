@@ -19,6 +19,28 @@ assert {
   res.body: isArray
 }
 
+tests {
+  test("every v1 kind is listed with its support state", function() {
+    const by = {};
+    for (const p of res.getBody()) by[p.kind] = p;
+    for (const k of ["polaris", "nessie", "iceberg", "postgresql", "mysql", "mariadb", "sqlserver", "oracle", "clickhouse", "flightsql", "trino"]) {
+      expect(by[k], k).to.exist;
+      expect(by[k].status.state, k).to.equal("supported");
+    }
+    expect(by.trino.roles).to.include("federated_engine");
+    expect(by.flightsql.roles).to.include("direct_engine");
+    for (const k of ["doris", "starrocks"]) {
+      expect(by[k].status.state, k).to.equal("unsupported");
+      expect(by[k].status.reason, k).to.match(/#(21|30)/);
+    }
+    // sqlite is unsupported unless the server sets BALEIA_SQLITE_ROOT
+    expect(by.sqlite).to.exist;
+    // secrets are flagged, never defaulted
+    const pw = by.flightsql.config_schema.find(f => f.key === "token");
+    expect(pw.secret).to.equal(true);
+  });
+}
+
 docs {
   Every connection kind with its roles and config schema. Fields with
   `secret: true` go in `credentials` and are never returned.

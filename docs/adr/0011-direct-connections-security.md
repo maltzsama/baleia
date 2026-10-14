@@ -52,6 +52,10 @@ Partially compliant.
   SQL Server (`Connector.Dialer`), Oracle (`OracleConnector.Dialer`) and ClickHouse (HTTP through
   the dialer's client). Their metadata sessions are read-only where the engine allows it
   (PostgreSQL, MySQL, MariaDB, ClickHouse `readonly=1`) and every statement has a 30 s limit.
+- Engine services: Flight SQL dials gRPC through `grpc.WithContextDialer` (TLS on by default,
+  server name checked; auth none, basic or bearer token) and Trino uses the dialer's HTTP client,
+  with password authentication only over HTTPS. Doris and StarRocks are declared unsupported
+  (#21, #30) and never connect.
 - SQLite files resolve inside `BALEIA_SQLITE_ROOT` and open read-only unless the connection and
   `BALEIA_SQLITE_ALLOW_WRITE` both allow writes (`TestSQLiteRootConfinement`).
 - Direct engines (sessions with read-only enforcement) are the engine issues (#81, #82, #83);

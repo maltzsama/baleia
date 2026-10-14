@@ -13,6 +13,8 @@ page when they land (#80).
 | Kind | Label | Family | Roles | Engine kind | Status |
 |---|---|---|---|---|---|
 | `clickhouse` | ClickHouse | database | metadata, direct_engine | clickhouse | supported |
+| `doris` | Apache Doris | engine | federated_engine | doris | unsupported (planned after v1 (#21)) |
+| `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | supported |
 | `iceberg` | Iceberg REST catalog | iceberg | metadata | — | supported |
 | `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | supported |
 | `mysql` | MySQL | database | metadata, direct_engine | mysql | supported |
@@ -22,6 +24,8 @@ page when they land (#80).
 | `postgresql` | PostgreSQL | database | metadata, direct_engine | postgresql | supported |
 | `sqlite` | SQLite | database | metadata, direct_engine | sqlite | unsupported (BALEIA_SQLITE_ROOT not set) |
 | `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | supported |
+| `starrocks` | StarRocks | engine | federated_engine | starrocks | unsupported (planned after v1 (#30)) |
+| `trino` | Trino | engine | metadata, federated_engine | trino | supported |
 
 ## `clickhouse` — ClickHouse
 
@@ -33,6 +37,27 @@ page when they land (#80).
 | `database` | text |  | `default` |  |
 | `username` | text |  | `default` |  |
 | `password` | secret |  |  |  |
+
+## `doris` — Apache Doris
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `host` | text | yes |  |  |
+| `port` | int |  | `9030` |  |
+| `username` | text |  |  |  |
+| `password` | secret |  |  |  |
+
+## `flightsql` — Arrow Flight SQL
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `host` | text | yes |  |  |
+| `port` | int | yes |  |  |
+| `tls` | bool |  | `true` |  |
+| `auth` | select |  | `none` | one of `none`, `basic`, `token` |
+| `username` | text |  |  | Basic authentication |
+| `password` | secret |  |  | Basic authentication |
+| `token` | secret |  |  | Token authentication |
 
 ## `iceberg` — Iceberg REST catalog
 
@@ -123,4 +148,23 @@ page when they land (#80).
 | `encrypt` | select |  | `true` | one of `true`, `false`, `disable`, `strict` |
 | `trust_server_certificate` | bool |  | `false` |  |
 | `username` | text | yes |  |  |
+| `password` | secret |  |  |  |
+
+## `starrocks` — StarRocks
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `host` | text | yes |  |  |
+| `port` | int |  | `9030` |  |
+| `username` | text |  |  |  |
+| `password` | secret |  |  |  |
+
+## `trino` — Trino
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `url` | url | yes |  | e.g. http://trino:8080 |
+| `service_user` | text |  | `baleia` | Identity for metadata reads and service statements |
+| `admin_user` | text |  | `baleia-admin` | Identity that cancels queries; never runs user SQL |
+| `username` | text |  |  | Password authentication (HTTPS only); must be allowed to impersonate the identities Baleia sends |
 | `password` | secret |  |  |  |

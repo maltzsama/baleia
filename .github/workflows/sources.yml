@@ -11,6 +11,7 @@ on:
   pull_request:
     paths:
       - "internal/connections/**"
+      - "internal/trino/**"
       - ".github/workflows/sources.yml"
 
 jobs:
@@ -62,6 +63,9 @@ jobs:
           nessie.catalog.warehouses.warehouse.location: s3://bucket/wh
           nessie.catalog.service.s3.default-options.region: us-east-1
         ports: ["19120:19120"]
+      trino:
+        image: trinodb/trino:483
+        ports: ["8080:8080"]
       clickhouse:
         image: clickhouse/clickhouse-server:24.8
         env:
@@ -91,6 +95,13 @@ jobs:
             sleep 3
           done
           echo "Nessie did not start" && exit 1
+      - name: Wait for Trino
+        run: |
+          for i in $(seq 1 60); do
+            curl -s http://127.0.0.1:8080/v1/info | grep -q '"starting":false' && exit 0
+            sleep 3
+          done
+          echo "Trino did not start" && exit 1
       - name: Provider integration tests
         env:
           BALEIA_TEST_POSTGRES_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres
@@ -100,6 +111,7 @@ jobs:
           BALEIA_TEST_ORACLE_URL: oracle://baleia:baleia_dev@127.0.0.1:1521/FREEPDB1
           BALEIA_TEST_CLICKHOUSE_URL: http://baleia:baleia_dev@127.0.0.1:8123
           BALEIA_TEST_NESSIE_URL: http://127.0.0.1:19120
+          BALEIA_TEST_TRINO_URL: http://127.0.0.1:8080
         shell: bash
         run: |
           set -o pipefail
