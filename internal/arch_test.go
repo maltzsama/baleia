@@ -39,7 +39,8 @@ var constructionRules = []constructionRule{
 			{"github.com/galileostudio/baleia/internal/trino", "New"},
 			{"github.com/galileostudio/baleia/internal/trino", "NewWithHTTPClient"},
 		},
-		allowed: append([]string{"internal/queryengine/", "internal/bindings/"}, wiringSites...),
+		// The Trino provider owns a client for metadata reads and pings.
+		allowed: append([]string{"internal/queryengine/", "internal/bindings/", "internal/connections/trino/"}, wiringSites...),
 	},
 	{
 		// Baleia's own database is opened by the binaries and the migrator;

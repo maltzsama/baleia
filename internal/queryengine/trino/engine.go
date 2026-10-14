@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	trinoprovider "github.com/galileostudio/baleia/internal/connections/trino"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
 )
@@ -42,7 +43,7 @@ func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Con
 	}
 	service := valueOr(cfg.Value("service_user"), defaultServiceUser)
 	admin := valueOr(cfg.Value("admin_user"), defaultAdminUser)
-	hc := d.HTTPClient(requestTimeout)
+	hc := trinoprovider.HTTPClient(d, cfg, requestTimeout)
 	return &Engine{
 		id:     row.ID,
 		client: trinoclient.NewWithHTTPClient(url, service, hc),

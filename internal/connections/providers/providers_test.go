@@ -264,9 +264,20 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 		connections.KindSQLServer:   {Values: map[string]string{"host": "localhost", "username": "u", "encrypt": "disable"}},
 		connections.KindOracle:      {Values: map[string]string{"host": "localhost", "service_name": "FREEPDB1", "username": "u"}},
 		connections.KindClickHouse:  {Values: map[string]string{"host": "localhost"}},
+		connections.KindFlightSQL:   {Values: map[string]string{"host": "localhost", "port": "32010", "tls": "false"}},
+		connections.KindTrino:       {Values: map[string]string{"url": "http://localhost:8080"}},
 	}
-	// SQLite opens no network connection; TestSQLiteRootConfinement guards it.
+	// SQLite opens no network connection (TestSQLiteRootConfinement guards
+	// it); planned kinds never connect.
 	noNetwork := map[connections.Kind]bool{connections.KindSQLite: true}
+	for _, p := range reg.All() {
+		if p.Status().State == connections.StateUnsupported && p.Kind() != connections.KindSQLite {
+			noNetwork[p.Kind()] = true
+			if err := p.Ping(context.Background(), connections.Config{}); !errors.Is(err, connections.ErrUnsupported) {
+				t.Errorf("%s: planned kind pinged: %v", p.Kind(), err)
+			}
+		}
+	}
 	for _, p := range reg.All() {
 		if noNetwork[p.Kind()] {
 			continue

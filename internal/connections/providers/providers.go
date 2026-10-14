@@ -5,14 +5,17 @@ package providers
 import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/clickhouse"
+	"github.com/galileostudio/baleia/internal/connections/flightsql"
 	"github.com/galileostudio/baleia/internal/connections/iceberg"
 	"github.com/galileostudio/baleia/internal/connections/mysql"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
 	"github.com/galileostudio/baleia/internal/connections/oracle"
+	"github.com/galileostudio/baleia/internal/connections/planned"
 	"github.com/galileostudio/baleia/internal/connections/polaris"
 	"github.com/galileostudio/baleia/internal/connections/postgresql"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/connections/sqlserver"
+	"github.com/galileostudio/baleia/internal/connections/trino"
 )
 
 // Options are server-side settings of providers that need them.
@@ -37,5 +40,9 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		oracle.New(d),
 		sqlite.New(o.SQLite),
 		clickhouse.New(d),
+		flightsql.New(d),
+		trino.New(d),
+		planned.Doris(),
+		planned.StarRocks(),
 	)
 }
