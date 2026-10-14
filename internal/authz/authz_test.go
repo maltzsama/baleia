@@ -14,8 +14,47 @@ import (
 func uid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
 
 type store struct {
-	conns map[[16]byte]db.CatalogConnection
-	cats  map[[16]byte]db.Catalog
+	conns   map[[16]byte]db.CatalogConnection
+	cats    map[[16]byte]db.Catalog
+	granted map[[2][16]byte]bool // {catalog, user} -> a workspace of the user holds a grant
+	wss     map[[16]byte]db.Workspace
+	members map[[2][16]byte]bool // {workspace, user}
+	owners  map[[2][16]byte]bool // {workspace, user}
+	teams   map[[16]byte]db.Team
+	roles   map[[2][16]byte]string // {team, user} -> team role
+}
+
+func (s store) CatalogGrantedToUser(_ context.Context, a db.CatalogGrantedToUserParams) (bool, error) {
+	return s.granted[[2][16]byte{a.CatalogID.Bytes, a.UserID.Bytes}], nil
+}
+
+func (s store) GetWorkspaceByID(_ context.Context, id pgtype.UUID) (db.Workspace, error) {
+	if w, ok := s.wss[id.Bytes]; ok {
+		return w, nil
+	}
+	return db.Workspace{}, pgx.ErrNoRows
+}
+
+func (s store) CheckWorkspaceAccess(_ context.Context, a db.CheckWorkspaceAccessParams) (bool, error) {
+	return s.members[[2][16]byte{a.ID.Bytes, a.UserID.Bytes}], nil
+}
+
+func (s store) IsWorkspaceOwner(_ context.Context, a db.IsWorkspaceOwnerParams) (bool, error) {
+	return s.owners[[2][16]byte{a.ID.Bytes, a.UserID.Bytes}], nil
+}
+
+func (s store) GetTeamByID(_ context.Context, id pgtype.UUID) (db.Team, error) {
+	if t, ok := s.teams[id.Bytes]; ok {
+		return t, nil
+	}
+	return db.Team{}, pgx.ErrNoRows
+}
+
+func (s store) GetTeamMemberRole(_ context.Context, a db.GetTeamMemberRoleParams) (string, error) {
+	if r, ok := s.roles[[2][16]byte{a.TeamID.Bytes, a.UserID.Bytes}]; ok {
+		return r, nil
+	}
+	return "", pgx.ErrNoRows
 }
 
 func (s store) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
@@ -40,6 +79,10 @@ var (
 	connB  = uid(11) // owned by other
 	connNo = uid(12) // created_by missing (legacy row)
 	catA   = uid(20) // under connA
+	wsX    = uid(30) // workspace: reader is a member, wsOwn owns it
+	teamT  = uid(40)
+	reader = Principal{UserID: uid(4), Role: "member"} // member of wsX, which holds a grant on catA
+	wsOwn  = Principal{UserID: uid(5), Role: "member"} // owner of wsX
 )
 
 func fixture() *Checker {
@@ -49,7 +92,13 @@ func fixture() *Checker {
 			connB.Bytes:  {ID: connB, CreatedBy: other.UserID},
 			connNo.Bytes: {ID: connNo},
 		},
-		cats: map[[16]byte]db.Catalog{catA.Bytes: {ID: catA, ConnectionID: connA}},
+		cats:    map[[16]byte]db.Catalog{catA.Bytes: {ID: catA, ConnectionID: connA}},
+		granted: map[[2][16]byte]bool{{catA.Bytes, reader.UserID.Bytes}: true},
+		wss:     map[[16]byte]db.Workspace{wsX.Bytes: {ID: wsX}},
+		members: map[[2][16]byte]bool{{wsX.Bytes, reader.UserID.Bytes}: true, {wsX.Bytes, wsOwn.UserID.Bytes}: true},
+		owners:  map[[2][16]byte]bool{{wsX.Bytes, wsOwn.UserID.Bytes}: true},
+		teams:   map[[16]byte]db.Team{teamT.Bytes: {ID: teamT}},
+		roles:   map[[2][16]byte]string{{teamT.Bytes, reader.UserID.Bytes}: "member", {teamT.Bytes, wsOwn.UserID.Bytes}: "owner"},
 	})
 }
 
@@ -92,6 +141,80 @@ func TestCatalog(t *testing.T) {
 	}
 	if _, _, err := c.Catalog(ctx, owner, uid(98), ActRead); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing catalog: %v", err)
+	}
+}
+
+// TestCatalogGrantMember: a member of a workspace granted the catalog may read
+// it, may not change it (403, they can already see it), and does not reach the
+// connection itself.
+func TestCatalogGrantMember(t *testing.T) {
+	c := fixture()
+	ctx := context.Background()
+	if _, _, err := c.Catalog(ctx, reader, catA, ActRead); err != nil {
+		t.Fatalf("grant member read: %v", err)
+	}
+	for _, act := range []Action{ActWrite, ActAdmin} {
+		if _, _, err := c.Catalog(ctx, reader, catA, act); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("grant member act %d: %v, want ErrForbidden", act, err)
+		}
+	}
+	for _, act := range []Action{ActRead, ActWrite, ActAdmin} {
+		if _, err := c.Connection(ctx, reader, connA, act); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("grant member on the connection (act %d): %v, want ErrNotFound", act, err)
+		}
+	}
+	if _, _, err := c.CatalogOfConnection(ctx, reader, connA, catA, ActRead); err != nil {
+		t.Fatalf("grant member read through its connection: %v", err)
+	}
+}
+
+func TestWorkspace(t *testing.T) {
+	c := fixture()
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		p    Principal
+		ws   pgtype.UUID
+		act  Action
+		want error
+	}{
+		{"member reads", reader, wsX, ActRead, nil},
+		{"member may not write", reader, wsX, ActWrite, ErrForbidden},
+		{"owner writes", wsOwn, wsX, ActAdmin, nil},
+		{"admin writes", admin, wsX, ActAdmin, nil},
+		{"stranger is told it does not exist", other, wsX, ActRead, ErrNotFound},
+		{"stranger write is 404 too", other, wsX, ActWrite, ErrNotFound},
+		{"missing workspace", owner, uid(97), ActRead, ErrNotFound},
+	}
+	for _, tc := range cases {
+		if _, err := c.Workspace(ctx, tc.p, tc.ws, tc.act); !errors.Is(err, tc.want) {
+			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.want)
+		}
+	}
+}
+
+func TestTeam(t *testing.T) {
+	c := fixture()
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		p    Principal
+		act  Action
+		want error
+	}{
+		{"member reads", reader, ActRead, nil},
+		{"member may not write", reader, ActWrite, ErrForbidden},
+		{"owner writes", wsOwn, ActWrite, nil},
+		{"admin writes", admin, ActWrite, nil},
+		{"stranger is told it does not exist", other, ActRead, ErrNotFound},
+	}
+	for _, tc := range cases {
+		if _, err := c.Team(ctx, tc.p, teamT, tc.act); !errors.Is(err, tc.want) {
+			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.want)
+		}
+	}
+	if _, err := c.Team(ctx, owner, uid(96), ActRead); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing team: %v", err)
 	}
 }
 

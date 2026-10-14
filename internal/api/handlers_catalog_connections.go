@@ -407,53 +407,78 @@ func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	p, err := authz.PrincipalFromContext(r.Context())
+	if err != nil {
+		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "invalid user", nil)
+		return
+	}
 	var wsUUID pgtype.UUID
-	if err := wsUUID.Scan(wsID); err != nil {
-		http.Error(w, `{"code":"bad_request","message":"invalid workspace id"}`, http.StatusBadRequest)
+	if err := wsUUID.Scan(wsID); err != nil || !wsUUID.Valid {
+		writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
 		return
 	}
-
-	ws, err := h.queries.GetWorkspaceByID(r.Context(), wsUUID)
+	// Any member (or a global admin) may list; anyone else is told it does not exist.
+	ws, err := h.authz().Workspace(r.Context(), p, wsUUID, authz.ActRead)
 	if err != nil {
-		http.Error(w, `{"code":"not_found","message":"workspace not found"}`, http.StatusNotFound)
-		return
-	}
-
-	if ws.OwnerUserID.Valid {
-		uid, _ := uuidFromString(userID)
-		if ws.OwnerUserID.Bytes != uid.Bytes {
-			http.Error(w, `{"code":"forbidden","message":"not your workspace"}`, http.StatusForbidden)
-			return
+		if errors.Is(err, authz.ErrNotFound) {
+			writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
+		} else {
+			writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
 		}
-	}
-
-	conns, err := h.queries.ListCatalogConnections(r.Context(), ws.OwnerUserID)
-	if err != nil {
-		slog.Error("list connections for workspace", "err", err)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]workspaceCatalogEntry{})
 		return
 	}
 
 	var entries []workspaceCatalogEntry
-	for _, conn := range conns {
-		// The catalogs table is the source of truth — no Polaris REST call.
-		rows, err := h.queries.ListCatalogsByConnection(r.Context(), conn.ID)
+	seen := map[string]bool{}
+
+	// Catalogs of the connections the workspace's own user created (personal workspaces).
+	if ws.OwnerUserID.Valid {
+		conns, err := h.queries.ListCatalogConnections(r.Context(), ws.OwnerUserID)
 		if err != nil {
-			slog.Warn("list catalogs for connection", "conn", conn.Name, "err", err)
-			continue
+			slog.Error("list connections for workspace", "err", err)
+			writeJSON(w, http.StatusOK, []workspaceCatalogEntry{})
+			return
 		}
-		for _, row := range rows {
-			if !row.Enabled {
+		for _, conn := range conns {
+			// The catalogs table is the source of truth — no Polaris REST call.
+			rows, err := h.queries.ListCatalogsByConnection(r.Context(), conn.ID)
+			if err != nil {
+				slog.Warn("list catalogs for connection", "conn", conn.Name, "err", err)
 				continue
 			}
-			entries = append(entries, workspaceCatalogEntry{
-				ConnectionID:   uuidStr(conn.ID),
-				ConnectionName: conn.Name,
-				ConnectionType: conn.Type,
-				CatalogName:    row.TrinoCatalogName,
-			})
+			for _, row := range rows {
+				if !row.Enabled || seen[row.TrinoCatalogName] {
+					continue
+				}
+				seen[row.TrinoCatalogName] = true
+				entries = append(entries, workspaceCatalogEntry{
+					ConnectionID:   uuidStr(conn.ID),
+					ConnectionName: conn.Name,
+					ConnectionType: conn.Type,
+					CatalogName:    row.TrinoCatalogName,
+				})
+			}
 		}
+	}
+
+	// Catalogs granted to the workspace, whoever owns their connection.
+	granted, err := h.queries.ListGrantedCatalogsOfWorkspace(r.Context(), wsUUID)
+	if err != nil {
+		slog.Error("list granted catalogs for workspace", "err", err)
+		writeJSON(w, http.StatusOK, []workspaceCatalogEntry{})
+		return
+	}
+	for _, row := range granted {
+		if seen[row.TrinoCatalogName] {
+			continue
+		}
+		seen[row.TrinoCatalogName] = true
+		entries = append(entries, workspaceCatalogEntry{
+			ConnectionID:   uuidStr(row.ConnectionID),
+			ConnectionName: row.ConnectionName,
+			ConnectionType: row.ConnectionType,
+			CatalogName:    row.TrinoCatalogName,
+		})
 	}
 
 	if entries == nil {

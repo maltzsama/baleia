@@ -2,15 +2,27 @@ package api
 
 import (
 	"context"
+	"errors"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error) {
-	teams, err := h.queries.ListTeams(ctx)
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return ListTeams401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	// A global admin sees every team; anyone else sees only the teams they belong to.
+	var teams []db.Team
+	if p.IsAdmin() {
+		teams, err = h.queries.ListTeams(ctx)
+	} else {
+		teams, err = h.queries.ListTeamsByUser(ctx, p.UserID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -47,13 +59,16 @@ func (h *Handlers) CreateTeam(ctx context.Context, request CreateTeamRequestObje
 }
 
 func (h *Handlers) GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error) {
-	var uid pgtype.UUID
-	uid.Bytes = request.Id
-	uid.Valid = true
-
-	team, err := h.queries.GetTeamByID(ctx, uid)
+	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+		return GetTeam401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	team, err := h.authz().Team(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
+	if err != nil {
+		if errors.Is(err, authz.ErrNotFound) {
+			return GetTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+		}
+		return nil, err
 	}
 
 	return GetTeam200JSONResponse(dbTeamToPublic(team)), nil
@@ -82,13 +97,16 @@ func (h *Handlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObje
 }
 
 func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersRequestObject) (ListTeamMembersResponseObject, error) {
-	var uid pgtype.UUID
-	uid.Bytes = request.Id
-	uid.Valid = true
-
-	_, err := h.queries.GetTeamByID(ctx, uid)
+	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListTeamMembers404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+		return ListTeamMembers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	uid := pgtype.UUID{Bytes: request.Id, Valid: true}
+	if _, err := h.authz().Team(ctx, p, uid, authz.ActRead); err != nil {
+		if errors.Is(err, authz.ErrNotFound) {
+			return ListTeamMembers404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+		}
+		return nil, err
 	}
 
 	members, err := h.queries.ListTeamMembers(ctx, uid)
@@ -98,18 +116,16 @@ func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersR
 
 	result := make([]TeamMember, 0, len(members))
 	for _, m := range members {
-		userID := openapi_types.UUID(m.ID.Bytes)
-		email := openapi_types.Email(m.UserEmail)
 		result = append(result, TeamMember{
 			Role:     TeamMemberRole(m.Role),
 			JoinedAt: pgTimestampToTime(m.JoinedAt),
 			User: UserPublic{
-				Id:           userID,
+				Id:           openapi_types.UUID(m.UserID.Bytes),
 				Name:         m.UserName,
-				Email:        email,
-				Role:         UserPublicRole(m.Role),
-				AuthProvider: "local",
-				CreatedAt:    pgTimestampToTime(m.JoinedAt),
+				Email:        openapi_types.Email(m.UserEmail),
+				Role:         UserPublicRole(m.UserRole),
+				AuthProvider: UserPublicAuthProvider(m.UserAuthProvider),
+				CreatedAt:    pgTimestampToTime(m.UserCreatedAt),
 			},
 		})
 	}
@@ -145,6 +161,8 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 	if err != nil {
 		return AddTeamMember409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "user already in team"}}, nil
 	}
+	// Team membership decides who is a member of the team's workspaces.
+	h.catalogCache.Clear()
 
 	user, err := h.queries.GetUserByID(ctx, userID)
 	if err != nil {
@@ -178,6 +196,7 @@ func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMembe
 	}); err != nil {
 		return RemoveTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "member not found"}}, nil
 	}
+	h.catalogCache.Clear()
 
 	return RemoveTeamMember204Response{}, nil
 }

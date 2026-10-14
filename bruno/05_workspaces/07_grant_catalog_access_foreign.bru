@@ -1,0 +1,26 @@
+meta {
+  name: Grant Catalog Access (foreign user -> 404)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/catalog-access
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+body:json {
+  {
+    "catalog_id": "{{catalog_id}}",
+    "permission": "read"
+  }
+}
+
+assert {
+  res.status: eq 404
+}

@@ -57,6 +57,7 @@ type authzFake struct {
 	registryErr []string
 	order       []string
 	mu          sync.Mutex
+	g           grantsState
 }
 
 func (q *authzFake) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {

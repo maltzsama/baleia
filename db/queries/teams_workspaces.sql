@@ -28,7 +28,8 @@ WHERE team_id = $1 AND user_id = $2;
 DELETE FROM team_members WHERE team_id = $1 AND user_id = $2;
 
 -- name: ListTeamMembers :many
-SELECT tm.*, u.name AS user_name, u.email AS user_email
+SELECT tm.*, u.name AS user_name, u.email AS user_email,
+       u.role AS user_role, u.auth_provider AS user_auth_provider, u.created_at AS user_created_at
 FROM team_members tm
 JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1
@@ -76,3 +77,59 @@ SELECT EXISTS (
 
 -- name: DeleteTeam :exec
 DELETE FROM teams WHERE id = $1;
+
+-- name: IsWorkspaceOwner :one
+-- A personal workspace is owned by its user; a shared one by the owners of its team.
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2 AND tm.role = 'owner'
+    WHERE w.id = $1
+      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+) AS is_owner;
+
+-- name: GetTeamMemberRole :one
+SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2;
+
+-- name: UpsertWorkspaceCatalogGrant :one
+INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, permission, granted_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id, catalog_id) DO UPDATE
+SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by, granted_at = now()
+RETURNING *;
+
+-- name: ListWorkspaceCatalogGrants :many
+SELECT g.workspace_id, g.catalog_id, g.permission, g.granted_at, c.trino_catalog_name AS catalog_name
+FROM workspace_catalog_grants g
+JOIN catalogs c ON c.id = g.catalog_id
+WHERE g.workspace_id = $1
+ORDER BY c.trino_catalog_name;
+
+-- name: DeleteWorkspaceCatalogGrant :execrows
+DELETE FROM workspace_catalog_grants WHERE workspace_id = $1 AND catalog_id = $2;
+
+-- name: CatalogGrantedToUser :one
+-- True when the user is a member of a workspace that has been granted the catalog.
+SELECT EXISTS (
+    SELECT 1 FROM workspace_catalog_grants g
+    JOIN workspaces w ON w.id = g.workspace_id
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+    WHERE g.catalog_id = $1
+      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+) AS granted;
+
+-- name: ListCatalogsGrantedToUser :many
+-- The catalogs of one connection that a user reaches through workspace grants.
+SELECT DISTINCT c.* FROM catalogs c
+JOIN workspace_catalog_grants g ON g.catalog_id = c.id
+JOIN workspaces w ON w.id = g.workspace_id
+LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+WHERE c.connection_id = $1
+  AND (w.owner_user_id = $2 OR tm.user_id = $2);
+
+-- name: ListGrantedCatalogsOfWorkspace :many
+SELECT c.*, cc.name AS connection_name, cc.type AS connection_type
+FROM workspace_catalog_grants g
+JOIN catalogs c ON c.id = g.catalog_id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE g.workspace_id = $1 AND c.enabled
+ORDER BY c.trino_catalog_name;

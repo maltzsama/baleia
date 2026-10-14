@@ -20,6 +20,8 @@ type Querier interface {
 	// concurrent completion or failure activity cannot be overwritten. Zero matched
 	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
 	CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error)
+	// True when the user is a member of a workspace that has been granted the catalog.
+	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
@@ -47,6 +49,7 @@ type Querier interface {
 	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
+	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
@@ -71,6 +74,7 @@ type Querier interface {
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
+	GetTeamMemberRole(ctx context.Context, arg GetTeamMemberRoleParams) (string, error)
 	GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (TrinoCluster, error)
 	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (TrinoQuerySnapshot, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -81,16 +85,21 @@ type Querier interface {
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
 	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
+	// A personal workspace is owned by its user; a shared one by the owners of its team.
+	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error)
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
+	// The catalogs of one connection that a user reaches through workspace grants.
+	ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
 	ListEnabledCatalogs(ctx context.Context) ([]Catalog, error)
 	// Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
 	// Iceberg REST, Nessie), used by the Lens table-health fan-out.
 	ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error)
+	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
@@ -112,6 +121,7 @@ type Querier interface {
 	// Lens shows non-admins only the queries run under their own Trino identity.
 	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	MarkTrinoCatalogRegistryError(ctx context.Context, arg MarkTrinoCatalogRegistryErrorParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
@@ -156,6 +166,7 @@ type Querier interface {
 	UpsertTrinoCatalogRegistry(ctx context.Context, arg UpsertTrinoCatalogRegistryParams) error
 	// Trino Query Snapshots
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
+	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
 }
 
 var _ Querier = (*Queries)(nil)

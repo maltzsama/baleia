@@ -36,6 +36,29 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 	return i, err
 }
 
+const catalogGrantedToUser = `-- name: CatalogGrantedToUser :one
+SELECT EXISTS (
+    SELECT 1 FROM workspace_catalog_grants g
+    JOIN workspaces w ON w.id = g.workspace_id
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+    WHERE g.catalog_id = $1
+      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+) AS granted
+`
+
+type CatalogGrantedToUserParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	UserID    pgtype.UUID `json:"user_id"`
+}
+
+// True when the user is a member of a workspace that has been granted the catalog.
+func (q *Queries) CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error) {
+	row := q.db.QueryRow(ctx, catalogGrantedToUser, arg.CatalogID, arg.UserID)
+	var granted bool
+	err := row.Scan(&granted)
+	return granted, err
+}
+
 const checkWorkspaceAccess = `-- name: CheckWorkspaceAccess :one
 SELECT EXISTS (
     SELECT 1 FROM workspaces w
@@ -131,6 +154,23 @@ func (q *Queries) DeleteTeam(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteWorkspaceCatalogGrant = `-- name: DeleteWorkspaceCatalogGrant :execrows
+DELETE FROM workspace_catalog_grants WHERE workspace_id = $1 AND catalog_id = $2
+`
+
+type DeleteWorkspaceCatalogGrantParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+}
+
+func (q *Queries) DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWorkspaceCatalogGrant, arg.WorkspaceID, arg.CatalogID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getTeamByID = `-- name: GetTeamByID :one
 SELECT id, name, description, created_by, created_at, updated_at FROM teams WHERE id = $1
 `
@@ -147,6 +187,22 @@ func (q *Queries) GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getTeamMemberRole = `-- name: GetTeamMemberRole :one
+SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2
+`
+
+type GetTeamMemberRoleParams struct {
+	TeamID pgtype.UUID `json:"team_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetTeamMemberRole(ctx context.Context, arg GetTeamMemberRoleParams) (string, error) {
+	row := q.db.QueryRow(ctx, getTeamMemberRole, arg.TeamID, arg.UserID)
+	var role string
+	err := row.Scan(&role)
+	return role, err
 }
 
 const getWorkspaceByID = `-- name: GetWorkspaceByID :one
@@ -191,8 +247,140 @@ func (q *Queries) GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogN
 	return i, err
 }
 
+const isWorkspaceOwner = `-- name: IsWorkspaceOwner :one
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2 AND tm.role = 'owner'
+    WHERE w.id = $1
+      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+) AS is_owner
+`
+
+type IsWorkspaceOwnerParams struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+// A personal workspace is owned by its user; a shared one by the owners of its team.
+func (q *Queries) IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isWorkspaceOwner, arg.ID, arg.UserID)
+	var is_owner bool
+	err := row.Scan(&is_owner)
+	return is_owner, err
+}
+
+const listCatalogsGrantedToUser = `-- name: ListCatalogsGrantedToUser :many
+SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at FROM catalogs c
+JOIN workspace_catalog_grants g ON g.catalog_id = c.id
+JOIN workspaces w ON w.id = g.workspace_id
+LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+WHERE c.connection_id = $1
+  AND (w.owner_user_id = $2 OR tm.user_id = $2)
+`
+
+type ListCatalogsGrantedToUserParams struct {
+	ConnectionID pgtype.UUID `json:"connection_id"`
+	UserID       pgtype.UUID `json:"user_id"`
+}
+
+// The catalogs of one connection that a user reaches through workspace grants.
+func (q *Queries) ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error) {
+	rows, err := q.db.Query(ctx, listCatalogsGrantedToUser, arg.ConnectionID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Catalog
+	for rows.Next() {
+		var i Catalog
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConnectionID,
+			&i.Name,
+			&i.Description,
+			&i.TrinoCatalogName,
+			&i.ClusterID,
+			&i.Warehouse,
+			&i.Connector,
+			&i.ExtraProps,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGrantedCatalogsOfWorkspace = `-- name: ListGrantedCatalogsOfWorkspace :many
+SELECT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, cc.name AS connection_name, cc.type AS connection_type
+FROM workspace_catalog_grants g
+JOIN catalogs c ON c.id = g.catalog_id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE g.workspace_id = $1 AND c.enabled
+ORDER BY c.trino_catalog_name
+`
+
+type ListGrantedCatalogsOfWorkspaceRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	ConnectionID     pgtype.UUID        `json:"connection_id"`
+	Name             string             `json:"name"`
+	Description      *string            `json:"description"`
+	TrinoCatalogName string             `json:"trino_catalog_name"`
+	ClusterID        pgtype.UUID        `json:"cluster_id"`
+	Warehouse        string             `json:"warehouse"`
+	Connector        string             `json:"connector"`
+	ExtraProps       []byte             `json:"extra_props"`
+	Enabled          bool               `json:"enabled"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ConnectionName   string             `json:"connection_name"`
+	ConnectionType   string             `json:"connection_type"`
+}
+
+func (q *Queries) ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error) {
+	rows, err := q.db.Query(ctx, listGrantedCatalogsOfWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGrantedCatalogsOfWorkspaceRow
+	for rows.Next() {
+		var i ListGrantedCatalogsOfWorkspaceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConnectionID,
+			&i.Name,
+			&i.Description,
+			&i.TrinoCatalogName,
+			&i.ClusterID,
+			&i.Warehouse,
+			&i.Connector,
+			&i.ExtraProps,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ConnectionName,
+			&i.ConnectionType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTeamMembers = `-- name: ListTeamMembers :many
-SELECT tm.id, tm.team_id, tm.user_id, tm.role, tm.joined_at, u.name AS user_name, u.email AS user_email
+SELECT tm.id, tm.team_id, tm.user_id, tm.role, tm.joined_at, u.name AS user_name, u.email AS user_email,
+       u.role AS user_role, u.auth_provider AS user_auth_provider, u.created_at AS user_created_at
 FROM team_members tm
 JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1
@@ -200,13 +388,16 @@ ORDER BY u.name
 `
 
 type ListTeamMembersRow struct {
-	ID        pgtype.UUID        `json:"id"`
-	TeamID    pgtype.UUID        `json:"team_id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Role      string             `json:"role"`
-	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
-	UserName  string             `json:"user_name"`
-	UserEmail string             `json:"user_email"`
+	ID               pgtype.UUID        `json:"id"`
+	TeamID           pgtype.UUID        `json:"team_id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	Role             string             `json:"role"`
+	JoinedAt         pgtype.Timestamptz `json:"joined_at"`
+	UserName         string             `json:"user_name"`
+	UserEmail        string             `json:"user_email"`
+	UserRole         string             `json:"user_role"`
+	UserAuthProvider string             `json:"user_auth_provider"`
+	UserCreatedAt    pgtype.Timestamptz `json:"user_created_at"`
 }
 
 func (q *Queries) ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error) {
@@ -226,6 +417,9 @@ func (q *Queries) ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]Li
 			&i.JoinedAt,
 			&i.UserName,
 			&i.UserEmail,
+			&i.UserRole,
+			&i.UserAuthProvider,
+			&i.UserCreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -292,6 +486,48 @@ func (q *Queries) ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Te
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceCatalogGrants = `-- name: ListWorkspaceCatalogGrants :many
+SELECT g.workspace_id, g.catalog_id, g.permission, g.granted_at, c.trino_catalog_name AS catalog_name
+FROM workspace_catalog_grants g
+JOIN catalogs c ON c.id = g.catalog_id
+WHERE g.workspace_id = $1
+ORDER BY c.trino_catalog_name
+`
+
+type ListWorkspaceCatalogGrantsRow struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CatalogID   pgtype.UUID        `json:"catalog_id"`
+	Permission  string             `json:"permission"`
+	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
+	CatalogName string             `json:"catalog_name"`
+}
+
+func (q *Queries) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceCatalogGrants, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWorkspaceCatalogGrantsRow
+	for rows.Next() {
+		var i ListWorkspaceCatalogGrantsRow
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.CatalogID,
+			&i.Permission,
+			&i.GrantedAt,
+			&i.CatalogName,
 		); err != nil {
 			return nil, err
 		}
@@ -425,6 +661,39 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.OwnerTeamID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertWorkspaceCatalogGrant = `-- name: UpsertWorkspaceCatalogGrant :one
+INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, permission, granted_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id, catalog_id) DO UPDATE
+SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by, granted_at = now()
+RETURNING workspace_id, catalog_id, permission, granted_by, granted_at
+`
+
+type UpsertWorkspaceCatalogGrantParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+	Permission  string      `json:"permission"`
+	GrantedBy   pgtype.UUID `json:"granted_by"`
+}
+
+func (q *Queries) UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error) {
+	row := q.db.QueryRow(ctx, upsertWorkspaceCatalogGrant,
+		arg.WorkspaceID,
+		arg.CatalogID,
+		arg.Permission,
+		arg.GrantedBy,
+	)
+	var i WorkspaceCatalogGrant
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.CatalogID,
+		&i.Permission,
+		&i.GrantedBy,
+		&i.GrantedAt,
 	)
 	return i, err
 }

@@ -1,0 +1,25 @@
+meta {
+  name: Update Workspace (foreign user -> 404)
+  type: http
+  seq: 9
+}
+
+patch {
+  url: {{base_url}}/workspaces/{{workspace_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+body:json {
+  {
+    "name": "not allowed"
+  }
+}
+
+assert {
+  res.status: eq 404
+}

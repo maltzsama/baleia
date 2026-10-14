@@ -298,3 +298,11 @@ type Workspace struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
+
+type WorkspaceCatalogGrant struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CatalogID   pgtype.UUID        `json:"catalog_id"`
+	Permission  string             `json:"permission"`
+	GrantedBy   pgtype.UUID        `json:"granted_by"`
+	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
+}
