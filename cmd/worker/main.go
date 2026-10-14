@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
+	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	// Engine kinds register themselves.
@@ -76,7 +77,9 @@ func main() {
 		slog.Error("invalid connection network settings", "err", err)
 		os.Exit(1)
 	}
-	conns, err := providers.New(dialer)
+	conns, err := providers.New(dialer, providers.Options{
+		SQLite: sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
+	})
 	if err != nil {
 		slog.Error("connection providers", "err", err)
 		os.Exit(1)

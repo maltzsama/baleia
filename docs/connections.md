@@ -12,11 +12,27 @@ page when they land (#80).
 
 | Kind | Label | Family | Roles | Engine kind | Status |
 |---|---|---|---|---|---|
+| `clickhouse` | ClickHouse | database | metadata, direct_engine | clickhouse | supported |
 | `iceberg` | Iceberg REST catalog | iceberg | metadata | — | supported |
+| `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | supported |
 | `mysql` | MySQL | database | metadata, direct_engine | mysql | supported |
 | `nessie` | Project Nessie | iceberg | metadata | — | supported |
+| `oracle` | Oracle Database | database | metadata, direct_engine | oracle | supported |
 | `polaris` | Apache Polaris | iceberg | metadata | — | supported |
 | `postgresql` | PostgreSQL | database | metadata, direct_engine | postgresql | supported |
+| `sqlite` | SQLite | database | metadata, direct_engine | sqlite | unsupported (BALEIA_SQLITE_ROOT not set) |
+| `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | supported |
+
+## `clickhouse` — ClickHouse
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `host` | text | yes |  |  |
+| `port` | int |  | `8123` | 8123 for HTTP, 8443 for HTTPS |
+| `secure` | bool |  | `false` |  |
+| `database` | text |  | `default` |  |
+| `username` | text |  | `default` |  |
+| `password` | secret |  |  |  |
 
 ## `iceberg` — Iceberg REST catalog
 
@@ -29,6 +45,17 @@ page when they land (#80).
 | `client_secret` | secret |  |  |  |
 | `oauth2_server_uri` | url |  |  | Default: <REST URI>/v1/oauth/tokens |
 | `scope` | text |  |  |  |
+
+## `mariadb` — MariaDB
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `host` | text | yes |  |  |
+| `port` | int |  | `3306` |  |
+| `database` | text |  |  |  |
+| `tls` | select |  | `preferred` | one of `preferred`, `true`, `skip-verify`, `false` |
+| `username` | text | yes |  |  |
+| `password` | secret |  |  |  |
 
 ## `mysql` — MySQL
 
@@ -49,6 +76,16 @@ page when they land (#80).
 | `warehouse` | text |  |  | Default: the server's default warehouse |
 | `token` | secret |  |  |  |
 
+## `oracle` — Oracle Database
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `host` | text | yes |  |  |
+| `port` | int |  | `1521` |  |
+| `service_name` | text | yes |  | e.g. FREEPDB1 |
+| `username` | text | yes |  |  |
+| `password` | secret |  |  |  |
+
 ## `polaris` — Apache Polaris
 
 | Field | Type | Required | Default | Notes |
@@ -66,5 +103,24 @@ page when they land (#80).
 | `port` | int |  | `5432` |  |
 | `database` | text |  | `postgres` | Database to connect to; every database the user may connect to is listed |
 | `sslmode` | select |  | `prefer` | one of `disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full` |
+| `username` | text | yes |  |  |
+| `password` | secret |  |  |  |
+
+## `sqlite` — SQLite
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `path` | file_path | yes |  | Path inside BALEIA_SQLITE_ROOT (relative to it, or absolute) |
+| `read_write` | bool |  | `false` | Takes effect only when the server sets BALEIA_SQLITE_ALLOW_WRITE=true |
+
+## `sqlserver` — SQL Server
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `host` | text | yes |  |  |
+| `port` | int |  | `1433` |  |
+| `database` | text |  | `master` | Database to connect to; every database the login may access is listed |
+| `encrypt` | select |  | `true` | one of `true`, `false`, `disable`, `strict` |
+| `trust_server_certificate` | bool |  | `false` |  |
 | `username` | text | yes |  |  |
 | `password` | secret |  |  |  |

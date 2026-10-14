@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
+	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	// Engine kinds register themselves.
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
@@ -92,7 +93,9 @@ func (s *Server) routes() {
 	if err != nil {
 		panic("invalid connection network settings: " + err.Error())
 	}
-	conns, err := providers.New(dialer)
+	conns, err := providers.New(dialer, providers.Options{
+		SQLite: sqlite.Options{Root: s.cfg.SQLiteRoot, AllowWrite: s.cfg.SQLiteAllowWrite},
+	})
 	if err != nil {
 		panic("connection providers: " + err.Error())
 	}

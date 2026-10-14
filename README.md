@@ -199,6 +199,8 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_SCHEDULES_ENABLED` | `true` | Ensure recurring Temporal Schedules (Lens pollers, table health, retriever) at worker boot |
 | `BALEIA_CONNECTIONS_DENY_CIDRS` | _(unset)_ | Comma-separated CIDRs that connections may never reach, added to the built-in deny list (loopback, link-local incl. cloud metadata `169.254.169.254`, `0.0.0.0/8`) — see [ADR 0011](docs/adr/0011-direct-connections-security.md) |
 | `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, connections may only reach these comma-separated CIDRs (the deny list still wins) |
+| `BALEIA_SQLITE_ROOT` | _(unset)_ | Directory SQLite connections are confined to (symlinks resolved); unset disables the SQLite provider. The API and the worker must see the same files (shared volume) |
+| `BALEIA_SQLITE_ALLOW_WRITE` | `false` | Let a SQLite connection that sets `read_write` open its file read-write; otherwise files open read-only |
 | `BALEIA_CONNECTIONS_ALLOW_LOOPBACK` | `false` | Let connections reach loopback addresses. For local development only (`make dev` / `make worker` set it); never in a shared deployment |
 | `BALEIA_TRINO_ADMIN_USER` | `baleia_admin` | Trino identity for catalog DDL/reconcile/maintenance (never user SQL) |
 | `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |

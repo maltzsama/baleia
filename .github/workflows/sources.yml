@@ -1,0 +1,111 @@
+name: Sources
+
+# Integration tests of the connection providers against real databases (#11).
+# Nightly, on demand, and on pull requests that touch the providers. Oracle
+# starts slowly; it runs here too, so a provider change is checked against
+# every database before it merges.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "internal/connections/**"
+      - ".github/workflows/sources.yml"
+
+jobs:
+  providers:
+    name: Provider integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: baleia_dev
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: baleia_dev
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pbaleia_dev" --health-interval 5s --health-timeout 5s --health-retries 30
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: baleia_dev
+        ports: ["3307:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 30
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Baleia_dev_2026
+        ports: ["1433:1433"]
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: baleia_dev
+          APP_USER: baleia
+          APP_USER_PASSWORD: baleia_dev
+        ports: ["1521:1521"]
+        options: >-
+          --health-cmd healthcheck.sh --health-interval 10s --health-timeout 5s --health-retries 60
+      nessie:
+        image: ghcr.io/projectnessie/nessie:0.104.5
+        env:
+          nessie.catalog.default-warehouse: warehouse
+          nessie.catalog.warehouses.warehouse.location: s3://bucket/wh
+          nessie.catalog.service.s3.default-options.region: us-east-1
+        ports: ["19120:19120"]
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8
+        env:
+          CLICKHOUSE_USER: baleia
+          CLICKHOUSE_PASSWORD: baleia_dev
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+        ports: ["8123:8123"]
+        options: >-
+          --health-cmd "wget -qO- http://127.0.0.1:8123/ping" --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Wait for SQL Server
+        run: |
+          for i in $(seq 1 60); do
+            (echo > /dev/tcp/127.0.0.1/1433) 2>/dev/null && sleep 10 && exit 0
+            sleep 3
+          done
+          echo "SQL Server did not start" && exit 1
+      - name: Wait for Nessie
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:19120/iceberg/v1/config >/dev/null && exit 0
+            sleep 3
+          done
+          echo "Nessie did not start" && exit 1
+      - name: Provider integration tests
+        env:
+          BALEIA_TEST_POSTGRES_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres
+          BALEIA_TEST_MYSQL_URL: mysql://root:baleia_dev@127.0.0.1:3306
+          BALEIA_TEST_MARIADB_URL: mysql://root:baleia_dev@127.0.0.1:3307
+          BALEIA_TEST_SQLSERVER_URL: sqlserver://sa:Baleia_dev_2026@127.0.0.1:1433
+          BALEIA_TEST_ORACLE_URL: oracle://baleia:baleia_dev@127.0.0.1:1521/FREEPDB1
+          BALEIA_TEST_CLICKHOUSE_URL: http://baleia:baleia_dev@127.0.0.1:8123
+          BALEIA_TEST_NESSIE_URL: http://127.0.0.1:19120
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -count=1 -v ./internal/connections/... | tee test.log
+          # Every integration test must have run, not been skipped (Polaris
+          # needs its bootstrap; it is covered against the compose stack).
+          if grep -E -- '--- SKIP: TestMetadataReader_' test.log | grep -v polaris; then
+            echo "an integration test was skipped" && exit 1
+          fi

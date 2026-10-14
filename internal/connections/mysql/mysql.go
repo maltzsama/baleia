@@ -33,25 +33,49 @@ var systemSchemas = []string{"mysql", "information_schema", "performance_schema"
 
 type Provider struct {
 	network string
+	mariadb bool
 }
 
-// New registers the dialer as a named network for the driver. The name is
-// unique per dialer, so tests with different dialers do not collide.
+// New is the MySQL provider. It registers the dialer as a named network for
+// the driver; the name is unique per dialer, so tests with different
+// dialers do not collide.
 func New(d *connections.Dialer) *Provider {
+	return &Provider{network: registerDialer(d)}
+}
+
+// NewMariaDB is the MariaDB provider: same protocol and metadata, MariaDB's
+// session variables.
+func NewMariaDB(d *connections.Dialer) *Provider {
+	return &Provider{network: registerDialer(d), mariadb: true}
+}
+
+func registerDialer(d *connections.Dialer) string {
 	network := fmt.Sprintf("baleia-%p", d)
 	driver.RegisterDialContext(network, func(ctx context.Context, addr string) (net.Conn, error) {
 		return d.DialContext(ctx, "tcp", addr)
 	})
-	return &Provider{network: network}
+	return network
 }
 
-func (*Provider) Kind() connections.Kind     { return connections.KindMySQL }
-func (*Provider) Label() string              { return "MySQL" }
+func (p *Provider) Kind() connections.Kind {
+	if p.mariadb {
+		return connections.KindMariaDB
+	}
+	return connections.KindMySQL
+}
+
+func (p *Provider) Label() string {
+	if p.mariadb {
+		return "MariaDB"
+	}
+	return "MySQL"
+}
+
 func (*Provider) Family() connections.Family { return connections.FamilyDatabase }
 func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
-func (*Provider) EngineKind() string { return "mysql" }
+func (p *Provider) EngineKind() string { return string(p.Kind()) }
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }
@@ -100,9 +124,16 @@ func (p *Provider) open(cfg connections.Config) (*sql.DB, error) {
 	mc.Timeout = connectTimeout
 	mc.ReadTimeout = statementTimeout
 	mc.WriteTimeout = statementTimeout
-	mc.Params = map[string]string{
-		"transaction_read_only": "1",
-		"max_execution_time":    fmt.Sprint(statementTimeout.Milliseconds()),
+	if p.mariadb {
+		mc.Params = map[string]string{
+			"tx_read_only":       "1",
+			"max_statement_time": fmt.Sprint(int(statementTimeout.Seconds())),
+		}
+	} else {
+		mc.Params = map[string]string{
+			"transaction_read_only": "1",
+			"max_execution_time":    fmt.Sprint(statementTimeout.Milliseconds()),
+		}
 	}
 	connector, err := driver.NewConnector(mc)
 	if err != nil {
