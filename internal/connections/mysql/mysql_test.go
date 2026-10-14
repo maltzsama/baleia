@@ -17,9 +17,19 @@ import (
 // BALEIA_TEST_MYSQL_URL (mysql://user:pass@host:port) to enable it; the user
 // needs CREATE and DROP on databases.
 func TestMetadataReader_mysql(t *testing.T) {
-	raw := os.Getenv("BALEIA_TEST_MYSQL_URL")
+	runMetadataReader(t, "BALEIA_TEST_MYSQL_URL", New)
+}
+
+// TestMetadataReader_mariadb is the same suite against MariaDB
+// (BALEIA_TEST_MARIADB_URL).
+func TestMetadataReader_mariadb(t *testing.T) {
+	runMetadataReader(t, "BALEIA_TEST_MARIADB_URL", NewMariaDB)
+}
+
+func runMetadataReader(t *testing.T, env string, newProvider func(*connections.Dialer) *Provider) {
+	raw := os.Getenv(env)
 	if raw == "" {
-		t.Skip("BALEIA_TEST_MYSQL_URL not set")
+		t.Skip(env + " not set")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -51,7 +61,7 @@ func TestMetadataReader_mysql(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := New(d)
+	p := newProvider(d)
 	host, port, _ := net.SplitHostPort(u.Host)
 	cfg, err := p.Validate(connections.Config{
 		Values:  map[string]string{"host": host, "port": port, "username": u.User.Username(), "tls": "false"},

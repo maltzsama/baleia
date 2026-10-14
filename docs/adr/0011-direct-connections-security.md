@@ -44,9 +44,14 @@ Partially compliant.
 - `connections.Dialer` exists and every provider dials through it, including the Iceberg REST
   HTTP client (environment proxies ignored) and the PostgreSQL (`DialFunc`) and MySQL
   (`RegisterDialContext`) drivers; `TestEveryDriverUsesDialer` proves it per provider (#11).
-- Metadata sessions of database providers are read-only with a 30 s statement timeout.
-- No direct engine exists yet: read-only capabilities and sessions are #20; SQLite and the other
-  database providers are #11 PR 2; transient tests are #12.
+- Database providers: PostgreSQL (pgx `DialFunc`), MySQL and MariaDB (`RegisterDialContext`),
+  SQL Server (`Connector.Dialer`), Oracle (`OracleConnector.Dialer`) and ClickHouse (HTTP through
+  the dialer's client). Their metadata sessions are read-only where the engine allows it
+  (PostgreSQL, MySQL, MariaDB, ClickHouse `readonly=1`) and every statement has a 30 s limit.
+- SQLite files resolve inside `BALEIA_SQLITE_ROOT` and open read-only unless the connection and
+  `BALEIA_SQLITE_ALLOW_WRITE` both allow writes (`TestSQLiteRootConfinement`).
+- Direct engines (sessions with read-only enforcement) are the engine issues (#81, #82, #83);
+  transient tests are #12.
 
 ## Alternatives considered
 

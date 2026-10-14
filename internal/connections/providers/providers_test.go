@@ -29,7 +29,11 @@ func registry(t *testing.T, o connections.DialerOptions) *connections.Registry {
 }
 
 // storedKinds is the catalog_connections.type CHECK of the current migrations.
-var storedKinds = []connections.Kind{"polaris", "nessie", "glue", "hive", "iceberg", "postgresql", "mysql"}
+var storedKinds = []connections.Kind{
+	"polaris", "nessie", "iceberg", "lakekeeper", "unity", "hive", "glue",
+	"postgresql", "mysql", "mariadb", "sqlserver", "oracle", "sqlite", "clickhouse",
+	"flightsql", "trino", "doris", "starrocks",
+}
 
 func TestEveryProviderIsComplete(t *testing.T) {
 	reg := registry(t, connections.DialerOptions{})
@@ -256,8 +260,17 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 		connections.KindIcebergREST: {Values: map[string]string{"url": "http://localhost:8181/catalog"}},
 		connections.KindPostgreSQL:  {Values: map[string]string{"host": "localhost", "username": "u", "sslmode": "disable"}},
 		connections.KindMySQL:       {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
+		connections.KindMariaDB:     {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
+		connections.KindSQLServer:   {Values: map[string]string{"host": "localhost", "username": "u", "encrypt": "disable"}},
+		connections.KindOracle:      {Values: map[string]string{"host": "localhost", "service_name": "FREEPDB1", "username": "u"}},
+		connections.KindClickHouse:  {Values: map[string]string{"host": "localhost"}},
 	}
+	// SQLite opens no network connection; TestSQLiteRootConfinement guards it.
+	noNetwork := map[connections.Kind]bool{connections.KindSQLite: true}
 	for _, p := range reg.All() {
+		if noNetwork[p.Kind()] {
+			continue
+		}
 		raw, ok := configs[p.Kind()]
 		if !ok {
 			t.Errorf("%s: no dialer test config", p.Kind())

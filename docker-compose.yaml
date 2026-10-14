@@ -394,3 +394,68 @@ services:
         condition: service_healthy
       polaris:
         condition: service_healthy
+
+  # ============================================
+  # SOURCES - databases for provider and engine tests (#11, #14)
+  # Not started by default: docker compose --profile sources up -d
+  # ============================================
+
+  mysql:
+    image: mysql:8.4
+    container_name: baleia_src_mysql
+    profiles: ["sources"]
+    environment:
+      MYSQL_ROOT_PASSWORD: baleia_dev
+    ports:
+      - "13306:3306"
+    networks:
+      - app_net
+
+  mariadb:
+    image: mariadb:11.4
+    container_name: baleia_src_mariadb
+    profiles: ["sources"]
+    environment:
+      MARIADB_ROOT_PASSWORD: baleia_dev
+    ports:
+      - "13307:3306"
+    networks:
+      - app_net
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: baleia_src_sqlserver
+    profiles: ["sources"]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Baleia_dev_2026
+    ports:
+      - "11433:1433"
+    networks:
+      - app_net
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    container_name: baleia_src_oracle
+    profiles: ["sources"]
+    environment:
+      ORACLE_PASSWORD: baleia_dev
+      APP_USER: baleia
+      APP_USER_PASSWORD: baleia_dev
+    ports:
+      - "11521:1521"
+    networks:
+      - app_net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: baleia_src_clickhouse
+    profiles: ["sources"]
+    environment:
+      CLICKHOUSE_USER: baleia
+      CLICKHOUSE_PASSWORD: baleia_dev
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "18123:8123"
+    networks:
+      - app_net

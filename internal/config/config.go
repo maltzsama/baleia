@@ -75,6 +75,11 @@ type Config struct {
 	ConnectionsDenyCIDRs     []string
 	ConnectionsAllowCIDRs    []string
 	ConnectionsAllowLoopback bool
+	// SQLiteRoot confines SQLite connections to files under it; empty
+	// disables the SQLite provider. SQLiteAllowWrite lets a connection that
+	// asks for it open its file read-write.
+	SQLiteRoot       string
+	SQLiteAllowWrite bool
 }
 
 func Load() *Config {
@@ -112,6 +117,8 @@ func Load() *Config {
 		ConnectionsDenyCIDRs:     splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
 		ConnectionsAllowCIDRs:    splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
 		ConnectionsAllowLoopback: getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
+		SQLiteRoot:               getEnv("BALEIA_SQLITE_ROOT", ""),
+		SQLiteAllowWrite:         getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
 	}
 }
 
