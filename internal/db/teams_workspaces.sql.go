@@ -109,7 +109,7 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspaces (name, description, type, polaris_catalog_name, owner_user_id, owner_team_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at
+RETURNING id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at, default_binding_id, default_schema
 `
 
 type CreateWorkspaceParams struct {
@@ -141,6 +141,8 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.OwnerTeamID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultBindingID,
+		&i.DefaultSchema,
 	)
 	return i, err
 }
@@ -206,7 +208,7 @@ func (q *Queries) GetTeamMemberRole(ctx context.Context, arg GetTeamMemberRolePa
 }
 
 const getWorkspaceByID = `-- name: GetWorkspaceByID :one
-SELECT id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at FROM workspaces WHERE id = $1
+SELECT id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at, default_binding_id, default_schema FROM workspaces WHERE id = $1
 `
 
 func (q *Queries) GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error) {
@@ -222,12 +224,14 @@ func (q *Queries) GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspa
 		&i.OwnerTeamID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultBindingID,
+		&i.DefaultSchema,
 	)
 	return i, err
 }
 
 const getWorkspaceByPolarisName = `-- name: GetWorkspaceByPolarisName :one
-SELECT id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at FROM workspaces WHERE polaris_catalog_name = $1
+SELECT id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at, default_binding_id, default_schema FROM workspaces WHERE polaris_catalog_name = $1
 `
 
 func (q *Queries) GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error) {
@@ -243,6 +247,8 @@ func (q *Queries) GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogN
 		&i.OwnerTeamID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultBindingID,
+		&i.DefaultSchema,
 	)
 	return i, err
 }
@@ -270,7 +276,7 @@ func (q *Queries) IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerPara
 }
 
 const listCatalogsGrantedToUser = `-- name: ListCatalogsGrantedToUser :many
-SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at FROM catalogs c
+SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref FROM catalogs c
 JOIN workspace_catalog_grants g ON g.catalog_id = c.id
 JOIN workspaces w ON w.id = g.workspace_id
 LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
@@ -306,6 +312,8 @@ func (q *Queries) ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalog
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Origin,
+			&i.SourceRef,
 		); err != nil {
 			return nil, err
 		}
@@ -318,7 +326,7 @@ func (q *Queries) ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalog
 }
 
 const listGrantedCatalogsOfWorkspace = `-- name: ListGrantedCatalogsOfWorkspace :many
-SELECT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, cc.name AS connection_name, cc.type AS connection_type
+SELECT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref, cc.name AS connection_name, cc.type AS connection_type
 FROM workspace_catalog_grants g
 JOIN catalogs c ON c.id = g.catalog_id
 JOIN catalog_connections cc ON cc.id = c.connection_id
@@ -339,6 +347,8 @@ type ListGrantedCatalogsOfWorkspaceRow struct {
 	Enabled          bool               `json:"enabled"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	Origin           string             `json:"origin"`
+	SourceRef        *string            `json:"source_ref"`
 	ConnectionName   string             `json:"connection_name"`
 	ConnectionType   string             `json:"connection_type"`
 }
@@ -365,6 +375,8 @@ func (q *Queries) ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceI
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Origin,
+			&i.SourceRef,
 			&i.ConnectionName,
 			&i.ConnectionType,
 		); err != nil {
@@ -540,7 +552,7 @@ func (q *Queries) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pg
 }
 
 const listWorkspacesByUser = `-- name: ListWorkspacesByUser :many
-SELECT DISTINCT w.id, w.name, w.description, w.type, w.polaris_catalog_name, w.owner_user_id, w.owner_team_id, w.created_at, w.updated_at
+SELECT DISTINCT w.id, w.name, w.description, w.type, w.polaris_catalog_name, w.owner_user_id, w.owner_team_id, w.created_at, w.updated_at, w.default_binding_id, w.default_schema
 FROM workspaces w
 LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
 WHERE w.owner_user_id = $1
@@ -567,6 +579,8 @@ func (q *Queries) ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.U
 			&i.OwnerTeamID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DefaultBindingID,
+			&i.DefaultSchema,
 		); err != nil {
 			return nil, err
 		}
@@ -639,7 +653,7 @@ const updateWorkspace = `-- name: UpdateWorkspace :one
 UPDATE workspaces
 SET name = $2, description = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at
+RETURNING id, name, description, type, polaris_catalog_name, owner_user_id, owner_team_id, created_at, updated_at, default_binding_id, default_schema
 `
 
 type UpdateWorkspaceParams struct {
@@ -661,6 +675,8 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.OwnerTeamID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultBindingID,
+		&i.DefaultSchema,
 	)
 	return i, err
 }

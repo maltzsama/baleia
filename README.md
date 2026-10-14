@@ -182,7 +182,7 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_ENCRYPTION_KEY` | _(unset)_ | Key that encrypts stored connection credentials (≥ 32 characters, must differ from `JWT_SECRET`). Required once any credential is stored; the API refuses to start without it. Derived with HKDF-SHA256; each value is bound to its connection row |
 | `BALEIA_ENCRYPTION_KEY_PREVIOUS` | _(unset)_ | Previous encryption key, set only during rotation: values are read with the current or previous key and always written with the current one |
 | `TEMPORAL_HOST` | `localhost:7233` | Temporal server address |
-| `TRINO_URL` | `http://localhost:8088` | Trino coordinator REST endpoint |
+| `TRINO_URL` | `http://localhost:8088` | Trino coordinator REST endpoint. At API boot it also seeds the default Trino engine and keeps its URL in step while that engine's connection is system-owned; engine endpoints live in the database (`engines`, [ADR 0002](docs/adr/0002-connections-engines-catalogs-bindings.md)) |
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |
 | `PUBLIC_URL` | `http://localhost:8080` | Externally reachable URL (used for presigned links) |
 | `S3_ENDPOINT` | `localhost:9000` | S3-compatible storage endpoint (RustFS) |

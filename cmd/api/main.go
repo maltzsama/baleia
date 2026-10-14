@@ -9,8 +9,10 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/server"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,6 +49,15 @@ func main() {
 	// the Trino plugin's connection stay in sync (no secret in a migration).
 	if err := bootstrap.SetTrinoRolePassword(ctx, pool, cfg.TrinoDBPassword); err != nil {
 		slog.Error("failed to set baleia_trino password", "err", err)
+		os.Exit(1)
+	}
+
+	// Engine endpoints live in the database; TRINO_URL only seeds and updates
+	// the default Trino engine Baleia created itself.
+	if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		return bootstrap.EnsureDefaultTrinoEngine(ctx, db.New(tx), cfg.TrinoURL)
+	}); err != nil {
+		slog.Error("default trino engine", "err", err)
 		os.Exit(1)
 	}
 

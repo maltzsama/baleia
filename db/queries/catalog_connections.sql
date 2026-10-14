@@ -27,3 +27,5 @@ RETURNING *;
 
 -- name: DeleteCatalogConnection :exec
 DELETE FROM catalog_connections WHERE id = $1;
+-- name: CatalogConnectionNameExists :one
+SELECT EXISTS (SELECT 1 FROM catalog_connections WHERE name = $1);
