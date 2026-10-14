@@ -38,8 +38,10 @@ func newSession(e *Engine, spec queryengine.SessionSpec) *session {
 		prepared:   map[string]string{},
 	}
 	if spec.Timeout > 0 {
-		// Trino enforces it too (#84).
-		s.properties["query_max_execution_time"] = fmt.Sprintf("%ds", int64(spec.Timeout/time.Second))
+		// Trino enforces it too (#84). Whole seconds, rounded up so a
+		// sub-second timeout never becomes 0s.
+		secs := int64((spec.Timeout + time.Second - 1) / time.Second)
+		s.properties["query_max_execution_time"] = fmt.Sprintf("%ds", secs)
 	}
 	return s
 }

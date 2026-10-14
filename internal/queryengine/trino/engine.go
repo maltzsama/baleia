@@ -113,7 +113,7 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 	}
 	err := e.admin.KillQuery(ctx, h.QueryID, "cancelled by baleia")
 	var qe *trinoclient.QueryError
-	if errors.As(err, &qe) && (qe.ErrorName == "NOT_FOUND" || strings.Contains(qe.Message, "is not running")) {
+	if errors.As(err, &qe) && queryGone(qe) {
 		return nil // already finished: not an error
 	}
 	if err != nil {
@@ -127,6 +127,14 @@ func (e *Engine) OpenSession(_ context.Context, spec queryengine.SessionSpec) (q
 }
 
 func (e *Engine) Introspector() queryengine.Introspector { return introspector{e: e} }
+
+// queryGone reports kill_query's answer for a query that is no longer
+// running. Trino 483 reports it as NOT_SUPPORTED "Target query is not
+// running: <id>"; NOT_FOUND covers an unknown id.
+func queryGone(qe *trinoclient.QueryError) bool {
+	return qe.ErrorName == "NOT_FOUND" ||
+		(qe.ErrorName == "NOT_SUPPORTED" && strings.Contains(qe.Message, "is not running"))
+}
 
 type dialect struct{}
 

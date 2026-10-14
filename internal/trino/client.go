@@ -45,7 +45,7 @@ func (e *QueryError) Error() string {
 }
 
 // TransportError means Trino could not be reached or answered with an HTTP
-// error instead of a statement response.
+// status other than 2xx instead of a statement response.
 type TransportError struct {
 	Status int // 0 for a network error
 	Err    error
@@ -381,7 +381,7 @@ func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOpti
 		return "", &TransportError{Err: fmt.Errorf("trino execute: %w", err)}
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 500 {
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", &TransportError{Status: resp.StatusCode}
 	}
 	if opts.OnHeaders != nil {
@@ -586,7 +586,7 @@ func (c *Client) next(ctx context.Context, uri, user string, onHeaders func(http
 		return StatementResponse{}, &TransportError{Err: fmt.Errorf("trino next: %w", err)}
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 500 {
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return StatementResponse{}, &TransportError{Status: resp.StatusCode}
 	}
 	if onHeaders != nil {

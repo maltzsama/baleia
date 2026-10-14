@@ -293,8 +293,13 @@ func TestStatementAsksForParametricDatetime(t *testing.T) {
 // HTTP failures are transport errors.
 func TestErrorsAreTyped(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Trino-User") == "down" {
+		switch r.Header.Get("X-Trino-User") {
+		case "down":
 			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		case "anon":
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, "Unauthorized")
 			return
 		}
 		_, _ = io.WriteString(w, `{"id":"q","error":{"message":"m","errorName":"SYNTAX_ERROR","errorType":"USER_ERROR"}}`)
@@ -309,5 +314,9 @@ func TestErrorsAreTyped(t *testing.T) {
 	var te *TransportError
 	if !errors.As(err, &te) || te.Status != http.StatusServiceUnavailable {
 		t.Fatalf("err = %#v", err)
+	}
+	_, err = New(srv.URL, "anon").Execute(context.Background(), "SELECT 1", "", "")
+	if !errors.As(err, &te) || te.Status != http.StatusUnauthorized {
+		t.Fatalf("a non-JSON 401 must be a transport error, got %#v", err)
 	}
 }

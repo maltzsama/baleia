@@ -3,6 +3,8 @@ package trino
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -42,6 +44,9 @@ func mapError(err error) error {
 	}
 	var te *trinoclient.TransportError
 	if errors.As(err, &te) {
+		if te.Status == http.StatusUnauthorized || te.Status == http.StatusForbidden {
+			return queryengine.NewError(queryengine.CodePermission, Kind, fmt.Sprintf("HTTP %d", te.Status), te.Error())
+		}
 		return queryengine.NewError(queryengine.CodeUnavailable, Kind, "", te.Error())
 	}
 	var qe *trinoclient.QueryError

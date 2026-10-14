@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -51,6 +52,12 @@ func TestErrorMapping(t *testing.T) {
 	}
 	if got := queryengine.CodeOf(mapError(&trinoclient.TransportError{Status: 503})); got != queryengine.CodeUnavailable {
 		t.Errorf("transport error → %s", got)
+	}
+	if got := queryengine.CodeOf(mapError(&trinoclient.TransportError{Status: 401})); got != queryengine.CodePermission {
+		t.Errorf("HTTP 401 → %s", got)
+	}
+	if got := queryengine.CodeOf(mapError(&trinoclient.TransportError{Status: 404})); got != queryengine.CodeUnavailable {
+		t.Errorf("HTTP 404 → %s", got)
 	}
 	if got := queryengine.CodeOf(mapError(context.Canceled)); got != queryengine.CodeCancelled {
 		t.Errorf("cancelled context → %s", got)
@@ -235,5 +242,31 @@ func TestQueryErrorsAreTyped(t *testing.T) {
 	var e *queryengine.Error
 	if !errors.As(err, &e) || e.Code != queryengine.CodeNotFound || e.Native != "TABLE_NOT_FOUND" {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestQueryGone(t *testing.T) {
+	cases := map[string]bool{
+		"NOT_SUPPORTED|Target query is not running: 20261014_183149_00019_5wabn": true,
+		"NOT_FOUND|Query not found":        true,
+		"NOT_SUPPORTED|something else":     false,
+		"PERMISSION_DENIED|is not running": false,
+	}
+	for in, want := range cases {
+		name, msg, _ := strings.Cut(in, "|")
+		if got := queryGone(&trinoclient.QueryError{ErrorName: name, Message: msg}); got != want {
+			t.Errorf("%s: %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestSubSecondTimeoutRoundsUp(t *testing.T) {
+	s := newSession(&Engine{}, queryengine.SessionSpec{Timeout: 300 * time.Millisecond})
+	if got := s.properties["query_max_execution_time"]; got != "1s" {
+		t.Fatalf("query_max_execution_time = %q, want 1s", got)
+	}
+	s = newSession(&Engine{}, queryengine.SessionSpec{Timeout: 90 * time.Second})
+	if got := s.properties["query_max_execution_time"]; got != "90s" {
+		t.Fatalf("query_max_execution_time = %q, want 90s", got)
 	}
 }
