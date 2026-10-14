@@ -96,7 +96,9 @@ func containsPrefix(list []netip.Prefix, p netip.Prefix) bool {
 
 // Permitted reports whether the dialer may connect to addr.
 func (d *Dialer) Permitted(addr netip.Addr) bool {
-	addr = addr.Unmap()
+	// Prefix.Contains never matches an address with an IPv6 zone, so "::1%lo"
+	// would slip past every deny prefix. Check the address without it.
+	addr = addr.Unmap().WithZone("")
 	for _, p := range d.Deny {
 		if p.Contains(addr) {
 			return false

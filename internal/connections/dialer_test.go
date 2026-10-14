@@ -33,6 +33,9 @@ func TestDialerDeniesMetadataIP(t *testing.T) {
 		"[::1]:5432",
 		"[::ffff:127.0.0.1]:5432",
 		"[fd00:ec2::254]:80",
+		"[::1%lo]:5432",
+		"[fd00:ec2::254%eth0]:80",
+		"[fe80::1%eth0]:80",
 		"0.0.0.0:80",
 	} {
 		if _, err := d.DialContext(context.Background(), "tcp", addr); !errors.Is(err, ErrDeniedNetwork) {
