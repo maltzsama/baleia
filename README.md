@@ -197,6 +197,9 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_RESULT_MAX_ROWS` | `1000000` | Max rows buffered per statement result before truncation |
 | `BALEIA_RESULT_MAX_BYTES` | `536870912` | Max Arrow bytes per statement result before truncation |
 | `BALEIA_SCHEDULES_ENABLED` | `true` | Ensure recurring Temporal Schedules (Lens pollers, table health, retriever) at worker boot |
+| `BALEIA_CONNECTIONS_DENY_CIDRS` | _(unset)_ | Comma-separated CIDRs that connections may never reach, added to the built-in deny list (loopback, link-local incl. cloud metadata `169.254.169.254`, `0.0.0.0/8`) — see [ADR 0011](docs/adr/0011-direct-connections-security.md) |
+| `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, connections may only reach these comma-separated CIDRs (the deny list still wins) |
+| `BALEIA_CONNECTIONS_ALLOW_LOOPBACK` | `false` | Let connections reach loopback addresses. For local development only (`make dev` / `make worker` set it); never in a shared deployment |
 | `BALEIA_TRINO_ADMIN_USER` | `baleia_admin` | Trino identity for catalog DDL/reconcile/maintenance (never user SQL) |
 | `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |
 | `BALEIA_TRINO_USER_IDENTITY` | `uuid` | Map Baleia users to Trino users: `uuid`→`u_<uuid>` or `email` |
@@ -232,7 +235,7 @@ internal/
   api/                             Generated code (oapi-codegen + sqlc)
   handlers/                        Strict server handler implementations
   auth/                            JWT, password hashing, auth middleware
-  catalog_connections/             Client interface + adapters for Polaris, Nessie, Glue, Hive
+  connections/                     Connection provider contract, SSRF-safe dialer, one package per provider
   config/                          Environment config loader
   crypto/                          AES-256-GCM encryption for stored credentials
   db/                              sqlc/pgx database layer
@@ -256,14 +259,14 @@ web/src/
 
 The OpenAPI spec is served at `GET /openapi.yaml` and is the single source of truth for endpoint contracts, request/response schemas, and authorization rules. Generate Go code from it with `make generate`.
 
-## Adding a catalog manager type
+## Adding a connection provider
 
-1. Add the type to the `catalog_connections_type_check` CHECK constraint (new migration)
-2. Implement the `Client` interface for the new manager in `internal/catalog_connections/`
-3. Extend `trinoConnector()` and `trinoCatalogProperties()` in `handlers_catalog_connections.go`
-4. Add the credentials schema to `api/swagger.yaml`
-5. Add the connector card to `web/src/routes/datasources/+page.svelte`
-6. Regenerate: `make sqlc && make generate`
+1. Add the kind to the `catalog_connections_type_check` CHECK constraint (new migration)
+2. Implement `connections.Provider` in `internal/connections/<kind>/` (config schema, `Validate`, `Ping`, `OpenMetadata`). Every network connection goes through the injected `connections.Dialer`; a driver without a dial hook is not shipped ([ADR 0011](docs/adr/0011-direct-connections-security.md))
+3. Register it in `internal/connections/providers/providers.go` and add it to `TestEveryDriverUsesDialer`
+4. Regenerate [`docs/connections.md`](docs/connections.md): `BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/`
+5. Until binders land (#80), extend `trinoConnector()` and `catalogs.Project` for the Trino projection
+6. Until the API is driven by the provider schema (#11 PR 1b), add the credentials schema to `api/swagger.yaml` and the card to `web/src/routes/(app)/datasources/+page.svelte`, then `make generate`
 
 ## Roadmap
 

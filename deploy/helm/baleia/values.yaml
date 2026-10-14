@@ -38,6 +38,10 @@ config:
   # Trino identity that may manage catalogs. One value: Baleia's DDL emitter
   # runs as it and the chart's catalog guard lists it as the only admin user.
   BALEIA_TRINO_ADMIN_USER: baleia_admin
+  # Network safety for connections (docs/adr/0011). Loopback, link-local and
+  # cloud metadata addresses are always refused. Comma-separated CIDRs.
+  BALEIA_CONNECTIONS_DENY_CIDRS: ""
+  BALEIA_CONNECTIONS_ALLOW_CIDRS: ""   # if set, connections may only reach these
 
 api:
   replicas: 1

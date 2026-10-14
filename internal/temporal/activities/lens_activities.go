@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/catalog_connections"
+	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 	credcat "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
@@ -182,17 +183,24 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 	if err != nil {
 		return fmt.Errorf("connection %s: %w", params.CatalogConnectionID, err)
 	}
-	var rawCreds *string
-	if plain != nil {
-		s := string(plain)
-		rawCreds = &s
-	}
-	client, err := catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
+	provider, err := a.connections.Get(connections.Kind(conn.Type))
 	if err != nil {
 		return err
 	}
+	if provider.Family() != connections.FamilyIceberg {
+		return fmt.Errorf("table health needs an Iceberg catalog, connection is %q: %w", conn.Type, connections.ErrUnsupported)
+	}
+	cfg, err := providers.FromStored(a.connections, connections.Kind(conn.Type), conn.ID, conn.Url, plain)
+	if err != nil {
+		return err
+	}
+	reader, err := provider.OpenMetadata(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
 
-	catalogs, err := client.ListCatalogs(ctx)
+	catalogs, err := reader.ListCatalogs(ctx)
 	if err != nil {
 		return fmt.Errorf("list catalogs: %w", err)
 	}
@@ -202,20 +210,20 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 			continue
 		}
 
-		namespaces, err := client.ListNamespaces(ctx, cat.Name)
+		namespaces, err := allNamespaces(ctx, reader, cat.Name)
 		if err != nil {
 			continue
 		}
 
 		for _, ns := range namespaces {
 			nsName := strings.Join(ns, ".")
-			tables, err := client.ListTables(ctx, cat.Name, nsName)
+			tables, err := allTables(ctx, reader, cat.Name, ns)
 			if err != nil {
 				continue
 			}
 
 			for _, tbl := range tables {
-				meta, err := client.LoadTable(ctx, cat.Name, nsName, tbl.Name)
+				meta, err := reader.LoadTable(ctx, tbl)
 				if err != nil {
 					continue
 				}
@@ -294,6 +302,49 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 	}
 
 	return nil
+}
+
+// maxNamespaceDepth bounds the walk of nested Iceberg namespaces.
+const maxNamespaceDepth = 8
+
+// allNamespaces lists every namespace of a catalog, nested ones included.
+func allNamespaces(ctx context.Context, r connections.MetadataReader, catalog string) ([]connections.Namespace, error) {
+	var out []connections.Namespace
+	var walk func(parent connections.Namespace, depth int) error
+	walk = func(parent connections.Namespace, depth int) error {
+		if depth > maxNamespaceDepth {
+			return nil
+		}
+		children, err := r.ListNamespaces(ctx, catalog, parent)
+		if err != nil {
+			return err
+		}
+		for _, ns := range children {
+			out = append(out, ns)
+			if err := walk(ns, depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return out, walk(nil, 1)
+}
+
+// allTables lists every table of a namespace, following pages.
+func allTables(ctx context.Context, r connections.MetadataReader, catalog string, ns connections.Namespace) ([]connections.TableRef, error) {
+	var out []connections.TableRef
+	token := ""
+	for {
+		page, next, err := r.ListTables(ctx, catalog, ns, token)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, page...)
+		if next == "" || next == token {
+			return out, nil
+		}
+		token = next
+	}
 }
 
 func mapTrinoState(s string) string {

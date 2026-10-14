@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlsplitter"
@@ -45,6 +46,8 @@ type Activities struct {
 	// keyring opens stored connection credentials (table health talks to the
 	// catalog manager). May be nil on a fresh install with no credentials.
 	keyring *crypto.Keyring
+	// connections reads metadata from catalog managers (table health).
+	connections *connections.Registry
 }
 
 // s3Client is the slice of the storage client result streaming needs. It is an
@@ -53,15 +56,16 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring) *Activities {
+func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry) *Activities {
 	a := &Activities{
 		queries: db.New(pool),
 		// The worker's client runs user queries. Its configured user is the
 		// service fallback; per-statement identity is set via ExecuteOptions.
 		trino:   trino.New(cfg.TrinoURL, cfg.TrinoServiceUser),
 		s3:      storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
-		cfg:     cfg,
-		keyring: keyring,
+		cfg:         cfg,
+		keyring:     keyring,
+		connections: conns,
 	}
 	defaultActivities = a
 	return a
