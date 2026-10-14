@@ -14,8 +14,9 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/jackc/pgx/v5"
@@ -114,21 +115,21 @@ func SplitSQL(ctx context.Context, params SplitSQLParams) (*SplitSQLResult, erro
 }
 
 func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*SplitSQLResult, error) {
-	stmts := sqlsplitter.Split(params.SQL)
-	if len(stmts) == 0 {
-		stmts = []string{params.SQL}
-	}
 	// I5 (CR-017): catalog management goes through the Baleia UI, never the
 	// SQL editor. With dynamic catalog.management — which is global — any
 	// user with query access could CREATE CATALOG pointed at arbitrary hosts
 	// (exfiltration) or DROP another user's catalog. Reject it here, per
 	// statement, before the workflow starts any statement. The editor gate also
 	// rejects EXECUTE IMMEDIATE smuggling catalog DDL and SET SESSION
-	// AUTHORIZATION.
-	for _, stmt := range stmts {
-		if sqlsplitter.IsForbiddenInEditor(stmt) {
-			return nil, fmt.Errorf("catalog management and session authorization are not allowed in the SQL editor")
-		}
+	// AUTHORIZATION. V1 executions run on the default Trino engine, so its
+	// dialect splits (the V2 workflow, #13, splits with the target's).
+	stmts, err := policy.EditorStatements(dialect.MustGet(dialect.Trino), params.SQL)
+	if err != nil {
+		// The same script fails the same way: retrying only delays the answer.
+		return nil, temporal.NewNonRetryableApplicationError(err.Error(), "editor_rejected", err)
+	}
+	if len(stmts) == 0 {
+		stmts = []string{params.SQL}
 	}
 	return &SplitSQLResult{Statements: stmts}, nil
 }
@@ -245,10 +246,8 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	// forbidden editor statements, but ensure that any path that bypasses
 	// splitting (single-statement fast path, future callers) still cannot issue
 	// them.
-	if sqlsplitter.IsForbiddenInEditor(params.SQL) {
-		return &ExecuteStatementResult{
-			Error: "catalog management and session authorization are not allowed in the SQL editor",
-		}, nil
+	if policy.ForbiddenInEditor(dialect.MustGet(dialect.Trino), params.SQL) {
+		return &ExecuteStatementResult{Error: policy.ErrForbiddenInEditor.Error()}, nil
 	}
 
 	start := time.Now()

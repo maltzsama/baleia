@@ -3,39 +3,21 @@ package trino
 import (
 	"errors"
 	"regexp"
-	"strings"
+
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
-// QuoteIdent returns s as a Trino delimited identifier ("a""b" for a"b). Input
-// is quoted, never sanitised: every byte except NUL survives. Empty names and
-// names containing NUL are rejected.
-func QuoteIdent(s string) (string, error) {
-	if s == "" {
-		return "", errors.New("empty identifier")
-	}
-	if strings.ContainsRune(s, 0) {
-		return "", errors.New("identifier contains a NUL byte")
-	}
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`, nil
-}
+// QuoteIdent returns s as a Trino delimited identifier ("a""b" for a"b). The
+// Trino dialect owns quoting; this is its shorthand for the client package.
+func QuoteIdent(s string) (string, error) { return trinoDialect.QuoteIdent(s) }
 
 // QualifiedName quotes each part and joins them with ".".
-func QualifiedName(parts ...string) (string, error) {
-	quoted := make([]string, len(parts))
-	for i, p := range parts {
-		q, err := QuoteIdent(p)
-		if err != nil {
-			return "", err
-		}
-		quoted[i] = q
-	}
-	return strings.Join(quoted, "."), nil
-}
+func QualifiedName(parts ...string) (string, error) { return trinoDialect.QualifiedName(parts...) }
 
-// QuoteString returns s as a Trino string literal ('it''s').
-func QuoteString(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
-}
+// QuoteString returns s as a Trino string literal ('it”s').
+func QuoteString(s string) string { return trinoDialect.QuoteString(s) }
+
+var trinoDialect = dialect.MustGet(dialect.Trino)
 
 var retentionRe = regexp.MustCompile(`^[1-9][0-9]{0,4}[dhm]$`)
 

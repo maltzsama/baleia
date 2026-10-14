@@ -22,6 +22,7 @@ package fake
 import (
 	"context"
 	"fmt"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,7 +81,7 @@ func (e *Engine) Closed() bool {
 func (e *Engine) ID() string                   { return e.opts.ID }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassDirect }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect{} }
+func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.FlightSQL) } // ANSI
 func (e *Engine) Ping(context.Context) error   { return nil }
 
 func (e *Engine) Capabilities() queryengine.Capabilities {
@@ -116,23 +117,6 @@ func (e *Engine) Cancel(_ context.Context, h queryengine.QueryHandle) error {
 }
 
 func (e *Engine) Introspector() queryengine.Introspector { return introspector{} }
-
-type dialect struct{}
-
-func (dialect) Name() string { return "fake" }
-
-func (dialect) QualifiedName(parts ...string) (string, error) {
-	out := make([]string, len(parts))
-	for i, p := range parts {
-		if p == "" {
-			return "", fmt.Errorf("empty identifier")
-		}
-		out[i] = `"` + strings.ReplaceAll(p, `"`, `""`) + `"`
-	}
-	return strings.Join(out, "."), nil
-}
-
-func (dialect) Literal(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
 // Shared state, as an engine server would hold it.
 var (

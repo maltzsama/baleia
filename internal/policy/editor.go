@@ -1,6 +1,49 @@
-package sqlsplitter
+// Package policy decides what users may do. It never asks what an engine can
+// do: capabilities describe engines, policies describe users, and the editor
+// gate below holds on every engine (docs/adr, #14).
+package policy
 
-import "strings"
+import (
+	"errors"
+	"strings"
+
+	"github.com/galileostudio/baleia/internal/dialect"
+)
+
+// ErrForbiddenInEditor is the error users see for a rejected script.
+var ErrForbiddenInEditor = errors.New("catalog management and session authorization are not allowed in the SQL editor")
+
+// ForbiddenInEditor reports whether a script holds a statement the SQL editor
+// must reject. The script is split with the target's dialect, so a statement
+// hidden after a separator of that engine (';', T-SQL GO, Oracle "/") is
+// judged on its own; a script the dialect cannot split is judged whole.
+func ForbiddenInEditor(d dialect.Dialect, sql string) bool {
+	stmts, err := d.SplitStatements(sql)
+	if err != nil {
+		stmts = []string{sql}
+	}
+	for _, s := range stmts {
+		if statementForbidden(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// EditorStatements splits a script for execution: the statements, or an
+// error when the script cannot be split or holds a forbidden statement.
+func EditorStatements(d dialect.Dialect, sql string) ([]string, error) {
+	stmts, err := d.SplitStatements(sql)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range stmts {
+		if statementForbidden(s) {
+			return nil, ErrForbiddenInEditor
+		}
+	}
+	return stmts, nil
+}
 
 // IsCatalogDDL reports whether sql is a CREATE/DROP CATALOG statement.
 // Used by:
@@ -38,7 +81,8 @@ func IsCatalogDDL(sql string) bool {
 		strings.HasPrefix(s, "drop catalog ") || s == "drop catalog"
 }
 
-// IsForbiddenInEditor reports whether sql must be rejected by the SQL editor:
+// statementForbidden reports whether one statement must be rejected by the
+// SQL editor:
 //   - catalog DDL (CREATE/DROP CATALOG, handled by IsCatalogDDL);
 //   - EXECUTE IMMEDIATE whose string literal body is catalog DDL (the parser
 //     would otherwise execute the mismatched grammar without us touching it);
@@ -46,7 +90,7 @@ func IsCatalogDDL(sql string) bool {
 //     target (e.g. baleia_admin) the guard grants to.
 //
 // The Trino catalog guard is the real control; this is UX and defense in depth.
-func IsForbiddenInEditor(sql string) bool {
+func statementForbidden(sql string) bool {
 	if sql == "" {
 		return false
 	}
@@ -69,7 +113,7 @@ func IsForbiddenInEditor(sql string) bool {
 }
 
 // extractExecuteImmediateLiteral pulls the first single-quoted string literal
-// out of an EXECUTE IMMEDIATE statement, honoring '' as an escaped quote. The
+// out of an EXECUTE IMMEDIATE statement, honoring ” as an escaped quote. The
 // closing quote is consumed; the returned body has no surrounding quotes.
 func extractExecuteImmediateLiteral(s string) string {
 	i := strings.IndexByte(s, '\'')

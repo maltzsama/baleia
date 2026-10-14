@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -291,4 +292,83 @@ func TestNoTrinoImportsInDomain(t *testing.T) {
 			t.Errorf("%s no longer imports internal/trino; remove it from trinoInDomain (%s)", file, issue)
 		}
 	}
+}
+
+// goSources calls fn for every production Go file of the module with its
+// module-relative path.
+func goSources(t *testing.T, fn func(rel string, f *ast.File)) {
+	t.Helper()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if skippedDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		fn(filepath.ToSlash(rel), f)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestGateNotCapabilityDriven: the editor gate is a policy on users, never
+// derived from what an engine supports (#14).
+func TestGateNotCapabilityDriven(t *testing.T) {
+	goSources(t, func(rel string, f *ast.File) {
+		if !strings.HasPrefix(rel, "internal/temporal/") && !strings.HasPrefix(rel, "internal/policy/") {
+			return
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if id, ok := n.(*ast.Ident); ok && id.Name == "SupportsCatalogDDL" {
+				t.Errorf("%s refers to SupportsCatalogDDL; editor policy must not depend on capabilities", rel)
+			}
+			return true
+		})
+	})
+}
+
+var limitClause = regexp.MustCompile(`(?i)\bLIMIT\s+([0-9]|\$|\?|\{|%|:)`)
+
+// TestSQLDialectsOwnLimit: row limits are dialect SQL (LIMIT, TOP, FETCH
+// FIRST). Only internal/dialect, a provider's own package (which speaks one
+// engine) and generated queries may spell one.
+func TestSQLDialectsOwnLimit(t *testing.T) {
+	allowed := func(rel string) bool {
+		if strings.HasPrefix(rel, "internal/dialect/") || strings.HasPrefix(rel, "internal/db/") {
+			return true
+		}
+		rest, ok := strings.CutPrefix(rel, "internal/connections/")
+		return ok && strings.Contains(rest, "/")
+	}
+	goSources(t, func(rel string, f *ast.File) {
+		if allowed(rel) {
+			return
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && limitClause.MatchString(lit.Value) {
+				t.Errorf("%s spells a LIMIT clause; use the engine's dialect (PreviewSQL/Limit)", rel)
+			}
+			return true
+		})
+	})
 }

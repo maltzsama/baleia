@@ -1,0 +1,211 @@
+// Package dialect is how Baleia writes SQL for each engine kind: quoting,
+// qualification, literals, statement splitting, previews, metadata queries
+// and the SQL-generation primitives of the semantic layer (#14, #33, #91).
+//
+// Every difference between engines is declared here; no other package spells
+// engine SQL. Dialects describe what SQL looks like; they never authorize
+// anything (that is internal/policy).
+package dialect
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+// Names of the v1 dialects.
+const (
+	Trino      = "trino"
+	PostgreSQL = "postgresql"
+	MySQL      = "mysql"
+	MariaDB    = "mariadb"
+	TSQL       = "tsql"
+	Oracle     = "oracle"
+	SQLite     = "sqlite"
+	ClickHouse = "clickhouse"
+	FlightSQL  = "flightsql-generic"
+)
+
+var (
+	// ErrUnsupported means the dialect cannot express the request; callers
+	// report it rather than falling back to another dialect's SQL.
+	ErrUnsupported = errors.New("not supported by this dialect")
+	// ErrInvalid means the input (identifier, type, value) is malformed.
+	ErrInvalid = errors.New("invalid input")
+)
+
+// LogicalType is an engine-independent column type: boolean, int64,
+// decimal(p,s), float64, string, date, timestamp, timestamptz, binary, json.
+type LogicalType string
+
+const (
+	TypeBoolean     LogicalType = "boolean"
+	TypeInt64       LogicalType = "int64"
+	TypeFloat64     LogicalType = "float64"
+	TypeString      LogicalType = "string"
+	TypeDate        LogicalType = "date"
+	TypeTimestamp   LogicalType = "timestamp"
+	TypeTimestampTZ LogicalType = "timestamptz"
+	TypeBinary      LogicalType = "binary"
+	TypeJSON        LogicalType = "json"
+)
+
+// Decimal returns the logical type decimal(p,s).
+func Decimal(precision, scale int) LogicalType {
+	return LogicalType(fmt.Sprintf("decimal(%d,%d)", precision, scale))
+}
+
+// decimal parses decimal(p,s); ok is false for any other type.
+func (t LogicalType) decimal() (p, s int, ok bool, err error) {
+	inner, found := strings.CutPrefix(string(t), "decimal(")
+	if !found {
+		return 0, 0, false, nil
+	}
+	inner, found = strings.CutSuffix(inner, ")")
+	ps := strings.Split(inner, ",")
+	if !found || len(ps) != 2 {
+		return 0, 0, true, fmt.Errorf("%w: type %q", ErrInvalid, t)
+	}
+	p, err1 := strconv.Atoi(strings.TrimSpace(ps[0]))
+	s, err2 := strconv.Atoi(strings.TrimSpace(ps[1]))
+	if err1 != nil || err2 != nil || p < 1 || p > 38 || s < 0 || s > p {
+		return 0, 0, true, fmt.Errorf("%w: type %q (precision 1-38, scale 0-precision)", ErrInvalid, t)
+	}
+	return p, s, true, nil
+}
+
+// TimeGrain is a TimeTrunc unit.
+type TimeGrain string
+
+const (
+	GrainSecond  TimeGrain = "second"
+	GrainMinute  TimeGrain = "minute"
+	GrainHour    TimeGrain = "hour"
+	GrainDay     TimeGrain = "day"
+	GrainWeek    TimeGrain = "week" // ISO week, starting on Monday
+	GrainMonth   TimeGrain = "month"
+	GrainQuarter TimeGrain = "quarter"
+	GrainYear    TimeGrain = "year"
+)
+
+// Grains lists every TimeGrain, finest first.
+var Grains = []TimeGrain{GrainSecond, GrainMinute, GrainHour, GrainDay, GrainWeek, GrainMonth, GrainQuarter, GrainYear}
+
+// AggFunc is an Aggregate function.
+type AggFunc string
+
+const (
+	AggSum                 AggFunc = "sum"
+	AggCount               AggFunc = "count"
+	AggAvg                 AggFunc = "avg"
+	AggMin                 AggFunc = "min"
+	AggMax                 AggFunc = "max"
+	AggCountDistinct       AggFunc = "count_distinct"
+	AggApproxCountDistinct AggFunc = "approx_count_distinct"
+)
+
+// Span is one statement of a script: Text is the statement without its
+// terminator or surrounding whitespace; Start and End are byte offsets of
+// Text in the script.
+type Span struct {
+	Text       string
+	Start, End int
+}
+
+// MetadataQueries are the catalog queries of an engine, in the dialect's own
+// bind-parameter syntax (Placeholder). Schemas takes no parameter; Tables
+// takes the schema; Columns takes the schema and the table. Each returns the
+// documented columns in order.
+type MetadataQueries struct {
+	Schemas string // schema_name
+	Tables  string // table_name, table_type ('TABLE' or 'VIEW')
+	Columns string // column_name, data_type, is_nullable ('YES'/'NO'), ordinal_position
+}
+
+// Dialect is how one engine kind spells SQL.
+type Dialect interface {
+	Name() string
+
+	// QuoteIdent returns s as a delimited identifier. Empty names, NUL bytes
+	// and names over the engine's identifier limit are errors; nothing is
+	// silently altered.
+	QuoteIdent(s string) (string, error)
+	// QualifiedName quotes each part and joins them with ".".
+	QualifiedName(parts ...string) (string, error)
+	// Qualify names an object following the engine's namespace rules:
+	// catalogs are dropped where one connection sees one catalog, and a
+	// schema path deeper than the engine supports is an error.
+	Qualify(catalog string, schema []string, object string) (string, error)
+	// QuoteString returns s as a string literal.
+	QuoteString(s string) string
+	// Literal renders v as a literal of type t (nil is NULL).
+	Literal(v any, t LogicalType) (string, error)
+
+	// SplitStatements splits a script into statements.
+	SplitStatements(sql string) ([]string, error)
+	// Statements is SplitStatements with byte offsets into sql.
+	Statements(sql string) ([]Span, error)
+	// PreviewSQL selects the first limit rows of an already qualified object.
+	PreviewSQL(object string, limit int) string
+	// Limit caps the rows of a query by wrapping it.
+	Limit(sql string, n int) string
+	// ExplainSQL returns the statement that explains sql, or false when the
+	// engine has no single-statement EXPLAIN.
+	ExplainSQL(sql string) (string, bool)
+	// Placeholder is the n-th (1-based) bind parameter.
+	Placeholder(n int) string
+	MetadataQueries() MetadataQueries
+
+	// SQL-generation primitives. Expressions are SQL the caller built from
+	// quoted identifiers; they are not re-checked.
+	Aggregate(fn AggFunc, expr string, distinct bool) (string, error)
+	TimeTrunc(expr string, grain TimeGrain) (string, error)
+	Cast(expr string, t LogicalType) (string, error)
+	// SafeDivide divides as floating point and yields NULL for a zero
+	// denominator.
+	SafeDivide(num, den string) string
+
+	// Editor support.
+	Keywords() []string
+	Functions() []string
+	FormatterLanguage() string // sql-formatter language id
+	CodeMirrorBase() string    // @codemirror/lang-sql base dialect
+}
+
+var registry = map[string]Dialect{}
+
+func register(d Dialect) Dialect {
+	if _, dup := registry[d.Name()]; dup {
+		panic("dialect registered twice: " + d.Name())
+	}
+	registry[d.Name()] = d
+	return d
+}
+
+// Get returns a dialect by name.
+func Get(name string) (Dialect, bool) {
+	d, ok := registry[name]
+	return d, ok
+}
+
+// MustGet returns a registered dialect and panics for an unknown name; use it
+// only with the name constants.
+func MustGet(name string) Dialect {
+	d, ok := registry[name]
+	if !ok {
+		panic("unknown dialect: " + name)
+	}
+	return d
+}
+
+// Names lists the registered dialects, sorted.
+func Names() []string {
+	out := make([]string, 0, len(registry))
+	for n := range registry {
+		out = append(out, n)
+	}
+	slices.Sort(out)
+	return out
+}
