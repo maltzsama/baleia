@@ -36,6 +36,8 @@ type Querier interface {
 	CreateEngine(ctx context.Context, arg CreateEngineParams) (Engine, error)
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) (Migration, error)
 	CreateMigrationItem(ctx context.Context, arg CreateMigrationItemParams) (MigrationItem, error)
+	// The target columns are the resolved execution target (#13); trino_catalog
+	// keeps the engine catalog for the Trino workflow until it reads the target.
 	CreateQueryExecution(ctx context.Context, arg CreateQueryExecutionParams) (QueryExecution, error)
 	CreateQueryFolder(ctx context.Context, arg CreateQueryFolderParams) (QueryFolder, error)
 	CreateQueryStatement(ctx context.Context, arg CreateQueryStatementParams) (QueryStatement, error)
@@ -150,6 +152,11 @@ type Querier interface {
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
+	// Every binding of a catalog the workspace may use, with the strongest
+	// permission it holds on that catalog: 'write' for the catalogs of the owner
+	// of a personal workspace (their own connections), else the grant (#16).
+	// Disabled bindings, engines and catalogs are included; callers filter.
+	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	MarkTrinoCatalogRegistryError(ctx context.Context, arg MarkTrinoCatalogRegistryErrorParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error

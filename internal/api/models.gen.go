@@ -30,9 +30,9 @@ const (
 
 // Defines values for CatalogBindingMode.
 const (
-	Adopted CatalogBindingMode = "adopted"
-	Managed CatalogBindingMode = "managed"
-	Native  CatalogBindingMode = "native"
+	CatalogBindingModeAdopted CatalogBindingMode = "adopted"
+	CatalogBindingModeManaged CatalogBindingMode = "managed"
+	CatalogBindingModeNative  CatalogBindingMode = "native"
 )
 
 // Defines values for ConnectionProviderFamily.
@@ -226,6 +226,19 @@ const (
 const (
 	WorkspaceCatalogAccessPermissionRead  WorkspaceCatalogAccessPermission = "read"
 	WorkspaceCatalogAccessPermissionWrite WorkspaceCatalogAccessPermission = "write"
+)
+
+// Defines values for WorkspaceTargetMode.
+const (
+	WorkspaceTargetModeAdopted WorkspaceTargetMode = "adopted"
+	WorkspaceTargetModeManaged WorkspaceTargetMode = "managed"
+	WorkspaceTargetModeNative  WorkspaceTargetMode = "native"
+)
+
+// Defines values for WorkspaceTargetPermission.
+const (
+	Read  WorkspaceTargetPermission = "read"
+	Write WorkspaceTargetPermission = "write"
 )
 
 // Defines values for ListMigrationItemsParamsStatus.
@@ -548,8 +561,11 @@ type Execution struct {
 	Sql          string              `json:"sql"`
 	StartedAt    *time.Time          `json:"started_at,omitempty"`
 	Status       ExecutionStatus     `json:"status"`
-	TrinoQueryId *string             `json:"trino_query_id"`
-	WorkspaceId  openapi_types.UUID  `json:"workspace_id"`
+
+	// Target The target an execution ran on, as recorded when it started
+	Target       *ExecutionTarget   `json:"target,omitempty"`
+	TrinoQueryId *string            `json:"trino_query_id"`
+	WorkspaceId  openapi_types.UUID `json:"workspace_id"`
 }
 
 // ExecutionStatus defines model for Execution.Status.
@@ -559,7 +575,23 @@ type ExecutionStatus string
 type ExecutionRequest struct {
 	SavedQueryId *openapi_types.UUID `json:"saved_query_id"`
 	Sql          string              `json:"sql"`
-	WorkspaceId  openapi_types.UUID  `json:"workspace_id"`
+
+	// Target Where to run. binding_id names a target; catalog_id picks the catalog's only enabled binding, or the one on engine_id when it has several. Omitted, the workspace default applies, else the workspace's only target; otherwise 422 target_required.
+	Target      *TargetRequest     `json:"target,omitempty"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+}
+
+// ExecutionTarget The target an execution ran on, as recorded when it started
+type ExecutionTarget struct {
+	BindingId     *openapi_types.UUID `json:"binding_id"`
+	CatalogId     *openapi_types.UUID `json:"catalog_id"`
+	CatalogName   *string             `json:"catalog_name,omitempty"`
+	EngineCatalog *string             `json:"engine_catalog,omitempty"`
+	EngineId      *openapi_types.UUID `json:"engine_id"`
+	EngineKind    *string             `json:"engine_kind,omitempty"`
+	EngineName    *string             `json:"engine_name,omitempty"`
+	ReadOnly      *bool               `json:"read_only,omitempty"`
+	Schema        *string             `json:"schema"`
 }
 
 // GlueCredentials defines model for GlueCredentials.
@@ -812,6 +844,14 @@ type SqlCredentials struct {
 	Username *string `json:"username,omitempty"`
 }
 
+// TargetRequest Where to run. binding_id names a target; catalog_id picks the catalog's only enabled binding, or the one on engine_id when it has several. Omitted, the workspace default applies, else the workspace's only target; otherwise 422 target_required.
+type TargetRequest struct {
+	BindingId *openapi_types.UUID `json:"binding_id,omitempty"`
+	CatalogId *openapi_types.UUID `json:"catalog_id,omitempty"`
+	EngineId  *openapi_types.UUID `json:"engine_id,omitempty"`
+	Schema    *string             `json:"schema,omitempty"`
+}
+
 // Team defines model for Team.
 type Team struct {
 	CreatedAt   time.Time          `json:"created_at"`
@@ -898,6 +938,11 @@ type UpdateUserRoleRequestRole string
 
 // UpdateWorkspaceRequest defines model for UpdateWorkspaceRequest.
 type UpdateWorkspaceRequest struct {
+	// DefaultTarget Sets the workspace default target ({"binding_id": null} clears it). The binding must be a target of the workspace (GET /workspaces/{id}/targets). Omitted, the default is unchanged.
+	DefaultTarget *struct {
+		BindingId *openapi_types.UUID `json:"binding_id"`
+		Schema    *string             `json:"schema"`
+	} `json:"default_target,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Name        *string `json:"name,omitempty"`
 }
@@ -930,15 +975,22 @@ type ValidationError struct {
 
 // Workspace defines model for Workspace.
 type Workspace struct {
-	CreatedAt          time.Time           `json:"created_at"`
-	Description        *string             `json:"description"`
-	Id                 openapi_types.UUID  `json:"id"`
-	Name               string              `json:"name"`
-	OwnerTeamId        *openapi_types.UUID `json:"owner_team_id"`
-	OwnerUserId        *openapi_types.UUID `json:"owner_user_id"`
-	PolarisCatalogName string              `json:"polaris_catalog_name"`
-	Type               WorkspaceType       `json:"type"`
-	UpdatedAt          *time.Time          `json:"updated_at,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// DefaultBindingId Target used when a run names none (GET /workspaces/{id}/targets)
+	DefaultBindingId *openapi_types.UUID `json:"default_binding_id"`
+	DefaultSchema    *string             `json:"default_schema"`
+	Description      *string             `json:"description"`
+	Id               openapi_types.UUID  `json:"id"`
+	Name             string              `json:"name"`
+	OwnerTeamId      *openapi_types.UUID `json:"owner_team_id"`
+	OwnerUserId      *openapi_types.UUID `json:"owner_user_id"`
+
+	// PolarisCatalogName Legacy; never used to resolve an execution target
+	// Deprecated:
+	PolarisCatalogName string        `json:"polaris_catalog_name"`
+	Type               WorkspaceType `json:"type"`
+	UpdatedAt          *time.Time    `json:"updated_at,omitempty"`
 }
 
 // WorkspaceType defines model for Workspace.Type.
@@ -954,6 +1006,28 @@ type WorkspaceCatalogAccess struct {
 
 // WorkspaceCatalogAccessPermission defines model for WorkspaceCatalogAccess.Permission.
 type WorkspaceCatalogAccessPermission string
+
+// WorkspaceTarget defines model for WorkspaceTarget.
+type WorkspaceTarget struct {
+	BindingId         openapi_types.UUID  `json:"binding_id"`
+	CatalogId         openapi_types.UUID  `json:"catalog_id"`
+	CatalogName       string              `json:"catalog_name"`
+	EngineCatalogName string              `json:"engine_catalog_name"`
+	EngineId          openapi_types.UUID  `json:"engine_id"`
+	EngineKind        string              `json:"engine_kind"`
+	EngineName        string              `json:"engine_name"`
+	IsDefault         bool                `json:"is_default"`
+	Mode              WorkspaceTargetMode `json:"mode"`
+
+	// Permission read targets run in read-only sessions where the engine enforces it
+	Permission WorkspaceTargetPermission `json:"permission"`
+}
+
+// WorkspaceTargetMode defines model for WorkspaceTarget.Mode.
+type WorkspaceTargetMode string
+
+// WorkspaceTargetPermission read targets run in read-only sessions where the engine enforces it
+type WorkspaceTargetPermission string
 
 // PathId defines model for PathId.
 type PathId = openapi_types.UUID

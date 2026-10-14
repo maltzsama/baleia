@@ -219,7 +219,7 @@ type ServerInterface interface {
 	// Workspace execution history
 	// (GET /workspaces/{id}/executions)
 	ListExecutions(w http.ResponseWriter, r *http.Request, id PathId, params ListExecutionsParams)
-	// Submit a query for execution via Trino
+	// Submit a query on a target
 	// (POST /workspaces/{id}/executions)
 	RunQuery(w http.ResponseWriter, r *http.Request, id PathId)
 	// Execution status and metadata
@@ -282,6 +282,9 @@ type ServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
+	// Where the workspace can run queries — workspace members
+	// (GET /workspaces/{id}/targets)
+	ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId)
 	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, params StreamExecutionParams)
@@ -693,7 +696,7 @@ func (_ Unimplemented) ListExecutions(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Submit a query for execution via Trino
+// Submit a query on a target
 // (POST /workspaces/{id}/executions)
 func (_ Unimplemented) RunQuery(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -816,6 +819,12 @@ func (_ Unimplemented) GetRetrieverHistory(w http.ResponseWriter, r *http.Reques
 // Trigger manual Retriever refresh
 // (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 func (_ Unimplemented) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Where the workspace can run queries — workspace members
+// (GET /workspaces/{id}/targets)
+func (_ Unimplemented) ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3732,6 +3741,39 @@ func (siw *ServerInterfaceWrapper) TriggerRetrieverRefresh(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkspaceTargets operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkspaceTargets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkspaceTargets(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StreamExecution operation middleware
 func (siw *ServerInterfaceWrapper) StreamExecution(w http.ResponseWriter, r *http.Request) {
 
@@ -4168,6 +4210,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/retrievers/{retriever_id}/refresh", wrapper.TriggerRetrieverRefresh)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/targets", wrapper.ListWorkspaceTargets)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ws/workspaces/{id}/executions/{execution_id}", wrapper.StreamExecution)
@@ -6493,6 +6538,17 @@ func (response UpdateWorkspace404JSONResponse) VisitUpdateWorkspaceResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateWorkspace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateWorkspace422JSONResponse) VisitUpdateWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspaceCatalogAccessRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -6680,6 +6736,15 @@ type RunQuery401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response RunQuery401JSONResponse) VisitRunQueryResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RunQuery404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RunQuery404JSONResponse) VisitRunQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -7429,6 +7494,41 @@ func (response TriggerRetrieverRefresh422JSONResponse) VisitTriggerRetrieverRefr
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListWorkspaceTargetsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListWorkspaceTargetsResponseObject interface {
+	VisitListWorkspaceTargetsResponse(w http.ResponseWriter) error
+}
+
+type ListWorkspaceTargets200JSONResponse []WorkspaceTarget
+
+func (response ListWorkspaceTargets200JSONResponse) VisitListWorkspaceTargetsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWorkspaceTargets401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListWorkspaceTargets401JSONResponse) VisitListWorkspaceTargetsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWorkspaceTargets404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWorkspaceTargets404JSONResponse) VisitListWorkspaceTargetsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type StreamExecutionRequestObject struct {
 	Id          PathId             `json:"id"`
 	ExecutionId openapi_types.UUID `json:"execution_id"`
@@ -7659,7 +7759,7 @@ type StrictServerInterface interface {
 	// Workspace execution history
 	// (GET /workspaces/{id}/executions)
 	ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error)
-	// Submit a query for execution via Trino
+	// Submit a query on a target
 	// (POST /workspaces/{id}/executions)
 	RunQuery(ctx context.Context, request RunQueryRequestObject) (RunQueryResponseObject, error)
 	// Execution status and metadata
@@ -7722,6 +7822,9 @@ type StrictServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error)
+	// Where the workspace can run queries — workspace members
+	// (GET /workspaces/{id}/targets)
+	ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error)
 	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error)
@@ -10224,6 +10327,32 @@ func (sh *strictHandler) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TriggerRetrieverRefreshResponseObject); ok {
 		if err := validResponse.VisitTriggerRetrieverRefreshResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWorkspaceTargets operation middleware
+func (sh *strictHandler) ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListWorkspaceTargetsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWorkspaceTargets(ctx, request.(ListWorkspaceTargetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWorkspaceTargets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWorkspaceTargetsResponseObject); ok {
+		if err := validResponse.VisitListWorkspaceTargetsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

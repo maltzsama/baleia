@@ -132,10 +132,47 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 		desc = request.Body.Description
 	}
 
-	workspace, err := h.queries.UpdateWorkspace(ctx, db.UpdateWorkspaceParams{
-		ID:          uid,
-		Name:        name,
-		Description: desc,
+	// A new default target must be a usable target of this workspace.
+	var newDefault, clearDefault bool
+	var defaultBinding pgtype.UUID
+	var defaultSchema *string
+	if dt := request.Body.DefaultTarget; dt != nil {
+		if dt.BindingId == nil {
+			clearDefault = true
+		} else {
+			target, err := h.ResolveTarget(ctx, current, &TargetRequest{BindingId: dt.BindingId})
+			if te, ok := asTargetError(err); ok {
+				if te.notFound {
+					te = &targetError{code: "target_unavailable", message: "the binding is not a target of this workspace"}
+				}
+				return UpdateWorkspace422JSONResponse{UnprocessableEntityJSONResponse: te.unprocessable()}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			newDefault, defaultBinding = true, target.BindingID
+			if dt.Schema != nil && *dt.Schema != "" {
+				defaultSchema = dt.Schema
+			}
+		}
+	}
+
+	var workspace db.Workspace
+	err = h.inTx(ctx, func(q db.Querier) error {
+		var err error
+		workspace, err = q.UpdateWorkspace(ctx, db.UpdateWorkspaceParams{
+			ID:          uid,
+			Name:        name,
+			Description: desc,
+		})
+		if err != nil || (!newDefault && !clearDefault) {
+			return err
+		}
+		if err := q.SetWorkspaceDefaultTarget(ctx, db.SetWorkspaceDefaultTargetParams{ID: uid, DefaultBindingID: defaultBinding, DefaultSchema: defaultSchema}); err != nil {
+			return err
+		}
+		workspace.DefaultBindingID, workspace.DefaultSchema = defaultBinding, defaultSchema
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -293,6 +330,11 @@ func dbWorkspaceToPublic(w db.Workspace) Workspace {
     if w.OwnerTeamID.Valid {
         tid := openapi_types.UUID(w.OwnerTeamID.Bytes)
         ws.OwnerTeamId = &tid
+    }
+    if w.DefaultBindingID.Valid {
+        bid := openapi_types.UUID(w.DefaultBindingID.Bytes)
+        ws.DefaultBindingId = &bid
+        ws.DefaultSchema = w.DefaultSchema
     }
     return ws
 }

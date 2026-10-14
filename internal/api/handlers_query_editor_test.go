@@ -169,6 +169,13 @@ type fakeRunQueryQuerier struct {
 	db.Querier
 	exec         db.QueryExecution
 	markStatuses []string
+	workspace    db.Workspace
+	targets      []db.ListWorkspaceTargetsRow
+	created      []db.CreateQueryExecutionParams
+}
+
+func (f *fakeRunQueryQuerier) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+	return f.targets, nil
 }
 
 func (f *fakeRunQueryQuerier) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAccessParams) (bool, error) {
@@ -176,10 +183,11 @@ func (f *fakeRunQueryQuerier) CheckWorkspaceAccess(context.Context, db.CheckWork
 }
 
 func (f *fakeRunQueryQuerier) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Workspace, error) {
-	return db.Workspace{PolarisCatalogName: "cat"}, nil
+	return f.workspace, nil
 }
 
-func (f *fakeRunQueryQuerier) CreateQueryExecution(context.Context, db.CreateQueryExecutionParams) (db.QueryExecution, error) {
+func (f *fakeRunQueryQuerier) CreateQueryExecution(_ context.Context, p db.CreateQueryExecutionParams) (db.QueryExecution, error) {
+	f.created = append(f.created, p)
 	return f.exec, nil
 }
 
@@ -207,7 +215,8 @@ func (f *fakeTemporalClient) CancelWorkflow(ctx context.Context, workflowID, run
 // workflow cannot start, the running execution row is failed instead of stuck.
 func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
 	fake := &fakeRunQueryQuerier{
-		exec: db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+		exec:    db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)},
 	}
 	h := &Handlers{
 		queries:        fake,

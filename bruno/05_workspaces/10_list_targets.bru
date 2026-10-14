@@ -1,0 +1,32 @@
+meta {
+  name: List Workspace Targets
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/targets
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+script:post-response {
+  // The first runnable target, used by 08_query_editor/07_run_query.
+  const t = (res.body || []).find((x) => x.engine_kind === "trino");
+  if (t) bru.setVar("binding_id", t.binding_id);
+}
+
+docs {
+  Where the workspace can run queries: enabled bindings of the catalogs it may
+  use (its owner's catalogs for a personal workspace, plus grants), with the
+  permission it holds. Empty until a catalog exists (creating one needs Trino).
+}

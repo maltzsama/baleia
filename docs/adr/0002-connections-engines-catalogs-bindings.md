@@ -72,8 +72,12 @@ Partially compliant.
   migration 00024). Every Trino cluster is backed by a system-owned `trino` connection and a
   federated engine; every catalog has a `managed` binding. A transitional trigger keeps that
   binding in step while the catalog handlers still write the Trino columns of `catalogs`; it is
-  dropped when those writes move to bindings (#80). Executions and workspaces have target columns,
-  not yet written by the API (#13 PR 2b).
+  dropped when those writes move to bindings (#80).
+- Runs resolve an explicit target (binding + schema), the workspace default or the workspace's only
+  target, and store it with a snapshot; the editor picks targets from
+  `GET /workspaces/{id}/targets`. The Trino workflow still receives the engine catalog only: the
+  schema and read-only mode reach the engine with the workflow input of #13 PR 3 / #20, and
+  direct-engine targets are refused until then.
 - Direct engines are registered through `/engines` on connections whose provider has the
   `direct_engine` role; their native catalogs (`origin = native`, no Trino columns, migration
   00025) and native bindings are created with them. Federated engines are only the default Trino

@@ -326,7 +326,9 @@ components:
         name: { type: string }
         description: { type: string, nullable: true }
         type: { type: string, enum: [personal, shared] }
-        polaris_catalog_name: { type: string }
+        polaris_catalog_name: { type: string, deprecated: true, description: "Legacy; never used to resolve an execution target" }
+        default_binding_id: { type: string, format: uuid, nullable: true, description: "Target used when a run names none (GET /workspaces/{id}/targets)" }
+        default_schema: { type: string, nullable: true }
         owner_user_id: { type: string, format: uuid, nullable: true }
         owner_team_id: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
@@ -352,6 +354,57 @@ components:
       properties:
         name: { type: string }
         description: { type: string }
+        default_target:
+          type: object
+          description: >
+            Sets the workspace default target ({"binding_id": null} clears it).
+            The binding must be a target of the workspace
+            (GET /workspaces/{id}/targets). Omitted, the default is unchanged.
+          properties:
+            binding_id: { type: string, format: uuid, nullable: true }
+            schema: { type: string, nullable: true }
+
+    TargetRequest:
+      type: object
+      description: >
+        Where to run. binding_id names a target; catalog_id picks the catalog's
+        only enabled binding, or the one on engine_id when it has several.
+        Omitted, the workspace default applies, else the workspace's only
+        target; otherwise 422 target_required.
+      properties:
+        binding_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        engine_id: { type: string, format: uuid }
+        schema: { type: string }
+
+    ExecutionTarget:
+      type: object
+      description: "The target an execution ran on, as recorded when it started"
+      properties:
+        engine_id: { type: string, format: uuid, nullable: true }
+        binding_id: { type: string, format: uuid, nullable: true }
+        catalog_id: { type: string, format: uuid, nullable: true }
+        engine_kind: { type: string }
+        engine_name: { type: string }
+        catalog_name: { type: string }
+        engine_catalog: { type: string }
+        schema: { type: string, nullable: true }
+        read_only: { type: boolean }
+
+    WorkspaceTarget:
+      type: object
+      required: [binding_id, catalog_id, catalog_name, engine_id, engine_name, engine_kind, engine_catalog_name, mode, permission, is_default]
+      properties:
+        binding_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        catalog_name: { type: string }
+        engine_id: { type: string, format: uuid }
+        engine_name: { type: string }
+        engine_kind: { type: string }
+        engine_catalog_name: { type: string }
+        mode: { type: string, enum: [managed, adopted, native] }
+        permission: { type: string, enum: [read, write], description: "read targets run in read-only sessions where the engine enforces it" }
+        is_default: { type: boolean }
 
     # ── Catalogs ─────────────────────────────────────────────────
     Catalog:
@@ -667,6 +720,7 @@ components:
         workspace_id: { type: string, format: uuid }
         saved_query_id: { type: string, format: uuid, nullable: true }
         sql: { type: string }
+        target: { $ref: "#/components/schemas/TargetRequest" }
 
     Execution:
       type: object
@@ -682,6 +736,7 @@ components:
         duration_ms: { type: integer, nullable: true }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
+        target: { $ref: "#/components/schemas/ExecutionTarget" }
 
     QueryStatement:
       type: object
@@ -1378,6 +1433,26 @@ paths:
               schema: { $ref: "#/components/schemas/Workspace" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/targets:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceTargets
+      summary: "Where the workspace can run queries — workspace members"
+      description: "Enabled bindings of the catalogs the workspace may use, on enabled engines."
+      responses:
+        "200":
+          description: "Targets, ordered by catalog then engine"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkspaceTarget" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/catalog-access:
@@ -2109,7 +2184,13 @@ paths:
     post:
       tags: [Executions]
       operationId: runQuery
-      summary: "Submit a query for execution via Trino"
+      summary: "Submit a query on a target"
+      description: >
+        The target is resolved per request (see TargetRequest) and must be a
+        target of the workspace. 404 when the named binding or catalog is not;
+        422 target_required (nothing to pick), engine_required (the catalog is
+        bound to several engines), target_unavailable (disabled binding, engine
+        or catalog), engine_unsupported (direct engines run from #20).
       requestBody:
         required: true
         content:
@@ -2122,6 +2203,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Execution" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/executions/{execution_id}:
