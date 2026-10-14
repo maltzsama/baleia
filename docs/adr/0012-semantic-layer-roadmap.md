@@ -27,7 +27,9 @@ release cycle.
 
 ## Current compliance
 
-Nothing implemented yet; #33 and the dialect work in #14 come first.
+`internal/dialect` has the generation primitives for every v1 dialect (`Aggregate`, `TimeTrunc`,
+`Cast`, `SafeDivide`, `Literal`, `Limit`) with golden tests (#14). Simple metrics (#33) are not
+implemented yet.
 
 ## Alternatives considered
 

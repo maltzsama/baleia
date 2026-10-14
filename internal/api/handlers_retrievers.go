@@ -10,7 +10,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/sqlsplitter"
+	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -419,11 +420,15 @@ func validateDestIdentifier(value, field string) error {
 // validateRetrieverDefinition requires exactly one SELECT/WITH statement and
 // rejects catalog DDL.
 func validateRetrieverDefinition(def string) error {
-	stmts := sqlsplitter.Split(def)
+	// Retrievers refresh on the default Trino engine.
+	stmts, err := dialect.MustGet(dialect.Trino).SplitStatements(def)
+	if err != nil {
+		return fmt.Errorf("definition_sql: %w", err)
+	}
 	if len(stmts) != 1 {
 		return errors.New("definition_sql must be exactly one statement")
 	}
-	if sqlsplitter.IsCatalogDDL(stmts[0]) {
+	if policy.IsCatalogDDL(stmts[0]) {
 		return errors.New("catalog management is not allowed in a retriever definition")
 	}
 	lower := strings.ToLower(strings.TrimSpace(stmts[0]))

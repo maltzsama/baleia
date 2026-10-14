@@ -1,6 +1,11 @@
-package sqlsplitter
+package policy
 
-import "testing"
+import (
+	"errors"
+	"testing"
+
+	"github.com/galileostudio/baleia/internal/dialect"
+)
 
 func TestIsCatalogDDL(t *testing.T) {
 	tests := []struct {
@@ -56,7 +61,7 @@ func TestIsCatalogDDL(t *testing.T) {
 	}
 }
 
-func TestIsForbiddenInEditor(t *testing.T) {
+func TestStatementForbidden(t *testing.T) {
 	tests := []struct {
 		name string
 		sql  string
@@ -88,9 +93,48 @@ func TestIsForbiddenInEditor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsForbiddenInEditor(tt.sql); got != tt.want {
-				t.Errorf("IsForbiddenInEditor(%q) = %v; want %v", tt.sql, got, tt.want)
+			if got := statementForbidden(tt.sql); got != tt.want {
+				t.Errorf("statementForbidden(%q) = %v; want %v", tt.sql, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestForbiddenInEditor: catalog DDL is forbidden on every engine, whatever
+// the engine supports, including when hidden after another statement with
+// that engine's own separators.
+func TestForbiddenInEditor(t *testing.T) {
+	for _, name := range dialect.Names() {
+		d := dialect.MustGet(name)
+		for _, sql := range []string{
+			"CREATE CATALOG x USING tpch",
+			"SELECT 1; DROP CATALOG x",
+			"SELECT 1;\n-- hi\n/* c */ create   catalog y using tpch",
+		} {
+			if !ForbiddenInEditor(d, sql) {
+				t.Errorf("%s: %q allowed", name, sql)
+			}
+			if _, err := EditorStatements(d, sql); !errors.Is(err, ErrForbiddenInEditor) {
+				t.Errorf("%s: EditorStatements(%q) = %v", name, sql, err)
+			}
+		}
+		if ForbiddenInEditor(d, "SELECT 'drop catalog x'; SELECT 2") {
+			t.Errorf("%s: a string literal was judged as a statement", name)
+		}
+		stmts, err := EditorStatements(d, "SELECT 1; SELECT 2")
+		if err != nil || len(stmts) != 2 {
+			t.Errorf("%s: %q, %v", name, stmts, err)
+		}
+	}
+	tsql := dialect.MustGet(dialect.TSQL)
+	if !ForbiddenInEditor(tsql, "SELECT 1\nGO\nDROP CATALOG x") {
+		t.Error("tsql: catalog DDL after GO allowed")
+	}
+	// An unsplittable script is judged whole, and EditorStatements reports why.
+	if !ForbiddenInEditor(dialect.MustGet(dialect.Trino), "DROP CATALOG x; SELECT 'open") {
+		t.Error("unterminated script hid catalog DDL")
+	}
+	if _, err := EditorStatements(dialect.MustGet(dialect.Trino), "SELECT 'open"); !errors.Is(err, dialect.ErrInvalid) {
+		t.Errorf("unterminated string: %v", err)
 	}
 }

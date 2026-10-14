@@ -26,8 +26,9 @@ which is separate work.
   identity sent in `X-Trino-User` (D8). A service identity is the fallback for jobs without a user.
 - **Read-only mode** is enforced by the guard: a session with the extra credential
   `baleia.mode=readonly` is denied every write and DDL check.
-- The Go check on SQL text (`IsForbiddenInEditor`) is UX and defense in depth only, never the
-  security boundary.
+- The Go check on SQL text (`policy.ForbiddenInEditor`, splitting with the target's dialect) is UX
+  and defense in depth only, never the security boundary. It is a policy on users and never reads
+  engine capabilities (`TestGateNotCapabilityDriven`).
 - **Trino is private.** The coordinator is not published by default. Because Baleia's Trino has no
   authentication, the guard's `baleia.allow-unauthenticated-admin` flag is enabled only where Trino
   is reachable from the API and worker alone (compose, minikube dev values); the Helm chart defaults

@@ -1,0 +1,344 @@
+package dialect
+
+import (
+	"errors"
+	"strings"
+	"testing"
+	"time"
+)
+
+var all = []string{Trino, PostgreSQL, MySQL, MariaDB, TSQL, Oracle, SQLite, ClickHouse, FlightSQL}
+
+func TestRegistry(t *testing.T) {
+	if got := strings.Join(Names(), ","); got != "clickhouse,flightsql-generic,mariadb,mysql,oracle,postgresql,sqlite,trino,tsql" {
+		t.Errorf("names = %s", got)
+	}
+	for _, n := range all {
+		d := MustGet(n)
+		if d.Name() != n || d.FormatterLanguage() == "" || d.CodeMirrorBase() == "" {
+			t.Errorf("%s: incomplete", n)
+		}
+		if d.Keywords() == nil || d.Functions() == nil {
+			t.Errorf("%s: lists must be non-nil", n)
+		}
+		m := d.MetadataQueries()
+		if m.Schemas == "" || m.Tables == "" || m.Columns == "" {
+			t.Errorf("%s: metadata queries missing", n)
+		}
+		if !strings.Contains(m.Tables, d.Placeholder(1)) || !strings.Contains(m.Columns, d.Placeholder(2)) {
+			t.Errorf("%s: metadata queries must use the dialect's placeholders", n)
+		}
+	}
+	if _, ok := Get("nope"); ok {
+		t.Error("unknown dialect found")
+	}
+}
+
+func TestQuoteIdent(t *testing.T) {
+	want := map[string]string{
+		Trino: `"a""b"`, PostgreSQL: `"a""b"`, Oracle: `"a""b"`, SQLite: `"a""b"`, FlightSQL: `"a""b"`,
+		MySQL: "`a\"b`", MariaDB: "`a\"b`", ClickHouse: "`a\"b`", TSQL: `[a"b]`,
+	}
+	for _, n := range all {
+		d := MustGet(n)
+		if got, err := d.QuoteIdent(`a"b`); err != nil || got != want[n] {
+			t.Errorf("%s: %q, %v", n, got, err)
+		}
+		for _, bad := range []string{"", "a\x00b", "\xff"} {
+			if _, err := d.QuoteIdent(bad); !errors.Is(err, ErrInvalid) {
+				t.Errorf("%s: %q accepted", n, bad)
+			}
+		}
+	}
+	// The closing quote character is doubled.
+	for n, in := range map[string]string{MySQL: "a`b", TSQL: "a]b", ClickHouse: "a`b"} {
+		got, _ := MustGet(n).QuoteIdent(in)
+		if want := map[string]string{MySQL: "`a``b`", TSQL: "[a]]b]", ClickHouse: "`a``b`"}[n]; got != want {
+			t.Errorf("%s: %q", n, got)
+		}
+	}
+	// Identifier limits: PostgreSQL 63 bytes, MySQL 64 characters, Oracle 128 bytes.
+	if _, err := MustGet(PostgreSQL).QuoteIdent(strings.Repeat("a", 64)); err == nil {
+		t.Error("postgresql: 64 bytes accepted")
+	}
+	if _, err := MustGet(MySQL).QuoteIdent(strings.Repeat("é", 64)); err != nil {
+		t.Errorf("mysql counts characters: %v", err)
+	}
+	if _, err := MustGet(Oracle).QuoteIdent(strings.Repeat("é", 65)); err == nil {
+		t.Error("oracle: 130 bytes accepted")
+	}
+}
+
+func TestQualify(t *testing.T) {
+	cases := map[string]string{
+		Trino:      `"c"."s"."t"`,
+		PostgreSQL: `"s"."t"`,
+		MySQL:      "`s`.`t`",
+		MariaDB:    "`s`.`t`",
+		TSQL:       "[c].[s].[t]",
+		Oracle:     `"s"."t"`,
+		SQLite:     `"t"`,
+		ClickHouse: "`s`.`t`",
+		FlightSQL:  `"c"."s"."t"`,
+	}
+	for n, want := range cases {
+		got, err := MustGet(n).Qualify("c", []string{"s"}, "t")
+		if err != nil || got != want {
+			t.Errorf("%s: %q, %v", n, got, err)
+		}
+	}
+	if _, err := MustGet(Trino).Qualify("c", []string{"a", "b"}, "t"); !errors.Is(err, ErrInvalid) {
+		t.Error("trino accepted a two-level schema")
+	}
+	if got, err := MustGet(FlightSQL).Qualify("", []string{"a", "b"}, "t"); err != nil || got != `"a"."b"."t"` {
+		t.Errorf("flightsql deep path: %q, %v", got, err)
+	}
+	if got, _ := MustGet(Trino).Qualify("", []string{"s"}, "t"); got != `"s"."t"` {
+		t.Errorf("trino without catalog: %q", got)
+	}
+}
+
+func TestQuoteString(t *testing.T) {
+	in := `it's a \ test`
+	want := map[string]string{
+		Trino: `'it''s a \ test'`, PostgreSQL: `'it''s a \ test'`, Oracle: `'it''s a \ test'`,
+		SQLite: `'it''s a \ test'`, FlightSQL: `'it''s a \ test'`,
+		MySQL: `'it''s a \\ test'`, MariaDB: `'it''s a \\ test'`, ClickHouse: `'it''s a \\ test'`,
+		TSQL: `N'it''s a \ test'`,
+	}
+	for _, n := range all {
+		if got := MustGet(n).QuoteString(in); got != want[n] {
+			t.Errorf("%s: %s", n, got)
+		}
+	}
+}
+
+func split(t *testing.T, name, sql string) []string {
+	t.Helper()
+	out, err := MustGet(name).SplitStatements(sql)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	return out
+}
+
+func TestSplitStatements_common(t *testing.T) {
+	for _, n := range all {
+		got := split(t, n, "SELECT 1; SELECT 'a;b' -- c;d\n; /* x;y */ SELECT 2;;\n  -- only a comment\n")
+		if len(got) != 3 || got[0] != "SELECT 1" || got[1] != "SELECT 'a;b' -- c;d" || got[2] != "/* x;y */ SELECT 2" {
+			t.Errorf("%s: %q", n, got)
+		}
+		if got := split(t, n, `SELECT "a;b" FROM t; SELECT 'it''s;'`); len(got) != 2 {
+			t.Errorf("%s: quoted identifier or doubled quote split: %q", n, got)
+		}
+		if _, err := MustGet(n).SplitStatements("SELECT 'open"); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: unterminated string accepted", n)
+		}
+	}
+}
+
+func TestSplitStatements_postgresql(t *testing.T) {
+	got := split(t, PostgreSQL, `CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql; DO $body$ BEGIN PERFORM 1; END $body$; SELECT E'a\';b'; SELECT 1`)
+	if len(got) != 4 || !strings.HasSuffix(got[0], "LANGUAGE sql") || !strings.HasPrefix(got[1], "DO $body$") || got[2] != `SELECT E'a\';b'` {
+		t.Errorf("%q", got)
+	}
+	if got := split(t, PostgreSQL, "SELECT 1 /* a /* nested; */ still; */; SELECT 2"); len(got) != 2 {
+		t.Errorf("nested comment: %q", got)
+	}
+	if got := split(t, PostgreSQL, "SELECT $1; SELECT 2"); len(got) != 2 {
+		t.Errorf("$1 is not a dollar quote: %q", got)
+	}
+}
+
+func TestSplitStatements_mysql(t *testing.T) {
+	for _, n := range []string{MySQL, MariaDB} {
+		got := split(t, n, "SELECT 'a\\';b', \"c;d\", `e;f` FROM t # hash; comment\n; SELECT 2")
+		if len(got) != 2 {
+			t.Errorf("%s: %q", n, got)
+		}
+		_, err := MustGet(n).SplitStatements("DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END//\nDELIMITER ;")
+		if !errors.Is(err, ErrDelimiter) {
+			t.Errorf("%s: DELIMITER: %v", n, err)
+		}
+	}
+}
+
+func TestSplitStatements_tsql(t *testing.T) {
+	got := split(t, TSQL, "SELECT [a;b], [x]]y;] FROM t\nGO\nCREATE PROCEDURE p AS SELECT 1\n  go  \nSELECT 2; SELECT 3")
+	if len(got) != 4 || got[0] != "SELECT [a;b], [x]]y;] FROM t" || got[1] != "CREATE PROCEDURE p AS SELECT 1" {
+		t.Errorf("%q", got)
+	}
+	if got := split(t, TSQL, "SELECT 1 AS GOAL; SELECT 'GO'"); len(got) != 2 {
+		t.Errorf("GO inside a line is not a separator: %q", got)
+	}
+}
+
+func TestSplitStatements_oracle(t *testing.T) {
+	got := split(t, Oracle, "SELECT q'[a';b]' FROM dual;\nBEGIN\n  NULL;\n  INSERT INTO t VALUES (1);\nEND;\n/\nCREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;\n/\nSELECT 2 FROM dual")
+	if len(got) != 4 || got[0] != "SELECT q'[a';b]' FROM dual" || !strings.HasPrefix(got[1], "BEGIN") || !strings.HasSuffix(got[1], "END;") ||
+		!strings.HasPrefix(got[2], "CREATE OR REPLACE PROCEDURE") || got[3] != "SELECT 2 FROM dual" {
+		t.Errorf("%q", got)
+	}
+	if got := split(t, Oracle, "SELECT q'{x}'||q'<y;>' FROM dual; SELECT 1 FROM dual"); len(got) != 2 {
+		t.Errorf("q-quotes: %q", got)
+	}
+}
+
+func TestStatementsOffsets(t *testing.T) {
+	sql := "  SELECT 1;\n\nSELECT 'x;';"
+	spans, err := MustGet(Trino).Statements(sql)
+	if err != nil || len(spans) != 2 {
+		t.Fatal(spans, err)
+	}
+	for _, s := range spans {
+		if sql[s.Start:s.End] != s.Text {
+			t.Errorf("span %+v does not match %q", s, sql[s.Start:s.End])
+		}
+	}
+}
+
+func TestPreviewAndLimit(t *testing.T) {
+	want := map[string][2]string{
+		Trino:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1) AS baleia_limit LIMIT 5"},
+		TSQL:   {"SELECT TOP (10) * FROM t", "SELECT TOP (5) * FROM (SELECT 1) AS baleia_limit"},
+		Oracle: {"SELECT * FROM t FETCH FIRST 10 ROWS ONLY", "SELECT * FROM (SELECT 1) FETCH FIRST 5 ROWS ONLY"},
+		MySQL:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1) AS baleia_limit LIMIT 5"},
+	}
+	for n, w := range want {
+		d := MustGet(n)
+		if got := d.PreviewSQL("t", 10); got != w[0] {
+			t.Errorf("%s preview: %s", n, got)
+		}
+		if got := d.Limit("SELECT 1 ;\n", 5); got != w[1] {
+			t.Errorf("%s limit: %s", n, got)
+		}
+	}
+	if _, ok := MustGet(TSQL).ExplainSQL("SELECT 1"); ok {
+		t.Error("tsql has no single-statement EXPLAIN")
+	}
+	if got, ok := MustGet(SQLite).ExplainSQL("SELECT 1;"); !ok || got != "EXPLAIN QUERY PLAN SELECT 1" {
+		t.Errorf("sqlite explain: %q", got)
+	}
+}
+
+func TestLiteral(t *testing.T) {
+	ts := time.Date(2024, 3, 5, 10, 20, 30, 123456000, time.FixedZone("x", 3600))
+	cases := []struct {
+		dialect string
+		v       any
+		typ     LogicalType
+		want    string
+	}{
+		{Trino, true, TypeBoolean, "TRUE"},
+		{TSQL, true, TypeBoolean, "CAST(1 AS BIT)"},
+		{SQLite, false, TypeBoolean, "0"},
+		{Trino, int64(42), TypeInt64, "42"},
+		{Trino, "12.50", Decimal(18, 2), "CAST(12.50 AS DECIMAL(18,2))"},
+		{ClickHouse, "12.50", Decimal(18, 2), "CAST('12.50' AS Decimal(18, 2))"},
+		{Trino, 1.5, TypeFloat64, "CAST(1.5 AS DOUBLE)"},
+		{PostgreSQL, float64(2), TypeFloat64, "CAST(2.0 AS DOUBLE PRECISION)"},
+		{Trino, ts, TypeDate, "DATE '2024-03-05'"},
+		{TSQL, "2024-03-05", TypeDate, "CAST('2024-03-05' AS DATE)"},
+		{ClickHouse, "2024-03-05", TypeDate, "toDate32('2024-03-05')"},
+		{Trino, ts, TypeTimestamp, "TIMESTAMP '2024-03-05 10:20:30.123456'"},
+		{Trino, ts, TypeTimestampTZ, "TIMESTAMP '2024-03-05 09:20:30.123456 UTC'"},
+		{PostgreSQL, ts, TypeTimestampTZ, "TIMESTAMPTZ '2024-03-05 09:20:30.123456+00'"},
+		{TSQL, ts, TypeTimestampTZ, "CAST('2024-03-05 09:20:30.123456 +00:00' AS DATETIMEOFFSET(6))"},
+		{Trino, []byte{0xca, 0xfe}, TypeBinary, "X'CAFE'"},
+		{PostgreSQL, []byte{0xca, 0xfe}, TypeBinary, "decode('CAFE', 'hex')"},
+		{TSQL, []byte{0xca, 0xfe}, TypeBinary, "0xCAFE"},
+		{Oracle, []byte{0xca, 0xfe}, TypeBinary, "HEXTORAW('CAFE')"},
+		{Trino, `{"a":1}`, TypeJSON, `JSON '{"a":1}'`},
+		{MySQL, `{"a":"\\"}`, TypeJSON, `CAST('{"a":"\\\\"}' AS JSON)`},
+		{TSQL, "x", TypeString, "N'x'"},
+		{Trino, nil, TypeString, "NULL"},
+	}
+	for _, c := range cases {
+		got, err := MustGet(c.dialect).Literal(c.v, c.typ)
+		if err != nil || got != c.want {
+			t.Errorf("%s %s %v: %q, %v (want %q)", c.dialect, c.typ, c.v, got, err, c.want)
+		}
+	}
+	bad := []struct {
+		dialect string
+		v       any
+		typ     LogicalType
+		err     error
+	}{
+		{Trino, "1;DROP", Decimal(10, 2), ErrInvalid},
+		{Trino, "2024-3-5", TypeDate, ErrInvalid},
+		{Trino, `{"a":`, TypeJSON, ErrInvalid},
+		{Trino, 1, TypeBoolean, ErrInvalid},
+		{Trino, "1", Decimal(40, 2), ErrInvalid},
+		{MySQL, ts, TypeTimestampTZ, ErrUnsupported},
+		{Trino, 1.0, "uuid", ErrInvalid},
+	}
+	for _, c := range bad {
+		if _, err := MustGet(c.dialect).Literal(c.v, c.typ); !errors.Is(err, c.err) {
+			t.Errorf("%s %s %v: %v, want %v", c.dialect, c.typ, c.v, err, c.err)
+		}
+	}
+}
+
+// TestGenerationGolden fixes the SQL each dialect generates for the
+// semantic-layer primitives. The integration test runs the same statements
+// against real servers (#14 PR 3).
+func TestGenerationGolden(t *testing.T) {
+	type golden struct{ approx, month, week, cast, divide string }
+	want := map[string]golden{
+		Trino: {"approx_distinct(x)", "date_trunc('month', ts)", "date_trunc('week', ts)",
+			"CAST(x AS DECIMAL(18,2))", "(CAST(a AS DOUBLE)) / NULLIF(b, 0)"},
+		PostgreSQL: {"COUNT(DISTINCT x)", "date_trunc('month', ts)", "date_trunc('week', ts)",
+			"CAST(x AS NUMERIC(18,2))", "(CAST(a AS DOUBLE PRECISION)) / NULLIF(b, 0)"},
+		MySQL: {"COUNT(DISTINCT x)", "CAST(DATE_FORMAT(ts, '%Y-%m-01 00:00:00') AS DATETIME)",
+			"CAST(DATE_SUB(DATE(ts), INTERVAL WEEKDAY(ts) DAY) AS DATETIME)",
+			"CAST(x AS DECIMAL(18,2))", "(a) / NULLIF(b, 0)"},
+		MariaDB: {"COUNT(DISTINCT x)", "CAST(DATE_FORMAT(ts, '%Y-%m-01 00:00:00') AS DATETIME)",
+			"CAST(DATE_SUB(DATE(ts), INTERVAL WEEKDAY(ts) DAY) AS DATETIME)",
+			"CAST(x AS DECIMAL(18,2))", "(a) / NULLIF(b, 0)"},
+		TSQL: {"APPROX_COUNT_DISTINCT(x)", "DATETRUNC(month, ts)", "DATETRUNC(iso_week, ts)",
+			"CAST(x AS DECIMAL(18,2))", "(CAST(a AS FLOAT)) / NULLIF(b, 0)"},
+		Oracle: {"APPROX_COUNT_DISTINCT(x)", "TRUNC(ts, 'MM')", "TRUNC(ts, 'IW')",
+			"CAST(x AS NUMBER(18,2))", "(a) / NULLIF(b, 0)"},
+		SQLite: {"COUNT(DISTINCT x)", "datetime(ts, 'start of month')", "datetime(ts, 'weekday 0', '-6 days', 'start of day')",
+			"CAST(x AS NUMERIC)", "(CAST(a AS REAL)) / NULLIF(b, 0)"},
+		ClickHouse: {"uniq(x)", "date_trunc('month', ts)", "date_trunc('week', ts)",
+			"CAST(x AS Decimal(18, 2))", "(a) / NULLIF(b, 0)"},
+		FlightSQL: {"COUNT(DISTINCT x)", "date_trunc('month', ts)", "date_trunc('week', ts)",
+			"CAST(x AS DECIMAL(18,2))", "(CAST(a AS DOUBLE PRECISION)) / NULLIF(b, 0)"},
+	}
+	for _, n := range all {
+		d, w := MustGet(n), want[n]
+		approx, err1 := d.Aggregate(AggApproxCountDistinct, "x", false)
+		month, err2 := d.TimeTrunc("ts", GrainMonth)
+		week, err3 := d.TimeTrunc("ts", GrainWeek)
+		cast, err4 := d.Cast("x", Decimal(18, 2))
+		got := golden{approx, month, week, cast, d.SafeDivide("a", "b")}
+		if err := errors.Join(err1, err2, err3, err4); err != nil || got != w {
+			t.Errorf("%s:\n got %+v\nwant %+v (%v)", n, got, w, err)
+		}
+		for _, g := range Grains {
+			if _, err := d.TimeTrunc("ts", g); err != nil {
+				t.Errorf("%s: grain %s: %v", n, g, err)
+			}
+		}
+		if s, err := d.Aggregate(AggSum, "x", true); err != nil || s != "SUM(DISTINCT x)" {
+			t.Errorf("%s: sum distinct %q, %v", n, s, err)
+		}
+		if s, _ := d.Aggregate(AggCount, "", false); s != "COUNT(*)" {
+			t.Errorf("%s: count(*) %q", n, s)
+		}
+	}
+	if _, err := MustGet(Trino).TimeTrunc("ts", "fortnight"); !errors.Is(err, ErrInvalid) {
+		t.Error("unknown grain accepted")
+	}
+	if _, err := MustGet(MySQL).Cast("x", TypeBoolean); !errors.Is(err, ErrUnsupported) {
+		t.Error("mysql cast to boolean must be unsupported")
+	}
+	if _, err := MustGet(MariaDB).Cast("x", TypeJSON); !errors.Is(err, ErrUnsupported) {
+		t.Error("mariadb cast to json must be unsupported")
+	}
+	if got, _ := MustGet(SQLite).Cast("x", TypeTimestamp); got != "datetime(x)" {
+		t.Errorf("sqlite timestamp cast: %s", got)
+	}
+}

@@ -12,8 +12,8 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/sqlsplitter"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
@@ -40,7 +40,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		// the placeholder plumbing of I2 is in place) they leak credentials
 		// in clear. Even after I2 the discard stays: it is defense in depth
 		// and the DDL carries no user-observability value.
-		if sqlsplitter.IsCatalogDDL(q.Query) {
+		if policy.IsCatalogDDL(q.Query) {
 			continue
 		}
 		// The cluster poller's own node-count statement is not user activity.

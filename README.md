@@ -244,7 +244,8 @@ internal/
   migrate/                         Programmatic migration runner
   polaris/                         Polaris REST API client helpers
   server/                          HTTP server bootstrap + middleware
-  sqlsplitter/                     Multi-statement SQL parser
+  dialect/                         SQL per engine: quoting, splitting, previews, generation primitives
+  policy/                          What users may do (SQL editor gate)
   storage/                         S3 client for SeaweedFS/Ceph
   temporal/                        Temporal workflow definitions + activities
   trino/                           Trino REST API client

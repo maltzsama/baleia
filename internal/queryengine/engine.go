@@ -2,6 +2,7 @@ package queryengine
 
 import (
 	"context"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -159,16 +160,8 @@ type Capabilities struct {
 	IcebergMaintenance bool // ALTER TABLE … EXECUTE optimize/expire_snapshots
 }
 
-// Dialect is how an engine spells SQL. #14 adds the capabilities and
-// SQL-generation primitives.
-type Dialect interface {
-	Name() string
-	// QualifiedName quotes each part and joins them; invalid parts are an
-	// error (never silently altered).
-	QualifiedName(parts ...string) (string, error)
-	// Literal renders a string literal.
-	Literal(s string) string
-}
+// Dialect is how an engine spells SQL (internal/dialect).
+type Dialect = dialect.Dialect
 
 // IcebergMaintainer is implemented by engines with
 // Capabilities.IcebergMaintenance. It renders the statements of one
