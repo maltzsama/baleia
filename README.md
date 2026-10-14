@@ -18,6 +18,10 @@ Baleia is the **UI and control plane** for a Trino-based lakehouse: it manages c
 
 ## Architecture
 
+Architectural decisions are recorded as ADRs in [`docs/adr/`](docs/adr/README.md). They are the
+current truth: where this README or the code disagrees with an ADR, the ADR's "Current compliance"
+section says which issue closes the gap.
+
 ```mermaid
 graph TB
     subgraph Frontend

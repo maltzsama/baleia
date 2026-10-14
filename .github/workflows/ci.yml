@@ -20,6 +20,18 @@ jobs:
       - name: Test
         run: go test ./...
 
+  docs:
+    name: Docs links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ADR cross-links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          # Offline: only links between repository files; external URLs are not checked.
+          args: --offline --no-progress --include-fragments 'docs/**/*.md'
+          fail: true
+
   build:
     name: Build
     runs-on: ubuntu-latest
