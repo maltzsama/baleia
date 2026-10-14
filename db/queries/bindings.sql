@@ -39,3 +39,24 @@ SET engine_id         = $2,
     target_schema     = $5,
     target_snapshot   = $6
 WHERE id = $1;
+
+-- name: UpsertNativeCatalog :one
+-- A catalog found inside an engine, owned by the engine's connection.
+INSERT INTO catalogs (connection_id, name, origin, enabled)
+VALUES ($1, $2, 'native', true)
+ON CONFLICT (connection_id, name) DO UPDATE SET updated_at = now()
+RETURNING *;
+
+-- name: UpsertNativeBinding :one
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode)
+VALUES ($1, $2, $3, 'native')
+ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
+    engine_catalog_name = EXCLUDED.engine_catalog_name,
+    updated_at          = now()
+RETURNING *;
+
+-- name: DeleteNativeCatalogsOfEngine :exec
+-- The native catalogs of an engine, deleted with it (their bindings cascade).
+DELETE FROM catalogs c
+USING catalog_bindings b
+WHERE b.catalog_id = c.id AND b.engine_id = $1 AND b.mode = 'native' AND c.origin = 'native';

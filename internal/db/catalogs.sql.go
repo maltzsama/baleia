@@ -23,10 +23,10 @@ type CreateCatalogParams struct {
 	ConnectionID     pgtype.UUID `json:"connection_id"`
 	Name             string      `json:"name"`
 	Description      *string     `json:"description"`
-	TrinoCatalogName string      `json:"trino_catalog_name"`
+	TrinoCatalogName *string     `json:"trino_catalog_name"`
 	ClusterID        pgtype.UUID `json:"cluster_id"`
-	Warehouse        string      `json:"warehouse"`
-	Connector        string      `json:"connector"`
+	Warehouse        *string     `json:"warehouse"`
+	Connector        *string     `json:"connector"`
 	ExtraProps       []byte      `json:"extra_props"`
 }
 
@@ -97,7 +97,7 @@ func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, 
 }
 
 const getCatalogByTrinoName = `-- name: GetCatalogByTrinoName :one
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = $2
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = $2::text
 `
 
 type GetCatalogByTrinoNameParams struct {
@@ -205,7 +205,7 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 }
 
 const listEnabledCatalogs = `-- name: ListEnabledCatalogs :many
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE enabled ORDER BY name
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE enabled AND origin = 'source' ORDER BY name
 `
 
 func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
@@ -244,10 +244,10 @@ func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
 }
 
 const listEnabledIcebergCatalogs = `-- name: ListEnabledIcebergCatalogs :many
-SELECT c.id, c.connection_id, c.name, c.trino_catalog_name
+SELECT c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '')::text AS trino_catalog_name
 FROM catalogs c
 JOIN catalog_connections cc ON cc.id = c.connection_id
-WHERE c.enabled AND cc.type IN ('polaris', 'iceberg', 'nessie')
+WHERE c.enabled AND c.origin = 'source' AND cc.type IN ('polaris', 'iceberg', 'nessie')
 ORDER BY c.name
 `
 
@@ -349,10 +349,10 @@ type UpdateCatalogParams struct {
 	ID               pgtype.UUID `json:"id"`
 	Name             string      `json:"name"`
 	Description      *string     `json:"description"`
-	Warehouse        string      `json:"warehouse"`
-	Connector        string      `json:"connector"`
+	Warehouse        *string     `json:"warehouse"`
+	Connector        *string     `json:"connector"`
 	ExtraProps       []byte      `json:"extra_props"`
-	TrinoCatalogName string      `json:"trino_catalog_name"`
+	TrinoCatalogName *string     `json:"trino_catalog_name"`
 }
 
 func (q *Queries) UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (Catalog, error) {

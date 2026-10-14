@@ -80,6 +80,31 @@ func (q *Queries) DeleteEngine(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const engineHostsCatalogGrantedToUser = `-- name: EngineHostsCatalogGrantedToUser :one
+SELECT EXISTS (
+    SELECT 1 FROM catalog_bindings b
+    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
+    JOIN workspaces w ON w.id = g.workspace_id
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1
+    WHERE b.engine_id = $2
+      AND (w.owner_user_id = $1 OR tm.user_id = $1)
+) AS granted
+`
+
+type EngineHostsCatalogGrantedToUserParams struct {
+	UserID   pgtype.UUID `json:"user_id"`
+	EngineID pgtype.UUID `json:"engine_id"`
+}
+
+// True when the engine has a binding of a catalog granted to a workspace the
+// user belongs to.
+func (q *Queries) EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error) {
+	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToUser, arg.UserID, arg.EngineID)
+	var granted bool
+	err := row.Scan(&granted)
+	return granted, err
+}
+
 const getDefaultTrinoEngine = `-- name: GetDefaultTrinoEngine :one
 SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only
 FROM engines e
@@ -211,6 +236,53 @@ SELECT id, name, kind, class, connection_id, identity_mode, enabled, created_by,
 
 func (q *Queries) ListEngines(ctx context.Context) ([]Engine, error) {
 	rows, err := q.db.Query(ctx, listEngines)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Engine
+	for rows.Next() {
+		var i Engine
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.Class,
+			&i.ConnectionID,
+			&i.IdentityMode,
+			&i.Enabled,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEnginesVisibleToUser = `-- name: ListEnginesVisibleToUser :many
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at FROM engines e
+JOIN catalog_connections c ON c.id = e.connection_id
+WHERE c.created_by = $1
+   OR EXISTS (
+        SELECT 1 FROM catalog_bindings b
+        JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
+        JOIN workspaces w ON w.id = g.workspace_id
+        LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1
+        WHERE b.engine_id = e.id
+          AND (w.owner_user_id = $1 OR tm.user_id = $1))
+ORDER BY e.name
+`
+
+// The engines a non-admin may see: those on connections they own and those
+// hosting a catalog granted to one of their workspaces.
+func (q *Queries) ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error) {
+	rows, err := q.db.Query(ctx, listEnginesVisibleToUser, userID)
 	if err != nil {
 		return nil, err
 	}

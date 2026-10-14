@@ -274,3 +274,33 @@ func TestPluginContractUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+const versionNativeCatalogs = 25
+
+func TestNativeCatalogs(t *testing.T) {
+	db, dir := testDB(t, versionNativeCatalogs)
+	seed(t, db, "pg")
+
+	// A native catalog needs none of the Trino columns; a source one still does.
+	mustExec(t, db, `INSERT INTO catalogs (id, connection_id, name, origin) VALUES
+		('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000c2', 'sales', 'native')`)
+	if _, err := db.Exec(`INSERT INTO catalogs (connection_id, name) VALUES ('00000000-0000-0000-0000-0000000000c2', 'broken')`); err == nil {
+		t.Error("a source catalog without Trino columns was accepted")
+	}
+	if n := scalar[int](t, db, `SELECT count(*) FROM catalog_bindings WHERE catalog_id = '00000000-0000-0000-0000-0000000000f1'`); n != 0 {
+		t.Errorf("the transitional trigger bound a native catalog (%d bindings)", n)
+	}
+
+	if err := goose.DownTo(db, dir, versionEngines); err != nil {
+		t.Fatal(err)
+	}
+	if n := scalar[int](t, db, `SELECT count(*) FROM catalogs WHERE origin = 'native'`); n != 0 {
+		t.Errorf("%d native catalogs survived down", n)
+	}
+	if n := scalar[int](t, db, `SELECT count(*) FROM catalogs`); n != 2 {
+		t.Errorf("source catalogs after down = %d, want 2", n)
+	}
+	if err := goose.UpTo(db, dir, versionNativeCatalogs); err != nil {
+		t.Fatal(err)
+	}
+}

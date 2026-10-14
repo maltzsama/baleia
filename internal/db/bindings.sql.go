@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteNativeCatalogsOfEngine = `-- name: DeleteNativeCatalogsOfEngine :exec
+DELETE FROM catalogs c
+USING catalog_bindings b
+WHERE b.catalog_id = c.id AND b.engine_id = $1 AND b.mode = 'native' AND c.origin = 'native'
+`
+
+// The native catalogs of an engine, deleted with it (their bindings cascade).
+func (q *Queries) DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteNativeCatalogsOfEngine, engineID)
+	return err
+}
+
 const getBindingForTarget = `-- name: GetBindingForTarget :one
 SELECT
     b.id          AS binding_id,
@@ -183,4 +195,72 @@ type SetWorkspaceDefaultTargetParams struct {
 func (q *Queries) SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error {
 	_, err := q.db.Exec(ctx, setWorkspaceDefaultTarget, arg.ID, arg.DefaultBindingID, arg.DefaultSchema)
 	return err
+}
+
+const upsertNativeBinding = `-- name: UpsertNativeBinding :one
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode)
+VALUES ($1, $2, $3, 'native')
+ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
+    engine_catalog_name = EXCLUDED.engine_catalog_name,
+    updated_at          = now()
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+`
+
+type UpsertNativeBindingParams struct {
+	CatalogID         pgtype.UUID `json:"catalog_id"`
+	EngineID          pgtype.UUID `json:"engine_id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+}
+
+func (q *Queries) UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindingParams) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, upsertNativeBinding, arg.CatalogID, arg.EngineID, arg.EngineCatalogName)
+	var i CatalogBinding
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.EngineID,
+		&i.EngineCatalogName,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Mode,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertNativeCatalog = `-- name: UpsertNativeCatalog :one
+INSERT INTO catalogs (connection_id, name, origin, enabled)
+VALUES ($1, $2, 'native', true)
+ON CONFLICT (connection_id, name) DO UPDATE SET updated_at = now()
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
+`
+
+type UpsertNativeCatalogParams struct {
+	ConnectionID pgtype.UUID `json:"connection_id"`
+	Name         string      `json:"name"`
+}
+
+// A catalog found inside an engine, owned by the engine's connection.
+func (q *Queries) UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatalogParams) (Catalog, error) {
+	row := q.db.QueryRow(ctx, upsertNativeCatalog, arg.ConnectionID, arg.Name)
+	var i Catalog
+	err := row.Scan(
+		&i.ID,
+		&i.ConnectionID,
+		&i.Name,
+		&i.Description,
+		&i.TrinoCatalogName,
+		&i.ClusterID,
+		&i.Warehouse,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Origin,
+		&i.SourceRef,
+	)
+	return i, err
 }

@@ -1,0 +1,26 @@
+meta {
+  name: Disable Engine
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{base_url}}/engines/{{engine_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "enabled": false
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.enabled: eq false
+}

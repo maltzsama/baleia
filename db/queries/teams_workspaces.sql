@@ -98,11 +98,13 @@ SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by, granted_
 RETURNING *;
 
 -- name: ListWorkspaceCatalogGrants :many
-SELECT g.workspace_id, g.catalog_id, g.permission, g.granted_at, c.trino_catalog_name AS catalog_name
+-- catalog_name is the Trino name of a source catalog (what the UI showed
+-- before bindings) and the logical name of a native one.
+SELECT g.workspace_id, g.catalog_id, g.permission, g.granted_at, COALESCE(c.trino_catalog_name, c.name)::text AS catalog_name
 FROM workspace_catalog_grants g
 JOIN catalogs c ON c.id = g.catalog_id
 WHERE g.workspace_id = $1
-ORDER BY c.trino_catalog_name;
+ORDER BY 5;
 
 -- name: DeleteWorkspaceCatalogGrant :execrows
 DELETE FROM workspace_catalog_grants WHERE workspace_id = $1 AND catalog_id = $2;

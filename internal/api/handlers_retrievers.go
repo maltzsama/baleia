@@ -394,7 +394,7 @@ func (h *Handlers) workspaceHasEnabledCatalog(ctx context.Context, workspaceID p
 			continue
 		}
 		for _, r := range rows {
-			if r.Enabled && (r.TrinoCatalogName == catalogName || r.Name == catalogName) {
+			if r.Enabled && r.TrinoName() != "" && (r.TrinoName() == catalogName || r.Name == catalogName) {
 				return true
 			}
 		}

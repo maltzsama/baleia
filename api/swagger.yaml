@@ -41,6 +41,8 @@ tags:
     description: "User or team workspaces"
   - name: CatalogConnections
     description: "External Iceberg catalog connections"
+  - name: Engines
+    description: "Query engines (federated or direct) and the catalogs bound to them"
   - name: Catalog
     description: "Iceberg catalog, namespace, and table exploration via Trino"
   - name: QueryEditor
@@ -513,6 +515,44 @@ components:
           additionalProperties: { type: string }
         credentials: { type: object }
         default_readonly: { type: boolean }
+
+    Engine:
+      type: object
+      required: [id, name, kind, class, connection_id, identity_mode, enabled, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, description: "Query-engine kind: trino, postgresql, mysql, …" }
+        class: { type: string, enum: [federated, direct] }
+        connection_id: { type: string, format: uuid }
+        identity_mode: { type: string, enum: [impersonation, connection, per_user] }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateEngineRequest:
+      type: object
+      required: [name, connection_id]
+      properties:
+        name: { type: string, pattern: "^[a-z][a-z0-9_-]{0,62}$" }
+        connection_id: { type: string, format: uuid, description: "A connection whose provider has the direct_engine role" }
+
+    UpdateEngineRequest:
+      type: object
+      properties:
+        enabled: { type: boolean }
+
+    CatalogBinding:
+      type: object
+      required: [id, catalog_id, engine_id, engine_catalog_name, mode, enabled]
+      properties:
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        engine_id: { type: string, format: uuid }
+        engine_catalog_name: { type: string, description: "The catalog's name in SQL on that engine" }
+        connector: { type: string, nullable: true }
+        mode: { type: string, enum: [managed, adopted, native] }
+        enabled: { type: boolean }
 
     ConnectionProviderField:
       type: object
@@ -1484,11 +1524,13 @@ paths:
       tags: [CatalogConnections]
       operationId: deleteCatalogConnection
       summary: "Remove a connection — admin only"
+      description: "Refused with 409 connection_in_use while an engine runs on the connection."
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /catalog-connections/{id}/test:
     parameters:
@@ -1504,6 +1546,130 @@ paths:
             application/json:
               schema:
                 { $ref: "#/components/schemas/TestCatalogConnectionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Engines ───────────────────────────────────────────────────
+  /engines:
+    get:
+      tags: [Engines]
+      operationId: listEngines
+      summary: "Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces"
+      responses:
+        "200":
+          description: "Engines, ordered by name"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Engine" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Engines]
+      operationId: createEngine
+      summary: "Register a direct engine on a connection (its owner or an admin)"
+      description: >
+        The connection's provider must have the direct_engine role. Baleia
+        checks that it can reach the engine, then creates the engine and one
+        native catalog with a native binding per catalog the engine exposes.
+        Federated engines are registered by Baleia (the default Trino engine).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEngineRequest" }
+      responses:
+        "201":
+          description: "Engine created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Engine" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /engines/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: getEngine
+      summary: "Engine details"
+      responses:
+        "200":
+          description: "Engine"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Engine" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Engines]
+      operationId: updateEngine
+      summary: "Enable or disable an engine (owner of its connection or an admin)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateEngineRequest" }
+      responses:
+        "200":
+          description: "Engine updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Engine" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Engines]
+      operationId: deleteEngine
+      summary: "Remove an engine (owner of its connection or an admin)"
+      description: >
+        Refused with 409 engine_in_use while the engine has managed bindings or
+        running executions. Its native catalogs and bindings are deleted with
+        it; the connection stays.
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /engines/{id}/bindings:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: listEngineBindings
+      summary: "Catalogs bound to an engine"
+      responses:
+        "200":
+          description: "Bindings, ordered by engine catalog name"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogBinding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{id}/bindings:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: listCatalogBindings
+      summary: "Engines a catalog is bound to (anyone who may read the catalog)"
+      responses:
+        "200":
+          description: "Bindings"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogBinding" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 

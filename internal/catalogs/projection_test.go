@@ -32,10 +32,10 @@ func TestProject_PolarisBuildsPolarisShape(t *testing.T) {
 		ID:               pgtype.UUID{Valid: true},
 		ConnectionID:     pgtype.UUID{Valid: true},
 		Name:             "pol-prod",
-		TrinoCatalogName: "baleia_polaris",
+		TrinoCatalogName: strp("baleia_polaris"),
 		ClusterID:        clusterID,
-		Warehouse:        "baleia",
-		Connector:        "iceberg",
+		Warehouse:        strp("baleia"),
+		Connector:        strp("iceberg"),
 	}
 	creds := Credentials{ClientID: "abc", ClientSecret: "def"}
 
@@ -52,14 +52,14 @@ func TestProject_PolarisBuildsPolarisShape(t *testing.T) {
 	// The registry stores the REAL credential — not a placeholder.
 	// Placeholder substitution is the DDL generator's job (internal/trino).
 	expectedProps := map[string]string{
-		"iceberg.catalog.type":                          "rest",
-		"iceberg.rest-catalog.uri":                      "http://polaris:8181/api/catalog",
-		"iceberg.rest-catalog.warehouse":                "baleia",
-		"iceberg.rest-catalog.security":                 "OAUTH2",
-		"iceberg.rest-catalog.oauth2.credential":         "abc:def",
-		"iceberg.rest-catalog.oauth2.scope":              "PRINCIPAL_ROLE:ALL",
+		"iceberg.catalog.type":                            "rest",
+		"iceberg.rest-catalog.uri":                        "http://polaris:8181/api/catalog",
+		"iceberg.rest-catalog.warehouse":                  "baleia",
+		"iceberg.rest-catalog.security":                   "OAUTH2",
+		"iceberg.rest-catalog.oauth2.credential":          "abc:def",
+		"iceberg.rest-catalog.oauth2.scope":               "PRINCIPAL_ROLE:ALL",
 		"iceberg.rest-catalog.vended-credentials-enabled": "true",
-		"fs.s3.enabled":                                  "true",
+		"fs.s3.enabled":                                   "true",
 	}
 	for k, want := range expectedProps {
 		if got, ok := row.Properties[k]; !ok || got != want {
@@ -102,8 +102,8 @@ func TestProject_RejectsReservedName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			conn := db.CatalogConnection{Type: "polaris"}
 			cat := db.Catalog{
-				TrinoCatalogName: name,
-				Connector:        "iceberg",
+				TrinoCatalogName: strp(name),
+				Connector:        strp("iceberg"),
 				ClusterID:        pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
 			}
 			if _, err := Project(conn, cat, Credentials{}); err == nil {
@@ -117,9 +117,9 @@ func TestProject_RejectsReservedName(t *testing.T) {
 func TestProject_RejectsInvalidName(t *testing.T) {
 	conn := db.CatalogConnection{Type: "polaris"}
 	cat := db.Catalog{
-		TrinoCatalogName: "Baleia_Polaris", // uppercase, not allowed by Trino
-		Connector:        "iceberg",
-		ClusterID:         pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
+		TrinoCatalogName: strp("Baleia_Polaris"), // uppercase, not allowed by Trino
+		Connector:        strp("iceberg"),
+		ClusterID:        pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
 	}
 	if _, err := Project(conn, cat, Credentials{}); err == nil {
 		t.Fatal("Project accepted uppercase name")
@@ -130,8 +130,8 @@ func TestProject_RejectsInvalidName(t *testing.T) {
 func TestProject_RejectsMissingCluster(t *testing.T) {
 	conn := db.CatalogConnection{Type: "polaris"}
 	cat := db.Catalog{
-		TrinoCatalogName: "x",
-		Connector:        "iceberg",
+		TrinoCatalogName: strp("x"),
+		Connector:        strp("iceberg"),
 		ClusterID:        pgtype.UUID{Valid: false},
 	}
 	if _, err := Project(conn, cat, Credentials{}); err == nil {
@@ -147,10 +147,10 @@ func TestProject_RejectsMissingCluster(t *testing.T) {
 func TestProject_RegistryCarriesRealSecret(t *testing.T) {
 	conn := db.CatalogConnection{Type: "polaris", Url: "http://polaris:8181"}
 	cat := db.Catalog{
-		TrinoCatalogName: "baleia_polaris",
-		Connector:        "iceberg",
-		Warehouse:        "baleia",
-		ClusterID:         pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
+		TrinoCatalogName: strp("baleia_polaris"),
+		Connector:        strp("iceberg"),
+		Warehouse:        strp("baleia"),
+		ClusterID:        pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
 	}
 	creds := Credentials{ClientID: "abc", ClientSecret: "def"}
 
@@ -227,3 +227,5 @@ func TestDecodeCredentials_Unreadable(t *testing.T) {
 		t.Fatalf("no credentials stored: %+v, %v", none, err)
 	}
 }
+
+func strp(s string) *string { return &s }

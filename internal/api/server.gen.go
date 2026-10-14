@@ -87,6 +87,9 @@ type ServerInterface interface {
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Engines a catalog is bound to (anyone who may read the catalog)
+	// (GET /catalogs/{id}/bindings)
+	ListCatalogBindings(w http.ResponseWriter, r *http.Request, id PathId)
 	// Connection kinds, their roles and config schemas (drives the connection forms)
 	// (GET /connection-providers)
 	ListConnectionProviders(w http.ResponseWriter, r *http.Request)
@@ -105,6 +108,24 @@ type ServerInterface interface {
 	// Update a catalog
 	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 	UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID)
+	// Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
+	// (GET /engines)
+	ListEngines(w http.ResponseWriter, r *http.Request)
+	// Register a direct engine on a connection (its owner or an admin)
+	// (POST /engines)
+	CreateEngine(w http.ResponseWriter, r *http.Request)
+	// Remove an engine (owner of its connection or an admin)
+	// (DELETE /engines/{id})
+	DeleteEngine(w http.ResponseWriter, r *http.Request, id PathId)
+	// Engine details
+	// (GET /engines/{id})
+	GetEngine(w http.ResponseWriter, r *http.Request, id PathId)
+	// Enable or disable an engine (owner of its connection or an admin)
+	// (PATCH /engines/{id})
+	UpdateEngine(w http.ResponseWriter, r *http.Request, id PathId)
+	// Catalogs bound to an engine
+	// (GET /engines/{id}/bindings)
+	ListEngineBindings(w http.ResponseWriter, r *http.Request, id PathId)
 	// Current user profile
 	// (GET /me)
 	GetProfile(w http.ResponseWriter, r *http.Request)
@@ -408,6 +429,12 @@ func (_ Unimplemented) SyncCatalog(w http.ResponseWriter, r *http.Request, catal
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Engines a catalog is bound to (anyone who may read the catalog)
+// (GET /catalogs/{id}/bindings)
+func (_ Unimplemented) ListCatalogBindings(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Connection kinds, their roles and config schemas (drives the connection forms)
 // (GET /connection-providers)
 func (_ Unimplemented) ListConnectionProviders(w http.ResponseWriter, r *http.Request) {
@@ -441,6 +468,42 @@ func (_ Unimplemented) GetCatalog(w http.ResponseWriter, r *http.Request, connec
 // Update a catalog
 // (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 func (_ Unimplemented) UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
+// (GET /engines)
+func (_ Unimplemented) ListEngines(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Register a direct engine on a connection (its owner or an admin)
+// (POST /engines)
+func (_ Unimplemented) CreateEngine(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove an engine (owner of its connection or an admin)
+// (DELETE /engines/{id})
+func (_ Unimplemented) DeleteEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Engine details
+// (GET /engines/{id})
+func (_ Unimplemented) GetEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Enable or disable an engine (owner of its connection or an admin)
+// (PATCH /engines/{id})
+func (_ Unimplemented) UpdateEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Catalogs bound to an engine
+// (GET /engines/{id}/bindings)
+func (_ Unimplemented) ListEngineBindings(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1431,6 +1494,39 @@ func (siw *ServerInterfaceWrapper) SyncCatalog(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListCatalogBindings operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogBindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCatalogBindings(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListConnectionProviders operation middleware
 func (siw *ServerInterfaceWrapper) ListConnectionProviders(w http.ResponseWriter, r *http.Request) {
 
@@ -1636,6 +1732,182 @@ func (siw *ServerInterfaceWrapper) UpdateCatalog(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCatalog(w, r, connectionId, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEngines operation middleware
+func (siw *ServerInterfaceWrapper) ListEngines(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEngines(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateEngine operation middleware
+func (siw *ServerInterfaceWrapper) CreateEngine(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEngine(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteEngine operation middleware
+func (siw *ServerInterfaceWrapper) DeleteEngine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteEngine(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEngine operation middleware
+func (siw *ServerInterfaceWrapper) GetEngine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEngine(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateEngine operation middleware
+func (siw *ServerInterfaceWrapper) UpdateEngine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateEngine(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEngineBindings operation middleware
+func (siw *ServerInterfaceWrapper) ListEngineBindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEngineBindings(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3703,6 +3975,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalogs/{catalog_id}/sync", wrapper.SyncCatalog)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{id}/bindings", wrapper.ListCatalogBindings)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/connection-providers", wrapper.ListConnectionProviders)
 	})
 	r.Group(func(r chi.Router) {
@@ -3719,6 +3994,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/connections/{connection_id}/catalogs/{catalog_id}", wrapper.UpdateCatalog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines", wrapper.ListEngines)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engines", wrapper.CreateEngine)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/engines/{id}", wrapper.DeleteEngine)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}", wrapper.GetEngine)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engines/{id}", wrapper.UpdateEngine)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/bindings", wrapper.ListEngineBindings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetProfile)
@@ -4328,6 +4621,15 @@ func (response DeleteCatalogConnection404JSONResponse) VisitDeleteCatalogConnect
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteCatalogConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteCatalogConnection409JSONResponse) VisitDeleteCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetCatalogConnectionRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -4667,6 +4969,41 @@ func (response SyncCatalog409JSONResponse) VisitSyncCatalogResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListCatalogBindingsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListCatalogBindingsResponseObject interface {
+	VisitListCatalogBindingsResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogBindings200JSONResponse []CatalogBinding
+
+func (response ListCatalogBindings200JSONResponse) VisitListCatalogBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogBindings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogBindings401JSONResponse) VisitListCatalogBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogBindings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogBindings404JSONResponse) VisitListCatalogBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListConnectionProvidersRequestObject struct {
 }
 
@@ -4891,6 +5228,252 @@ func (response UpdateCatalog403JSONResponse) VisitUpdateCatalogResponse(w http.R
 type UpdateCatalog404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateCatalog404JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEnginesRequestObject struct {
+}
+
+type ListEnginesResponseObject interface {
+	VisitListEnginesResponse(w http.ResponseWriter) error
+}
+
+type ListEngines200JSONResponse []Engine
+
+func (response ListEngines200JSONResponse) VisitListEnginesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEngines401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListEngines401JSONResponse) VisitListEnginesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngineRequestObject struct {
+	Body *CreateEngineJSONRequestBody
+}
+
+type CreateEngineResponseObject interface {
+	VisitCreateEngineResponse(w http.ResponseWriter) error
+}
+
+type CreateEngine201JSONResponse Engine
+
+func (response CreateEngine201JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateEngine401JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateEngine404JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateEngine409JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateEngine422JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteEngineRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DeleteEngineResponseObject interface {
+	VisitDeleteEngineResponse(w http.ResponseWriter) error
+}
+
+type DeleteEngine204Response = NoContentResponse
+
+func (response DeleteEngine204Response) VisitDeleteEngineResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteEngine401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteEngine401JSONResponse) VisitDeleteEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteEngine403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteEngine403JSONResponse) VisitDeleteEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteEngine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteEngine404JSONResponse) VisitDeleteEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteEngine409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteEngine409JSONResponse) VisitDeleteEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetEngineResponseObject interface {
+	VisitGetEngineResponse(w http.ResponseWriter) error
+}
+
+type GetEngine200JSONResponse Engine
+
+func (response GetEngine200JSONResponse) VisitGetEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngine401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetEngine401JSONResponse) VisitGetEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetEngine404JSONResponse) VisitGetEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateEngineRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *UpdateEngineJSONRequestBody
+}
+
+type UpdateEngineResponseObject interface {
+	VisitUpdateEngineResponse(w http.ResponseWriter) error
+}
+
+type UpdateEngine200JSONResponse Engine
+
+func (response UpdateEngine200JSONResponse) VisitUpdateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateEngine401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateEngine401JSONResponse) VisitUpdateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateEngine403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateEngine403JSONResponse) VisitUpdateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateEngine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateEngine404JSONResponse) VisitUpdateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEngineBindingsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListEngineBindingsResponseObject interface {
+	VisitListEngineBindingsResponse(w http.ResponseWriter) error
+}
+
+type ListEngineBindings200JSONResponse []CatalogBinding
+
+func (response ListEngineBindings200JSONResponse) VisitListEngineBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEngineBindings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListEngineBindings401JSONResponse) VisitListEngineBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEngineBindings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListEngineBindings404JSONResponse) VisitListEngineBindingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -6944,6 +7527,9 @@ type StrictServerInterface interface {
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(ctx context.Context, request SyncCatalogRequestObject) (SyncCatalogResponseObject, error)
+	// Engines a catalog is bound to (anyone who may read the catalog)
+	// (GET /catalogs/{id}/bindings)
+	ListCatalogBindings(ctx context.Context, request ListCatalogBindingsRequestObject) (ListCatalogBindingsResponseObject, error)
 	// Connection kinds, their roles and config schemas (drives the connection forms)
 	// (GET /connection-providers)
 	ListConnectionProviders(ctx context.Context, request ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error)
@@ -6962,6 +7548,24 @@ type StrictServerInterface interface {
 	// Update a catalog
 	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 	UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error)
+	// Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
+	// (GET /engines)
+	ListEngines(ctx context.Context, request ListEnginesRequestObject) (ListEnginesResponseObject, error)
+	// Register a direct engine on a connection (its owner or an admin)
+	// (POST /engines)
+	CreateEngine(ctx context.Context, request CreateEngineRequestObject) (CreateEngineResponseObject, error)
+	// Remove an engine (owner of its connection or an admin)
+	// (DELETE /engines/{id})
+	DeleteEngine(ctx context.Context, request DeleteEngineRequestObject) (DeleteEngineResponseObject, error)
+	// Engine details
+	// (GET /engines/{id})
+	GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error)
+	// Enable or disable an engine (owner of its connection or an admin)
+	// (PATCH /engines/{id})
+	UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error)
+	// Catalogs bound to an engine
+	// (GET /engines/{id}/bindings)
+	ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error)
 	// Current user profile
 	// (GET /me)
 	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
@@ -7790,6 +8394,32 @@ func (sh *strictHandler) SyncCatalog(w http.ResponseWriter, r *http.Request, cat
 	}
 }
 
+// ListCatalogBindings operation middleware
+func (sh *strictHandler) ListCatalogBindings(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListCatalogBindingsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogBindings(ctx, request.(ListCatalogBindingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogBindings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogBindingsResponseObject); ok {
+		if err := validResponse.VisitListCatalogBindingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListConnectionProviders operation middleware
 func (sh *strictHandler) ListConnectionProviders(w http.ResponseWriter, r *http.Request) {
 	var request ListConnectionProvidersRequestObject
@@ -7954,6 +8584,172 @@ func (sh *strictHandler) UpdateCatalog(w http.ResponseWriter, r *http.Request, c
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCatalogResponseObject); ok {
 		if err := validResponse.VisitUpdateCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEngines operation middleware
+func (sh *strictHandler) ListEngines(w http.ResponseWriter, r *http.Request) {
+	var request ListEnginesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEngines(ctx, request.(ListEnginesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEngines")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEnginesResponseObject); ok {
+		if err := validResponse.VisitListEnginesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateEngine operation middleware
+func (sh *strictHandler) CreateEngine(w http.ResponseWriter, r *http.Request) {
+	var request CreateEngineRequestObject
+
+	var body CreateEngineJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateEngine(ctx, request.(CreateEngineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateEngine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateEngineResponseObject); ok {
+		if err := validResponse.VisitCreateEngineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteEngine operation middleware
+func (sh *strictHandler) DeleteEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DeleteEngineRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteEngine(ctx, request.(DeleteEngineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteEngine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteEngineResponseObject); ok {
+		if err := validResponse.VisitDeleteEngineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEngine operation middleware
+func (sh *strictHandler) GetEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetEngineRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEngine(ctx, request.(GetEngineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEngine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEngineResponseObject); ok {
+		if err := validResponse.VisitGetEngineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateEngine operation middleware
+func (sh *strictHandler) UpdateEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request UpdateEngineRequestObject
+
+	request.Id = id
+
+	var body UpdateEngineJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateEngine(ctx, request.(UpdateEngineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateEngine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateEngineResponseObject); ok {
+		if err := validResponse.VisitUpdateEngineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEngineBindings operation middleware
+func (sh *strictHandler) ListEngineBindings(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListEngineBindingsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEngineBindings(ctx, request.(ListEngineBindingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEngineBindings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEngineBindingsResponseObject); ok {
+		if err := validResponse.VisitListEngineBindingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

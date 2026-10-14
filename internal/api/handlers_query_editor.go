@@ -42,8 +42,8 @@ func (h *Handlers) resolveDefaultTrinoCatalog(ctx context.Context, workspace db.
 					continue
 				}
 				for _, r := range rows {
-					if r.Enabled {
-						return r.TrinoCatalogName
+					if r.Enabled && r.TrinoName() != "" {
+						return r.TrinoName()
 					}
 				}
 			}

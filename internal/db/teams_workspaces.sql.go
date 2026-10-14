@@ -339,10 +339,10 @@ type ListGrantedCatalogsOfWorkspaceRow struct {
 	ConnectionID     pgtype.UUID        `json:"connection_id"`
 	Name             string             `json:"name"`
 	Description      *string            `json:"description"`
-	TrinoCatalogName string             `json:"trino_catalog_name"`
+	TrinoCatalogName *string            `json:"trino_catalog_name"`
 	ClusterID        pgtype.UUID        `json:"cluster_id"`
-	Warehouse        string             `json:"warehouse"`
-	Connector        string             `json:"connector"`
+	Warehouse        *string            `json:"warehouse"`
+	Connector        *string            `json:"connector"`
 	ExtraProps       []byte             `json:"extra_props"`
 	Enabled          bool               `json:"enabled"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
@@ -510,11 +510,11 @@ func (q *Queries) ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Te
 }
 
 const listWorkspaceCatalogGrants = `-- name: ListWorkspaceCatalogGrants :many
-SELECT g.workspace_id, g.catalog_id, g.permission, g.granted_at, c.trino_catalog_name AS catalog_name
+SELECT g.workspace_id, g.catalog_id, g.permission, g.granted_at, COALESCE(c.trino_catalog_name, c.name)::text AS catalog_name
 FROM workspace_catalog_grants g
 JOIN catalogs c ON c.id = g.catalog_id
 WHERE g.workspace_id = $1
-ORDER BY c.trino_catalog_name
+ORDER BY 5
 `
 
 type ListWorkspaceCatalogGrantsRow struct {
@@ -525,6 +525,8 @@ type ListWorkspaceCatalogGrantsRow struct {
 	CatalogName string             `json:"catalog_name"`
 }
 
+// catalog_name is the Trino name of a source catalog (what the UI showed
+// before bindings) and the logical name of a native one.
 func (q *Queries) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error) {
 	rows, err := q.db.Query(ctx, listWorkspaceCatalogGrants, workspaceID)
 	if err != nil {

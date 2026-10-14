@@ -27,9 +27,14 @@ func (e *configError) Error() string { return e.code }
 func (e *configError) Unwrap() error { return errConfigInvalid }
 
 func (e *configError) response() UnprocessableEntityJSONResponse {
+	messages := map[string]string{
+		"provider_unsupported": "no provider is available for this connection type",
+		"engine_unsupported":   "this connection cannot back an engine",
+		"engine_unreachable":   "Baleia could not reach the engine",
+	}
 	out := UnprocessableEntityJSONResponse{Code: e.code, Message: "invalid connection config"}
-	if e.code == "provider_unsupported" {
-		out.Message = "no provider is available for this connection type"
+	if m, ok := messages[e.code]; ok {
+		out.Message = m
 	}
 	for _, f := range e.fields {
 		field, msg := f.Key, f.Message

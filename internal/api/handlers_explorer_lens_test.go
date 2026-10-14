@@ -34,7 +34,7 @@ func (q *explorerFake) GetDefaultTrinoCluster(context.Context) (db.TrinoCluster,
 }
 
 func (q *explorerFake) GetCatalogByTrinoName(_ context.Context, p db.GetCatalogByTrinoNameParams) (db.Catalog, error) {
-	if p.TrinoCatalogName == q.cat.TrinoCatalogName {
+	if p.TrinoCatalogName == q.cat.TrinoName() {
 		return q.cat, nil
 	}
 	return db.Catalog{}, pgx.ErrNoRows

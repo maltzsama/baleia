@@ -1,0 +1,38 @@
+meta {
+  name: Create Direct Engine (PostgreSQL)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/engines
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "local-pg",
+    "connection_id": "{{postgresql_connection_id}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.class: eq direct
+  res.body.kind: eq postgresql
+}
+
+vars:post-response {
+  engine_id: res.body.id
+}
+
+docs {
+  Uses the connection from 06_catalog_connections/14_create_postgresql. Baleia
+  pings it first (with make dev, loopback is allowed), then registers the
+  engine and its native catalog: the configured database.
+}
