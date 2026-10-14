@@ -21,3 +21,5 @@ data:
   BALEIA_RESULT_MAX_BYTES: {{ .Values.config.BALEIA_RESULT_MAX_BYTES | quote }}
   BALEIA_STATEMENT_TIMEOUT: {{ .Values.config.BALEIA_STATEMENT_TIMEOUT | quote }}
   BALEIA_TRINO_ADMIN_USER: {{ .Values.config.BALEIA_TRINO_ADMIN_USER | quote }}
+  BALEIA_CONNECTIONS_DENY_CIDRS: {{ .Values.config.BALEIA_CONNECTIONS_DENY_CIDRS | default "" | quote }}
+  BALEIA_CONNECTIONS_ALLOW_CIDRS: {{ .Values.config.BALEIA_CONNECTIONS_ALLOW_CIDRS | default "" | quote }}

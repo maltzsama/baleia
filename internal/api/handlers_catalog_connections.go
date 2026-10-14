@@ -10,8 +10,9 @@ import (
 	"time"
 	"log/slog"
 
-	catalog_connections "github.com/galileostudio/baleia/internal/catalog_connections"
 	catalogs "github.com/galileostudio/baleia/internal/catalogs"
+	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/google/uuid"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -184,18 +185,18 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
         return h.testSQLViaTrino(ctx, conn, start)
     }
 
-    client, err := h.connectionClient(conn)
-    if err != nil {
-        errMsg := err.Error()
-        return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
-    }
+	provider, cfg, err := h.connectionConfig(conn)
+	if err != nil {
+		errMsg := connectionTestError(err)
+		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
+	}
 
-    testErr := client.Ping(ctx)
-    latencyMs := int(time.Since(start).Milliseconds())
-    if testErr != nil {
-        errMsg := testErr.Error()
-        return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: latencyMs, Error: &errMsg}, nil
-    }
+	testErr := provider.Ping(ctx, cfg)
+	latencyMs := int(time.Since(start).Milliseconds())
+	if testErr != nil {
+		errMsg := connectionTestError(testErr)
+		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: latencyMs, Error: &errMsg}, nil
+	}
 
     v := conn.Type
     return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
@@ -283,17 +284,35 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 	return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
 }
 
-func (h *Handlers) connectionClient(conn db.CatalogConnection) (catalog_connections.Client, error) {
+// connectionConfig returns the provider of a stored connection and its
+// decrypted config.
+func (h *Handlers) connectionConfig(conn db.CatalogConnection) (connections.Provider, connections.Config, error) {
 	plain, err := catalogs.OpenCredentials(conn, h.keyring)
 	if err != nil {
-		return nil, err
+		return nil, connections.Config{}, err
 	}
-	var rawCreds *string
-	if plain != nil {
-		s := string(plain)
-		rawCreds = &s
+	kind := connections.Kind(conn.Type)
+	provider, err := h.connections.Get(kind)
+	if err != nil {
+		return nil, connections.Config{}, err
 	}
-	return catalog_connections.NewClient(conn.Type, conn.Url, rawCreds)
+	cfg, err := providers.FromStored(h.connections, kind, conn.ID, conn.Url, plain)
+	if err != nil {
+		return nil, connections.Config{}, err
+	}
+	return provider, cfg, nil
+}
+
+// connectionTestError is the message a failed connection test returns. A
+// dialer refusal gets a fixed message so the resolved address is never echoed.
+func connectionTestError(err error) string {
+	switch {
+	case errors.Is(err, connections.ErrDeniedNetwork):
+		return "connection_denied_network: the destination is not an allowed network address"
+	case errors.Is(err, connections.ErrUnknownKind):
+		return "provider_unsupported: this connection type cannot be tested yet"
+	}
+	return err.Error()
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

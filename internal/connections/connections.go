@@ -1,0 +1,205 @@
+// Package connections is the provider contract for connections: credentials
+// and an endpoint for one external system (docs/adr/0002). One provider per
+// kind owns the kind's config schema, roles, validation, reachability check and
+// metadata reader. Providers never know how a federated engine projects them;
+// binders do (#80).
+//
+// Every provider dials through Dialer (docs/adr/0011).
+package connections
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sort"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+// Kind is the connection type, stored in catalog_connections.type.
+type Kind string
+
+const (
+	// Iceberg catalog managers and metastores: metadata and bindable, never engines.
+	KindPolaris       Kind = "polaris"
+	KindNessie        Kind = "nessie"
+	KindIcebergREST   Kind = "iceberg"
+	KindLakekeeper    Kind = "lakekeeper"
+	KindUnity         Kind = "unity"
+	KindHiveMetastore Kind = "hive"
+	KindGlue          Kind = "glue"
+	// Databases: metadata, direct engine, and bindable where a connector exists.
+	KindPostgreSQL Kind = "postgresql"
+	KindMySQL      Kind = "mysql"
+	KindMariaDB    Kind = "mariadb"
+	KindSQLServer  Kind = "sqlserver"
+	KindOracle     Kind = "oracle"
+	KindSQLite     Kind = "sqlite"
+	KindClickHouse Kind = "clickhouse"
+	// Engine services.
+	KindFlightSQL Kind = "flightsql"
+	KindTrino     Kind = "trino"
+	KindDoris     Kind = "doris"
+	KindStarRocks Kind = "starrocks"
+)
+
+// Role is a way a connection can be used.
+type Role string
+
+const (
+	RoleMetadata  Role = "metadata"      // implements MetadataReader
+	RoleDirect    Role = "direct_engine" // an engine of EngineKind() can run on it
+	RoleBindable  Role = "bindable"      // declared by binders (#80), never by providers
+	RoleFederated Role = "federated_engine"
+)
+
+// Family groups kinds for forms and docs.
+type Family string
+
+const (
+	FamilyIceberg   Family = "iceberg"
+	FamilyMetastore Family = "metastore"
+	FamilyDatabase  Family = "database"
+	FamilyEngine    Family = "engine"
+)
+
+// Field types used by ConfigSchema.
+const (
+	FieldText     = "text"
+	FieldSecret   = "secret"
+	FieldInt      = "int"
+	FieldBool     = "bool"
+	FieldSelect   = "select"
+	FieldURL      = "url"
+	FieldFilePath = "file_path"
+)
+
+// Field describes one config or secret value of a provider.
+type Field struct {
+	Key      string
+	Label    string
+	Type     string
+	Required bool
+	Default  string
+	Options  []string
+	Help     string
+}
+
+// Secret reports whether the field is stored sealed and never returned.
+func (f Field) Secret() bool { return f.Type == FieldSecret }
+
+// Config is a decrypted connection. Secrets are decrypted once per use and
+// never logged.
+type Config struct {
+	ConnectionID pgtype.UUID
+	Kind         Kind
+	Values       map[string]string
+	Secrets      map[string]string
+}
+
+// Value returns a non-secret value, or "" when unset.
+func (c Config) Value(key string) string { return c.Values[key] }
+
+// Secret returns a secret value, or "" when unset.
+func (c Config) Secret(key string) string { return c.Secrets[key] }
+
+// State is a provider's support level.
+type State string
+
+const (
+	StateSupported   State = "supported"
+	StatePreview     State = "preview"
+	StateUnsupported State = "unsupported"
+)
+
+// Status is a provider's support level and, when not supported, why.
+type Status struct {
+	State  State
+	Reason string
+}
+
+// Provider owns everything Baleia knows about one connection kind.
+type Provider interface {
+	Kind() Kind
+	Label() string
+	Family() Family
+	Roles() []Role
+	// ConfigSchema lists the non-secret values and the secrets, for forms and
+	// validation.
+	ConfigSchema() []Field
+	// Validate normalizes and validates a config; unknown keys are rejected.
+	Validate(cfg Config) (Config, error)
+	// EngineKind is the queryengine kind used for RoleDirect or
+	// RoleFederated, or "" when the kind is never an engine.
+	EngineKind() string
+	// OpenMetadata returns a reader for RoleMetadata, else ErrUnsupported.
+	OpenMetadata(ctx context.Context, cfg Config) (MetadataReader, error)
+	// Ping checks reachability and credentials with the provider's own client.
+	Ping(ctx context.Context, cfg Config) error
+	Status() Status
+}
+
+// IcebergRESTEndpoint is implemented by providers that serve the Iceberg REST
+// catalog API. Binders use it to point an engine's Iceberg connector at the
+// provider.
+type IcebergRESTEndpoint interface {
+	// RESTURI is the base URI of the Iceberg REST API (the one /v1/config is
+	// under).
+	RESTURI(cfg Config) string
+}
+
+var (
+	// ErrUnsupported means the provider does not offer the operation.
+	ErrUnsupported = errors.New("unsupported")
+	// ErrUnknownKind means no provider is registered for the kind.
+	ErrUnknownKind = errors.New("provider_unsupported")
+	// ErrNotFound means the catalog, namespace or table does not exist.
+	ErrNotFound = errors.New("not_found")
+)
+
+// Registry maps kinds to providers. It is built once at the wiring sites
+// (docs/adr/0007) and read concurrently afterwards.
+type Registry struct {
+	providers map[Kind]Provider
+}
+
+// NewRegistry registers the providers; a kind registered twice is an error.
+func NewRegistry(providers ...Provider) (*Registry, error) {
+	r := &Registry{providers: make(map[Kind]Provider, len(providers))}
+	for _, p := range providers {
+		if _, dup := r.providers[p.Kind()]; dup {
+			return nil, fmt.Errorf("connections: provider %q registered twice", p.Kind())
+		}
+		r.providers[p.Kind()] = p
+	}
+	return r, nil
+}
+
+// Get returns the provider of a kind, or ErrUnknownKind.
+func (r *Registry) Get(kind Kind) (Provider, error) {
+	p, ok := r.providers[kind]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", ErrUnknownKind, kind)
+	}
+	return p, nil
+}
+
+// All returns every provider ordered by kind.
+func (r *Registry) All() []Provider {
+	out := make([]Provider, 0, len(r.providers))
+	for _, p := range r.providers {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Kind() < out[j].Kind() })
+	return out
+}
+
+// HasRole reports whether the provider declares the role.
+func HasRole(p Provider, role Role) bool {
+	for _, r := range p.Roles() {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}

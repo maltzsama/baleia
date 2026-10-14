@@ -11,6 +11,8 @@ import (
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -75,7 +77,22 @@ func (s *Server) routes() {
 
 	s3Client := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
 
-	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client)
+	// Every connection provider dials through one SSRF-safe dialer
+	// (docs/adr/0011).
+	dialer, err := connections.NewDialer(connections.DialerOptions{
+		DenyCIDRs:     s.cfg.ConnectionsDenyCIDRs,
+		AllowCIDRs:    s.cfg.ConnectionsAllowCIDRs,
+		AllowLoopback: s.cfg.ConnectionsAllowLoopback,
+	})
+	if err != nil {
+		panic("invalid connection network settings: " + err.Error())
+	}
+	conns, err := providers.New(dialer)
+	if err != nil {
+		panic("connection providers: " + err.Error())
+	}
+
+	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns)
 
 	// OIDC needs cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)

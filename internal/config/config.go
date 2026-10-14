@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -67,6 +68,13 @@ type Config struct {
 	SchedulesEnabled bool
 	RateLimitRPS     int
 	RateLimitBurst   int
+	// Connections* configure the dialer every connection provider uses to
+	// reach user-supplied hosts (docs/adr/0011). Loopback, link-local and
+	// cloud metadata addresses are always denied unless loopback is allowed
+	// for local development.
+	ConnectionsDenyCIDRs     []string
+	ConnectionsAllowCIDRs    []string
+	ConnectionsAllowLoopback bool
 }
 
 func Load() *Config {
@@ -100,6 +108,10 @@ func Load() *Config {
 		SchedulesEnabled: getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
 		RateLimitRPS:     getEnvInt("RATE_LIMIT_RPS", 60),
 		RateLimitBurst:   getEnvInt("RATE_LIMIT_BURST", 10),
+
+		ConnectionsDenyCIDRs:     splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
+		ConnectionsAllowCIDRs:    splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
+		ConnectionsAllowLoopback: getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
 	}
 }
 
@@ -152,6 +164,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("BALEIA_STATEMENT_TIMEOUT must be at least 1m (got %s)", c.StatementTimeout)
 	}
 	return nil
+}
+
+// splitList splits a comma-separated list, ignoring blanks.
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func getEnv(key, fallback string) string {

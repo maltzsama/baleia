@@ -71,10 +71,14 @@ Not compliant yet.
 - There are no `engines`, `catalog_bindings` or logical `catalogs` tables in the new sense (#13).
 - The engine is the concrete `*trino.Client`, constructed in `internal/api/handlers.go` and
   `internal/temporal/activities/activities.go` (#20).
-- Connection-type knowledge lives in `internal/catalog_connections/client.go` (`NewClient`),
-  `internal/catalogs/projection.go` (`switch conn.Type`) and
-  `internal/api/handlers_catalog_connections.go` (`trinoConnector`) (#11, #80).
-- Glue and Hive clients are stubs (`internal/catalog_connections/glue_hive.go`) (#86).
+- The provider registry exists (`internal/connections`, #11 PR 1a) for polaris, nessie, iceberg,
+  postgresql and mysql; the API and the worker use it for connection tests and Lens table health.
+  Connection config is still stored as `url` plus a credentials blob and converted with
+  `providers.FromStored`; it is stored per `ConfigSchema` from #11 PR 1b.
+- Trino projection knowledge remains in `internal/catalogs/projection.go` (`switch conn.Type`) and
+  `internal/api/handlers_catalog_connections.go` (`trinoConnector`) until binders land (#80); the
+  create handler's credential switch (`internal/api/catalog_credentials.go`) goes in #11 PR 1b.
+- Glue and Hive have no provider yet (#86).
 
 ## Alternatives considered
 

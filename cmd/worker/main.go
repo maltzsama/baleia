@@ -10,6 +10,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
@@ -57,7 +59,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	act := activities.New(pool, cfg, keyring)
+	// Every connection provider dials through one SSRF-safe dialer
+	// (docs/adr/0011).
+	dialer, err := connections.NewDialer(connections.DialerOptions{
+		DenyCIDRs:     cfg.ConnectionsDenyCIDRs,
+		AllowCIDRs:    cfg.ConnectionsAllowCIDRs,
+		AllowLoopback: cfg.ConnectionsAllowLoopback,
+	})
+	if err != nil {
+		slog.Error("invalid connection network settings", "err", err)
+		os.Exit(1)
+	}
+	conns, err := providers.New(dialer)
+	if err != nil {
+		slog.Error("connection providers", "err", err)
+		os.Exit(1)
+	}
+
+	act := activities.New(pool, cfg, keyring, conns)
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflow)

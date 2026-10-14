@@ -15,10 +15,10 @@ BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 .PHONY: dev worker migrate migrate-credentials migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down
 
 dev:
-	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
+	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
 
 worker:
-	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) go run ./cmd/worker
+	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true go run ./cmd/worker
 
 # ── Trino plugin ──────────────────────────────────────────────────────────────
 # Clones and builds the baleia-trino-catalog-store plugin using Docker.

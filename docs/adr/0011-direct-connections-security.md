@@ -39,8 +39,14 @@ access.
 
 ## Current compliance
 
-Not compliant yet: no direct connections exist. The dialer and providers are #11; read-only
-capabilities and sessions are #20; transient tests are #12.
+Partially compliant.
+
+- `connections.Dialer` exists and every provider dials through it, including the Iceberg REST
+  HTTP client (environment proxies ignored) and the PostgreSQL (`DialFunc`) and MySQL
+  (`RegisterDialContext`) drivers; `TestEveryDriverUsesDialer` proves it per provider (#11).
+- Metadata sessions of database providers are read-only with a 30 s statement timeout.
+- No direct engine exists yet: read-only capabilities and sessions are #20; SQLite and the other
+  database providers are #11 PR 2; transient tests are #12.
 
 ## Alternatives considered
 

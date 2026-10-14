@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -29,10 +30,13 @@ type Handlers struct {
 	s3             *storage.S3Client
 	trino          *trino.Client
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
+	// connections holds every connection provider (docs/adr/0002).
+	connections *connections.Registry
 }
 
-func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client) *Handlers {
+func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry) *Handlers {
 	return &Handlers{
+		connections:    conns,
 		queries:        queries,
 		pool:           pool,
 		cfg:            cfg,

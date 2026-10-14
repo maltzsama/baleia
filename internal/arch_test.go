@@ -40,7 +40,7 @@ var constructionRules = []constructionRule{
 		},
 		allowed: append([]string{"internal/queryengine/", "internal/bindings/"}, wiringSites...),
 		offenders: map[string]string{
-			"internal/api/handlers.go":                    "#20",
+			"internal/api/handlers.go":                   "#20",
 			"internal/temporal/activities/activities.go": "#20",
 		},
 	},
