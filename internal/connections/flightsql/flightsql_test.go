@@ -7,9 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/flight"
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql"
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql/example"
+	"github.com/apache/arrow-go/v18/arrow/memory"
 
 	"github.com/galileostudio/baleia/internal/connections"
 )
@@ -160,5 +163,31 @@ func TestValidate(t *testing.T) {
 	cfg, err := p.Validate(connections.Config{Values: map[string]string{"host": "h", "port": "1", "username": "u"}, Secrets: map[string]string{"token": "t"}})
 	if err != nil || cfg.Values["username"] != "" || cfg.Secrets["token"] != "" || cfg.Values["tls"] != "true" {
 		t.Errorf("auth none keeps credentials or TLS is off: %+v, %v", cfg, err)
+	}
+}
+
+// TestColumnTypes: string-like and binary-like columns are read whatever
+// their width.
+func TestColumnTypes(t *testing.T) {
+	mem := memory.NewGoAllocator()
+	schema := arrow.NewSchema([]arrow.Field{
+		{Name: "a", Type: arrow.BinaryTypes.String, Nullable: true},
+		{Name: "b", Type: arrow.BinaryTypes.LargeString},
+		{Name: "c", Type: arrow.BinaryTypes.StringView},
+		{Name: "d", Type: arrow.BinaryTypes.LargeBinary},
+	}, nil)
+	bld := array.NewRecordBuilder(mem, schema)
+	defer bld.Release()
+	bld.Field(0).(*array.StringBuilder).AppendNull()
+	bld.Field(1).(*array.LargeStringBuilder).Append("large")
+	bld.Field(2).(*array.StringViewBuilder).Append("view")
+	bld.Field(3).(*array.BinaryBuilder).Append([]byte{1, 2})
+	rec := bld.NewRecordBatch()
+	defer rec.Release()
+	if got := []string{column(rec, "a")[0], column(rec, "b")[0], column(rec, "c")[0], column(rec, "missing")[0]}; got[0] != "" || got[1] != "large" || got[2] != "view" || got[3] != "" {
+		t.Errorf("columns = %q", got)
+	}
+	if b, ok := rec.Column(3).(binaryColumn); !ok || b.Value(0)[1] != 2 {
+		t.Error("large_binary is not read")
 	}
 }

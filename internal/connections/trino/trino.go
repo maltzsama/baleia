@@ -117,14 +117,18 @@ func (r *reader) ListCatalogs(ctx context.Context) ([]connections.CatalogRef, er
 	return out, nil
 }
 
-// query runs sql against catalog's information_schema; %s in sql is the
-// quoted catalog.
+// catalogRef in a statement stands for the quoted catalog. It is replaced
+// once, before anything else: the rest of the statement holds quoted literals
+// that may contain any character.
+const catalogRef = "{catalog}"
+
+// query runs sql against catalog's information_schema.
 func (r *reader) query(ctx context.Context, catalog, sql string) ([][]any, error) {
 	q, err := trinoclient.QuoteIdent(catalog)
 	if err != nil {
 		return nil, fmt.Errorf("%w: catalog", connections.ErrNotFound)
 	}
-	res, err := r.c.Execute(ctx, fmt.Sprintf(sql, q), "", "")
+	res, err := r.c.Execute(ctx, strings.Replace(sql, catalogRef, q, 1), "", "")
 	if err != nil {
 		var qe *trinoclient.QueryError
 		if errors.As(err, &qe) && (qe.ErrorName == "CATALOG_NOT_FOUND" || qe.ErrorName == "SCHEMA_NOT_FOUND" || qe.ErrorName == "TABLE_NOT_FOUND") {
@@ -144,7 +148,7 @@ func (r *reader) ListNamespaces(ctx context.Context, catalog string, parent conn
 	if len(parent) > 0 {
 		return []connections.Namespace{}, nil
 	}
-	rows, err := r.query(ctx, catalog, `SELECT schema_name FROM %s.information_schema.schemata WHERE schema_name <> 'information_schema' ORDER BY schema_name`)
+	rows, err := r.query(ctx, catalog, `SELECT schema_name FROM {catalog}.information_schema.schemata WHERE schema_name <> 'information_schema' ORDER BY schema_name`)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +163,7 @@ func (r *reader) ListTables(ctx context.Context, catalog string, ns connections.
 	if len(ns) != 1 {
 		return nil, "", fmt.Errorf("%w: namespace %v", connections.ErrNotFound, ns)
 	}
-	rows, err := r.query(ctx, catalog, `SELECT table_name, table_type FROM %s.information_schema.tables
+	rows, err := r.query(ctx, catalog, `SELECT table_name, table_type FROM {catalog}.information_schema.tables
 		WHERE table_schema = `+trinoclient.QuoteString(ns[0])+` AND table_name > `+trinoclient.QuoteString(pageToken)+`
 		ORDER BY table_name LIMIT `+fmt.Sprint(pageSize+1))
 	if err != nil {
@@ -186,7 +190,7 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 		return nil, fmt.Errorf("%w: namespace %v", connections.ErrNotFound, t.Namespace)
 	}
 	where := `table_schema = ` + trinoclient.QuoteString(t.Namespace[0]) + ` AND table_name = ` + trinoclient.QuoteString(t.Name)
-	tables, err := r.query(ctx, t.Catalog, `SELECT table_type FROM %s.information_schema.tables WHERE `+where)
+	tables, err := r.query(ctx, t.Catalog, `SELECT table_type FROM {catalog}.information_schema.tables WHERE `+where)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +198,7 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 		return nil, fmt.Errorf("%w: table", connections.ErrNotFound)
 	}
 	rows, err := r.query(ctx, t.Catalog, `SELECT column_name, data_type, is_nullable, ordinal_position
-		FROM %s.information_schema.columns WHERE `+where+` ORDER BY ordinal_position`)
+		FROM {catalog}.information_schema.columns WHERE `+where+` ORDER BY ordinal_position`)
 	if err != nil {
 		return nil, err
 	}

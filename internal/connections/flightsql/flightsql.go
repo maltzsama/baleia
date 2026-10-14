@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/flight"
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql"
 	"github.com/apache/arrow-go/v18/arrow/memory"
@@ -234,17 +233,21 @@ func column(rec arrow.RecordBatch, name string) []string {
 	if len(idx) == 0 {
 		return make([]string, rec.NumRows())
 	}
-	col, ok := rec.Column(idx[0]).(*array.String)
+	// Servers send string, large_string or string_view.
+	col := rec.Column(idx[0])
 	out := make([]string, rec.NumRows())
-	if !ok {
-		return out
-	}
 	for i := range out {
 		if col.IsValid(i) {
-			out[i] = col.Value(i)
+			out[i] = col.ValueStr(i)
 		}
 	}
 	return out
+}
+
+// binaryColumn is a binary or large_binary column.
+type binaryColumn interface {
+	IsValid(i int) bool
+	Value(i int) []byte
 }
 
 func (c *conn) catalogs(ctx context.Context) ([]string, error) {
@@ -341,9 +344,9 @@ func (r *reader) tables(ctx context.Context, catalog string, ns connections.Name
 		return r.c.client.GetTables(ctx, opts)
 	}, func(rec arrow.RecordBatch) error {
 		schemas, names, kinds := column(rec, "db_schema_name"), column(rec, "table_name"), column(rec, "table_type")
-		var blobs *array.Binary
+		var blobs binaryColumn
 		if idx := rec.Schema().FieldIndices("table_schema"); withSchema && len(idx) > 0 {
-			blobs, _ = rec.Column(idx[0]).(*array.Binary)
+			blobs, _ = rec.Column(idx[0]).(binaryColumn)
 		}
 		for i := range names {
 			if schemas[i] != schema || (name != nil && names[i] != *name) {

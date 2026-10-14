@@ -3,7 +3,11 @@ package trino
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
@@ -31,6 +35,25 @@ func TestValidate(t *testing.T) {
 	cfg, err := p.Validate(connections.Config{Values: map[string]string{"url": "https://trino:8443/", "username": "u"}, Secrets: map[string]string{"password": "p"}})
 	if err != nil || cfg.Values["url"] != "https://trino:8443" || cfg.Values["service_user"] != "baleia" {
 		t.Errorf("cfg = %+v, %v", cfg, err)
+	}
+}
+
+// TestLiteralsKeepPercent: names with % or {catalog} reach Trino unchanged.
+func TestLiteralsKeepPercent(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got = string(b)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	p := provider(t)
+	cfg, _ := p.Validate(connections.Config{Values: map[string]string{"url": srv.URL}})
+	r := &reader{c: p.client(cfg)}
+	_, _, _ = r.ListTables(context.Background(), "cat{catalog}", connections.Namespace{"a%sb{catalog}"}, "x%d")
+	want := `FROM "cat{catalog}".information_schema.tables`
+	if !strings.Contains(got, want) || !strings.Contains(got, `'a%sb{catalog}'`) || !strings.Contains(got, `'x%d'`) {
+		t.Errorf("statement = %s", got)
 	}
 }
 
