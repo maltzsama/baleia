@@ -1,0 +1,41 @@
+meta {
+  name: Create Catalog Connection (PostgreSQL)
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{base_url}}/catalog-connections
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Local PostgreSQL",
+    "type": "postgresql",
+    "config": {
+      "host": "localhost",
+      "port": "5432",
+      "database": "baleia",
+      "sslmode": "disable",
+      "username": "baleia"
+    },
+    "credentials": {
+      "password": "baleia"
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.url: eq jdbc:postgresql://localhost:5432/baleia
+}
+
+vars:post-response {
+  postgresql_connection_id: res.body.id
+}

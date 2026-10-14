@@ -18,15 +18,30 @@ body:json {
   {
     "name": "Local Polaris",
     "type": "polaris",
-    "url": "http://localhost:8181",
     "default_readonly": false,
+    "config": {
+      "url": "http://localhost:8181",
+      "client_id": "admin"
+    },
     "credentials": {
-      "client_id": "admin",
       "client_secret": "admin"
     }
   }
 }
 
+assert {
+  res.status: eq 201
+  res.body.config.client_id: eq admin
+  res.body.config.realm: eq POLARIS
+  res.body.has_credentials: eq true
+}
+
 vars:post-response {
   catalog_connection_id: res.body.id
+}
+
+docs {
+  Non-secret fields go in `config`, secret fields in `credentials`, both as
+  listed by GET /connection-providers. The older shape (`url` plus a
+  `credentials` object that also carries `client_id`) is still accepted.
 }

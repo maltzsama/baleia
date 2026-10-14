@@ -190,7 +190,7 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 	if provider.Family() != connections.FamilyIceberg {
 		return fmt.Errorf("table health needs an Iceberg catalog, connection is %q: %w", conn.Type, connections.ErrUnsupported)
 	}
-	cfg, err := providers.FromStored(a.connections, connections.Kind(conn.Type), conn.ID, conn.Url, plain)
+	cfg, err := providers.FromStored(a.connections, connections.Kind(conn.Type), conn.ID, conn.Url, conn.Config, plain)
 	if err != nil {
 		return err
 	}

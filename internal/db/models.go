@@ -43,17 +43,19 @@ type Catalog struct {
 }
 
 type CatalogConnection struct {
-	ID              pgtype.UUID        `json:"id"`
-	Name            string             `json:"name"`
-	Type            string             `json:"type"`
-	Url             string             `json:"url"`
-	CredentialsEnc  *string            `json:"credentials_enc"`
-	DefaultReadonly bool               `json:"default_readonly"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	Host            *string            `json:"host"`
-	Port            *string            `json:"port"`
-	CreatedBy       pgtype.UUID        `json:"created_by"`
+	ID                  pgtype.UUID        `json:"id"`
+	Name                string             `json:"name"`
+	Type                string             `json:"type"`
+	Url                 string             `json:"url"`
+	CredentialsEnc      *string            `json:"credentials_enc"`
+	DefaultReadonly     bool               `json:"default_readonly"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	Host                *string            `json:"host"`
+	Port                *string            `json:"port"`
+	CreatedBy           pgtype.UUID        `json:"created_by"`
+	Config              []byte             `json:"config"`
+	CredentialsReadOnly bool               `json:"credentials_read_only"`
 }
 
 type ClusterSnapshot struct {

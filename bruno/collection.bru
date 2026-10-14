@@ -1,0 +1,8 @@
+docs {
+  Run against `make dev` (API on :9000). `01_auth` logs in and sets `token`.
+
+  `other_token` is the token of a second, non-admin user. The `*_foreign`
+  requests use it and expect 404: another user's resources must not be
+  visible. Invite a user (`03_users/02_invite_user`), log in as them and set
+  the variable.
+}

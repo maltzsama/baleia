@@ -74,7 +74,8 @@ var operationAccess = map[string]access{
 	"RefreshToken":         {kind: kindPublic},
 
 	// ── any valid token
-	"Logout": {kind: kindAuthenticated, why: "ends the caller's own session"},
+	"Logout":                  {kind: kindAuthenticated, why: "ends the caller's own session"},
+	"ListConnectionProviders": {kind: kindAuthenticated, why: "static provider metadata (kinds and config schemas), no tenant data"},
 
 	// ── scoped to the caller
 	"GetMe":                   {kind: kindSelf, calls: selfID},

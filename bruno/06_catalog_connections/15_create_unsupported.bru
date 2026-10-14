@@ -1,0 +1,32 @@
+meta {
+  name: Create Catalog Connection (kind without a provider)
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{base_url}}/catalog-connections
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Glue",
+    "type": "glue",
+    "config": {}
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq provider_unsupported
+}
+
+docs {
+  Glue and Hive Metastore get providers in #86; until then they are rejected.
+}

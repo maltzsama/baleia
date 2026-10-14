@@ -1,0 +1,33 @@
+meta {
+  name: Update Catalog Connection (config)
+  type: http
+  seq: 13
+}
+
+patch {
+  url: {{base_url}}/catalog-connections/{{catalog_connection_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "config": {
+      "realm": "POLARIS"
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.config.realm: eq POLARIS
+}
+
+docs {
+  Config keys are merged into the stored values (an empty string clears an
+  optional one). Secrets that are not sent are kept.
+}

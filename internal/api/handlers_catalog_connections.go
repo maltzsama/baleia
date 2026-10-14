@@ -56,7 +56,15 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	// The connection id is generated here, not by the database default: the
 	// credentials are sealed with it as additional authenticated data.
 	connID := pgtype.UUID{Bytes: uuid.New(), Valid: true}
-	credsEnc, err := encodeCredentials(h.keyring, createCredentials(request.Body), connID)
+	cfg, err := h.createConfig(connID, request.Body)
+	var ce *configError
+	if errors.As(err, &ce) {
+		return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	config, connURL, credsEnc, err := storedColumns(h, cfg)
 	if err != nil {
 		slog.Error("encrypt connection credentials", "err", err)
 		return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
@@ -70,8 +78,9 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	conn, err := h.queries.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
 		ID:              connID,
 		Name:            request.Body.Name,
-		Type:            string(request.Body.Type),
-		Url:             request.Body.Url,
+		Type:            string(cfg.Kind),
+		Url:             connURL,
+		Config:          config,
 		CredentialsEnc:  credsEnc,
 		DefaultReadonly: defaultReadonly,
 		CreatedBy:       uid,
@@ -117,17 +126,37 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	}
 
 	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, err := h.authz().Connection(ctx, p, connID, authz.ActWrite); err != nil {
+	stored, err := h.authz().Connection(ctx, p, connID, authz.ActWrite)
+	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return UpdateCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
 		}
 		return nil, err
 	}
 
-	params, err := buildConnectionUpdateParams(connID, *request.Body, h.keyring)
-	if err != nil {
-		slog.Error("encrypt connection credentials", "err", err)
-		return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
+	// Only fields present in the request are written; the SQL COALESCE leaves
+	// the others untouched, so concurrent PATCHes to different fields do not
+	// overwrite each other.
+	body := *request.Body
+	params := db.UpdateCatalogConnectionParams{ID: connID, Name: body.Name, DefaultReadonly: body.DefaultReadonly}
+	if body.Url != nil || body.Config != nil || body.Credentials != nil {
+		cfg, err := h.updateConfig(stored, body)
+		var ce *configError
+		switch {
+		case errors.As(err, &ce):
+			return UpdateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
+		case errors.Is(err, catalogs.ErrCredentialsUnreadable):
+			slog.Error("open connection credentials", "err", err)
+			return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not open the stored connection credentials"}, nil
+		case err != nil:
+			return nil, err
+		}
+		config, connURL, credsEnc, err := storedColumns(h, cfg)
+		if err != nil {
+			slog.Error("encrypt connection credentials", "err", err)
+			return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
+		}
+		params.Config, params.Url, params.CredentialsEnc = config, &connURL, credsEnc
 	}
 
 	conn, err := h.queries.UpdateCatalogConnection(ctx, params)
@@ -296,7 +325,7 @@ func (h *Handlers) connectionConfig(conn db.CatalogConnection) (connections.Prov
 	if err != nil {
 		return nil, connections.Config{}, err
 	}
-	cfg, err := providers.FromStored(h.connections, kind, conn.ID, conn.Url, plain)
+	cfg, err := providers.FromStored(h.connections, kind, conn.ID, conn.Url, conn.Config, plain)
 	if err != nil {
 		return nil, connections.Config{}, err
 	}
@@ -352,8 +381,9 @@ func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 	return CatalogConnection{
 		Id:              id,
 		Name:            c.Name,
-		Type:            CatalogConnectionType(c.Type),
+		Type:            c.Type,
 		Url:             redactURLSecrets(c.Url),
+		Config:          publicConfig(c.Config),
 		HasCredentials:  c.CredentialsEnc != nil && *c.CredentialsEnc != "",
 		DefaultReadonly: c.DefaultReadonly,
 		CreatedAt:       pgTimestampToTime(c.CreatedAt),

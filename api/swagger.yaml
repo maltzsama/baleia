@@ -402,12 +402,16 @@ components:
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
-      required: [id, name, type, url, default_readonly, has_credentials, created_at]
+      required: [id, name, type, url, config, default_readonly, has_credentials, created_at]
       properties:
         id:   { type: string, format: uuid }
         name: { type: string }
-        type: { type: string, enum: [polaris, nessie, glue, hive, iceberg, postgresql, mysql] }
-        url:  { type: string }
+        type: { type: string, description: "Connection kind; one of the kinds listed by GET /connection-providers" }
+        url:  { type: string, description: "Deprecated: read config. Kept while the Trino projection still reads it (#80)" }
+        config:
+          type: object
+          additionalProperties: { type: string }
+          description: "Non-secret values of the provider's config schema. Secret fields are never returned"
         host: { type: string }
         port: { type: string }
         has_credentials: { type: boolean, description: "Whether stored credentials exist; the secret itself is never returned" }
@@ -417,13 +421,25 @@ components:
 
     CreateCatalogConnectionRequest:
       type: object
-      required: [name, type, url]
+      required: [name, type]
+      description: >
+        Values and secrets are validated against the provider's config schema
+        (GET /connection-providers): unknown keys, missing required fields and
+        kinds without a provider answer 422. Non-secret fields go in `config`,
+        secret fields in `credentials`. `url` and the typed `*_credentials`
+        objects are the older shape and are still accepted.
       properties:
         name: { type: string }
-        type:             { type: string, enum: [polaris, nessie, glue, hive, iceberg, postgresql, mysql] }
-        url: { type: string }
+        type: { type: string, description: "A kind listed by GET /connection-providers" }
+        url: { type: string, description: "Older shape: the endpoint URL (a JDBC URL for databases). Prefer config" }
+        config:
+          type: object
+          additionalProperties: { type: string }
+          description: "Non-secret fields of the provider's config schema"
         default_readonly: { type: boolean, default: true }
-        credentials: { type: object }
+        credentials:
+          type: object
+          description: "Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config"
         nessie_credentials:
           $ref: "#/components/schemas/NessieCredentials"
         glue_credentials:
@@ -484,11 +500,53 @@ components:
 
     UpdateCatalogConnectionRequest:
       type: object
+      description: >
+        Partial update. `config` keys are merged into the stored values (an
+        empty string clears an optional field). `credentials` keys replace the
+        stored secrets they name; secrets that are absent are kept. The result
+        is validated like a create.
       properties:
         name: { type: string }
-        url: { type: string }
+        url: { type: string, description: "Older shape: the endpoint URL. Prefer config" }
+        config:
+          type: object
+          additionalProperties: { type: string }
         credentials: { type: object }
         default_readonly: { type: boolean }
+
+    ConnectionProviderField:
+      type: object
+      required: [key, label, type, required, secret]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        type: { type: string, enum: [text, secret, int, bool, select, url, file_path] }
+        required: { type: boolean }
+        secret: { type: boolean, description: "Sent in credentials, stored sealed, never returned" }
+        default: { type: string }
+        options: { type: array, items: { type: string } }
+        help: { type: string }
+
+    ConnectionProvider:
+      type: object
+      required: [kind, label, family, roles, status, config_schema]
+      properties:
+        kind: { type: string }
+        label: { type: string }
+        family: { type: string, enum: [iceberg, metastore, database, engine] }
+        roles:
+          type: array
+          items: { type: string, enum: [metadata, direct_engine, federated_engine] }
+        engine_kind: { type: string, description: "Query-engine kind when the connection can be an engine" }
+        status:
+          type: object
+          required: [state]
+          properties:
+            state: { type: string, enum: [supported, preview, unsupported] }
+            reason: { type: string }
+        config_schema:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectionProviderField" }
 
     TestCatalogConnectionResult:
       type: object
@@ -1337,6 +1395,21 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Catalog Connections ───────────────────────────────────────
+  /connection-providers:
+    get:
+      tags: [CatalogConnections]
+      operationId: listConnectionProviders
+      summary: "Connection kinds, their roles and config schemas (drives the connection forms)"
+      responses:
+        "200":
+          description: "Providers, ordered by kind"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ConnectionProvider" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /catalog-connections:
     get:
       tags: [CatalogConnections]
@@ -1406,6 +1479,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [CatalogConnections]
       operationId: deleteCatalogConnection

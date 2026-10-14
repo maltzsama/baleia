@@ -71,13 +71,16 @@ Not compliant yet.
 - There are no `engines`, `catalog_bindings` or logical `catalogs` tables in the new sense (#13).
 - The engine is the concrete `*trino.Client`, constructed in `internal/api/handlers.go` and
   `internal/temporal/activities/activities.go` (#20).
-- The provider registry exists (`internal/connections`, #11 PR 1a) for polaris, nessie, iceberg,
-  postgresql and mysql; the API and the worker use it for connection tests and Lens table health.
-  Connection config is still stored as `url` plus a credentials blob and converted with
-  `providers.FromStored`; it is stored per `ConfigSchema` from #11 PR 1b.
-- Trino projection knowledge remains in `internal/catalogs/projection.go` (`switch conn.Type`) and
-  `internal/api/handlers_catalog_connections.go` (`trinoConnector`) until binders land (#80); the
-  create handler's credential switch (`internal/api/catalog_credentials.go`) goes in #11 PR 1b.
+- The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql
+  and mysql. Create and update validate through `Provider.Validate`, store non-secret values in
+  `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the
+  schemas. Connection tests and Lens table health read through the registry (#11).
+- The `url` column is still written (derived with `providers.LegacyURL`) and the credentials blob
+  of older rows still carries non-secret values, because the Trino projection reads them:
+  `internal/catalogs/projection.go` (`switch conn.Type`) and `trinoConnector` in
+  `internal/api/handlers_catalog_connections.go` move to binders in #80. The typed
+  `*_credentials` request fields (`internal/api/catalog_credentials.go`) stay until the UI uses
+  the provider schema (#22).
 - Glue and Hive have no provider yet (#86).
 
 ## Alternatives considered

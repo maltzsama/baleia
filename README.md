@@ -266,7 +266,7 @@ The OpenAPI spec is served at `GET /openapi.yaml` and is the single source of tr
 3. Register it in `internal/connections/providers/providers.go` and add it to `TestEveryDriverUsesDialer`
 4. Regenerate [`docs/connections.md`](docs/connections.md): `BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/`
 5. Until binders land (#80), extend `trinoConnector()` and `catalogs.Project` for the Trino projection
-6. Until the API is driven by the provider schema (#11 PR 1b), add the credentials schema to `api/swagger.yaml` and the card to `web/src/routes/(app)/datasources/+page.svelte`, then `make generate`
+6. The API validates and stores connections through the provider's schema (`GET /connection-providers` exposes it), so no OpenAPI change is needed. Until the UI reads that endpoint (#22), add the card to `web/src/routes/(app)/datasources/+page.svelte`
 
 ## Roadmap
 

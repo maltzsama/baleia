@@ -1,0 +1,15 @@
+meta {
+  name: Delete PostgreSQL Connection
+  type: http
+  seq: 2
+}
+
+delete {
+  url: {{base_url}}/catalog-connections/{{postgresql_connection_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
