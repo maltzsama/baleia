@@ -125,7 +125,8 @@ func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*Spli
 	// dialect splits (the V2 workflow, #13, splits with the target's).
 	stmts, err := policy.EditorStatements(dialect.MustGet(dialect.Trino), params.SQL)
 	if err != nil {
-		return nil, err
+		// The same script fails the same way: retrying only delays the answer.
+		return nil, temporal.NewNonRetryableApplicationError(err.Error(), "editor_rejected", err)
 	}
 	if len(stmts) == 0 {
 		stmts = []string{params.SQL}

@@ -148,6 +148,9 @@ func TestSplitStatements_postgresql(t *testing.T) {
 	if got := split(t, PostgreSQL, "SELECT $1; SELECT 2"); len(got) != 2 {
 		t.Errorf("$1 is not a dollar quote: %q", got)
 	}
+	if got := split(t, PostgreSQL, "SELECT a$b$c FROM t; SELECT 2"); len(got) != 2 {
+		t.Errorf("$ inside an identifier is not a dollar quote: %q", got)
+	}
 }
 
 func TestSplitStatements_mysql(t *testing.T) {
@@ -199,17 +202,17 @@ func TestStatementsOffsets(t *testing.T) {
 
 func TestPreviewAndLimit(t *testing.T) {
 	want := map[string][2]string{
-		Trino:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1) AS baleia_limit LIMIT 5"},
-		TSQL:   {"SELECT TOP (10) * FROM t", "SELECT TOP (5) * FROM (SELECT 1) AS baleia_limit"},
-		Oracle: {"SELECT * FROM t FETCH FIRST 10 ROWS ONLY", "SELECT * FROM (SELECT 1) FETCH FIRST 5 ROWS ONLY"},
-		MySQL:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1) AS baleia_limit LIMIT 5"},
+		Trino:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1 -- note\n) AS baleia_limit LIMIT 5"},
+		TSQL:   {"SELECT TOP (10) * FROM t", "SELECT TOP (5) * FROM (SELECT 1 -- note\n) AS baleia_limit"},
+		Oracle: {"SELECT * FROM t FETCH FIRST 10 ROWS ONLY", "SELECT * FROM (SELECT 1 -- note\n) FETCH FIRST 5 ROWS ONLY"},
+		MySQL:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1 -- note\n) AS baleia_limit LIMIT 5"},
 	}
 	for n, w := range want {
 		d := MustGet(n)
 		if got := d.PreviewSQL("t", 10); got != w[0] {
 			t.Errorf("%s preview: %s", n, got)
 		}
-		if got := d.Limit("SELECT 1 ;\n", 5); got != w[1] {
+		if got := d.Limit("SELECT 1 -- note\n ;\n", 5); got != w[1] {
 			t.Errorf("%s limit: %s", n, got)
 		}
 	}
@@ -340,5 +343,35 @@ func TestGenerationGolden(t *testing.T) {
 	}
 	if got, _ := MustGet(SQLite).Cast("x", TypeTimestamp); got != "datetime(x)" {
 		t.Errorf("sqlite timestamp cast: %s", got)
+	}
+}
+
+// TestSplitStatements_trino keeps the cases of the former sqlsplitter suite.
+func TestSplitStatements_trino(t *testing.T) {
+	cases := []struct {
+		sql  string
+		want []string
+	}{
+		{"SELECT 1", []string{"SELECT 1"}},
+		{"SELECT 1; SELECT 2; SELECT 3", []string{"SELECT 1", "SELECT 2", "SELECT 3"}},
+		{";;SELECT 1;;", []string{"SELECT 1"}},
+		{"SELECT 'hello; world'", []string{"SELECT 'hello; world'"}},
+		{"SELECT 'it''s fine'; SELECT 2", []string{"SELECT 'it''s fine'", "SELECT 2"}},
+		{`SELECT * FROM "my;table"; SELECT 2`, []string{`SELECT * FROM "my;table"`, "SELECT 2"}},
+		{"SELECT 1 -- ignore this ; semicolon\n; SELECT 2", []string{"SELECT 1 -- ignore this ; semicolon", "SELECT 2"}},
+		{"SELECT 1 /* ignore ; this */ ; SELECT 2", []string{"SELECT 1 /* ignore ; this */", "SELECT 2"}},
+		{"SELECT 1;", []string{"SELECT 1"}},
+		{"   \n\t  ", nil},
+		{"\nCREATE TABLE foo (\n    id INT,\n    name VARCHAR\n);\n\nINSERT INTO foo VALUES (1, 'hello');\n", []string{"CREATE TABLE foo (\n    id INT,\n    name VARCHAR\n)", "INSERT INTO foo VALUES (1, 'hello')"}},
+	}
+	for _, c := range cases {
+		got := split(t, Trino, c.sql)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") || len(got) != len(c.want) {
+			t.Errorf("%q: %q, want %q", c.sql, got, c.want)
+		}
+	}
+	// Dollar quoting is PostgreSQL's (the old splitter applied it to Trino).
+	if got := split(t, PostgreSQL, "SELECT $$hello; world$$; SELECT 2"); len(got) != 2 {
+		t.Errorf("postgresql $$: %q", got)
 	}
 }

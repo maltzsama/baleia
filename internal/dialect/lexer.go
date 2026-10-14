@@ -110,7 +110,7 @@ func (r lexRules) split(sql string) ([]Span, error) {
 				return nil, fmt.Errorf("%w: unterminated [identifier]", ErrInvalid)
 			}
 			i += end + 2
-		case r.dollarQuotes && c == '$':
+		case r.dollarQuotes && c == '$' && !identChar(prev(sql, i)): // a$b$c is an identifier
 			tag, ok := dollarTag(sql[i:])
 			if !ok {
 				i++

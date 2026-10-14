@@ -280,8 +280,10 @@ func stripTerminator(sql string) string {
 	return strings.TrimRight(strings.TrimSpace(sql), "; \t\r\n")
 }
 
+// Limit wraps the query; a newline ends it so a trailing -- comment cannot
+// swallow the closing parenthesis.
 func (d *spec) Limit(sql string, n int) string {
-	sql = stripTerminator(sql)
+	sql = stripTerminator(sql) + "\n"
 	if d.limit != nil {
 		return d.limit(sql, n)
 	}
