@@ -129,10 +129,10 @@ func TestValidateCatalogName(t *testing.T) {
 		{"a", true},
 		{"baleia_polaris", true},
 		{"Baleia_Polaris", false}, // uppercase
-		{"baleia-polaris", false},  // hyphen
-		{"1baleia", false},         // starts with digit
-		{"system", true},           // regex allows it; reserved check is elsewhere
-		{"_baleia", false},         // starts with underscore
+		{"baleia-polaris", false}, // hyphen
+		{"1baleia", false},        // starts with digit
+		{"system", true},          // regex allows it; reserved check is elsewhere
+		{"_baleia", false},        // starts with underscore
 		{strings.Repeat("a", 63), true},
 		{strings.Repeat("a", 64), false}, // too long
 	}
@@ -147,8 +147,8 @@ func TestValidateCatalogName(t *testing.T) {
 func TestCreateCatalog_RejectsInvalidNameBeforeExecute(t *testing.T) {
 	c := &Client{baseURL: "http://invalid:1", user: "test", http: nil}
 	err := c.CreateCatalog(nil, CatalogSpec{
-		Name:      "BadName",
-		Connector: "iceberg",
+		Name:       "BadName",
+		Connector:  "iceberg",
 		Properties: map[string]string{"a": "b"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "invalid catalog name") {
@@ -269,5 +269,54 @@ func TestDecodeUseNumber(t *testing.T) {
 	}
 	if num.String() != "9007199254740993" {
 		t.Fatalf("bigint lost precision: %s", num.String())
+	}
+}
+
+// TestStatementAsksForParametricDatetime: without the capability Trino rounds
+// timestamp(6) and time(6) values to milliseconds.
+func TestStatementAsksForParametricDatetime(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("X-Trino-Client-Capabilities")
+		_, _ = io.WriteString(w, `{"id":"20240101_000000_00000_abcde"}`)
+	}))
+	defer srv.Close()
+	if _, err := New(srv.URL, "baleia").Execute(context.Background(), "SELECT 1", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got != "PARAMETRIC_DATETIME" {
+		t.Fatalf("X-Trino-Client-Capabilities = %q", got)
+	}
+}
+
+// TestErrorsAreTyped: statement failures carry Trino's classification and
+// HTTP failures are transport errors.
+func TestErrorsAreTyped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Trino-User") {
+		case "down":
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		case "anon":
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, "Unauthorized")
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"q","error":{"message":"m","errorName":"SYNTAX_ERROR","errorType":"USER_ERROR"}}`)
+	}))
+	defer srv.Close()
+	_, err := New(srv.URL, "baleia").Execute(context.Background(), "SELEKT", "", "")
+	var qe *QueryError
+	if !errors.As(err, &qe) || qe.ErrorName != "SYNTAX_ERROR" || qe.ErrorType != "USER_ERROR" || qe.QueryID != "q" {
+		t.Fatalf("err = %#v", err)
+	}
+	_, err = New(srv.URL, "down").Execute(context.Background(), "SELECT 1", "", "")
+	var te *TransportError
+	if !errors.As(err, &te) || te.Status != http.StatusServiceUnavailable {
+		t.Fatalf("err = %#v", err)
+	}
+	_, err = New(srv.URL, "anon").Execute(context.Background(), "SELECT 1", "", "")
+	if !errors.As(err, &te) || te.Status != http.StatusUnauthorized {
+		t.Fatalf("a non-JSON 401 must be a transport error, got %#v", err)
 	}
 }

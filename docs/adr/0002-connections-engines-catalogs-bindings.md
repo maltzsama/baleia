@@ -84,7 +84,9 @@ Partially compliant.
   engine Baleia bootstraps; registering others needs a Trino provider (#11 PR 3).
 - The engine contract exists (`internal/queryengine`: `Engine`/`Session`, Arrow record sinks,
   cross-process `QueryHandle`, typed errors, kind registry, `Manager`, conformance suite; #20 PR 1),
-  but every call site still uses the concrete `*trino.Client`, constructed in
+  and the Trino adapter implements it (`internal/queryengine/trino`, #25; conformance suite green
+  against the compose Trino), but every call site still uses the concrete `*trino.Client`,
+  constructed in
   `internal/api/handlers.go` and `internal/temporal/activities/activities.go`, until the Trino
   adapter lands (#20 PR 2). `TestNoTrinoImportsInDomain` lists those files and may only shrink.
 - The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql

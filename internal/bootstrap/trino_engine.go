@@ -24,23 +24,43 @@ type DefaultEngineStore interface {
 	LinkTrinoClusterEngine(ctx context.Context, arg db.LinkTrinoClusterEngineParams) error
 }
 
+// DefaultTrinoEngine is the environment's view of the default Trino engine:
+// TRINO_URL, BALEIA_TRINO_SERVICE_USER and BALEIA_TRINO_ADMIN_USER.
+type DefaultTrinoEngine struct {
+	URL         string
+	ServiceUser string
+	AdminUser   string
+}
+
+func (d DefaultTrinoEngine) config() map[string]string {
+	cfg := map[string]string{"url": d.URL}
+	if d.ServiceUser != "" {
+		cfg["service_user"] = d.ServiceUser
+	}
+	if d.AdminUser != "" {
+		cfg["admin_user"] = d.AdminUser
+	}
+	return cfg
+}
+
 // EnsureDefaultTrinoEngine keeps the default Trino cluster's engine in the
-// database (docs/adr/0002). Engine endpoints live in the database; TRINO_URL
-// only seeds and updates the engine Baleia created itself:
+// database (docs/adr/0002). Engine endpoints live in the database; the
+// environment only seeds and updates the engine Baleia created itself:
 //   - no engine on the default cluster: create a system-owned trino connection
 //     (created_by NULL) with url = trinoURL and a federated engine on it;
 //   - a system-owned connection with another url: update it to trinoURL;
 //   - a connection someone owns: leave it, TRINO_URL no longer applies.
 //
 // Run it in one transaction.
-func EnsureDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, trinoURL string) error {
+func EnsureDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, env DefaultTrinoEngine) error {
+	trinoURL := env.URL
 	if trinoURL == "" {
 		return nil
 	}
 	row, err := q.GetDefaultTrinoEngine(ctx)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return createDefaultTrinoEngine(ctx, q, trinoURL)
+		return createDefaultTrinoEngine(ctx, q, env)
 	case err != nil:
 		return fmt.Errorf("default trino engine: %w", err)
 	}
@@ -56,13 +76,19 @@ func EnsureDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, trinoUR
 			return fmt.Errorf("default trino engine config: %w", err)
 		}
 	}
-	if cfg["url"] == trinoURL && conn.Url == trinoURL {
-		return nil
-	}
+	want := env.config()
 	if cfg == nil {
 		cfg = map[string]string{}
 	}
-	cfg["url"] = trinoURL
+	changed := conn.Url != trinoURL
+	for k, v := range want {
+		if cfg[k] != v {
+			cfg[k], changed = v, true
+		}
+	}
+	if !changed {
+		return nil
+	}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -71,11 +97,12 @@ func EnsureDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, trinoUR
 	if _, err := q.UpdateCatalogConnection(ctx, db.UpdateCatalogConnectionParams{ID: conn.ID, Url: &url, Config: raw}); err != nil {
 		return fmt.Errorf("update default trino engine url: %w", err)
 	}
-	slog.Info("default trino engine url updated from TRINO_URL", "engine", row.Engine.Name)
+	slog.Info("default trino engine updated from the environment", "engine", row.Engine.Name)
 	return nil
 }
 
-func createDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, trinoURL string) error {
+func createDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, env DefaultTrinoEngine) error {
+	trinoURL := env.URL
 	cluster, err := q.GetDefaultTrinoCluster(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // no Trino cluster to back: nothing to bootstrap
@@ -84,7 +111,7 @@ func createDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, trinoUR
 		return fmt.Errorf("default trino cluster: %w", err)
 	}
 
-	raw, err := json.Marshal(map[string]string{"url": trinoURL})
+	raw, err := json.Marshal(env.config())
 	if err != nil {
 		return err
 	}
