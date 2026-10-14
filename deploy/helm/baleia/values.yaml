@@ -65,4 +65,13 @@ trino:
     imagePullPolicy: ""
   jvmHeap: 2G
   awsRegion: us-east-1    # set explicitly: S3 region auto-detection hangs without EC2 metadata
+  catalogGuard:
+    # The in-chart Trino has no authentication, so the guard cannot verify who
+    # claims the admin identity (config.BALEIA_TRINO_ADMIN_USER). When true, ANY
+    # client that reaches the Trino service may connect as that user and run
+    # CREATE/DROP CATALOG. Set true only when the Trino service is reachable from
+    # the API and worker alone (e.g. a NetworkPolicy, single-tenant dev cluster).
+    # When false, the guard denies catalog management to the unauthenticated
+    # admin, so creating, updating and syncing catalogs from Baleia fails.
+    allowUnauthenticatedAdmin: false
   resources: {}

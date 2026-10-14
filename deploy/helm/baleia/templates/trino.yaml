@@ -13,7 +13,7 @@ data:
   baleia-base-access-control.properties: |
 {{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}
   baleia-catalog-guard.properties: |
-{{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | indent 4 }}
+{{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | replace "baleia.allow-unauthenticated-admin=true" (printf "baleia.allow-unauthenticated-admin=%t" .Values.trino.catalogGuard.allowUnauthenticatedAdmin) | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
