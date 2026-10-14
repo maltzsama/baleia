@@ -28,26 +28,37 @@ const (
 	CatalogSyncStatusSynced   CatalogSyncStatus = "synced"
 )
 
-// Defines values for CatalogConnectionType.
+// Defines values for ConnectionProviderFamily.
 const (
-	CatalogConnectionTypeGlue       CatalogConnectionType = "glue"
-	CatalogConnectionTypeHive       CatalogConnectionType = "hive"
-	CatalogConnectionTypeIceberg    CatalogConnectionType = "iceberg"
-	CatalogConnectionTypeMysql      CatalogConnectionType = "mysql"
-	CatalogConnectionTypeNessie     CatalogConnectionType = "nessie"
-	CatalogConnectionTypePolaris    CatalogConnectionType = "polaris"
-	CatalogConnectionTypePostgresql CatalogConnectionType = "postgresql"
+	Database  ConnectionProviderFamily = "database"
+	Engine    ConnectionProviderFamily = "engine"
+	Iceberg   ConnectionProviderFamily = "iceberg"
+	Metastore ConnectionProviderFamily = "metastore"
 )
 
-// Defines values for CreateCatalogConnectionRequestType.
+// Defines values for ConnectionProviderRoles.
 const (
-	CreateCatalogConnectionRequestTypeGlue       CreateCatalogConnectionRequestType = "glue"
-	CreateCatalogConnectionRequestTypeHive       CreateCatalogConnectionRequestType = "hive"
-	CreateCatalogConnectionRequestTypeIceberg    CreateCatalogConnectionRequestType = "iceberg"
-	CreateCatalogConnectionRequestTypeMysql      CreateCatalogConnectionRequestType = "mysql"
-	CreateCatalogConnectionRequestTypeNessie     CreateCatalogConnectionRequestType = "nessie"
-	CreateCatalogConnectionRequestTypePolaris    CreateCatalogConnectionRequestType = "polaris"
-	CreateCatalogConnectionRequestTypePostgresql CreateCatalogConnectionRequestType = "postgresql"
+	DirectEngine    ConnectionProviderRoles = "direct_engine"
+	FederatedEngine ConnectionProviderRoles = "federated_engine"
+	Metadata        ConnectionProviderRoles = "metadata"
+)
+
+// Defines values for ConnectionProviderStatusState.
+const (
+	Preview     ConnectionProviderStatusState = "preview"
+	Supported   ConnectionProviderStatusState = "supported"
+	Unsupported ConnectionProviderStatusState = "unsupported"
+)
+
+// Defines values for ConnectionProviderFieldType.
+const (
+	Bool     ConnectionProviderFieldType = "bool"
+	FilePath ConnectionProviderFieldType = "file_path"
+	Int      ConnectionProviderFieldType = "int"
+	Secret   ConnectionProviderFieldType = "secret"
+	Select   ConnectionProviderFieldType = "select"
+	Text     ConnectionProviderFieldType = "text"
+	Url      ConnectionProviderFieldType = "url"
 )
 
 // Defines values for CreateMigrationRequestSourceType.
@@ -279,22 +290,67 @@ type CatalogSyncStatus string
 
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
-	CreatedAt       time.Time `json:"created_at"`
-	DefaultReadonly bool      `json:"default_readonly"`
+	// Config Non-secret values of the provider's config schema. Secret fields are never returned
+	Config          map[string]string `json:"config"`
+	CreatedAt       time.Time         `json:"created_at"`
+	DefaultReadonly bool              `json:"default_readonly"`
 
 	// HasCredentials Whether stored credentials exist; the secret itself is never returned
-	HasCredentials bool                  `json:"has_credentials"`
-	Host           *string               `json:"host,omitempty"`
-	Id             openapi_types.UUID    `json:"id"`
-	Name           string                `json:"name"`
-	Port           *string               `json:"port,omitempty"`
-	Type           CatalogConnectionType `json:"type"`
-	UpdatedAt      *time.Time            `json:"updated_at,omitempty"`
-	Url            string                `json:"url"`
+	HasCredentials bool               `json:"has_credentials"`
+	Host           *string            `json:"host,omitempty"`
+	Id             openapi_types.UUID `json:"id"`
+	Name           string             `json:"name"`
+	Port           *string            `json:"port,omitempty"`
+
+	// Type Connection kind; one of the kinds listed by GET /connection-providers
+	Type      string     `json:"type"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// Url Deprecated: read config. Kept while the Trino projection still reads it (#80)
+	Url string `json:"url"`
 }
 
-// CatalogConnectionType defines model for CatalogConnection.Type.
-type CatalogConnectionType string
+// ConnectionProvider defines model for ConnectionProvider.
+type ConnectionProvider struct {
+	ConfigSchema []ConnectionProviderField `json:"config_schema"`
+
+	// EngineKind Query-engine kind when the connection can be an engine
+	EngineKind *string                   `json:"engine_kind,omitempty"`
+	Family     ConnectionProviderFamily  `json:"family"`
+	Kind       string                    `json:"kind"`
+	Label      string                    `json:"label"`
+	Roles      []ConnectionProviderRoles `json:"roles"`
+	Status     struct {
+		Reason *string                       `json:"reason,omitempty"`
+		State  ConnectionProviderStatusState `json:"state"`
+	} `json:"status"`
+}
+
+// ConnectionProviderFamily defines model for ConnectionProvider.Family.
+type ConnectionProviderFamily string
+
+// ConnectionProviderRoles defines model for ConnectionProvider.Roles.
+type ConnectionProviderRoles string
+
+// ConnectionProviderStatusState defines model for ConnectionProvider.Status.State.
+type ConnectionProviderStatusState string
+
+// ConnectionProviderField defines model for ConnectionProviderField.
+type ConnectionProviderField struct {
+	Default  *string   `json:"default,omitempty"`
+	Help     *string   `json:"help,omitempty"`
+	Key      string    `json:"key"`
+	Label    string    `json:"label"`
+	Options  *[]string `json:"options,omitempty"`
+	Required bool      `json:"required"`
+
+	// Secret Sent in credentials, stored sealed, never returned
+	Secret bool                        `json:"secret"`
+	Type   ConnectionProviderFieldType `json:"type"`
+}
+
+// ConnectionProviderFieldType defines model for ConnectionProviderField.Type.
+type ConnectionProviderFieldType string
 
 // CreateAdminRequest defines model for CreateAdminRequest.
 type CreateAdminRequest struct {
@@ -309,23 +365,28 @@ type CreateApiKeyRequest struct {
 	Name      string     `json:"name"`
 }
 
-// CreateCatalogConnectionRequest defines model for CreateCatalogConnectionRequest.
+// CreateCatalogConnectionRequest Values and secrets are validated against the provider's config schema (GET /connection-providers): unknown keys, missing required fields and kinds without a provider answer 422. Non-secret fields go in `config`, secret fields in `credentials`. `url` and the typed `*_credentials` objects are the older shape and are still accepted.
 type CreateCatalogConnectionRequest struct {
-	Credentials           *map[string]interface{}            `json:"credentials,omitempty"`
-	DefaultReadonly       *bool                              `json:"default_readonly,omitempty"`
-	GlueCredentials       *GlueCredentials                   `json:"glue_credentials,omitempty"`
-	HiveCredentials       *HiveCredentials                   `json:"hive_credentials,omitempty"`
-	IcebergCredentials    *IcebergCredentials                `json:"iceberg_credentials,omitempty"`
-	MysqlCredentials      *SqlCredentials                    `json:"mysql_credentials,omitempty"`
-	Name                  string                             `json:"name"`
-	NessieCredentials     *NessieCredentials                 `json:"nessie_credentials,omitempty"`
-	PostgresqlCredentials *SqlCredentials                    `json:"postgresql_credentials,omitempty"`
-	Type                  CreateCatalogConnectionRequestType `json:"type"`
-	Url                   string                             `json:"url"`
-}
+	// Config Non-secret fields of the provider's config schema
+	Config *map[string]string `json:"config,omitempty"`
 
-// CreateCatalogConnectionRequestType defines model for CreateCatalogConnectionRequest.Type.
-type CreateCatalogConnectionRequestType string
+	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
+	Credentials           *map[string]interface{} `json:"credentials,omitempty"`
+	DefaultReadonly       *bool                   `json:"default_readonly,omitempty"`
+	GlueCredentials       *GlueCredentials        `json:"glue_credentials,omitempty"`
+	HiveCredentials       *HiveCredentials        `json:"hive_credentials,omitempty"`
+	IcebergCredentials    *IcebergCredentials     `json:"iceberg_credentials,omitempty"`
+	MysqlCredentials      *SqlCredentials         `json:"mysql_credentials,omitempty"`
+	Name                  string                  `json:"name"`
+	NessieCredentials     *NessieCredentials      `json:"nessie_credentials,omitempty"`
+	PostgresqlCredentials *SqlCredentials         `json:"postgresql_credentials,omitempty"`
+
+	// Type A kind listed by GET /connection-providers
+	Type string `json:"type"`
+
+	// Url Older shape: the endpoint URL (a JDBC URL for databases). Prefer config
+	Url *string `json:"url,omitempty"`
+}
 
 // CreateCatalogRequest defines model for CreateCatalogRequest.
 type CreateCatalogRequest struct {
@@ -713,12 +774,15 @@ type TestCatalogConnectionResult struct {
 	Version   *string `json:"version"`
 }
 
-// UpdateCatalogConnectionRequest defines model for UpdateCatalogConnectionRequest.
+// UpdateCatalogConnectionRequest Partial update. `config` keys are merged into the stored values (an empty string clears an optional field). `credentials` keys replace the stored secrets they name; secrets that are absent are kept. The result is validated like a create.
 type UpdateCatalogConnectionRequest struct {
+	Config          *map[string]string      `json:"config,omitempty"`
 	Credentials     *map[string]interface{} `json:"credentials,omitempty"`
 	DefaultReadonly *bool                   `json:"default_readonly,omitempty"`
 	Name            *string                 `json:"name,omitempty"`
-	Url             *string                 `json:"url,omitempty"`
+
+	// Url Older shape: the endpoint URL. Prefer config
+	Url *string `json:"url,omitempty"`
 }
 
 // UpdatePasswordRequest defines model for UpdatePasswordRequest.

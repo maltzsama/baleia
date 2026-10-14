@@ -12,9 +12,9 @@ import (
 )
 
 const createCatalogConnection = `-- name: CreateCatalogConnection :one
-INSERT INTO catalog_connections (id, name, type, url, credentials_enc, default_readonly, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by
+INSERT INTO catalog_connections (id, name, type, url, config, credentials_enc, default_readonly, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only
 `
 
 type CreateCatalogConnectionParams struct {
@@ -22,6 +22,7 @@ type CreateCatalogConnectionParams struct {
 	Name            string      `json:"name"`
 	Type            string      `json:"type"`
 	Url             string      `json:"url"`
+	Config          []byte      `json:"config"`
 	CredentialsEnc  *string     `json:"credentials_enc"`
 	DefaultReadonly bool        `json:"default_readonly"`
 	CreatedBy       pgtype.UUID `json:"created_by"`
@@ -35,6 +36,7 @@ func (q *Queries) CreateCatalogConnection(ctx context.Context, arg CreateCatalog
 		arg.Name,
 		arg.Type,
 		arg.Url,
+		arg.Config,
 		arg.CredentialsEnc,
 		arg.DefaultReadonly,
 		arg.CreatedBy,
@@ -52,6 +54,8 @@ func (q *Queries) CreateCatalogConnection(ctx context.Context, arg CreateCatalog
 		&i.Host,
 		&i.Port,
 		&i.CreatedBy,
+		&i.Config,
+		&i.CredentialsReadOnly,
 	)
 	return i, err
 }
@@ -66,7 +70,7 @@ func (q *Queries) DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) e
 }
 
 const getCatalogConnectionByID = `-- name: GetCatalogConnectionByID :one
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by FROM catalog_connections WHERE id = $1
+SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only FROM catalog_connections WHERE id = $1
 `
 
 func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error) {
@@ -84,12 +88,14 @@ func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) 
 		&i.Host,
 		&i.Port,
 		&i.CreatedBy,
+		&i.Config,
+		&i.CredentialsReadOnly,
 	)
 	return i, err
 }
 
 const listCatalogConnections = `-- name: ListCatalogConnections :many
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by FROM catalog_connections WHERE created_by = $1 ORDER BY name
+SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only FROM catalog_connections WHERE created_by = $1 ORDER BY name
 `
 
 func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error) {
@@ -113,6 +119,8 @@ func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.U
 			&i.Host,
 			&i.Port,
 			&i.CreatedBy,
+			&i.Config,
+			&i.CredentialsReadOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -128,16 +136,18 @@ const updateCatalogConnection = `-- name: UpdateCatalogConnection :one
 UPDATE catalog_connections
 SET name             = COALESCE($1, name),
     url              = COALESCE($2, url),
-    credentials_enc  = COALESCE($3, credentials_enc),
-    default_readonly = COALESCE($4, default_readonly),
+    config           = COALESCE($3, config),
+    credentials_enc  = COALESCE($4, credentials_enc),
+    default_readonly = COALESCE($5, default_readonly),
     updated_at       = now()
-WHERE id = $5
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by
+WHERE id = $6
+RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only
 `
 
 type UpdateCatalogConnectionParams struct {
 	Name            *string     `json:"name"`
 	Url             *string     `json:"url"`
+	Config          []byte      `json:"config"`
 	CredentialsEnc  *string     `json:"credentials_enc"`
 	DefaultReadonly *bool       `json:"default_readonly"`
 	ID              pgtype.UUID `json:"id"`
@@ -150,6 +160,7 @@ func (q *Queries) UpdateCatalogConnection(ctx context.Context, arg UpdateCatalog
 	row := q.db.QueryRow(ctx, updateCatalogConnection,
 		arg.Name,
 		arg.Url,
+		arg.Config,
 		arg.CredentialsEnc,
 		arg.DefaultReadonly,
 		arg.ID,
@@ -167,6 +178,8 @@ func (q *Queries) UpdateCatalogConnection(ctx context.Context, arg UpdateCatalog
 		&i.Host,
 		&i.Port,
 		&i.CreatedBy,
+		&i.Config,
+		&i.CredentialsReadOnly,
 	)
 	return i, err
 }

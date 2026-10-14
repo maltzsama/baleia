@@ -87,6 +87,9 @@ type ServerInterface interface {
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Connection kinds, their roles and config schemas (drives the connection forms)
+	// (GET /connection-providers)
+	ListConnectionProviders(w http.ResponseWriter, r *http.Request)
 	// List catalogs registered under a connection
 	// (GET /connections/{connection_id}/catalogs)
 	ListCatalogs(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID)
@@ -402,6 +405,12 @@ func (_ Unimplemented) ListTableSnapshots(w http.ResponseWriter, r *http.Request
 // Force re-sync of a catalog against the Trino cluster
 // (POST /catalogs/{catalog_id}/sync)
 func (_ Unimplemented) SyncCatalog(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Connection kinds, their roles and config schemas (drives the connection forms)
+// (GET /connection-providers)
+func (_ Unimplemented) ListConnectionProviders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1413,6 +1422,28 @@ func (siw *ServerInterfaceWrapper) SyncCatalog(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SyncCatalog(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConnectionProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListConnectionProviders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConnectionProviders(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3672,6 +3703,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalogs/{catalog_id}/sync", wrapper.SyncCatalog)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/connection-providers", wrapper.ListConnectionProviders)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/connections/{connection_id}/catalogs", wrapper.ListCatalogs)
 	})
 	r.Group(func(r chi.Router) {
@@ -4374,6 +4408,17 @@ func (response UpdateCatalogConnection404JSONResponse) VisitUpdateCatalogConnect
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateCatalogConnection422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateCatalogConnection422JSONResponse) VisitUpdateCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type TestCatalogConnectionRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -4618,6 +4663,31 @@ type SyncCatalog409JSONResponse Catalog
 func (response SyncCatalog409JSONResponse) VisitSyncCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListConnectionProvidersRequestObject struct {
+}
+
+type ListConnectionProvidersResponseObject interface {
+	VisitListConnectionProvidersResponse(w http.ResponseWriter) error
+}
+
+type ListConnectionProviders200JSONResponse []ConnectionProvider
+
+func (response ListConnectionProviders200JSONResponse) VisitListConnectionProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListConnectionProviders401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListConnectionProviders401JSONResponse) VisitListConnectionProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -6874,6 +6944,9 @@ type StrictServerInterface interface {
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(ctx context.Context, request SyncCatalogRequestObject) (SyncCatalogResponseObject, error)
+	// Connection kinds, their roles and config schemas (drives the connection forms)
+	// (GET /connection-providers)
+	ListConnectionProviders(ctx context.Context, request ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error)
 	// List catalogs registered under a connection
 	// (GET /connections/{connection_id}/catalogs)
 	ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error)
@@ -7710,6 +7783,30 @@ func (sh *strictHandler) SyncCatalog(w http.ResponseWriter, r *http.Request, cat
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SyncCatalogResponseObject); ok {
 		if err := validResponse.VisitSyncCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConnectionProviders operation middleware
+func (sh *strictHandler) ListConnectionProviders(w http.ResponseWriter, r *http.Request) {
+	var request ListConnectionProvidersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConnectionProviders(ctx, request.(ListConnectionProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConnectionProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConnectionProvidersResponseObject); ok {
+		if err := validResponse.VisitListConnectionProvidersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -277,7 +277,7 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 func TestFromStored(t *testing.T) {
 	reg := registry(t, connections.DialerOptions{})
 
-	cfg, err := FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://polaris:8181/", []byte(`{"client_id":"id","client_secret":"sec","realm":"R","stray":"x"}`))
+	cfg, err := FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://polaris:8181/", nil, []byte(`{"client_id":"id","client_secret":"sec","realm":"R","stray":"x"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestFromStored(t *testing.T) {
 		t.Errorf("polaris = %+v", cfg)
 	}
 
-	cfg, err = FromStored(reg, connections.KindPostgreSQL, pgtype.UUID{}, "jdbc:postgresql://db.internal:6543/sales", []byte(`{"username":"u","password":"p"}`))
+	cfg, err = FromStored(reg, connections.KindPostgreSQL, pgtype.UUID{}, "jdbc:postgresql://db.internal:6543/sales", nil, []byte(`{"username":"u","password":"p"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +295,7 @@ func TestFromStored(t *testing.T) {
 		t.Errorf("postgresql = %+v", cfg)
 	}
 
-	if _, err := FromStored(reg, connections.KindGlue, pgtype.UUID{}, "", nil); !errors.Is(err, connections.ErrUnknownKind) {
+	if _, err := FromStored(reg, connections.KindGlue, pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
 		t.Errorf("glue: want ErrUnknownKind, got %v", err)
 	}
 }
@@ -315,5 +315,67 @@ func TestConnectionsMatrixUpToDate(t *testing.T) {
 	}
 	if string(want) != got {
 		t.Error("docs/connections.md is stale; regenerate it with BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/")
+	}
+}
+
+func TestFromStoredReadsConfigColumn(t *testing.T) {
+	reg := registry(t, connections.DialerOptions{})
+
+	// A database row after the migration backfill: the JDBC URL sits in config.
+	cfg, err := FromStored(reg, connections.KindMySQL, pgtype.UUID{}, "jdbc:mysql://old:1/x", []byte(`{"url":"jdbc:mysql://db:3307/app"}`), []byte(`{"username":"u","password":"p"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Values["host"] != "db" || cfg.Values["port"] != "3307" || cfg.Values["database"] != "app" || cfg.Values["url"] != "" || cfg.Values["username"] != "u" {
+		t.Errorf("mysql = %+v", cfg)
+	}
+
+	// A row written through the registry: config wins over a leftover blob value.
+	cfg, err = FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://ignored", []byte(`{"url":"http://p:8181","client_id":"new"}`), []byte(`{"client_id":"old","client_secret":"s"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Values["url"] != "http://p:8181" || cfg.Values["client_id"] != "new" || cfg.Secrets["client_secret"] != "s" {
+		t.Errorf("polaris = %+v", cfg)
+	}
+}
+
+func TestMerge(t *testing.T) {
+	reg := registry(t, connections.DialerOptions{})
+	cur := connections.Config{Kind: connections.KindPostgreSQL,
+		Values:  map[string]string{"host": "a", "port": "5432", "database": "d", "username": "u", "sslmode": "require"},
+		Secrets: map[string]string{"password": "old"},
+	}
+	jdbc := "jdbc:postgresql://b:6543/e"
+	got, err := Merge(reg, cur, &jdbc, map[string]string{"sslmode": ""}, map[string]any{"password": "", "username": "v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Values["host"] != "b" || got.Values["port"] != "6543" || got.Values["database"] != "e" || got.Values["username"] != "v" {
+		t.Errorf("values = %v", got.Values)
+	}
+	if _, ok := got.Values["sslmode"]; ok {
+		t.Error("an empty config value must clear the field")
+	}
+	if got.Secrets["password"] != "old" {
+		t.Error("an empty secret must keep the stored one")
+	}
+	if cur.Values["host"] != "a" {
+		t.Error("Merge modified its input")
+	}
+}
+
+func TestLegacyURL(t *testing.T) {
+	for _, c := range []struct {
+		cfg  connections.Config
+		want string
+	}{
+		{connections.Config{Kind: connections.KindPolaris, Values: map[string]string{"url": "http://p"}}, "http://p"},
+		{connections.Config{Kind: connections.KindPostgreSQL, Values: map[string]string{"host": "db", "port": "5432", "database": "s"}}, "jdbc:postgresql://db:5432/s"},
+		{connections.Config{Kind: connections.KindMySQL, Values: map[string]string{"host": "::1", "port": "3306"}}, "jdbc:mysql://[::1]:3306"},
+	} {
+		if got := LegacyURL(c.cfg); got != c.want {
+			t.Errorf("%s: %q, want %q", c.cfg.Kind, got, c.want)
+		}
 	}
 }

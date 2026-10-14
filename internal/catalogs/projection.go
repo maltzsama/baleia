@@ -84,19 +84,27 @@ func OpenCredentials(conn db.CatalogConnection, kr *crypto.Keyring) ([]byte, err
 	return plain, nil
 }
 
-// DecodeCredentials opens and parses a connection's stored credentials. It
-// returns zero Credentials and a nil error only when none are configured.
+// DecodeCredentials opens and parses a connection's stored credentials. The
+// non-secret parts (client_id, realm, username) live in the config column for
+// rows written through the provider registry and in the credentials blob for
+// older rows; both are read, config winning (an update rewrites config but
+// keeps a blob that has no secret to replace). It returns zero Credentials and
+// a nil error only when none are configured.
 func DecodeCredentials(conn db.CatalogConnection, kr *crypto.Keyring) (Credentials, error) {
 	plain, err := OpenCredentials(conn, kr)
 	if err != nil {
 		return Credentials{}, err
 	}
-	if plain == nil {
-		return Credentials{}, nil
-	}
 	var c Credentials
-	if err := json.Unmarshal(plain, &c); err != nil {
-		return Credentials{}, fmt.Errorf("decode credentials: %w", err)
+	if plain != nil {
+		if err := json.Unmarshal(plain, &c); err != nil {
+			return Credentials{}, fmt.Errorf("decode credentials: %w", err)
+		}
+	}
+	if len(conn.Config) > 0 {
+		if err := json.Unmarshal(conn.Config, &c); err != nil {
+			return Credentials{}, fmt.Errorf("decode config: %w", err)
+		}
 	}
 	return c, nil
 }

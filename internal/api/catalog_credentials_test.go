@@ -94,7 +94,7 @@ func TestCreateCredentials(t *testing.T) {
 	generic := map[string]interface{}{"client_id": "id", "client_secret": "secret"}
 
 	t.Run("generic credentials are used for every type", func(t *testing.T) {
-		for _, typ := range []CreateCatalogConnectionRequestType{"polaris", "nessie", "glue", "hive", "iceberg", "postgresql", "mysql"} {
+		for _, typ := range []string{"polaris", "nessie", "glue", "hive", "iceberg", "postgresql", "mysql"} {
 			got := createCredentials(&CreateCatalogConnectionRequest{Type: typ, Credentials: &generic})
 			if got == nil {
 				t.Errorf("%s: generic credentials dropped", typ)

@@ -1,0 +1,36 @@
+meta {
+  name: Create Catalog Connection (invalid config)
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{base_url}}/catalog-connections
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Invalid Polaris",
+    "type": "polaris",
+    "config": {
+      "url": "ftp://polaris",
+      "unknown_field": "x"
+    }
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq validation_error
+}
+
+docs {
+  Unknown keys, a non-http URL and the missing client_id / client_secret are
+  all reported in `errors`. Nothing is stored.
+}

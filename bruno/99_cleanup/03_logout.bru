@@ -1,7 +1,7 @@
 meta {
   name: Logout
   type: http
-  seq: 10
+  seq: 3
 }
 
 post {
@@ -22,4 +22,8 @@ body:json {
 
 assert {
   res.status: eq 204
+}
+docs {
+  Last request of the collection: logging out ends the session every other
+  request uses.
 }
