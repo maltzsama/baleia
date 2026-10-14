@@ -102,6 +102,7 @@ jobs:
           BALEIA_TEST_NESSIE_URL: http://127.0.0.1:19120
         shell: bash
         run: |
+          set -o pipefail
           go test -count=1 -v ./internal/connections/... | tee test.log
           # Every integration test must have run, not been skipped (Polaris
           # needs its bootstrap; it is covered against the compose stack).

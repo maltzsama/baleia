@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -35,7 +36,11 @@ type Provider struct {
 	opts Options
 }
 
-func New(o Options) *Provider { return &Provider{opts: o} }
+func New(o Options) *Provider {
+	p := &Provider{opts: o}
+	p.WarnIfRootWritable()
+	return p
+}
 
 func (*Provider) Kind() connections.Kind     { return connections.KindSQLite }
 func (*Provider) Label() string              { return "SQLite" }
@@ -115,6 +120,10 @@ func (p *Provider) writable(cfg connections.Config) bool {
 	return p.opts.AllowWrite && cfg.Value("read_write") == "true"
 }
 
+// open opens the resolved file. Confinement is path-based: it holds while
+// nobody who must not escape the root can replace a component of a path under
+// it (docs/adr/0011). The path is resolved again right after opening, so a
+// swap that lands inside that window is detected rather than used.
 func (p *Provider) open(cfg connections.Config) (*sql.DB, error) {
 	path, err := p.Resolve(cfg.Value("path"))
 	if err != nil {
@@ -134,7 +143,27 @@ func (p *Provider) open(cfg connections.Config) (*sql.DB, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if again, err := p.Resolve(cfg.Value("path")); err != nil || again != path {
+		db.Close()
+		return nil, ErrOutsideRoot
+	}
 	return db, nil
+}
+
+// WarnIfRootWritable logs when the root is writable by group or others: then
+// someone other than the operator may swap a path component (docs/adr/0011).
+func (p *Provider) WarnIfRootWritable() {
+	if p.opts.Root == "" {
+		return
+	}
+	info, err := os.Stat(p.opts.Root)
+	if err == nil && info.Mode().Perm()&0o022 != 0 {
+		slog.Warn("BALEIA_SQLITE_ROOT is writable by group or others; SQLite confinement assumes only operators can change files under it", "root", p.opts.Root)
+	}
 }
 
 func (p *Provider) Ping(ctx context.Context, cfg connections.Config) error {

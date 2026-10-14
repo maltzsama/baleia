@@ -20,7 +20,11 @@ access.
   extra deny or allow CIDRs. A driver without a dial hook is not shipped.
 - **SQLite** files must resolve (after cleaning and resolving symlinks) inside `BALEIA_SQLITE_ROOT`,
   and are opened read-only unless both the connection and the server allow writes. Without
-  `BALEIA_SQLITE_ROOT` the provider is unavailable.
+  `BALEIA_SQLITE_ROOT` the provider is unavailable. Confinement is path-based, so its threat model
+  is explicit: Baleia users choose a path but never write under the root (Baleia offers no upload);
+  the root and every directory under it must be writable only by operators. A component swapped
+  between resolving and opening is caught by resolving again after the open, and a root writable
+  by group or others is logged at startup.
 - **Identity modes:** v1 uses the connection's credentials (`connection`); `per_user` comes later.
 - **Read-only enforcement is per engine**, declared in `queryengine.Capabilities.ReadOnly`
   (`enforced` or `none`). A `read` grant runs in a read-only session; on an engine that cannot
