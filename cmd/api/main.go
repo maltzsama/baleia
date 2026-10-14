@@ -55,7 +55,9 @@ func main() {
 	// Engine endpoints live in the database; TRINO_URL only seeds and updates
 	// the default Trino engine Baleia created itself.
 	if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-		return bootstrap.EnsureDefaultTrinoEngine(ctx, db.New(tx), cfg.TrinoURL)
+		return bootstrap.EnsureDefaultTrinoEngine(ctx, db.New(tx), bootstrap.DefaultTrinoEngine{
+			URL: cfg.TrinoURL, ServiceUser: cfg.TrinoServiceUser, AdminUser: cfg.TrinoAdminUser,
+		})
 	}); err != nil {
 		slog.Error("default trino engine", "err", err)
 		os.Exit(1)

@@ -28,10 +28,10 @@ type ColumnInfo struct {
 	Type string
 }
 
-// StreamWriter serializes Trino result rows to the Arrow IPC stream format,
-// preserving exact types (decimal128, exact integers, timestamps with unit).
-type StreamWriter struct {
-	writer   *ipc.Writer
+// Batcher converts Trino result rows into Arrow record batches of at most
+// recordBatchSize rows, preserving exact types (decimal128, exact integers,
+// timestamps with unit). It never holds more than one batch in memory.
+type Batcher struct {
 	builders []array.Builder
 	types    []arrow.DataType
 	names    []string
@@ -40,9 +40,8 @@ type StreamWriter struct {
 	total    int64
 }
 
-// NewStreamWriter builds a writer for the given columns. The stream header is
-// written immediately so the caller can start appending rows as they arrive.
-func NewStreamWriter(w io.Writer, cols []ColumnInfo) (*StreamWriter, error) {
+// NewBatcher builds a batcher for the given columns.
+func NewBatcher(cols []ColumnInfo) (*Batcher, error) {
 	fields := make([]arrow.Field, len(cols))
 	types := make([]arrow.DataType, len(cols))
 	names := make([]string, len(cols))
@@ -55,42 +54,35 @@ func NewStreamWriter(w io.Writer, cols []ColumnInfo) (*StreamWriter, error) {
 		names[i] = c.Name
 		fields[i] = arrow.Field{Name: c.Name, Type: typ, Nullable: true}
 	}
-
-	schema := arrow.NewSchema(fields, nil)
 	pool := memory.NewGoAllocator()
-
 	builders := make([]array.Builder, len(fields))
 	for i := range fields {
 		builders[i] = array.NewBuilder(pool, fields[i].Type)
 	}
-
-	s := &StreamWriter{
-		writer:   ipc.NewWriter(w, ipc.WithSchema(schema), ipc.WithAllocator(pool)),
-		builders: builders,
-		types:    types,
-		names:    names,
-		schema:   schema,
-	}
-	return s, nil
+	return &Batcher{builders: builders, types: types, names: names, schema: arrow.NewSchema(fields, nil)}, nil
 }
 
-// AppendRows appends rows to the current batch, flushing a record batch every
-// recordBatchSize rows. It never holds more than one batch in memory.
-func (s *StreamWriter) AppendRows(rows [][]interface{}) error {
+// Schema is the Arrow schema of the batches.
+func (b *Batcher) Schema() *arrow.Schema { return b.schema }
+
+// RowCount reports the total number of rows appended so far.
+func (b *Batcher) RowCount() int64 { return b.total }
+
+// Append converts rows, handing every full batch to emit, which owns it.
+func (b *Batcher) Append(rows [][]interface{}, emit func(arrow.RecordBatch) error) error {
 	for _, row := range rows {
-		if len(row) != len(s.builders) {
-			return fmt.Errorf("row %d: got %d values, expected %d columns",
-				s.total, len(row), len(s.builders))
+		if len(row) != len(b.builders) {
+			return fmt.Errorf("row %d: got %d values, expected %d columns", b.total, len(row), len(b.builders))
 		}
 		for i, val := range row {
-			if err := appendValue(s.builders[i], s.types[i], val); err != nil {
-				return fmt.Errorf("column %q row %d: %w", s.names[i], s.total, err)
+			if err := appendValue(b.builders[i], b.types[i], val); err != nil {
+				return fmt.Errorf("column %q row %d: %w", b.names[i], b.total, err)
 			}
 		}
-		s.rowCount++
-		s.total++
-		if s.rowCount >= recordBatchSize {
-			if err := s.flushBatch(); err != nil {
+		b.rowCount++
+		b.total++
+		if b.rowCount >= recordBatchSize {
+			if err := b.Flush(emit); err != nil {
 				return err
 			}
 		}
@@ -98,36 +90,73 @@ func (s *StreamWriter) AppendRows(rows [][]interface{}) error {
 	return nil
 }
 
-// flushBatch writes the pending record and resets the builders for reuse.
-func (s *StreamWriter) flushBatch() error {
-	if s.rowCount == 0 {
+// Flush hands the pending rows to emit as one batch; nothing when empty.
+func (b *Batcher) Flush(emit func(arrow.RecordBatch) error) error {
+	if b.rowCount == 0 {
 		return nil
 	}
-
-	cols := make([]arrow.Array, len(s.builders))
-	for i, b := range s.builders {
-		cols[i] = b.NewArray()
+	cols := make([]arrow.Array, len(b.builders))
+	for i, bl := range b.builders {
+		cols[i] = bl.NewArray()
 	}
-	rec := array.NewRecord(s.schema, cols, int64(s.rowCount))
+	rec := array.NewRecordBatch(b.schema, cols, int64(b.rowCount))
+	for _, c := range cols {
+		c.Release()
+	}
+	b.rowCount = 0
+	return emit(rec)
+}
+
+// Release frees the builders.
+func (b *Batcher) Release() {
+	for _, bl := range b.builders {
+		bl.Release()
+	}
+}
+
+// StreamWriter serializes Trino result rows to the Arrow IPC stream format.
+type StreamWriter struct {
+	writer  *ipc.Writer
+	batcher *Batcher
+}
+
+// NewStreamWriter builds a writer for the given columns. The stream header is
+// written immediately so the caller can start appending rows as they arrive.
+func NewStreamWriter(w io.Writer, cols []ColumnInfo) (*StreamWriter, error) {
+	b, err := NewBatcher(cols)
+	if err != nil {
+		return nil, err
+	}
+	return &StreamWriter{
+		writer:  ipc.NewWriter(w, ipc.WithSchema(b.schema), ipc.WithAllocator(memory.NewGoAllocator())),
+		batcher: b,
+	}, nil
+}
+
+func (s *StreamWriter) write(rec arrow.RecordBatch) error {
+	defer rec.Release()
 	if err := s.writer.Write(rec); err != nil {
 		return fmt.Errorf("write arrow batch: %w", err)
 	}
-	rec.Release()
-
-	s.rowCount = 0
 	return nil
+}
+
+// AppendRows appends rows, writing a record batch every recordBatchSize rows.
+func (s *StreamWriter) AppendRows(rows [][]interface{}) error {
+	return s.batcher.Append(rows, s.write)
 }
 
 // Close flushes the remainder and writes the end-of-stream marker.
 func (s *StreamWriter) Close() error {
-	if err := s.flushBatch(); err != nil {
+	defer s.batcher.Release()
+	if err := s.batcher.Flush(s.write); err != nil {
 		return err
 	}
 	return s.writer.Close()
 }
 
 // RowCount reports the total number of rows appended so far.
-func (s *StreamWriter) RowCount() int64 { return s.total }
+func (s *StreamWriter) RowCount() int64 { return s.batcher.RowCount() }
 
 // TrinoTypeToArrow maps a Trino type name to the exact Arrow type used for
 // storage. Look at the type table in issue #89 for the mapping and the rationale.
@@ -160,6 +189,8 @@ func TrinoTypeToArrow(t string) (arrow.DataType, error) {
 		return arrow.BinaryTypes.String, nil
 	case t == "varbinary":
 		return arrow.BinaryTypes.Binary, nil
+	case t == "unknown": // the type of a bare NULL literal
+		return arrow.Null, nil
 	case t == "date":
 		return arrow.FixedWidthTypes.Date32, nil
 	case strings.HasPrefix(t, "timestamp"):

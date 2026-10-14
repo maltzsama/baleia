@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -21,11 +22,76 @@ type Client struct {
 }
 
 func New(baseURL, user string) *Client {
-	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		user:    user,
-		http:    &http.Client{Timeout: 60 * time.Second},
+	return NewWithHTTPClient(baseURL, user, &http.Client{Timeout: 60 * time.Second})
+}
+
+// NewWithHTTPClient is New with the caller's HTTP client, e.g. one that dials
+// through connections.Dialer (docs/adr/0011).
+func NewWithHTTPClient(baseURL, user string, hc *http.Client) *Client {
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), user: user, http: hc}
+}
+
+// QueryError is a failure Trino reported for a statement. ErrorName and
+// ErrorType are Trino's own classification (e.g. SYNTAX_ERROR, USER_ERROR).
+type QueryError struct {
+	QueryID   string
+	Message   string
+	ErrorName string
+	ErrorType string
+}
+
+func (e *QueryError) Error() string {
+	return fmt.Sprintf("trino error: %s (%s)", e.Message, e.ErrorName)
+}
+
+// TransportError means Trino could not be reached or answered with an HTTP
+// error instead of a statement response.
+type TransportError struct {
+	Status int // 0 for a network error
+	Err    error
+}
+
+func (e *TransportError) Error() string {
+	if e.Status != 0 {
+		return fmt.Sprintf("trino unavailable: HTTP %d", e.Status)
 	}
+	return "trino unavailable: " + e.Err.Error()
+}
+
+func (e *TransportError) Unwrap() error { return e.Err }
+
+func queryError(id string, se *StatementError) *QueryError {
+	return &QueryError{QueryID: id, Message: se.Message, ErrorName: se.ErrorName, ErrorType: se.ErrorType}
+}
+
+// ServerInfo is the answer of GET /v1/info.
+type ServerInfo struct {
+	NodeVersion struct {
+		Version string `json:"version"`
+	} `json:"nodeVersion"`
+	Coordinator bool `json:"coordinator"`
+	Starting    bool `json:"starting"`
+}
+
+// Info returns the coordinator's /v1/info.
+func (c *Client) Info(ctx context.Context) (*ServerInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/info", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, &TransportError{Err: err}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, &TransportError{Status: resp.StatusCode}
+	}
+	var info ServerInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, &TransportError{Err: err}
+	}
+	return &info, nil
 }
 
 type Column struct {
@@ -34,27 +100,27 @@ type Column struct {
 }
 
 type StatementStats struct {
-	State      string `json:"state"`
-	Rows       int64  `json:"processedRows"`
-	Bytes      int64  `json:"processedBytes"`
-	ElapsedMs  int64  `json:"elapsedTimeMillis"`
+	State     string `json:"state"`
+	Rows      int64  `json:"processedRows"`
+	Bytes     int64  `json:"processedBytes"`
+	ElapsedMs int64  `json:"elapsedTimeMillis"`
 }
 
 type StatementResponse struct {
-	ID      string           `json:"id"`
-	InfoURI string           `json:"infoUri"`
-	NextURI string           `json:"nextUri"`
-	Stats   StatementStats   `json:"stats"`
-	Columns []Column         `json:"columns"`
-	Data    [][]interface{}  `json:"data"`
-	Error   *StatementError  `json:"error"`
+	ID      string          `json:"id"`
+	InfoURI string          `json:"infoUri"`
+	NextURI string          `json:"nextUri"`
+	Stats   StatementStats  `json:"stats"`
+	Columns []Column        `json:"columns"`
+	Data    [][]interface{} `json:"data"`
+	Error   *StatementError `json:"error"`
 }
 
 type StatementError struct {
-	Message    string      `json:"message"`
-	ErrorCode  interface{} `json:"errorCode"`
-	ErrorName  string      `json:"errorName"`
-	ErrorType  string      `json:"errorType"`
+	Message   string      `json:"message"`
+	ErrorCode interface{} `json:"errorCode"`
+	ErrorName string      `json:"errorName"`
+	ErrorType string      `json:"errorType"`
 }
 
 type QueryResult struct {
@@ -106,7 +172,7 @@ var catalogNameRe = regexp.MustCompile("^[a-z][a-z0-9_]{0,62}$")
 //   - Name and Connector validated against catalogNameRe BEFORE interpolation
 //     (no sanitization — fail fast).
 //   - Property keys double-quoted (required because keys contain hyphens).
-//   - Property values single-quoted with ' escaped as ''.
+//   - Property values single-quoted with ' escaped as ”.
 //   - Property keys iterated in sorted alphabetical order, so the generated
 //     text is deterministic and the catalog_version hash (catalogs.Version)
 //     is reproducible.
@@ -213,6 +279,7 @@ func buildCreateCatalogDDL(spec CatalogSpec) string {
 	b.WriteString("\n)")
 	return b.String()
 }
+
 // ExecuteOptions configures a single statement execution.
 type ExecuteOptions struct {
 	Catalog string
@@ -229,6 +296,20 @@ type ExecuteOptions struct {
 	OnProgress func()
 	// SessionProperties are sent as X-Trino-Session: k=v, ...
 	SessionProperties map[string]string
+	// PreparedStatements are sent as X-Trino-Prepared-Statement: name=sql, ...
+	PreparedStatements map[string]string
+	// ExtraCredentials are sent as X-Trino-Extra-Credential (the catalog
+	// guard's read-only mode is baleia.mode=readonly).
+	ExtraCredentials map[string]string
+	// Correlation: X-Trino-Source, X-Trino-Client-Tags, X-Trino-Client-Info
+	// and X-Trino-Trace-Token.
+	Source     string
+	ClientTags []string
+	ClientInfo string
+	TraceToken string
+	// OnHeaders receives the headers of every response, so a client-side
+	// session can apply X-Trino-Set-* and prepared statement changes.
+	OnHeaders func(h http.Header)
 }
 
 // trinoQueryIDRe matches Trino's query id format, e.g.
@@ -294,9 +375,18 @@ func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOpti
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("trino execute: %w", err)
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", &TransportError{Err: fmt.Errorf("trino execute: %w", err)}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return "", &TransportError{Status: resp.StatusCode}
+	}
+	if opts.OnHeaders != nil {
+		opts.OnHeaders(resp.Header)
+	}
 
 	var sr StatementResponse
 	dec := json.NewDecoder(resp.Body)
@@ -310,7 +400,7 @@ func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOpti
 	}
 
 	if sr.Error != nil {
-		return sr.ID, fmt.Errorf("trino error: %s (%s)", sr.Error.Message, sr.Error.ErrorName)
+		return sr.ID, queryError(sr.ID, sr.Error)
 	}
 
 	if err := c.onPage(onPage, sr.Columns, sr.Data); err != nil {
@@ -327,7 +417,7 @@ func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOpti
 			return "", err
 		}
 
-		sr, err = c.next(ctx, nextURI, user)
+		sr, err = c.next(ctx, nextURI, user, opts.OnHeaders)
 		if err != nil {
 			if ctx.Err() != nil {
 				c.cancelAbandoned(nextURI, user)
@@ -336,7 +426,7 @@ func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOpti
 			return "", err
 		}
 		if sr.Error != nil {
-			return "", fmt.Errorf("trino error: %s (%s)", sr.Error.Message, sr.Error.ErrorName)
+			return sr.ID, queryError(sr.ID, sr.Error)
 		}
 		if err := c.onPage(onPage, sr.Columns, sr.Data); err != nil {
 			return "", err
@@ -370,6 +460,9 @@ func (c *Client) onPage(onPage func(cols []Column, rows [][]interface{}) error, 
 // properties to a statement request.
 func (c *Client) setStatementHeaders(req *http.Request, opts ExecuteOptions) {
 	req.Header.Set("X-Trino-User", c.resolveUser(opts))
+	// Without PARAMETRIC_DATETIME Trino rounds timestamps and times to
+	// milliseconds for legacy clients; results must keep their precision.
+	req.Header.Set("X-Trino-Client-Capabilities", "PARAMETRIC_DATETIME")
 	if opts.Catalog != "" {
 		req.Header.Set("X-Trino-Catalog", opts.Catalog)
 	}
@@ -379,7 +472,40 @@ func (c *Client) setStatementHeaders(req *http.Request, opts ExecuteOptions) {
 	if len(opts.SessionProperties) > 0 {
 		req.Header.Set("X-Trino-Session", encodeSessionProperties(opts.SessionProperties))
 	}
+	if len(opts.PreparedStatements) > 0 {
+		req.Header.Set("X-Trino-Prepared-Statement", encodeURLPairs(opts.PreparedStatements))
+	}
+	if len(opts.ExtraCredentials) > 0 {
+		req.Header.Set("X-Trino-Extra-Credential", encodeSessionProperties(opts.ExtraCredentials))
+	}
+	if opts.Source != "" {
+		req.Header.Set("X-Trino-Source", opts.Source)
+	}
+	if len(opts.ClientTags) > 0 {
+		req.Header.Set("X-Trino-Client-Tags", strings.Join(opts.ClientTags, ","))
+	}
+	if opts.ClientInfo != "" {
+		req.Header.Set("X-Trino-Client-Info", opts.ClientInfo)
+	}
+	if opts.TraceToken != "" {
+		req.Header.Set("X-Trino-Trace-Token", opts.TraceToken)
+	}
 	req.Header.Set("Content-Type", "text/plain")
+}
+
+// encodeURLPairs renders name=value pairs with URL-encoded values, as Trino
+// expects for prepared statements.
+func encodeURLPairs(pairs map[string]string) string {
+	keys := make([]string, 0, len(pairs))
+	for k := range pairs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+url.QueryEscape(pairs[k]))
+	}
+	return strings.Join(parts, ",")
 }
 
 // encodeSessionProperties renders session properties deterministically so the
@@ -448,7 +574,7 @@ func (c *Client) deleteURI(ctx context.Context, nextURI, user string) error {
 	return nil
 }
 
-func (c *Client) next(ctx context.Context, uri, user string) (StatementResponse, error) {
+func (c *Client) next(ctx context.Context, uri, user string, onHeaders func(http.Header)) (StatementResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	if err != nil {
 		return StatementResponse{}, err
@@ -457,9 +583,15 @@ func (c *Client) next(ctx context.Context, uri, user string) (StatementResponse,
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return StatementResponse{}, fmt.Errorf("trino next: %w", err)
+		return StatementResponse{}, &TransportError{Err: fmt.Errorf("trino next: %w", err)}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return StatementResponse{}, &TransportError{Status: resp.StatusCode}
+	}
+	if onHeaders != nil {
+		onHeaders(resp.Header)
+	}
 
 	var sr StatementResponse
 	dec := json.NewDecoder(resp.Body)
