@@ -14,6 +14,11 @@
 
 	type Tab = { id: string; name: string; sql: string; savedId: string | null;
 		results: any[]; columns: string[]; rowCount: number; durationMs: number; errorMsg: string; statusText: string; page: number; };
+	// A place the workspace can run queries: a catalog bound to an engine
+	// (GET /workspaces/{id}/targets).
+	type Target = { binding_id: string; catalog_id: string; catalog_name: string; engine_id: string;
+		engine_name: string; engine_kind: string; engine_catalog_name: string; mode: string;
+		permission: 'read' | 'write'; is_default: boolean; };
 
 	let editorView: EditorView;
 	let editorEl: HTMLDivElement;
@@ -32,6 +37,9 @@
 	const apiBase = '/api/v1';
 	const workspaceId = $derived(workspaceStore.current?.id || '');
 	const token = localStorage.getItem('token') || '';
+	let targets = $state<Target[]>([]);
+	let targetId = $state('');
+	const selectedTarget = $derived(targets.find((t) => t.binding_id === targetId));
 	let saveModalOpen = $state(false);
 	let saveName = $state('');
 	let perPage = $state(50);
@@ -66,6 +74,33 @@
 		activeIdx = tabs.length - 1;
 		editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: q.sql } });
 	}
+
+	// Until the engine contract lands (#20) only Trino runs queries.
+	const runnable = (t: Target) => t.engine_kind === 'trino';
+	const targetKey = (wid: string) => `target:${wid}`;
+
+	async function loadTargets(wid: string) {
+		targets = []; targetId = '';
+		if (!wid) return;
+		try {
+			const res = await fetch(`${apiBase}/workspaces/${wid}/targets`, { headers: { Authorization: `Bearer ${token}` } });
+			if (!res.ok) return;
+			targets = await res.json();
+		} catch { return; }
+		// The last choice in this workspace, else its default, else its only target.
+		const saved = localStorage.getItem(targetKey(wid));
+		const pick = targets.find((t) => t.binding_id === saved && runnable(t))
+			|| targets.find((t) => t.is_default && runnable(t))
+			|| (targets.length === 1 && runnable(targets[0]) ? targets[0] : undefined);
+		targetId = pick?.binding_id || '';
+	}
+
+	function selectTarget(id: string) {
+		targetId = id;
+		if (workspaceId) localStorage.setItem(targetKey(workspaceId), id);
+	}
+
+	$effect(() => { loadTargets(workspaceId); });
 
 	onMount(async () => {
 		await workspaceStore.load();
@@ -108,12 +143,18 @@
 		const idx = activeIdx;
 		executing = true; tabs[idx].errorMsg = ''; tabs[idx].results = []; tabs[idx].statusText = 'Running...';
 		try {
+			const body: any = { workspace_id: workspaceId, sql };
+			if (targetId) body.target = { binding_id: targetId };
 			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify({ workspace_id: workspaceId, sql })
+				body: JSON.stringify(body)
 			});
-			if (!res.ok) throw new Error('Failed to start execution');
+			if (!res.ok) {
+				// The API explains target problems (target_required, engine_required, …).
+				const err = await res.json().catch(() => ({}));
+				throw new Error(err.errors?.[0]?.message || err.message || 'Failed to start execution');
+			}
 			const exec = await res.json();
 			executionId = exec.id;
 			connectWS(executionId);
@@ -272,12 +313,25 @@
 		<button onclick={formatSQL} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap">Format</button>
 		<button onclick={() => saveModalOpen = true} class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap">Save</button>
 		<div class="flex-1"></div>
+		<label class="flex items-center gap-1.5 text-[11px] text-text-muted">
+			<span>Target</span>
+			<select value={targetId} onchange={(e) => selectTarget((e.currentTarget as HTMLSelectElement).value)}
+				title="Where the query runs: a catalog on an engine"
+				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[260px] {targetId ? 'text-text-main' : 'text-text-muted'}">
+				<option value="">{targets.length ? 'Choose a target…' : 'No target available'}</option>
+				{#each targets as t (t.binding_id)}
+					<option value={t.binding_id} disabled={!runnable(t)}>
+						{t.catalog_name} · {t.engine_name}{t.permission === 'read' ? ' (read-only)' : ''}{runnable(t) ? '' : ' — not runnable yet'}
+					</option>
+				{/each}
+			</select>
+		</label>
 	</div>
 
 	<div bind:this={editorEl} class="flex-1 overflow-auto min-h-0"></div>
 
 	<div class="flex items-center gap-4 px-3.5 h-6 bg-bg-toolbar border-t border-b border-border text-[11px] text-text-muted shrink-0">
-		<span class="text-primary font-semibold">Trino SQL</span>
+		<span class="text-primary font-semibold">{selectedTarget ? `${selectedTarget.engine_kind === 'trino' ? 'Trino' : selectedTarget.engine_kind} SQL` : 'Trino SQL'}</span>
 		<span>Ln 1, Col 1</span>
 		<span>{tabs[activeIdx].statusText}</span>
 		{#if tabs[activeIdx].errorMsg}<span class="text-red-600">{tabs[activeIdx].errorMsg}</span>{/if}

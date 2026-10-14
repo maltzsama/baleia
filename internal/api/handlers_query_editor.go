@@ -25,33 +25,6 @@ import (
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// resolveDefaultTrinoCatalog returns the first enabled Iceberg-type catalog
-// registered under the workspace owner's connections. With the plugin in
-// place, looking up the catalogs table is sufficient — Trino already has
-// the catalog loaded at boot (or will after the next restart).
-func (h *Handlers) resolveDefaultTrinoCatalog(ctx context.Context, workspace db.Workspace) string {
-	if workspace.OwnerUserID.Valid {
-		conns, err := h.queries.ListCatalogConnections(ctx, workspace.OwnerUserID)
-		if err == nil {
-			for _, conn := range conns {
-				if conn.Type != "polaris" && conn.Type != "iceberg" && conn.Type != "nessie" {
-					continue
-				}
-				rows, err := h.queries.ListCatalogsByConnection(ctx, conn.ID)
-				if err != nil {
-					continue
-				}
-				for _, r := range rows {
-					if r.Enabled && r.TrinoName() != "" {
-						return r.TrinoName()
-					}
-				}
-			}
-		}
-	}
-	return workspace.PolarisCatalogName
-}
-
 // ── Folders ───────────────────────────────────────────────────────────────────
 
 func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error) {
@@ -349,7 +322,33 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		}, nil
 	}
 
-	trinoCatalog := h.resolveDefaultTrinoCatalog(ctx, workspace)
+	target, err := h.ResolveTarget(ctx, workspace, request.Body.Target)
+	if te, ok := asTargetError(err); ok {
+		if te.notFound {
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: te.message}}, nil
+		}
+		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: te.unprocessable()}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Until the engine contract lands (#20) the execution workflow runs on
+	// Trino only.
+	if target.EngineKind != "trino" {
+		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: (&targetError{
+			code:    "engine_unsupported",
+			message: "queries on " + target.EngineKind + " engines run once the engine contract lands (#20)",
+		}).unprocessable()}, nil
+	}
+	snapshot, err := target.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	trinoCatalog := target.EngineCatalog
+	var targetSchema *string
+	if target.Schema != "" {
+		targetSchema = &target.Schema
+	}
 
 	var savedQueryID pgtype.UUID
 	if request.Body.SavedQueryId != nil {
@@ -381,6 +380,12 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		Sql:          request.Body.Sql,
 		TrinoCatalog: &trinoCatalog,
 		RequestID:    requestIDPtr,
+		// The resolved target, recorded for history (#13).
+		EngineID:        target.EngineID,
+		TargetBindingID: target.BindingID,
+		TargetCatalogID: target.CatalogID,
+		TargetSchema:    targetSchema,
+		TargetSnapshot:  snapshot,
 	})
 	if err != nil {
 		return nil, err
@@ -705,7 +710,29 @@ func dbExecutionToPublic(e db.QueryExecution) Execution {
 		dur := int(*e.DurationMs)
 		exec.DurationMs = &dur
 	}
+	exec.Target = executionTarget(e)
 	return exec
+}
+
+// executionTarget is the target an execution recorded when it started: the
+// ids (null once the binding, catalog or engine is gone) and the snapshot.
+func executionTarget(e db.QueryExecution) *ExecutionTarget {
+	if len(e.TargetSnapshot) == 0 {
+		return nil
+	}
+	var t ExecutionTarget
+	if err := json.Unmarshal(e.TargetSnapshot, &t); err != nil {
+		return nil
+	}
+	uuidOrNil := func(u pgtype.UUID) *openapi_types.UUID {
+		if !u.Valid {
+			return nil
+		}
+		v := openapi_types.UUID(u.Bytes)
+		return &v
+	}
+	t.EngineId, t.BindingId, t.CatalogId = uuidOrNil(e.EngineID), uuidOrNil(e.TargetBindingID), uuidOrNil(e.TargetCatalogID)
+	return &t
 }
 
 func dbStatementToPublic(s db.QueryStatement) QueryStatement {

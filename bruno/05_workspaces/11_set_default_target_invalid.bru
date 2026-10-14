@@ -1,0 +1,33 @@
+meta {
+  name: Set Default Target (not a target of the workspace)
+  type: http
+  seq: 11
+}
+
+patch {
+  url: {{base_url}}/workspaces/{{workspace_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "default_target": {
+      "binding_id": "00000000-0000-0000-0000-000000000001"
+    }
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq target_unavailable
+}
+
+docs {
+  A default must be one of GET /workspaces/{id}/targets.
+  {"default_target": {"binding_id": null}} clears it.
+}

@@ -54,21 +54,30 @@ func (q *Queries) CancelQueryExecution(ctx context.Context, arg CancelQueryExecu
 }
 
 const createQueryExecution = `-- name: CreateQueryExecution :one
-INSERT INTO query_executions (workspace_id, user_id, saved_query_id, status, sql, trino_catalog, request_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO query_executions (
+    workspace_id, user_id, saved_query_id, status, sql, trino_catalog, request_id,
+    engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id, workspace_id, user_id, saved_query_id, status, sql, trino_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot
 `
 
 type CreateQueryExecutionParams struct {
-	WorkspaceID  pgtype.UUID `json:"workspace_id"`
-	UserID       pgtype.UUID `json:"user_id"`
-	SavedQueryID pgtype.UUID `json:"saved_query_id"`
-	Status       string      `json:"status"`
-	Sql          string      `json:"sql"`
-	TrinoCatalog *string     `json:"trino_catalog"`
-	RequestID    *string     `json:"request_id"`
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	UserID          pgtype.UUID `json:"user_id"`
+	SavedQueryID    pgtype.UUID `json:"saved_query_id"`
+	Status          string      `json:"status"`
+	Sql             string      `json:"sql"`
+	TrinoCatalog    *string     `json:"trino_catalog"`
+	RequestID       *string     `json:"request_id"`
+	EngineID        pgtype.UUID `json:"engine_id"`
+	TargetBindingID pgtype.UUID `json:"target_binding_id"`
+	TargetCatalogID pgtype.UUID `json:"target_catalog_id"`
+	TargetSchema    *string     `json:"target_schema"`
+	TargetSnapshot  []byte      `json:"target_snapshot"`
 }
 
+// The target columns are the resolved execution target (#13); trino_catalog
+// keeps the engine catalog for the Trino workflow until it reads the target.
 func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecutionParams) (QueryExecution, error) {
 	row := q.db.QueryRow(ctx, createQueryExecution,
 		arg.WorkspaceID,
@@ -78,6 +87,11 @@ func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecu
 		arg.Sql,
 		arg.TrinoCatalog,
 		arg.RequestID,
+		arg.EngineID,
+		arg.TargetBindingID,
+		arg.TargetCatalogID,
+		arg.TargetSchema,
+		arg.TargetSnapshot,
 	)
 	var i QueryExecution
 	err := row.Scan(

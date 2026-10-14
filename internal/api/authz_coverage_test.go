@@ -125,6 +125,7 @@ var operationAccess = map[string]access{
 	"ListTeamMembers":            checked("Team"),
 	"CreateWorkspace":            {kind: kindChecked, calls: []string{"RoleFromContext", "UserIDFromContext"}}, // shared needs an admin
 	"GetWorkspace":               {kind: kindChecked, calls: wsMember},
+	"ListWorkspaceTargets":       {kind: kindChecked, calls: wsMember},
 	"UpdateWorkspace":            checked("Workspace"),
 	"ListWorkspaceCatalogAccess": checked("Workspace"),
 	"GrantCatalogAccess":         checked("Workspace", "Catalog"),

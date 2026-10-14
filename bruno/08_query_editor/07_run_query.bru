@@ -21,6 +21,17 @@ body:json {
   }
 }
 
+script:pre-request {
+  // Run on the target found by 05_workspaces/10_list_targets, if any; without
+  // one the API resolves the workspace default or answers 422 target_required.
+  const binding = bru.getVar("binding_id");
+  if (binding) {
+    const body = req.getBody();
+    body.target = { binding_id: binding };
+    req.setBody(body);
+  }
+}
+
 vars:post-response {
   execution_id: res.body.id
 }
