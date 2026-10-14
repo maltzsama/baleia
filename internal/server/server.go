@@ -13,9 +13,14 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
+	"github.com/galileostudio/baleia/internal/queryengine"
+	// Engine kinds register themselves.
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/galileostudio/baleia/internal/ws"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -92,7 +97,13 @@ func (s *Server) routes() {
 		panic("connection providers: " + err.Error())
 	}
 
-	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns)
+	// Engines run SQL (docs/adr/0002); catalog DDL runs as the Trino admin
+	// identity (docs/adr/0005). Both dial through the connections dialer.
+	engines := queryengine.NewManager(s.queries, s.keyring, conns, dialer)
+	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, dialer.HTTPClient(60*time.Second))
+	catalogDDL := bindtrino.NewDDL(trinoAdmin)
+
+	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, catalogDDL)
 
 	// OIDC needs cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)
@@ -101,7 +112,6 @@ func (s *Server) routes() {
 	// WebSocket needs a raw connection
 	wsHandler := ws.New(s.queries.AsWSQuerier(), s.cfg.JWTSecret, s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
-
 
 	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret),
@@ -115,7 +125,7 @@ func (s *Server) routes() {
 		// middleware; handlers read the caller from the request context.
 		r.Group(func(r chi.Router) {
 			r.Use(chiAuthMiddleware(s.cfg.JWTSecret))
-			baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg, temporalClient)
+			baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg, temporalClient, engines)
 			r.Get("/workspaces/{id}/catalogs", h.ListWorkspaceCatalogs)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", h.HandleListNamespaces)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", h.HandleListTables)

@@ -2,7 +2,6 @@ package activities
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -10,7 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trino"
+	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
@@ -105,7 +104,7 @@ func TestRetrieverRefresh_QuotesIdentifiers(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got, err := buildRefreshSQL(c.catalog, c.namespace, c.table, c.definition)
+		got, err := buildRefreshSQL((*qtrino.Engine)(nil).Dialect(), c.catalog, c.namespace, c.table, c.definition)
 		if err != nil {
 			t.Fatalf("[%s] unexpected error: %v", c.name, err)
 		}
@@ -132,7 +131,7 @@ func TestRetrieverDispatch_ReturnsDue(t *testing.T) {
 
 func TestRetrieverRefresh_SuccessTransitions(t *testing.T) {
 	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever()}
-	err := runRetrieverRefresh(fakeQuery, &fakeTrinoClient{assignID: true})
+	err := runRetrieverRefresh(fakeQuery, &fakeEngine{assignID: true})
 	if err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
@@ -149,7 +148,7 @@ func TestRetrieverRefresh_SuccessTransitions(t *testing.T) {
 
 func TestRetrieverRefresh_FailureTransitions(t *testing.T) {
 	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever()}
-	err := runRetrieverRefresh(fakeQuery, &fakeTrinoClient{err: errors.New("trino down")})
+	err := runRetrieverRefresh(fakeQuery, &fakeEngine{err: errors.New("trino down")})
 	if err == nil {
 		t.Fatal("expected a refresh error")
 	}
@@ -163,10 +162,10 @@ func TestRetrieverRefresh_FailureTransitions(t *testing.T) {
 
 // runRetrieverRefresh executes the registered activity so activity.GetLogger /
 // GetInfo have a real activity context.
-func runRetrieverRefresh(queries *retrieverFakeQuerier, trino trinoClient) error {
+func runRetrieverRefresh(queries *retrieverFakeQuerier, eng *fakeEngine) error {
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: queries, trino: trino, s3: &fakeS3{}, cfg: &config.Config{}}
+	defaultActivities = &Activities{queries: queries, engines: eng, s3: &fakeS3{}, cfg: &config.Config{}}
 
 	wts := &testsuite.WorkflowTestSuite{}
 	ts := wts.NewTestActivityEnvironment()
@@ -202,7 +201,7 @@ func TestRetrieverRefresh_RunsAsTheOwner(t *testing.T) {
 	owner := pgtype.UUID{Bytes: [16]byte{0xA1, 0xB2}, Valid: true}
 	r.CreatedBy = owner
 	fakeQuery := &retrieverFakeQuerier{retriever: r}
-	fakeTrino := &fakeTrinoClient{ctasCount: "25"}
+	fakeTrino := &fakeEngine{ctasCount: "25"}
 	if err := runRetrieverRefresh(fakeQuery, fakeTrino); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
@@ -219,7 +218,7 @@ func TestRetrieverRefresh_RunsAsTheOwner(t *testing.T) {
 // called.
 func TestRetrieverRefresh_MissingOwnerFailsWithoutRunning(t *testing.T) {
 	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever(), ownerMissing: true}
-	fakeTrino := &fakeTrinoClient{assignID: true}
+	fakeTrino := &fakeEngine{assignID: true}
 	if err := runRetrieverRefresh(fakeQuery, fakeTrino); err == nil {
 		t.Fatal("expected an error for a missing owner")
 	}
@@ -236,13 +235,13 @@ func TestRetrieverRefresh_MissingOwnerFailsWithoutRunning(t *testing.T) {
 
 func TestRowsWritten(t *testing.T) {
 	for name, tc := range map[string]struct {
-		res  *trino.QueryResult
+		res  [][]string
 		want int64
 	}{
-		"ctas count":      {&trino.QueryResult{Data: [][]interface{}{{json.Number("25")}}, RowCount: 1}, 25},
-		"float count":     {&trino.QueryResult{Data: [][]interface{}{{float64(7)}}, RowCount: 1}, 7},
-		"other shape":     {&trino.QueryResult{Data: [][]interface{}{{"a"}, {"b"}}, RowCount: 2}, 2},
-		"non numeric one": {&trino.QueryResult{Data: [][]interface{}{{"x"}}, RowCount: 1}, 1},
+		"ctas count":      {[][]string{{"25"}}, 25},
+		"other shape":     {[][]string{{"a"}, {"b"}}, 2},
+		"non numeric one": {[][]string{{"x"}}, 1},
+		"no rows":         {nil, 0},
 	} {
 		if got := rowsWritten(tc.res); got != tc.want {
 			t.Errorf("%s: %d, want %d", name, got, tc.want)

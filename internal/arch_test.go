@@ -37,12 +37,9 @@ var constructionRules = []constructionRule{
 	{
 		constructors: []guardedConstructor{
 			{"github.com/galileostudio/baleia/internal/trino", "New"},
+			{"github.com/galileostudio/baleia/internal/trino", "NewWithHTTPClient"},
 		},
 		allowed: append([]string{"internal/queryengine/", "internal/bindings/"}, wiringSites...),
-		offenders: map[string]string{
-			"internal/api/handlers.go":                   "#20",
-			"internal/temporal/activities/activities.go": "#20",
-		},
 	},
 	{
 		// Baleia's own database is opened by the binaries and the migrator;
@@ -263,18 +260,11 @@ func TestNoDriversOutsideAdapters(t *testing.T) {
 	}
 }
 
-// trinoInDomain lists the domain files that still import internal/trino
-// directly. #20 PR 2 moves them to the engine contract, the Trino binder and
-// the Trino monitor; the list may only shrink.
-var trinoInDomain = map[string]string{
-	"internal/api/handlers.go":                             "#20 PR 2",
-	"internal/api/handlers_catalog_connections.go":         "#20 PR 2",
-	"internal/api/handlers_catalogs_write.go":              "#20 PR 2",
-	"internal/api/handlers_lens.go":                        "#20 PR 2",
-	"internal/temporal/activities/activities.go":           "#20 PR 2",
-	"internal/temporal/activities/lens_activities.go":      "#20 PR 2",
-	"internal/temporal/activities/retriever_activities.go": "#20 PR 2",
-}
+// trinoInDomain lists domain files allowed to import internal/trino. It is
+// empty: the domain runs SQL through internal/queryengine, catalog DDL
+// through internal/bindings/trino and monitoring through
+// internal/trino/monitor. Keep it empty.
+var trinoInDomain = map[string]string{}
 
 // TestNoTrinoImportsInDomain: internal/api and internal/temporal run SQL
 // through internal/queryengine, never through the Trino client.

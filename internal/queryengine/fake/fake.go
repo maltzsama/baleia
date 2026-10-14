@@ -121,6 +121,19 @@ type dialect struct{}
 
 func (dialect) Name() string { return "fake" }
 
+func (dialect) QualifiedName(parts ...string) (string, error) {
+	out := make([]string, len(parts))
+	for i, p := range parts {
+		if p == "" {
+			return "", fmt.Errorf("empty identifier")
+		}
+		out[i] = `"` + strings.ReplaceAll(p, `"`, `""`) + `"`
+	}
+	return strings.Join(out, "."), nil
+}
+
+func (dialect) Literal(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
 // Shared state, as an engine server would hold it.
 var (
 	committed struct {

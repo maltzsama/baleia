@@ -3,7 +3,6 @@ package trino
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -15,7 +14,7 @@ import (
 // queries into the dialect.
 type introspector struct{ e *Engine }
 
-func literal(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+func literal(s string) string { return trinoclient.QuoteString(s) }
 
 func (in introspector) query(ctx context.Context, sql string) ([][]any, error) {
 	res, err := in.e.client.ExecuteWithOptions(ctx, sql, trinoclient.ExecuteOptions{Source: "baleia", ClientTags: []string{"baleia", "introspection"}})

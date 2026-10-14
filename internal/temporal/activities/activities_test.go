@@ -10,9 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/queryengine"
+	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/jackc/pgx/v5"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/converter"
@@ -29,9 +32,12 @@ func (f *fakeQuerier) UpdateQueryExecution(context.Context, db.UpdateQueryExecut
 	return db.QueryExecution{}, f.updateErr
 }
 
-// fakeTrinoClient simulates the Trino statement protocol so the activities can
-// be tested against a blocked, failing, or always-succeeding backend.
-type fakeTrinoClient struct {
+// fakeEngine is a scripted engine (and engine source) so the activities can
+// be tested against a blocked, failing, or always-succeeding backend. The
+// embedded Trino adapter is nil: its dialect, capabilities and maintenance
+// rendering need no coordinator, so the SQL under test is Trino's own.
+type fakeEngine struct {
+	*qtrino.Engine
 	mu        sync.Mutex
 	callCount int
 	block     time.Duration
@@ -42,98 +48,97 @@ type fakeTrinoClient struct {
 	killCalls int
 	lastUser  string
 	ctasCount string // when set, the result is one row holding this count
+	sqls      []string
 }
 
-func (f *fakeTrinoClient) ExecuteWithOptions(ctx context.Context, sql string, opts trino.ExecuteOptions) (*trino.QueryResult, error) {
-	f.mu.Lock()
-	f.callCount++
-	f.lastUser = opts.User
-	f.mu.Unlock()
+func (f *fakeEngine) DefaultTrino(context.Context) (queryengine.Engine, error) { return f, nil }
 
-	if f.ctasCount != "" {
-		return &trino.QueryResult{Data: [][]interface{}{{json.Number(f.ctasCount)}}, RowCount: 1}, nil
-	}
-
-	if f.assignID && opts.OnQueryID != nil {
-		opts.OnQueryID(testQueryID)
-	}
-	if f.err != nil {
-		return nil, f.err
-	}
-	if f.block > 0 {
-		select {
-		case <-time.After(f.block):
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	if opts.OnProgress != nil {
-		opts.OnProgress()
-	}
-	return &trino.QueryResult{QueryID: testQueryID, RowCount: 1}, nil
+func (f *fakeEngine) OpenSession(_ context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {
+	return &fakeSession{f: f, spec: spec}, nil
 }
 
-func (f *fakeTrinoClient) Execute(ctx context.Context, sql, catalog, schema string) (*trino.QueryResult, error) {
-	return nil, nil
-}
-
-func (f *fakeTrinoClient) ExecuteStream(ctx context.Context, sql string, opts trino.ExecuteOptions,
-	onPage func(cols []trino.Column, rows [][]interface{}) error) (string, error) {
-	f.mu.Lock()
-	f.callCount++
-	f.mu.Unlock()
-
-	if f.assignID && opts.OnQueryID != nil {
-		opts.OnQueryID(testQueryID)
-	}
-	if f.err != nil {
-		return "", f.err
-	}
-	if f.block > 0 {
-		select {
-		case <-time.After(f.block):
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
-	}
-	if f.noColumns {
-		// DDL/DML: the protocol returns schema-less pages (or none).
-		if err := onPage(nil, nil); err != nil {
-			return "", err
-		}
-		return testQueryID, nil
-	}
-	n := f.deliver
-	if n == 0 {
-		n = 1
-	}
-	rows := make([][]interface{}, 0, n)
-	for i := 0; i < n; i++ {
-		rows = append(rows, []interface{}{json.Number("1")})
-	}
-	err := onPage([]trino.Column{{Name: "c", Type: "bigint"}}, rows)
-	if err != nil {
-		return "", err
-	}
-	if opts.OnProgress != nil {
-		opts.OnProgress()
-	}
-	return testQueryID, nil
-}
-
-func (f *fakeTrinoClient) KillQuery(ctx context.Context, queryID, message string) error {
+func (f *fakeEngine) Cancel(context.Context, queryengine.QueryHandle) error {
 	f.mu.Lock()
 	f.killCalls++
 	f.mu.Unlock()
 	return nil
 }
 
-func (f *fakeTrinoClient) ListQueries(ctx context.Context) ([]trino.QueryInfo, error) {
-	return nil, nil
+type fakeSession struct {
+	f    *fakeEngine
+	spec queryengine.SessionSpec
 }
 
-func (f *fakeTrinoClient) GetClusterStats(ctx context.Context) (*trino.ClusterStats, error) {
-	return nil, nil
+func (s *fakeSession) Close() error { return nil }
+
+func (s *fakeSession) Execute(ctx context.Context, sql string, cb queryengine.Callbacks, sink queryengine.RecordSink) error {
+	f := s.f
+	f.mu.Lock()
+	f.callCount++
+	f.lastUser = s.spec.Identity.UserID
+	f.sqls = append(f.sqls, sql)
+	f.mu.Unlock()
+
+	if f.ctasCount != "" {
+		return emitBigints(sink, []string{f.ctasCount})
+	}
+	if f.assignID && cb.OnStart != nil {
+		cb.OnStart(queryengine.QueryHandle{QueryID: testQueryID})
+	}
+	if f.err != nil {
+		return f.err
+	}
+	if f.block > 0 {
+		select {
+		case <-time.After(f.block):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if f.noColumns {
+		// DDL/DML: one result set without columns.
+		if err := sink.Begin(arrow.NewSchema(nil, nil)); err != nil {
+			return err
+		}
+		return sink.End(queryengine.Stats{})
+	}
+	n := f.deliver
+	if n == 0 {
+		n = 1
+	}
+	vals := make([]string, n)
+	for i := range vals {
+		vals[i] = "1"
+	}
+	if err := emitBigints(sink, vals); err != nil {
+		return err
+	}
+	if cb.OnProgress != nil {
+		cb.OnProgress(queryengine.Progress{})
+	}
+	return nil
+}
+
+// emitBigints streams one bigint column "c" in batches of one row, as an
+// engine page at a time.
+func emitBigints(sink queryengine.RecordSink, vals []string) error {
+	b, err := arrowipc.NewBatcher([]arrowipc.ColumnInfo{{Name: "c", Type: "bigint"}})
+	if err != nil {
+		return err
+	}
+	defer b.Release()
+	if err := sink.Begin(b.Schema()); err != nil {
+		return err
+	}
+	for _, v := range vals {
+		if err := b.Append([][]interface{}{{json.Number(v)}}, sink.Write); err != nil {
+			return err
+		}
+		if err := b.Flush(sink.Write); err != nil {
+			return err
+		}
+	}
+	return sink.End(queryengine.Stats{RowCount: int64(len(vals))})
 }
 
 // fakeS3 drains the upload stream and reports a fixed size or error.
@@ -216,9 +221,9 @@ func TestExecuteStatement_Heartbeats(t *testing.T) {
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
 	defaultActivities = &Activities{
-		trino: &fakeTrinoClient{assignID: true},
-		s3:    &fakeS3{},
-		cfg:   testActivitiesConfig(),
+		engines: &fakeEngine{assignID: true},
+		s3:      &fakeS3{},
+		cfg:     testActivitiesConfig(),
 	}
 
 	wts := &testsuite.WorkflowTestSuite{}
@@ -262,8 +267,8 @@ func TestExecuteStatement_RetriesOnlyBeforeQueryID(t *testing.T) {
 		statementTransportBackoff = backoffBefore
 	}()
 
-	fake := &fakeTrinoClient{err: errors.New("connection refused")} // never assigns an id
-	defaultActivities = &Activities{trino: fake, cfg: testActivitiesConfig()}
+	fake := &fakeEngine{err: queryengine.NewError(queryengine.CodeUnavailable, "trino", "", "connection refused")} // never assigns an id
+	defaultActivities = &Activities{engines: fake, cfg: testActivitiesConfig()}
 
 	wts := &testsuite.WorkflowTestSuite{}
 	ts := wts.NewTestActivityEnvironment()
@@ -305,11 +310,11 @@ func TestExecuteStatement_Truncates(t *testing.T) {
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
 
-	fake := &fakeTrinoClient{assignID: true, deliver: 5}
+	fake := &fakeEngine{assignID: true, deliver: 5}
 	defaultActivities = &Activities{
-		trino: fake,
-		s3:    &fakeS3{},
-		cfg:   &config.Config{ResultMaxRows: 2, ResultMaxBytes: 100},
+		engines: fake,
+		s3:      &fakeS3{},
+		cfg:     &config.Config{ResultMaxRows: 2, ResultMaxBytes: 1 << 20},
 	}
 
 	wts := &testsuite.WorkflowTestSuite{}
@@ -349,9 +354,9 @@ func TestExecuteStatement_DDLNoUpload(t *testing.T) {
 
 	s3 := &fakeS3{}
 	defaultActivities = &Activities{
-		trino: &fakeTrinoClient{noColumns: true},
-		s3:    s3,
-		cfg:   testActivitiesConfig(),
+		engines: &fakeEngine{noColumns: true},
+		s3:      s3,
+		cfg:     testActivitiesConfig(),
 	}
 
 	wts := &testsuite.WorkflowTestSuite{}
@@ -387,9 +392,9 @@ func TestExecuteStatement_UploadFailureFails(t *testing.T) {
 	defer func() { defaultActivities = before }()
 
 	defaultActivities = &Activities{
-		trino: &fakeTrinoClient{assignID: true},
-		s3:    &fakeS3{err: errors.New("s3 down")},
-		cfg:   testActivitiesConfig(),
+		engines: &fakeEngine{assignID: true},
+		s3:      &fakeS3{err: errors.New("s3 down")},
+		cfg:     testActivitiesConfig(),
 	}
 
 	wts := &testsuite.WorkflowTestSuite{}
@@ -409,5 +414,35 @@ func TestExecuteStatement_UploadFailureFails(t *testing.T) {
 	}
 	if r.ResultKey != "" {
 		t.Fatalf("a failed upload must not publish a result key, got %q", r.ResultKey)
+	}
+}
+
+// TestExecuteStatement_TruncatesOnBytes: the byte cap counts what was written
+// to the stored stream; past it the result is truncated and the query killed.
+func TestExecuteStatement_TruncatesOnBytes(t *testing.T) {
+	before := defaultActivities
+	defer func() { defaultActivities = before }()
+
+	fake := &fakeEngine{assignID: true, deliver: 50}
+	defaultActivities = &Activities{
+		engines: fake,
+		s3:      &fakeS3{},
+		cfg:     &config.Config{ResultMaxRows: 1000, ResultMaxBytes: 1024},
+	}
+	ts := (&testsuite.WorkflowTestSuite{}).NewTestActivityEnvironment()
+	ts.RegisterActivityWithOptions(ExecuteStatement, activity.RegisterOptions{Name: "ExecuteStatement"})
+	result, err := ts.ExecuteActivity(ExecuteStatement, execParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r *ExecuteStatementResult
+	if err := result.Get(&r); err != nil {
+		t.Fatal(err)
+	}
+	if !r.Truncated || r.RowCount == 0 || r.RowCount >= 50 || r.Error != "" {
+		t.Fatalf("result = %+v, want truncated with some rows", r)
+	}
+	if fake.killCalls == 0 {
+		t.Fatal("the over-cap query must be killed")
 	}
 }

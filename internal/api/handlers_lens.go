@@ -10,7 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
@@ -20,9 +20,9 @@ import (
 
 // RegisterLensRoutes mounts the Lens routes. The caller wraps them in the
 // shared auth middleware; handlers read the caller from the request context.
-func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, temporalClient client.Client) {
+func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, temporalClient client.Client, engines engineSource) {
 	mux.Group(func(r chi.Router) {
-		h := &lensHandlers{queries: queries, temporalClient: temporalClient, identityMode: cfg.TrinoUserIdentity}
+		h := &lensHandlers{queries: queries, temporalClient: temporalClient, identityMode: cfg.TrinoUserIdentity, engines: engines}
 
 		r.Get("/lens/queries", h.listQueries)
 		r.Get("/lens/queries/{id}", h.getQuery)
@@ -39,6 +39,7 @@ type lensHandlers struct {
 	queries        db.Querier
 	temporalClient client.Client
 	identityMode   string // BALEIA_TRINO_USER_IDENTITY
+	engines        engineSource
 }
 
 // internalError logs err and answers a generic 500: database errors are not
@@ -264,7 +265,17 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if _, err := trino.QualifiedName(trinoName, namespace, table); err != nil {
+	eng, err := h.engines.DefaultTrino(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	maintainer, ok := queryengine.As[queryengine.IcebergMaintainer](eng)
+	if !ok || !eng.Capabilities().IcebergMaintenance {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"code": "engine_unsupported", "message": "this engine has no Iceberg maintenance"})
+		return
+	}
+	if _, err := eng.Dialect().QualifiedName(trinoName, namespace, table); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"code": "invalid_identifier", "message": "invalid namespace or table"})
 		return
 	}
@@ -275,7 +286,9 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Retention == "" {
 		body.Retention = "7d"
 	}
-	if err := trino.ValidateRetention(body.Retention); err != nil {
+	// Rendering the statements validates the retention before anything runs;
+	// the worker renders them again (a workflow input is not a trust boundary).
+	if _, err := maintainer.MaintenanceStatements([]string{trinoName, namespace, table}, body.Retention); err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"code": "validation_error", "message": err.Error()})
 		return
 	}

@@ -11,7 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	catalogs "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/db"
-	trino_client "github.com/galileostudio/baleia/internal/trino"
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -195,7 +195,7 @@ func (h *Handlers) emitCreateCatalog(ctx context.Context, cat db.Catalog, conn d
 	if err != nil {
 		return err
 	}
-	return h.trino.CreateCatalog(ctx, trino_client.CatalogSpec{
+	return h.catalogDDL.CreateCatalog(ctx, bindtrino.CatalogSpec{
 		Name:       proj.Row.CatalogName,
 		Connector:  proj.Row.ConnectorName,
 		Properties: proj.Row.Properties,
@@ -221,7 +221,7 @@ func (h *Handlers) recreateCatalog(ctx context.Context, cat db.Catalog, conn db.
 
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	if err := h.trino.DropCatalog(ddlCtx, dropName); err != nil {
+	if err := h.catalogDDL.DropCatalog(ddlCtx, dropName); err != nil {
 		slog.Warn("drop catalog before re-create", "catalog", dropName, "err", err)
 	}
 	if err := h.queries.UpsertTrinoCatalogRegistry(ctx, db.UpsertTrinoCatalogRegistryParams{
@@ -319,7 +319,7 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	// Rename: DROP the old name and soft-delete its registry row first.
 	if newTrinoName != existing.TrinoName() {
 		dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-		_ = h.trino.DropCatalog(dropCtx, existing.TrinoName())
+		_ = h.catalogDDL.DropCatalog(dropCtx, existing.TrinoName())
 		cancel()
 		_ = h.queries.SoftDeleteTrinoCatalogRegistry(ctx, db.SoftDeleteTrinoCatalogRegistryParams{
 			ClusterID:   existing.ClusterID,
@@ -398,7 +398,7 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 	}
 	dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	_ = h.trino.DropCatalog(dropCtx, cat.TrinoName())
+	_ = h.catalogDDL.DropCatalog(dropCtx, cat.TrinoName())
 	h.catalogCache.Clear()
 	return DeleteCatalog204Response{}, nil
 }
@@ -469,7 +469,7 @@ func (h *Handlers) ReconcileTrino(ctx context.Context, _ ReconcileTrinoRequestOb
 	if err != nil {
 		return nil, fmt.Errorf("list enabled catalogs: %w", err)
 	}
-	live, err := h.trino.ListCatalogs(ctx)
+	live, err := h.catalogDDL.ListCatalogs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list trino catalogs: %w", err)
 	}

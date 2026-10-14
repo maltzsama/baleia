@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron"
@@ -115,7 +115,11 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	}
 
 	// v1 refresh: one atomic statement replaced under a new Iceberg snapshot.
-	sql, err := buildRefreshSQL(retriever.DestCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
+	eng, err := a.engines.DefaultTrino(ctx)
+	if err != nil {
+		return fmt.Errorf("retriever %s: %w", retriever.ID, err)
+	}
+	sql, err := buildRefreshSQL(eng.Dialect(), retriever.DestCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
 	if err != nil {
 		return fmt.Errorf("retriever %s has an invalid destination: %w", retriever.ID, err)
 	}
@@ -124,17 +128,13 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	start := time.Now()
 	// Heartbeats let a long refresh receive cancellation and never be re-run.
 	var lastBeat time.Time
-	opts := trino.ExecuteOptions{
-		Catalog: retriever.DestCatalog,
-		Schema:  retriever.DestNamespace,
-		OnProgress: func() {
-			now := time.Now()
-			if now.Sub(lastBeat) >= heartbeatInterval {
-				lastBeat = now
-				activity.RecordHeartbeat(ctx)
-			}
-		},
-	}
+	cb := queryengine.Callbacks{OnProgress: func(queryengine.Progress) {
+		now := time.Now()
+		if now.Sub(lastBeat) >= heartbeatInterval {
+			lastBeat = now
+			activity.RecordHeartbeat(ctx)
+		}
+	}}
 
 	// The refresh runs as the retriever owner, never the service identity. An
 	// owner that no longer exists fails the run and flips the retriever to
@@ -143,13 +143,18 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	if a.cfg != nil {
 		mode = a.cfg.TrinoUserIdentity
 	}
-	var result *trino.QueryResult
+	var result [][]string
 	identity, idErr := trinoidentity.For(ctx, a.queries, mode, retriever.CreatedBy)
 	if idErr != nil {
 		err = fmt.Errorf("retriever owner unavailable: %w", idErr)
 	} else {
-		opts.User = identity
-		result, err = a.trino.ExecuteWithOptions(ctx, sql, opts)
+		spec := queryengine.SessionSpec{
+			Catalog:  retriever.DestCatalog,
+			Schema:   []string{retriever.DestNamespace},
+			Identity: queryengine.Identity{UserID: identity},
+			Tags:     queryengine.Tags{Source: "retriever"},
+		}
+		result, err = queryengine.CollectStringsWith(ctx, eng, spec, sql, retrieverMaxResultRows, cb)
 	}
 	durationMs := time.Since(start).Milliseconds()
 
@@ -198,23 +203,27 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	return nil
 }
 
+// retrieverMaxResultRows bounds what a refresh statement may return: a CREATE
+// TABLE AS answers with one row.
+const retrieverMaxResultRows = 1000
+
 // rowsWritten returns the number of rows a CREATE TABLE AS wrote: Trino answers
 // with one row holding that count. It falls back to the result's row count for
 // any other shape.
-func rowsWritten(r *trino.QueryResult) int64 {
-	if len(r.Data) == 1 && len(r.Data[0]) == 1 {
-		if n, err := strconv.ParseInt(fmt.Sprint(r.Data[0][0]), 10, 64); err == nil {
+func rowsWritten(rows [][]string) int64 {
+	if len(rows) == 1 && len(rows[0]) == 1 {
+		if n, err := strconv.ParseInt(rows[0][0], 10, 64); err == nil {
 			return n
 		}
 	}
-	return r.RowCount
+	return int64(len(rows))
 }
 
 // buildRefreshSQL renders the atomic full-refresh statement
 // `CREATE OR REPLACE TABLE <dest> AS <definition>` with each identifier
 // double-quoted. The definition is a single SELECT/WITH validated at create.
-func buildRefreshSQL(catalog, namespace, table, definition string) (string, error) {
-	dest, err := trino.QualifiedName(catalog, namespace, table)
+func buildRefreshSQL(d queryengine.Dialect, catalog, namespace, table, definition string) (string, error) {
+	dest, err := d.QualifiedName(catalog, namespace, table)
 	if err != nil {
 		return "", err
 	}

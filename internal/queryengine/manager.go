@@ -19,6 +19,7 @@ import (
 // Store is the slice of the database the manager reads.
 type Store interface {
 	GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (db.GetEngineWithConnectionRow, error)
+	GetDefaultTrinoEngine(ctx context.Context) (db.GetDefaultTrinoEngineRow, error)
 }
 
 // Manager builds engines from `engines` rows on demand and caches them by
@@ -88,6 +89,19 @@ func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error)
 	me := &managed{Engine: eng, version: version, credentialsReadOnly: er.CredentialsReadOnly}
 	m.cache[engineID.Bytes] = me
 	return me, nil
+}
+
+// DefaultTrino returns the engine of the default Trino cluster. Callers that
+// do not know their target's engine yet use it (#13 PR 3 passes the engine id).
+func (m *Manager) DefaultTrino(ctx context.Context) (Engine, error) {
+	row, err := m.store.GetDefaultTrinoEngine(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, NewError(CodeUnavailable, "trino", "", "no default trino engine is configured")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return m.Get(ctx, row.Engine.ID)
 }
 
 // Close closes every cached engine once its sessions are closed.
