@@ -71,6 +71,12 @@
           }
         },
         "jvmHeap": { "type": "string" },
+        "catalogGuard": {
+          "type": "object",
+          "properties": {
+            "allowUnauthenticatedAdmin": { "type": "boolean" }
+          }
+        },
         "resources": { "type": "object" }
       }
     }
