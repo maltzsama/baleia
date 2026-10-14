@@ -184,6 +184,10 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 	}
 
 	if err := h.queries.DeleteCatalogConnection(ctx, connID); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && isFKViolation(pgErr) && pgErr.ConstraintName == "engines_connection_id_fkey" {
+			return DeleteCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "connection_in_use", Message: "an engine runs on this connection; delete the engine first"}}, nil
+		}
 		return nil, err
 	}
 
@@ -259,12 +263,13 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 
 	// Build a throwaway catalog row for Project to consume. Use a bogus
 	// connection id pointing back at conn so Project works.
+	connector := trinoConnector(conn.Type)
 	throw := db.Catalog{
-		ConnectionID:      conn.ID,
-		TrinoCatalogName: testName,
-		ClusterID:         cluster.ID,
-		Warehouse:         testName,
-		Connector:         trinoConnector(conn.Type),
+		ConnectionID:     conn.ID,
+		TrinoCatalogName: &testName,
+		ClusterID:        cluster.ID,
+		Warehouse:        &testName,
+		Connector:        &connector,
 	}
 	proj, err := catalogs.Project(conn, throw, creds)
 	if err != nil {
@@ -496,15 +501,18 @@ func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request)
 				continue
 			}
 			for _, row := range rows {
-				if !row.Enabled || seen[row.TrinoCatalogName] {
+				// The tree lists Trino catalogs; native catalogs of direct
+				// engines are reached through targets (#13 PR 2b, #24).
+				name := row.TrinoName()
+				if !row.Enabled || name == "" || seen[name] {
 					continue
 				}
-				seen[row.TrinoCatalogName] = true
+				seen[name] = true
 				entries = append(entries, workspaceCatalogEntry{
 					ConnectionID:   uuidStr(conn.ID),
 					ConnectionName: conn.Name,
 					ConnectionType: conn.Type,
-					CatalogName:    row.TrinoCatalogName,
+					CatalogName:    name,
 				})
 			}
 		}
@@ -518,15 +526,16 @@ func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	for _, row := range granted {
-		if seen[row.TrinoCatalogName] {
+		if row.TrinoCatalogName == nil || seen[*row.TrinoCatalogName] {
 			continue
 		}
-		seen[row.TrinoCatalogName] = true
+		name := *row.TrinoCatalogName
+		seen[name] = true
 		entries = append(entries, workspaceCatalogEntry{
 			ConnectionID:   uuidStr(row.ConnectionID),
 			ConnectionName: row.ConnectionName,
 			ConnectionType: row.ConnectionType,
-			CatalogName:    row.TrinoCatalogName,
+			CatalogName:    name,
 		})
 	}
 
@@ -608,7 +617,7 @@ func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	target, err := trino_client.QualifiedName(cat.TrinoCatalogName)
+	target, err := trino_client.QualifiedName(cat.TrinoName())
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid catalog name", err)
 		return
@@ -638,7 +647,7 @@ func (h *Handlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
 	}
-	target, err := trino_client.QualifiedName(cat.TrinoCatalogName, namespace)
+	target, err := trino_client.QualifiedName(cat.TrinoName(), namespace)
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
@@ -679,7 +688,7 @@ func (h *Handlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid table", err)
 		return
 	}
-	target, err := trino_client.QualifiedName(cat.TrinoCatalogName, namespace, table)
+	target, err := trino_client.QualifiedName(cat.TrinoName(), namespace, table)
 	if err != nil {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace or table", err)
 		return

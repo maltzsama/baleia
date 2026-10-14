@@ -32,10 +32,10 @@ type Catalog struct {
 	ConnectionID     pgtype.UUID        `json:"connection_id"`
 	Name             string             `json:"name"`
 	Description      *string            `json:"description"`
-	TrinoCatalogName string             `json:"trino_catalog_name"`
+	TrinoCatalogName *string            `json:"trino_catalog_name"`
 	ClusterID        pgtype.UUID        `json:"cluster_id"`
-	Warehouse        string             `json:"warehouse"`
-	Connector        string             `json:"connector"`
+	Warehouse        *string            `json:"warehouse"`
+	Connector        *string            `json:"connector"`
 	ExtraProps       []byte             `json:"extra_props"`
 	Enabled          bool               `json:"enabled"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`

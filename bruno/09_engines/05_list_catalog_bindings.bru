@@ -1,0 +1,20 @@
+meta {
+  name: List Catalog Bindings
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/catalogs/{{native_catalog_id}}/bindings
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].engine_id: eq {{engine_id}}
+}

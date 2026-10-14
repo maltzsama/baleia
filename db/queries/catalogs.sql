@@ -15,21 +15,21 @@ RETURNING *;
 SELECT * FROM catalogs WHERE id = $1;
 
 -- name: GetCatalogByTrinoName :one
-SELECT * FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = $2;
+SELECT * FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = sqlc.arg('trino_catalog_name')::text;
 
 -- name: ListCatalogsByConnection :many
 SELECT * FROM catalogs WHERE connection_id = $1 ORDER BY name;
 
 -- name: ListEnabledCatalogs :many
-SELECT * FROM catalogs WHERE enabled ORDER BY name;
+SELECT * FROM catalogs WHERE enabled AND origin = 'source' ORDER BY name;
 
 -- name: ListEnabledIcebergCatalogs :many
 -- Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
 -- Iceberg REST, Nessie), used by the Lens table-health fan-out.
-SELECT c.id, c.connection_id, c.name, c.trino_catalog_name
+SELECT c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '')::text AS trino_catalog_name
 FROM catalogs c
 JOIN catalog_connections cc ON cc.id = c.connection_id
-WHERE c.enabled AND cc.type IN ('polaris', 'iceberg', 'nessie')
+WHERE c.enabled AND c.origin = 'source' AND cc.type IN ('polaris', 'iceberg', 'nessie')
 ORDER BY c.name;
 
 -- name: UpdateCatalog :one

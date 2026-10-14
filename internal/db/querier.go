@@ -51,11 +51,16 @@ type Querier interface {
 	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
 	DeleteEngine(ctx context.Context, id pgtype.UUID) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
+	// The native catalogs of an engine, deleted with it (their bindings cascade).
+	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error
 	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
+	// True when the engine has a binding of a catalog granted to a workspace the
+	// user belongs to.
+	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
@@ -117,6 +122,9 @@ type Querier interface {
 	// Iceberg REST, Nessie), used by the Lens table-health fan-out.
 	ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error)
 	ListEngines(ctx context.Context) ([]Engine, error)
+	// The engines a non-admin may see: those on connections they own and those
+	// hosting a catalog granted to one of their workspaces.
+	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
@@ -139,6 +147,8 @@ type Querier interface {
 	// Lens shows non-admins only the queries run under their own Trino identity.
 	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// catalog_name is the Trino name of a source catalog (what the UI showed
+	// before bindings) and the logical name of a native one.
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	MarkTrinoCatalogRegistryError(ctx context.Context, arg MarkTrinoCatalogRegistryErrorParams) error
@@ -184,6 +194,9 @@ type Querier interface {
 	UpdateUserPersonalWorkspace(ctx context.Context, arg UpdateUserPersonalWorkspaceParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
+	UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindingParams) (CatalogBinding, error)
+	// A catalog found inside an engine, owned by the engine's connection.
+	UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatalogParams) (Catalog, error)
 	// Table Health Snapshots
 	UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	UpsertTrinoCatalogRegistry(ctx context.Context, arg UpsertTrinoCatalogRegistryParams) error

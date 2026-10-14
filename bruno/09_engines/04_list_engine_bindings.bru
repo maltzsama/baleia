@@ -1,0 +1,25 @@
+meta {
+  name: List Engine Bindings
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/engines/{{engine_id}}/bindings
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].mode: eq native
+  res.body[0].engine_catalog_name: eq baleia
+}
+
+vars:post-response {
+  native_catalog_id: res.body[0].catalog_id
+}

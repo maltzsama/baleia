@@ -1,0 +1,20 @@
+meta {
+  name: Delete Connection Backing an Engine
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{base_url}}/catalog-connections/{{postgresql_connection_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq connection_in_use
+}

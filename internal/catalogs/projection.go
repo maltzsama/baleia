@@ -145,8 +145,8 @@ func Project(conn db.CatalogConnection, cat db.Catalog, creds Credentials) (Proj
 
 	row := RegistryRow{
 		ClusterID:     clusterID,
-		CatalogName:   cat.TrinoCatalogName,
-		ConnectorName: cat.Connector,
+		CatalogName:   cat.TrinoName(),
+		ConnectorName: cat.ConnectorName(),
 		Properties:    props,
 	}
 	return Projection{Row: row, SecretKeys: secretKeys}, nil
@@ -159,20 +159,20 @@ func validateProjectInputs(conn db.CatalogConnection, cat db.Catalog) error {
 	if !cat.ClusterID.Valid {
 		return errors.New("catalog has no cluster_id")
 	}
-	if cat.TrinoCatalogName == "" {
+	if cat.TrinoName() == "" {
 		return errors.New("catalog has no trino_catalog_name")
 	}
-	if cat.Connector == "" {
+	if cat.ConnectorName() == "" {
 		return errors.New("catalog has no connector")
 	}
-	if !nameRe.MatchString(cat.TrinoCatalogName) {
-		return fmt.Errorf("invalid trino_catalog_name %q (must match %s)", cat.TrinoCatalogName, nameRe)
+	if !nameRe.MatchString(cat.TrinoName()) {
+		return fmt.Errorf("invalid trino_catalog_name %q (must match %s)", cat.TrinoName(), nameRe)
 	}
-	if !nameRe.MatchString(cat.Connector) {
-		return fmt.Errorf("invalid connector %q (must match %s)", cat.Connector, nameRe)
+	if !nameRe.MatchString(cat.ConnectorName()) {
+		return fmt.Errorf("invalid connector %q (must match %s)", cat.ConnectorName(), nameRe)
 	}
-	if isReserved(cat.TrinoCatalogName) {
-		return fmt.Errorf("trino_catalog_name %q is reserved by Trino", cat.TrinoCatalogName)
+	if isReserved(cat.TrinoName()) {
+		return fmt.Errorf("trino_catalog_name %q is reserved by Trino", cat.TrinoName())
 	}
 	if conn.Type == "" {
 		return errors.New("catalog_connection has no type")
@@ -195,7 +195,7 @@ func buildIcebergRestProperties(conn db.CatalogConnection, cat db.Catalog, creds
 	props := map[string]string{
 		"iceberg.catalog.type":                            "rest",
 		"iceberg.rest-catalog.uri":                        url,
-		"iceberg.rest-catalog.warehouse":                  cat.Warehouse,
+		"iceberg.rest-catalog.warehouse":                  cat.WarehouseName(),
 		"iceberg.rest-catalog.security":                   "OAUTH2",
 		"iceberg.rest-catalog.oauth2.credential":          credential,
 		"iceberg.rest-catalog.oauth2.scope":               "PRINCIPAL_ROLE:ALL",

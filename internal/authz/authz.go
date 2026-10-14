@@ -70,6 +70,8 @@ type Store interface {
 	IsWorkspaceOwner(ctx context.Context, arg db.IsWorkspaceOwnerParams) (bool, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error)
 	GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error)
+	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
+	EngineHostsCatalogGrantedToUser(ctx context.Context, arg db.EngineHostsCatalogGrantedToUserParams) (bool, error)
 }
 
 // Checker evaluates the rules against a Store.
@@ -130,6 +132,41 @@ func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUI
 		return db.Catalog{}, db.CatalogConnection{}, ErrForbidden
 	}
 	return cat, conn, nil
+}
+
+// Engine loads the engine and checks the caller on it, with the catalog rule:
+// the owner of the engine's connection and a global admin may do anything; a
+// member of a workspace granted a catalog the engine hosts may read it
+// (ErrForbidden for anything else); everyone else gets ErrNotFound.
+func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID, act Action) (db.Engine, db.CatalogConnection, error) {
+	eng, err := c.q.GetEngineByID(ctx, engineID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.Engine{}, db.CatalogConnection{}, ErrNotFound
+		}
+		return db.Engine{}, db.CatalogConnection{}, err
+	}
+	conn, err := c.q.GetCatalogConnectionByID(ctx, eng.ConnectionID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.Engine{}, db.CatalogConnection{}, ErrNotFound
+		}
+		return db.Engine{}, db.CatalogConnection{}, err
+	}
+	if p.IsAdmin() || isOwner(p, conn.CreatedBy) {
+		return eng, conn, nil
+	}
+	granted, err := c.q.EngineHostsCatalogGrantedToUser(ctx, db.EngineHostsCatalogGrantedToUserParams{UserID: p.UserID, EngineID: eng.ID})
+	if err != nil {
+		return db.Engine{}, db.CatalogConnection{}, err
+	}
+	if !granted {
+		return db.Engine{}, db.CatalogConnection{}, ErrNotFound
+	}
+	if act != ActRead {
+		return db.Engine{}, db.CatalogConnection{}, ErrForbidden
+	}
+	return eng, conn, nil
 }
 
 // CatalogOfConnection is Catalog for routes addressed as

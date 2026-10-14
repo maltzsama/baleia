@@ -44,3 +44,30 @@ DELETE FROM engines WHERE id = $1;
 SELECT
     (SELECT count(*) FROM catalog_bindings b WHERE b.engine_id = $1 AND b.mode = 'managed')::bigint AS managed_bindings,
     (SELECT count(*) FROM query_executions q WHERE q.engine_id = $1 AND q.status = 'running')::bigint AS running_executions;
+
+-- name: EngineHostsCatalogGrantedToUser :one
+-- True when the engine has a binding of a catalog granted to a workspace the
+-- user belongs to.
+SELECT EXISTS (
+    SELECT 1 FROM catalog_bindings b
+    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
+    JOIN workspaces w ON w.id = g.workspace_id
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = sqlc.arg('user_id')
+    WHERE b.engine_id = sqlc.arg('engine_id')
+      AND (w.owner_user_id = sqlc.arg('user_id') OR tm.user_id = sqlc.arg('user_id'))
+) AS granted;
+
+-- name: ListEnginesVisibleToUser :many
+-- The engines a non-admin may see: those on connections they own and those
+-- hosting a catalog granted to one of their workspaces.
+SELECT e.* FROM engines e
+JOIN catalog_connections c ON c.id = e.connection_id
+WHERE c.created_by = sqlc.arg('user_id')
+   OR EXISTS (
+        SELECT 1 FROM catalog_bindings b
+        JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
+        JOIN workspaces w ON w.id = g.workspace_id
+        LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = sqlc.arg('user_id')
+        WHERE b.engine_id = e.id
+          AND (w.owner_user_id = sqlc.arg('user_id') OR tm.user_id = sqlc.arg('user_id')))
+ORDER BY e.name;

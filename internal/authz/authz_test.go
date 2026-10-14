@@ -22,6 +22,19 @@ type store struct {
 	owners  map[[2][16]byte]bool // {workspace, user}
 	teams   map[[16]byte]db.Team
 	roles   map[[2][16]byte]string // {team, user} -> team role
+	engines map[[16]byte]db.Engine
+	hosted  map[[2][16]byte]bool // {engine, user} -> the engine hosts a catalog granted to the user
+}
+
+func (s store) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+	if e, ok := s.engines[id.Bytes]; ok {
+		return e, nil
+	}
+	return db.Engine{}, pgx.ErrNoRows
+}
+
+func (s store) EngineHostsCatalogGrantedToUser(_ context.Context, a db.EngineHostsCatalogGrantedToUserParams) (bool, error) {
+	return s.hosted[[2][16]byte{a.EngineID.Bytes, a.UserID.Bytes}], nil
 }
 
 func (s store) CatalogGrantedToUser(_ context.Context, a db.CatalogGrantedToUserParams) (bool, error) {
@@ -82,6 +95,7 @@ var (
 	wsX    = uid(30) // workspace: reader is a member, wsOwn owns it
 	teamT  = uid(40)
 	reader = Principal{UserID: uid(4), Role: "member"} // member of wsX, which holds a grant on catA
+	engA   = uid(50)                                   // runs on connA and hosts catA
 	wsOwn  = Principal{UserID: uid(5), Role: "member"} // owner of wsX
 )
 
@@ -99,6 +113,8 @@ func fixture() *Checker {
 		owners:  map[[2][16]byte]bool{{wsX.Bytes, wsOwn.UserID.Bytes}: true},
 		teams:   map[[16]byte]db.Team{teamT.Bytes: {ID: teamT}},
 		roles:   map[[2][16]byte]string{{teamT.Bytes, reader.UserID.Bytes}: "member", {teamT.Bytes, wsOwn.UserID.Bytes}: "owner"},
+		engines: map[[16]byte]db.Engine{engA.Bytes: {ID: engA, ConnectionID: connA}},
+		hosted:  map[[2][16]byte]bool{{engA.Bytes, reader.UserID.Bytes}: true},
 	})
 }
 
@@ -259,5 +275,33 @@ func TestPrincipalFromContext(t *testing.T) {
 		if _, err := PrincipalFromContext(bad); !errors.Is(err, ErrUnauthenticated) {
 			t.Fatalf("bad context: %v, want ErrUnauthenticated", err)
 		}
+	}
+}
+
+func TestEngine(t *testing.T) {
+	c := fixture()
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		p    Principal
+		act  Action
+		want error
+	}{
+		{"connection owner may do anything", owner, ActAdmin, nil},
+		{"global admin may do anything", admin, ActAdmin, nil},
+		{"a grantee may read", reader, ActRead, nil},
+		{"a grantee may not write", reader, ActWrite, ErrForbidden},
+		{"a stranger is told it does not exist", other, ActRead, ErrNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := c.Engine(ctx, tc.p, engA, tc.act)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+	if _, _, err := c.Engine(ctx, admin, uid(99), ActRead); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing engine: %v", err)
 	}
 }

@@ -29,7 +29,7 @@ func (f *fakeRetrieverQuerier) ListCatalogConnections(context.Context, pgtype.UU
 
 func (f *fakeRetrieverQuerier) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
 	return []db.Catalog{
-		{Name: "tpch", TrinoCatalogName: "tpch", Enabled: true},
+		{Name: "tpch", TrinoCatalogName: strp("tpch"), Enabled: true},
 	}, nil
 }
 

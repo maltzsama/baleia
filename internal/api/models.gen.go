@@ -28,12 +28,19 @@ const (
 	CatalogSyncStatusSynced   CatalogSyncStatus = "synced"
 )
 
+// Defines values for CatalogBindingMode.
+const (
+	Adopted CatalogBindingMode = "adopted"
+	Managed CatalogBindingMode = "managed"
+	Native  CatalogBindingMode = "native"
+)
+
 // Defines values for ConnectionProviderFamily.
 const (
-	Database  ConnectionProviderFamily = "database"
-	Engine    ConnectionProviderFamily = "engine"
-	Iceberg   ConnectionProviderFamily = "iceberg"
-	Metastore ConnectionProviderFamily = "metastore"
+	ConnectionProviderFamilyDatabase  ConnectionProviderFamily = "database"
+	ConnectionProviderFamilyEngine    ConnectionProviderFamily = "engine"
+	ConnectionProviderFamilyIceberg   ConnectionProviderFamily = "iceberg"
+	ConnectionProviderFamilyMetastore ConnectionProviderFamily = "metastore"
 )
 
 // Defines values for ConnectionProviderRoles.
@@ -76,6 +83,19 @@ const (
 const (
 	CreateWorkspaceRequestTypePersonal CreateWorkspaceRequestType = "personal"
 	CreateWorkspaceRequestTypeShared   CreateWorkspaceRequestType = "shared"
+)
+
+// Defines values for EngineClass.
+const (
+	Direct    EngineClass = "direct"
+	Federated EngineClass = "federated"
+)
+
+// Defines values for EngineIdentityMode.
+const (
+	Connection    EngineIdentityMode = "connection"
+	Impersonation EngineIdentityMode = "impersonation"
+	PerUser       EngineIdentityMode = "per_user"
 )
 
 // Defines values for ExecutionStatus.
@@ -288,6 +308,22 @@ type Catalog struct {
 // CatalogSyncStatus State of the baleia-trino-catalog-store plugin's view of this catalog.
 type CatalogSyncStatus string
 
+// CatalogBinding defines model for CatalogBinding.
+type CatalogBinding struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Connector *string            `json:"connector"`
+	Enabled   bool               `json:"enabled"`
+
+	// EngineCatalogName The catalog's name in SQL on that engine
+	EngineCatalogName string             `json:"engine_catalog_name"`
+	EngineId          openapi_types.UUID `json:"engine_id"`
+	Id                openapi_types.UUID `json:"id"`
+	Mode              CatalogBindingMode `json:"mode"`
+}
+
+// CatalogBindingMode defines model for CatalogBinding.Mode.
+type CatalogBindingMode string
+
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
 	// Config Non-secret values of the provider's config schema. Secret fields are never returned
@@ -401,6 +437,13 @@ type CreateCatalogRequest struct {
 	Warehouse        string             `json:"warehouse"`
 }
 
+// CreateEngineRequest defines model for CreateEngineRequest.
+type CreateEngineRequest struct {
+	// ConnectionId A connection whose provider has the direct_engine role
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+	Name         string             `json:"name"`
+}
+
 // CreateFolderRequest defines model for CreateFolderRequest.
 type CreateFolderRequest struct {
 	Name     string              `json:"name"`
@@ -467,6 +510,27 @@ type CreateWorkspaceRequest struct {
 
 // CreateWorkspaceRequestType defines model for CreateWorkspaceRequest.Type.
 type CreateWorkspaceRequestType string
+
+// Engine defines model for Engine.
+type Engine struct {
+	Class        EngineClass        `json:"class"`
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Enabled      bool               `json:"enabled"`
+	Id           openapi_types.UUID `json:"id"`
+	IdentityMode EngineIdentityMode `json:"identity_mode"`
+
+	// Kind Query-engine kind: trino, postgresql, mysql, …
+	Kind      string     `json:"kind"`
+	Name      string     `json:"name"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// EngineClass defines model for Engine.Class.
+type EngineClass string
+
+// EngineIdentityMode defines model for Engine.IdentityMode.
+type EngineIdentityMode string
 
 // Error defines model for Error.
 type Error struct {
@@ -785,6 +849,11 @@ type UpdateCatalogConnectionRequest struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// UpdateEngineRequest defines model for UpdateEngineRequest.
+type UpdateEngineRequest struct {
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
 // UpdatePasswordRequest defines model for UpdatePasswordRequest.
 type UpdatePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
@@ -1000,6 +1069,12 @@ type CreateCatalogJSONRequestBody = CreateCatalogRequest
 
 // UpdateCatalogJSONRequestBody defines body for UpdateCatalog for application/json ContentType.
 type UpdateCatalogJSONRequestBody = CreateCatalogRequest
+
+// CreateEngineJSONRequestBody defines body for CreateEngine for application/json ContentType.
+type CreateEngineJSONRequestBody = CreateEngineRequest
+
+// UpdateEngineJSONRequestBody defines body for UpdateEngine for application/json ContentType.
+type UpdateEngineJSONRequestBody = UpdateEngineRequest
 
 // UpdateProfileJSONRequestBody defines body for UpdateProfile for application/json ContentType.
 type UpdateProfileJSONRequestBody = UpdateProfileRequest

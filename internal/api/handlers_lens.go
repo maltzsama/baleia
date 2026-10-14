@@ -246,15 +246,15 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 	}
 	trinoName := ""
 	for _, c := range cats {
-		if c.TrinoCatalogName == catalog {
-			trinoName = c.TrinoCatalogName
+		if c.TrinoName() != "" && c.TrinoName() == catalog {
+			trinoName = c.TrinoName()
 			break
 		}
 	}
 	if trinoName == "" {
 		for _, c := range cats {
 			if c.Name == catalog {
-				trinoName = c.TrinoCatalogName
+				trinoName = c.TrinoName()
 				break
 			}
 		}

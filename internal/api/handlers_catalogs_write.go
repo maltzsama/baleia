@@ -120,10 +120,10 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 		ConnectionID:     connID,
 		Name:             body.Name,
 		Description:      body.Description,
-		TrinoCatalogName: body.TrinoCatalogName,
+		TrinoCatalogName: &body.TrinoCatalogName,
 		ClusterID:        cluster.ID,
-		Warehouse:        body.Warehouse,
-		Connector:        connector,
+		Warehouse:        &body.Warehouse,
+		Connector:        &connector,
 		ExtraProps:       extraProps,
 	}, conn, creds)
 	if txErr != nil {
@@ -136,7 +136,7 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 		errPtr := err.Error()
 		_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
 			ClusterID:   cluster.ID,
-			CatalogName: cat.TrinoCatalogName,
+			CatalogName: cat.TrinoName(),
 			SyncError:   &errPtr,
 		})
 		c := dbCatalogToPublic(cat)
@@ -295,15 +295,15 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		return nil, err
 	}
 
-	newTrinoName := existing.TrinoCatalogName
+	newTrinoName := existing.TrinoName()
 	if body.TrinoCatalogName != "" {
 		newTrinoName = body.TrinoCatalogName
 	}
-	newWarehouse := existing.Warehouse
+	newWarehouse := existing.WarehouseName()
 	if body.Warehouse != "" {
 		newWarehouse = body.Warehouse
 	}
-	newConnector := existing.Connector
+	newConnector := existing.ConnectorName()
 	if body.Connector != nil && *body.Connector != "" {
 		newConnector = *body.Connector
 	}
@@ -317,13 +317,13 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	}
 
 	// Rename: DROP the old name and soft-delete its registry row first.
-	if newTrinoName != existing.TrinoCatalogName {
+	if newTrinoName != existing.TrinoName() {
 		dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-		_ = h.trino.DropCatalog(dropCtx, existing.TrinoCatalogName)
+		_ = h.trino.DropCatalog(dropCtx, existing.TrinoName())
 		cancel()
 		_ = h.queries.SoftDeleteTrinoCatalogRegistry(ctx, db.SoftDeleteTrinoCatalogRegistryParams{
 			ClusterID:   existing.ClusterID,
-			CatalogName: existing.TrinoCatalogName,
+			CatalogName: existing.TrinoName(),
 		})
 	}
 
@@ -331,23 +331,23 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		ID:               id,
 		Name:             newName,
 		Description:      body.Description,
-		Warehouse:        newWarehouse,
-		Connector:        newConnector,
+		Warehouse:        &newWarehouse,
+		Connector:        &newConnector,
 		ExtraProps:       extraProps,
-		TrinoCatalogName: newTrinoName,
+		TrinoCatalogName: &newTrinoName,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("update catalog: %w", err)
 	}
 
-	version, err := h.recreateCatalog(ctx, updated, conn, creds, updated.TrinoCatalogName)
+	version, err := h.recreateCatalog(ctx, updated, conn, creds, updated.TrinoName())
 	c := dbCatalogToPublic(updated)
 	if err != nil {
 		slog.Warn("re-create catalog after update", "err", err)
 		errMsg := err.Error()
 		_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
 			ClusterID:   updated.ClusterID,
-			CatalogName: updated.TrinoCatalogName,
+			CatalogName: updated.TrinoName(),
 			SyncError:   &errMsg,
 		})
 		c.SyncStatus = ptrSyncStatus(CatalogSyncStatusError)
@@ -390,7 +390,7 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 		}
 		return qtx.SoftDeleteTrinoCatalogRegistry(ctx, db.SoftDeleteTrinoCatalogRegistryParams{
 			ClusterID:   cat.ClusterID,
-			CatalogName: cat.TrinoCatalogName,
+			CatalogName: cat.TrinoName(),
 		})
 	})
 	if txErr != nil {
@@ -398,7 +398,7 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 	}
 	dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	_ = h.trino.DropCatalog(dropCtx, cat.TrinoCatalogName)
+	_ = h.trino.DropCatalog(dropCtx, cat.TrinoName())
 	h.catalogCache.Clear()
 	return DeleteCatalog204Response{}, nil
 }
@@ -429,7 +429,7 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 		return h.syncFailed(ctx, cat, err), nil
 	}
 
-	version, err := h.recreateCatalog(ctx, cat, conn, creds, cat.TrinoCatalogName)
+	version, err := h.recreateCatalog(ctx, cat, conn, creds, cat.TrinoName())
 	if err != nil {
 		return h.syncFailed(ctx, cat, err), nil
 	}
@@ -445,7 +445,7 @@ func (h *Handlers) syncFailed(ctx context.Context, cat db.Catalog, err error) Sy
 	errMsg := err.Error()
 	_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
 		ClusterID:   cat.ClusterID,
-		CatalogName: cat.TrinoCatalogName,
+		CatalogName: cat.TrinoName(),
 		SyncError:   &errMsg,
 	})
 	c := dbCatalogToPublic(cat)
@@ -482,12 +482,12 @@ func (h *Handlers) ReconcileTrino(ctx context.Context, _ ReconcileTrinoRequestOb
 	ok := make([]Catalog, 0)
 	for _, c := range registry {
 		pub := dbCatalogToPublic(c)
-		if _, present := liveSet[c.TrinoCatalogName]; present {
+		if _, present := liveSet[c.TrinoName()]; present {
 			ok = append(ok, pub)
 		} else {
 			pending = append(pending, pub)
 		}
-		delete(liveSet, c.TrinoCatalogName)
+		delete(liveSet, c.TrinoName())
 	}
 	orphan := make([]string, 0, len(liveSet))
 	for n := range liveSet {
@@ -511,9 +511,9 @@ func dbCatalogToPublic(c db.Catalog) Catalog {
 		Id:               &id,
 		ConnectionId:     &connID,
 		Name:             &c.Name,
-		TrinoCatalogName: &c.TrinoCatalogName,
-		Warehouse:        &c.Warehouse,
-		Connector:        &c.Connector,
+		TrinoCatalogName: c.TrinoCatalogName,
+		Warehouse:        c.Warehouse,
+		Connector:        c.Connector,
 		Enabled:          &c.Enabled,
 		CreatedAt:        pgTimestampToTimePtr(c.CreatedAt),
 		UpdatedAt:        pgTimestampToTimePtr(c.UpdatedAt),

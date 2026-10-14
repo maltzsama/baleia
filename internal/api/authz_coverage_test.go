@@ -89,6 +89,7 @@ var operationAccess = map[string]access{
 	"ListCatalogConnections":  {kind: kindSelf, calls: selfID},        // only the connections the caller created
 	"CreateCatalogConnection": {kind: kindSelf, calls: selfID},        // any user; becomes the owner
 	"ListTeams":               {kind: kindSelf, calls: selfPrincipal}, // the caller's teams; admin sees all
+	"ListEngines":             {kind: kindSelf, calls: selfPrincipal}, // engines on the caller's connections or hosting a granted catalog; admin sees all
 
 	// ── global administrators
 	"ListUsers":        {kind: kindAdmin, calls: adminRole},
@@ -106,6 +107,12 @@ var operationAccess = map[string]access{
 	"UpdateCatalogConnection": checked("Connection"),
 	"DeleteCatalogConnection": checked("Connection"),
 	"TestCatalogConnection":   checked("Connection"),
+	"CreateEngine":            checked("Connection"),
+	"GetEngine":               checked("Engine"),
+	"UpdateEngine":            checked("Engine"),
+	"DeleteEngine":            checked("Engine"),
+	"ListEngineBindings":      checked("Engine"),
+	"ListCatalogBindings":     checked("Catalog"),
 	"ListCatalogs":            checked("Connection"),
 	"CreateCatalog":           checked("Connection"),
 	"GetCatalog":              checked("CatalogOfConnection"),

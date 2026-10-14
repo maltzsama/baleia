@@ -1,0 +1,26 @@
+meta {
+  name: List Engines
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/engines
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+docs {
+  An admin sees every engine, including the default Trino engine Baleia
+  creates from TRINO_URL. Others see engines on connections they own and
+  engines hosting a catalog granted to one of their workspaces.
+}

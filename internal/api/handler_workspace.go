@@ -213,7 +213,10 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
 	}
 	h.catalogCache.Clear()
 
-	name := cat.TrinoCatalogName
+	name := cat.TrinoName()
+	if name == "" {
+		name = cat.Name // a native catalog has no Trino name
+	}
 	return GrantCatalogAccess201JSONResponse(WorkspaceCatalogAccess{
 		CatalogId:   openapi_types.UUID(grant.CatalogID.Bytes),
 		CatalogName: &name,

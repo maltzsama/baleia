@@ -156,7 +156,7 @@ func (q *authzFake) ListWorkspaceCatalogGrants(_ context.Context, ws pgtype.UUID
 	out := []db.ListWorkspaceCatalogGrantsRow{}
 	for _, g := range q.g.grants {
 		if g.WorkspaceID.Bytes == ws.Bytes {
-			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, Permission: g.Permission, CatalogName: q.cat.TrinoCatalogName})
+			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, Permission: g.Permission, CatalogName: q.cat.TrinoName()})
 		}
 	}
 	return out, nil
@@ -562,7 +562,7 @@ func TestListWorkspaceCatalogs_GrantsAndCache(t *testing.T) {
 		t.Fatalf("stranger: %d, want 404", code)
 	}
 	_ = grant(t, h, q, ctxAs(ownerID, "member"), GrantCatalogAccessRequestPermissionRead)
-	if code, out := listAs(memberID); code != 200 || len(out) != 1 || out[0].CatalogName != q.cat.TrinoCatalogName {
+	if code, out := listAs(memberID); code != 200 || len(out) != 1 || out[0].CatalogName != q.cat.TrinoName() {
 		t.Fatalf("after grant: %d %v", code, out)
 	}
 	_, _ = h.RevokeCatalogAccess(ctxAs(ownerID, "member"), RevokeCatalogAccessRequestObject{Id: wsID.Bytes, CatalogId: q.cat.ID.Bytes})

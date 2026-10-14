@@ -138,8 +138,8 @@ func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
 	q := &authzFake{
 		conn: db.CatalogConnection{ID: connID, Name: "src", Type: "polaris", Url: "http://polaris:8181", CreatedBy: owner, CredentialsEnc: &sealed},
 		cat: db.Catalog{
-			ID: pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}, ConnectionID: connID, Name: "wh", TrinoCatalogName: "wh",
-			ClusterID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Warehouse: "wh", Connector: "iceberg", ExtraProps: []byte("{}"),
+			ID: pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}, ConnectionID: connID, Name: "wh", TrinoCatalogName: strp("wh"),
+			ClusterID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Warehouse: strp("wh"), Connector: strp("iceberg"), ExtraProps: []byte("{}"),
 		},
 	}
 	ft := newFakeTrino(t)
@@ -241,7 +241,7 @@ func TestUpdateCatalog_RenamePersistsAndRecreatesInOrder(t *testing.T) {
 	if code := visitCode(t, resp); code != 200 {
 		t.Fatalf("status %d", code)
 	}
-	if len(q.updated) != 1 || q.updated[0].TrinoCatalogName != "wh_renamed" {
+	if len(q.updated) != 1 || q.updated[0].TrinoCatalogName == nil || *q.updated[0].TrinoCatalogName != "wh_renamed" {
 		t.Fatalf("rename not persisted: %+v", q.updated)
 	}
 	var seq []string
@@ -502,3 +502,5 @@ func TestSyncCatalog_StuckDDLTimesOut(t *testing.T) {
 		t.Fatalf("status %d registryErr=%v, want 409 with the timeout recorded", code, q.registryErr)
 	}
 }
+
+func strp(s string) *string { return &s }
