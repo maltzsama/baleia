@@ -184,3 +184,120 @@ func isAllowed(file string, allowed []string) bool {
 	}
 	return false
 }
+
+// moduleImports maps every production .go file (module-relative) to its
+// import paths.
+func moduleImports(t *testing.T) map[string][]string {
+	t.Helper()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string][]string{}
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if skippedDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		for _, imp := range f.Imports {
+			p, _ := strconv.Unquote(imp.Path.Value)
+			out[filepath.ToSlash(rel)] = append(out[filepath.ToSlash(rel)], p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestNoDriversOutsideAdapters: database and engine drivers are imported only
+// by the adapter and provider packages that own them (docs/adr/0002, #20).
+// pgx is also Baleia's own database driver and is guarded by
+// TestAdapterConstructionOnlyInWiring instead.
+func TestNoDriversOutsideAdapters(t *testing.T) {
+	drivers := []string{
+		"github.com/go-sql-driver/mysql",
+		"github.com/microsoft/go-mssqldb",
+		"github.com/sijms/go-ora",
+		"modernc.org/sqlite",
+		"github.com/ClickHouse/",
+		"github.com/apache/arrow-go/v18/arrow/flight",
+	}
+	adapter := func(file string) bool {
+		for _, root := range []string{"internal/queryengine/", "internal/connections/"} {
+			rest, ok := strings.CutPrefix(file, root)
+			if ok && strings.Contains(rest, "/") { // a kind's own package, not the contract
+				return true
+			}
+		}
+		return false
+	}
+	for file, imports := range moduleImports(t) {
+		if adapter(file) {
+			continue
+		}
+		for _, imp := range imports {
+			for _, drv := range drivers {
+				if strings.HasPrefix(imp, drv) {
+					t.Errorf("%s imports the driver %s; only internal/queryengine/<kind> and internal/connections/<kind> may", file, imp)
+				}
+			}
+		}
+	}
+}
+
+// trinoInDomain lists the domain files that still import internal/trino
+// directly. #20 PR 2 moves them to the engine contract, the Trino binder and
+// the Trino monitor; the list may only shrink.
+var trinoInDomain = map[string]string{
+	"internal/api/handlers.go":                             "#20 PR 2",
+	"internal/api/handlers_catalog_connections.go":         "#20 PR 2",
+	"internal/api/handlers_catalogs_write.go":              "#20 PR 2",
+	"internal/api/handlers_lens.go":                        "#20 PR 2",
+	"internal/temporal/activities/activities.go":           "#20 PR 2",
+	"internal/temporal/activities/lens_activities.go":      "#20 PR 2",
+	"internal/temporal/activities/retriever_activities.go": "#20 PR 2",
+}
+
+// TestNoTrinoImportsInDomain: internal/api and internal/temporal run SQL
+// through internal/queryengine, never through the Trino client.
+func TestNoTrinoImportsInDomain(t *testing.T) {
+	const trinoPkg = "github.com/galileostudio/baleia/internal/trino"
+	offending := map[string]bool{}
+	for file, imports := range moduleImports(t) {
+		if !strings.HasPrefix(file, "internal/api/") && !strings.HasPrefix(file, "internal/temporal/") {
+			continue
+		}
+		for _, imp := range imports {
+			if imp != trinoPkg {
+				continue
+			}
+			offending[file] = true
+			if _, known := trinoInDomain[file]; !known {
+				t.Errorf("%s imports internal/trino; run SQL through internal/queryengine", file)
+			}
+		}
+	}
+	for file, issue := range trinoInDomain {
+		if !offending[file] {
+			t.Errorf("%s no longer imports internal/trino; remove it from trinoInDomain (%s)", file, issue)
+		}
+	}
+}
