@@ -333,19 +333,20 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 		err = cerr
 	}
 
-	if err != nil {
-		return &ExecuteStatementResult{
-			TrinoQueryID: handle.QueryID,
-			DurationMs:   durationMs,
-			Error:        err.Error(),
-		}, nil
-	}
+	// A failed upload also fails the writes into its pipe: report the upload.
 	if sink.uploadErr != nil {
 		return &ExecuteStatementResult{
 			TrinoQueryID: handle.QueryID,
 			RowCount:     sink.rows,
 			DurationMs:   durationMs,
 			Error:        fmt.Sprintf("store results: %v", sink.uploadErr),
+		}, nil
+	}
+	if err != nil {
+		return &ExecuteStatementResult{
+			TrinoQueryID: handle.QueryID,
+			DurationMs:   durationMs,
+			Error:        err.Error(),
 		}, nil
 	}
 
