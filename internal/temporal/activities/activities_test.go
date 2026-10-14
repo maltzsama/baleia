@@ -141,6 +141,20 @@ func emitBigints(sink queryengine.RecordSink, vals []string) error {
 	return sink.End(queryengine.Stats{RowCount: int64(len(vals))})
 }
 
+// handleQuerier records the query handles the activity persists.
+type handleQuerier struct {
+	db.Querier
+	mu      sync.Mutex
+	handles []db.SetStatementQueryHandleParams
+}
+
+func (q *handleQuerier) SetStatementQueryHandle(_ context.Context, p db.SetStatementQueryHandleParams) error {
+	q.mu.Lock()
+	q.handles = append(q.handles, p)
+	q.mu.Unlock()
+	return nil
+}
+
 // fakeS3 drains the upload stream and reports a fixed size or error.
 type fakeS3 struct {
 	bytes       int64
@@ -220,7 +234,9 @@ func execParams() ExecuteStatementParams {
 func TestExecuteStatement_Heartbeats(t *testing.T) {
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
+	handles := &handleQuerier{}
 	defaultActivities = &Activities{
+		queries: handles,
 		engines: &fakeEngine{assignID: true},
 		s3:      &fakeS3{},
 		cfg:     testActivitiesConfig(),
@@ -250,8 +266,12 @@ func TestExecuteStatement_Heartbeats(t *testing.T) {
 	if len(beats) == 0 {
 		t.Fatal("no heartbeat was recorded during statement execution")
 	}
-	if beats[0].TrinoQueryID != testQueryID {
-		t.Fatalf("heartbeat query id = %q, want %q", beats[0].TrinoQueryID, testQueryID)
+	if beats[0].EngineQueryID != testQueryID {
+		t.Fatalf("heartbeat query id = %q, want %q", beats[0].EngineQueryID, testQueryID)
+	}
+	// The handle is persisted for cross-process cancel.
+	if len(handles.handles) != 1 || !strings.Contains(string(handles.handles[0].QueryHandle), testQueryID) {
+		t.Fatalf("persisted handles = %+v", handles.handles)
 	}
 }
 
@@ -311,7 +331,9 @@ func TestExecuteStatement_Truncates(t *testing.T) {
 	defer func() { defaultActivities = before }()
 
 	fake := &fakeEngine{assignID: true, deliver: 5}
+	handles := &handleQuerier{}
 	defaultActivities = &Activities{
+		queries: handles,
 		engines: fake,
 		s3:      &fakeS3{},
 		cfg:     &config.Config{ResultMaxRows: 2, ResultMaxBytes: 1 << 20},
@@ -353,7 +375,9 @@ func TestExecuteStatement_DDLNoUpload(t *testing.T) {
 	defer func() { defaultActivities = before }()
 
 	s3 := &fakeS3{}
+	handles := &handleQuerier{}
 	defaultActivities = &Activities{
+		queries: handles,
 		engines: &fakeEngine{noColumns: true},
 		s3:      s3,
 		cfg:     testActivitiesConfig(),
@@ -391,7 +415,9 @@ func TestExecuteStatement_UploadFailureFails(t *testing.T) {
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
 
+	handles := &handleQuerier{}
 	defaultActivities = &Activities{
+		queries: handles,
 		engines: &fakeEngine{assignID: true},
 		s3:      &fakeS3{err: errors.New("s3 down")},
 		cfg:     testActivitiesConfig(),
@@ -424,7 +450,9 @@ func TestExecuteStatement_TruncatesOnBytes(t *testing.T) {
 	defer func() { defaultActivities = before }()
 
 	fake := &fakeEngine{assignID: true, deliver: 50}
+	handles := &handleQuerier{}
 	defaultActivities = &Activities{
+		queries: handles,
 		engines: fake,
 		s3:      &fakeS3{},
 		cfg:     &config.Config{ResultMaxRows: 1000, ResultMaxBytes: 1024},

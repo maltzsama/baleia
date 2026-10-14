@@ -731,7 +731,7 @@ components:
         saved_query_id: { type: string, format: uuid, nullable: true }
         status: { type: string, enum: [running, finished, failed, cancelled] }
         sql: { type: string }
-        trino_query_id: { type: string, nullable: true }
+        engine_query_id: { type: string, nullable: true, description: "The statement's id on its engine (a Trino query id, …). Was trino_query_id" }
         rows_returned: { type: integer, nullable: true }
         duration_ms: { type: integer, nullable: true }
         started_at: { type: string, format: date-time }
@@ -747,8 +747,19 @@ components:
         position: { type: integer }
         sql: { type: string }
         status: { type: string, enum: [running, finished, failed, cancelled] }
-        trino_query_id: { type: string, nullable: true }
+        engine_query_id: { type: string, nullable: true, description: "The statement's id on its engine. Was trino_query_id" }
         rows_returned: { type: integer, nullable: true }
+        result_sets:
+          type: array
+          description: "Stored results of the statement, one per result set"
+          items:
+            type: object
+            required: [result_index, rows, bytes, truncated]
+            properties:
+              result_index: { type: integer }
+              rows: { type: integer }
+              bytes: { type: integer }
+              truncated: { type: boolean }
         result_bytes: { type: integer, nullable: true }
         truncated: { type: boolean, nullable: true }
         duration_ms: { type: integer, nullable: true }

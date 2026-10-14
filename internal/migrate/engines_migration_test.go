@@ -304,3 +304,35 @@ func TestNativeCatalogs(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+const versionVocabulary = 26
+
+func TestEngineVocabulary(t *testing.T) {
+	db, dir := testDB(t, versionNativeCatalogs)
+	seed(t, db, "pg")
+	mustExec(t, db, `INSERT INTO query_statements (execution_id, position, sql, status, trino_query_id, rows_returned, result_key, result_bytes, truncated)
+		VALUES ('00000000-0000-0000-0000-0000000000e1', 1, 'SELECT 1', 'finished', 'q1', 3, 'query-results/x/1/0.arrow', 99, true),
+		       ('00000000-0000-0000-0000-0000000000e1', 2, 'CREATE TABLE t (a int)', 'finished', 'q2', 0, NULL, NULL, false)`)
+	if err := goose.UpTo(db, dir, versionVocabulary); err != nil {
+		t.Fatal(err)
+	}
+	got := scalar[string](t, db, `SELECT result_sets::text FROM query_statements WHERE position = 1`)
+	if !strings.Contains(got, `"result_key": "query-results/x/1/0.arrow"`) || !strings.Contains(got, `"rows": 3`) || !strings.Contains(got, `"truncated": true`) {
+		t.Errorf("backfilled result_sets = %s", got)
+	}
+	if got := scalar[string](t, db, `SELECT result_sets::text FROM query_statements WHERE position = 2`); got != "[]" {
+		t.Errorf("a statement without results: %s", got)
+	}
+	if got := scalar[string](t, db, `SELECT engine_query_id FROM query_statements WHERE position = 1`); got != "q1" {
+		t.Errorf("engine_query_id = %q", got)
+	}
+	if err := goose.DownTo(db, dir, versionNativeCatalogs); err != nil {
+		t.Fatal(err)
+	}
+	if got := scalar[string](t, db, `SELECT trino_query_id FROM query_statements WHERE position = 1`); got != "q1" {
+		t.Errorf("trino_query_id after down = %q", got)
+	}
+	if err := goose.UpTo(db, dir, versionVocabulary); err != nil {
+		t.Fatal(err)
+	}
+}

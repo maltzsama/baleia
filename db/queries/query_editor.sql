@@ -47,7 +47,7 @@ RETURNING *;
 -- never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
 -- execution was already terminal; callers treat that as a no-op.
 UPDATE query_executions
-SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
+SET status = $2, engine_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
 WHERE id = $1 AND status = 'running'
 RETURNING *;
 
@@ -90,8 +90,8 @@ RETURNING *;
 -- completion can never overwrite a cancellation. Zero matched rows means the
 -- statement was already terminal; callers treat that as a no-op.
 UPDATE query_statements
-SET status = $2, trino_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7,
-    result_key = $8, result_bytes = $9, truncated = $10
+SET status = $2, engine_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7,
+    result_key = $8, result_bytes = $9, truncated = $10, result_sets = $11
 WHERE id = $1 AND status = 'running'
 RETURNING *;
 
@@ -112,3 +112,16 @@ ORDER BY s.position;
 SELECT s.* FROM query_statements s
 JOIN query_executions e ON e.id = s.execution_id
 WHERE s.execution_id = $1 AND e.workspace_id = $2 AND s.position = $3;
+
+-- name: SetStatementQueryHandle :exec
+-- Persists the engine's handle of a running statement as soon as it is known,
+-- so the API can cancel it from another process.
+UPDATE query_statements
+SET query_handle = $3
+WHERE execution_id = $1 AND position = $2 AND status = 'running';
+
+-- name: ListRunningStatementHandles :many
+SELECT position, query_handle
+FROM query_statements
+WHERE execution_id = $1 AND query_handle IS NOT NULL AND status = 'running'
+ORDER BY position;
