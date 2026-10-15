@@ -55,6 +55,8 @@ type fakeEngine struct {
 	closed    int      // sessions closed
 	cancelled []queryengine.QueryHandle
 	started   chan struct{} // closed when a blocking statement starts
+	// beginThenBlock streams one row, then blocks like a slow engine.
+	beginThenBlock bool
 }
 
 func (f *fakeEngine) DefaultTrino(context.Context) (queryengine.Engine, error) {
@@ -136,6 +138,22 @@ func (s *fakeSession) Execute(ctx context.Context, sql string, cb queryengine.Ca
 	if f.err != nil {
 		return f.err
 	}
+	if f.beginThenBlock {
+		b, err := arrowipc.NewBatcher([]arrowipc.ColumnInfo{{Name: "c", Type: "bigint"}})
+		if err != nil {
+			return err
+		}
+		defer b.Release()
+		if err := sink.Begin(b.Schema()); err != nil {
+			return err
+		}
+		if err := b.Append([][]interface{}{{json.Number("1")}}, sink.Write); err != nil {
+			return err
+		}
+		if err := b.Flush(sink.Write); err != nil {
+			return err
+		}
+	}
 	if f.block > 0 {
 		if f.started != nil {
 			close(f.started)
@@ -208,14 +226,22 @@ func (q *handleQuerier) SetStatementQueryHandle(_ context.Context, p db.SetState
 
 // fakeS3 drains the upload stream and reports a fixed size or error.
 type fakeS3 struct {
+	mu          sync.Mutex
 	bytes       int64
 	err         error
 	uploadCalls int
+	readErrs    []error // what reading each upload stream ended with
 }
 
 func (f *fakeS3) PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error) {
+	_, rerr := io.Copy(io.Discard, r)
+	f.mu.Lock()
 	f.uploadCalls++
-	_, _ = io.Copy(io.Discard, r)
+	f.readErrs = append(f.readErrs, rerr)
+	f.mu.Unlock()
+	if rerr != nil {
+		return 0, rerr
+	}
 	if f.err != nil {
 		return 0, f.err
 	}

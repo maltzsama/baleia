@@ -133,14 +133,22 @@ func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) erro
 	}).Get(bookkeepingCtx, nil)
 }
 
+// statementMargin is the time each statement gets on top of its timeout
+// (opening the session, stopping it, storing its result), so a statement's
+// own timeout fires before the script's.
+const statementMargin = time.Minute
+
 // scriptTimeout bounds the script activity: every statement may take its
-// whole timeout, capped by the execution timeout.
+// whole timeout plus statementMargin, capped by the execution timeout.
 func scriptTimeout(statements int, statementTimeout, executionTimeout time.Duration) time.Duration {
 	if executionTimeout <= 0 {
 		executionTimeout = defaultExecutionTimeout
 	}
-	t := time.Duration(statements) * statementTimeout
-	if t <= 0 || t > executionTimeout {
+	if statementTimeout <= 0 {
+		return executionTimeout
+	}
+	t := time.Duration(statements) * (statementTimeout + statementMargin)
+	if t > executionTimeout {
 		return executionTimeout
 	}
 	return t

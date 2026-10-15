@@ -135,7 +135,7 @@ func (a *Activities) executeScript(ctx context.Context, p ExecuteScriptParams) (
 	s.eng = eng
 	sess, err := s.openSession()
 	if err != nil {
-		if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
 			return nil, s.cancelled(p.Statements[0].Position, queryengine.QueryHandle{})
 		}
 		return s.failBeforeStart(err)
@@ -332,22 +332,28 @@ func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err 
 	}
 	o := StatementOutcome{Position: st.Position, EngineQueryID: handle.QueryID, DurationMs: elapsed.Milliseconds()}
 
-	// Cancelled by the workflow: finalize the upload first so it cannot
-	// deadlock, then stop the statement on the engine.
-	if s.ctx.Err() != nil {
-		sink.abort()
-		observe(metrics.StatementCancelled, nil, 0, 0)
-		return true, s.cancelled(st.Position, handle)
-	}
-	if stmtCtx.Err() != nil {
+	// Stopped by the workflow or a deadline: finalize the upload first so it
+	// cannot deadlock, then stop the statement on the engine. Only a real
+	// cancel is a cancellation; the script's own deadline is a timeout.
+	timedOut := func(msg string) (bool, error) {
 		sink.abort()
 		if handle.QueryID != "" {
-			s.cancelOnEngine(handle, "statement timeout")
+			s.cancelOnEngine(handle, "timeout")
 		}
-		terr := queryengine.NewError(queryengine.CodeTimeout, s.eng.Kind(), "", fmt.Sprintf("the statement ran longer than %s", s.p.Timeout))
+		terr := queryengine.NewError(queryengine.CodeTimeout, s.eng.Kind(), "", msg)
 		observe(metrics.StatementError, terr, 0, 0)
 		o.Status, o.ErrorCode, o.Error = "failed", string(queryengine.CodeTimeout), terr.Error()
 		return true, s.finish(o)
+	}
+	switch {
+	case errors.Is(s.ctx.Err(), context.Canceled):
+		sink.abort()
+		observe(metrics.StatementCancelled, nil, 0, 0)
+		return true, s.cancelled(st.Position, handle)
+	case s.ctx.Err() != nil:
+		return timedOut("the execution ran longer than its timeout")
+	case stmtCtx.Err() != nil:
+		return timedOut(fmt.Sprintf("the statement ran longer than %s", s.p.Timeout))
 	}
 
 	if errors.Is(err, errResultCapReached) {
@@ -576,11 +582,15 @@ func (s *resultSink) finish() error {
 	return err
 }
 
-// abort ends the upload without completing the stream.
+// errResultAborted fails an upload whose statement did not finish, so no
+// partial object is stored.
+var errResultAborted = errors.New("result upload aborted")
+
+// abort fails the upload: the stream is incomplete and must not be stored.
 func (s *resultSink) abort() {
 	if s.pw == nil {
 		return
 	}
-	_ = s.pw.Close()
+	_ = s.pw.CloseWithError(errResultAborted)
 	<-s.done
 }

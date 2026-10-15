@@ -578,3 +578,61 @@ func TestExecuteScript_CancelledOnEngine(t *testing.T) {
 		t.Fatalf("outcomes = %+v", r.Statements)
 	}
 }
+
+// TestExecuteScript_DeadlineIsTimeout: when the script's own deadline
+// expires mid-statement, the statement ends failed/timeout (not cancelled),
+// is stopped on the engine, the rest are skipped, and its partial result is
+// not stored.
+func TestExecuteScript_DeadlineIsTimeout(t *testing.T) {
+	intervalBefore := heartbeatInterval
+	heartbeatInterval = 10 * time.Millisecond
+	defer func() { heartbeatInterval = intervalBefore }()
+	fake := &fakeEngine{assignID: true, beginThenBlock: true, block: time.Minute, started: make(chan struct{})}
+	store := newStatementStore(2)
+	s3 := &fakeS3{}
+	before := defaultActivities
+	defer func() { defaultActivities = before }()
+	defaultActivities = &Activities{queries: store, engines: fake, s3: s3, cfg: testActivitiesConfig()}
+
+	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(shortScriptWorkflow)
+	env.RegisterActivity(ExecuteScript)
+	env.ExecuteWorkflow(shortScriptWorkflow, scriptParams("SELECT 1", "SELECT 2"))
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		fake.mu.Lock()
+		closed := fake.closed
+		fake.mu.Unlock()
+		if closed == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := store.status(); strings.Join(got, ",") != "failed,skipped" {
+		t.Fatalf("statuses = %v", got)
+	}
+	if code := store.row(1).code; code != string(queryengine.CodeTimeout) {
+		t.Fatalf("code = %q, want timeout", code)
+	}
+	fake.mu.Lock()
+	cancels := len(fake.cancelled)
+	fake.mu.Unlock()
+	if cancels != 1 {
+		t.Fatalf("engine cancels = %d, want 1", cancels)
+	}
+	s3.mu.Lock()
+	defer s3.mu.Unlock()
+	if len(s3.readErrs) != 1 || !errors.Is(s3.readErrs[0], errResultAborted) {
+		t.Fatalf("the partial upload must fail, got %v", s3.readErrs)
+	}
+}
+
+// shortScriptWorkflow runs ExecuteScript with a deadline shorter than the
+// statement.
+func shortScriptWorkflow(ctx workflow.Context, p ExecuteScriptParams) error {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 300 * time.Millisecond,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+	return workflow.ExecuteActivity(ctx, ExecuteScript, p).Get(ctx, nil)
+}

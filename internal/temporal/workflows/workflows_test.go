@@ -295,7 +295,7 @@ func TestV2_RejectedScriptFails(t *testing.T) {
 }
 
 func TestScriptTimeout(t *testing.T) {
-	require.Equal(t, 90*time.Minute, scriptTimeout(3, 30*time.Minute, 2*time.Hour))
+	require.Equal(t, 93*time.Minute, scriptTimeout(3, 30*time.Minute, 2*time.Hour), "a minute of margin per statement")
 	require.Equal(t, 2*time.Hour, scriptTimeout(10, 30*time.Minute, 2*time.Hour), "capped by the execution timeout")
 	require.Equal(t, defaultExecutionTimeout, scriptTimeout(10, 30*time.Minute, 0), "no cap given: the default cap")
 	require.Equal(t, time.Hour, scriptTimeout(1, 0, time.Hour), "no statement timeout: the cap")
