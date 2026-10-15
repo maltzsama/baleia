@@ -388,7 +388,7 @@ type CatalogBinding struct {
 	ExtraProps        *map[string]string `json:"extra_props,omitempty"`
 	Id                openapi_types.UUID `json:"id"`
 
-	// LastErrorCode e.g. plugin_not_confirmed, engine_unavailable, the engine's error name
+	// LastErrorCode e.g. plugin_not_confirmed, engine_unavailable, engine_load_failed (the engine refused to load the catalog; sync the binding to apply it again), the engine's error name
 	LastErrorCode    *string `json:"last_error_code"`
 	LastErrorMessage *string `json:"last_error_message"`
 
@@ -396,7 +396,7 @@ type CatalogBinding struct {
 	LifecycleState *CatalogBindingLifecycleState `json:"lifecycle_state,omitempty"`
 	Mode           CatalogBindingMode            `json:"mode"`
 
-	// SyncStatus Derived: synced when the binding is active, the engine confirmed the desired version (Trino: the plugin rewrote the registry row) and the engine does not report it missing; pending while provisioning or updating or not yet confirmed; error; disabled while deprovisioning or disabled.
+	// SyncStatus Derived: synced when the binding is active, the engine confirmed the desired version (Trino: the plugin rewrote the registry row) and the engine does not report it missing; pending while provisioning or updating or not yet confirmed; error (also when the engine could not load the active binding's catalog at boot, last_error_code engine_load_failed); disabled while deprovisioning or disabled.
 	SyncStatus *CatalogBindingSyncStatus `json:"sync_status"`
 
 	// Version Version of the projection applied (write responses, when synced)
@@ -409,7 +409,7 @@ type CatalogBindingLifecycleState string
 // CatalogBindingMode defines model for CatalogBinding.Mode.
 type CatalogBindingMode string
 
-// CatalogBindingSyncStatus Derived: synced when the binding is active, the engine confirmed the desired version (Trino: the plugin rewrote the registry row) and the engine does not report it missing; pending while provisioning or updating or not yet confirmed; error; disabled while deprovisioning or disabled.
+// CatalogBindingSyncStatus Derived: synced when the binding is active, the engine confirmed the desired version (Trino: the plugin rewrote the registry row) and the engine does not report it missing; pending while provisioning or updating or not yet confirmed; error (also when the engine could not load the active binding's catalog at boot, last_error_code engine_load_failed); disabled while deprovisioning or disabled.
 type CatalogBindingSyncStatus string
 
 // CatalogConnection defines model for CatalogConnection.

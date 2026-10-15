@@ -70,21 +70,30 @@ func observe(ctx context.Context, l bindings.Lifecycle) {
 	}
 }
 
-// bindingSyncStatus is the derived status of a binding (binding_status_v).
-func (h *Handlers) bindingSyncStatus(ctx context.Context, b db.CatalogBinding) string {
+// bindingSyncStatus is the derived status of a binding (binding_status_v)
+// and, when the engine refused to load an active binding's catalog, its
+// message.
+func (h *Handlers) bindingSyncStatus(ctx context.Context, b db.CatalogBinding) (status, engineError string) {
 	st, err := h.queries.GetBindingStatus(ctx, b.ID)
 	if err != nil || st.SyncStatus == "" {
-		return "pending"
+		return "pending", ""
 	}
-	return st.SyncStatus
+	return st.SyncStatus, st.EngineError
 }
+
+// engineLoadFailed is the error code of a binding the engine refused to load.
+const engineLoadFailed = "engine_load_failed"
 
 // catalogResponse is a catalog with its primary binding's status.
 func (h *Handlers) catalogResponse(ctx context.Context, cat db.Catalog, b db.CatalogBinding, version string) Catalog {
 	c := dbCatalogToPublic(cat)
-	status := CatalogSyncStatus(h.bindingSyncStatus(ctx, b))
+	st, engineErr := h.bindingSyncStatus(ctx, b)
+	status := CatalogSyncStatus(st)
 	c.SyncStatus = &status
 	c.SyncError = b.LastErrorMessage
+	if engineErr != "" {
+		c.SyncError = &engineErr
+	}
 	if version != "" && status == CatalogSyncStatusSynced {
 		c.CatalogVersion = &version
 	}
@@ -94,8 +103,13 @@ func (h *Handlers) catalogResponse(ctx context.Context, cat db.Catalog, b db.Cat
 // bindingResponse is a binding with its derived status and lifecycle.
 func (h *Handlers) bindingResponse(ctx context.Context, b db.CatalogBinding, version string) CatalogBinding {
 	out := bindingToPublic(b)
-	status := CatalogBindingSyncStatus(h.bindingSyncStatus(ctx, b))
+	st, engineErr := h.bindingSyncStatus(ctx, b)
+	status := CatalogBindingSyncStatus(st)
 	out.SyncStatus = &status
+	if engineErr != "" {
+		code := engineLoadFailed
+		out.LastErrorCode, out.LastErrorMessage = &code, &engineErr
+	}
 	if version != "" && status == CatalogBindingSyncStatusSynced {
 		out.Version = &version
 	}

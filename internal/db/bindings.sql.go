@@ -199,13 +199,18 @@ func (q *Queries) GetBindingForTarget(ctx context.Context, id pgtype.UUID) (GetB
 }
 
 const getBindingStatus = `-- name: GetBindingStatus :one
-SELECT binding_id, lifecycle_state, sync_status FROM binding_status_v WHERE binding_id = $1
+SELECT binding_id, lifecycle_state, sync_status, engine_error FROM binding_status_v WHERE binding_id = $1
 `
 
 func (q *Queries) GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (BindingStatusV, error) {
 	row := q.db.QueryRow(ctx, getBindingStatus, bindingID)
 	var i BindingStatusV
-	err := row.Scan(&i.BindingID, &i.LifecycleState, &i.SyncStatus)
+	err := row.Scan(
+		&i.BindingID,
+		&i.LifecycleState,
+		&i.SyncStatus,
+		&i.EngineError,
+	)
 	return i, err
 }
 
@@ -261,7 +266,7 @@ func (q *Queries) GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.U
 }
 
 const listBindingStatusByCatalog = `-- name: ListBindingStatusByCatalog :many
-SELECT s.binding_id, s.lifecycle_state, s.sync_status FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id WHERE b.catalog_id = $1
+SELECT s.binding_id, s.lifecycle_state, s.sync_status, s.engine_error FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id WHERE b.catalog_id = $1
 `
 
 func (q *Queries) ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]BindingStatusV, error) {
@@ -273,7 +278,12 @@ func (q *Queries) ListBindingStatusByCatalog(ctx context.Context, catalogID pgty
 	var items []BindingStatusV
 	for rows.Next() {
 		var i BindingStatusV
-		if err := rows.Scan(&i.BindingID, &i.LifecycleState, &i.SyncStatus); err != nil {
+		if err := rows.Scan(
+			&i.BindingID,
+			&i.LifecycleState,
+			&i.SyncStatus,
+			&i.EngineError,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
