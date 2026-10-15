@@ -29,12 +29,15 @@ responsible for Trino's security updates.
 
 ## Current compliance
 
-Partially compliant.
+Compliant.
 
+- Releases ship `baleia-catalog-store/`, `contract/` and `VERSION` in a tarball with a `.sha256`.
 - The Helm chart installs the plugin from the release tarball with a sha256 check, or from a
-  plugin-only image (`deploy/helm/baleia/templates/trino.yaml`).
-- Compose and the `Makefile` still clone and build the plugin from source (`PLUGIN_TAG`), and
-  `trino_catalog/` remains in the repository (#88).
+  plugin-only image (`deploy/helm/baleia/templates/trino.yaml`, `deploy/dev/plugins.Dockerfile`,
+  which also checks `VERSION`).
+- Compose installs it with the `trino-plugin-init` container (sha256 and `VERSION`) into a volume
+  mounted read-only into the official image; nothing builds the plugin. The Makefile's
+  `BALEIA_PLUGIN_VERSION` is the single pin (#88).
 
 ## Alternatives considered
 

@@ -385,3 +385,6 @@ Dockerfile.*
 
 hacks/
 tmp/
+
+# Contract fixtures of the pinned plugin release (make contract-fetch)
+/internal/contract/testdata/

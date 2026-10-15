@@ -49,8 +49,14 @@ Partially compliant.
 - Registry, placeholders and the version algorithm exist (`db/migrations/00018_trino_catalog_store.sql`,
   `internal/trino/secret.go`, `internal/bindings/trino/version.go`); the Trino binder
   (`internal/bindings/trino`, #80) is the only code that writes the registry and catalog DDL.
-- Provenance is implicit in `trino_catalog_registry.updated_by IN ('baleia','trino')`; there is no
-  `managed`/`adopted` binding mode yet (#13, #80).
+- The shared fixtures (version vectors, reserved names, placeholder cases, the plugin's registry
+  statements) live only in the plugin's `contract/` and ship in each release; `internal/contract`
+  checks Baleia against the release it pins (`make contract-fetch`, CI job Contract), including
+  that every plugin statement prepares as `baleia_trino` against Baleia's schema and that the
+  registry refuses reserved names (migration 00029). Changing the contract means a plugin release
+  first, then bumping `BALEIA_PLUGIN_VERSION` (#39).
+- Provenance: bindings are `managed`, `adopted` or `native` (#13, #80, #38); the registry's
+  `updated_by = 'trino'` is the plugin's confirmation, which Baleia never writes.
 - Desired, effective and observed state are separate (#38): `catalog_bindings` holds the desired
   state and a lifecycle Baleia owns (provisioning, active, updating, error, deprovisioning,
   disabled; guarded transitions in `internal/bindings/lifecycle.go`); the effective state is the

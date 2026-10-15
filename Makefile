@@ -1,8 +1,11 @@
 BALEIA_DIR ?= $(CURDIR)
-PLUGIN_DIR ?= $(BALEIA_DIR)/.plugin/baleia-trino-catalog-store
-PLUGIN_REPO ?= https://github.com/maltzsama/baleia-trino-catalog-store.git
-PLUGIN_TAG  ?= v0.8.0
-PLUGIN_JAVA_IMAGE ?= eclipse-temurin:25-jdk
+
+# The baleia-trino-catalog-store release Baleia runs and tests its contract
+# against (#88, #39): the single pin for compose, the dev cluster and CI.
+BALEIA_PLUGIN_VERSION ?= 0.9.0
+TRINO_VERSION         ?= 483
+BALEIA_PLUGIN_TARBALL  = baleia-catalog-store-$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION).tar.gz
+BALEIA_PLUGIN_URL     ?= https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v$(BALEIA_PLUGIN_VERSION)/$(BALEIA_PLUGIN_TARBALL)
 
 # Fallback secret for local development. An exported or command-line
 # JWT_SECRET wins, so credentials encrypted under a custom key stay readable.
@@ -12,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate migrate-credentials migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down dialect-lists
+.PHONY: dev worker migrate migrate-credentials migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down dialect-lists
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -21,37 +24,27 @@ worker:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true go run ./cmd/worker
 
 # ── Trino plugin ──────────────────────────────────────────────────────────────
-# Clones and builds the baleia-trino-catalog-store plugin using Docker.
-# The output goes to $(PLUGIN_DIR)/target/baleia-catalog-store/ and is consumed
-# by Trino in the compose file via a bind mount (docker-compose.yaml).
-.PHONY: plugin-clone
-plugin-clone:
-	@if [ ! -d "$(PLUGIN_DIR)" ]; then \
-		echo ">>> Cloning plugin $(PLUGIN_TAG) from $(PLUGIN_REPO)..."; \
-		git clone --depth 1 --branch $(PLUGIN_TAG) $(PLUGIN_REPO) $(PLUGIN_DIR); \
-	else \
-		echo ">>> Plugin already cloned at $(PLUGIN_DIR)"; \
-	fi
+# The plugin is never built here: compose and the dev cluster install the
+# released tarball (sha256-verified) into the official Trino image.
 
-.PHONY: plugin-build
-plugin-build: plugin-clone
-	@echo ">>> Building plugin in $(PLUGIN_DIR)..."
-	docker run --rm \
-		-v "$(PLUGIN_DIR):/plugin" \
-		-w /plugin \
-		$(PLUGIN_JAVA_IMAGE) \
-		sh -c 'apt-get update -qq && apt-get install -y -qq maven 2>/dev/null && mvn clean package -q -DskipTests'
-	@echo ">>> Plugin built: $$(ls $(PLUGIN_DIR)/target/baleia-catalog-store/baleia-trino-catalog-store-*.jar 2>/dev/null)"
-
-.PHONY: clean-plugin
-clean-plugin:
-	rm -rf $(PLUGIN_DIR)
+# contract-fetch extracts contract/ of the pinned release into
+# internal/contract/testdata for the contract tests (go test -tags contract).
+.PHONY: contract-fetch
+contract-fetch:
+	@rm -rf internal/contract/testdata && mkdir -p internal/contract/testdata
+	curl -fsSL -o internal/contract/testdata/p.tgz "$(BALEIA_PLUGIN_URL)"
+	curl -fsSL -o internal/contract/testdata/p.sha256 "$(BALEIA_PLUGIN_URL).sha256"
+	cd internal/contract/testdata && echo "$$(cut -d' ' -f1 p.sha256)  p.tgz" | sha256sum -c - \
+		&& tar -xzf p.tgz contract VERSION \
+		&& test "$$(cat VERSION)" = "$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION)" \
+		&& rm p.tgz p.sha256
+	@echo ">>> contract of plugin $$(cat internal/contract/testdata/VERSION) in internal/contract/testdata"
 
 # ── Compose ───────────────────────────────────────────────────────────────────
 
-# up: builds the plugin and brings up the full stack.
-up: plugin-build
-	docker compose up -d
+# up: brings up the full stack; trino-plugin-init installs the plugin release.
+up:
+	BALEIA_PLUGIN_VERSION=$(BALEIA_PLUGIN_VERSION) TRINO_VERSION=$(TRINO_VERSION) docker compose up -d
 
 # down: tears down the stack without destroying volumes (data persists).
 down:
@@ -125,7 +118,7 @@ build-all: build-web build
 K8S_PROFILE ?= baleia
 K8S_NS      ?= baleia-dev
 K8S_PLUGIN_IMAGE      ?= baleia-plugins
-K8S_PLUGIN_VERSION    ?= 0.8.0
+K8S_PLUGIN_VERSION    ?= $(BALEIA_PLUGIN_VERSION)
 # The bundle image is tagged with the plugin release it carries (the plugin repo
 # owns that version), so it matches trino.plugin.image in deploy/dev/values-dev.yaml.
 K8S_PLUGIN_TAG        ?= $(K8S_PLUGIN_VERSION)

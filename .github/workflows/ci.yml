@@ -20,6 +20,32 @@ jobs:
       - name: Test
         run: go test ./...
 
+  # Baleia's half of the registry contract against the fixtures of the pinned
+  # plugin release (#39): the Makefile's BALEIA_PLUGIN_VERSION.
+  contract:
+    name: Contract
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: baleia_dev
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fetch the contract of the pinned plugin release
+        run: make contract-fetch
+      - name: Contract tests
+        env:
+          BALEIA_TEST_DATABASE_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
+        run: go test -count=1 -tags contract -v ./internal/contract/...
+
   docs:
     name: Docs links
     runs-on: ubuntu-latest

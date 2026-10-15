@@ -316,23 +316,6 @@ func (q *Queries) ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabled
 	return items, nil
 }
 
-const markTrinoCatalogRegistryError = `-- name: MarkTrinoCatalogRegistryError :exec
-UPDATE trino_catalog_registry
-   SET sync_status = 'error', sync_error = $3, updated_by = 'baleia', updated_at = now()
- WHERE cluster_id = $1 AND catalog_name = $2
-`
-
-type MarkTrinoCatalogRegistryErrorParams struct {
-	ClusterID   pgtype.UUID `json:"cluster_id"`
-	CatalogName string      `json:"catalog_name"`
-	SyncError   *string     `json:"sync_error"`
-}
-
-func (q *Queries) MarkTrinoCatalogRegistryError(ctx context.Context, arg MarkTrinoCatalogRegistryErrorParams) error {
-	_, err := q.db.Exec(ctx, markTrinoCatalogRegistryError, arg.ClusterID, arg.CatalogName, arg.SyncError)
-	return err
-}
-
 const setCatalogEnabled = `-- name: SetCatalogEnabled :exec
 UPDATE catalogs SET enabled = $2, updated_at = now() WHERE id = $1
 `
