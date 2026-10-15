@@ -55,7 +55,7 @@ func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequest
 		}
 		out := make([]Catalog, 0, len(granted))
 		for _, r := range granted {
-			out = append(out, dbCatalogToPublic(r))
+			out = append(out, h.catalogWithStatus(ctx, r))
 		}
 		return ListCatalogs200JSONResponse(out), nil
 	}
@@ -66,7 +66,7 @@ func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequest
 	}
 	out := make([]Catalog, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, dbCatalogToPublic(r))
+		out = append(out, h.catalogWithStatus(ctx, r))
 	}
 	return ListCatalogs200JSONResponse(out), nil
 }
@@ -120,12 +120,20 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 		return nil, err
 	}
 	extraProps, _ := json.Marshal(extra)
-	eng := bindings.EngineRef{ClusterID: cluster.ID}
+	if !cluster.EngineID.Valid {
+		return nil, errors.New("the default Trino cluster has no engine")
+	}
+	eng, err := h.queries.GetEngineByID(ctx, cluster.EngineID)
+	if err != nil {
+		return nil, err
+	}
 
+	// Desired state first (catalog and its binding, provisioning), then the
+	// lifecycle applies it (#38).
 	var cat db.Catalog
-	txErr := withTx(ctx, h.pool, func(tx pgx.Tx) error {
-		qtx := db.New(tx)
-		c, err := qtx.CreateCatalog(ctx, db.CreateCatalogParams{
+	var binding db.CatalogBinding
+	txErr := h.inTx(ctx, func(q db.Querier) error {
+		c, err := q.CreateCatalog(ctx, db.CreateCatalogParams{
 			ConnectionID:     connID,
 			Name:             body.Name,
 			Description:      body.Description,
@@ -139,40 +147,34 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 			return err
 		}
 		cat = c
-		if err := upsertPrimaryBinding(ctx, qtx, cluster, c); err != nil {
-			return err
-		}
-		return h.binder.WithStore(qtx).Stage(ctx, eng, proj)
+		binding, err = upsertPrimaryBinding(ctx, q, cluster, c, bindings.StateProvisioning, proj.Version)
+		return err
 	})
 	if txErr != nil {
 		return nil, fmt.Errorf("create catalog: %w", txErr)
 	}
 
+	l := h.lifecycleOn(cluster, eng)
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	if err := h.binder.Apply(ddlCtx, proj); err != nil {
-		c := h.markSyncError(ctx, cat, err)
-		return CreateCatalog201JSONResponse(c), nil
+	binding, err = l.Provision(ddlCtx, binding, proj)
+	if err != nil {
+		return nil, err
 	}
-
+	observe(ctx, l)
 	h.catalogCache.Clear()
-	c := dbCatalogToPublic(cat)
-	c.CatalogVersion = &proj.Version
-	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusSynced)
-	return CreateCatalog201JSONResponse(c), nil
+	return CreateCatalog201JSONResponse(h.catalogResponse(ctx, cat, binding, proj.Version)), nil
 }
 
 // upsertPrimaryBinding writes the managed binding a catalog's Trino columns
-// describe, on its cluster's engine (the 00024 trigger did this until #80).
-func upsertPrimaryBinding(ctx context.Context, q db.Querier, cluster db.TrinoCluster, c db.Catalog) error {
-	if !cluster.EngineID.Valid || c.Origin != "source" {
-		return nil
-	}
-	_, err := q.UpsertManagedBinding(ctx, db.UpsertManagedBindingParams{
+// describe, on its cluster's engine, entering state with the version it
+// wants.
+func upsertPrimaryBinding(ctx context.Context, q db.Querier, cluster db.TrinoCluster, c db.Catalog, state, version string) (db.CatalogBinding, error) {
+	return q.UpsertManagedBinding(ctx, db.UpsertManagedBindingParams{
 		CatalogID: c.ID, EngineID: cluster.EngineID, EngineCatalogName: c.TrinoName(),
 		Connector: c.Connector, ExtraProps: c.ExtraProps, Enabled: c.Enabled,
+		LifecycleState: state, DesiredVersion: &version,
 	})
-	return err
 }
 
 // projectBinding projects a binding of conn through the Trino binder.
@@ -240,36 +242,6 @@ func bindingUnprocessable(err error) UnprocessableEntityJSONResponse {
 	return out
 }
 
-// markSyncError records err on the catalog's registry row and returns the
-// catalog as the API shows it.
-func (h *Handlers) markSyncError(ctx context.Context, cat db.Catalog, err error) Catalog {
-	errMsg := err.Error()
-	_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
-		ClusterID:   cat.ClusterID,
-		CatalogName: cat.TrinoName(),
-		SyncError:   &errMsg,
-	})
-	c := dbCatalogToPublic(cat)
-	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusError)
-	c.SyncError = &errMsg
-	return c
-}
-
-// recreateCatalog replaces the live Trino catalog with the catalog's current
-// projection (binder Replace) and returns the new catalog version.
-func (h *Handlers) recreateCatalog(ctx context.Context, cat db.Catalog, conn db.CatalogConnection) (string, error) {
-	proj, err := h.projectCatalog(conn, cat)
-	if err != nil {
-		return "", err
-	}
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
-	if err := h.binder.WithStore(h.queries).Replace(ddlCtx, bindings.EngineRef{ClusterID: cat.ClusterID}, proj); err != nil {
-		return "", err
-	}
-	return proj.Version, nil
-}
-
 // catalogAccessError maps an authz error to the generic not-found/forbidden
 // messages; ok is false for any other error.
 func catalogAccessError(err error) (notFound, forbidden bool) {
@@ -291,7 +263,7 @@ func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObje
 		}
 		return nil, err
 	}
-	return GetCatalog200JSONResponse(dbCatalogToPublic(cat)), nil
+	return GetCatalog200JSONResponse(h.catalogWithStatus(ctx, cat)), nil
 }
 
 // UpdateCatalog — PATCH /connections/{connection_id}/catalogs/{catalog_id}
@@ -353,7 +325,12 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		return nil, err
 	}
 
+	cluster, eng, err := h.catalogEngine(ctx, existing)
+	if err != nil {
+		return nil, err
+	}
 	var updated db.Catalog
+	var binding db.CatalogBinding
 	if err := h.inTx(ctx, func(q db.Querier) error {
 		u, err := q.UpdateCatalog(ctx, db.UpdateCatalogParams{
 			ID:               id,
@@ -368,33 +345,34 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 			return err
 		}
 		updated = u
-		cluster, err := q.GetTrinoClusterByID(ctx, u.ClusterID)
-		if err != nil {
-			return err
-		}
-		return upsertPrimaryBinding(ctx, q, cluster, u)
+		binding, err = upsertPrimaryBinding(ctx, q, cluster, u, bindings.StateUpdating, proj.Version)
+		return err
 	}); err != nil {
 		return nil, fmt.Errorf("update catalog: %w", err)
 	}
 
-	eng := bindings.EngineRef{ClusterID: updated.ClusterID}
+	l := h.lifecycleOn(cluster, eng)
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	b := h.binder.WithStore(h.queries)
 	if newTrinoName != existing.TrinoName() {
-		err = b.Rename(ddlCtx, eng, existing.TrinoName(), proj) // create the new name, then drop the old
+		binding, err = l.Rename(ddlCtx, binding, existing.TrinoName(), proj)
+		if err == nil && binding.EngineCatalogName == existing.TrinoName() {
+			// The new name could not be created: the catalog keeps its old one.
+			old := existing.TrinoName()
+			updated, err = h.queries.UpdateCatalog(ctx, db.UpdateCatalogParams{
+				ID: id, Name: updated.Name, Description: updated.Description, Warehouse: updated.Warehouse,
+				Connector: updated.Connector, ExtraProps: updated.ExtraProps, TrinoCatalogName: &old,
+			})
+		}
 	} else {
-		err = b.Replace(ddlCtx, eng, proj)
+		binding, err = l.Update(ddlCtx, binding, proj)
 	}
-	h.catalogCache.Clear()
 	if err != nil {
-		slog.Warn("apply catalog after update", "err", err)
-		return UpdateCatalog200JSONResponse(h.markSyncError(ctx, updated, err)), nil
+		return nil, err
 	}
-	c := dbCatalogToPublic(updated)
-	c.CatalogVersion = &proj.Version
-	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusSynced)
-	return UpdateCatalog200JSONResponse(c), nil
+	observe(ctx, l)
+	h.catalogCache.Clear()
+	return UpdateCatalog200JSONResponse(h.catalogResponse(ctx, updated, binding, proj.Version)), nil
 }
 
 // DeleteCatalog — DELETE /connections/{connection_id}/catalogs/{catalog_id}
@@ -418,24 +396,31 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 		return nil, err
 	}
 
-	txErr := withTx(ctx, h.pool, func(tx pgx.Tx) error {
-		qtx := db.New(tx)
-		if err := qtx.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: id, Enabled: false}); err != nil {
-			return err
-		}
-		if err := qtx.DisableManagedBindingsOfCatalog(ctx, id); err != nil {
-			return err
-		}
-		return h.binder.WithStore(qtx).Unstage(ctx, bindings.EngineRef{ClusterID: cat.ClusterID}, cat.TrinoName())
-	})
-	if txErr != nil {
-		return nil, txErr
+	cluster, eng, err := h.catalogEngine(ctx, cat)
+	if err != nil {
+		return nil, err
 	}
+	binding, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: cat.ID, EngineID: eng.ID})
+	if err != nil {
+		return nil, fmt.Errorf("catalog binding: %w", err)
+	}
+	if err := h.inTx(ctx, func(q db.Querier) error {
+		if err := q.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: id, Enabled: false}); err != nil {
+			return err
+		}
+		return q.DisableManagedBindingsOfCatalog(ctx, id)
+	}); err != nil {
+		return nil, err
+	}
+	// A failed drop leaves the binding deprovisioning with the error; the
+	// reconciler (#37) retries. The catalog is gone for users either way.
+	l := h.lifecycleOn(cluster, eng)
 	dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	if err := h.binder.Remove(dropCtx, cat.TrinoName()); err != nil {
-		slog.Warn("drop catalog", "catalog", cat.TrinoName(), "err", err)
+	if _, err := l.Deprovision(dropCtx, binding); err != nil && !errors.Is(err, bindings.ErrConcurrentChange) {
+		return nil, err
 	}
+	observe(ctx, l)
 	h.catalogCache.Clear()
 	return DeleteCatalog204Response{}, nil
 }
@@ -458,23 +443,43 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 		}
 		return nil, err
 	}
-	// A projection failure (e.g. unreadable credentials) fails closed before
-	// touching Trino: the live catalog is left as is and the registry row
-	// records why it could not be re-synced.
-	version, err := h.recreateCatalog(ctx, cat, conn)
+	cluster, eng, err := h.catalogEngine(ctx, cat)
 	if err != nil {
-		return h.syncFailed(ctx, cat, err), nil
+		return nil, err
 	}
-
-	c := dbCatalogToPublic(cat)
-	c.CatalogVersion = &version
-	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusSynced)
+	binding, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: cat.ID, EngineID: eng.ID})
+	if err != nil {
+		return nil, fmt.Errorf("catalog binding: %w", err)
+	}
+	// A projection failure (e.g. unreadable credentials) fails closed before
+	// touching Trino.
+	proj, err := h.projectCatalog(conn, cat)
+	if err != nil {
+		c := h.catalogResponse(ctx, cat, binding, "")
+		msg, status := err.Error(), CatalogSyncStatusError
+		c.SyncError, c.SyncStatus = &msg, &status
+		return SyncCatalog409JSONResponse(c), nil
+	}
+	l := h.lifecycleOn(cluster, eng)
+	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
+	defer cancel()
+	synced, err := l.Sync(ddlCtx, binding, proj)
+	if errors.Is(err, bindings.ErrConcurrentChange) {
+		c := h.catalogResponse(ctx, cat, binding, "")
+		msg := "the catalog's binding is " + binding.LifecycleState + "; it cannot be synced now"
+		c.SyncError = &msg
+		return SyncCatalog409JSONResponse(c), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	binding = synced
+	observe(ctx, l)
+	c := h.catalogResponse(ctx, cat, binding, proj.Version)
+	if binding.LifecycleState != bindings.StateActive {
+		return SyncCatalog409JSONResponse(c), nil
+	}
 	return SyncCatalog200JSONResponse(c), nil
-}
-
-// syncFailed records err on the registry row and builds the 409 response.
-func (h *Handlers) syncFailed(ctx context.Context, cat db.Catalog, err error) SyncCatalogResponseObject {
-	return SyncCatalog409JSONResponse(h.markSyncError(ctx, cat, err))
 }
 
 // ReconcileTrino — POST /trino/reconcile

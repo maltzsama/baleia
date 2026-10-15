@@ -1,0 +1,33 @@
+meta {
+  name: Lifecycle - Failing Change
+  type: http
+  seq: 10
+}
+
+patch {
+  url: {{base_url}}/bindings/{{lifecycle_binding_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "extra_props": { "iceberg.no-such-property": "x" }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.lifecycle_state: eq error
+  res.body.sync_status: eq error
+  res.body.last_error_code: isString
+}
+
+docs {
+  Trino refuses an unknown property: the binding goes to error with the
+  engine's error recorded, instead of claiming it is synced.
+}

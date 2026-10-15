@@ -27,6 +27,12 @@ type AuthProvider struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type BindingStatusV struct {
+	BindingID      pgtype.UUID `json:"binding_id"`
+	LifecycleState string      `json:"lifecycle_state"`
+	SyncStatus     string      `json:"sync_status"`
+}
+
 type Catalog struct {
 	ID               pgtype.UUID        `json:"id"`
 	ConnectionID     pgtype.UUID        `json:"connection_id"`
@@ -55,6 +61,11 @@ type CatalogBinding struct {
 	Enabled           bool               `json:"enabled"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	LifecycleState    string             `json:"lifecycle_state"`
+	DesiredVersion    *string            `json:"desired_version"`
+	LastErrorCode     *string            `json:"last_error_code"`
+	LastErrorMessage  *string            `json:"last_error_message"`
+	StateChangedAt    pgtype.Timestamptz `json:"state_changed_at"`
 }
 
 type CatalogConnection struct {
@@ -96,6 +107,16 @@ type Engine struct {
 	CreatedBy    pgtype.UUID        `json:"created_by"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type EngineCatalogObservation struct {
+	EngineID    pgtype.UUID        `json:"engine_id"`
+	CatalogName string             `json:"catalog_name"`
+	Present     bool               `json:"present"`
+	Mode        string             `json:"mode"`
+	Connector   *string            `json:"connector"`
+	FirstSeenAt pgtype.Timestamptz `json:"first_seen_at"`
+	ObservedAt  pgtype.Timestamptz `json:"observed_at"`
 }
 
 type Migration struct {

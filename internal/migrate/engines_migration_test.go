@@ -371,3 +371,63 @@ func TestTransitionalTriggersDropped(t *testing.T) {
 		t.Errorf("after down the trigger must keep the binding in step, got %q", name)
 	}
 }
+
+const versionBindingLifecycle = 28
+
+// TestBindingLifecycleMigration: existing bindings become active (or
+// disabled), take the registry's version as desired, and binding_status_v
+// derives the status from the plugin's confirmation and observations.
+func TestBindingLifecycleMigration(t *testing.T) {
+	db, dir := testDB(t, versionBeforeEngines)
+	seedLegacy(t, db)
+	if err := goose.UpTo(db, dir, versionNoTransitionalTriggers); err != nil {
+		t.Fatal(err)
+	}
+	// The plugin confirmed lake (v1); pg is disabled.
+	mustExec(t, db, `INSERT INTO trino_catalog_registry (cluster_id, catalog_name, connector_name, properties, catalog_version, updated_by)
+		SELECT id, 'lake', 'iceberg', '{}'::jsonb, 'v1', 'trino' FROM trino_clusters WHERE name = 'default'
+		ON CONFLICT (cluster_id, catalog_name) DO UPDATE SET catalog_version = 'v1', updated_by = 'trino', enabled = true`)
+	if err := goose.UpTo(db, dir, versionBindingLifecycle); err != nil {
+		t.Fatal(err)
+	}
+	status := func(name string) (string, string) {
+		var lifecycle, sync string
+		if err := db.QueryRow(`SELECT s.lifecycle_state, s.sync_status FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id
+			WHERE b.engine_catalog_name = $1`, name).Scan(&lifecycle, &sync); err != nil {
+			t.Fatal(err)
+		}
+		return lifecycle, sync
+	}
+	if l, s := status("lake"); l != "active" || s != "synced" {
+		t.Errorf("lake: %s/%s, want active/synced", l, s)
+	}
+	if l, s := status("pg"); l != "disabled" || s != "disabled" {
+		t.Errorf("pg: %s/%s, want disabled/disabled", l, s)
+	}
+	if v := scalar[string](t, db, `SELECT desired_version FROM catalog_bindings WHERE engine_catalog_name = 'lake'`); v != "v1" {
+		t.Errorf("desired_version = %q, want the registry's v1", v)
+	}
+	// A newer desired version is pending until the plugin confirms it; the
+	// engine reporting the catalog missing makes it pending as well.
+	mustExec(t, db, `UPDATE catalog_bindings SET desired_version = 'v2' WHERE engine_catalog_name = 'lake'`)
+	if _, s := status("lake"); s != "pending" {
+		t.Errorf("unconfirmed version: %s, want pending", s)
+	}
+	mustExec(t, db, `UPDATE catalog_bindings SET desired_version = 'v1' WHERE engine_catalog_name = 'lake'`)
+	mustExec(t, db, `INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode)
+		SELECT engine_id, 'lake', false, 'managed' FROM catalog_bindings WHERE engine_catalog_name = 'lake'`)
+	if _, s := status("lake"); s != "pending" {
+		t.Errorf("observed missing: %s, want pending", s)
+	}
+	mustExec(t, db, `UPDATE catalog_bindings SET lifecycle_state = 'error' WHERE engine_catalog_name = 'lake'`)
+	if _, s := status("lake"); s != "error" {
+		t.Errorf("error state: %s", s)
+	}
+
+	if err := goose.DownTo(db, dir, versionNoTransitionalTriggers); err != nil {
+		t.Fatal(err)
+	}
+	if err := goose.UpTo(db, dir, versionBindingLifecycle); err != nil {
+		t.Fatal(err)
+	}
+}

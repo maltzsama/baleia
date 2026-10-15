@@ -60,6 +60,12 @@ func (e *TransportError) Error() string {
 
 func (e *TransportError) Unwrap() error { return e.Err }
 
+// Code is the error's machine-readable code (bindings.ErrorCode).
+func (e *TransportError) Code() string { return "engine_unavailable" }
+
+// Code is Trino's error name, lower-cased (bindings.ErrorCode).
+func (e *QueryError) Code() string { return strings.ToLower(e.ErrorName) }
+
 func queryError(id string, se *StatementError) *QueryError {
 	return &QueryError{QueryID: id, Message: se.Message, ErrorName: se.ErrorName, ErrorType: se.ErrorType}
 }

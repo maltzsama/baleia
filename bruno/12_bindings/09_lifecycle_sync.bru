@@ -1,0 +1,20 @@
+meta {
+  name: Lifecycle - Sync
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/bindings/{{lifecycle_binding_id}}/sync
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.sync_status: eq synced
+}

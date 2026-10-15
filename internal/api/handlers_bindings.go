@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"slices"
 
 	"github.com/galileostudio/baleia/internal/authz"
@@ -114,21 +113,6 @@ func bindingConflict(err error) (ConflictJSONResponse, bool) {
 	return ConflictJSONResponse{Code: "name_in_use", Message: "the engine already has a catalog of that name"}, true
 }
 
-func bindingWithSync(b db.CatalogBinding, version string, syncErr error) CatalogBinding {
-	out := bindingToPublic(b)
-	status := CatalogBindingSyncStatusSynced
-	if syncErr != nil {
-		status = CatalogBindingSyncStatusError
-		msg := syncErr.Error()
-		out.SyncError = &msg
-	}
-	out.SyncStatus = &status
-	if version != "" {
-		out.Version = &version
-	}
-	return out
-}
-
 // syncPrimaryCatalog keeps the catalog's Trino columns in step with its
 // primary binding.
 func syncPrimaryCatalog(ctx context.Context, q db.Querier, t bindingTarget, b db.CatalogBinding) error {
@@ -197,16 +181,13 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	txErr := h.inTx(ctx, func(qtx db.Querier) error {
 		b, err := qtx.CreateManagedBinding(ctx, db.CreateManagedBindingParams{
 			CatalogID: t.catalog.ID, EngineID: t.engine.ID, EngineCatalogName: proj.EngineCatalog,
-			Connector: &proj.Connector, ExtraProps: rawExtra,
+			Connector: &proj.Connector, ExtraProps: rawExtra, DesiredVersion: &proj.Version,
 		})
 		if err != nil {
 			return err
 		}
 		created = b
-		if err := syncPrimaryCatalog(ctx, qtx, t, b); err != nil {
-			return err
-		}
-		return h.binder.WithStore(qtx).Stage(ctx, t.ref(), proj)
+		return syncPrimaryCatalog(ctx, qtx, t, b)
 	})
 	if c, ok := bindingConflict(txErr); ok {
 		return CreateCatalogBinding409JSONResponse{ConflictJSONResponse: c}, nil
@@ -214,19 +195,16 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	if txErr != nil {
 		return nil, fmt.Errorf("create binding: %w", txErr)
 	}
+	l := h.lifecycleOn(t.cluster, t.engine)
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	applyErr := h.binder.Apply(ddlCtx, proj)
-	if applyErr != nil {
-		h.markBindingError(ctx, t, proj.EngineCatalog, applyErr)
+	created, err = l.Provision(ddlCtx, created, proj)
+	if err != nil {
+		return nil, err
 	}
+	observe(ctx, l)
 	h.catalogCache.Clear()
-	return CreateCatalogBinding201JSONResponse(bindingWithSync(created, proj.Version, applyErr)), nil
-}
-
-func (h *Handlers) markBindingError(ctx context.Context, t bindingTarget, name string, err error) {
-	msg := err.Error()
-	_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{ClusterID: t.cluster.ID, CatalogName: name, SyncError: &msg})
+	return CreateCatalogBinding201JSONResponse(h.bindingResponse(ctx, created, proj.Version)), nil
 }
 
 // managedBinding loads a binding for a write: it must exist, be managed and
@@ -296,10 +274,21 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	}
 	rawExtra, _ := json.Marshal(extra)
 
+	// The state the change enters, and the states it may start from.
+	state, from := bindings.StateUpdating, []string{bindings.StateActive, bindings.StateError}
+	switch {
+	case !enabled && cur.Enabled:
+		state, from = bindings.StateDeprovisioning, []string{bindings.StateActive, bindings.StateError, bindings.StateProvisioning, bindings.StateUpdating}
+	case !enabled:
+		state, from = cur.LifecycleState, []string{bindings.StateDisabled, bindings.StateDeprovisioning}
+	case !cur.Enabled:
+		state, from = bindings.StateProvisioning, []string{bindings.StateDisabled, bindings.StateDeprovisioning}
+	}
 	var updated db.CatalogBinding
 	txErr := h.inTx(ctx, func(qtx db.Querier) error {
 		b, err := qtx.UpdateBinding(ctx, db.UpdateBindingParams{
 			ID: cur.ID, EngineCatalogName: name, Connector: &proj.Connector, ExtraProps: rawExtra, Enabled: enabled,
+			LifecycleState: state, DesiredVersion: &proj.Version, FromStates: from,
 		})
 		if err != nil {
 			return err
@@ -307,6 +296,11 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 		updated = b
 		return syncPrimaryCatalog(ctx, qtx, t, b)
 	})
+	if errors.Is(txErr, pgx.ErrNoRows) {
+		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
+			Code: "concurrent_change", Message: "the binding is " + cur.LifecycleState + "; retry when it settles",
+		}}, nil
+	}
 	if c, ok := bindingConflict(txErr); ok {
 		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: c}, nil
 	}
@@ -314,31 +308,30 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 		return nil, fmt.Errorf("update binding: %w", txErr)
 	}
 
+	l := h.lifecycleOn(t.cluster, t.engine)
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	b := h.binder.WithStore(h.queries)
-	var applyErr error
 	switch {
 	case !enabled && cur.Enabled:
-		applyErr = b.Drop(ddlCtx, t.ref(), cur.EngineCatalogName)
+		updated, err = l.Deprovision(ddlCtx, updated)
 	case !enabled:
 		// stays disabled: nothing on the engine
 	case !cur.Enabled:
-		applyErr = b.Create(ddlCtx, t.ref(), proj)
+		updated, err = l.Provision(ddlCtx, updated, proj)
 	case name != cur.EngineCatalogName:
-		applyErr = b.Rename(ddlCtx, t.ref(), cur.EngineCatalogName, proj)
+		updated, err = l.Rename(ddlCtx, updated, cur.EngineCatalogName, proj)
+		if err == nil && updated.EngineCatalogName == cur.EngineCatalogName && t.primary() {
+			err = syncPrimaryCatalog(ctx, h.queries, t, updated) // the rename was reverted
+		}
 	default:
-		applyErr = b.Replace(ddlCtx, t.ref(), proj)
+		updated, err = l.Update(ddlCtx, updated, proj)
 	}
-	if applyErr != nil && enabled {
-		h.markBindingError(ctx, t, name, applyErr)
+	if err != nil {
+		return nil, err
 	}
+	observe(ctx, l)
 	h.catalogCache.Clear()
-	version := proj.Version
-	if !enabled {
-		version = ""
-	}
-	return UpdateCatalogBinding200JSONResponse(bindingWithSync(updated, version, applyErr)), nil
+	return UpdateCatalogBinding200JSONResponse(h.bindingResponse(ctx, updated, proj.Version)), nil
 }
 
 func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatalogBindingRequestObject) (DeleteCatalogBindingResponseObject, error) {
@@ -362,22 +355,29 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 			Code: "binding_is_primary", Message: "this is the catalog's own binding on its Trino cluster; delete the catalog instead",
 		}}, nil
 	}
-	if err := h.inTx(ctx, func(qtx db.Querier) error {
-		if err := qtx.DeleteBinding(ctx, cur.ID); err != nil {
-			return err
-		}
-		return h.binder.WithStore(qtx).Unstage(ctx, t.ref(), cur.EngineCatalogName)
-	}); err != nil {
-		return nil, err
-	}
+	l := h.lifecycleOn(t.cluster, t.engine)
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	if cur.Enabled {
-		if err := h.binder.Remove(ddlCtx, cur.EngineCatalogName); err != nil {
-			// The binding is gone; the catalog may still be live in Trino and
-			// shows up as orphan_in_trino in /trino/reconcile.
-			slog.Warn("drop catalog of deleted binding", "catalog", cur.EngineCatalogName, "err", err)
+	gone := cur
+	if cur.LifecycleState != bindings.StateDisabled {
+		gone, err = l.Deprovision(ddlCtx, cur)
+	}
+	if errors.Is(err, bindings.ErrConcurrentChange) {
+		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "concurrent_change", Message: "the binding changed; retry"}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	observe(ctx, l)
+	if gone.LifecycleState != bindings.StateDisabled {
+		msg := "the engine did not drop the catalog; the binding stays deprovisioning and is retried"
+		if gone.LastErrorMessage != nil {
+			msg += ": " + *gone.LastErrorMessage
 		}
+		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "drop_failed", Message: msg}}, nil
+	}
+	if err := h.queries.DeleteBinding(ctx, cur.ID); err != nil {
+		return nil, err
 	}
 	h.catalogCache.Clear()
 	return DeleteCatalogBinding204Response{}, nil
@@ -407,20 +407,34 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 		connector = *cur.Connector
 	}
 	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(cur.ExtraProps)))
-	if err != nil {
-		h.markBindingError(ctx, t, cur.EngineCatalogName, err)
-		if bindingInvalid(err) {
-			return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
-		}
-		return SyncCatalogBinding409JSONResponse(bindingWithSync(cur, "", err)), nil
+	if bindingInvalid(err) {
+		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
 	}
+	if err != nil {
+		out := h.bindingResponse(ctx, cur, "")
+		msg, status := err.Error(), CatalogBindingSyncStatusError
+		out.LastErrorMessage, out.SyncStatus = &msg, &status
+		return SyncCatalogBinding409JSONResponse(out), nil
+	}
+	l := h.lifecycleOn(t.cluster, t.engine)
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	if err := h.binder.WithStore(h.queries).Replace(ddlCtx, t.ref(), proj); err != nil {
-		h.markBindingError(ctx, t, cur.EngineCatalogName, err)
-		return SyncCatalogBinding409JSONResponse(bindingWithSync(cur, "", err)), nil
+	synced, err := l.Sync(ddlCtx, cur, proj)
+	if errors.Is(err, bindings.ErrConcurrentChange) {
+		out := h.bindingResponse(ctx, cur, "")
+		msg := "the binding is " + cur.LifecycleState + "; it cannot be synced now"
+		out.LastErrorMessage = &msg
+		return SyncCatalogBinding409JSONResponse(out), nil
 	}
-	return SyncCatalogBinding200JSONResponse(bindingWithSync(cur, proj.Version, nil)), nil
+	if err != nil {
+		return nil, err
+	}
+	observe(ctx, l)
+	out := h.bindingResponse(ctx, synced, proj.Version)
+	if synced.LifecycleState != bindings.StateActive {
+		return SyncCatalogBinding409JSONResponse(out), nil
+	}
+	return SyncCatalogBinding200JSONResponse(out), nil
 }
 
 func (h *Handlers) GetEngineBindingSupport(ctx context.Context, request GetEngineBindingSupportRequestObject) (GetEngineBindingSupportResponseObject, error) {

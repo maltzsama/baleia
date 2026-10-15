@@ -51,7 +51,14 @@ Partially compliant.
   (`internal/bindings/trino`, #80) is the only code that writes the registry and catalog DDL.
 - Provenance is implicit in `trino_catalog_registry.updated_by IN ('baleia','trino')`; there is no
   `managed`/`adopted` binding mode yet (#13, #80).
-- Desired, effective and observed state are not separated (#38).
+- Desired, effective and observed state are separate (#38): `catalog_bindings` holds the desired
+  state and a lifecycle Baleia owns (provisioning, active, updating, error, deprovisioning,
+  disabled; guarded transitions in `internal/bindings/lifecycle.go`); the effective state is the
+  binder's confirmation (Trino: the plugin rewrote the registry row with the desired version);
+  the observed state is `engine_catalog_observations`. The API's `sync_status` is derived by
+  `binding_status_v`; Baleia no longer writes `sync_status`/`sync_error` to the registry, which
+  would overwrite the plugin's confirmation. Trino 483 has no in-place `ALTER CATALOG` besides
+  `SET AUTHORIZATION`, so updates are DROP then CREATE and renames create then drop.
 - Golden vectors are copied into `internal/bindings/trino/testdata/` rather than fetched from the plugin's
   contract fixtures (#39).
 - `SecretPlaceholder` emits only the catalog-origin form; env/file references are #31.

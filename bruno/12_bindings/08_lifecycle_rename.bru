@@ -1,0 +1,32 @@
+meta {
+  name: Lifecycle - Rename
+  type: http
+  seq: 8
+}
+
+patch {
+  url: {{base_url}}/bindings/{{lifecycle_binding_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "engine_catalog_name": "bruno_lifecycle2"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.engine_catalog_name: eq bruno_lifecycle2
+  res.body.sync_status: eq synced
+}
+
+docs {
+  Create-then-drop: the catalog never goes missing. The catalog's own Trino
+  name follows its primary binding.
+}

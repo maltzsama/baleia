@@ -1,0 +1,33 @@
+meta {
+  name: Lifecycle - Update Extra Properties
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{base_url}}/bindings/{{lifecycle_binding_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "extra_props": { "iceberg.unique-table-location": "true" }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.lifecycle_state: eq active
+  res.body.sync_status: eq synced
+}
+
+tests {
+  test("the extra property is stored", function() {
+    expect(res.getBody().extra_props["iceberg.unique-table-location"]).to.equal("true");
+  });
+}
