@@ -65,9 +65,12 @@ func TestLensTableHealth_FanOut(t *testing.T) {
 		}, nil)
 
 	var analyzed []activities.LensAnalyzeTableHealthParams
+	var mu sync.Mutex
 	env.OnActivity(activities.LensAnalyzeTableHealth, mock.Anything, mock.Anything).
 		Return(func(ctx context.Context, p activities.LensAnalyzeTableHealthParams) error {
+			mu.Lock()
 			analyzed = append(analyzed, p)
+			mu.Unlock()
 			if p.Catalog == "cat2" {
 				return errors.New("catalog unreachable")
 			}
