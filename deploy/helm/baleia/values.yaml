@@ -52,6 +52,8 @@ worker:
   replicas: 1
   resources: {}
   healthPort: 8081
+  # /metrics (Temporal SDK, pool, build) and /healthz for Prometheus (#87).
+  metricsPort: 9090
 
 migrate:
   enabled: true

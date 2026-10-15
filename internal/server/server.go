@@ -19,6 +19,7 @@ import (
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/metrics"
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/trino"
@@ -30,21 +31,25 @@ import (
 )
 
 type Server struct {
-	cfg     *config.Config
-	mux     *chi.Mux
-	pool    *pgxpool.Pool
-	queries *db.Queries
-	rl      *RateLimiter
-	keyring *crypto.Keyring
+	cfg      *config.Config
+	mux      *chi.Mux
+	pool     *pgxpool.Pool
+	queries  *db.Queries
+	rl       *RateLimiter
+	keyring  *crypto.Keyring
+	temporal client.Client
+	metrics  *metrics.Registry
 }
 
-func New(cfg *config.Config, pool *pgxpool.Pool, keyring *crypto.Keyring) *Server {
+// New builds the API server. The Temporal client is dialed by the caller
+// (with retries, internal/temporal/dial); metrics may be nil.
+func New(cfg *config.Config, pool *pgxpool.Pool, keyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) *Server {
 	queries := db.New(pool)
 	rl := NewRateLimiter(RateLimiterConfig{
 		RequestsPerSecond: cfg.RateLimitRPS,
 		Burst:             cfg.RateLimitBurst,
 	})
-	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring}
+	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring, temporal: temporal, metrics: reg}
 	s.routes()
 	return s
 }
@@ -76,10 +81,15 @@ func (s *Server) routes() {
 		http.ServeFile(w, r, "api/swagger.yaml")
 	})
 
-	temporalClient, err := client.Dial(client.Options{HostPort: s.cfg.TemporalHost})
-	if err != nil {
-		panic("failed to connect to temporal: " + err.Error())
+	// Prometheus scrape endpoint (#87): no tenant data, gated by the optional
+	// BALEIA_METRICS_TOKEN instead of the user JWT.
+	if s.cfg.MetricsEnabled && s.metrics != nil {
+		metricsHandler := s.metrics.Handler(s.cfg.MetricsToken)
+		s.mux.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
+			metricsHandler.ServeHTTP(w, r)
+		})
 	}
+	temporalClient := s.temporal
 
 	s3Client := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
 

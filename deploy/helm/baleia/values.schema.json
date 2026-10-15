@@ -48,6 +48,7 @@
       "properties": {
         "replicas": { "type": "integer", "minimum": 1 },
         "healthPort": { "type": "integer" },
+        "metricsPort": { "type": "integer" },
         "resources": { "type": "object" }
       }
     },

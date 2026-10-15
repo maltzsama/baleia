@@ -80,6 +80,16 @@ type Config struct {
 	// asks for it open its file read-write.
 	SQLiteRoot       string
 	SQLiteAllowWrite bool
+	// Metrics (#87): /metrics on the API (MetricsEnabled, optional bearer
+	// MetricsToken) and the worker's own listener (WorkerMetricsAddr).
+	MetricsEnabled    bool
+	MetricsToken      string
+	WorkerMetricsAddr string
+	// Baleia's database pool; DBMaxConns 0 means the process default (api 20,
+	// worker 10).
+	DBMaxConns        int
+	DBMinConns        int
+	DBMaxConnLifetime time.Duration
 }
 
 func Load() *Config {
@@ -119,6 +129,12 @@ func Load() *Config {
 		ConnectionsAllowLoopback: getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
 		SQLiteRoot:               getEnv("BALEIA_SQLITE_ROOT", ""),
 		SQLiteAllowWrite:         getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
+		MetricsEnabled:           getEnv("BALEIA_METRICS_ENABLED", "true") == "true",
+		MetricsToken:             getEnv("BALEIA_METRICS_TOKEN", ""),
+		WorkerMetricsAddr:        getEnv("BALEIA_WORKER_METRICS_ADDR", ":9090"),
+		DBMaxConns:               getEnvInt("BALEIA_DB_MAX_CONNS", 0),
+		DBMinConns:               getEnvInt("BALEIA_DB_MIN_CONNS", 2),
+		DBMaxConnLifetime:        getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
 	}
 }
 
@@ -216,4 +232,12 @@ func getEnvInt(key string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// PoolSize is DBMaxConns, or the process default when unset.
+func (c *Config) PoolSize(processDefault int) int32 {
+	if c.DBMaxConns > 0 {
+		return int32(c.DBMaxConns)
+	}
+	return int32(processDefault)
 }

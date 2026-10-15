@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
@@ -13,7 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/server"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -38,7 +41,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	reg := metrics.New("api")
+	pool, err := dbpool.Open(ctx, cfg.DatabaseURL, dbpool.Options{
+		MaxConns: cfg.PoolSize(20), MinConns: int32(cfg.DBMinConns), MaxConnLifetime: cfg.DBMaxConnLifetime,
+		Tracer: reg.NewPoolTracer(),
+	})
 	if err != nil {
 		slog.Error("failed to connect to database", "err", err)
 		os.Exit(1)
@@ -76,7 +83,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := server.New(cfg, pool, keyring)
+	reg.WatchPool(pool)
+	temporalMetrics, flushTemporal := reg.TemporalHandler()
+	defer func() { _ = flushTemporal() }()
+	temporalClient, err := dial.Temporal(ctx, cfg.TemporalHost, temporalMetrics, 30*time.Second)
+	if err != nil {
+		slog.Error("temporal", "err", err)
+		os.Exit(1)
+	}
+	defer temporalClient.Close()
+
+	srv := server.New(cfg, pool, keyring, temporalClient, reg)
 	if err := srv.Run(ctx); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)

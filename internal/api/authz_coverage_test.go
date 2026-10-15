@@ -185,7 +185,10 @@ var routeAccess = map[string]access{
 	"GET /healthz":      {kind: kindPublic},
 	"GET /readyz":       {kind: kindPublic},
 	"GET /openapi.yaml": {kind: kindPublic},
-	"ANY /*":            {kind: kindPublic}, // the web app
+	// Prometheus cannot log in: /metrics carries no tenant data and is gated by
+	// the optional BALEIA_METRICS_TOKEN instead of the JWT (#87).
+	"GET /metrics": {kind: kindPublic},
+	"ANY /*":       {kind: kindPublic}, // the web app
 
 	"GET /api/v1/auth/oidc/{provider_id}/login":    {kind: kindPublic},
 	"GET /api/v1/auth/oidc/{provider_id}/callback": {kind: kindPublic},
