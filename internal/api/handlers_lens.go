@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
@@ -20,9 +21,12 @@ import (
 
 // RegisterLensRoutes mounts the Lens routes. The caller wraps them in the
 // shared auth middleware; handlers read the caller from the request context.
-func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, temporalClient client.Client, engines engineSource) {
+func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, temporalClient client.Client, engines engineSource, rec audit.Recorder) {
+	if rec == nil {
+		rec = audit.Nop{}
+	}
 	mux.Group(func(r chi.Router) {
-		h := &lensHandlers{queries: queries, temporalClient: temporalClient, identityMode: cfg.TrinoUserIdentity, engines: engines}
+		h := &lensHandlers{queries: queries, temporalClient: temporalClient, identityMode: cfg.TrinoUserIdentity, engines: engines, audit: rec}
 
 		r.Get("/lens/queries", h.listQueries)
 		r.Get("/lens/queries/{id}", h.getQuery)
@@ -40,6 +44,7 @@ type lensHandlers struct {
 	temporalClient client.Client
 	identityMode   string // BALEIA_TRINO_USER_IDENTITY
 	engines        engineSource
+	audit          audit.Recorder // #43
 }
 
 // internalError logs err and answers a generic 500: database errors are not
@@ -217,6 +222,8 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "unauthorized", "message": "invalid user"})
 		return
 	}
+	ev := audit.Event{Action: audit.MaintenanceTrigger, ResourceType: "connection", ResourceID: chi.URLParam(r, "conn_id")}
+	record := func(e audit.Event) { _ = h.audit.Record(r.Context(), e) }
 	catalog := chi.URLParam(r, "catalog")
 	namespace := chi.URLParam(r, "namespace")
 	table := chi.URLParam(r, "table")
@@ -226,11 +233,13 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 	// that would reveal more.
 	var connID pgtype.UUID
 	if err := connID.Scan(chi.URLParam(r, "conn_id")); err != nil || !connID.Valid {
+		record(ev.Denied(audit.ReasonNotFound))
 		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "catalog connection not found"})
 		return
 	}
 	if _, err := authz.New(h.queries).Connection(r.Context(), p, connID, authz.ActWrite); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
+			record(ev.Denied(audit.ReasonNotFound))
 			writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "catalog connection not found"})
 			return
 		}
@@ -261,6 +270,7 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if trinoName == "" {
+		record(ev.Failed(audit.ReasonNotFound))
 		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "catalog not found on this connection"})
 		return
 	}
@@ -272,10 +282,12 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 	}
 	maintainer, ok := queryengine.As[queryengine.IcebergMaintainer](eng)
 	if !ok || !eng.Capabilities().IcebergMaintenance {
+		record(ev.Failed(audit.ReasonValidation))
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"code": "engine_unsupported", "message": "this engine has no Iceberg maintenance"})
 		return
 	}
 	if _, err := eng.Dialect().QualifiedName(trinoName, namespace, table); err != nil {
+		record(ev.Failed(audit.ReasonValidation))
 		writeJSON(w, http.StatusBadRequest, map[string]string{"code": "invalid_identifier", "message": "invalid namespace or table"})
 		return
 	}
@@ -289,6 +301,7 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 	// Rendering the statements validates the retention before anything runs;
 	// the worker renders them again (a workflow input is not a trust boundary).
 	if _, err := maintainer.MaintenanceStatements([]string{trinoName, namespace, table}, body.Retention); err != nil {
+		record(ev.Failed(audit.ReasonValidation))
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"code": "validation_error", "message": err.Error()})
 		return
 	}
@@ -308,6 +321,8 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	ev.Changes = map[string]audit.Change{"table": {To: trinoName + "." + namespace + "." + table}, "retention": {To: body.Retention}}
+	record(ev.Allowed())
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"execution_id": executionID,
 		"status":       "running",

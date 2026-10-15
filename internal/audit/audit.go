@@ -7,6 +7,8 @@ package audit
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"net/netip"
@@ -31,6 +33,8 @@ const (
 	ReasonForbidden   = "forbidden"
 	ReasonValidation  = "validation"
 	ReasonEngineError = "engine_error"
+	ReasonConflict    = "conflict"
+	ReasonInternal    = "internal"
 )
 
 // Auth methods recorded with an event.
@@ -82,7 +86,42 @@ const (
 	keyRequest ctxKey = iota
 	keyService
 	keyAuthMethod
+	keyAction
+	keyAnonymous
 )
+
+// WithAnonymous identifies an unauthenticated caller (a failed login) by an
+// opaque id, e.g. EmailFingerprint; never a raw e-mail.
+func WithAnonymous(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, keyAnonymous, id)
+}
+
+// AsUser makes userID the actor, for operations that authenticate the caller
+// themselves (login, refresh, password reset).
+func AsUser(ctx context.Context, userID, method string) context.Context {
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
+	return WithAuthMethod(ctx, method)
+}
+
+// EmailFingerprint is the audit id of an e-mail submitted by an
+// unauthenticated caller: the first 16 hex characters of its sha256.
+func EmailFingerprint(email string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// WithAction names the operation a handler is performing, so a refusal by
+// the authorization checker is recorded under it (#43). Read-only handlers
+// set none: refusals of reads are not audited (no read actions exist).
+func WithAction(ctx context.Context, a Action) context.Context {
+	return context.WithValue(ctx, keyAction, a)
+}
+
+// ActionFrom returns the operation set by WithAction, if any.
+func ActionFrom(ctx context.Context) (Action, bool) {
+	a, ok := ctx.Value(keyAction).(Action)
+	return a, ok
+}
 
 // RequestInfo is the client of an HTTP request.
 type RequestInfo struct {
@@ -135,7 +174,8 @@ func actor(ctx context.Context) (kind, id, method string) {
 		}
 		return "user", uid, method
 	}
-	return "anonymous", "", method
+	anon, _ := ctx.Value(keyAnonymous).(string)
+	return "anonymous", anon, method
 }
 
 func requestOf(ctx context.Context) (RequestInfo, string) {
@@ -186,3 +226,25 @@ func truncate(s string, n int) string {
 	}
 	return s[:n]
 }
+
+// Allowed returns e with the operation done.
+func (e Event) Allowed() Event {
+	e.Outcome, e.Reason = Allowed, ""
+	return e
+}
+
+// Denied returns e refused for reason (ReasonForbidden, ReasonNotFound).
+func (e Event) Denied(reason string) Event {
+	e.Outcome, e.Reason = Denied, reason
+	return e
+}
+
+// Failed returns e with the operation refused or failed for reason
+// (ReasonValidation, ReasonConflict, ReasonEngineError, …).
+func (e Event) Failed(reason string) Event {
+	e.Outcome, e.Reason = Error, reason
+	return e
+}
+
+// ActorOf returns who acts in ctx, as Record would store it.
+func ActorOf(ctx context.Context) (kind, id, method string) { return actor(ctx) }

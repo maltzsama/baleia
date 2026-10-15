@@ -127,7 +127,8 @@ func (s *Server) routes() {
 	if s.metrics != nil {
 		auditMetrics = s.metrics.Audit()
 	}
-	h.SetAudit(audit.NewPostgres(s.queries, conns.SecretKeys(), auditMetrics.WriteFailed))
+	auditRec := audit.NewPostgres(s.queries, conns.SecretKeys(), auditMetrics.WriteFailed)
+	h.SetAudit(auditRec)
 	var onRefreshLimited func()
 	if s.metrics != nil {
 		h.SetMetrics(s.metrics)
@@ -158,7 +159,7 @@ func (s *Server) routes() {
 		// middleware; handlers read the caller from the request context.
 		r.Group(func(r chi.Router) {
 			r.Use(chiAuthMiddleware(s.cfg.JWTSecret))
-			baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg, temporalClient, engines)
+			baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg, temporalClient, engines, auditRec)
 			r.Get("/workspaces/{id}/catalogs", h.ListWorkspaceCatalogs)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", h.HandleListNamespaces)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", h.HandleListTables)

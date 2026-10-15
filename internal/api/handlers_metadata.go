@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
@@ -25,6 +26,8 @@ func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogM
 		return SyncCatalogMetadata401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	ev := audit.Event{Action: audit.MetadataSync, ResourceType: "catalog", ResourceID: idString(id)}
+	ctx = audit.WithAction(ctx, ev.Action)
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActWrite); err != nil {
 		nf, fb := catalogAccessError(err)
 		switch {
@@ -45,11 +48,13 @@ func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogM
 	}, workflows.MetadataSyncWorkflow, workflows.MetadataSyncInput{CatalogID: catalogID})
 	var running *serviceerror.WorkflowExecutionAlreadyStarted
 	if errors.As(err, &running) {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return SyncCatalogMetadata409JSONResponse{Code: "sync_in_progress", Message: "a metadata pass of this catalog is already running"}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	h.audited(ctx, ev.Allowed())
 	return SyncCatalogMetadata202JSONResponse{CatalogId: request.CatalogId, WorkflowId: wid}, nil
 }
 

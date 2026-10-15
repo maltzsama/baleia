@@ -1,15 +1,17 @@
 package api
 
 import (
-	"github.com/galileostudio/baleia/internal/bindings"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
-	"log/slog"
+
+	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/bindings"
 
 	catalogs "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -24,8 +26,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
@@ -57,9 +59,11 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	// The connection id is generated here, not by the database default: the
 	// credentials are sealed with it as additional authenticated data.
 	connID := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	ev := audit.Event{Action: audit.ConnectionCreate, ResourceType: "connection", ResourceID: idString(connID)}
 	cfg, err := h.createConfig(connID, request.Body)
 	var ce *configError
 	if errors.As(err, &ce) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
 	}
 	if err != nil {
@@ -90,13 +94,15 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 		slog.Error("CreateCatalogConnection failed", "err", err)
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			h.audited(ctx, ev.Failed(audit.ReasonConflict))
 			return catalogConnectionConflictJSONResponse{Message: "a connection with this name already exists"}, nil
 		}
 		return nil, err
 	}
 
 	h.catalogCache.Clear()
-
+	ev.Changes = map[string]audit.Change{"name": {To: conn.Name}, "type": {To: conn.Type}, "url": {To: conn.Url}}
+	h.audited(ctx, ev.Allowed())
 	return CreateCatalogConnection201JSONResponse(dbCatalogConnectionToPublic(conn)), nil
 }
 
@@ -127,6 +133,8 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	}
 
 	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	ev := audit.Event{Action: audit.ConnectionUpdate, ResourceType: "connection", ResourceID: idString(connID)}
+	ctx = audit.WithAction(ctx, ev.Action)
 	stored, err := h.authz().Connection(ctx, p, connID, authz.ActWrite)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
@@ -145,6 +153,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		var ce *configError
 		switch {
 		case errors.As(err, &ce):
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
 			return UpdateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
 		case errors.Is(err, catalogs.ErrCredentialsUnreadable):
 			slog.Error("open connection credentials", "err", err)
@@ -166,7 +175,8 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	}
 
 	h.catalogCache.Clear()
-
+	ev.Changes = connectionChanges(stored, conn, body.Credentials)
+	h.audited(ctx, ev.Allowed())
 	return UpdateCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
 }
 
@@ -177,6 +187,8 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 	}
 
 	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	ev := audit.Event{Action: audit.ConnectionDelete, ResourceType: "connection", ResourceID: idString(connID)}
+	ctx = audit.WithAction(ctx, ev.Action)
 	if _, err := h.authz().Connection(ctx, p, connID, authz.ActAdmin); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return DeleteCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
@@ -187,13 +199,14 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 	if err := h.queries.DeleteCatalogConnection(ctx, connID); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && isFKViolation(pgErr) && pgErr.ConstraintName == "engines_connection_id_fkey" {
+			h.audited(ctx, ev.Failed(audit.ReasonConflict))
 			return DeleteCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "connection_in_use", Message: "an engine runs on this connection; delete the engine first"}}, nil
 		}
 		return nil, err
 	}
 
 	h.catalogCache.Clear()
-
+	h.audited(ctx, ev.Allowed())
 	return DeleteCatalogConnection204Response{}, nil
 }
 
@@ -205,6 +218,8 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 
 	// Only the owner (or a global admin) may trigger a probe with the stored
 	// credentials; checked before any outbound call.
+	ev := audit.Event{Action: audit.ConnectionTest, ResourceType: "connection", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ctx = audit.WithAction(ctx, ev.Action)
 	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActWrite)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
@@ -215,13 +230,18 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 
 	start := time.Now()
 
-    if conn.Type == "postgresql" || conn.Type == "mysql" {
-        return h.testSQLViaTrino(ctx, conn, start)
-    }
+	if conn.Type == "postgresql" || conn.Type == "mysql" {
+		resp, err := h.testSQLViaTrino(ctx, conn, start)
+		if r, ok := resp.(TestCatalogConnection200JSONResponse); ok {
+			h.audited(ctx, testOutcome(ev, r.Success))
+		}
+		return resp, err
+	}
 
 	provider, cfg, err := h.connectionConfig(conn)
 	if err != nil {
 		errMsg := connectionTestError(err)
+		h.audited(ctx, testOutcome(ev, false))
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
 	}
 
@@ -229,11 +249,13 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 	latencyMs := int(time.Since(start).Milliseconds())
 	if testErr != nil {
 		errMsg := connectionTestError(testErr)
+		h.audited(ctx, testOutcome(ev, false))
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: latencyMs, Error: &errMsg}, nil
 	}
 
-    v := conn.Type
-    return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
+	v := conn.Type
+	h.audited(ctx, testOutcome(ev, true))
+	return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
 }
 
 // testSQLViaTrino binds a throwaway catalog of the connection into Trino

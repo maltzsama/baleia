@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -118,4 +122,132 @@ func decodeAuditCursor(c string) (time.Time, int64, bool) {
 		return time.Time{}, 0, false
 	}
 	return at, id, true
+}
+
+// audited records one audited operation (#43). It never fails the request:
+// the recorder logs and counts a failed write.
+func (h *Handlers) audited(ctx context.Context, e audit.Event) {
+	if h.audit == nil {
+		return
+	}
+	_ = h.audit.Record(ctx, e)
+}
+
+// idString renders a resource id for the audit trail.
+func idString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return uuid.UUID(id.Bytes).String()
+}
+
+// testOutcome is a connection test's event: the probe ran (allowed) or the
+// source could not be reached with the stored settings.
+func testOutcome(ev audit.Event, ok bool) audit.Event {
+	if ok {
+		return ev.Allowed()
+	}
+	return ev.Failed(audit.ReasonEngineError)
+}
+
+// connectionChanges lists what an update changed: name, read-only default,
+// URL and config values as they are; credentials only by key, as "***".
+func connectionChanges(before, after db.CatalogConnection, creds *map[string]interface{}) map[string]audit.Change {
+	changes := map[string]audit.Change{}
+	if before.Name != after.Name {
+		changes["name"] = audit.Change{From: before.Name, To: after.Name}
+	}
+	if before.DefaultReadonly != after.DefaultReadonly {
+		changes["default_readonly"] = audit.Change{From: before.DefaultReadonly, To: after.DefaultReadonly}
+	}
+	if before.Url != after.Url {
+		changes["url"] = audit.Change{From: before.Url, To: after.Url}
+	}
+	var was, is map[string]any
+	_ = json.Unmarshal(before.Config, &was)
+	_ = json.Unmarshal(after.Config, &is)
+	for k, v := range is {
+		if old, ok := was[k]; !ok || fmt.Sprint(old) != fmt.Sprint(v) {
+			changes["config."+k] = audit.Change{From: was[k], To: v}
+		}
+	}
+	for k := range was {
+		if _, ok := is[k]; !ok {
+			changes["config."+k] = audit.Change{From: was[k]}
+		}
+	}
+	if creds != nil {
+		for k := range *creds {
+			changes["credentials."+k] = audit.Change{From: "***", To: "***"}
+		}
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	return changes
+}
+
+// withID returns ev about the resource id.
+func withID(ev audit.Event, id pgtype.UUID) audit.Event {
+	ev.ResourceID = idString(id)
+	return ev
+}
+
+// catalogChanges lists what a catalog update changes.
+func catalogChanges(c db.Catalog, name, trinoName, warehouse, connector string, extraProps []byte) map[string]audit.Change {
+	changes := map[string]audit.Change{}
+	add := func(k string, from, to string) {
+		if from != to {
+			changes[k] = audit.Change{From: from, To: to}
+		}
+	}
+	add("name", c.Name, name)
+	add("trino_catalog_name", c.TrinoName(), trinoName)
+	add("warehouse", c.WarehouseName(), warehouse)
+	add("connector", c.ConnectorName(), connector)
+	// Extra properties may carry engine secrets: only their keys are kept.
+	if string(c.ExtraProps) != string(extraProps) {
+		changes["extra_props"] = audit.Change{From: propKeys(c.ExtraProps), To: propKeys(extraProps)}
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	return changes
+}
+
+// propKeys lists the keys of a JSON object, sorted.
+func propKeys(raw []byte) []string {
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// workspaceChanges lists what a workspace update changed.
+func workspaceChanges(before, after db.Workspace, targetChanged bool) map[string]audit.Change {
+	changes := map[string]audit.Change{}
+	if before.Name != after.Name {
+		changes["name"] = audit.Change{From: before.Name, To: after.Name}
+	}
+	if fmt.Sprint(deref(before.Description)) != fmt.Sprint(deref(after.Description)) {
+		changes["description"] = audit.Change{From: deref(before.Description), To: deref(after.Description)}
+	}
+	if targetChanged {
+		changes["default_binding_id"] = audit.Change{From: idString(before.DefaultBindingID), To: idString(after.DefaultBindingID)}
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	return changes
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

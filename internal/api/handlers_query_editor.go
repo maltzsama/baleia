@@ -11,12 +11,14 @@ import (
 	"slices"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -300,7 +302,9 @@ func (h *Handlers) ListExecutions(ctx context.Context, request ListExecutionsReq
 }
 
 func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) (RunQueryResponseObject, error) {
+	ev := audit.Event{Action: audit.ExecutionCreate, ResourceType: "execution", WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return RunQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
@@ -327,8 +331,10 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	target, err := h.ResolveTarget(ctx, workspace, request.Body.Target)
 	if te, ok := asTargetError(err); ok {
 		if te.notFound {
+			h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: te.message}}, nil
 		}
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: te.unprocessable()}, nil
 	}
 	if err != nil {
@@ -337,6 +343,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	// A target runs where an adapter for its engine kind exists; direct
 	// engines get theirs in #81-#83.
 	if !slices.Contains(queryengine.Kinds(), target.EngineKind) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: (&targetError{
 			code:    "engine_unsupported",
 			message: "queries on " + target.EngineKind + " engines are not available yet",
@@ -426,6 +433,12 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		return nil, err
 	}
 
+	// The target, never the SQL text.
+	ev = withID(ev, execution.ID)
+	ev.Changes = map[string]audit.Change{"target": {To: map[string]any{
+		"catalog": target.CatalogName, "engine": target.EngineName, "engine_kind": target.EngineKind, "schema": target.Schema, "read_only": target.ReadOnly,
+	}}}
+	h.audited(ctx, ev.Allowed())
 	return RunQuery202JSONResponse(dbExecutionToPublic(execution)), nil
 }
 
@@ -450,7 +463,9 @@ func (h *Handlers) GetExecution(ctx context.Context, request GetExecutionRequest
 }
 
 func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error) {
+	ev := audit.Event{Action: audit.ExecutionCancel, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return CancelExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
@@ -477,6 +492,7 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 		// through the persisted handle too. Cancelling a finished statement is
 		// not an error.
 		h.cancelOnEngine(ctx, updated)
+		h.audited(ctx, ev.Allowed())
 		return CancelExecution200JSONResponse(dbExecutionToPublic(updated)), nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -490,8 +506,11 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 		WorkspaceID: wsID,
 	})
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}
+	// Already finished: nothing was cancelled.
+	h.audited(ctx, ev.Failed(audit.ReasonConflict))
 	return CancelExecution200JSONResponse(dbExecutionToPublic(current)), nil
 }
 
@@ -627,7 +646,9 @@ func (r arrowStreamResponse) write(w http.ResponseWriter) error {
 // GetStatementResults streams a single statement's result set, scoped to the
 // requesting workspace. Same auth and delivery model as GetResults.
 func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error) {
+	ev := audit.Event{Action: audit.ResultsDownload, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return GetStatementResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
@@ -641,16 +662,19 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 		Position:    int32(request.Position),
 	})
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement not found"}}, nil
 	}
 
 	if statement.Status != "finished" {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return GetStatementResults409JSONResponse{
 			Code:    "conflict",
 			Message: "statement has no result yet",
 		}, nil
 	}
 	if statement.ResultKey == nil || *statement.ResultKey == "" {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement produced no result set"}}, nil
 	}
 
@@ -662,6 +686,7 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 		contentType = "application/vnd.apache.arrow.stream"
 	}
 
+	h.audited(ctx, ev.Allowed())
 	return arrowStreamResponse{reader: reader, contentType: contentType}, nil
 }
 
