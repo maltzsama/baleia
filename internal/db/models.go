@@ -198,6 +198,7 @@ type QueryStatement struct {
 	Truncated     bool               `json:"truncated"`
 	QueryHandle   []byte             `json:"query_handle"`
 	ResultSets    []byte             `json:"result_sets"`
+	ErrorCode     *string            `json:"error_code"`
 }
 
 type RefreshToken struct {

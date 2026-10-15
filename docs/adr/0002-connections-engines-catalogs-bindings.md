@@ -76,11 +76,16 @@ Partially compliant.
 - Runs resolve an explicit target (binding + schema), the workspace default or the workspace's only
   target, and store it with a snapshot; the editor picks targets from
   `GET /workspaces/{id}/targets`. New executions start `QueryExecutionWorkflowV2`, whose input
-  carries the target and the caller's identity, never a secret (`TestV2_InputHasNoSecrets`); the
-  statement activity opens the target's engine by id, in its catalog and schema, read-only for a
-  `read` grant, and splits with the engine's dialect. Targets on engine kinds without an adapter
-  (direct engines until #81-#83) answer 422 `engine_unsupported`. V1 stays registered until its
-  runs drain (#27).
+  carries the target and the caller's identity, never a secret (`TestV2_InputHasNoSecrets`). The
+  script is split with the engine's dialect and every statement runs in ONE `ExecuteScript`
+  activity holding ONE session on the target's engine, opened by id in its catalog and schema,
+  read-only for a `read` grant, so `USE`/`SET`, temporary tables and transactions persist across
+  statements on every engine (#27). The activity is never retried; after a failure or a cancel the
+  remaining statements are `skipped`, and a worker crash ends the running statement
+  `failed/interrupted` and cancels it on the engine by its persisted handle. An execution is not a
+  transaction: closing the session rolls back what the user left open. Targets on engine kinds
+  without an adapter (direct engines until #81-#83) answer 422 `engine_unsupported`. V1 was removed
+  (no V1 run was open); a change to V2's commands adds V3 (`TestV2_Replay`).
 - Direct engines are registered through `/engines` on connections whose provider has the
   `direct_engine` role; their native catalogs (`origin = native`, no Trino columns, migration
   00025) and native bindings are created with them. Federated engines are only the default Trino

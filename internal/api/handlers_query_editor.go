@@ -408,6 +408,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		Identity:         queryengine.Identity{UserID: trinoUser},
 		StatementTimeout: h.cfg.StatementTimeout,
 		RequestID:        requestID,
+		ExecutionTimeout: h.cfg.ExecutionTimeout,
 	})
 	if err != nil {
 		// The workflow failed to start; fail the row so it does not stay
@@ -816,6 +817,7 @@ func dbStatementToPublic(s db.QueryStatement) QueryStatement {
 	if s.ErrorMessage != nil {
 		qs.ErrorMessage = s.ErrorMessage
 	}
+	qs.ErrorCode = s.ErrorCode
 	return qs
 }
 

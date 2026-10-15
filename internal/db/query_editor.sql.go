@@ -11,6 +11,53 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const abandonRunningStatements = `-- name: AbandonRunningStatements :many
+UPDATE query_statements
+SET status = $2, error_code = $3, error_message = $4, finished_at = now()
+WHERE execution_id = $1 AND status = 'running'
+RETURNING position, query_handle
+`
+
+type AbandonRunningStatementsParams struct {
+	ExecutionID  pgtype.UUID `json:"execution_id"`
+	Status       string      `json:"status"`
+	ErrorCode    *string     `json:"error_code"`
+	ErrorMessage *string     `json:"error_message"`
+}
+
+type AbandonRunningStatementsRow struct {
+	Position    int32  `json:"position"`
+	QueryHandle []byte `json:"query_handle"`
+}
+
+// Ends the statements still running after the script activity stopped
+// (cancel, crash, heartbeat timeout) and returns their handles so the engine
+// can be asked to stop them.
+func (q *Queries) AbandonRunningStatements(ctx context.Context, arg AbandonRunningStatementsParams) ([]AbandonRunningStatementsRow, error) {
+	rows, err := q.db.Query(ctx, abandonRunningStatements,
+		arg.ExecutionID,
+		arg.Status,
+		arg.ErrorCode,
+		arg.ErrorMessage,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AbandonRunningStatementsRow
+	for rows.Next() {
+		var i AbandonRunningStatementsRow
+		if err := rows.Scan(&i.Position, &i.QueryHandle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const cancelQueryExecution = `-- name: CancelQueryExecution :one
 UPDATE query_executions
 SET status = 'cancelled', finished_at = now()
@@ -146,7 +193,7 @@ func (q *Queries) CreateQueryFolder(ctx context.Context, arg CreateQueryFolderPa
 const createQueryStatement = `-- name: CreateQueryStatement :one
 INSERT INTO query_statements (execution_id, position, sql, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, execution_id, position, sql, status, engine_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated, query_handle, result_sets
+RETURNING id, execution_id, position, sql, status, engine_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated, query_handle, result_sets, error_code
 `
 
 type CreateQueryStatementParams struct {
@@ -181,6 +228,7 @@ func (q *Queries) CreateQueryStatement(ctx context.Context, arg CreateQueryState
 		&i.Truncated,
 		&i.QueryHandle,
 		&i.ResultSets,
+		&i.ErrorCode,
 	)
 	return i, err
 }
@@ -320,7 +368,7 @@ func (q *Queries) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg Get
 }
 
 const getQueryStatementByPosition = `-- name: GetQueryStatementByPosition :one
-SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.engine_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at, s.result_key, s.result_bytes, s.truncated, s.query_handle, s.result_sets FROM query_statements s
+SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.engine_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at, s.result_key, s.result_bytes, s.truncated, s.query_handle, s.result_sets, s.error_code FROM query_statements s
 JOIN query_executions e ON e.id = s.execution_id
 WHERE s.execution_id = $1 AND e.workspace_id = $2 AND s.position = $3
 `
@@ -352,6 +400,7 @@ func (q *Queries) GetQueryStatementByPosition(ctx context.Context, arg GetQueryS
 		&i.Truncated,
 		&i.QueryHandle,
 		&i.ResultSets,
+		&i.ErrorCode,
 	)
 	return i, err
 }
@@ -472,7 +521,7 @@ func (q *Queries) ListQueryFolders(ctx context.Context, arg ListQueryFoldersPara
 }
 
 const listQueryStatements = `-- name: ListQueryStatements :many
-SELECT id, execution_id, position, sql, status, engine_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated, query_handle, result_sets FROM query_statements
+SELECT id, execution_id, position, sql, status, engine_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated, query_handle, result_sets, error_code FROM query_statements
 WHERE execution_id = $1
 ORDER BY position
 `
@@ -503,6 +552,7 @@ func (q *Queries) ListQueryStatements(ctx context.Context, executionID pgtype.UU
 			&i.Truncated,
 			&i.QueryHandle,
 			&i.ResultSets,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
@@ -515,7 +565,7 @@ func (q *Queries) ListQueryStatements(ctx context.Context, executionID pgtype.UU
 }
 
 const listQueryStatementsByWorkspace = `-- name: ListQueryStatementsByWorkspace :many
-SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.engine_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at, s.result_key, s.result_bytes, s.truncated, s.query_handle, s.result_sets FROM query_statements s
+SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.engine_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at, s.result_key, s.result_bytes, s.truncated, s.query_handle, s.result_sets, s.error_code FROM query_statements s
 JOIN query_executions e ON e.id = s.execution_id
 WHERE s.execution_id = $1 AND e.workspace_id = $2
 ORDER BY s.position
@@ -553,6 +603,7 @@ func (q *Queries) ListQueryStatementsByWorkspace(ctx context.Context, arg ListQu
 			&i.Truncated,
 			&i.QueryHandle,
 			&i.ResultSets,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
@@ -671,6 +722,40 @@ func (q *Queries) SetStatementQueryHandle(ctx context.Context, arg SetStatementQ
 	return err
 }
 
+const skipPendingStatements = `-- name: SkipPendingStatements :exec
+UPDATE query_statements
+SET status = 'skipped', finished_at = now()
+WHERE execution_id = $1 AND status = 'pending'
+`
+
+// After a failure, a cancel or a crash the statements that never ran are
+// skipped.
+func (q *Queries) SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, skipPendingStatements, executionID)
+	return err
+}
+
+const startQueryStatement = `-- name: StartQueryStatement :execrows
+UPDATE query_statements
+SET status = 'running', started_at = now()
+WHERE execution_id = $1 AND position = $2 AND status = 'pending'
+`
+
+type StartQueryStatementParams struct {
+	ExecutionID pgtype.UUID `json:"execution_id"`
+	Position    int32       `json:"position"`
+}
+
+// A pending statement becomes the running one. Zero rows means the
+// statement is no longer pending (already abandoned).
+func (q *Queries) StartQueryStatement(ctx context.Context, arg StartQueryStatementParams) (int64, error) {
+	result, err := q.db.Exec(ctx, startQueryStatement, arg.ExecutionID, arg.Position)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateQueryExecution = `-- name: UpdateQueryExecution :one
 UPDATE query_executions
 SET status = $2, engine_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
@@ -727,9 +812,9 @@ func (q *Queries) UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecu
 const updateQueryStatement = `-- name: UpdateQueryStatement :one
 UPDATE query_statements
 SET status = $2, engine_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7,
-    result_key = $8, result_bytes = $9, truncated = $10, result_sets = $11
+    result_key = $8, result_bytes = $9, truncated = $10, result_sets = $11, error_code = $12
 WHERE id = $1 AND status = 'running'
-RETURNING id, execution_id, position, sql, status, engine_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated, query_handle, result_sets
+RETURNING id, execution_id, position, sql, status, engine_query_id, rows_returned, duration_ms, error_message, started_at, finished_at, result_key, result_bytes, truncated, query_handle, result_sets, error_code
 `
 
 type UpdateQueryStatementParams struct {
@@ -744,6 +829,7 @@ type UpdateQueryStatementParams struct {
 	ResultBytes   *int64             `json:"result_bytes"`
 	Truncated     bool               `json:"truncated"`
 	ResultSets    []byte             `json:"result_sets"`
+	ErrorCode     *string            `json:"error_code"`
 }
 
 // Conditional update: only a running statement transitions, so a late
@@ -762,6 +848,7 @@ func (q *Queries) UpdateQueryStatement(ctx context.Context, arg UpdateQueryState
 		arg.ResultBytes,
 		arg.Truncated,
 		arg.ResultSets,
+		arg.ErrorCode,
 	)
 	var i QueryStatement
 	err := row.Scan(
@@ -781,6 +868,7 @@ func (q *Queries) UpdateQueryStatement(ctx context.Context, arg UpdateQueryState
 		&i.Truncated,
 		&i.QueryHandle,
 		&i.ResultSets,
+		&i.ErrorCode,
 	)
 	return i, err
 }

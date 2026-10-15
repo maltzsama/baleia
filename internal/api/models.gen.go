@@ -196,7 +196,9 @@ const (
 	QueryStatementStatusCancelled QueryStatementStatus = "cancelled"
 	QueryStatementStatusFailed    QueryStatementStatus = "failed"
 	QueryStatementStatusFinished  QueryStatementStatus = "finished"
+	QueryStatementStatusPending   QueryStatementStatus = "pending"
 	QueryStatementStatusRunning   QueryStatementStatus = "running"
+	QueryStatementStatusSkipped   QueryStatementStatus = "skipped"
 )
 
 // Defines values for RetrieverRefreshType.
@@ -908,13 +910,16 @@ type QueryStatement struct {
 	DurationMs *int `json:"duration_ms"`
 
 	// EngineQueryId The statement's id on its engine. Was trino_query_id
-	EngineQueryId *string            `json:"engine_query_id"`
-	ErrorMessage  *string            `json:"error_message"`
-	ExecutionId   openapi_types.UUID `json:"execution_id"`
-	FinishedAt    *time.Time         `json:"finished_at"`
-	Id            openapi_types.UUID `json:"id"`
-	Position      int                `json:"position"`
-	ResultBytes   *int               `json:"result_bytes"`
+	EngineQueryId *string `json:"engine_query_id"`
+
+	// ErrorCode Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown).
+	ErrorCode    *string            `json:"error_code"`
+	ErrorMessage *string            `json:"error_message"`
+	ExecutionId  openapi_types.UUID `json:"execution_id"`
+	FinishedAt   *time.Time         `json:"finished_at"`
+	Id           openapi_types.UUID `json:"id"`
+	Position     int                `json:"position"`
+	ResultBytes  *int               `json:"result_bytes"`
 
 	// ResultSets Stored results of the statement, one per result set
 	ResultSets *[]struct {
@@ -923,14 +928,16 @@ type QueryStatement struct {
 		Rows        int  `json:"rows"`
 		Truncated   bool `json:"truncated"`
 	} `json:"result_sets,omitempty"`
-	RowsReturned *int                 `json:"rows_returned"`
-	Sql          string               `json:"sql"`
-	StartedAt    *time.Time           `json:"started_at"`
-	Status       QueryStatementStatus `json:"status"`
-	Truncated    *bool                `json:"truncated"`
+	RowsReturned *int       `json:"rows_returned"`
+	Sql          string     `json:"sql"`
+	StartedAt    *time.Time `json:"started_at"`
+
+	// Status All statements of an execution run in order in one engine session. `pending` has not started yet; `skipped` never ran because an earlier statement failed, the execution was cancelled, or the worker was interrupted.
+	Status    QueryStatementStatus `json:"status"`
+	Truncated *bool                `json:"truncated"`
 }
 
-// QueryStatementStatus defines model for QueryStatement.Status.
+// QueryStatementStatus All statements of an execution run in order in one engine session. `pending` has not started yet; `skipped` never ran because an earlier statement failed, the execution was cancelled, or the worker was interrupted.
 type QueryStatementStatus string
 
 // RefreshRequest defines model for RefreshRequest.

@@ -872,7 +872,14 @@ components:
         execution_id: { type: string, format: uuid }
         position: { type: integer }
         sql: { type: string }
-        status: { type: string, enum: [running, finished, failed, cancelled] }
+        status:
+          type: string
+          enum: [pending, running, finished, failed, cancelled, skipped]
+          description: >
+            All statements of an execution run in order in one engine session.
+            `pending` has not started yet; `skipped` never ran because an
+            earlier statement failed, the execution was cancelled, or the
+            worker was interrupted.
         engine_query_id: { type: string, nullable: true, description: "The statement's id on its engine. Was trino_query_id" }
         rows_returned: { type: integer, nullable: true }
         result_sets:
@@ -890,6 +897,15 @@ components:
         truncated: { type: boolean, nullable: true }
         duration_ms: { type: integer, nullable: true }
         error_message: { type: string, nullable: true }
+        error_code:
+          type: string
+          nullable: true
+          description: >
+            Typed reason of a failed or cancelled statement: an engine code
+            (syntax, not_found, permission_denied, timeout, cancelled,
+            resource_exhausted, engine_unavailable, read_only_unsupported,
+            conflict, internal), `editor_rejected`, or `interrupted` when the
+            worker stopped mid-statement (its outcome on the engine is unknown).
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
 

@@ -1,3 +1,6 @@
+// Determinism: workflow code here never calls time.Now(), reads the
+// environment, lets map iteration drive control flow, or starts goroutines.
+// Everything it needs arrives in QueryExecutionInput.
 package workflows
 
 import (
@@ -6,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
-	"github.com/google/uuid"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -22,169 +24,144 @@ type QueryExecutionInput struct {
 	Identity         queryengine.Identity
 	StatementTimeout time.Duration
 	RequestID        string
+	// ExecutionTimeout caps the whole script (BALEIA_EXECUTION_TIMEOUT);
+	// 0 = defaultExecutionTimeout.
+	ExecutionTimeout time.Duration
 }
+
+// defaultExecutionTimeout caps a script when the input names no cap.
+const defaultExecutionTimeout = 2 * time.Hour
 
 // QueryExecutionWorkflowV2 runs every statement of a query on the target's
-// engine, in the target's catalog and schema, read-only when the target is.
-// Registered beside QueryExecutionWorkflow until V1 runs drain (#27).
+// engine, in ONE activity holding ONE engine session (#27), so session state
+// (USE, SET, temporary tables, transactions) persists across statements on
+// every engine. The workflow never names an engine: the target does.
+//
+// Do not change this workflow's commands in place once runs may be open:
+// add V3 and drain V2 (see #27).
 func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) error {
-	d, ok := dialect.ForEngineKind(in.Target.EngineKind)
 	dialectName := dialect.Trino
-	if ok {
+	if d, ok := dialect.ForEngineKind(in.Target.EngineKind); ok {
 		dialectName = d.Name()
 	}
-	engineID := ""
-	if in.Target.EngineID.Valid {
-		engineID = uuid.UUID(in.Target.EngineID.Bytes).String()
-	}
-	return runExecution(ctx, in.ExecutionID, in.SQL, dialectName, in.StatementTimeout, func(position int32, stmt string) activities.ExecuteStatementParams {
-		return activities.ExecuteStatementParams{
-			ExecutionID:  in.ExecutionID,
-			Position:     position,
-			SQL:          stmt,
-			TrinoCatalog: in.Target.EngineCatalog,
-			RequestID:    in.RequestID,
-			User:         in.Identity.UserID,
-			Timeout:      in.StatementTimeout,
-			EngineID:     engineID,
-			Schema:       in.Target.Schema,
-			ReadOnly:     in.Target.ReadOnly,
-			Dialect:      dialectName,
-		}
-	})
-}
 
-// QueryExecutionWorkflow is V1: every statement on the default Trino engine
-// in trinoCatalog. New executions start V2; V1 stays registered so runs
-// started before the upgrade can finish (#27 removes it).
-//
-// statementTimeout bounds each statement. It is passed as input because
-// workflow code must stay deterministic and never read the environment.
-func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog, requestID, user string, statementTimeout time.Duration) error {
-	return runExecution(ctx, executionID, sql, "", statementTimeout, func(position int32, stmt string) activities.ExecuteStatementParams {
-		return activities.ExecuteStatementParams{
-			ExecutionID:  executionID,
-			Position:     position,
-			SQL:          stmt,
-			TrinoCatalog: trinoCatalog,
-			RequestID:    requestID,
-			User:         user,
-			Timeout:      statementTimeout,
-		}
-	})
-}
-
-// runExecution runs every statement sequentially, stopping on the first
-// error. It carries control only; result rows live in object storage (#89).
-// V1 and V2 issue the same commands, so V1 histories replay unchanged.
-func runExecution(ctx workflow.Context, executionID, sql, dialectName string, statementTimeout time.Duration, statement func(position int32, stmt string) activities.ExecuteStatementParams) error {
 	// Bookkeeping activities are idempotent DB updates and may be retried.
 	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 
-	// Statement execution is never retried automatically: a retried INSERT or
-	// CREATE TABLE AS would write twice.
-	statementCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: statementTimeout,
-		HeartbeatTimeout:    30 * time.Second,
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-	})
-
-	var splitResult activities.SplitSQLResult
+	var split activities.SplitSQLResult
 	if err := workflow.ExecuteActivity(bookkeepingCtx, activities.SplitSQL, activities.SplitSQLParams{
-		SQL:     sql,
+		SQL:     in.SQL,
 		Dialect: dialectName,
-	}).Get(bookkeepingCtx, &splitResult); err != nil {
-		return failExecution(bookkeepingCtx, executionID, err)
+	}).Get(bookkeepingCtx, &split); err != nil {
+		return failExecution(bookkeepingCtx, in.ExecutionID, err)
 	}
 
 	if err := workflow.ExecuteActivity(bookkeepingCtx, activities.CreateStatementRecords, activities.CreateStatementRecordsParams{
-		ExecutionID: executionID,
-		Statements:  splitResult.Statements,
+		ExecutionID: in.ExecutionID,
+		Statements:  split.Statements,
 	}).Get(bookkeepingCtx, nil); err != nil {
-		return failExecution(bookkeepingCtx, executionID, err)
+		return failExecution(bookkeepingCtx, in.ExecutionID, err)
 	}
 
-	var totalRows int64
-	var totalDurationMs int64
+	refs := make([]activities.StatementRef, len(split.Statements))
+	for i, sql := range split.Statements {
+		refs[i] = activities.StatementRef{Position: int32(i + 1), SQL: sql}
+	}
 
-	for i, stmt := range splitResult.Statements {
-		position := int32(i + 1)
+	// The script is never retried automatically: a session cannot be resumed
+	// and a retried INSERT or CREATE TABLE AS would write twice. On cancel the
+	// workflow waits for the script to stop its statement on the engine.
+	scriptCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: scriptTimeout(len(refs), in.StatementTimeout, in.ExecutionTimeout),
+		HeartbeatTimeout:    30 * time.Second,
+		WaitForCancellation: true,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+	var res activities.ExecuteScriptResult
+	err := workflow.ExecuteActivity(scriptCtx, activities.ExecuteScript, activities.ExecuteScriptParams{
+		ExecutionID: in.ExecutionID,
+		Target:      in.Target,
+		Identity:    in.Identity,
+		Statements:  refs,
+		Timeout:     in.StatementTimeout,
+		RequestID:   in.RequestID,
+	}).Get(scriptCtx, &res)
 
-		var execResult activities.ExecuteStatementResult
-		err := workflow.ExecuteActivity(statementCtx, activities.ExecuteStatement, statement(position, stmt)).Get(statementCtx, &execResult)
-
-		// A cancelled workflow (UI cancel, timeout) cancels the statement
-		// activity, which kills the Trino query. Record the cancellation on a
-		// disconnected context and stop.
-		if temporal.IsCanceledError(err) {
-			return markCancelled(ctx, executionID, position)
-		}
-
-		if err != nil || execResult.Error != "" {
-			errMsg := execResult.Error
-			if err != nil {
-				errMsg = err.Error()
-			}
-
-			_ = workflow.ExecuteActivity(bookkeepingCtx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
-				ExecutionID:  executionID,
-				Position:     position,
-				Status:       "failed",
-				ErrorMessage: errMsg,
-				DurationMs:   execResult.DurationMs,
-			}).Get(bookkeepingCtx, nil)
-
-			_ = workflow.ExecuteActivity(bookkeepingCtx, activities.FailExecution, activities.FailExecutionParams{
-				ExecutionID:  executionID,
-				ErrorMessage: errMsg,
-			}).Get(bookkeepingCtx, nil)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		_ = workflow.ExecuteActivity(bookkeepingCtx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
-			ExecutionID:   executionID,
-			Position:      position,
-			Status:        "finished",
-			EngineQueryID: execResult.EngineQueryID,
-			RowsReturned:  execResult.RowCount,
-			DurationMs:    execResult.DurationMs,
-			ResultKey:     execResult.ResultKey,
-			ResultBytes:   execResult.ResultBytes,
-			Truncated:     execResult.Truncated,
+	// A cancelled workflow (UI cancel) cancels the script, which stops the
+	// statement on the engine. Record it on a disconnected context.
+	if temporal.IsCanceledError(err) {
+		return markCancelled(ctx, in)
+	}
+	// The script stopped without an answer (worker crash, heartbeat or
+	// script timeout): the statement it was running is interrupted.
+	if err != nil {
+		_ = workflow.ExecuteActivity(bookkeepingCtx, activities.AbandonStatements, activities.AbandonStatementsParams{
+			ExecutionID: in.ExecutionID,
+			EngineID:    in.Target.EngineID,
+			Status:      "failed",
+			ErrorCode:   activities.CodeInterrupted,
+			Error:       "the worker running the statement stopped; its outcome on the engine is unknown",
 		}).Get(bookkeepingCtx, nil)
-
-		totalRows += execResult.RowCount
-		totalDurationMs += execResult.DurationMs
+		workflow.GetLogger(ctx).Warn("script interrupted", "execution_id", in.ExecutionID, "err", err)
+		return failExecution(bookkeepingCtx, in.ExecutionID, err)
 	}
 
+	var totalRows, totalDurationMs int64
+	for _, o := range res.Statements {
+		switch o.Status {
+		case "failed":
+			return failExecution(bookkeepingCtx, in.ExecutionID, nil)
+		case "cancelled":
+			// Stopped on the engine; the cancel endpoint already recorded the
+			// execution's cancellation, this is a no-op then.
+			return workflow.ExecuteActivity(bookkeepingCtx, activities.CompleteExecution, activities.CompleteExecutionParams{
+				ExecutionID: in.ExecutionID,
+				Status:      "cancelled",
+			}).Get(bookkeepingCtx, nil)
+		}
+		totalRows += o.RowCount
+		totalDurationMs += o.DurationMs
+	}
 	return workflow.ExecuteActivity(bookkeepingCtx, activities.CompleteExecution, activities.CompleteExecutionParams{
-		ExecutionID:  executionID,
+		ExecutionID:  in.ExecutionID,
 		Status:       "finished",
 		RowsReturned: totalRows,
 		DurationMs:   totalDurationMs,
 	}).Get(bookkeepingCtx, nil)
 }
 
+// scriptTimeout bounds the script activity: every statement may take its
+// whole timeout, capped by the execution timeout.
+func scriptTimeout(statements int, statementTimeout, executionTimeout time.Duration) time.Duration {
+	if executionTimeout <= 0 {
+		executionTimeout = defaultExecutionTimeout
+	}
+	t := time.Duration(statements) * statementTimeout
+	if t <= 0 || t > executionTimeout {
+		return executionTimeout
+	}
+	return t
+}
+
 // failExecution marks the execution failed with a bounded-retry bookkeeping
-// context and returns the original error.
+// context and returns the cause (nil when a statement failed: the run itself
+// completed).
 func failExecution(ctx workflow.Context, executionID string, cause error) error {
-	_ = workflow.ExecuteActivity(ctx, activities.FailExecution, activities.FailExecutionParams{
-		ExecutionID:  executionID,
-		ErrorMessage: cause.Error(),
-	}).Get(ctx, nil)
+	params := activities.FailExecutionParams{ExecutionID: executionID}
+	if cause != nil {
+		params.ErrorMessage = cause.Error()
+	}
+	_ = workflow.ExecuteActivity(ctx, activities.FailExecution, params).Get(ctx, nil)
 	return cause
 }
 
-// markCancelled records the cancellation of the in-flight statement and the
-// execution. It runs on a disconnected context because the workflow context is
-// already cancelled by the time it is called.
-func markCancelled(ctx workflow.Context, executionID string, position int32) error {
+// markCancelled ends the statement that was running as cancelled, skips the
+// rest and records the execution's cancellation. It runs on a disconnected
+// context because the workflow context is already cancelled.
+func markCancelled(ctx workflow.Context, in QueryExecutionInput) error {
 	dctx, cancel := workflow.NewDisconnectedContext(ctx)
 	defer cancel()
 	dctx = workflow.WithActivityOptions(dctx, workflow.ActivityOptions{
@@ -192,18 +169,18 @@ func markCancelled(ctx workflow.Context, executionID string, position int32) err
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 
-	_ = workflow.ExecuteActivity(dctx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
-		ExecutionID: executionID,
-		Position:    position,
+	_ = workflow.ExecuteActivity(dctx, activities.AbandonStatements, activities.AbandonStatementsParams{
+		ExecutionID: in.ExecutionID,
+		EngineID:    in.Target.EngineID,
 		Status:      "cancelled",
+		ErrorCode:   string(queryengine.CodeCancelled),
 	}).Get(dctx, nil)
 
 	// The cancel endpoint already flipped the execution to cancelled; this is
 	// a no-op in that case (the update is conditional on status='running').
 	_ = workflow.ExecuteActivity(dctx, activities.CompleteExecution, activities.CompleteExecutionParams{
-		ExecutionID: executionID,
+		ExecutionID: in.ExecutionID,
 		Status:      "cancelled",
 	}).Get(dctx, nil)
-
 	return nil
 }

@@ -8,8 +8,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -19,12 +17,9 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/trino/monitor"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
 )
@@ -37,13 +32,6 @@ var defaultActivities *Activities
 type engineSource interface {
 	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
-}
-
-// lensMonitor reads the Trino coordinator's runtime state for Lens;
-// *trino/monitor.Monitor implements it.
-type lensMonitor interface {
-	ListQueries(ctx context.Context) ([]monitor.QueryInfo, error)
-	ClusterStats(ctx context.Context) (*monitor.ClusterStats, error)
 }
 
 type Activities struct {
@@ -92,11 +80,10 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SplitSQL)
 	w.RegisterActivity(SchedulePassSucceeded)
 	w.RegisterActivity(CreateStatementRecords)
-	w.RegisterActivity(ExecuteStatement)
-	w.RegisterActivity(UpdateStatementRecord)
+	w.RegisterActivity(ExecuteScript)
+	w.RegisterActivity(AbandonStatements)
 	w.RegisterActivity(CompleteExecution)
 	w.RegisterActivity(FailExecution)
-	w.RegisterActivity(SetExecutionResult)
 	w.RegisterActivity(LensPollTrinoQueries)
 	w.RegisterActivity(LensPollTrinoCluster)
 	w.RegisterActivity(ListEnabledIcebergCatalogs)
@@ -109,16 +96,12 @@ func Register(w worker.Worker, a *Activities) {
 
 type SplitSQLParams struct {
 	SQL string
-	// Dialect splits and gates the script (V2: the target engine's); empty
-	// is Trino, the V1 engine.
+	// Dialect splits and gates the script: the target engine's.
 	Dialect string
 }
 
-// paramsDialect is the dialect a V1 or V2 activity input names.
+// paramsDialect is the dialect an activity input names.
 func paramsDialect(name string) (dialect.Dialect, error) {
-	if name == "" {
-		return dialect.MustGet(dialect.Trino), nil
-	}
 	d, ok := dialect.Get(name)
 	if !ok {
 		return nil, temporal.NewNonRetryableApplicationError("unknown dialect "+name, "editor_rejected", nil)
@@ -177,389 +160,13 @@ func (a *Activities) createStatementRecords(ctx context.Context, params CreateSt
 			ExecutionID: execID,
 			Position:    int32(i + 1),
 			Sql:         sql,
-			Status:      "running",
+			Status:      "pending",
 		})
 		if err != nil {
 			return fmt.Errorf("create statement record %d: %w", i+1, err)
 		}
 	}
 	return nil
-}
-
-type ExecuteStatementParams struct {
-	ExecutionID  string
-	Position     int32
-	SQL          string
-	TrinoCatalog string
-	RequestID    string
-	// User is the per-statement Trino identity (the mapped Baleia user), empty
-	// to fall back to the service user. Never the admin identity.
-	User string
-	// Timeout bounds the statement. It is sent to Trino as the session
-	// property query_max_execution_time so the cluster enforces it too.
-	Timeout time.Duration
-	// V2 (#13): the target's engine (empty: the default Trino engine, V1),
-	// schema and read-only session; TrinoCatalog is the target's catalog
-	// name on that engine. Dialect names the engine's dialect.
-	EngineID string
-	Schema   string
-	ReadOnly bool
-	Dialect  string
-}
-
-// statementEngine is the V2 target's engine, or the default Trino engine for
-// V1 inputs (no engine id).
-func (a *Activities) statementEngine(ctx context.Context, engineID string) (queryengine.Engine, error) {
-	if engineID == "" {
-		return a.engines.DefaultTrino(ctx)
-	}
-	id, err := uuid.Parse(engineID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid engine id %q", engineID)
-	}
-	return a.engines.Get(ctx, pgtype.UUID{Bytes: id, Valid: true})
-}
-
-// heartbeatInterval throttles activity heartbeats; the workflow's heartbeat
-// timeout is 3x this interval.
-const heartbeatInterval = 10 * time.Second
-
-// statementTransportBackoff bounds retries of transport failures that happen
-// before Trino accepted a statement. It is a package var so tests can shrink it.
-var statementTransportBackoff = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
-
-// heartbeatDetails travels with the heartbeat so a cancellation or a recovered
-// attempt knows which Trino query to abandon.
-type heartbeatDetails struct {
-	EngineQueryID string
-}
-
-// arrowContentType is the MIME type used for stored Arrow IPC streams.
-const arrowContentType = "application/vnd.apache.arrow.stream"
-
-// errResultCapReached signals that a statement hit the row/byte cap. It is an
-// internal sentinel, converted to a truncated (not failed) result.
-var errResultCapReached = errors.New("statement result cap reached")
-
-// ExecuteStatementResult is the control-plane summary of one statement. Result
-// rows are never part of it; they live in object storage under ResultKey.
-type ExecuteStatementResult struct {
-	EngineQueryID string
-	RowCount      int64
-	DurationMs    int64
-	Columns       []ColumnResult
-	ResultKey     string // "" when the statement returns no result set (DDL/DML)
-	ResultBytes   int64
-	Truncated     bool
-	Error         string
-}
-
-type ColumnResult struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
-
-func ExecuteStatement(ctx context.Context, params ExecuteStatementParams) (*ExecuteStatementResult, error) {
-	return defaultActivities.executeStatement(ctx, params)
-}
-
-// countingWriter counts bytes while proxying to the underlying pipe.
-type countingWriter struct {
-	w io.Writer
-	n int64
-}
-
-func (c *countingWriter) Write(p []byte) (int, error) {
-	n, err := c.w.Write(p)
-	c.n += int64(n)
-	return n, err
-}
-
-// s3ResultKey lays out result objects per statement so future result sets
-// (result_index > 0) fit the same layout.
-func s3ResultKey(executionID string, position, resultIndex int) string {
-	return fmt.Sprintf("query-results/%s/%d/%d.arrow", executionID, position, resultIndex)
-}
-
-func (a *Activities) executeStatement(ctx context.Context, params ExecuteStatementParams) (*ExecuteStatementResult, error) {
-	logger := activity.GetLogger(ctx)
-	logger.Info("executing statement", "execution_id", params.ExecutionID, "request_id", params.RequestID, "position", params.Position)
-
-	// I5 (CR-017): defense in depth. splitSQL already rejects catalog DDL and
-	// forbidden editor statements, but ensure that any path that bypasses
-	// splitting (single-statement fast path, future callers) still cannot issue
-	// them.
-	d, err := paramsDialect(params.Dialect)
-	if err != nil {
-		return &ExecuteStatementResult{Error: err.Error()}, nil
-	}
-	if policy.ForbiddenInEditor(d, params.SQL) {
-		return &ExecuteStatementResult{Error: policy.ErrForbiddenInEditor.Error()}, nil
-	}
-
-	start := time.Now()
-	eng, err := a.statementEngine(ctx, params.EngineID)
-	if err != nil {
-		return &ExecuteStatementResult{Error: err.Error()}, nil
-	}
-
-	// Heartbeats let Temporal deliver a cancellation to this attempt and prove
-	// liveness. They are throttled to heartbeatInterval.
-	var handle queryengine.QueryHandle
-	var lastBeat time.Time
-	beat := func(force bool) {
-		now := time.Now()
-		if !force && now.Sub(lastBeat) < heartbeatInterval {
-			return
-		}
-		lastBeat = now
-		activity.RecordHeartbeat(ctx, heartbeatDetails{EngineQueryID: handle.QueryID})
-	}
-	cb := queryengine.Callbacks{
-		OnStart: func(h queryengine.QueryHandle) {
-			handle = h
-			beat(true)
-			a.persistHandle(ctx, params, h)
-		},
-		OnProgress: func(queryengine.Progress) { beat(false) },
-	}
-	spec := queryengine.SessionSpec{
-		Catalog:  params.TrinoCatalog,
-		Identity: queryengine.Identity{UserID: params.User},
-		ReadOnly: params.ReadOnly,
-		Timeout:  params.Timeout,
-		Tags:     queryengine.Tags{ExecutionID: params.ExecutionID, RequestID: params.RequestID, Source: "editor"},
-	}
-	if params.Schema != "" {
-		spec.Schema = []string{params.Schema}
-	}
-
-	// A statement is never retried once the engine has accepted it: retrying
-	// an INSERT/CREATE could write twice. Only an unavailable engine before
-	// the statement got a handle is retried, with a bounded backoff.
-	sink := &resultSink{a: a, ctx: ctx, params: params}
-	backoff := statementTransportBackoff
-	for attempt := 0; ; attempt++ {
-		handle = queryengine.QueryHandle{}
-		sess, oerr := eng.OpenSession(ctx, spec)
-		if oerr != nil {
-			err = oerr
-		} else {
-			err = sess.Execute(ctx, params.SQL, cb, sink)
-			_ = sess.Close()
-		}
-		if err == nil || ctx.Err() != nil || handle.QueryID != "" || sink.began ||
-			queryengine.CodeOf(err) != queryengine.CodeUnavailable || attempt >= len(backoff) {
-			break
-		}
-		select {
-		case <-ctx.Done():
-		case <-time.After(backoff[attempt]):
-		}
-	}
-
-	durationMs := time.Since(start).Milliseconds()
-	observe := func(outcome string, err error, rows, bytes int64) {
-		a.metrics.engine.Statement(eng.Kind(), outcome, string(queryengine.CodeOf(err)), time.Since(start), rows, bytes)
-	}
-	cancelOnEngine := func(reason string) {
-		if handle.QueryID == "" {
-			return
-		}
-		killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer killCancel()
-		if kerr := eng.Cancel(killCtx, handle); kerr != nil {
-			logger.Warn("cancel on the engine failed", "reason", reason, "query_id", handle.QueryID, "err", kerr)
-		}
-	}
-
-	// On cancellation finalize the upload first so it cannot deadlock, then
-	// stop the statement on the engine.
-	if ctx.Err() != nil {
-		sink.abort()
-		cancelOnEngine("cancelled by baleia")
-		observe(metrics.StatementCancelled, nil, 0, 0)
-		return nil, temporal.NewCanceledError()
-	}
-
-	if errors.Is(err, errResultCapReached) {
-		cancelOnEngine("statement result cap reached")
-		sink.truncated = true
-		err = nil
-	}
-
-	if cerr := sink.finish(); cerr != nil && err == nil {
-		err = cerr
-	}
-
-	// A failed upload also fails the writes into its pipe: report the upload.
-	if sink.uploadErr != nil {
-		observe(metrics.StatementError, sink.uploadErr, sink.rows, 0)
-		return &ExecuteStatementResult{
-			EngineQueryID: handle.QueryID,
-			RowCount:      sink.rows,
-			DurationMs:    durationMs,
-			Error:         fmt.Sprintf("store results: %v", sink.uploadErr),
-		}, nil
-	}
-	if err != nil {
-		observe(metrics.StatementError, err, 0, 0)
-		return &ExecuteStatementResult{
-			EngineQueryID: handle.QueryID,
-			DurationMs:    durationMs,
-			Error:         err.Error(),
-		}, nil
-	}
-
-	res := &ExecuteStatementResult{
-		EngineQueryID: handle.QueryID,
-		RowCount:      sink.rows,
-		DurationMs:    durationMs,
-		Columns:       sink.columns,
-		Truncated:     sink.truncated,
-	}
-	if sink.writer != nil {
-		res.ResultKey = sink.key
-		res.ResultBytes = sink.uploaded
-	}
-	outcome := metrics.StatementSuccess
-	if sink.truncated {
-		outcome = metrics.StatementTruncated
-	}
-	observe(outcome, nil, sink.rows, res.ResultBytes)
-	return res, nil
-}
-
-// persistHandle stores the statement's engine handle so the API can cancel it
-// from another process (#20). A failure only loses that ability: logged.
-func (a *Activities) persistHandle(ctx context.Context, params ExecuteStatementParams, h queryengine.QueryHandle) {
-	var execID pgtype.UUID
-	if err := execID.Scan(params.ExecutionID); err != nil {
-		return
-	}
-	raw, err := json.Marshal(h)
-	if err != nil {
-		return
-	}
-	if err := a.queries.SetStatementQueryHandle(ctx, db.SetStatementQueryHandleParams{
-		ExecutionID: execID, Position: params.Position, QueryHandle: raw,
-	}); err != nil {
-		activity.GetLogger(ctx).Warn("could not persist the query handle", "execution_id", params.ExecutionID, "err", err)
-	}
-}
-
-// resultSink streams the first result set of a statement to object storage as
-// one Arrow IPC object: batch -> IPC writer -> io.Pipe -> S3 multipart upload.
-// A result set without columns (DDL/DML) uploads nothing. Past the row or byte
-// cap it stops the statement with errResultCapReached; the stored result is
-// then truncated, not failed.
-type resultSink struct {
-	a      *Activities
-	ctx    context.Context
-	params ExecuteStatementParams
-
-	began     bool
-	sets      int
-	columns   []ColumnResult
-	key       string
-	writer    *arrowipc.RecordWriter
-	pw        *io.PipeWriter
-	cw        *countingWriter
-	done      chan struct{}
-	uploaded  int64
-	uploadErr error
-	rows      int64
-	truncated bool
-}
-
-func (s *resultSink) Begin(schema *arrow.Schema) error {
-	s.began = true
-	s.sets++
-	if s.sets > 1 || schema.NumFields() == 0 {
-		return nil // one stored result per statement; result_sets is #20 PR 3
-	}
-	s.columns = make([]ColumnResult, schema.NumFields())
-	for i, f := range schema.Fields() {
-		s.columns[i] = ColumnResult{Name: f.Name, Type: arrowipc.NativeType(f)}
-	}
-	s.key = s3ResultKey(s.params.ExecutionID, int(s.params.Position), 0)
-	pr, pw := io.Pipe()
-	s.pw = pw
-	s.cw = &countingWriter{w: pw}
-	s.writer = arrowipc.NewRecordWriter(s.cw, schema)
-	s.done = make(chan struct{})
-	go func() {
-		defer close(s.done)
-		n, err := s.a.s3.PutStream(s.ctx, s.key, pr, arrowContentType)
-		if err != nil {
-			s.uploadErr = err
-			_ = pr.CloseWithError(err)
-			return
-		}
-		s.uploaded = n
-	}()
-	return nil
-}
-
-func (s *resultSink) Write(rec arrow.RecordBatch) error {
-	defer rec.Release()
-	if s.sets > 1 || s.writer == nil {
-		return nil
-	}
-	maxRows, maxBytes := s.a.cfg.ResultMaxRows, s.a.cfg.ResultMaxBytes
-	if s.rows >= maxRows || s.cw.n >= maxBytes {
-		return errResultCapReached
-	}
-	batch := rec
-	capped := false
-	if remaining := maxRows - s.rows; rec.NumRows() > remaining {
-		batch = rec.NewSlice(0, remaining)
-		defer batch.Release()
-		capped = true
-	}
-	if err := s.writer.Write(batch); err != nil {
-		return err
-	}
-	s.rows += batch.NumRows()
-	if capped || s.cw.n >= maxBytes {
-		return errResultCapReached
-	}
-	return nil
-}
-
-func (s *resultSink) End(queryengine.Stats) error { return nil }
-
-// finish closes the IPC stream and waits for the upload.
-func (s *resultSink) finish() error {
-	if s.writer == nil {
-		return nil
-	}
-	err := s.writer.Close()
-	_ = s.pw.Close()
-	<-s.done
-	return err
-}
-
-// abort ends the upload without completing the stream.
-func (s *resultSink) abort() {
-	if s.pw == nil {
-		return
-	}
-	_ = s.pw.Close()
-	<-s.done
-}
-
-type UpdateStatementRecordParams struct {
-	ExecutionID   string
-	Position      int32
-	Status        string
-	EngineQueryID string
-	RowsReturned  int64
-	DurationMs    int64
-	ErrorMessage  string
-	ResultKey     string
-	ResultBytes   int64
-	Truncated     bool
 }
 
 // resultSet is one entry of query_statements.result_sets.
@@ -573,81 +180,53 @@ type resultSet struct {
 
 // resultSets renders the stored results of a statement: today at most one,
 // at result_index 0 (the layout already allows more).
-func resultSets(p UpdateStatementRecordParams) []byte {
+func resultSets(o StatementOutcome) []byte {
 	sets := []resultSet{}
-	if p.ResultKey != "" {
-		sets = append(sets, resultSet{ResultKey: p.ResultKey, Rows: p.RowsReturned, Bytes: p.ResultBytes, Truncated: p.Truncated})
+	if o.ResultKey != "" {
+		sets = append(sets, resultSet{ResultKey: o.ResultKey, Rows: o.RowCount, Bytes: o.ResultBytes, Truncated: o.Truncated})
 	}
 	out, _ := json.Marshal(sets)
 	return out
 }
 
-func UpdateStatementRecord(ctx context.Context, params UpdateStatementRecordParams) error {
-	return defaultActivities.updateStatementRecord(ctx, params)
-}
-
-func (a *Activities) updateStatementRecord(ctx context.Context, params UpdateStatementRecordParams) error {
-	var execID pgtype.UUID
-	if err := execID.Scan(params.ExecutionID); err != nil {
-		return err
-	}
-
+// recordOutcome ends the running statement at o.Position. The update is
+// conditional on status='running', so it never overwrites a statement that
+// was already abandoned.
+func (a *Activities) recordOutcome(ctx context.Context, execID pgtype.UUID, o StatementOutcome) error {
 	statements, err := a.queries.ListQueryStatements(ctx, execID)
 	if err != nil {
 		return err
 	}
-
 	for _, s := range statements {
-		if s.Position != params.Position {
+		if s.Position != o.Position {
 			continue
 		}
-
-		var errMsg *string
-		if params.ErrorMessage != "" {
-			errMsg = &params.ErrorMessage
-		}
-		var engineID *string
-		if params.EngineQueryID != "" {
-			engineID = &params.EngineQueryID
-		}
-		var resultKey *string
-		if params.ResultKey != "" {
-			resultKey = &params.ResultKey
-		}
-		var finishedAt pgtype.Timestamptz
-		if params.Status == "finished" || params.Status == "failed" || params.Status == "cancelled" {
-			finishedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
-		}
-
 		_, err := a.queries.UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{
 			ID:            s.ID,
-			Status:        params.Status,
-			EngineQueryID: engineID,
-			ResultSets:    resultSets(params),
-			RowsReturned:  &params.RowsReturned,
-			DurationMs:    &params.DurationMs,
-			ErrorMessage:  errMsg,
-			FinishedAt:    finishedAt,
-			ResultKey:     resultKey,
-			ResultBytes:   &params.ResultBytes,
-			Truncated:     params.Truncated,
+			Status:        o.Status,
+			EngineQueryID: optional(o.EngineQueryID),
+			ResultSets:    resultSets(o),
+			RowsReturned:  &o.RowCount,
+			DurationMs:    &o.DurationMs,
+			ErrorMessage:  optional(o.Error),
+			ErrorCode:     optional(o.ErrorCode),
+			FinishedAt:    pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			ResultKey:     optional(o.ResultKey),
+			ResultBytes:   &o.ResultBytes,
+			Truncated:     o.Truncated,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
-			// The statement was already terminal (cancelled); a late update
-			// must not overwrite it.
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-
 		// The execution's result_key points at the last statement that
-		// produced a result set; runs are processed in statement order so
-		// later statements naturally win.
-		if resultKey != nil {
+		// produced a result set; statements run in order, so later ones win.
+		if o.ResultKey != "" {
 			if err := a.queries.SetExecutionResult(ctx, db.SetExecutionResultParams{
 				ID:        execID,
-				ResultKey: resultKey,
+				ResultKey: &o.ResultKey,
 			}); err != nil {
 				return fmt.Errorf("set execution result: %w", err)
 			}
@@ -657,24 +236,11 @@ func (a *Activities) updateStatementRecord(ctx context.Context, params UpdateSta
 	return nil
 }
 
-type SetExecutionResultParams struct {
-	ExecutionID string
-	ResultKey   string
-}
-
-func SetExecutionResult(ctx context.Context, params SetExecutionResultParams) error {
-	return defaultActivities.setExecutionResult(ctx, params)
-}
-
-func (a *Activities) setExecutionResult(ctx context.Context, params SetExecutionResultParams) error {
-	var execID pgtype.UUID
-	if err := execID.Scan(params.ExecutionID); err != nil {
-		return err
+func optional(s string) *string {
+	if s == "" {
+		return nil
 	}
-	return a.queries.SetExecutionResult(ctx, db.SetExecutionResultParams{
-		ID:        execID,
-		ResultKey: &params.ResultKey,
-	})
+	return &s
 }
 
 type CompleteExecutionParams struct {

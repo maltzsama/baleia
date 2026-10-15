@@ -91,9 +91,32 @@ RETURNING *;
 -- statement was already terminal; callers treat that as a no-op.
 UPDATE query_statements
 SET status = $2, engine_query_id = $3, rows_returned = $4, duration_ms = $5, error_message = $6, finished_at = $7,
-    result_key = $8, result_bytes = $9, truncated = $10, result_sets = $11
+    result_key = $8, result_bytes = $9, truncated = $10, result_sets = $11, error_code = $12
 WHERE id = $1 AND status = 'running'
 RETURNING *;
+
+-- name: StartQueryStatement :execrows
+-- A pending statement becomes the running one. Zero rows means the
+-- statement is no longer pending (already abandoned).
+UPDATE query_statements
+SET status = 'running', started_at = now()
+WHERE execution_id = $1 AND position = $2 AND status = 'pending';
+
+-- name: SkipPendingStatements :exec
+-- After a failure, a cancel or a crash the statements that never ran are
+-- skipped.
+UPDATE query_statements
+SET status = 'skipped', finished_at = now()
+WHERE execution_id = $1 AND status = 'pending';
+
+-- name: AbandonRunningStatements :many
+-- Ends the statements still running after the script activity stopped
+-- (cancel, crash, heartbeat timeout) and returns their handles so the engine
+-- can be asked to stop them.
+UPDATE query_statements
+SET status = $2, error_code = $3, error_message = $4, finished_at = now()
+WHERE execution_id = $1 AND status = 'running'
+RETURNING position, query_handle;
 
 -- name: ListQueryStatements :many
 SELECT * FROM query_statements

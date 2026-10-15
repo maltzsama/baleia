@@ -295,6 +295,32 @@ func TestNoTrinoImportsInDomain(t *testing.T) {
 	}
 }
 
+// executionPath is the code that runs an execution's statements (#27).
+var executionPath = []string{
+	"internal/temporal/activities/activities.go",
+	"internal/temporal/activities/execute_script.go",
+	"internal/temporal/workflows/workflows.go",
+}
+
+// TestNoTrinoInExecutionPath: the execution path runs any engine through
+// internal/queryengine; it imports no Trino package, not even the adapter.
+func TestNoTrinoInExecutionPath(t *testing.T) {
+	imports := moduleImports(t)
+	for _, file := range executionPath {
+		got, ok := imports[file]
+		if !ok {
+			t.Errorf("%s not found; update executionPath", file)
+			continue
+		}
+		for _, imp := range got {
+			if strings.HasPrefix(imp, "github.com/galileostudio/baleia/internal/trino") ||
+				strings.HasPrefix(imp, "github.com/galileostudio/baleia/internal/queryengine/trino") {
+				t.Errorf("%s imports %s; the execution path is engine-neutral", file, imp)
+			}
+		}
+	}
+}
+
 // goSources calls fn for every production Go file of the module with its
 // module-relative path.
 func goSources(t *testing.T, fn func(rel string, f *ast.File)) {
