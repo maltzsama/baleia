@@ -1,4 +1,4 @@
-package catalogs
+package trino
 
 import (
 	"encoding/json"

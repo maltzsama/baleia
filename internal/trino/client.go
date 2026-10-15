@@ -174,7 +174,7 @@ var catalogNameRe = regexp.MustCompile("^[a-z][a-z0-9_]{0,62}$")
 //   - Property keys double-quoted (required because keys contain hyphens).
 //   - Property values single-quoted with ' escaped as ”.
 //   - Property keys iterated in sorted alphabetical order, so the generated
-//     text is deterministic and the catalog_version hash (catalogs.Version)
+//     text is deterministic and the catalog_version hash (bindings/trino.Version)
 //     is reproducible.
 //   - Secrets in spec.SecretKeys replaced with the
 //     @baleia-secret[<Name>:<key>] placeholder in the DDL text ONLY.
@@ -250,7 +250,7 @@ func validateCatalogName(name string) error {
 // buildCreateCatalogDDL renders spec into a CREATE CATALOG statement.
 // Secrets in spec.SecretKeys are replaced with @baleia-secret[...] in the
 // DDL text only; spec.Properties retains the real value (callers must
-// already have written that to the registry via catalogs.Project).
+// already have written that to the registry via the Trino binder, internal/bindings/trino).
 func buildCreateCatalogDDL(spec CatalogSpec) string {
 	secretKeySet := make(map[string]struct{}, len(spec.SecretKeys))
 	for _, k := range spec.SecretKeys {

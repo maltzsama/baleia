@@ -74,3 +74,7 @@ UPDATE trino_catalog_registry
 UPDATE trino_catalog_registry
    SET sync_status = 'error', sync_error = $3, updated_by = 'baleia', updated_at = now()
  WHERE cluster_id = $1 AND catalog_name = $2;
+-- name: GetTrinoCatalogRegistryState :one
+SELECT catalog_version, enabled, sync_status, updated_by
+  FROM trino_catalog_registry
+ WHERE cluster_id = $1 AND catalog_name = $2;

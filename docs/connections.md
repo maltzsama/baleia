@@ -7,25 +7,25 @@ Every connection kind Baleia knows, what it can be used for, and its configurati
 See [ADR 0002](adr/0002-connections-engines-catalogs-bindings.md) for the model and
 [ADR 0011](adr/0011-direct-connections-security.md) for network safety.
 
-Which federated engines can bind each kind is declared by binders and is added to this
-page when they land (#80).
+*Bindable into* lists the federated engines whose binder can bind the kind, with the
+connectors it may use (the first is the default; `internal/bindings`).
 
-| Kind | Label | Family | Roles | Engine kind | Status |
-|---|---|---|---|---|---|
-| `clickhouse` | ClickHouse | database | metadata, direct_engine | clickhouse | supported |
-| `doris` | Apache Doris | engine | federated_engine | doris | unsupported (planned after v1 (#21)) |
-| `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | supported |
-| `iceberg` | Iceberg REST catalog | iceberg | metadata | — | supported |
-| `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | supported |
-| `mysql` | MySQL | database | metadata, direct_engine | mysql | supported |
-| `nessie` | Project Nessie | iceberg | metadata | — | supported |
-| `oracle` | Oracle Database | database | metadata, direct_engine | oracle | supported |
-| `polaris` | Apache Polaris | iceberg | metadata | — | supported |
-| `postgresql` | PostgreSQL | database | metadata, direct_engine | postgresql | supported |
-| `sqlite` | SQLite | database | metadata, direct_engine | sqlite | unsupported (BALEIA_SQLITE_ROOT not set) |
-| `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | supported |
-| `starrocks` | StarRocks | engine | federated_engine | starrocks | unsupported (planned after v1 (#30)) |
-| `trino` | Trino | engine | metadata, federated_engine | trino | supported |
+| Kind | Label | Family | Roles | Engine kind | Bindable into | Status |
+|---|---|---|---|---|---|---|
+| `clickhouse` | ClickHouse | database | metadata, direct_engine | clickhouse | — | supported |
+| `doris` | Apache Doris | engine | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
+| `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | — | supported |
+| `iceberg` | Iceberg REST catalog | iceberg | metadata | — | trino (iceberg) | supported |
+| `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | — | supported |
+| `mysql` | MySQL | database | metadata, direct_engine | mysql | trino (mysql) | supported |
+| `nessie` | Project Nessie | iceberg | metadata | — | trino (iceberg) | supported |
+| `oracle` | Oracle Database | database | metadata, direct_engine | oracle | — | supported |
+| `polaris` | Apache Polaris | iceberg | metadata | — | trino (iceberg) | supported |
+| `postgresql` | PostgreSQL | database | metadata, direct_engine | postgresql | trino (postgresql) | supported |
+| `sqlite` | SQLite | database | metadata, direct_engine | sqlite | — | unsupported (BALEIA_SQLITE_ROOT not set) |
+| `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | — | supported |
+| `starrocks` | StarRocks | engine | federated_engine | starrocks | — | unsupported (planned after v1 (#30)) |
+| `trino` | Trino | engine | metadata, federated_engine | trino | — | supported |
 
 ## `clickhouse` — ClickHouse
 

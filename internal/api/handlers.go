@@ -33,10 +33,10 @@ type Handlers struct {
 	versionCache   *TTLStore[*string] // engine id@updated_at → reported version
 	// connections holds every connection provider (docs/adr/0002).
 	connections *connections.Registry
-	// engines runs SQL (docs/adr/0002); catalogDDL manages Trino catalogs as
-	// the admin identity (docs/adr/0005). Both are built at the wiring site.
-	engines    engineSource
-	catalogDDL catalogDDL
+	// engines runs SQL (docs/adr/0002); binder binds catalogs into Trino as
+	// the admin identity (docs/adr/0005, #80). Both are built at the wiring site.
+	engines engineSource
+	binder  *bindtrino.Binder
 }
 
 // engineSource returns engines; *queryengine.Manager implements it.
@@ -45,14 +45,7 @@ type engineSource interface {
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
 }
 
-// catalogDDL creates and drops Trino catalogs; *bindings/trino.DDL implements it.
-type catalogDDL interface {
-	CreateCatalog(ctx context.Context, spec bindtrino.CatalogSpec) error
-	DropCatalog(ctx context.Context, name string) error
-	ListCatalogs(ctx context.Context) ([]string, error)
-}
-
-func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, ddl catalogDDL) *Handlers {
+func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, binder *bindtrino.Binder) *Handlers {
 	return &Handlers{
 		connections:    conns,
 		queries:        queries,
@@ -62,7 +55,7 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		temporalClient: temporalClient,
 		s3:             s3,
 		engines:        engines,
-		catalogDDL:     ddl,
+		binder:         binder,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 		versionCache:   NewTTLStore[*string](engineVersionTTL),
 	}

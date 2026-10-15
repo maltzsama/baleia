@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -325,7 +326,8 @@ func TestFromStored(t *testing.T) {
 }
 
 func TestConnectionsMatrixUpToDate(t *testing.T) {
-	got := Markdown(registry(t, connections.DialerOptions{}))
+	// The bindable column comes from the binders (bindings.TestSupportsMatrixMatchesDocs).
+	got := Markdown(registry(t, connections.DialerOptions{}), bindtrino.New(nil, nil))
 	const path = "../../../docs/connections.md"
 	if os.Getenv("BALEIA_UPDATE_DOCS") == "1" {
 		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {

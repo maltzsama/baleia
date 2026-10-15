@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/galileostudio/baleia/internal/bindings"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,7 +19,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -236,19 +236,9 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
     return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
 }
 
-// testSQLViaTrino registers a throwaway catalog in Trino using catalogs.Project
-// (the canonical property builder) + @baleia-secret[...] placeholder, runs a
-// SHOW SCHEMAS as a smoke test, then DROPs the catalog and the throwaway
-// registry row. L2 (CR-017): Polaris connections are tested via REST Ping at
-// the TestCatalogConnection level, so this path is only used for postgresql/
-// mysql connections today.
-//
-// Note: the placeholder the DDL carries resolves against the catalog name we
-// just registered in trino_catalog_registry. So we must write a temporary
-// registry row BEFORE emitting the DDL — the plugin reads it at boot-time
-// AND at createCatalogProperties-time. For the test, we upsert a row with
-// sync_status='pending', issue the CREATE CATALOG, then DROP CATALOG and
-// soft-delete the registry row.
+// testSQLViaTrino binds a throwaway catalog of the connection into Trino
+// through the binder (registry row first: the plugin resolves the
+// placeholders from it), lists its schemas, then drops it.
 func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnection, start time.Time) (TestCatalogConnectionResponseObject, error) {
 	testName := "baleia_test_" + uuid.NewString()[:8]
 
@@ -256,65 +246,36 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 	if err != nil {
 		return nil, fmt.Errorf("get default cluster: %w", err)
 	}
-	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
+	proj, err := h.projectBinding(conn, bindings.BindingSpec{EngineCatalog: testName, SourceRef: testName})
 	if err != nil {
 		errMsg := err.Error()
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
 	}
-
-	// Build a throwaway catalog row for Project to consume. Use a bogus
-	// connection id pointing back at conn so Project works.
-	connector := trinoConnector(conn.Type)
-	throw := db.Catalog{
-		ConnectionID:     conn.ID,
-		TrinoCatalogName: &testName,
-		ClusterID:        cluster.ID,
-		Warehouse:        &testName,
-		Connector:        &connector,
-	}
-	proj, err := catalogs.Project(conn, throw, creds)
-	if err != nil {
-		errMsg := err.Error()
-		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
-	}
-	propsJSON, _ := json.Marshal(proj.Row.Properties)
-	_ = h.queries.UpsertTrinoCatalogRegistry(ctx, db.UpsertTrinoCatalogRegistryParams{
-		ClusterID:      pgtype.UUID{Bytes: proj.Row.ClusterID, Valid: true},
-		CatalogName:    proj.Row.CatalogName,
-		ConnectorName:  proj.Row.ConnectorName,
-		Column4:        propsJSON,
-	})
-	defer func() {
-		_ = h.queries.SoftDeleteTrinoCatalogRegistry(ctx, db.SoftDeleteTrinoCatalogRegistryParams{
-			ClusterID:   cluster.ID,
-			CatalogName: testName,
-		})
-		_ = h.catalogDDL.DropCatalog(ctx, testName)
-	}()
+	eng := bindings.EngineRef{ClusterID: cluster.ID}
+	b := h.binder.WithStore(h.queries)
 
 	trinoCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-
-	if err := h.catalogDDL.CreateCatalog(trinoCtx, bindtrino.CatalogSpec{
-		Name:       proj.Row.CatalogName,
-		Connector:  proj.Row.ConnectorName,
-		Properties: proj.Row.Properties,
-		SecretKeys: proj.SecretKeys,
-	}); err != nil {
+	defer func() {
+		dropCtx, dropCancel := context.WithTimeout(context.WithoutCancel(ctx), catalogDDLTimeout)
+		defer dropCancel()
+		_ = b.Drop(dropCtx, eng, testName)
+	}()
+	if err := b.Create(trinoCtx, eng, proj); err != nil {
 		errMsg := err.Error()
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
 	}
 
-	eng, err := h.engines.DefaultTrino(trinoCtx)
+	engine, err := h.engines.DefaultTrino(trinoCtx)
 	if err != nil {
 		return nil, err
 	}
-	testTarget, err := eng.Dialect().QualifiedName(testName)
+	testTarget, err := engine.Dialect().QualifiedName(testName)
 	if err != nil {
 		return nil, err
 	}
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "connection-test", RequestID: middleware.GetReqID(ctx)}}
-	if _, err := queryengine.CollectStrings(trinoCtx, eng, spec, "SHOW SCHEMAS FROM "+testTarget, 10000); err != nil {
+	if _, err := queryengine.CollectStrings(trinoCtx, engine, spec, "SHOW SCHEMAS FROM "+testTarget, 10000); err != nil {
 		errMsg := err.Error()
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
 	}
@@ -421,26 +382,6 @@ func (h *Handlers) ListColumns(ctx context.Context, request ListColumnsRequestOb
 func (h *Handlers) ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error) {
 	return ListTableSnapshots404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalogs are loaded dynamically"}}, nil
 }
-
-func trinoConnector(connType string) string {
-	switch connType {
-	case "postgresql", "postgres":
-		return "postgresql"
-	case "mysql":
-		return "mysql"
-	case "polaris", "iceberg", "nessie":
-		return "iceberg"
-	default:
-		return ""
-	}
-}
-
-// trinoCatalogProperties was the old inline builder for connector properties
-// from the pre-plugin era. It has been replaced by internal/catalogs.Project,
-// which lives alongside the write-through handlers in handlers_catalogs_write.go.
-// (CR-017 §L1: the dynamic catalog-discovery path via Polaris REST has been
-// removed — catalogs are now discovered via the registry table that the
-// plugin loads at Trino boot.)
 
 // workspaceCatalogEntry describes one catalog-row in the per-workspace
 // listing exposed to the UI. Fields mirror what the frontend DataSourceTree

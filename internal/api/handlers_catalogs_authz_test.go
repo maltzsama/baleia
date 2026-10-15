@@ -54,6 +54,7 @@ type authzFake struct {
 	cat         db.Catalog
 	updated     []db.UpdateCatalogParams
 	upserts     []string
+	disabled    []string // registry rows soft-deleted
 	registryErr []string
 	order       []string
 	mu          sync.Mutex
@@ -102,7 +103,10 @@ func (q *authzFake) MarkTrinoCatalogRegistryError(_ context.Context, p db.MarkTr
 	return nil
 }
 
-func (q *authzFake) SoftDeleteTrinoCatalogRegistry(context.Context, db.SoftDeleteTrinoCatalogRegistryParams) error {
+func (q *authzFake) SoftDeleteTrinoCatalogRegistry(_ context.Context, p db.SoftDeleteTrinoCatalogRegistryParams) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.disabled = append(q.disabled, p.CatalogName)
 	return nil
 }
 
@@ -148,8 +152,9 @@ func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
 		keyring:      kr,
 		cfg:          &config.Config{TrinoUserIdentity: "uuid"},
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
+		connections:  testRegistry(t),
 	}
-	h.engines, h.catalogDDL = trinoBackends(ft.srv.URL)
+	h.engines, h.binder = trinoBackends(ft.srv.URL)
 	return h, q, ft
 }
 
@@ -229,9 +234,11 @@ func TestUpdateCatalog_Authz(t *testing.T) {
 	}
 }
 
-// TestUpdateCatalog_RenamePersistsAndRecreatesInOrder pins #132 and #129: the
-// new trino_catalog_name is written with the row, and the registry row is
-// upserted (re-enabled) after DROP and before CREATE.
+// TestUpdateCatalog_RenamePersistsAndRecreatesInOrder pins #132 and the
+// binder's rename (#80): the new trino_catalog_name is written with the row,
+// the catalog is created under the new name (registry row first), and only
+// then is the old name disabled and dropped, so it never goes missing. The
+// same-name order of #129 (DROP, upsert, CREATE) is TestSyncCatalog_Authz.
 func TestUpdateCatalog_RenamePersistsAndRecreatesInOrder(t *testing.T) {
 	h, q, ft := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
@@ -254,12 +261,15 @@ func TestUpdateCatalog_RenamePersistsAndRecreatesInOrder(t *testing.T) {
 			seq = append(seq, "create")
 		}
 	}
-	// old name dropped (rename), then drop of the new name, then create.
-	if len(seq) < 2 || seq[len(seq)-1] != "create" || seq[len(seq)-2] != "drop" {
-		t.Fatalf("statement order = %v, want ... drop, create", seq)
+	if strings.Join(seq, ",") != "create,drop" {
+		t.Fatalf("statement order = %v, want create (new name), drop (old name)", seq)
 	}
-	if len(q.upserts) != 1 || q.upserts[0] != "wh_renamed" {
-		t.Fatalf("registry upserts = %v", q.upserts)
+	stmts := ft.statements()
+	if !strings.Contains(stmts[len(stmts)-2], "wh_renamed") || !strings.Contains(stmts[len(stmts)-1], "wh") || strings.Contains(stmts[len(stmts)-1], "wh_renamed") {
+		t.Fatalf("statements = %q", stmts)
+	}
+	if len(q.upserts) != 1 || q.upserts[0] != "wh_renamed" || len(q.disabled) != 1 || q.disabled[0] != "wh" {
+		t.Fatalf("registry upserts = %v, disabled = %v", q.upserts, q.disabled)
 	}
 }
 
@@ -311,7 +321,7 @@ func TestSyncCatalog_FailedRecreateIsASyncError(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"q","stats":{"state":"FINISHED"}}`)
 	}))
 	defer failing.Close()
-	h.engines, h.catalogDDL = trinoBackends(failing.URL)
+	h.engines, h.binder = trinoBackends(failing.URL)
 	_, cat := reqIDs(q)
 	resp, err := h.SyncCatalog(ctxAs(ownerID, "member"), SyncCatalogRequestObject{CatalogId: cat})
 	if err != nil {
@@ -488,7 +498,7 @@ func TestSyncCatalog_StuckDDLTimesOut(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"q","stats":{"state":"FINISHED"}}`)
 	}))
 	defer stuck.Close()
-	h.engines, h.catalogDDL = trinoBackends(stuck.URL)
+	h.engines, h.binder = trinoBackends(stuck.URL)
 
 	_, cat := reqIDs(q)
 	start := time.Now()

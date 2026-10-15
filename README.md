@@ -268,7 +268,7 @@ The OpenAPI spec is served at `GET /openapi.yaml` and is the single source of tr
 2. Implement `connections.Provider` in `internal/connections/<kind>/` (config schema, `Validate`, `Ping`, `OpenMetadata`). Every network connection goes through the injected `connections.Dialer`; a driver without a dial hook is not shipped ([ADR 0011](docs/adr/0011-direct-connections-security.md))
 3. Register it in `internal/connections/providers/providers.go` and add it to `TestEveryDriverUsesDialer`
 4. Regenerate [`docs/connections.md`](docs/connections.md): `BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/`
-5. Until binders land (#80), extend `trinoConnector()` and `catalogs.Project` for the Trino projection
+5. To bind it into Trino, add its projection to the Trino binder (`internal/bindings/trino`: `Supports`, a projection function with a golden test, and `TestDDLHasNoSecrets`), then regenerate `docs/connections.md`
 6. The API validates and stores connections through the provider's schema (`GET /connection-providers` exposes it), so no OpenAPI change is needed. Until the UI reads that endpoint (#22), add the card to `web/src/routes/(app)/datasources/+page.svelte`
 
 ## Source databases and SQL dialects
