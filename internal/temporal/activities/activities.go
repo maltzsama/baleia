@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -50,7 +51,12 @@ type Activities struct {
 	metadata metadataSyncer
 	// observeEngine observes a federated engine's catalogs (#17).
 	observeEngine engineObserver
+	// audit records data operations (#45; call sites #43).
+	audit audit.Recorder
 }
+
+// SetAudit wires the audit recorder (#45).
+func (a *Activities) SetAudit(r audit.Recorder) { a.audit = r }
 
 // s3Client is the slice of the storage client result streaming needs. It is an
 // interface so tests can inject a fake.
@@ -67,6 +73,7 @@ func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns 
 		cfg:         cfg,
 		keyring:     keyring,
 		connections: conns,
+		audit:       audit.Nop{},
 	}
 	defaultActivities = a
 	return a
@@ -97,6 +104,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(RetrieverDispatch)
 	w.RegisterActivity(AdvanceRetrieverSchedule)
 	w.RegisterActivity(SyncCatalogMetadata)
+	w.RegisterActivity(EnsureAuditPartitions)
 	w.RegisterActivity(RefreshEngineCatalogs)
 	w.RegisterActivity(ListSyncableCatalogs)
 }

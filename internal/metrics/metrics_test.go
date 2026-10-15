@@ -38,6 +38,7 @@ func registry(t *testing.T) *Registry {
 		t.Fatal(err)
 	}
 	r.Metadata().Synced(time.Second, nil)
+	r.Audit().WriteFailed()
 	r.WatchMetadataStaleness(func(context.Context) (float64, error) { return 42, nil })
 	return r
 }
@@ -85,6 +86,7 @@ func TestMetadataMetrics(t *testing.T) {
 	for _, want := range []string{
 		"baleia_metadata_staleness_seconds_max 42",
 		`baleia_metadata_sync_duration_seconds_count{outcome="success"} 1`,
+		"baleia_audit_write_failures_total 1",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape lacks %q", want)

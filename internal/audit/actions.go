@@ -1,0 +1,86 @@
+package audit
+
+// Action is one entry of the bounded audit vocabulary: <resource>.<verb>.
+// Adding an action means adding it here and to allActions
+// (TestActionsAreBounded).
+type Action string
+
+const (
+	ConnectionCreate Action = "connection.create"
+	ConnectionUpdate Action = "connection.update"
+	ConnectionDelete Action = "connection.delete"
+	ConnectionTest   Action = "connection.test"
+
+	CatalogCreate    Action = "catalog.create"
+	CatalogUpdate    Action = "catalog.update"
+	CatalogRename    Action = "catalog.rename"
+	CatalogDelete    Action = "catalog.delete"
+	CatalogSync      Action = "catalog.sync"
+	CatalogReconcile Action = "catalog.reconcile"
+
+	GrantCreate Action = "grant.create"
+	GrantRevoke Action = "grant.revoke"
+
+	WorkspaceUpdate Action = "workspace.update"
+
+	TeamMemberAdd    Action = "team.member_add"
+	TeamMemberRemove Action = "team.member_remove"
+	TeamRoleChange   Action = "team.role_change"
+
+	UserInvite     Action = "user.invite"
+	UserRoleChange Action = "user.role_change"
+	UserDisable    Action = "user.disable"
+
+	AuthLogin                Action = "auth.login"
+	AuthLogout               Action = "auth.logout"
+	AuthRefresh              Action = "auth.refresh"
+	AuthPasswordResetRequest Action = "auth.password_reset_request"
+	AuthPasswordResetConfirm Action = "auth.password_reset_confirm"
+
+	APIKeyCreate Action = "api_key.create"
+	APIKeyRevoke Action = "api_key.revoke"
+
+	ExecutionCreate Action = "execution.create"
+	ExecutionCancel Action = "execution.cancel"
+
+	ResultsDownload Action = "results.download"
+
+	MaintenanceTrigger Action = "maintenance.trigger"
+
+	RetrieverCreate  Action = "retriever.create"
+	RetrieverUpdate  Action = "retriever.update"
+	RetrieverDelete  Action = "retriever.delete"
+	RetrieverRefresh Action = "retriever.refresh"
+
+	MetadataSync Action = "metadata.sync"
+)
+
+// allActions is the whole vocabulary.
+var allActions = []Action{
+	ConnectionCreate, ConnectionUpdate, ConnectionDelete, ConnectionTest,
+	CatalogCreate, CatalogUpdate, CatalogRename, CatalogDelete, CatalogSync, CatalogReconcile,
+	GrantCreate, GrantRevoke,
+	WorkspaceUpdate,
+	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,
+	UserInvite, UserRoleChange, UserDisable,
+	AuthLogin, AuthLogout, AuthRefresh, AuthPasswordResetRequest, AuthPasswordResetConfirm,
+	APIKeyCreate, APIKeyRevoke,
+	ExecutionCreate, ExecutionCancel,
+	ResultsDownload,
+	MaintenanceTrigger,
+	RetrieverCreate, RetrieverUpdate, RetrieverDelete, RetrieverRefresh,
+	MetadataSync,
+}
+
+// Actions returns the vocabulary.
+func Actions() []Action { return append([]Action(nil), allActions...) }
+
+// Known reports whether a is in the vocabulary.
+func Known(a Action) bool {
+	for _, k := range allActions {
+		if k == a {
+			return true
+		}
+	}
+	return false
+}

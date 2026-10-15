@@ -6,18 +6,19 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/metrics"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
 )
 
@@ -39,6 +40,8 @@ type Handlers struct {
 	engines engineSource
 	binder  *bindtrino.Binder
 	metrics apiMetrics
+	// audit records security and data operations (#45; call sites #43).
+	audit audit.Recorder
 }
 
 // apiMetrics are the API's producers (#87); all nil-safe, zero without
@@ -88,8 +91,12 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		binder:         binder,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 		versionCache:   NewTTLStore[*string](engineVersionTTL),
+		audit:          audit.Nop{},
 	}
 }
+
+// SetAudit wires the audit recorder (#45).
+func (h *Handlers) SetAudit(r audit.Recorder) { h.audit = r }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

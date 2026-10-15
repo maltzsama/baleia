@@ -5,6 +5,8 @@
 package db
 
 import (
+	"net/netip"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,6 +17,25 @@ type ApiKey struct {
 	KeyHash   string             `json:"key_hash"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type AuditEvent struct {
+	ID           int64              `json:"id"`
+	OccurredAt   pgtype.Timestamptz `json:"occurred_at"`
+	ActorKind    string             `json:"actor_kind"`
+	ActorID      *string            `json:"actor_id"`
+	AuthMethod   *string            `json:"auth_method"`
+	Action       string             `json:"action"`
+	ResourceType string             `json:"resource_type"`
+	ResourceID   *string            `json:"resource_id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	Outcome      string             `json:"outcome"`
+	Reason       *string            `json:"reason"`
+	RequestID    *string            `json:"request_id"`
+	TraceID      *string            `json:"trace_id"`
+	ClientIp     *netip.Addr        `json:"client_ip"`
+	UserAgent    *string            `json:"user_agent"`
+	Changes      []byte             `json:"changes"`
 }
 
 type AuthProvider struct {

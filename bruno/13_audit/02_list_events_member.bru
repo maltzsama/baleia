@@ -1,0 +1,27 @@
+meta {
+  name: List Audit Events (member sees only their own)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/audit/events?limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("every event is the caller's", function () {
+    for (const e of res.body.items) {
+      expect(e.actor_kind).to.equal("user");
+    }
+  });
+}

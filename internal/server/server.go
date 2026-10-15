@@ -9,12 +9,14 @@ import (
 	"time"
 
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/queryengine"
+
 	// Engine kinds register themselves.
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -120,6 +122,12 @@ func (s *Server) routes() {
 	binder := bindtrino.New(trinoAdmin, s.queries)
 
 	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
+	// The audit trail is best-effort: a failed write is counted, never fatal.
+	var auditMetrics *metrics.Audit
+	if s.metrics != nil {
+		auditMetrics = s.metrics.Audit()
+	}
+	h.SetAudit(audit.NewPostgres(s.queries, conns.SecretKeys(), auditMetrics.WriteFailed))
 	var onRefreshLimited func()
 	if s.metrics != nil {
 		h.SetMetrics(s.metrics)
@@ -141,6 +149,7 @@ func (s *Server) routes() {
 	})
 
 	s.mux.Route("/api/v1", func(r chi.Router) {
+		r.Use(audit.Middleware)
 		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
 		r.Use(OptionalJSONBody)
 		baleiaapi.HandlerFromMux(strictHandler, r)

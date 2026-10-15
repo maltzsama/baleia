@@ -20,6 +20,21 @@ const (
 	AddTeamMemberRequestRoleOwner  AddTeamMemberRequestRole = "owner"
 )
 
+// Defines values for AuditEventActorKind.
+const (
+	Agent     AuditEventActorKind = "agent"
+	Anonymous AuditEventActorKind = "anonymous"
+	Service   AuditEventActorKind = "service"
+	User      AuditEventActorKind = "user"
+)
+
+// Defines values for AuditEventOutcome.
+const (
+	AuditEventOutcomeAllowed AuditEventOutcome = "allowed"
+	AuditEventOutcomeDenied  AuditEventOutcome = "denied"
+	AuditEventOutcomeError   AuditEventOutcome = "error"
+)
+
 // Defines values for CatalogMetadataSyncStatus.
 const (
 	CatalogMetadataSyncStatusFailed   CatalogMetadataSyncStatus = "failed"
@@ -350,6 +365,13 @@ const (
 	Write WorkspaceTargetPermission = "write"
 )
 
+// Defines values for ListAuditEventsParamsOutcome.
+const (
+	ListAuditEventsParamsOutcomeAllowed ListAuditEventsParamsOutcome = "allowed"
+	ListAuditEventsParamsOutcomeDenied  ListAuditEventsParamsOutcome = "denied"
+	ListAuditEventsParamsOutcomeError   ListAuditEventsParamsOutcome = "error"
+)
+
 // Defines values for ListMigrationItemsParamsStatus.
 const (
 	ListMigrationItemsParamsStatusFailed   ListMigrationItemsParamsStatus = "failed"
@@ -361,10 +383,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	Cancelled ListExecutionsParamsStatus = "cancelled"
-	Failed    ListExecutionsParamsStatus = "failed"
-	Finished  ListExecutionsParamsStatus = "finished"
-	Running   ListExecutionsParamsStatus = "running"
+	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
+	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
+	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
+	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for SearchMetadataParamsKind.
@@ -408,6 +430,44 @@ type ApiKeyCreated struct {
 
 	// Secret Displayed only once upon creation
 	Secret string `json:"secret"`
+}
+
+// AuditEvent defines model for AuditEvent.
+type AuditEvent struct {
+	// Action <resource>.<verb>, from a bounded vocabulary (internal/audit/actions.go)
+	Action     string              `json:"action"`
+	ActorId    *string             `json:"actor_id"`
+	ActorKind  AuditEventActorKind `json:"actor_kind"`
+	AuthMethod *string             `json:"auth_method"`
+
+	// Changes {"field": {"from": …, "to": …}}; secret values are "***"
+	Changes *map[string]struct {
+		From *interface{} `json:"from,omitempty"`
+		To   *interface{} `json:"to,omitempty"`
+	} `json:"changes"`
+	ClientIp     *string             `json:"client_ip"`
+	Id           int64               `json:"id"`
+	OccurredAt   time.Time           `json:"occurred_at"`
+	Outcome      AuditEventOutcome   `json:"outcome"`
+	Reason       *string             `json:"reason"`
+	RequestId    *string             `json:"request_id"`
+	ResourceId   *string             `json:"resource_id"`
+	ResourceType string              `json:"resource_type"`
+	TraceId      *string             `json:"trace_id"`
+	UserAgent    *string             `json:"user_agent"`
+	WorkspaceId  *openapi_types.UUID `json:"workspace_id"`
+}
+
+// AuditEventActorKind defines model for AuditEvent.ActorKind.
+type AuditEventActorKind string
+
+// AuditEventOutcome defines model for AuditEvent.Outcome.
+type AuditEventOutcome string
+
+// AuditEventPage defines model for AuditEventPage.
+type AuditEventPage struct {
+	Items      []AuditEvent `json:"items"`
+	NextCursor *string      `json:"next_cursor"`
 }
 
 // BindingSupport defines model for BindingSupport.
@@ -1488,6 +1548,24 @@ type Unauthorized = Error
 
 // UnprocessableEntity defines model for UnprocessableEntity.
 type UnprocessableEntity = ValidationError
+
+// ListAuditEventsParams defines parameters for ListAuditEvents.
+type ListAuditEventsParams struct {
+	ResourceType *string                       `form:"resource_type,omitempty" json:"resource_type,omitempty"`
+	ResourceId   *string                       `form:"resource_id,omitempty" json:"resource_id,omitempty"`
+	ActorId      *string                       `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+	Action       *string                       `form:"action,omitempty" json:"action,omitempty"`
+	Outcome      *ListAuditEventsParamsOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+	From         *time.Time                    `form:"from,omitempty" json:"from,omitempty"`
+	To           *time.Time                    `form:"to,omitempty" json:"to,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAuditEventsParamsOutcome defines parameters for ListAuditEvents.
+type ListAuditEventsParamsOutcome string
 
 // OidcCallbackParams defines parameters for OidcCallback.
 type OidcCallbackParams struct {

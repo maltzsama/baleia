@@ -1,0 +1,26 @@
+meta {
+  name: List Audit Events (admin)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/audit/events?limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.items: isArray
+}
+
+docs {
+  The append-only audit trail (#45), newest first: an admin sees every
+  event. Pass `next_cursor` as `cursor` for the next page. Call sites are
+  instrumented by #43.
+}

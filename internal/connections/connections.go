@@ -203,3 +203,19 @@ func HasRole(p Provider, role Role) bool {
 	}
 	return false
 }
+
+// SecretKeys lists the secret field names of every registered provider (the
+// audit trail redacts their values, #45).
+func (r *Registry) SecretKeys() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range r.All() {
+		for _, f := range p.ConfigSchema() {
+			if f.Secret() && !seen[f.Key] {
+				seen[f.Key] = true
+				out = append(out, f.Key)
+			}
+		}
+	}
+	return out
+}

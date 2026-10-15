@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/bindings"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/dbpool"
@@ -134,6 +135,7 @@ func main() {
 		return err
 	})
 	reg.WatchMetadataStaleness(db.New(pool).MaxMetadataStalenessSeconds)
+	act.SetAudit(audit.NewPostgres(db.New(pool), conns.SecretKeys(), reg.Audit().WriteFailed))
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV2)
@@ -145,6 +147,7 @@ func main() {
 	w.RegisterWorkflow(workflows.RetrieverRefreshWorkflow)
 	w.RegisterWorkflow(workflows.MetadataSyncWorkflow)
 	w.RegisterWorkflow(workflows.MetadataSyncDispatchWorkflow)
+	w.RegisterWorkflow(workflows.AuditPartitionsWorkflow)
 
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
@@ -155,6 +158,7 @@ func main() {
 			{ID: schedules.LensTableHealth, Workflow: workflows.LensTableHealthWorkflow, Every: time.Hour},
 			{ID: schedules.RetrieverScheduler, Workflow: workflows.RetrieverDispatchWorkflow, Every: 60 * time.Second},
 			{ID: schedules.MetadataSync, Workflow: workflows.MetadataSyncDispatchWorkflow, Every: cfg.MetadataSyncEvery()},
+			{ID: schedules.AuditPartitions, Workflow: workflows.AuditPartitionsWorkflow, Every: 24 * time.Hour},
 		}); err != nil {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)

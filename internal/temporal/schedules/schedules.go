@@ -89,4 +89,5 @@ const (
 	LensTableHealth    = "lens-table-health"
 	RetrieverScheduler = "retriever-scheduler"
 	MetadataSync       = "metadata-sync"
+	AuditPartitions    = "audit-partitions"
 )
