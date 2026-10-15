@@ -236,3 +236,55 @@ func (s *Schedules) Succeeded(schedule string) {
 	}
 	s.last.WithLabelValues(schedule).SetToCurrentTime()
 }
+
+// Metadata records the metadata sync (#17). No metric carries a catalog
+// label: the allow-list forbids concrete names.
+type Metadata struct{ duration *prometheus.HistogramVec }
+
+// Metadata registers baleia_metadata_sync_duration_seconds{outcome}.
+func (r *Registry) Metadata() *Metadata {
+	m := &Metadata{duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: Namespace, Name: "metadata_sync_duration_seconds", Help: "Duration of one catalog metadata pass by outcome.",
+		Buckets: []float64{0.5, 1, 5, 15, 60, 300, 900, 3600},
+	}, []string{"outcome"})}
+	r.reg.MustRegister(m.duration)
+	return m
+}
+
+// Synced records one catalog pass.
+func (m *Metadata) Synced(d time.Duration, err error) {
+	if m == nil {
+		return
+	}
+	outcome := OutcomeSuccess
+	if err != nil {
+		outcome = OutcomeError
+	}
+	m.duration.WithLabelValues(outcome).Observe(d.Seconds())
+}
+
+// WatchMetadataStaleness exports baleia_metadata_staleness_seconds_max: the
+// seconds since the stalest enabled catalog last finished a metadata pass,
+// read from max at each scrape.
+func (r *Registry) WatchMetadataStaleness(max func(ctx context.Context) (float64, error)) {
+	r.reg.MustRegister(&stalenessCollector{max: max})
+}
+
+var metadataStaleness = prometheus.NewDesc(Namespace+"_metadata_staleness_seconds_max", "Seconds since the stalest enabled catalog last finished a metadata pass.", nil, nil)
+
+type stalenessCollector struct {
+	max func(ctx context.Context) (float64, error)
+}
+
+func (c *stalenessCollector) Describe(ch chan<- *prometheus.Desc) { ch <- metadataStaleness }
+
+func (c *stalenessCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	v, err := c.max(ctx)
+	if err != nil {
+		slog.Warn("metadata_staleness_seconds_max", "err", err)
+		return
+	}
+	ch <- prometheus.MustNewConstMetric(metadataStaleness, prometheus.GaugeValue, v)
+}

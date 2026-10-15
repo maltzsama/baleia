@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
@@ -99,4 +101,23 @@ func intPtr(v *int32) *int {
 	}
 	n := int(*v)
 	return &n
+}
+
+// startMetadataSync starts a catalog's metadata pass right after the catalog
+// was created or changed (#17), so its metadata does not wait for the
+// schedule. A pass already running is reused (same workflow id). It never
+// fails the request: a failure is logged and the schedule catches up.
+func (h *Handlers) startMetadataSync(ctx context.Context, catalogID pgtype.UUID) {
+	if h.temporalClient == nil {
+		return
+	}
+	id := uuid.UUID(catalogID.Bytes).String()
+	_, err := h.temporalClient.ExecuteWorkflow(context.WithoutCancel(ctx), client.StartWorkflowOptions{
+		ID:                       workflows.MetadataSyncWorkflowID(id),
+		TaskQueue:                "baleia-task-queue",
+		WorkflowIDConflictPolicy: enumspb.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING,
+	}, workflows.MetadataSyncWorkflow, workflows.MetadataSyncInput{CatalogID: id})
+	if err != nil {
+		slog.Warn("start metadata sync", "catalog_id", id, "err", err)
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
@@ -161,12 +162,13 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 		slog.Info("engine reachability check failed", "connection", conn.Name, "err", err)
 		return invalid("engine_unreachable", "connection_id", connectionTestError(err)), nil
 	}
-	natives, err := nativeCatalogs(pingCtx, provider, cfg, conn)
+	natives, err := catalogs.NativeNames(pingCtx, provider, cfg, conn.Name)
 	if err != nil {
 		return invalid("engine_unreachable", "connection_id", connectionTestError(err)), nil
 	}
 
 	var created db.Engine
+	var nativeIDs []pgtype.UUID
 	err = h.inTx(ctx, func(q db.Querier) error {
 		eng, err := q.CreateEngine(ctx, db.CreateEngineParams{
 			Name:         body.Name,
@@ -185,6 +187,7 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 			if err != nil {
 				return err
 			}
+			nativeIDs = append(nativeIDs, cat.ID)
 			if _, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{CatalogID: cat.ID, EngineID: eng.ID, EngineCatalogName: name}); err != nil {
 				return err
 			}
@@ -202,36 +205,10 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 	if err != nil {
 		return nil, err
 	}
+	for _, id := range nativeIDs {
+		h.startMetadataSync(ctx, id)
+	}
 	return CreateEngine201JSONResponse(engineToPublic(created)), nil
-}
-
-// nativeCatalogs names the catalogs a direct engine exposes: a PostgreSQL
-// session reaches one database; a MySQL server is one catalog named after the
-// connection; any other kind lists them through its metadata reader.
-func nativeCatalogs(ctx context.Context, p connections.Provider, cfg connections.Config, conn db.CatalogConnection) ([]string, error) {
-	switch p.Kind() {
-	case connections.KindPostgreSQL:
-		if d := cfg.Value("database"); d != "" {
-			return []string{d}, nil
-		}
-		return []string{"postgres"}, nil
-	case connections.KindMySQL, connections.KindMariaDB:
-		return []string{conn.Name}, nil
-	}
-	r, err := p.OpenMetadata(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	refs, err := r.ListCatalogs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(refs))
-	for _, c := range refs {
-		names = append(names, c.Name)
-	}
-	return names, nil
 }
 
 func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error) {

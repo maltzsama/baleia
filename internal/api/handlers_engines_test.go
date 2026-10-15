@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
@@ -292,7 +293,7 @@ func TestEngineAccess(t *testing.T) {
 func TestNativeCatalogsReaderError(t *testing.T) {
 	p := &fakeEngineProvider{kind: "clickhouse", roles: []connections.Role{connections.RoleDirect}}
 	bad := &errReaderProvider{fakeEngineProvider: p}
-	_, err := nativeCatalogs(context.Background(), bad, connections.Config{}, db.CatalogConnection{})
+	_, err := catalogs.NativeNames(context.Background(), bad, connections.Config{}, "")
 	if !errors.Is(err, errReader) {
 		t.Fatalf("err = %v", err)
 	}

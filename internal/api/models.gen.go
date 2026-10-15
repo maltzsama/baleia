@@ -20,6 +20,14 @@ const (
 	AddTeamMemberRequestRoleOwner  AddTeamMemberRequestRole = "owner"
 )
 
+// Defines values for CatalogMetadataSyncStatus.
+const (
+	CatalogMetadataSyncStatusFailed   CatalogMetadataSyncStatus = "failed"
+	CatalogMetadataSyncStatusFinished CatalogMetadataSyncStatus = "finished"
+	CatalogMetadataSyncStatusNever    CatalogMetadataSyncStatus = "never"
+	CatalogMetadataSyncStatusRunning  CatalogMetadataSyncStatus = "running"
+)
+
 // Defines values for CatalogSyncStatus.
 const (
 	CatalogSyncStatusDisabled CatalogSyncStatus = "disabled"
@@ -312,10 +320,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	Cancelled ListExecutionsParamsStatus = "cancelled"
-	Failed    ListExecutionsParamsStatus = "failed"
-	Finished  ListExecutionsParamsStatus = "finished"
-	Running   ListExecutionsParamsStatus = "running"
+	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
+	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
+	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
+	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
@@ -374,8 +382,17 @@ type Catalog struct {
 	Description    *string             `json:"description"`
 	Enabled        *bool               `json:"enabled,omitempty"`
 	Id             *openapi_types.UUID `json:"id,omitempty"`
-	Name           *string             `json:"name,omitempty"`
-	SyncError      *string             `json:"sync_error"`
+
+	// MetadataSyncErrorCode The latest pass's error code when it failed (see MetadataSyncRun.error_code).
+	MetadataSyncErrorCode *string `json:"metadata_sync_error_code"`
+
+	// MetadataSyncStatus Status of the latest metadata pass. Every catalog is refreshed every BALEIA_METADATA_SYNC_INTERVAL (15m) and right after it is created or changed.
+	MetadataSyncStatus *CatalogMetadataSyncStatus `json:"metadata_sync_status,omitempty"`
+
+	// MetadataSyncedAt End of the latest finished metadata pass of the catalog (#17); null before the first one.
+	MetadataSyncedAt *time.Time `json:"metadata_synced_at"`
+	Name             *string    `json:"name,omitempty"`
+	SyncError        *string    `json:"sync_error"`
 
 	// SyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
 	SyncStatus *CatalogSyncStatus `json:"sync_status,omitempty"`
@@ -387,6 +404,9 @@ type Catalog struct {
 	// Warehouse Iceberg warehouse identifier
 	Warehouse *string `json:"warehouse,omitempty"`
 }
+
+// CatalogMetadataSyncStatus Status of the latest metadata pass. Every catalog is refreshed every BALEIA_METADATA_SYNC_INTERVAL (15m) and right after it is created or changed.
+type CatalogMetadataSyncStatus string
 
 // CatalogSyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
 type CatalogSyncStatus string

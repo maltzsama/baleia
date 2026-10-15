@@ -117,6 +117,46 @@ func (q *Queries) DisableManagedBindingsOfCatalog(ctx context.Context, catalogID
 	return err
 }
 
+const disableMissingAdoptedBindings = `-- name: DisableMissingAdoptedBindings :execrows
+UPDATE catalog_bindings b
+SET enabled = false, updated_at = now()
+FROM engine_catalog_observations o
+WHERE b.engine_id = $1 AND b.mode = 'adopted' AND b.enabled
+  AND o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name AND NOT o.present
+`
+
+// Adopted catalogs the engine no longer reports are disabled, never deleted
+// (#17): their metadata and history stay.
+func (q *Queries) DisableMissingAdoptedBindings(ctx context.Context, engineID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, disableMissingAdoptedBindings, engineID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const disableMissingNativeBindings = `-- name: DisableMissingNativeBindings :execrows
+UPDATE catalog_bindings
+SET enabled = false, updated_at = now()
+WHERE engine_id = $1 AND mode = 'native' AND enabled
+  AND NOT (engine_catalog_name = ANY($2::text[]))
+`
+
+type DisableMissingNativeBindingsParams struct {
+	EngineID pgtype.UUID `json:"engine_id"`
+	Present  []string    `json:"present"`
+}
+
+// Native catalogs an engine no longer reports are disabled, never deleted
+// (#17): their metadata and history stay.
+func (q *Queries) DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, disableMissingNativeBindings, arg.EngineID, arg.Present)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getBinding = `-- name: GetBinding :one
 SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at FROM catalog_bindings WHERE id = $1
 `
@@ -715,9 +755,10 @@ func (q *Queries) UpdateBinding(ctx context.Context, arg UpdateBindingParams) (C
 }
 
 const upsertAdoptedBinding = `-- name: UpsertAdoptedBinding :exec
-INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, mode, enabled, lifecycle_state)
+INSERT INTO catalog_bindings AS b (catalog_id, engine_id, engine_catalog_name, connector, mode, enabled, lifecycle_state)
 VALUES ($1, $2, $3, $4, 'adopted', true, 'active')
-ON CONFLICT (engine_id, engine_catalog_name) DO NOTHING
+ON CONFLICT (engine_id, engine_catalog_name) DO UPDATE SET enabled = true, updated_at = now()
+WHERE b.mode = 'adopted' AND NOT b.enabled
 `
 
 type UpsertAdoptedBindingParams struct {
@@ -728,6 +769,8 @@ type UpsertAdoptedBindingParams struct {
 }
 
 // A catalog found in an engine that no managed binding created (#38, #13).
+// An adopted binding the engine reports again is enabled again; a managed
+// binding of the same name is never touched.
 func (q *Queries) UpsertAdoptedBinding(ctx context.Context, arg UpsertAdoptedBindingParams) error {
 	_, err := q.db.Exec(ctx, upsertAdoptedBinding,
 		arg.CatalogID,
@@ -833,6 +876,7 @@ INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode)
 VALUES ($1, $2, $3, 'native')
 ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
     engine_catalog_name = EXCLUDED.engine_catalog_name,
+    enabled             = true,
     updated_at          = now()
 RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at
 `
@@ -843,6 +887,8 @@ type UpsertNativeBindingParams struct {
 	EngineCatalogName string      `json:"engine_catalog_name"`
 }
 
+// A native binding is enabled while its engine reports the catalog: native
+// bindings are only ever disabled by discovery (DisableMissingNativeBindings).
 func (q *Queries) UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindingParams) (CatalogBinding, error) {
 	row := q.db.QueryRow(ctx, upsertNativeBinding, arg.CatalogID, arg.EngineID, arg.EngineCatalogName)
 	var i CatalogBinding

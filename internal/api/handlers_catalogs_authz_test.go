@@ -73,6 +73,11 @@ type authzFake struct {
 	order          []string
 	mu             sync.Mutex
 	g              grantsState
+	syncState      db.GetCatalogSyncStateRow
+}
+
+func (q *authzFake) GetCatalogSyncState(context.Context, pgtype.UUID) (db.GetCatalogSyncStateRow, error) {
+	return q.syncState, nil
 }
 
 func (q *authzFake) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {

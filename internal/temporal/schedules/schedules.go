@@ -88,4 +88,5 @@ const (
 	LensClusterPoller  = "lens-cluster-poller"
 	LensTableHealth    = "lens-table-health"
 	RetrieverScheduler = "retriever-scheduler"
+	MetadataSync       = "metadata-sync"
 )

@@ -2,24 +2,31 @@ package api
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/jackc/pgx/v5/pgtype"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
 
-// metadataTemporal records the workflow a metadata sync starts.
+// metadataTemporal records the workflows a metadata sync starts.
 type metadataTemporal struct {
 	client.Client
-	opts  client.StartWorkflowOptions
-	input workflows.MetadataSyncInput
-	err   error
+	opts   client.StartWorkflowOptions
+	input  workflows.MetadataSyncInput
+	starts []client.StartWorkflowOptions
+	err    error
 }
 
 func (f *metadataTemporal) ExecuteWorkflow(_ context.Context, o client.StartWorkflowOptions, _ interface{}, args ...interface{}) (client.WorkflowRun, error) {
 	f.opts = o
+	f.starts = append(f.starts, o)
 	if len(args) == 1 {
 		f.input, _ = args[0].(workflows.MetadataSyncInput)
 	}
@@ -92,5 +99,77 @@ func TestListCatalogMetadataSyncRuns(t *testing.T) {
 	}
 	if got := visitCode(t, resp); got != 404 {
 		t.Fatalf("stranger: %d", got)
+	}
+}
+
+// TestUpdateCatalog_StartsSync: a changed catalog gets a metadata pass right
+// away, reusing a pass already running (#17).
+func TestUpdateCatalog_StartsSync(t *testing.T) {
+	h, q, _ := newAuthzHandlers(t)
+	tc := &metadataTemporal{}
+	h.temporalClient = tc
+	conn, cat := reqIDs(q)
+	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: "wh2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := visitCode(t, resp); code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	if len(tc.starts) != 1 || tc.starts[0].ID != "metadata-sync-"+uuidString(q.cat.ID) ||
+		tc.starts[0].WorkflowIDConflictPolicy != enumspb.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING {
+		t.Fatalf("starts = %+v", tc.starts)
+	}
+
+	// A Temporal failure never fails the request.
+	tc.err = errors.New("temporal down")
+	resp, err = h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: "wh3"}})
+	if err != nil || visitCode(t, resp) != 200 {
+		t.Fatalf("update with temporal down: %v", err)
+	}
+}
+
+// TestCreateDirectEngine_StartsMetadataSyncs: every native catalog of a new
+// engine gets a metadata pass right away.
+func TestCreateDirectEngine_StartsMetadataSyncs(t *testing.T) {
+	q := &engineQuerier{conn: ownedConnection(t, "clickhouse", testUserID)}
+	p := &fakeEngineProvider{kind: "clickhouse", roles: []connections.Role{connections.RoleMetadata, connections.RoleDirect}, catalogs: []string{"default", "logs"}}
+	h := engineHandlers(t, q, p)
+	tc := &metadataTemporal{}
+	h.temporalClient = tc
+	if rec := createEngine(t, h, "ch"); rec.Code != 201 {
+		t.Fatalf("response = %d %s", rec.Code, rec.Body)
+	}
+	if len(tc.starts) != 2 {
+		t.Fatalf("starts = %+v", tc.starts)
+	}
+}
+
+// TestCatalog_FreshnessFields: a catalog shows its latest pass: never before
+// the first, then the end of the latest finished one and a failed pass's
+// code.
+func TestCatalog_FreshnessFields(t *testing.T) {
+	h, q, _ := newAuthzHandlers(t)
+	conn, cat := reqIDs(q)
+	get := func() Catalog {
+		resp, err := h.GetCatalog(ctxAs(ownerID, "member"), GetCatalogRequestObject{ConnectionId: conn, CatalogId: cat})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, ok := resp.(GetCatalog200JSONResponse)
+		if !ok {
+			t.Fatalf("response %T", resp)
+		}
+		return Catalog(c)
+	}
+	c := get()
+	if c.MetadataSyncStatus == nil || *c.MetadataSyncStatus != CatalogMetadataSyncStatusNever || c.MetadataSyncedAt != nil || c.MetadataSyncErrorCode != nil {
+		t.Fatalf("before any pass: %+v %+v %+v", c.MetadataSyncStatus, c.MetadataSyncedAt, c.MetadataSyncErrorCode)
+	}
+	at := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
+	q.syncState = db.GetCatalogSyncStateRow{LastStatus: "failed", LastErrorCode: "engine_unavailable", SyncedAt: pgtype.Timestamptz{Time: at, Valid: true}}
+	c = get()
+	if *c.MetadataSyncStatus != CatalogMetadataSyncStatusFailed || !c.MetadataSyncedAt.Equal(at) || *c.MetadataSyncErrorCode != "engine_unavailable" {
+		t.Fatalf("after a failed pass: %+v %+v %+v", *c.MetadataSyncStatus, c.MetadataSyncedAt, c.MetadataSyncErrorCode)
 	}
 }

@@ -15,13 +15,13 @@ auth:bearer {
 }
 
 assert {
-  res.status: eq 202
-  res.body.workflow_id: eq metadata-sync-{{explorer_catalog_id}}
+  res.status: in 202,409
 }
 
 docs {
   Starts one metadata pass of the catalog on the worker (#15): namespaces,
   tables and columns are read from the catalog's own source (here Polaris)
   and stored once per catalog. 409 `sync_in_progress` while a pass of the
-  same catalog runs. Owner of the connection or admin only.
+  same catalog runs (creating the catalog already started one, #17). Owner
+  of the connection or admin only.
 }

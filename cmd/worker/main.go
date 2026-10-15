@@ -9,10 +9,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/bindings"
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/dbpool"
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
@@ -117,6 +120,20 @@ func main() {
 	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor)
 	act.SetMetrics(reg)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(db.New(pool), keyring, conns, engines)))
+	// The dispatcher observes federated engines' catalogs (adopting the ones
+	// Baleia did not create) with the binder, as the catalog DDL identity.
+	trinoAdmin := trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, dialer.HTTPClient(60*time.Second))
+	binder := bindtrino.New(trinoAdmin, db.New(pool))
+	act.SetEngineObserver(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID) error {
+		q := db.New(pool)
+		l := bindings.Lifecycle{Store: q, Binder: binder.WithStore(q), Engine: bindings.EngineRef{ID: eng.ID, ClusterID: clusterID}, ConnectionID: eng.ConnectionID}
+		if _, err := l.Observe(ctx); err != nil {
+			return err
+		}
+		_, err := q.DisableMissingAdoptedBindings(ctx, eng.ID)
+		return err
+	})
+	reg.WatchMetadataStaleness(db.New(pool).MaxMetadataStalenessSeconds)
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV2)
@@ -127,6 +144,7 @@ func main() {
 	w.RegisterWorkflow(workflows.RetrieverDispatchWorkflow)
 	w.RegisterWorkflow(workflows.RetrieverRefreshWorkflow)
 	w.RegisterWorkflow(workflows.MetadataSyncWorkflow)
+	w.RegisterWorkflow(workflows.MetadataSyncDispatchWorkflow)
 
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
@@ -136,6 +154,7 @@ func main() {
 			{ID: schedules.LensClusterPoller, Workflow: workflows.LensClusterPollWorkflow, Every: 30 * time.Second},
 			{ID: schedules.LensTableHealth, Workflow: workflows.LensTableHealthWorkflow, Every: time.Hour},
 			{ID: schedules.RetrieverScheduler, Workflow: workflows.RetrieverDispatchWorkflow, Every: 60 * time.Second},
+			{ID: schedules.MetadataSync, Workflow: workflows.MetadataSyncDispatchWorkflow, Every: cfg.MetadataSyncInterval},
 		}); err != nil {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)

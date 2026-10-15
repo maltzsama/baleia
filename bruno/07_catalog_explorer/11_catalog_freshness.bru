@@ -1,0 +1,27 @@
+meta {
+  name: Catalog Metadata Freshness
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{base_url}}/connections/{{catalog_connection_id}}/catalogs/{{explorer_catalog_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.metadata_sync_status: eq finished
+  res.body.metadata_synced_at: isString
+}
+
+docs {
+  A catalog shows its metadata freshness (#17): the status of its latest
+  pass (never, running, finished, failed), when the latest finished pass
+  ended, and a failed pass's error code.
+}

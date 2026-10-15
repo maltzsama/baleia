@@ -70,6 +70,8 @@ groups:
           (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule=~"lens-query-poller|lens-cluster-poller"}) > 3 * 30)
           or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="retriever-scheduler"}) > 3 * 60)
           or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="lens-table-health"}) > 3 * 3600)
+          # metadata-sync runs every BALEIA_METADATA_SYNC_INTERVAL (default 15m).
+          or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="metadata-sync"}) > 3 * 900)
         for: 0m
         labels:
           severity: warning

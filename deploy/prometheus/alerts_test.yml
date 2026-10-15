@@ -108,3 +108,33 @@ tests:
               summary: 2 managed catalog bindings are in error
               description: Managed catalog bindings have been in the error state for 30 minutes.
               runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiacatalogsinerror
+
+  - name: metadata sync schedule and staleness
+    interval: 1m
+    input_series:
+      # Last metadata-sync pass at t=0: stale only after 3 × 15m.
+      - series: 'baleia_schedule_last_success_timestamp_seconds{schedule="metadata-sync",instance="w1"}'
+        values: '0x60'
+      # The stalest catalog is 2h old and stays so.
+      - series: 'baleia_metadata_staleness_seconds_max{instance="w1"}'
+        values: '7200x60'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: BaleiaScheduleStale
+        exp_alerts: []
+      - eval_time: 46m
+        alertname: BaleiaScheduleStale
+        exp_alerts:
+          - exp_labels: {severity: warning, schedule: metadata-sync}
+            exp_annotations:
+              summary: Schedule metadata-sync has not succeeded in 3 intervals
+              description: The last successful pass of metadata-sync was 46m 0s ago.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaschedulestale
+      - eval_time: 31m
+        alertname: BaleiaMetadataStale
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Catalog metadata is more than an hour old
+              description: The stalest catalog metadata is 2h 0m 0s old.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiametadatastale
