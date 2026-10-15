@@ -14,8 +14,8 @@ import (
 const createCatalog = `-- name: CreateCatalog :one
 INSERT INTO catalogs (
     connection_id, name, description, trino_catalog_name,
-    cluster_id, warehouse, connector, extra_props
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    cluster_id, warehouse, connector, extra_props, source_ref
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6)
 RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
 `
 
@@ -30,6 +30,7 @@ type CreateCatalogParams struct {
 	ExtraProps       []byte      `json:"extra_props"`
 }
 
+// A source catalog's source_ref is its warehouse (or database).
 func (q *Queries) CreateCatalog(ctx context.Context, arg CreateCatalogParams) (Catalog, error) {
 	row := q.db.QueryRow(ctx, createCatalog,
 		arg.ConnectionID,
@@ -370,6 +371,7 @@ UPDATE catalogs SET
     connector = $5,
     extra_props = $6,
     trino_catalog_name = $7,
+    source_ref = CASE WHEN origin = 'source' THEN $4 ELSE source_ref END,
     updated_at = now()
 WHERE id = $1
 RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref

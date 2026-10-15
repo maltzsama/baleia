@@ -115,6 +115,13 @@ var operationAccess = map[string]access{
 	"DeleteEngine":            checked("Engine"),
 	"ListEngineBindings":      checked("Engine"),
 	"ListCatalogBindings":     checked("Catalog"),
+	// bindingAccess and managedBinding run Catalog and Engine with ActWrite
+	// (handlers_bindings.go; TestBindingAPI_Authz).
+	"CreateCatalogBinding":    checked("bindingAccess"),
+	"UpdateCatalogBinding":    checked("managedBinding"),
+	"DeleteCatalogBinding":    checked("managedBinding"),
+	"SyncCatalogBinding":      checked("managedBinding"),
+	"GetEngineBindingSupport": checked("Engine"),
 	"ListCatalogs":            checked("Connection"),
 	"CreateCatalog":           checked("Connection"),
 	"GetCatalog":              checked("CatalogOfConnection"),

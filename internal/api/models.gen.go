@@ -35,6 +35,12 @@ const (
 	CatalogBindingModeNative  CatalogBindingMode = "native"
 )
 
+// Defines values for CatalogBindingSyncStatus.
+const (
+	CatalogBindingSyncStatusError  CatalogBindingSyncStatus = "error"
+	CatalogBindingSyncStatusSynced CatalogBindingSyncStatus = "synced"
+)
+
 // Defines values for ConnectionProviderFamily.
 const (
 	ConnectionProviderFamilyDatabase  ConnectionProviderFamily = "database"
@@ -278,10 +284,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
-	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
-	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
-	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
+	Cancelled ListExecutionsParamsStatus = "cancelled"
+	Failed    ListExecutionsParamsStatus = "failed"
+	Finished  ListExecutionsParamsStatus = "finished"
+	Running   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
@@ -320,6 +326,16 @@ type ApiKeyCreated struct {
 	Secret string `json:"secret"`
 }
 
+// BindingSupport defines model for BindingSupport.
+type BindingSupport struct {
+	// Connectors The first is the default
+	Connectors []string `json:"connectors"`
+
+	// ProtectedKeyPatterns Glob patterns (case-insensitive) of extra-property keys that cannot be overridden
+	ProtectedKeyPatterns []string `json:"protected_key_patterns"`
+	ReservedNames        []string `json:"reserved_names"`
+}
+
 // Catalog defines model for Catalog.
 type Catalog struct {
 	// CatalogVersion SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion)
@@ -356,12 +372,23 @@ type CatalogBinding struct {
 	// EngineCatalogName The catalog's name in SQL on that engine
 	EngineCatalogName string             `json:"engine_catalog_name"`
 	EngineId          openapi_types.UUID `json:"engine_id"`
+	ExtraProps        *map[string]string `json:"extra_props,omitempty"`
 	Id                openapi_types.UUID `json:"id"`
 	Mode              CatalogBindingMode `json:"mode"`
+	SyncError         *string            `json:"sync_error"`
+
+	// SyncStatus Write responses only
+	SyncStatus *CatalogBindingSyncStatus `json:"sync_status"`
+
+	// Version Version of the projection last applied (write responses only)
+	Version *string `json:"version"`
 }
 
 // CatalogBindingMode defines model for CatalogBinding.Mode.
 type CatalogBindingMode string
+
+// CatalogBindingSyncStatus Write responses only
+type CatalogBindingSyncStatus string
 
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
@@ -438,6 +465,17 @@ type CreateAdminRequest struct {
 type CreateApiKeyRequest struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 	Name      string     `json:"name"`
+}
+
+// CreateBindingRequest defines model for CreateBindingRequest.
+type CreateBindingRequest struct {
+	// Connector One of the engine's connectors for the source kind (GET /engines/{id}/binding-support); default the first
+	Connector         *string            `json:"connector,omitempty"`
+	EngineCatalogName string             `json:"engine_catalog_name"`
+	EngineId          openapi_types.UUID `json:"engine_id"`
+
+	// ExtraProps Merged over the projection; protected keys cannot be overridden
+	ExtraProps *map[string]string `json:"extra_props,omitempty"`
 }
 
 // CreateCatalogConnectionRequest Values and secrets are validated against the provider's config schema (GET /connection-providers): unknown keys, missing required fields and kinds without a provider answer 422. Non-secret fields go in `config`, secret fields in `credentials`. `url` and the typed `*_credentials` objects are the older shape and are still accepted.
@@ -999,6 +1037,15 @@ type TestCatalogConnectionResult struct {
 	Version   *string `json:"version"`
 }
 
+// UpdateBindingRequest defines model for UpdateBindingRequest.
+type UpdateBindingRequest struct {
+	Enabled           *bool   `json:"enabled,omitempty"`
+	EngineCatalogName *string `json:"engine_catalog_name,omitempty"`
+
+	// ExtraProps Replaces the binding's extra properties
+	ExtraProps *map[string]string `json:"extra_props,omitempty"`
+}
+
 // UpdateCatalogConnectionRequest Partial update. `config` keys are merged into the stored values (an empty string clears an optional field). `credentials` keys replace the stored secrets they name; secrets that are absent are kept. The result is validated like a create.
 type UpdateCatalogConnectionRequest struct {
 	Config          *map[string]string      `json:"config,omitempty"`
@@ -1258,11 +1305,17 @@ type RequestPasswordResetJSONRequestBody = PasswordResetRequestBody
 // RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
 type RefreshTokenJSONRequestBody = RefreshRequest
 
+// UpdateCatalogBindingJSONRequestBody defines body for UpdateCatalogBinding for application/json ContentType.
+type UpdateCatalogBindingJSONRequestBody = UpdateBindingRequest
+
 // CreateCatalogConnectionJSONRequestBody defines body for CreateCatalogConnection for application/json ContentType.
 type CreateCatalogConnectionJSONRequestBody = CreateCatalogConnectionRequest
 
 // UpdateCatalogConnectionJSONRequestBody defines body for UpdateCatalogConnection for application/json ContentType.
 type UpdateCatalogConnectionJSONRequestBody = UpdateCatalogConnectionRequest
+
+// CreateCatalogBindingJSONRequestBody defines body for CreateCatalogBinding for application/json ContentType.
+type CreateCatalogBindingJSONRequestBody = CreateBindingRequest
 
 // CreateCatalogJSONRequestBody defines body for CreateCatalog for application/json ContentType.
 type CreateCatalogJSONRequestBody = CreateCatalogRequest

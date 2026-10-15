@@ -1,0 +1,40 @@
+meta {
+  name: Engine Binding Support
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/engines/{{trino_engine_id}}/binding-support
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("trino binds the v1 source kinds with its rules", function() {
+    const s = res.getBody();
+    for (const k of ["polaris", "nessie", "iceberg", "postgresql", "mysql", "mariadb", "sqlserver", "oracle"]) {
+      expect(s[k], k).to.exist;
+      expect(s[k].connectors.length, k).to.be.above(0);
+    }
+    expect(s.postgresql.connectors[0]).to.equal("postgresql");
+    expect(s.postgresql.protected_key_patterns).to.include("connection-url");
+    expect(s.postgresql.reserved_names).to.include("system");
+    expect(s.clickhouse).to.not.exist;
+  });
+}
+
+docs {
+  Source kinds an engine can bind, with the connectors (first = default),
+  the extra-property keys that cannot be overridden and the reserved catalog
+  names. Empty for direct engines. Run 09_engines first (sets
+  trino_engine_id).
+}

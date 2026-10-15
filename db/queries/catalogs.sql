@@ -5,10 +5,11 @@ SELECT * FROM trino_clusters WHERE name = 'default';
 SELECT * FROM trino_clusters WHERE id = $1;
 
 -- name: CreateCatalog :one
+-- A source catalog's source_ref is its warehouse (or database).
 INSERT INTO catalogs (
     connection_id, name, description, trino_catalog_name,
-    cluster_id, warehouse, connector, extra_props
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    cluster_id, warehouse, connector, extra_props, source_ref
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6)
 RETURNING *;
 
 -- name: GetCatalogByID :one
@@ -40,6 +41,7 @@ UPDATE catalogs SET
     connector = $5,
     extra_props = $6,
     trino_catalog_name = $7,
+    source_ref = CASE WHEN origin = 'source' THEN $4 ELSE source_ref END,
     updated_at = now()
 WHERE id = $1
 RETURNING *;

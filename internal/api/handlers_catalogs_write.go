@@ -139,6 +139,9 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 			return err
 		}
 		cat = c
+		if err := upsertPrimaryBinding(ctx, qtx, cluster, c); err != nil {
+			return err
+		}
 		return h.binder.WithStore(qtx).Stage(ctx, eng, proj)
 	})
 	if txErr != nil {
@@ -157,6 +160,19 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 	c.CatalogVersion = &proj.Version
 	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusSynced)
 	return CreateCatalog201JSONResponse(c), nil
+}
+
+// upsertPrimaryBinding writes the managed binding a catalog's Trino columns
+// describe, on its cluster's engine (the 00024 trigger did this until #80).
+func upsertPrimaryBinding(ctx context.Context, q db.Querier, cluster db.TrinoCluster, c db.Catalog) error {
+	if !cluster.EngineID.Valid || c.Origin != "source" {
+		return nil
+	}
+	_, err := q.UpsertManagedBinding(ctx, db.UpsertManagedBindingParams{
+		CatalogID: c.ID, EngineID: cluster.EngineID, EngineCatalogName: c.TrinoName(),
+		Connector: c.Connector, ExtraProps: c.ExtraProps, Enabled: c.Enabled,
+	})
+	return err
 }
 
 // projectBinding projects a binding of conn through the Trino binder.
@@ -337,16 +353,27 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		return nil, err
 	}
 
-	updated, err := h.queries.UpdateCatalog(ctx, db.UpdateCatalogParams{
-		ID:               id,
-		Name:             newName,
-		Description:      body.Description,
-		Warehouse:        &newWarehouse,
-		Connector:        &proj.Connector,
-		ExtraProps:       extraProps,
-		TrinoCatalogName: &newTrinoName,
-	})
-	if err != nil {
+	var updated db.Catalog
+	if err := h.inTx(ctx, func(q db.Querier) error {
+		u, err := q.UpdateCatalog(ctx, db.UpdateCatalogParams{
+			ID:               id,
+			Name:             newName,
+			Description:      body.Description,
+			Warehouse:        &newWarehouse,
+			Connector:        &proj.Connector,
+			ExtraProps:       extraProps,
+			TrinoCatalogName: &newTrinoName,
+		})
+		if err != nil {
+			return err
+		}
+		updated = u
+		cluster, err := q.GetTrinoClusterByID(ctx, u.ClusterID)
+		if err != nil {
+			return err
+		}
+		return upsertPrimaryBinding(ctx, q, cluster, u)
+	}); err != nil {
 		return nil, fmt.Errorf("update catalog: %w", err)
 	}
 
@@ -394,6 +421,9 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 	txErr := withTx(ctx, h.pool, func(tx pgx.Tx) error {
 		qtx := db.New(tx)
 		if err := qtx.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: id, Enabled: false}); err != nil {
+			return err
+		}
+		if err := qtx.DisableManagedBindingsOfCatalog(ctx, id); err != nil {
 			return err
 		}
 		return h.binder.WithStore(qtx).Unstage(ctx, bindings.EngineRef{ClusterID: cat.ClusterID}, cat.TrinoName())
