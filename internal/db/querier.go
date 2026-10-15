@@ -170,9 +170,14 @@ type Querier interface {
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error
 	// Catalogs the engine no longer reports.
 	MarkEngineCatalogsAbsent(ctx context.Context, arg MarkEngineCatalogsAbsentParams) error
 	MarkTrinoCatalogRegistryError(ctx context.Context, arg MarkTrinoCatalogRegistryErrorParams) error
+	// Catalogs Baleia managed and still sees in the engine, though no managed
+	// binding owns them any more (an old name that failed to drop): they stay
+	// managed, never adopted, for the reconciler (#37) to drop.
+	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error

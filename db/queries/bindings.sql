@@ -164,6 +164,7 @@ UPDATE catalog_bindings SET
     last_error_code    = sqlc.narg(error_code),
     last_error_message = sqlc.narg(error_message),
     engine_catalog_name = COALESCE(sqlc.narg(engine_catalog_name), engine_catalog_name),
+    desired_version    = COALESCE(sqlc.narg(desired_version), desired_version),
     state_changed_at   = now(),
     updated_at         = now()
 WHERE id = sqlc.arg(id) AND lifecycle_state = ANY(sqlc.arg(from_states)::text[])
@@ -200,3 +201,15 @@ ON CONFLICT (engine_id, engine_catalog_name) DO NOTHING;
 
 -- name: GetManagedBindingOfCatalog :one
 SELECT * FROM catalog_bindings WHERE catalog_id = $1 AND engine_id = $2 AND mode = 'managed';
+
+-- name: ObservedManagedNamesOfEngine :many
+-- Catalogs Baleia managed and still sees in the engine, though no managed
+-- binding owns them any more (an old name that failed to drop): they stay
+-- managed, never adopted, for the reconciler (#37) to drop.
+SELECT catalog_name FROM engine_catalog_observations
+WHERE engine_id = $1 AND mode = 'managed' AND present;
+
+-- name: MarkEngineCatalogManaged :exec
+INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode)
+VALUES ($1, $2, true, 'managed')
+ON CONFLICT (engine_id, catalog_name) DO UPDATE SET mode = 'managed', present = true, observed_at = now();

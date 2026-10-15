@@ -196,9 +196,10 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 		return nil, fmt.Errorf("create binding: %w", txErr)
 	}
 	l := h.lifecycleOn(t.cluster, t.engine)
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
-	created, err = l.Provision(ddlCtx, created, proj)
+	created, err = l.Provision(ctx, created, proj)
+	if errors.Is(err, bindings.ErrConcurrentChange) {
+		return CreateCatalogBinding409JSONResponse{ConflictJSONResponse: concurrentChange(created)}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -309,22 +310,23 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	}
 
 	l := h.lifecycleOn(t.cluster, t.engine)
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
 	switch {
 	case !enabled && cur.Enabled:
-		updated, err = l.Deprovision(ddlCtx, updated)
+		updated, err = l.Deprovision(ctx, updated)
 	case !enabled:
 		// stays disabled: nothing on the engine
 	case !cur.Enabled:
-		updated, err = l.Provision(ddlCtx, updated, proj)
+		updated, err = l.Provision(ctx, updated, proj)
 	case name != cur.EngineCatalogName:
-		updated, err = l.Rename(ddlCtx, updated, cur.EngineCatalogName, proj)
+		updated, err = l.Rename(ctx, updated, cur.EngineCatalogName, cur.DesiredVersion, proj)
 		if err == nil && updated.EngineCatalogName == cur.EngineCatalogName && t.primary() {
 			err = syncPrimaryCatalog(ctx, h.queries, t, updated) // the rename was reverted
 		}
 	default:
-		updated, err = l.Update(ddlCtx, updated, proj)
+		updated, err = l.Update(ctx, updated, proj)
+	}
+	if errors.Is(err, bindings.ErrConcurrentChange) {
+		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: concurrentChange(cur)}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -356,11 +358,9 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 		}}, nil
 	}
 	l := h.lifecycleOn(t.cluster, t.engine)
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
 	gone := cur
 	if cur.LifecycleState != bindings.StateDisabled {
-		gone, err = l.Deprovision(ddlCtx, cur)
+		gone, err = l.Deprovision(ctx, cur)
 	}
 	if errors.Is(err, bindings.ErrConcurrentChange) {
 		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "concurrent_change", Message: "the binding changed; retry"}}, nil
@@ -417,9 +417,7 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 		return SyncCatalogBinding409JSONResponse(out), nil
 	}
 	l := h.lifecycleOn(t.cluster, t.engine)
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
-	synced, err := l.Sync(ddlCtx, cur, proj)
+	synced, err := l.Sync(ctx, cur, proj)
 	if errors.Is(err, bindings.ErrConcurrentChange) {
 		out := h.bindingResponse(ctx, cur, "")
 		msg := "the binding is " + cur.LifecycleState + "; it cannot be synced now"

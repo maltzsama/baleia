@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/db"
@@ -20,6 +21,7 @@ func (h *Handlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bindings.
 		Binder:       h.binder.WithStore(h.queries),
 		Engine:       bindings.EngineRef{ID: eng.ID, ClusterID: cluster.ID},
 		ConnectionID: eng.ConnectionID,
+		DDLTimeout:   catalogDDLTimeout,
 	}
 }
 
@@ -37,10 +39,32 @@ func (h *Handlers) catalogEngine(ctx context.Context, cat db.Catalog) (db.TrinoC
 	return cluster, eng, err
 }
 
+// observeTimeout bounds the observation that follows a procedure.
+const observeTimeout = 10 * time.Second
+
+// concurrentChange is the 409 for a binding that left the state a request
+// expected.
+func concurrentChange(b db.CatalogBinding) ConflictJSONResponse {
+	msg := "the binding changed while this request ran; retry"
+	if b.LifecycleState != "" {
+		msg = "the binding is " + b.LifecycleState + "; retry when it settles"
+	}
+	return ConflictJSONResponse{Code: "concurrent_change", Message: msg}
+}
+
+// notManaged is the 422 for catalogs Baleia does not manage (native and
+// adopted catalogs belong to their engine).
+func notManaged() UnprocessableEntityJSONResponse {
+	return unprocessable("catalog_not_managed", "this catalog belongs to its engine; Baleia does not change it")
+}
+
 // observe records what the engine reports after a procedure; it never fails
 // the request (the reconciler, #37, observes again).
 func observe(ctx context.Context, l bindings.Lifecycle) {
-	if _, err := l.Observe(context.WithoutCancel(ctx)); err != nil {
+	// Bounded: it outlives a disconnected client, never a stuck engine.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), observeTimeout)
+	defer cancel()
+	if _, err := l.Observe(ctx); err != nil {
 		slog.Warn("observe engine catalogs", "engine", l.Engine.ID, "err", err)
 	}
 }

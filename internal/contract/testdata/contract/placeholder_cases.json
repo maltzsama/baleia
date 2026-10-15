@@ -1,0 +1,50 @@
+[
+  {
+    "value": "@baleia-secret[cat:k]",
+    "matches": true,
+    "origin": "cat",
+    "key": "k"
+  },
+  {
+    "value": "@baleia-secret[sales_db:connection-password]",
+    "matches": true,
+    "origin": "sales_db",
+    "key": "connection-password"
+  },
+  {
+    "value": "@baleia-secret[env:PG_PASSWORD]",
+    "matches": true,
+    "origin": "env",
+    "key": "PG_PASSWORD"
+  },
+  {
+    "value": "@baleia-secret[file:secret.txt]",
+    "matches": true,
+    "origin": "file",
+    "key": "secret.txt"
+  },
+  {
+    "value": "@baleia-secret[cat]",
+    "matches": false
+  },
+  {
+    "value": "@baleia-secret[:k]",
+    "matches": false
+  },
+  {
+    "value": "@baleia-secret[cat:]",
+    "matches": false
+  },
+  {
+    "value": "prefix @baleia-secret[cat:k]",
+    "matches": false
+  },
+  {
+    "value": "@baleia-secret[cat:k] suffix",
+    "matches": false
+  },
+  {
+    "value": "plain value",
+    "matches": false
+  }
+]

@@ -54,7 +54,10 @@ func (f *lifecycleFake) noteRegistry(name string, version *string) {
 	}
 }
 
-func (f *lifecycleFake) TransitionBinding(_ context.Context, a db.TransitionBindingParams) (db.CatalogBinding, error) {
+func (f *lifecycleFake) TransitionBinding(ctx context.Context, a db.TransitionBindingParams) (db.CatalogBinding, error) {
+	if err := ctx.Err(); err != nil {
+		return db.CatalogBinding{}, err // like a real database on a dead context
+	}
 	f.lmu.Lock()
 	defer f.lmu.Unlock()
 	f.init()
@@ -65,6 +68,9 @@ func (f *lifecycleFake) TransitionBinding(_ context.Context, a db.TransitionBind
 	b.LifecycleState, b.LastErrorCode, b.LastErrorMessage = a.ToState, a.ErrorCode, a.ErrorMessage
 	if a.EngineCatalogName != nil {
 		b.EngineCatalogName = *a.EngineCatalogName
+	}
+	if a.DesiredVersion != nil {
+		b.DesiredVersion = a.DesiredVersion
 	}
 	f.tracked[a.ID.Bytes] = b
 	return b, nil
@@ -139,5 +145,13 @@ func (f *lifecycleFake) UpsertNativeCatalog(_ context.Context, a db.UpsertNative
 }
 
 func (f *lifecycleFake) UpsertAdoptedBinding(context.Context, db.UpsertAdoptedBindingParams) error {
+	return nil
+}
+
+func (f *lifecycleFake) ObservedManagedNamesOfEngine(context.Context, pgtype.UUID) ([]string, error) {
+	return nil, nil
+}
+
+func (f *lifecycleFake) MarkEngineCatalogManaged(context.Context, db.MarkEngineCatalogManagedParams) error {
 	return nil
 }

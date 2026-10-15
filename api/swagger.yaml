@@ -2103,6 +2103,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /connections/{connection_id}/catalogs/{catalog_id}:
     parameters:
@@ -2145,6 +2146,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       tags: [Catalog]
       operationId: deleteCatalog
@@ -2154,6 +2156,8 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /catalogs/{catalog_id}/sync:
     parameters:
@@ -2185,6 +2189,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Catalog" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /trino/reconcile:
     post:

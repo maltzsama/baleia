@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
@@ -61,6 +62,8 @@ type LifecycleStore interface {
 	MarkEngineCatalogsAbsent(ctx context.Context, arg db.MarkEngineCatalogsAbsentParams) error
 	UpsertNativeCatalog(ctx context.Context, arg db.UpsertNativeCatalogParams) (db.Catalog, error)
 	UpsertAdoptedBinding(ctx context.Context, arg db.UpsertAdoptedBindingParams) error
+	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	MarkEngineCatalogManaged(ctx context.Context, arg db.MarkEngineCatalogManagedParams) error
 }
 
 // Lifecycle runs the procedures on one engine's binder.
@@ -70,10 +73,34 @@ type Lifecycle struct {
 	Engine EngineRef
 	// ConnectionID is the engine's connection; adopted catalogs belong to it.
 	ConnectionID pgtype.UUID
+	// DDLTimeout bounds each call to the engine; 0 means 30s. State writes
+	// never inherit it, so an engine that times out still leaves the binding
+	// in error with the cause recorded.
+	DDLTimeout time.Duration
+}
+
+// stateWriteTimeout bounds a state write once the request may be gone.
+const stateWriteTimeout = 10 * time.Second
+
+// engine is the context of one call to the engine.
+func (l Lifecycle) engine(ctx context.Context) (context.Context, context.CancelFunc) {
+	d := l.DDLTimeout
+	if d == 0 {
+		d = 30 * time.Second
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 func (l Lifecycle) transition(ctx context.Context, id pgtype.UUID, to string, from []string, cause error, rename *string) (db.CatalogBinding, error) {
-	arg := db.TransitionBindingParams{ID: id, ToState: to, FromStates: from, EngineCatalogName: rename}
+	return l.transitionTo(ctx, id, to, from, cause, rename, nil)
+}
+
+// transitionTo is transition that also sets the desired version. The write
+// survives the request and the engine's deadline (stateWriteTimeout).
+func (l Lifecycle) transitionTo(ctx context.Context, id pgtype.UUID, to string, from []string, cause error, rename, version *string) (db.CatalogBinding, error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
+	defer cancel()
+	arg := db.TransitionBindingParams{ID: id, ToState: to, FromStates: from, EngineCatalogName: rename, DesiredVersion: version}
 	if cause != nil {
 		code, msg := ErrorCode(cause), cause.Error()
 		arg.ErrorCode, arg.ErrorMessage = &code, &msg
@@ -100,7 +127,9 @@ func coded(code, msg string) error { return &codedError{code: code, err: errors.
 // confirm moves a binding that the engine applied to active, or to error
 // when the binder cannot confirm it.
 func (l Lifecycle) confirm(ctx context.Context, id pgtype.UUID, from string, p Projection) (db.CatalogBinding, error) {
-	c, err := l.Binder.Confirm(ctx, l.Engine, p)
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
+	defer cancel()
+	c, err := l.Binder.Confirm(cctx, l.Engine, p)
 	if err != nil {
 		return l.transition(ctx, id, StateError, []string{from}, err, nil)
 	}
@@ -112,16 +141,45 @@ func (l Lifecycle) confirm(ctx context.Context, id pgtype.UUID, from string, p P
 
 // Provision applies a binding written in provisioning (create, enable).
 func (l Lifecycle) Provision(ctx context.Context, b db.CatalogBinding, p Projection) (db.CatalogBinding, error) {
-	if err := l.Binder.Create(ctx, l.Engine, p); err != nil {
+	if err := l.create(ctx, p); err != nil {
 		return l.transition(ctx, b.ID, StateError, []string{StateProvisioning}, err, nil)
 	}
 	return l.confirm(ctx, b.ID, StateProvisioning, p)
 }
 
+// create applies a new catalog. When the engine already has one of that
+// name — which Baleia may not own — nothing on the engine is touched; only
+// the bookkeeping this Create wrote is undone.
+func (l Lifecycle) create(ctx context.Context, p Projection) error {
+	ectx, cancel := l.engine(ctx)
+	defer cancel()
+	err := l.Binder.Create(ectx, l.Engine, p)
+	if errors.Is(err, ErrCatalogExists) {
+		if u, ok := l.Binder.(Unstager); ok {
+			uctx, ucancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
+			defer ucancel()
+			_ = u.Unstage(uctx, l.Engine, p.EngineCatalog)
+		}
+	}
+	return err
+}
+
+func (l Lifecycle) drop(ctx context.Context, name string) error {
+	ectx, cancel := l.engine(ctx)
+	defer cancel()
+	return l.Binder.Drop(ectx, l.Engine, name)
+}
+
+func (l Lifecycle) replace(ctx context.Context, p Projection) error {
+	ectx, cancel := l.engine(ctx)
+	defer cancel()
+	return l.Binder.Replace(ectx, l.Engine, p)
+}
+
 // Update applies a changed projection under the same name to a binding
 // written in updating.
 func (l Lifecycle) Update(ctx context.Context, b db.CatalogBinding, p Projection) (db.CatalogBinding, error) {
-	if err := l.Binder.Replace(ctx, l.Engine, p); err != nil {
+	if err := l.replace(ctx, p); err != nil {
 		return l.transition(ctx, b.ID, StateError, []string{StateUpdating}, err, nil)
 	}
 	return l.confirm(ctx, b.ID, StateUpdating, p)
@@ -130,19 +188,27 @@ func (l Lifecycle) Update(ctx context.Context, b db.CatalogBinding, p Projection
 // Rename moves a binding written in updating under its new name: the new
 // catalog is created and confirmed first, then the old one dropped, so the
 // catalog never goes missing. If the new name cannot be created the binding
-// keeps its old name and state, with the error recorded.
-func (l Lifecycle) Rename(ctx context.Context, b db.CatalogBinding, oldName string, p Projection) (db.CatalogBinding, error) {
-	if err := l.Binder.Create(ctx, l.Engine, p); err != nil {
-		_ = l.Binder.Drop(ctx, l.Engine, p.EngineCatalog) // the new name's leftovers, if any
-		return l.transition(ctx, b.ID, StateActive, []string{StateUpdating}, err, &oldName)
+// keeps its old name and version, active, with the error recorded; a name
+// the engine already had is left alone. An old name that cannot be dropped
+// stays recorded as managed, so it is never adopted and the reconciler (#37)
+// drops it.
+func (l Lifecycle) Rename(ctx context.Context, b db.CatalogBinding, oldName string, oldVersion *string, p Projection) (db.CatalogBinding, error) {
+	if err := l.create(ctx, p); err != nil {
+		if !errors.Is(err, ErrCatalogExists) {
+			_ = l.drop(ctx, p.EngineCatalog) // the new name's leftovers, if any
+		}
+		return l.transitionTo(ctx, b.ID, StateActive, []string{StateUpdating}, err, &oldName, oldVersion)
 	}
 	out, err := l.confirm(ctx, b.ID, StateUpdating, p)
 	if err != nil || out.LifecycleState != StateActive {
 		return out, err
 	}
-	if derr := l.Binder.Drop(ctx, l.Engine, oldName); derr != nil {
-		// The binding is active under its new name; the old catalog is left
-		// for the reconciler (#37) and the error says so.
+	if derr := l.drop(ctx, oldName); derr != nil {
+		mctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
+		defer cancel()
+		if merr := l.Store.MarkEngineCatalogManaged(mctx, db.MarkEngineCatalogManagedParams{EngineID: l.Engine.ID, CatalogName: oldName}); merr != nil {
+			return out, merr
+		}
 		return l.transition(ctx, b.ID, StateActive, []string{StateActive}, coded("old_name_not_dropped", fmt.Sprintf("%s is still in the engine: %v", oldName, derr)), nil)
 	}
 	return out, nil
@@ -150,11 +216,11 @@ func (l Lifecycle) Rename(ctx context.Context, b db.CatalogBinding, oldName stri
 
 // Sync re-applies a binding in error or active.
 func (l Lifecycle) Sync(ctx context.Context, b db.CatalogBinding, p Projection) (db.CatalogBinding, error) {
-	cur, err := l.transition(ctx, b.ID, StateProvisioning, []string{StateError, StateActive}, nil, nil)
+	cur, err := l.transitionTo(ctx, b.ID, StateProvisioning, []string{StateError, StateActive}, nil, nil, &p.Version)
 	if err != nil {
 		return cur, err
 	}
-	if err := l.Binder.Replace(ctx, l.Engine, p); err != nil {
+	if err := l.replace(ctx, p); err != nil {
 		return l.transition(ctx, b.ID, StateError, []string{StateProvisioning}, err, nil)
 	}
 	return l.confirm(ctx, b.ID, StateProvisioning, p)
@@ -169,7 +235,7 @@ func (l Lifecycle) Deprovision(ctx context.Context, b db.CatalogBinding) (db.Cat
 	if err != nil {
 		return cur, err
 	}
-	if err := l.Binder.Drop(ctx, l.Engine, b.EngineCatalogName); err != nil {
+	if err := l.drop(ctx, b.EngineCatalogName); err != nil {
 		return l.transition(ctx, b.ID, StateDeprovisioning, []string{StateDeprovisioning}, err, nil)
 	}
 	return l.transition(ctx, b.ID, StateDisabled, []string{StateDeprovisioning}, nil, nil)
@@ -184,7 +250,9 @@ const probeCatalogPrefix = "baleia_test_"
 // the engine's connection with an adopted binding); catalogs it no longer
 // reports are marked absent. Reserved (built-in) names are skipped.
 func (l Lifecycle) Observe(ctx context.Context) ([]Observed, error) {
-	seen, err := l.Binder.Observe(ctx, l.Engine)
+	ectx, cancel := l.engine(ctx)
+	seen, err := l.Binder.Observe(ectx, l.Engine)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +260,11 @@ func (l Lifecycle) Observe(ctx context.Context) ([]Observed, error) {
 	if err != nil {
 		return nil, err
 	}
+	leftovers, err := l.Store.ObservedManagedNamesOfEngine(ctx, l.Engine.ID)
+	if err != nil {
+		return nil, err
+	}
+	managed = append(managed, leftovers...)
 	reserved := l.Binder.ReservedNames()
 	present := []string{}
 	for _, o := range seen {

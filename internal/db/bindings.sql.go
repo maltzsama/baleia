@@ -448,6 +448,22 @@ func (q *Queries) ManagedBindingNamesOfEngine(ctx context.Context, engineID pgty
 	return items, nil
 }
 
+const markEngineCatalogManaged = `-- name: MarkEngineCatalogManaged :exec
+INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode)
+VALUES ($1, $2, true, 'managed')
+ON CONFLICT (engine_id, catalog_name) DO UPDATE SET mode = 'managed', present = true, observed_at = now()
+`
+
+type MarkEngineCatalogManagedParams struct {
+	EngineID    pgtype.UUID `json:"engine_id"`
+	CatalogName string      `json:"catalog_name"`
+}
+
+func (q *Queries) MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error {
+	_, err := q.db.Exec(ctx, markEngineCatalogManaged, arg.EngineID, arg.CatalogName)
+	return err
+}
+
 const markEngineCatalogsAbsent = `-- name: MarkEngineCatalogsAbsent :exec
 UPDATE engine_catalog_observations SET present = false, observed_at = now()
 WHERE engine_id = $1 AND NOT (catalog_name = ANY($2::text[]))
@@ -462,6 +478,34 @@ type MarkEngineCatalogsAbsentParams struct {
 func (q *Queries) MarkEngineCatalogsAbsent(ctx context.Context, arg MarkEngineCatalogsAbsentParams) error {
 	_, err := q.db.Exec(ctx, markEngineCatalogsAbsent, arg.EngineID, arg.PresentNames)
 	return err
+}
+
+const observedManagedNamesOfEngine = `-- name: ObservedManagedNamesOfEngine :many
+SELECT catalog_name FROM engine_catalog_observations
+WHERE engine_id = $1 AND mode = 'managed' AND present
+`
+
+// Catalogs Baleia managed and still sees in the engine, though no managed
+// binding owns them any more (an old name that failed to drop): they stay
+// managed, never adopted, for the reconciler (#37) to drop.
+func (q *Queries) ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, observedManagedNamesOfEngine, engineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var catalog_name string
+		if err := rows.Scan(&catalog_name); err != nil {
+			return nil, err
+		}
+		items = append(items, catalog_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setExecutionTarget = `-- name: SetExecutionTarget :exec
@@ -520,9 +564,10 @@ UPDATE catalog_bindings SET
     last_error_code    = $2,
     last_error_message = $3,
     engine_catalog_name = COALESCE($4, engine_catalog_name),
+    desired_version    = COALESCE($5, desired_version),
     state_changed_at   = now(),
     updated_at         = now()
-WHERE id = $5 AND lifecycle_state = ANY($6::text[])
+WHERE id = $6 AND lifecycle_state = ANY($7::text[])
 RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at
 `
 
@@ -531,6 +576,7 @@ type TransitionBindingParams struct {
 	ErrorCode         *string     `json:"error_code"`
 	ErrorMessage      *string     `json:"error_message"`
 	EngineCatalogName *string     `json:"engine_catalog_name"`
+	DesiredVersion    *string     `json:"desired_version"`
 	ID                pgtype.UUID `json:"id"`
 	FromStates        []string    `json:"from_states"`
 }
@@ -543,6 +589,7 @@ func (q *Queries) TransitionBinding(ctx context.Context, arg TransitionBindingPa
 		arg.ErrorCode,
 		arg.ErrorMessage,
 		arg.EngineCatalogName,
+		arg.DesiredVersion,
 		arg.ID,
 		arg.FromStates,
 	)

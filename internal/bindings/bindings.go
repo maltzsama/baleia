@@ -29,7 +29,16 @@ var (
 	ErrReservedName = errors.New("reserved catalog name")
 	// ErrUnsupportedSource is a source kind or connector the binder cannot bind.
 	ErrUnsupportedSource = errors.New("source not bindable on this engine")
+	// ErrCatalogExists is a Create the engine refused because a catalog of
+	// that name already exists — one Baleia may not own.
+	ErrCatalogExists = errors.New("catalog_already_exists")
 )
+
+// Unstager is a binder that can undo the engine-side bookkeeping of a Create
+// without touching the engine's catalog (Trino: disable the registry row).
+type Unstager interface {
+	Unstage(ctx context.Context, eng EngineRef, name string) error
+}
 
 // PropertyError is an ErrPropertyNotOverridable or ErrInvalid for one key.
 type PropertyError struct {

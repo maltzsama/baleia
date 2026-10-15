@@ -155,9 +155,10 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 	}
 
 	l := h.lifecycleOn(cluster, eng)
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
-	binding, err = l.Provision(ddlCtx, binding, proj)
+	binding, err = l.Provision(ctx, binding, proj)
+	if errors.Is(err, bindings.ErrConcurrentChange) {
+		return CreateCatalog409JSONResponse{ConflictJSONResponse: concurrentChange(binding)}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -291,6 +292,9 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	if request.Body == nil {
 		return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "missing body"}}, nil
 	}
+	if existing.Origin != "source" {
+		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: notManaged()}, nil
+	}
 	body := *request.Body
 
 	newTrinoName := existing.TrinoName()
@@ -329,6 +333,10 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	if err != nil {
 		return nil, err
 	}
+	cur, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: existing.ID, EngineID: eng.ID})
+	if err != nil {
+		return nil, fmt.Errorf("catalog binding: %w", err)
+	}
 	var updated db.Catalog
 	var binding db.CatalogBinding
 	if err := h.inTx(ctx, func(q db.Querier) error {
@@ -345,17 +353,22 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 			return err
 		}
 		updated = u
-		binding, err = upsertPrimaryBinding(ctx, q, cluster, u, bindings.StateUpdating, proj.Version)
+		// Guarded: only an active or failed binding may start a change; a
+		// deleted catalog (disabled binding) is never re-created here.
+		binding, err = q.UpdateBinding(ctx, db.UpdateBindingParams{
+			ID: cur.ID, EngineCatalogName: u.TrinoName(), Connector: u.Connector, ExtraProps: u.ExtraProps, Enabled: cur.Enabled,
+			LifecycleState: bindings.StateUpdating, DesiredVersion: &proj.Version, FromStates: []string{bindings.StateActive, bindings.StateError},
+		})
 		return err
-	}); err != nil {
+	}); errors.Is(err, pgx.ErrNoRows) {
+		return UpdateCatalog409JSONResponse{ConflictJSONResponse: concurrentChange(cur)}, nil
+	} else if err != nil {
 		return nil, fmt.Errorf("update catalog: %w", err)
 	}
 
 	l := h.lifecycleOn(cluster, eng)
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
 	if newTrinoName != existing.TrinoName() {
-		binding, err = l.Rename(ddlCtx, binding, existing.TrinoName(), proj)
+		binding, err = l.Rename(ctx, binding, existing.TrinoName(), cur.DesiredVersion, proj)
 		if err == nil && binding.EngineCatalogName == existing.TrinoName() {
 			// The new name could not be created: the catalog keeps its old one.
 			old := existing.TrinoName()
@@ -365,7 +378,10 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 			})
 		}
 	} else {
-		binding, err = l.Update(ddlCtx, binding, proj)
+		binding, err = l.Update(ctx, binding, proj)
+	}
+	if errors.Is(err, bindings.ErrConcurrentChange) {
+		return UpdateCatalog409JSONResponse{ConflictJSONResponse: concurrentChange(cur)}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -396,6 +412,9 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 		return nil, err
 	}
 
+	if cat.Origin != "source" {
+		return DeleteCatalog422JSONResponse{UnprocessableEntityJSONResponse: notManaged()}, nil
+	}
 	cluster, eng, err := h.catalogEngine(ctx, cat)
 	if err != nil {
 		return nil, err
@@ -415,9 +434,7 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 	// A failed drop leaves the binding deprovisioning with the error; the
 	// reconciler (#37) retries. The catalog is gone for users either way.
 	l := h.lifecycleOn(cluster, eng)
-	dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
-	if _, err := l.Deprovision(dropCtx, binding); err != nil && !errors.Is(err, bindings.ErrConcurrentChange) {
+	if _, err := l.Deprovision(ctx, binding); err != nil && !errors.Is(err, bindings.ErrConcurrentChange) {
 		return nil, err
 	}
 	observe(ctx, l)
@@ -443,6 +460,9 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 		}
 		return nil, err
 	}
+	if cat.Origin != "source" {
+		return SyncCatalog422JSONResponse{UnprocessableEntityJSONResponse: notManaged()}, nil
+	}
 	cluster, eng, err := h.catalogEngine(ctx, cat)
 	if err != nil {
 		return nil, err
@@ -461,9 +481,7 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 		return SyncCatalog409JSONResponse(c), nil
 	}
 	l := h.lifecycleOn(cluster, eng)
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
-	synced, err := l.Sync(ddlCtx, binding, proj)
+	synced, err := l.Sync(ctx, binding, proj)
 	if errors.Is(err, bindings.ErrConcurrentChange) {
 		c := h.catalogResponse(ctx, cat, binding, "")
 		msg := "the catalog's binding is " + binding.LifecycleState + "; it cannot be synced now"

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -131,6 +132,21 @@ func (q *authzFake) UpsertManagedBinding(_ context.Context, p db.UpsertManagedBi
 	}), nil
 }
 
+func (q *authzFake) UpdateBinding(_ context.Context, p db.UpdateBindingParams) (db.CatalogBinding, error) {
+	b, ok := q.current(p.ID)
+	if !ok || !slices.Contains(p.FromStates, b.LifecycleState) {
+		return db.CatalogBinding{}, pgx.ErrNoRows
+	}
+	b.EngineCatalogName, b.Connector, b.ExtraProps, b.Enabled, b.LifecycleState = p.EngineCatalogName, p.Connector, p.ExtraProps, p.Enabled, p.LifecycleState
+	if p.DesiredVersion != nil {
+		b.DesiredVersion = p.DesiredVersion
+	}
+	q.mu.Lock()
+	q.bindingUpserts = append(q.bindingUpserts, db.UpsertManagedBindingParams{EngineCatalogName: p.EngineCatalogName})
+	q.mu.Unlock()
+	return q.track(b), nil
+}
+
 func (q *authzFake) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
 	return db.Engine{ID: id, Name: "default", Kind: "trino", Class: "federated", ConnectionID: pgtype.UUID{Bytes: [16]byte{0xC9}, Valid: true}, Enabled: true}, nil
 }
@@ -176,7 +192,7 @@ func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
 	q := &authzFake{
 		conn: db.CatalogConnection{ID: connID, Name: "src", Type: "polaris", Url: "http://polaris:8181", CreatedBy: owner, CredentialsEnc: &sealed},
 		cat: db.Catalog{
-			ID: pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}, ConnectionID: connID, Name: "wh", TrinoCatalogName: strp("wh"),
+			ID: pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}, ConnectionID: connID, Name: "wh", Origin: "source", TrinoCatalogName: strp("wh"),
 			ClusterID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Warehouse: strp("wh"), Connector: strp("iceberg"), ExtraProps: []byte("{}"),
 		},
 	}
@@ -574,5 +590,42 @@ func TestBindingErrorsAre422(t *testing.T) {
 	}
 	if bindingInvalid(errors.New("network down")) {
 		t.Error("a server failure is not a 422")
+	}
+}
+
+// TestUpdateCatalog_DeletedIsNotRecreated: a deleted catalog's binding is
+// disabled; an update is a 409 and nothing reaches Trino (#38).
+func TestUpdateCatalog_DeletedIsNotRecreated(t *testing.T) {
+	h, q, ft := newAuthzHandlers(t)
+	b, _ := q.current(pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true})
+	b.LifecycleState = "disabled"
+	q.track(b)
+	conn, cat := reqIDs(q)
+	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: "wh2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := visitCode(t, resp); code != 409 || len(ft.statements()) != 0 {
+		t.Fatalf("status %d, trino %v", code, ft.statements())
+	}
+}
+
+// TestNativeCatalogsAreNotManaged: catalogs that belong to their engine
+// answer 422 on every managed-catalog operation.
+func TestNativeCatalogsAreNotManaged(t *testing.T) {
+	h, q, ft := newAuthzHandlers(t)
+	q.cat.Origin = "native"
+	conn, cat := reqIDs(q)
+	owner := ctxAs(ownerID, "member")
+	u, _ := h.UpdateCatalog(owner, UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: "x"}})
+	d, _ := h.DeleteCatalog(owner, DeleteCatalogRequestObject{ConnectionId: conn, CatalogId: cat})
+	s, _ := h.SyncCatalog(owner, SyncCatalogRequestObject{CatalogId: cat})
+	for name, code := range map[string]int{"update": visitCode(t, u), "delete": visitCode(t, d), "sync": visitCode(t, s)} {
+		if code != 422 {
+			t.Errorf("%s: %d, want 422", name, code)
+		}
+	}
+	if len(ft.statements()) != 0 {
+		t.Errorf("trino = %v", ft.statements())
 	}
 }
