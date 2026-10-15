@@ -75,9 +75,12 @@ Partially compliant.
   dropped when those writes move to bindings (#80).
 - Runs resolve an explicit target (binding + schema), the workspace default or the workspace's only
   target, and store it with a snapshot; the editor picks targets from
-  `GET /workspaces/{id}/targets`. The Trino workflow still receives the engine catalog only: the
-  schema and read-only mode reach the engine with the workflow input of #13 PR 3 / #20, and
-  direct-engine targets are refused until then.
+  `GET /workspaces/{id}/targets`. New executions start `QueryExecutionWorkflowV2`, whose input
+  carries the target and the caller's identity, never a secret (`TestV2_InputHasNoSecrets`); the
+  statement activity opens the target's engine by id, in its catalog and schema, read-only for a
+  `read` grant, and splits with the engine's dialect. Targets on engine kinds without an adapter
+  (direct engines until #81-#83) answer 422 `engine_unsupported`. V1 stays registered until its
+  runs drain (#27).
 - Direct engines are registered through `/engines` on connections whose provider has the
   `direct_engine` role; their native catalogs (`origin = native`, no Trino columns, migration
   00025) and native bindings are created with them. Federated engines are only the default Trino
@@ -86,8 +89,7 @@ Partially compliant.
   are in place, and `internal/api` and `internal/temporal` run SQL only through them (#20 PR 2,
   #25): statements, the explorer, connection tests, retrievers and Iceberg maintenance. Catalog
   DDL goes through `internal/bindings/trino` (the binder contract is #80) and Lens monitoring
-  through `internal/trino/monitor`. Until executions carry their target's engine (#13 PR 3), they
-  run on the default Trino engine.
+  through `internal/trino/monitor`. Executions run on their target's engine (#13 PR 3).
 - The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql
   and mysql. Create and update validate through `Provider.Validate`, store non-secret values in
   `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the

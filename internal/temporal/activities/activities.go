@@ -19,6 +19,7 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,6 +34,7 @@ var defaultActivities *Activities
 // implements it. Until executions carry their target's engine (#13 PR 3),
 // everything runs on the default Trino engine.
 type engineSource interface {
+	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
 }
 
@@ -104,6 +106,21 @@ func Register(w worker.Worker, a *Activities) {
 
 type SplitSQLParams struct {
 	SQL string
+	// Dialect splits and gates the script (V2: the target engine's); empty
+	// is Trino, the V1 engine.
+	Dialect string
+}
+
+// paramsDialect is the dialect a V1 or V2 activity input names.
+func paramsDialect(name string) (dialect.Dialect, error) {
+	if name == "" {
+		return dialect.MustGet(dialect.Trino), nil
+	}
+	d, ok := dialect.Get(name)
+	if !ok {
+		return nil, temporal.NewNonRetryableApplicationError("unknown dialect "+name, "editor_rejected", nil)
+	}
+	return d, nil
 }
 
 type SplitSQLResult struct {
@@ -121,9 +138,12 @@ func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*Spli
 	// (exfiltration) or DROP another user's catalog. Reject it here, per
 	// statement, before the workflow starts any statement. The editor gate also
 	// rejects EXECUTE IMMEDIATE smuggling catalog DDL and SET SESSION
-	// AUTHORIZATION. V1 executions run on the default Trino engine, so its
-	// dialect splits (the V2 workflow, #13, splits with the target's).
-	stmts, err := policy.EditorStatements(dialect.MustGet(dialect.Trino), params.SQL)
+	// AUTHORIZATION. The script is split with the target engine's dialect.
+	d, err := paramsDialect(params.Dialect)
+	if err != nil {
+		return nil, err
+	}
+	stmts, err := policy.EditorStatements(d, params.SQL)
 	if err != nil {
 		// The same script fails the same way: retrying only delays the answer.
 		return nil, temporal.NewNonRetryableApplicationError(err.Error(), "editor_rejected", err)
@@ -175,6 +195,26 @@ type ExecuteStatementParams struct {
 	// Timeout bounds the statement. It is sent to Trino as the session
 	// property query_max_execution_time so the cluster enforces it too.
 	Timeout time.Duration
+	// V2 (#13): the target's engine (empty: the default Trino engine, V1),
+	// schema and read-only session; TrinoCatalog is the target's catalog
+	// name on that engine. Dialect names the engine's dialect.
+	EngineID string
+	Schema   string
+	ReadOnly bool
+	Dialect  string
+}
+
+// statementEngine is the V2 target's engine, or the default Trino engine for
+// V1 inputs (no engine id).
+func (a *Activities) statementEngine(ctx context.Context, engineID string) (queryengine.Engine, error) {
+	if engineID == "" {
+		return a.engines.DefaultTrino(ctx)
+	}
+	id, err := uuid.Parse(engineID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid engine id %q", engineID)
+	}
+	return a.engines.Get(ctx, pgtype.UUID{Bytes: id, Valid: true})
 }
 
 // heartbeatInterval throttles activity heartbeats; the workflow's heartbeat
@@ -246,12 +286,16 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	// forbidden editor statements, but ensure that any path that bypasses
 	// splitting (single-statement fast path, future callers) still cannot issue
 	// them.
-	if policy.ForbiddenInEditor(dialect.MustGet(dialect.Trino), params.SQL) {
+	d, err := paramsDialect(params.Dialect)
+	if err != nil {
+		return &ExecuteStatementResult{Error: err.Error()}, nil
+	}
+	if policy.ForbiddenInEditor(d, params.SQL) {
 		return &ExecuteStatementResult{Error: policy.ErrForbiddenInEditor.Error()}, nil
 	}
 
 	start := time.Now()
-	eng, err := a.engines.DefaultTrino(ctx)
+	eng, err := a.statementEngine(ctx, params.EngineID)
 	if err != nil {
 		return &ExecuteStatementResult{Error: err.Error()}, nil
 	}
@@ -279,8 +323,12 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	spec := queryengine.SessionSpec{
 		Catalog:  params.TrinoCatalog,
 		Identity: queryengine.Identity{UserID: params.User},
+		ReadOnly: params.ReadOnly,
 		Timeout:  params.Timeout,
 		Tags:     queryengine.Tags{ExecutionID: params.ExecutionID, RequestID: params.RequestID, Source: "editor"},
+	}
+	if params.Schema != "" {
+		spec.Schema = []string{params.Schema}
 	}
 
 	// A statement is never retried once the engine has accepted it: retrying

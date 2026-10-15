@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -18,8 +19,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
@@ -333,12 +334,12 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	// Until the engine contract lands (#20) the execution workflow runs on
-	// Trino only.
-	if target.EngineKind != "trino" {
+	// A target runs where an adapter for its engine kind exists; direct
+	// engines get theirs in #81-#83.
+	if !slices.Contains(queryengine.Kinds(), target.EngineKind) {
 		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: (&targetError{
 			code:    "engine_unsupported",
-			message: "queries on " + target.EngineKind + " engines run once the engine contract lands (#20)",
+			message: "queries on " + target.EngineKind + " engines are not available yet",
 		}).unprocessable()}, nil
 	}
 	snapshot, err := target.Snapshot()
@@ -399,15 +400,15 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		TaskQueue: "baleia-task-queue",
 	}
 
-	_, err = h.temporalClient.ExecuteWorkflow(ctx, wo, workflows.QueryExecutionWorkflow,
-		executionID,
-		request.Id.String(),
-		request.Body.Sql,
-		trinoCatalog,
-		requestID,
-		trinoUser,
-		h.cfg.StatementTimeout,
-	)
+	_, err = h.temporalClient.ExecuteWorkflow(ctx, wo, workflows.QueryExecutionWorkflowV2, workflows.QueryExecutionInput{
+		ExecutionID:      executionID,
+		WorkspaceID:      request.Id.String(),
+		SQL:              request.Body.Sql,
+		Target:           target,
+		Identity:         queryengine.Identity{UserID: trinoUser},
+		StatementTimeout: h.cfg.StatementTimeout,
+		RequestID:        requestID,
+	})
 	if err != nil {
 		// The workflow failed to start; fail the row so it does not stay
 		// `running` forever. Use a context detached from the request in case

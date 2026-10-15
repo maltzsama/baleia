@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"io"
 	"strings"
 	"sync"
@@ -49,9 +51,23 @@ type fakeEngine struct {
 	lastUser  string
 	ctasCount string // when set, the result is one row holding this count
 	sqls      []string
+	lastSpec  queryengine.SessionSpec
+	gotEngine []string // engine ids asked for through Get ("default" for DefaultTrino)
 }
 
-func (f *fakeEngine) DefaultTrino(context.Context) (queryengine.Engine, error) { return f, nil }
+func (f *fakeEngine) DefaultTrino(context.Context) (queryengine.Engine, error) {
+	f.mu.Lock()
+	f.gotEngine = append(f.gotEngine, "default")
+	f.mu.Unlock()
+	return f, nil
+}
+
+func (f *fakeEngine) Get(_ context.Context, id pgtype.UUID) (queryengine.Engine, error) {
+	f.mu.Lock()
+	f.gotEngine = append(f.gotEngine, uuid.UUID(id.Bytes).String())
+	f.mu.Unlock()
+	return f, nil
+}
 
 func (f *fakeEngine) OpenSession(_ context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {
 	return &fakeSession{f: f, spec: spec}, nil
@@ -76,6 +92,7 @@ func (s *fakeSession) Execute(ctx context.Context, sql string, cb queryengine.Ca
 	f.mu.Lock()
 	f.callCount++
 	f.lastUser = s.spec.Identity.UserID
+	f.lastSpec = s.spec
 	f.sqls = append(f.sqls, sql)
 	f.mu.Unlock()
 
@@ -472,5 +489,59 @@ func TestExecuteStatement_TruncatesOnBytes(t *testing.T) {
 	}
 	if fake.killCalls == 0 {
 		t.Fatal("the over-cap query must be killed")
+	}
+}
+
+// TestExecuteStatement_V2Target: a V2 statement runs on the target's engine,
+// in its catalog and schema, read-only when the target is; a V1 statement
+// (no engine id) runs on the default Trino engine.
+func TestExecuteStatement_V2Target(t *testing.T) {
+	before := defaultActivities
+	defer func() { defaultActivities = before }()
+	fake := &fakeEngine{assignID: true}
+	defaultActivities = &Activities{queries: &handleQuerier{}, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}
+	wts := &testsuite.WorkflowTestSuite{}
+	ts := wts.NewTestActivityEnvironment()
+	ts.RegisterActivityWithOptions(ExecuteStatement, activity.RegisterOptions{Name: "ExecuteStatement"})
+
+	engineID := "0b6d1c1e-5a4f-4a5e-9d7c-2f1e3a4b5c6d"
+	p := execParams()
+	p.EngineID, p.TrinoCatalog, p.Schema, p.ReadOnly, p.Dialect = engineID, "sales", "eu", true, "trino"
+	result, err := ts.ExecuteActivity(ExecuteStatement, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r *ExecuteStatementResult
+	if err := result.Get(&r); err != nil || r.Error != "" {
+		t.Fatalf("result %+v, %v", r, err)
+	}
+	fake.mu.Lock()
+	spec, got := fake.lastSpec, append([]string(nil), fake.gotEngine...)
+	fake.mu.Unlock()
+	if len(got) != 1 || got[0] != engineID {
+		t.Errorf("engines asked for = %v, want [%s]", got, engineID)
+	}
+	if spec.Catalog != "sales" || len(spec.Schema) != 1 || spec.Schema[0] != "eu" || !spec.ReadOnly {
+		t.Errorf("session spec = %+v", spec)
+	}
+
+	if _, err := ts.ExecuteActivity(ExecuteStatement, execParams()); err != nil {
+		t.Fatal(err)
+	}
+	fake.mu.Lock()
+	got = append([]string(nil), fake.gotEngine...)
+	fake.mu.Unlock()
+	if len(got) != 2 || got[1] != "default" {
+		t.Errorf("a V1 statement must use the default engine: %v", got)
+	}
+
+	p = execParams()
+	p.Dialect = "cobol"
+	result, err = ts.ExecuteActivity(ExecuteStatement, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := result.Get(&r); err != nil || r.Error == "" {
+		t.Errorf("unknown dialect must fail the statement: %+v", r)
 	}
 }

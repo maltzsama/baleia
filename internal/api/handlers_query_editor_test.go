@@ -202,9 +202,11 @@ func (f *fakeRunQueryQuerier) UpdateQueryExecution(_ context.Context, arg db.Upd
 type fakeTemporalClient struct {
 	client.Client
 	startErr error
+	started  []interface{} // the args of the last ExecuteWorkflow
 }
 
 func (f *fakeTemporalClient) ExecuteWorkflow(ctx context.Context, options client.StartWorkflowOptions, wf interface{}, args ...interface{}) (client.WorkflowRun, error) {
+	f.started = args
 	return nil, f.startErr
 }
 

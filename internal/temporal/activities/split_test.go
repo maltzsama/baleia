@@ -22,3 +22,18 @@ func TestSplitSQL(t *testing.T) {
 		}
 	}
 }
+
+// TestSplitSQL_Dialect: V2 splits with the target engine's dialect.
+func TestSplitSQL_Dialect(t *testing.T) {
+	a := &Activities{}
+	res, err := a.splitSQL(context.Background(), SplitSQLParams{SQL: "SELECT 1\nGO\nSELECT 2", Dialect: "tsql"})
+	if err != nil || len(res.Statements) != 2 {
+		t.Fatalf("tsql GO: %+v, %v", res, err)
+	}
+	if _, err := a.splitSQL(context.Background(), SplitSQLParams{SQL: "SELECT 1\nGO\nDROP CATALOG x", Dialect: "tsql"}); err == nil {
+		t.Error("catalog DDL after GO accepted")
+	}
+	if _, err := a.splitSQL(context.Background(), SplitSQLParams{SQL: "SELECT 1", Dialect: "cobol"}); err == nil {
+		t.Error("unknown dialect accepted")
+	}
+}

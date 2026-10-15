@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -81,7 +82,14 @@ func TestResolveTarget(t *testing.T) {
 
 func runQuery(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) *httptest.ResponseRecorder {
 	t.Helper()
-	h := &Handlers{queries: fake, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: &fakeTemporalClient{}}
+	rec, _ := runQueryWith(t, fake, target)
+	return rec
+}
+
+func runQueryWith(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) (*httptest.ResponseRecorder, *fakeTemporalClient) {
+	t.Helper()
+	tc := &fakeTemporalClient{}
+	h := &Handlers{queries: fake, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: tc}
 	resp, err := h.RunQuery(testContext(), RunQueryRequestObject{Id: PathId{0xAA}, Body: &RunQueryJSONRequestBody{Sql: "SELECT 1", Target: target}})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +98,7 @@ func runQuery(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) *h
 	if err := resp.VisitRunQueryResponse(rec); err != nil {
 		t.Fatal(err)
 	}
-	return rec
+	return rec, tc
 }
 
 func TestRunQuery_StoresTarget(t *testing.T) {
@@ -99,8 +107,21 @@ func TestRunQuery_StoresTarget(t *testing.T) {
 		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "read", true)},
 	}
 	schema := "tiny"
-	if rec := runQuery(t, fake, &TargetRequest{BindingId: tuuid(0xB1), Schema: &schema}); rec.Code != 202 {
+	rec, tc := runQueryWith(t, fake, &TargetRequest{BindingId: tuuid(0xB1), Schema: &schema})
+	if rec.Code != 202 {
 		t.Fatalf("response = %d %s", rec.Code, rec.Body)
+	}
+	// The V2 workflow gets the resolved target and the caller's identity.
+	if len(tc.started) != 1 {
+		t.Fatalf("workflow args = %v", tc.started)
+	}
+	in, ok := tc.started[0].(workflows.QueryExecutionInput)
+	if !ok {
+		t.Fatalf("workflow input = %T", tc.started[0])
+	}
+	if in.Target.EngineID != id(0xE1) || in.Target.EngineCatalog != "eng_cat_1" || in.Target.Schema != "tiny" || !in.Target.ReadOnly ||
+		in.Identity.UserID == "" || in.StatementTimeout != time.Minute || in.SQL != "SELECT 1" {
+		t.Fatalf("workflow input = %+v", in)
 	}
 	p := fake.created[0]
 	if p.EngineID != id(0xE1) || p.TargetBindingID != id(0xB1) || p.TargetCatalogID != id(0xC1) || *p.TargetSchema != "tiny" || *p.TrinoCatalog != "eng_cat_1" {
