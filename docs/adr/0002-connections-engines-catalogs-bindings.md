@@ -95,6 +95,12 @@ Partially compliant.
   #25): statements, the explorer, connection tests, retrievers and Iceberg maintenance. Catalog
   DDL goes through `internal/bindings/trino` (the binder contract is #80) and Lens monitoring
   through `internal/trino/monitor`. Executions run on their target's engine (#13 PR 3).
+- Physical metadata snapshots are keyed by logical catalog (migration 00032, `internal/metadata`,
+  #15): one sync per catalog, however many bindings and workspaces it has. A catalog is read from
+  its own source when its provider can (Iceberg catalog managers; databases whose reader walks a
+  catalog in one query), else introspected through its first active binding's engine in a
+  read-only session with the service identity. `POST /catalogs/{id}/metadata/sync` starts a pass
+  on demand; schedules are #17, the read API #18.
 - The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql
   and mysql. Create and update validate through `Provider.Validate`, store non-secret values in
   `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the

@@ -669,6 +669,39 @@ components:
       properties:
         enabled: { type: boolean }
 
+    MetadataSyncStarted:
+      type: object
+      required: [catalog_id, workflow_id]
+      properties:
+        catalog_id: { type: string, format: uuid }
+        workflow_id: { type: string }
+
+    MetadataSyncRun:
+      type: object
+      required: [id, catalog_id, status, source_path, started_at]
+      properties:
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        status: { type: string, enum: [running, finished, failed] }
+        source_path:
+          type: string
+          enum: [provider, engine]
+          description: >
+            provider: read from the catalog's own source (catalog manager,
+            database); engine: introspected through one of its bindings.
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        tables_seen: { type: integer, nullable: true }
+        tables_changed: { type: integer, nullable: true }
+        tables_removed: { type: integer, nullable: true }
+        error_code:
+          type: string
+          nullable: true
+          description: >
+            Why a pass failed: an engine code (engine_unavailable, timeout, …),
+            not_found, interrupted (the worker stopped mid-pass), cancelled or
+            sync_failed. The source's own message stays in the worker's logs.
+
     CatalogBinding:
       type: object
       required: [id, catalog_id, engine_id, engine_catalog_name, mode, enabled]
@@ -2213,6 +2246,63 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Catalog" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /catalogs/{catalog_id}/metadata/sync:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Catalog]
+      operationId: syncCatalogMetadata
+      summary: "Refresh the catalog's metadata snapshot now"
+      description: >
+        Starts one metadata pass of the catalog on the worker: namespaces,
+        tables and columns are read from the catalog's own source (its catalog
+        manager or database) or, when Baleia cannot read it directly, through
+        one of its bindings' engines, and stored once per catalog (#15). The
+        pass runs in the background; GET .../metadata/sync-runs shows how it
+        ended. The connection's owner and global admins may start it.
+      responses:
+        "202":
+          description: "The pass started"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetadataSyncStarted" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "A pass of this catalog is already running (code sync_in_progress)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /catalogs/{catalog_id}/metadata/sync-runs:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Catalog]
+      operationId: listCatalogMetadataSyncRuns
+      summary: "Latest metadata passes of the catalog, newest first"
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: "Passes"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MetadataSyncRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /trino/reconcile:
     post:

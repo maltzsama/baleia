@@ -163,6 +163,19 @@ const (
 	InviteUserRequestRoleMember InviteUserRequestRole = "member"
 )
 
+// Defines values for MetadataSyncRunSourcePath.
+const (
+	MetadataSyncRunSourcePathEngine   MetadataSyncRunSourcePath = "engine"
+	MetadataSyncRunSourcePathProvider MetadataSyncRunSourcePath = "provider"
+)
+
+// Defines values for MetadataSyncRunStatus.
+const (
+	MetadataSyncRunStatusFailed   MetadataSyncRunStatus = "failed"
+	MetadataSyncRunStatusFinished MetadataSyncRunStatus = "finished"
+	MetadataSyncRunStatusRunning  MetadataSyncRunStatus = "running"
+)
+
 // Defines values for MigrationSourceType.
 const (
 	MigrationSourceTypeNessie MigrationSourceType = "nessie"
@@ -299,10 +312,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
-	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
-	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
-	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
+	Cancelled ListExecutionsParamsStatus = "cancelled"
+	Failed    ListExecutionsParamsStatus = "failed"
+	Finished  ListExecutionsParamsStatus = "finished"
+	Running   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
@@ -821,6 +834,36 @@ type LogoutRequest struct {
 	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
+// MetadataSyncRun defines model for MetadataSyncRun.
+type MetadataSyncRun struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+
+	// ErrorCode Why a pass failed: an engine code (engine_unavailable, timeout, …), not_found, interrupted (the worker stopped mid-pass), cancelled or sync_failed. The source's own message stays in the worker's logs.
+	ErrorCode  *string            `json:"error_code"`
+	FinishedAt *time.Time         `json:"finished_at"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// SourcePath provider: read from the catalog's own source (catalog manager, database); engine: introspected through one of its bindings.
+	SourcePath    MetadataSyncRunSourcePath `json:"source_path"`
+	StartedAt     time.Time                 `json:"started_at"`
+	Status        MetadataSyncRunStatus     `json:"status"`
+	TablesChanged *int                      `json:"tables_changed"`
+	TablesRemoved *int                      `json:"tables_removed"`
+	TablesSeen    *int                      `json:"tables_seen"`
+}
+
+// MetadataSyncRunSourcePath provider: read from the catalog's own source (catalog manager, database); engine: introspected through one of its bindings.
+type MetadataSyncRunSourcePath string
+
+// MetadataSyncRunStatus defines model for MetadataSyncRun.Status.
+type MetadataSyncRunStatus string
+
+// MetadataSyncStarted defines model for MetadataSyncStarted.
+type MetadataSyncStarted struct {
+	CatalogId  openapi_types.UUID `json:"catalog_id"`
+	WorkflowId string             `json:"workflow_id"`
+}
+
 // Migration defines model for Migration.
 type Migration struct {
 	CreatedAt                 time.Time           `json:"created_at"`
@@ -1254,6 +1297,11 @@ type UnprocessableEntity = ValidationError
 type OidcCallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
+}
+
+// ListCatalogMetadataSyncRunsParams defines parameters for ListCatalogMetadataSyncRuns.
+type ListCatalogMetadataSyncRunsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetDialectParams defines parameters for GetDialect.

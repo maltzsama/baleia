@@ -81,6 +81,12 @@ type ServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
+	// Refresh the catalog's metadata snapshot now
+	// (POST /catalogs/{catalog_id}/metadata/sync)
+	SyncCatalogMetadata(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Latest metadata passes of the catalog, newest first
+	// (GET /catalogs/{catalog_id}/metadata/sync-runs)
+	ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListCatalogMetadataSyncRunsParams)
 	// List namespaces in a catalog
 	// (GET /catalogs/{catalog_id}/namespaces)
 	ListNamespaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
@@ -438,6 +444,18 @@ func (_ Unimplemented) UpdateCatalogConnection(w http.ResponseWriter, r *http.Re
 // Test catalog connectivity
 // (POST /catalog-connections/{id}/test)
 func (_ Unimplemented) TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Refresh the catalog's metadata snapshot now
+// (POST /catalogs/{catalog_id}/metadata/sync)
+func (_ Unimplemented) SyncCatalogMetadata(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Latest metadata passes of the catalog, newest first
+// (GET /catalogs/{catalog_id}/metadata/sync-runs)
+func (_ Unimplemented) ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListCatalogMetadataSyncRunsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1446,6 +1464,83 @@ func (siw *ServerInterfaceWrapper) TestCatalogConnection(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestCatalogConnection(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncCatalogMetadata operation middleware
+func (siw *ServerInterfaceWrapper) SyncCatalogMetadata(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncCatalogMetadata(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCatalogMetadataSyncRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCatalogMetadataSyncRunsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCatalogMetadataSyncRuns(w, r, catalogId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4329,6 +4424,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalog-connections/{id}/test", wrapper.TestCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{catalog_id}/metadata/sync", wrapper.SyncCatalogMetadata)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/metadata/sync-runs", wrapper.ListCatalogMetadataSyncRuns)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces", wrapper.ListNamespaces)
 	})
 	r.Group(func(r chi.Router) {
@@ -5325,6 +5426,95 @@ func (response TestCatalogConnection401JSONResponse) VisitTestCatalogConnectionR
 type TestCatalogConnection404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response TestCatalogConnection404JSONResponse) VisitTestCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogMetadataRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type SyncCatalogMetadataResponseObject interface {
+	VisitSyncCatalogMetadataResponse(w http.ResponseWriter) error
+}
+
+type SyncCatalogMetadata202JSONResponse MetadataSyncStarted
+
+func (response SyncCatalogMetadata202JSONResponse) VisitSyncCatalogMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogMetadata401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SyncCatalogMetadata401JSONResponse) VisitSyncCatalogMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogMetadata403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SyncCatalogMetadata403JSONResponse) VisitSyncCatalogMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogMetadata404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SyncCatalogMetadata404JSONResponse) VisitSyncCatalogMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogMetadata409JSONResponse Error
+
+func (response SyncCatalogMetadata409JSONResponse) VisitSyncCatalogMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogMetadataSyncRunsRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Params    ListCatalogMetadataSyncRunsParams
+}
+
+type ListCatalogMetadataSyncRunsResponseObject interface {
+	VisitListCatalogMetadataSyncRunsResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogMetadataSyncRuns200JSONResponse []MetadataSyncRun
+
+func (response ListCatalogMetadataSyncRuns200JSONResponse) VisitListCatalogMetadataSyncRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogMetadataSyncRuns401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogMetadataSyncRuns401JSONResponse) VisitListCatalogMetadataSyncRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogMetadataSyncRuns404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogMetadataSyncRuns404JSONResponse) VisitListCatalogMetadataSyncRunsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -8438,6 +8628,12 @@ type StrictServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error)
+	// Refresh the catalog's metadata snapshot now
+	// (POST /catalogs/{catalog_id}/metadata/sync)
+	SyncCatalogMetadata(ctx context.Context, request SyncCatalogMetadataRequestObject) (SyncCatalogMetadataResponseObject, error)
+	// Latest metadata passes of the catalog, newest first
+	// (GET /catalogs/{catalog_id}/metadata/sync-runs)
+	ListCatalogMetadataSyncRuns(ctx context.Context, request ListCatalogMetadataSyncRunsRequestObject) (ListCatalogMetadataSyncRunsResponseObject, error)
 	// List namespaces in a catalog
 	// (GET /catalogs/{catalog_id}/namespaces)
 	ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error)
@@ -9278,6 +9474,59 @@ func (sh *strictHandler) TestCatalogConnection(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestCatalogConnectionResponseObject); ok {
 		if err := validResponse.VisitTestCatalogConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SyncCatalogMetadata operation middleware
+func (sh *strictHandler) SyncCatalogMetadata(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request SyncCatalogMetadataRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SyncCatalogMetadata(ctx, request.(SyncCatalogMetadataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SyncCatalogMetadata")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SyncCatalogMetadataResponseObject); ok {
+		if err := validResponse.VisitSyncCatalogMetadataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCatalogMetadataSyncRuns operation middleware
+func (sh *strictHandler) ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListCatalogMetadataSyncRunsParams) {
+	var request ListCatalogMetadataSyncRunsRequestObject
+
+	request.CatalogId = catalogId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogMetadataSyncRuns(ctx, request.(ListCatalogMetadataSyncRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogMetadataSyncRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogMetadataSyncRunsResponseObject); ok {
+		if err := validResponse.VisitListCatalogMetadataSyncRunsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

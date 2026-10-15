@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/conntest"
 )
 
 // TestMetadataReader_clickhouse runs against a real server. Set
@@ -89,6 +90,8 @@ func TestMetadataReader_clickhouse(t *testing.T) {
 		meta.Columns[1].NativeType != "Decimal(12, 2)" || !meta.Columns[2].Nullable || meta.Columns[2].Comment != "free text" {
 		t.Errorf("meta = %+v", meta)
 	}
+	conntest.CheckWalk(t, r, Catalog, tables...)
+
 	if _, err := r.LoadTable(ctx, connections.TableRef{Catalog: Catalog, Namespace: connections.Namespace{"baleia_fixture"}, Name: "nope"}); !errors.Is(err, connections.ErrNotFound) {
 		t.Errorf("missing table: %v", err)
 	}

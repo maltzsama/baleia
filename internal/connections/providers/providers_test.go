@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -123,7 +124,13 @@ func fakeIcebergREST(t *testing.T) *httptest.Server {
 		case "/v1/p-wh/namespaces/db%1Finner/tables", "/v1/p-/namespaces/db%1Finner/tables":
 			write(w, map[string]any{"identifiers": []map[string]any{{"namespace": []string{"db", "inner"}, "name": "events"}}})
 		case "/v1/p-wh/namespaces/db%1Finner/tables/events", "/v1/p-/namespaces/db%1Finner/tables/events":
-			write(w, map[string]any{"metadata": map[string]any{
+			// The table keeps its ETag: a matching If-None-Match is a 304.
+			if r.Header.Get("If-None-Match") == `W/"v2"` {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("ETag", `W/"v2"`)
+			write(w, map[string]any{"metadata-location": "s3://b/events/metadata/00002.metadata.json", "metadata": map[string]any{
 				"format-version":      2,
 				"location":            "s3://b/events",
 				"current-schema-id":   1,
@@ -133,6 +140,9 @@ func fakeIcebergREST(t *testing.T) *httptest.Server {
 					{"schema-id": 1, "fields": []map[string]any{
 						{"id": 1, "name": "id", "type": "long", "required": true},
 						{"id": 2, "name": "tags", "type": map[string]any{"type": "list", "element": "string"}, "required": false, "doc": "labels"},
+						{"id": 3, "name": "attrs", "type": map[string]any{"type": "map", "key": "string", "value": map[string]any{
+							"type": "struct", "fields": []map[string]any{{"id": 5, "name": "n", "type": "long"}, {"id": 6, "name": "at", "type": "timestamptz"}},
+						}}},
 					}},
 				},
 				"snapshots": []map[string]any{
@@ -201,12 +211,26 @@ func TestIcebergRESTReaders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(meta.Columns) != 2 || meta.Columns[0].Name != "id" || meta.Columns[0].Nullable ||
-				meta.Columns[1].NativeType != "list" || meta.Columns[1].Comment != "labels" {
+			if len(meta.Columns) != 3 || meta.Columns[0].Name != "id" || meta.Columns[0].Nullable ||
+				meta.Columns[1].NativeType != "list<string>" || meta.Columns[1].Comment != "labels" ||
+				meta.Columns[2].NativeType != "map<string, struct<n: long, at: timestamptz>>" {
 				t.Errorf("columns from the current schema = %+v", meta.Columns)
 			}
-			if len(meta.Snapshots) != 2 || meta.Snapshots[1].Operation != "overwrite" || meta.Properties["location"] != "s3://b/events" {
+			if len(meta.Snapshots) != 2 || meta.Snapshots[1].Operation != "overwrite" || meta.Properties["location"] != "s3://b/events" ||
+				meta.Properties["metadata_location"] != "s3://b/events/metadata/00002.metadata.json" {
 				t.Errorf("snapshots/properties = %+v %v", meta.Snapshots, meta.Properties)
+			}
+
+			// A conditional load of an unchanged table loads nothing.
+			cl, ok := r.(connections.ConditionalLoader)
+			if !ok {
+				t.Fatal("Iceberg REST readers load conditionally")
+			}
+			if m, etag, err := cl.LoadTableIfChanged(ctx, tables[0], ""); err != nil || m == nil || etag != `W/"v2"` {
+				t.Fatalf("first load = %v %q %v", m, etag, err)
+			}
+			if m, etag, err := cl.LoadTableIfChanged(ctx, tables[0], `W/"v2"`); err != nil || m != nil || etag != `W/"v2"` {
+				t.Fatalf("unchanged load = %v %q %v", m, etag, err)
 			}
 
 			if _, err := r.LoadTable(ctx, connections.TableRef{Catalog: c.catalog, Namespace: connections.Namespace{"db"}, Name: "missing"}); !errors.Is(err, connections.ErrNotFound) {

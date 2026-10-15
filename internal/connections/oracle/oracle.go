@@ -34,6 +34,12 @@ func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
 func (*Provider) EngineKind() string { return "oracle" }
+
+// WalksCatalogs: the reader reads a whole catalog in one query (#15).
+func (*Provider) WalksCatalogs() bool { return true }
+
+var _ connections.CatalogWalker = (*reader)(nil)
+
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }
@@ -260,6 +266,63 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 	ref := t
 	ref.Type = typ // TABLE | VIEW
 	return &connections.TableMeta{Ref: ref, Columns: cols, Comment: comment.String, Format: "oracle", Properties: map[string]string{}}, nil
+}
+
+// WalkCatalog reads every table and view of the user schemas with their
+// columns in one query.
+func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(connections.TableMeta) error) error {
+	if err := r.checkCatalog(catalog); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT o.owner, o.name, o.kind, tc.comments,
+		       c.column_name,
+		       c.data_type || CASE
+		           WHEN c.data_type IN ('VARCHAR2', 'NVARCHAR2', 'CHAR', 'NCHAR', 'RAW') THEN '(' || c.char_length || ')'
+		           WHEN c.data_type = 'NUMBER' AND c.data_precision IS NOT NULL THEN '(' || c.data_precision || ',' || c.data_scale || ')'
+		           ELSE '' END,
+		       c.nullable, cc.comments, c.column_id
+		FROM (
+		    SELECT owner, table_name AS name, 'TABLE' AS kind FROM all_tables
+		    UNION ALL
+		    SELECT owner, view_name, 'VIEW' FROM all_views
+		) o
+		JOIN all_users u ON u.username = o.owner AND u.oracle_maintained = 'N'
+		LEFT JOIN all_tab_comments tc ON tc.owner = o.owner AND tc.table_name = o.name
+		LEFT JOIN all_tab_columns c ON c.owner = o.owner AND c.table_name = o.name
+		LEFT JOIN all_col_comments cc
+		       ON cc.owner = c.owner AND cc.table_name = c.table_name AND cc.column_name = c.column_name
+		ORDER BY o.owner, o.name, c.column_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	g := connections.NewTableGrouper(catalog, visit)
+	for rows.Next() {
+		var owner string
+		// Oracle: '' is NULL, and a table without columns has NULL ones.
+		var tableComment, column, typ, nullable, comment sql.NullString
+		var position sql.NullInt64
+		var row connections.CatalogRow
+		if err := rows.Scan(&owner, &row.Table, &row.Type, &tableComment, &column, &typ, &nullable, &comment, &position); err != nil {
+			return err
+		}
+		row.Namespace = connections.Namespace{owner}
+		row.Comment, row.Format = tableComment.String, "oracle"
+		row.Column = connections.Column{
+			Name: column.String, NativeType: typ.String, Nullable: nullable.String == "Y",
+			Comment: comment.String, Position: int(position.Int64),
+		}
+		if err := g.Add(row); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return g.Flush()
 }
 
 func (r *reader) Close() error { return r.db.Close() }

@@ -11,6 +11,12 @@ var ansiInformationSchema = MetadataQueries{
 FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name`,
 	Columns: `SELECT column_name, data_type, is_nullable, ordinal_position
 FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position`,
+	Catalog: `SELECT t.table_schema, t.table_name, CASE WHEN t.table_type = 'VIEW' THEN 'VIEW' ELSE 'TABLE' END,
+       c.column_name, c.data_type, c.is_nullable, c.ordinal_position
+FROM information_schema.tables t
+LEFT JOIN information_schema.columns c ON c.table_schema = t.table_schema AND c.table_name = t.table_name
+WHERE t.table_schema <> 'information_schema'
+ORDER BY t.table_schema, t.table_name, c.ordinal_position`,
 }
 
 func explainPrefix(prefix string) func(string) (string, bool) {

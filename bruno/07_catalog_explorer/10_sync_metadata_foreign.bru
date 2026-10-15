@@ -1,0 +1,19 @@
+meta {
+  name: Sync Catalog Metadata (foreign user -> 404)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/catalogs/{{explorer_catalog_id}}/metadata/sync
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 404
+}

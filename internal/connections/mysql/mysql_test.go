@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/conntest"
 	driver "github.com/go-sql-driver/mysql"
 )
 
@@ -107,6 +108,8 @@ func runMetadataReader(t *testing.T, env string, newProvider func(*connections.D
 		meta.Columns[0].Nullable || meta.Columns[1].NativeType != "decimal(12,2)" || meta.Columns[2].Comment != "free text" {
 		t.Errorf("meta = %+v", meta)
 	}
+	conntest.CheckWalk(t, r, Catalog, tables...)
+
 	if _, err := r.LoadTable(ctx, connections.TableRef{Catalog: Catalog, Namespace: connections.Namespace{"baleia_fixture"}, Name: "nope"}); !errors.Is(err, connections.ErrNotFound) {
 		t.Errorf("missing table: %v", err)
 	}

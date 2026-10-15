@@ -50,6 +50,11 @@ func (*Provider) Roles() []connections.Role {
 }
 func (*Provider) EngineKind() string { return "sqlite" }
 
+// WalksCatalogs: the reader reads a whole catalog in one query (#15).
+func (*Provider) WalksCatalogs() bool { return true }
+
+var _ connections.CatalogWalker = (*reader)(nil)
+
 func (p *Provider) Status() connections.Status {
 	if p.opts.Root == "" {
 		return connections.Status{State: connections.StateUnsupported, Reason: "BALEIA_SQLITE_ROOT not set"}
@@ -280,6 +285,47 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 		ref.Type = "VIEW"
 	}
 	return &connections.TableMeta{Ref: ref, Columns: cols, Format: "sqlite", Properties: map[string]string{}}, nil
+}
+
+// WalkCatalog reads every table and view of the database with its columns in
+// one query.
+func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(connections.TableMeta) error) error {
+	if err := check(catalog, nil); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT s.name, s.type, COALESCE(p.name, ''), COALESCE(p.type, ''), COALESCE(p."notnull", 0), COALESCE(p.cid, -1)
+		FROM sqlite_schema s
+		LEFT JOIN pragma_table_info(s.name) p
+		WHERE s.type IN ('table', 'view') AND s.name NOT LIKE 'sqlite\_%' ESCAPE '\'
+		ORDER BY s.name, p.cid`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	g := connections.NewTableGrouper(catalog, visit)
+	for rows.Next() {
+		var typ string
+		var notnull, cid int
+		row := connections.CatalogRow{Namespace: connections.Namespace{}}
+		if err := rows.Scan(&row.Table, &typ, &row.Column.Name, &row.Column.NativeType, &notnull, &cid); err != nil {
+			return err
+		}
+		row.Column.Nullable, row.Column.Position = notnull == 0, cid+1
+		row.Type, row.Format = "TABLE", "sqlite"
+		if typ == "view" {
+			row.Type = "VIEW"
+		}
+		if err := g.Add(row); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return g.Flush()
 }
 
 func (r *reader) Close() error { return r.db.Close() }

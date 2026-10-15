@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/conntest"
 )
 
 // fixture creates root/app.db with a table and a view, plus a database outside
@@ -103,6 +104,8 @@ func TestMetadataReader_sqlite(t *testing.T) {
 	if len(meta.Columns) != 3 || meta.Columns[0].Nullable || meta.Columns[1].NativeType != "NUMERIC(12,2)" || !meta.Columns[2].Nullable {
 		t.Errorf("columns = %+v", meta.Columns)
 	}
+	conntest.CheckWalk(t, r, Catalog, tables...)
+
 	if _, err := r.LoadTable(ctx, connections.TableRef{Catalog: Catalog, Name: "nope"}); !errors.Is(err, connections.ErrNotFound) {
 		t.Errorf("missing table: %v", err)
 	}
