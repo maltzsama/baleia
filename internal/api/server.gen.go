@@ -7150,6 +7150,15 @@ func (response RemoveUser404JSONResponse) VisitRemoveUserResponse(w http.Respons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type RemoveUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RemoveUser409JSONResponse) VisitRemoveUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type UpdateUserRoleRequestObject struct {
 	Id   PathId `json:"id"`
 	Body *UpdateUserRoleJSONRequestBody

@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -146,8 +148,24 @@ func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObje
 	}
 
 	if err := h.queries.DeleteUser(ctx, uid); err != nil {
+		if c, ok := removeUserConflict(err); ok {
+			return RemoveUser409JSONResponse{ConflictJSONResponse: c}, nil
+		}
 		return nil, err
 	}
 
 	return RemoveUser204Response{}, nil
+}
+// removeUserConflict maps a delete the database refused because the user is
+// still referenced: a workspace the user owns (every user who has logged in
+// owns a personal one) keeps its content, so the removal is refused.
+func removeUserConflict(err error) (ConflictJSONResponse, bool) {
+	var pg *pgconn.PgError
+	if !errors.As(err, &pg) || !isFKViolation(pg) {
+		return ConflictJSONResponse{}, false
+	}
+	if pg.ConstraintName == "workspaces_owner_user_id_fkey" {
+		return ConflictJSONResponse{Code: "user_owns_workspace", Message: "the user owns a workspace; removing the user would delete its content"}, true
+	}
+	return ConflictJSONResponse{Code: "user_in_use", Message: "the user is still referenced (" + pg.TableName + ")"}, true
 }

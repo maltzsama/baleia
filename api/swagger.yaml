@@ -1340,11 +1340,16 @@ paths:
       tags: [Users]
       operationId: removeUser
       summary: "Remove a user — admin only"
+      description: >
+        409 user_owns_workspace when the user owns a workspace (every user who
+        has logged in owns a personal one): removing the user would delete its
+        content, so it is refused. Suspension is #54.
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /me:
     get:
