@@ -140,7 +140,10 @@ k8s-up:
 	minikube -p $(K8S_PROFILE) image build -t baleia:dev .
 	$(MAKE) k8s-plugin-bundle
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
-		-f deploy/dev/values-dev.yaml --wait --timeout 10m
+		-f deploy/dev/values-dev.yaml \
+		--set trino.plugin.image=$(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) \
+		--set trino.plugin.version=$(K8S_PLUGIN_VERSION) \
+		--wait --timeout 10m
 	@echo ">>> api:   kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080"
 	@echo ">>> usage: make k8s-forward && scripts/smoke.sh"
 
