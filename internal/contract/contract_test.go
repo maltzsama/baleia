@@ -165,9 +165,9 @@ func TestReservedNames(t *testing.T) {
 
 var statementRe = regexp.MustCompile(`(?s)-- name: (\w+)\n(.*?);\n`)
 
-// TestRegistrySchema prepares every statement the plugin issues, as the
-// plugin's role, against Baleia's migrated schema: a renamed column or a
-// missing grant fails here before it fails in Trino.
+// TestRegistrySchema prepares and then runs every statement the plugin
+// issues, as the plugin's role, against Baleia's migrated schema: a renamed
+// column or a missing grant fails here before it fails in Trino.
 func TestRegistrySchema(t *testing.T) {
 	fixture(t, "registry_schema.sql", nil)
 	raw, _ := os.ReadFile(filepath.Join("testdata", "contract", "registry_schema.sql"))
@@ -184,6 +184,7 @@ func TestRegistrySchema(t *testing.T) {
 	if _, err := conn.ExecContext(t.Context(), `SET ROLE baleia_trino`); err != nil {
 		t.Fatal(err)
 	}
+	texts := map[string]string{}
 	for _, s := range stmts {
 		name, text := s[1], s[2]
 		n := 0
@@ -191,6 +192,67 @@ func TestRegistrySchema(t *testing.T) {
 		if _, err := conn.ExecContext(t.Context(), "PREPARE contract_"+strings.ToLower(name)+" AS "+pg); err != nil {
 			t.Errorf("%s does not prepare as baleia_trino: %v", name, err)
 		}
+		texts[name] = pg
+	}
+	if _, err := conn.ExecContext(t.Context(), `RESET ROLE`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Postgres checks table privileges when a statement runs, not when it is
+	// prepared: run each one as baleia_trino, with the plugin's arguments, in
+	// a transaction that rolls back. Writes must reach the one row.
+	tx, err := db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`SET LOCAL ROLE baleia_trino`); err != nil {
+		t.Fatal(err)
+	}
+	const cluster, catalog = "default", "contract_probe"
+	runs := []struct {
+		name string
+		args []any
+		rows int64 // affected rows for writes; -1 for reads
+	}{
+		{"UPSERT", []any{cluster, catalog, "iceberg", `{"iceberg.catalog.type":"rest"}`, "1"}, 1},
+		{"SELECT_CLUSTER", []any{cluster}, -1},
+		{"SELECT_ALL", []any{cluster}, -1},
+		{"SELECT_ONE", []any{cluster, catalog}, -1},
+		{"MARK_ERROR", []any{"probe failure", cluster, catalog}, 1},
+		{"CLEAR_ERROR", []any{cluster, catalog}, 1},
+		{"SOFT_DELETE", []any{cluster, catalog}, 1},
+	}
+	for _, r := range runs {
+		text, ok := texts[r.name]
+		if !ok {
+			t.Errorf("registry_schema.sql has no %s", r.name)
+			continue
+		}
+		if r.rows < 0 {
+			rows, err := tx.Query(text, r.args...)
+			if err != nil {
+				t.Errorf("%s does not run as baleia_trino: %v", r.name, err)
+				continue
+			}
+			found := rows.Next()
+			rows.Close()
+			if !found {
+				t.Errorf("%s returned no row for the upserted catalog", r.name)
+			}
+			continue
+		}
+		res, err := tx.Exec(text, r.args...)
+		if err != nil {
+			t.Errorf("%s does not run as baleia_trino: %v", r.name, err)
+			continue
+		}
+		if n, _ := res.RowsAffected(); n != r.rows {
+			t.Errorf("%s affected %d rows, want %d", r.name, n, r.rows)
+		}
+	}
+	if len(texts) != len(runs) {
+		t.Errorf("registry_schema.sql has %d statements, the test runs %d: cover the new ones", len(texts), len(runs))
 	}
 }
 
