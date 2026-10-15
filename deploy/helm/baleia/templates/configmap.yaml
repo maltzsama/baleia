@@ -5,6 +5,9 @@ metadata:
   labels:
     {{- include "baleia.labels" . | nindent 4 }}
 {{- include "baleia.requireSecret" . }}
+{{- if hasKey .Values.config "BALEIA_METRICS_TOKEN" }}
+{{- fail "BALEIA_METRICS_TOKEN is a credential: set secrets.values.BALEIA_METRICS_TOKEN, or the key in existingSecret, not config" }}
+{{- end }}
 data:
   PUBLIC_URL: {{ .Values.config.PUBLIC_URL | quote }}
   TEMPORAL_HOST: {{ default (include "baleia.temporalService" .) .Values.config.TEMPORAL_HOST | quote }}
@@ -23,3 +26,10 @@ data:
   BALEIA_TRINO_ADMIN_USER: {{ .Values.config.BALEIA_TRINO_ADMIN_USER | quote }}
   BALEIA_CONNECTIONS_DENY_CIDRS: {{ .Values.config.BALEIA_CONNECTIONS_DENY_CIDRS | default "" | quote }}
   BALEIA_CONNECTIONS_ALLOW_CIDRS: {{ .Values.config.BALEIA_CONNECTIONS_ALLOW_CIDRS | default "" | quote }}
+  {{- /* Any other config key (e.g. BALEIA_METRICS_ENABLED, BALEIA_DB_MAX_CONNS) as given: the deployments reference every config key. */}}
+  {{- $rendered := list "PUBLIC_URL" "TEMPORAL_HOST" "TRINO_URL" "POLARIS_URL" "S3_ENDPOINT" "S3_BUCKET" "S3_USE_SSL" "SMTP_HOST" "SMTP_PORT" "SMTP_USER" "SMTP_FROM" "BALEIA_RESULT_MAX_ROWS" "BALEIA_RESULT_MAX_BYTES" "BALEIA_STATEMENT_TIMEOUT" "BALEIA_TRINO_ADMIN_USER" "BALEIA_CONNECTIONS_DENY_CIDRS" "BALEIA_CONNECTIONS_ALLOW_CIDRS" }}
+  {{- range $key, $value := .Values.config }}
+  {{- if not (has $key $rendered) }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}

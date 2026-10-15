@@ -16,6 +16,10 @@ spec:
       labels:
         {{- include "baleia.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.worker.metricsPort | quote }}
+        prometheus.io/path: /metrics
     spec:
       {{- include "baleia.podSecurityContext" . | nindent 6 }}
       containers:
@@ -27,6 +31,8 @@ spec:
           env:
             - name: WORKER_HEALTH_PORT
               value: {{ .Values.worker.healthPort | quote }}
+            - name: BALEIA_WORKER_METRICS_ADDR
+              value: {{ printf ":%v" .Values.worker.metricsPort | quote }}
             {{- range $key, $_ := .Values.config }}
             - name: {{ $key }}
               valueFrom:
@@ -44,6 +50,8 @@ spec:
           ports:
             - name: health
               containerPort: {{ .Values.worker.healthPort }}
+            - name: metrics
+              containerPort: {{ .Values.worker.metricsPort }}
           livenessProbe:
             httpGet: { path: /healthz, port: health }
             initialDelaySeconds: 15

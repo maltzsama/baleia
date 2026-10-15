@@ -26,7 +26,8 @@
             "BALEIA_TRINO_DB_PASSWORD": { "type": "string" },
             "S3_ACCESS_KEY": { "type": "string" },
             "S3_SECRET_KEY": { "type": "string" },
-            "SMTP_PASSWORD": { "type": "string" }
+            "SMTP_PASSWORD": { "type": "string" },
+            "BALEIA_METRICS_TOKEN": { "type": "string" }
           }
         }
       }
@@ -48,6 +49,7 @@
       "properties": {
         "replicas": { "type": "integer", "minimum": 1 },
         "healthPort": { "type": "integer" },
+        "metricsPort": { "type": "integer" },
         "resources": { "type": "object" }
       }
     },

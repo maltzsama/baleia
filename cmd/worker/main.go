@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
+	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,8 +26,6 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
 
@@ -37,19 +39,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	reg := metrics.New("worker")
+	pool, err := dbpool.Open(context.Background(), cfg.DatabaseURL, dbpool.Options{
+		MaxConns: cfg.PoolSize(10), MinConns: int32(cfg.DBMinConns), MaxConnLifetime: cfg.DBMaxConnLifetime,
+		Tracer: reg.NewPoolTracer(),
+	})
 	if err != nil {
 		slog.Error("failed to connect to database", "err", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
+	reg.WatchPool(pool)
 
-	c, err := client.Dial(client.Options{HostPort: cfg.TemporalHost})
+	temporalMetrics, flushTemporal := reg.TemporalHandler()
+	defer func() { _ = flushTemporal() }()
+	c, err := dial.Temporal(context.Background(), cfg.TemporalHost, temporalMetrics, 30*time.Second)
 	if err != nil {
-		slog.Error("failed to connect to temporal", "err", err)
+		slog.Error("temporal", "err", err)
 		os.Exit(1)
 	}
 	defer c.Close()
+
+	// The worker's own listener: /metrics (Temporal SDK, pool, build) and
+	// /healthz. Prometheus scrapes it directly; it is never behind the JWT.
+	if cfg.WorkerMetricsAddr != "" {
+		srv := &http.Server{Addr: cfg.WorkerMetricsAddr, Handler: metricsMux(reg, cfg.MetricsToken), ReadHeaderTimeout: 5 * time.Second}
+		go func() {
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("worker metrics listener", "addr", cfg.WorkerMetricsAddr, "err", err)
+			}
+		}()
+		defer srv.Close()
+	}
 
 	w := worker.New(c, taskQueue, worker.Options{})
 
@@ -146,4 +167,14 @@ func serveHealth(envKey, fallback string) {
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		slog.Error("health server", "port", port, "err", err)
 	}
+}
+
+// metricsMux serves the worker's /metrics and /healthz.
+func metricsMux(reg *metrics.Registry, token string) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", reg.Handler(token))
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	return mux
 }

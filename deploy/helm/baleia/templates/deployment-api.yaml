@@ -16,6 +16,10 @@ spec:
       labels:
         {{- include "baleia.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.api.port | quote }}
+        prometheus.io/path: /metrics
     spec:
       {{- include "baleia.podSecurityContext" . | nindent 6 }}
       containers:
