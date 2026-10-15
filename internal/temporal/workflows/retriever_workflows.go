@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -61,6 +62,7 @@ func RetrieverDispatchWorkflow(ctx workflow.Context) error {
 		}
 	}
 
+	passSucceeded(ctx, schedules.RetrieverScheduler)
 	return nil
 }
 

@@ -147,12 +147,8 @@ type EnabledIcebergCatalog struct {
 	TrinoCatalogName    string
 }
 
-// ListEnabledIcebergCatalogs opens a table-health pass; a failing catalog
-// does not fail the pass, so its success is the pass's.
 func ListEnabledIcebergCatalogs(ctx context.Context, params ListEnabledIcebergCatalogsParams) ([]EnabledIcebergCatalog, error) {
-	out, err := defaultActivities.listEnabledIcebergCatalogs(ctx)
-	defaultActivities.passDone(schedules.LensTableHealth, err)
-	return out, err
+	return defaultActivities.listEnabledIcebergCatalogs(ctx)
 }
 
 func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledIcebergCatalog, error) {

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -81,5 +82,22 @@ func LensTableHealthWorkflow(ctx workflow.Context) error {
 		})
 	}
 	latch.Wait(ctx)
+	passSucceeded(ctx, schedules.LensTableHealth)
 	return nil
+}
+
+// passSucceeded records the end of a scheduled pass (baleia_schedule_last_
+// success_timestamp_seconds). Versioned: runs started before it replay
+// without the extra activity. A failed record is logged, not the pass's error.
+func passSucceeded(ctx workflow.Context, schedule string) {
+	if workflow.GetVersion(ctx, "schedule-pass-metric", workflow.DefaultVersion, 1) == workflow.DefaultVersion {
+		return
+	}
+	actCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 10 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+	if err := workflow.ExecuteActivity(actCtx, activities.SchedulePassSucceeded, activities.SchedulePassSucceededParams{Schedule: schedule}).Get(actCtx, nil); err != nil {
+		workflow.GetLogger(ctx).Warn("record schedule pass failed", "schedule", schedule, "err", err)
+	}
 }

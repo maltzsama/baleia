@@ -9,7 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron"
@@ -27,9 +26,7 @@ type RetrieverDispatchParams struct{}
 // RetrieverDispatch lists retrievers whose next run is due. It is the single
 // pass the retriever-scheduler Temporal Schedule drives.
 func RetrieverDispatch(ctx context.Context, params RetrieverDispatchParams) ([]RetrieverDue, error) {
-	out, err := defaultActivities.retrieverDispatch(ctx)
-	defaultActivities.passDone(schedules.RetrieverScheduler, err)
-	return out, err
+	return defaultActivities.retrieverDispatch(ctx)
 }
 
 func (a *Activities) retrieverDispatch(ctx context.Context) ([]RetrieverDue, error) {

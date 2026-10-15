@@ -6,9 +6,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"sync"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/testsuite"
@@ -126,4 +128,51 @@ func hasContinueAsNewError(n ast.Node) bool {
 		return true
 	})
 	return found
+}
+
+// TestLensTableHealth_RecordsPassLast: the schedule's success is recorded
+// once, after every catalog's analysis, even when one of them failed.
+func TestLensTableHealth_RecordsPassLast(t *testing.T) {
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+
+	env.OnActivity(activities.ListEnabledIcebergCatalogs, mock.Anything, mock.Anything).
+		Return([]activities.EnabledIcebergCatalog{{Catalog: "cat1"}, {Catalog: "cat2"}}, nil)
+	var mu sync.Mutex
+	var events []string
+	record := func(e string) { mu.Lock(); defer mu.Unlock(); events = append(events, e) }
+	env.OnActivity(activities.LensAnalyzeTableHealth, mock.Anything, mock.Anything).
+		Return(func(ctx context.Context, p activities.LensAnalyzeTableHealthParams) error {
+			record("analyze")
+			if p.Catalog == "cat2" {
+				return errors.New("catalog unreachable")
+			}
+			return nil
+		})
+	env.OnActivity(activities.SchedulePassSucceeded, mock.Anything, activities.SchedulePassSucceededParams{Schedule: schedules.LensTableHealth}).
+		Return(func(ctx context.Context, p activities.SchedulePassSucceededParams) error {
+			record("pass")
+			return nil
+		}).Once()
+
+	env.ExecuteWorkflow(LensTableHealthWorkflow)
+
+	require.NoError(t, env.GetWorkflowError())
+	require.Equal(t, []string{"analyze", "analyze", "pass"}, events)
+}
+
+// TestLensTableHealth_NoPassWhenListingFails: a pass that failed is not
+// recorded as a success.
+func TestLensTableHealth_NoPassWhenListingFails(t *testing.T) {
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+
+	env.OnActivity(activities.ListEnabledIcebergCatalogs, mock.Anything, mock.Anything).
+		Return(nil, errors.New("database down"))
+	env.OnActivity(activities.SchedulePassSucceeded, mock.Anything, mock.Anything).Return(nil).Never()
+
+	env.ExecuteWorkflow(LensTableHealthWorkflow)
+
+	require.Error(t, env.GetWorkflowError())
+	env.AssertExpectations(t)
 }

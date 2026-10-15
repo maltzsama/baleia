@@ -82,7 +82,13 @@ func (c *S3Client) SetMetrics(m *metrics.Storage) { c.metrics = m }
 
 // Put uploads already-buffered bytes.
 func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType string) (err error) {
-	defer func() { c.metrics.Op("put", err, int64(len(data))) }()
+	defer func() {
+		var n int64
+		if err == nil {
+			n = int64(len(data))
+		}
+		c.metrics.Op("put", err, n)
+	}()
 	_, err = c.client.PutObject(ctx, c.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: contentType,
 	})

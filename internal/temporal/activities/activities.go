@@ -90,6 +90,7 @@ func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns 
 
 func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SplitSQL)
+	w.RegisterActivity(SchedulePassSucceeded)
 	w.RegisterActivity(CreateStatementRecords)
 	w.RegisterActivity(ExecuteStatement)
 	w.RegisterActivity(UpdateStatementRecord)
@@ -752,4 +753,15 @@ func (a *Activities) passDone(schedule string, err error) {
 	if a != nil && err == nil {
 		a.metrics.schedules.Succeeded(schedule)
 	}
+}
+
+// SchedulePassSucceededParams names the schedule whose pass completed.
+type SchedulePassSucceededParams struct{ Schedule string }
+
+// SchedulePassSucceeded records a completed pass of a scheduled workflow that
+// does more than one activity (table health, retriever dispatch): the
+// workflow calls it last, so the gauge never runs ahead of the pass.
+func SchedulePassSucceeded(ctx context.Context, params SchedulePassSucceededParams) error {
+	defaultActivities.passDone(params.Schedule, nil)
+	return nil
 }
