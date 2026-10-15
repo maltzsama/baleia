@@ -1,0 +1,32 @@
+meta {
+  name: Metadata Namespaces
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/catalogs/{{explorer_catalog_id}}/namespaces
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.freshness.metadata_synced_at: isString
+}
+
+script:post-response {
+  // The first top-level namespace is browsed next.
+  if (res.body.items && res.body.items.length > 0) {
+    bru.setVar("metadata_ns", res.body.items[0].path[0]);
+  }
+}
+
+docs {
+  Child namespaces of `parent` (repeat it per level: parent=a&parent=b is
+  a.b); none: the top level.
+}

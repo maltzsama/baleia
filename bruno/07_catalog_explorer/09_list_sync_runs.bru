@@ -15,13 +15,17 @@ auth:bearer {
 }
 
 script:pre-request {
-  // The pass runs on the worker: wait (up to 60s) until it ends.
+  // The pass runs on the worker: wait (up to 60s) until the one 08 started
+  // (or, after a 409, the one already running) has ended.
   const axios = require("axios");
-  const url = bru.getEnvVar("base_url") + "/catalogs/" + bru.getVar("explorer_catalog_id") + "/metadata/sync-runs?limit=1";
+  const url = bru.getEnvVar("base_url") + "/catalogs/" + bru.getVar("explorer_catalog_id") + "/metadata/sync-runs?limit=100";
   const headers = { Authorization: "Bearer " + bru.getVar("token") };
+  const before = bru.getVar("metadata_runs_before") || 0;
+  const started = bru.getVar("metadata_sync_started");
   for (let i = 0; i < 60; i++) {
     const r = await axios.get(url, { headers });
-    if (r.data.length > 0 && r.data[0].status !== "running") break;
+    const newer = !started || r.data.length > before;
+    if (newer && r.data.length > 0 && r.data[0].status !== "running") break;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }

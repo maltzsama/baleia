@@ -685,6 +685,120 @@ components:
       properties:
         enabled: { type: boolean }
 
+    MetadataFreshness:
+      type: object
+      properties:
+        metadata_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: End of the latest finished metadata pass of the catalog; null before the first one.
+
+    MetadataCatalogBinding:
+      type: object
+      required: [binding_id, engine_id, engine_name, engine_kind, engine_catalog_name, mode, status]
+      properties:
+        binding_id: { type: string, format: uuid }
+        engine_id: { type: string, format: uuid }
+        engine_name: { type: string }
+        engine_kind: { type: string }
+        engine_catalog_name: { type: string }
+        mode: { type: string, enum: [managed, adopted, native] }
+        status: { type: string, description: "The binding's sync status (CatalogBinding.sync_status)" }
+
+    MetadataCatalog:
+      type: object
+      required: [id, name, origin, provider_kind, metadata_sync_status, bindings]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        origin: { type: string, enum: [source, native] }
+        provider_kind: { type: string, description: "The kind of the catalog's connection (polaris, postgresql, trino, …)" }
+        metadata_synced_at: { type: string, format: date-time, nullable: true }
+        metadata_sync_status: { type: string, enum: [never, running, finished, failed] }
+        bindings:
+          type: array
+          items: { $ref: "#/components/schemas/MetadataCatalogBinding" }
+
+    MetadataNamespaceList:
+      type: object
+      required: [freshness, items]
+      properties:
+        freshness: { $ref: "#/components/schemas/MetadataFreshness" }
+        items:
+          type: array
+          items:
+            type: object
+            required: [path]
+            properties:
+              path: { type: array, items: { type: string } }
+
+    MetadataTableSummary:
+      type: object
+      required: [id, name, kind]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [table, view, materialized_view] }
+        comment: { type: string, nullable: true }
+        last_changed_at: { type: string, format: date-time, nullable: true }
+
+    MetadataTablePage:
+      type: object
+      required: [freshness, items]
+      properties:
+        freshness: { $ref: "#/components/schemas/MetadataFreshness" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MetadataTableSummary" }
+        next_cursor: { type: string, nullable: true, description: "Pass as cursor for the next page; null on the last one" }
+
+    MetadataColumn:
+      type: object
+      required: [ordinal, name, native_type, type_system]
+      properties:
+        ordinal: { type: integer }
+        name: { type: string }
+        native_type: { type: string, description: "The type as the source reports it" }
+        type_system: { type: string, description: "iceberg, postgresql, mysql, tsql, oracle, sqlite, clickhouse, trino, …" }
+        display_type: { type: string, nullable: true, description: "native_type in the binding's engine dialect, when Baleia can map it" }
+        nullable: { type: boolean, nullable: true }
+        comment: { type: string, nullable: true }
+
+    MetadataTableDetail:
+      type: object
+      required: [freshness, id, catalog_id, namespace, name, kind, properties, columns]
+      properties:
+        freshness: { $ref: "#/components/schemas/MetadataFreshness" }
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        name: { type: string }
+        kind: { type: string, enum: [table, view, materialized_view] }
+        comment: { type: string, nullable: true }
+        properties: { type: object, additionalProperties: { type: string } }
+        last_changed_at: { type: string, format: date-time, nullable: true }
+        removed_at: { type: string, format: date-time, nullable: true, description: "Set when the source no longer has the table" }
+        binding_id: { type: string, format: uuid, nullable: true, description: "The binding display_type and qualified_name are rendered for; null when the catalog has none" }
+        qualified_name: { type: string, nullable: true, description: "The table's name in SQL on that binding's engine" }
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/MetadataColumn" }
+
+    MetadataSearchResult:
+      type: object
+      required: [kind, table_id, catalog_id, namespace, table, score]
+      properties:
+        kind: { type: string, enum: [table, column] }
+        table_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        column: { type: string, nullable: true }
+        native_type: { type: string, nullable: true }
+        score: { type: number, format: double }
+        metadata_synced_at: { type: string, format: date-time, nullable: true }
+
     MetadataSyncStarted:
       type: object
       required: [catalog_id, workflow_id]
@@ -1643,6 +1757,151 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  /workspaces/{id}/metadata/catalogs:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: listMetadataCatalogs
+      summary: "Catalogs the workspace may browse, with freshness and bindings — workspace members"
+      description: >
+        Read from the stored metadata snapshot (#15), never from an engine.
+        Every read under /metadata is scoped to the workspace and to the
+        catalogs granted to it; anything else is a 404.
+      responses:
+        "200":
+          description: "Granted catalogs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MetadataCatalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Metadata]
+      operationId: listMetadataNamespaces
+      summary: "Child namespaces of a namespace (none given: the top level)"
+      parameters:
+        - name: parent
+          in: query
+          description: "The parent namespace, one value per level (parent=a&parent=b is a.b); a dot inside a level is part of its name"
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: "Namespaces"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetadataNamespaceList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/metadata/catalogs/{catalog_id}/tables:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Metadata]
+      operationId: listMetadataTables
+      summary: "Tables of a namespace, by name, one page at a time"
+      parameters:
+        - name: ns
+          in: query
+          description: "The namespace, one value per level (ns=a&ns=b is a.b); none: tables without a namespace (SQLite)"
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+        - name: cursor
+          in: query
+          description: "next_cursor of the previous page"
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: "One page of tables"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetadataTablePage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/metadata/tables/{table_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: table_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Metadata]
+      operationId: getMetadataTable
+      summary: "A table with its columns, typed and named for one of its catalog's bindings"
+      parameters:
+        - name: binding_id
+          in: query
+          description: "The binding the user browses through: types are shown (display_type) and the name qualified in its engine's dialect. Default: the catalog's first enabled binding"
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "The table"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetadataTableDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/metadata/search:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: searchMetadata
+      summary: "Tables and columns whose names match, best first (autocomplete and search)"
+      description: >
+        Trigram similarity over table and column names of the granted
+        catalogs; removed tables are left out.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 200 }
+        - name: kind
+          in: query
+          schema: { type: string, enum: [table, column, all], default: all }
+        - name: catalog_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: "Matches"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MetadataSearchResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /workspaces/{id}/targets:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -2344,131 +2603,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
-  /catalogs/{catalog_id}/namespaces:
-    parameters:
-      - name: catalog_id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [Catalog]
-      operationId: listNamespaces
-      summary: "List namespaces in a catalog"
-      responses:
-        "200":
-          description: "List of namespaces"
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: array
-                  items: { type: string }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /catalogs/{catalog_id}/namespaces/{namespace}/tables:
-    parameters:
-      - name: catalog_id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-      - name: namespace
-        in: path
-        required: true
-        schema: { type: string }
-    get:
-      tags: [Catalog]
-      operationId: listTables
-      summary: "List tables in a namespace"
-      responses:
-        "200":
-          description: "List of tables"
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    namespace: { type: array, items: { type: string } }
-                    name: { type: string }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns:
-    parameters:
-      - name: catalog_id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-      - name: namespace
-        in: path
-        required: true
-        schema: { type: string }
-      - name: table
-        in: path
-        required: true
-        schema: { type: string }
-    get:
-      tags: [Catalog]
-      operationId: listColumns
-      summary: "List columns of a table"
-      responses:
-        "200":
-          description: "List of columns"
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: integer }
-                    name: { type: string }
-                    type: { type: string }
-                    required: { type: boolean }
-                    doc: { type: string }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots:
-    parameters:
-      - name: catalog_id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-      - name: namespace
-        in: path
-        required: true
-        schema: { type: string }
-      - name: table
-        in: path
-        required: true
-        schema: { type: string }
-    get:
-      tags: [Catalog]
-      operationId: listTableSnapshots
-      summary: "List Iceberg snapshots for a table"
-      responses:
-        "200":
-          description: "List of snapshots"
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    snapshot_id: { type: integer, format: int64 }
-                    parent_id: { type: integer, format: int64, nullable: true }
-                    timestamp_ms: { type: integer, format: int64 }
-                    operation: { type: string }
-                    manifest_list: { type: string }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  # ── Query Editor ──────────────────────────────────────────────
   /workspaces/{id}/folders:
     parameters:
       - $ref: "#/components/parameters/PathId"

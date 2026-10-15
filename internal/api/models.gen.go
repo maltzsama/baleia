@@ -171,6 +171,33 @@ const (
 	InviteUserRequestRoleMember InviteUserRequestRole = "member"
 )
 
+// Defines values for MetadataCatalogMetadataSyncStatus.
+const (
+	MetadataCatalogMetadataSyncStatusFailed   MetadataCatalogMetadataSyncStatus = "failed"
+	MetadataCatalogMetadataSyncStatusFinished MetadataCatalogMetadataSyncStatus = "finished"
+	MetadataCatalogMetadataSyncStatusNever    MetadataCatalogMetadataSyncStatus = "never"
+	MetadataCatalogMetadataSyncStatusRunning  MetadataCatalogMetadataSyncStatus = "running"
+)
+
+// Defines values for MetadataCatalogOrigin.
+const (
+	MetadataCatalogOriginNative MetadataCatalogOrigin = "native"
+	MetadataCatalogOriginSource MetadataCatalogOrigin = "source"
+)
+
+// Defines values for MetadataCatalogBindingMode.
+const (
+	MetadataCatalogBindingModeAdopted MetadataCatalogBindingMode = "adopted"
+	MetadataCatalogBindingModeManaged MetadataCatalogBindingMode = "managed"
+	MetadataCatalogBindingModeNative  MetadataCatalogBindingMode = "native"
+)
+
+// Defines values for MetadataSearchResultKind.
+const (
+	MetadataSearchResultKindColumn MetadataSearchResultKind = "column"
+	MetadataSearchResultKindTable  MetadataSearchResultKind = "table"
+)
+
 // Defines values for MetadataSyncRunSourcePath.
 const (
 	MetadataSyncRunSourcePathEngine   MetadataSyncRunSourcePath = "engine"
@@ -182,6 +209,20 @@ const (
 	MetadataSyncRunStatusFailed   MetadataSyncRunStatus = "failed"
 	MetadataSyncRunStatusFinished MetadataSyncRunStatus = "finished"
 	MetadataSyncRunStatusRunning  MetadataSyncRunStatus = "running"
+)
+
+// Defines values for MetadataTableDetailKind.
+const (
+	MetadataTableDetailKindMaterializedView MetadataTableDetailKind = "materialized_view"
+	MetadataTableDetailKindTable            MetadataTableDetailKind = "table"
+	MetadataTableDetailKindView             MetadataTableDetailKind = "view"
+)
+
+// Defines values for MetadataTableSummaryKind.
+const (
+	MetadataTableSummaryKindMaterializedView MetadataTableSummaryKind = "materialized_view"
+	MetadataTableSummaryKindTable            MetadataTableSummaryKind = "table"
+	MetadataTableSummaryKindView             MetadataTableSummaryKind = "view"
 )
 
 // Defines values for MigrationSourceType.
@@ -320,10 +361,17 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
-	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
-	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
-	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
+	Cancelled ListExecutionsParamsStatus = "cancelled"
+	Failed    ListExecutionsParamsStatus = "failed"
+	Finished  ListExecutionsParamsStatus = "finished"
+	Running   ListExecutionsParamsStatus = "running"
+)
+
+// Defines values for SearchMetadataParamsKind.
+const (
+	SearchMetadataParamsKindAll    SearchMetadataParamsKind = "all"
+	SearchMetadataParamsKindColumn SearchMetadataParamsKind = "column"
+	SearchMetadataParamsKindTable  SearchMetadataParamsKind = "table"
 )
 
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
@@ -854,6 +902,88 @@ type LogoutRequest struct {
 	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
+// MetadataCatalog defines model for MetadataCatalog.
+type MetadataCatalog struct {
+	Bindings           []MetadataCatalogBinding          `json:"bindings"`
+	Id                 openapi_types.UUID                `json:"id"`
+	MetadataSyncStatus MetadataCatalogMetadataSyncStatus `json:"metadata_sync_status"`
+	MetadataSyncedAt   *time.Time                        `json:"metadata_synced_at"`
+	Name               string                            `json:"name"`
+	Origin             MetadataCatalogOrigin             `json:"origin"`
+
+	// ProviderKind The kind of the catalog's connection (polaris, postgresql, trino, …)
+	ProviderKind string `json:"provider_kind"`
+}
+
+// MetadataCatalogMetadataSyncStatus defines model for MetadataCatalog.MetadataSyncStatus.
+type MetadataCatalogMetadataSyncStatus string
+
+// MetadataCatalogOrigin defines model for MetadataCatalog.Origin.
+type MetadataCatalogOrigin string
+
+// MetadataCatalogBinding defines model for MetadataCatalogBinding.
+type MetadataCatalogBinding struct {
+	BindingId         openapi_types.UUID         `json:"binding_id"`
+	EngineCatalogName string                     `json:"engine_catalog_name"`
+	EngineId          openapi_types.UUID         `json:"engine_id"`
+	EngineKind        string                     `json:"engine_kind"`
+	EngineName        string                     `json:"engine_name"`
+	Mode              MetadataCatalogBindingMode `json:"mode"`
+
+	// Status The binding's sync status (CatalogBinding.sync_status)
+	Status string `json:"status"`
+}
+
+// MetadataCatalogBindingMode defines model for MetadataCatalogBinding.Mode.
+type MetadataCatalogBindingMode string
+
+// MetadataColumn defines model for MetadataColumn.
+type MetadataColumn struct {
+	Comment *string `json:"comment"`
+
+	// DisplayType native_type in the binding's engine dialect, when Baleia can map it
+	DisplayType *string `json:"display_type"`
+	Name        string  `json:"name"`
+
+	// NativeType The type as the source reports it
+	NativeType string `json:"native_type"`
+	Nullable   *bool  `json:"nullable"`
+	Ordinal    int    `json:"ordinal"`
+
+	// TypeSystem iceberg, postgresql, mysql, tsql, oracle, sqlite, clickhouse, trino, …
+	TypeSystem string `json:"type_system"`
+}
+
+// MetadataFreshness defines model for MetadataFreshness.
+type MetadataFreshness struct {
+	// MetadataSyncedAt End of the latest finished metadata pass of the catalog; null before the first one.
+	MetadataSyncedAt *time.Time `json:"metadata_synced_at"`
+}
+
+// MetadataNamespaceList defines model for MetadataNamespaceList.
+type MetadataNamespaceList struct {
+	Freshness MetadataFreshness `json:"freshness"`
+	Items     []struct {
+		Path []string `json:"path"`
+	} `json:"items"`
+}
+
+// MetadataSearchResult defines model for MetadataSearchResult.
+type MetadataSearchResult struct {
+	CatalogId        openapi_types.UUID       `json:"catalog_id"`
+	Column           *string                  `json:"column"`
+	Kind             MetadataSearchResultKind `json:"kind"`
+	MetadataSyncedAt *time.Time               `json:"metadata_synced_at"`
+	Namespace        []string                 `json:"namespace"`
+	NativeType       *string                  `json:"native_type"`
+	Score            float64                  `json:"score"`
+	Table            string                   `json:"table"`
+	TableId          openapi_types.UUID       `json:"table_id"`
+}
+
+// MetadataSearchResultKind defines model for MetadataSearchResult.Kind.
+type MetadataSearchResultKind string
+
 // MetadataSyncRun defines model for MetadataSyncRun.
 type MetadataSyncRun struct {
 	CatalogId openapi_types.UUID `json:"catalog_id"`
@@ -883,6 +1013,52 @@ type MetadataSyncStarted struct {
 	CatalogId  openapi_types.UUID `json:"catalog_id"`
 	WorkflowId string             `json:"workflow_id"`
 }
+
+// MetadataTableDetail defines model for MetadataTableDetail.
+type MetadataTableDetail struct {
+	// BindingId The binding display_type and qualified_name are rendered for; null when the catalog has none
+	BindingId     *openapi_types.UUID     `json:"binding_id"`
+	CatalogId     openapi_types.UUID      `json:"catalog_id"`
+	Columns       []MetadataColumn        `json:"columns"`
+	Comment       *string                 `json:"comment"`
+	Freshness     MetadataFreshness       `json:"freshness"`
+	Id            openapi_types.UUID      `json:"id"`
+	Kind          MetadataTableDetailKind `json:"kind"`
+	LastChangedAt *time.Time              `json:"last_changed_at"`
+	Name          string                  `json:"name"`
+	Namespace     []string                `json:"namespace"`
+	Properties    map[string]string       `json:"properties"`
+
+	// QualifiedName The table's name in SQL on that binding's engine
+	QualifiedName *string `json:"qualified_name"`
+
+	// RemovedAt Set when the source no longer has the table
+	RemovedAt *time.Time `json:"removed_at"`
+}
+
+// MetadataTableDetailKind defines model for MetadataTableDetail.Kind.
+type MetadataTableDetailKind string
+
+// MetadataTablePage defines model for MetadataTablePage.
+type MetadataTablePage struct {
+	Freshness MetadataFreshness      `json:"freshness"`
+	Items     []MetadataTableSummary `json:"items"`
+
+	// NextCursor Pass as cursor for the next page; null on the last one
+	NextCursor *string `json:"next_cursor"`
+}
+
+// MetadataTableSummary defines model for MetadataTableSummary.
+type MetadataTableSummary struct {
+	Comment       *string                  `json:"comment"`
+	Id            openapi_types.UUID       `json:"id"`
+	Kind          MetadataTableSummaryKind `json:"kind"`
+	LastChangedAt *time.Time               `json:"last_changed_at"`
+	Name          string                   `json:"name"`
+}
+
+// MetadataTableSummaryKind defines model for MetadataTableSummary.Kind.
+type MetadataTableSummaryKind string
 
 // Migration defines model for Migration.
 type Migration struct {
@@ -1358,6 +1534,39 @@ type ListExecutionsParamsStatus string
 // ListFoldersParams defines parameters for ListFolders.
 type ListFoldersParams struct {
 	ParentId *openapi_types.UUID `form:"parent_id,omitempty" json:"parent_id,omitempty"`
+}
+
+// ListMetadataNamespacesParams defines parameters for ListMetadataNamespaces.
+type ListMetadataNamespacesParams struct {
+	// Parent The parent namespace, one value per level (parent=a&parent=b is a.b); a dot inside a level is part of its name
+	Parent *[]string `form:"parent,omitempty" json:"parent,omitempty"`
+}
+
+// ListMetadataTablesParams defines parameters for ListMetadataTables.
+type ListMetadataTablesParams struct {
+	// Ns The namespace, one value per level (ns=a&ns=b is a.b); none: tables without a namespace (SQLite)
+	Ns *[]string `form:"ns,omitempty" json:"ns,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// SearchMetadataParams defines parameters for SearchMetadata.
+type SearchMetadataParams struct {
+	Q         string                    `form:"q" json:"q"`
+	Kind      *SearchMetadataParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+	CatalogId *openapi_types.UUID       `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
+	Limit     *int                      `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// SearchMetadataParamsKind defines parameters for SearchMetadata.
+type SearchMetadataParamsKind string
+
+// GetMetadataTableParams defines parameters for GetMetadataTable.
+type GetMetadataTableParams struct {
+	// BindingId The binding the user browses through: types are shown (display_type) and the name qualified in its engine's dialect. Default: the catalog's first enabled binding
+	BindingId *openapi_types.UUID `form:"binding_id,omitempty" json:"binding_id,omitempty"`
 }
 
 // ListSavedQueriesParams defines parameters for ListSavedQueries.

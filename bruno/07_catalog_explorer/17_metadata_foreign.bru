@@ -1,0 +1,19 @@
+meta {
+  name: Metadata Catalogs (foreign user -> 404)
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/catalogs
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 404
+}

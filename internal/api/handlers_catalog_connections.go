@@ -368,22 +368,6 @@ func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 // DeleteCatalog, SyncCatalog, ReconcileTrino) and the write-through flow
 // (Project + UpsertRegistry + DDL) live in handlers_catalogs_write.go.
 
-func (h *Handlers) ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error) {
-	return ListNamespaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "use /connections/{id}/catalogs/{name}/namespaces"}}, nil
-}
-
-func (h *Handlers) ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error) {
-	return ListTables404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "use /connections/{id}/catalogs/{name}/namespaces/{ns}/tables"}}, nil
-}
-
-func (h *Handlers) ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error) {
-	return ListColumns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "use /connections/{id}/catalogs/{name}/namespaces/{ns}/tables/{table}/columns"}}, nil
-}
-
-func (h *Handlers) ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error) {
-	return ListTableSnapshots404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalogs are loaded dynamically"}}, nil
-}
-
 // workspaceCatalogEntry describes one catalog-row in the per-workspace
 // listing exposed to the UI. Fields mirror what the frontend DataSourceTree
 // expects.

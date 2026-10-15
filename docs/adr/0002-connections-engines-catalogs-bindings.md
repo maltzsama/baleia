@@ -100,7 +100,10 @@ Partially compliant.
   its own source when its provider can (Iceberg catalog managers; databases whose reader walks a
   catalog in one query), else introspected through its first active binding's engine in a
   read-only session with the service identity. `POST /catalogs/{id}/metadata/sync` starts a pass
-  on demand; schedules are #17, the read API #18.
+  on demand; the `metadata-sync` schedule refreshes every catalog (#17). The explorer, autocomplete
+  and search read the snapshot through `/workspaces/{id}/metadata/…` (#18): workspace members only,
+  the catalogs the workspace may use only, never an engine call. The live chi explorer routes
+  (`/connections/{id}/catalogs/{name}/namespaces…`) stay until the UI switches (#23).
 - The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql
   and mysql. Create and update validate through `Provider.Validate`, store non-secret values in
   `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the

@@ -1,0 +1,35 @@
+meta {
+  name: Metadata Catalogs
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/catalogs
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the explorer catalog is listed with its freshness and bindings", function () {
+    const c = res.body.find((x) => x.id === bru.getVar("explorer_catalog_id"));
+    expect(c).to.exist;
+    expect(c.metadata_sync_status).to.equal("finished");
+    expect(c.metadata_synced_at).to.be.a("string");
+    expect(c.bindings.length).to.be.greaterThan(0);
+  });
+}
+
+docs {
+  Catalogs the workspace may use, read from the stored snapshot (#15, #18),
+  never from an engine: freshness and the bindings the target selector
+  offers.
+}

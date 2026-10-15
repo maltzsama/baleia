@@ -87,18 +87,6 @@ type ServerInterface interface {
 	// Latest metadata passes of the catalog, newest first
 	// (GET /catalogs/{catalog_id}/metadata/sync-runs)
 	ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListCatalogMetadataSyncRunsParams)
-	// List namespaces in a catalog
-	// (GET /catalogs/{catalog_id}/namespaces)
-	ListNamespaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
-	// List tables in a namespace
-	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables)
-	ListTables(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string)
-	// List columns of a table
-	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns)
-	ListColumns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string)
-	// List Iceberg snapshots for a table
-	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots)
-	ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string)
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
@@ -273,6 +261,21 @@ type ServerInterface interface {
 	// Remove a folder and its contents
 	// (DELETE /workspaces/{id}/folders/{folder_id})
 	DeleteFolder(w http.ResponseWriter, r *http.Request, id PathId, folderId openapi_types.UUID)
+	// Catalogs the workspace may browse, with freshness and bindings — workspace members
+	// (GET /workspaces/{id}/metadata/catalogs)
+	ListMetadataCatalogs(w http.ResponseWriter, r *http.Request, id PathId)
+	// Child namespaces of a namespace (none given: the top level)
+	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces)
+	ListMetadataNamespaces(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataNamespacesParams)
+	// Tables of a namespace, by name, one page at a time
+	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
+	ListMetadataTables(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataTablesParams)
+	// Tables and columns whose names match, best first (autocomplete and search)
+	// (GET /workspaces/{id}/metadata/search)
+	SearchMetadata(w http.ResponseWriter, r *http.Request, id PathId, params SearchMetadataParams)
+	// A table with its columns, typed and named for one of its catalog's bindings
+	// (GET /workspaces/{id}/metadata/tables/{table_id})
+	GetMetadataTable(w http.ResponseWriter, r *http.Request, id PathId, tableId openapi_types.UUID, params GetMetadataTableParams)
 	// List workspace saved queries
 	// (GET /workspaces/{id}/queries)
 	ListSavedQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListSavedQueriesParams)
@@ -456,30 +459,6 @@ func (_ Unimplemented) SyncCatalogMetadata(w http.ResponseWriter, r *http.Reques
 // Latest metadata passes of the catalog, newest first
 // (GET /catalogs/{catalog_id}/metadata/sync-runs)
 func (_ Unimplemented) ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListCatalogMetadataSyncRunsParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// List namespaces in a catalog
-// (GET /catalogs/{catalog_id}/namespaces)
-func (_ Unimplemented) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// List tables in a namespace
-// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables)
-func (_ Unimplemented) ListTables(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// List columns of a table
-// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns)
-func (_ Unimplemented) ListColumns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// List Iceberg snapshots for a table
-// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots)
-func (_ Unimplemented) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -828,6 +807,36 @@ func (_ Unimplemented) CreateFolder(w http.ResponseWriter, r *http.Request, id P
 // Remove a folder and its contents
 // (DELETE /workspaces/{id}/folders/{folder_id})
 func (_ Unimplemented) DeleteFolder(w http.ResponseWriter, r *http.Request, id PathId, folderId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Catalogs the workspace may browse, with freshness and bindings — workspace members
+// (GET /workspaces/{id}/metadata/catalogs)
+func (_ Unimplemented) ListMetadataCatalogs(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Child namespaces of a namespace (none given: the top level)
+// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces)
+func (_ Unimplemented) ListMetadataNamespaces(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataNamespacesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Tables of a namespace, by name, one page at a time
+// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
+func (_ Unimplemented) ListMetadataTables(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataTablesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Tables and columns whose names match, best first (autocomplete and search)
+// (GET /workspaces/{id}/metadata/search)
+func (_ Unimplemented) SearchMetadata(w http.ResponseWriter, r *http.Request, id PathId, params SearchMetadataParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A table with its columns, typed and named for one of its catalog's bindings
+// (GET /workspaces/{id}/metadata/tables/{table_id})
+func (_ Unimplemented) GetMetadataTable(w http.ResponseWriter, r *http.Request, id PathId, tableId openapi_types.UUID, params GetMetadataTableParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1541,183 +1550,6 @@ func (siw *ServerInterfaceWrapper) ListCatalogMetadataSyncRuns(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCatalogMetadataSyncRuns(w, r, catalogId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListNamespaces operation middleware
-func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "catalog_id" -------------
-	var catalogId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListNamespaces(w, r, catalogId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListTables operation middleware
-func (siw *ServerInterfaceWrapper) ListTables(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "catalog_id" -------------
-	var catalogId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "namespace" -------------
-	var namespace string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTables(w, r, catalogId, namespace)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListColumns operation middleware
-func (siw *ServerInterfaceWrapper) ListColumns(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "catalog_id" -------------
-	var catalogId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "namespace" -------------
-	var namespace string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "table" -------------
-	var table string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListColumns(w, r, catalogId, namespace, table)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListTableSnapshots operation middleware
-func (siw *ServerInterfaceWrapper) ListTableSnapshots(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "catalog_id" -------------
-	var catalogId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "namespace" -------------
-	var namespace string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "table" -------------
-	var table string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTableSnapshots(w, r, catalogId, namespace, table)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3656,6 +3488,289 @@ func (siw *ServerInterfaceWrapper) DeleteFolder(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListMetadataCatalogs operation middleware
+func (siw *ServerInterfaceWrapper) ListMetadataCatalogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMetadataCatalogs(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMetadataNamespaces operation middleware
+func (siw *ServerInterfaceWrapper) ListMetadataNamespaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMetadataNamespacesParams
+
+	// ------------- Optional query parameter "parent" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "parent", r.URL.Query(), &params.Parent)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "parent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMetadataNamespaces(w, r, id, catalogId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMetadataTables operation middleware
+func (siw *ServerInterfaceWrapper) ListMetadataTables(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMetadataTablesParams
+
+	// ------------- Optional query parameter "ns" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMetadataTables(w, r, id, catalogId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchMetadata operation middleware
+func (siw *ServerInterfaceWrapper) SearchMetadata(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchMetadataParams
+
+	// ------------- Required query parameter "q" -------------
+
+	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "catalog_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchMetadata(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMetadataTable operation middleware
+func (siw *ServerInterfaceWrapper) GetMetadataTable(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "table_id" -------------
+	var tableId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "table_id", chi.URLParam(r, "table_id"), &tableId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMetadataTableParams
+
+	// ------------- Optional query parameter "binding_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "binding_id", r.URL.Query(), &params.BindingId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "binding_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMetadataTable(w, r, id, tableId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSavedQueries operation middleware
 func (siw *ServerInterfaceWrapper) ListSavedQueries(w http.ResponseWriter, r *http.Request) {
 
@@ -4430,18 +4545,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/catalogs/{catalog_id}/metadata/sync-runs", wrapper.ListCatalogMetadataSyncRuns)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces", wrapper.ListNamespaces)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces/{namespace}/tables", wrapper.ListTables)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns", wrapper.ListColumns)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots", wrapper.ListTableSnapshots)
-	})
-	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/catalogs/{catalog_id}/sync", wrapper.SyncCatalog)
 	})
 	r.Group(func(r chi.Router) {
@@ -4614,6 +4717,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/{id}/folders/{folder_id}", wrapper.DeleteFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs", wrapper.ListMetadataCatalogs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces", wrapper.ListMetadataNamespaces)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs/{catalog_id}/tables", wrapper.ListMetadataTables)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/search", wrapper.SearchMetadata)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/tables/{table_id}", wrapper.GetMetadataTable)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/queries", wrapper.ListSavedQueries)
@@ -5515,166 +5633,6 @@ func (response ListCatalogMetadataSyncRuns401JSONResponse) VisitListCatalogMetad
 type ListCatalogMetadataSyncRuns404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListCatalogMetadataSyncRuns404JSONResponse) VisitListCatalogMetadataSyncRunsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListNamespacesRequestObject struct {
-	CatalogId openapi_types.UUID `json:"catalog_id"`
-}
-
-type ListNamespacesResponseObject interface {
-	VisitListNamespacesResponse(w http.ResponseWriter) error
-}
-
-type ListNamespaces200JSONResponse [][]string
-
-func (response ListNamespaces200JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListNamespaces401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListNamespaces401JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListNamespaces404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response ListNamespaces404JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListTablesRequestObject struct {
-	CatalogId openapi_types.UUID `json:"catalog_id"`
-	Namespace string             `json:"namespace"`
-}
-
-type ListTablesResponseObject interface {
-	VisitListTablesResponse(w http.ResponseWriter) error
-}
-
-type ListTables200JSONResponse []struct {
-	Name      *string   `json:"name,omitempty"`
-	Namespace *[]string `json:"namespace,omitempty"`
-}
-
-func (response ListTables200JSONResponse) VisitListTablesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListTables401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListTables401JSONResponse) VisitListTablesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListTables404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response ListTables404JSONResponse) VisitListTablesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListColumnsRequestObject struct {
-	CatalogId openapi_types.UUID `json:"catalog_id"`
-	Namespace string             `json:"namespace"`
-	Table     string             `json:"table"`
-}
-
-type ListColumnsResponseObject interface {
-	VisitListColumnsResponse(w http.ResponseWriter) error
-}
-
-type ListColumns200JSONResponse []struct {
-	Doc      *string `json:"doc,omitempty"`
-	Id       *int    `json:"id,omitempty"`
-	Name     *string `json:"name,omitempty"`
-	Required *bool   `json:"required,omitempty"`
-	Type     *string `json:"type,omitempty"`
-}
-
-func (response ListColumns200JSONResponse) VisitListColumnsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListColumns401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListColumns401JSONResponse) VisitListColumnsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListColumns404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response ListColumns404JSONResponse) VisitListColumnsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListTableSnapshotsRequestObject struct {
-	CatalogId openapi_types.UUID `json:"catalog_id"`
-	Namespace string             `json:"namespace"`
-	Table     string             `json:"table"`
-}
-
-type ListTableSnapshotsResponseObject interface {
-	VisitListTableSnapshotsResponse(w http.ResponseWriter) error
-}
-
-type ListTableSnapshots200JSONResponse []struct {
-	ManifestList *string `json:"manifest_list,omitempty"`
-	Operation    *string `json:"operation,omitempty"`
-	ParentId     *int64  `json:"parent_id"`
-	SnapshotId   *int64  `json:"snapshot_id,omitempty"`
-	TimestampMs  *int64  `json:"timestamp_ms,omitempty"`
-}
-
-func (response ListTableSnapshots200JSONResponse) VisitListTableSnapshotsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListTableSnapshots401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListTableSnapshots401JSONResponse) VisitListTableSnapshotsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListTableSnapshots404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response ListTableSnapshots404JSONResponse) VisitListTableSnapshotsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -8072,6 +8030,210 @@ func (response DeleteFolder404JSONResponse) VisitDeleteFolderResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListMetadataCatalogsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListMetadataCatalogsResponseObject interface {
+	VisitListMetadataCatalogsResponse(w http.ResponseWriter) error
+}
+
+type ListMetadataCatalogs200JSONResponse []MetadataCatalog
+
+func (response ListMetadataCatalogs200JSONResponse) VisitListMetadataCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataCatalogs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMetadataCatalogs401JSONResponse) VisitListMetadataCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataCatalogs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMetadataCatalogs404JSONResponse) VisitListMetadataCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataNamespacesRequestObject struct {
+	Id        PathId             `json:"id"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Params    ListMetadataNamespacesParams
+}
+
+type ListMetadataNamespacesResponseObject interface {
+	VisitListMetadataNamespacesResponse(w http.ResponseWriter) error
+}
+
+type ListMetadataNamespaces200JSONResponse MetadataNamespaceList
+
+func (response ListMetadataNamespaces200JSONResponse) VisitListMetadataNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataNamespaces401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMetadataNamespaces401JSONResponse) VisitListMetadataNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataNamespaces404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMetadataNamespaces404JSONResponse) VisitListMetadataNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataTablesRequestObject struct {
+	Id        PathId             `json:"id"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Params    ListMetadataTablesParams
+}
+
+type ListMetadataTablesResponseObject interface {
+	VisitListMetadataTablesResponse(w http.ResponseWriter) error
+}
+
+type ListMetadataTables200JSONResponse MetadataTablePage
+
+func (response ListMetadataTables200JSONResponse) VisitListMetadataTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataTables401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMetadataTables401JSONResponse) VisitListMetadataTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataTables404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMetadataTables404JSONResponse) VisitListMetadataTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataTables422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListMetadataTables422JSONResponse) VisitListMetadataTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchMetadataRequestObject struct {
+	Id     PathId `json:"id"`
+	Params SearchMetadataParams
+}
+
+type SearchMetadataResponseObject interface {
+	VisitSearchMetadataResponse(w http.ResponseWriter) error
+}
+
+type SearchMetadata200JSONResponse []MetadataSearchResult
+
+func (response SearchMetadata200JSONResponse) VisitSearchMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchMetadata401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SearchMetadata401JSONResponse) VisitSearchMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchMetadata404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SearchMetadata404JSONResponse) VisitSearchMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchMetadata422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SearchMetadata422JSONResponse) VisitSearchMetadataResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMetadataTableRequestObject struct {
+	Id      PathId             `json:"id"`
+	TableId openapi_types.UUID `json:"table_id"`
+	Params  GetMetadataTableParams
+}
+
+type GetMetadataTableResponseObject interface {
+	VisitGetMetadataTableResponse(w http.ResponseWriter) error
+}
+
+type GetMetadataTable200JSONResponse MetadataTableDetail
+
+func (response GetMetadataTable200JSONResponse) VisitGetMetadataTableResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMetadataTable401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetMetadataTable401JSONResponse) VisitGetMetadataTableResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMetadataTable404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetMetadataTable404JSONResponse) VisitGetMetadataTableResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListSavedQueriesRequestObject struct {
 	Id     PathId `json:"id"`
 	Params ListSavedQueriesParams
@@ -8634,18 +8796,6 @@ type StrictServerInterface interface {
 	// Latest metadata passes of the catalog, newest first
 	// (GET /catalogs/{catalog_id}/metadata/sync-runs)
 	ListCatalogMetadataSyncRuns(ctx context.Context, request ListCatalogMetadataSyncRunsRequestObject) (ListCatalogMetadataSyncRunsResponseObject, error)
-	// List namespaces in a catalog
-	// (GET /catalogs/{catalog_id}/namespaces)
-	ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error)
-	// List tables in a namespace
-	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables)
-	ListTables(ctx context.Context, request ListTablesRequestObject) (ListTablesResponseObject, error)
-	// List columns of a table
-	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/columns)
-	ListColumns(ctx context.Context, request ListColumnsRequestObject) (ListColumnsResponseObject, error)
-	// List Iceberg snapshots for a table
-	// (GET /catalogs/{catalog_id}/namespaces/{namespace}/tables/{table}/snapshots)
-	ListTableSnapshots(ctx context.Context, request ListTableSnapshotsRequestObject) (ListTableSnapshotsResponseObject, error)
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(ctx context.Context, request SyncCatalogRequestObject) (SyncCatalogResponseObject, error)
@@ -8820,6 +8970,21 @@ type StrictServerInterface interface {
 	// Remove a folder and its contents
 	// (DELETE /workspaces/{id}/folders/{folder_id})
 	DeleteFolder(ctx context.Context, request DeleteFolderRequestObject) (DeleteFolderResponseObject, error)
+	// Catalogs the workspace may browse, with freshness and bindings — workspace members
+	// (GET /workspaces/{id}/metadata/catalogs)
+	ListMetadataCatalogs(ctx context.Context, request ListMetadataCatalogsRequestObject) (ListMetadataCatalogsResponseObject, error)
+	// Child namespaces of a namespace (none given: the top level)
+	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces)
+	ListMetadataNamespaces(ctx context.Context, request ListMetadataNamespacesRequestObject) (ListMetadataNamespacesResponseObject, error)
+	// Tables of a namespace, by name, one page at a time
+	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
+	ListMetadataTables(ctx context.Context, request ListMetadataTablesRequestObject) (ListMetadataTablesResponseObject, error)
+	// Tables and columns whose names match, best first (autocomplete and search)
+	// (GET /workspaces/{id}/metadata/search)
+	SearchMetadata(ctx context.Context, request SearchMetadataRequestObject) (SearchMetadataResponseObject, error)
+	// A table with its columns, typed and named for one of its catalog's bindings
+	// (GET /workspaces/{id}/metadata/tables/{table_id})
+	GetMetadataTable(ctx context.Context, request GetMetadataTableRequestObject) (GetMetadataTableResponseObject, error)
 	// List workspace saved queries
 	// (GET /workspaces/{id}/queries)
 	ListSavedQueries(ctx context.Context, request ListSavedQueriesRequestObject) (ListSavedQueriesResponseObject, error)
@@ -9527,115 +9692,6 @@ func (sh *strictHandler) ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListCatalogMetadataSyncRunsResponseObject); ok {
 		if err := validResponse.VisitListCatalogMetadataSyncRunsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListNamespaces operation middleware
-func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
-	var request ListNamespacesRequestObject
-
-	request.CatalogId = catalogId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListNamespaces(ctx, request.(ListNamespacesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListNamespaces")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListNamespacesResponseObject); ok {
-		if err := validResponse.VisitListNamespacesResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListTables operation middleware
-func (sh *strictHandler) ListTables(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string) {
-	var request ListTablesRequestObject
-
-	request.CatalogId = catalogId
-	request.Namespace = namespace
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListTables(ctx, request.(ListTablesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListTables")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListTablesResponseObject); ok {
-		if err := validResponse.VisitListTablesResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListColumns operation middleware
-func (sh *strictHandler) ListColumns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
-	var request ListColumnsRequestObject
-
-	request.CatalogId = catalogId
-	request.Namespace = namespace
-	request.Table = table
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListColumns(ctx, request.(ListColumnsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListColumns")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListColumnsResponseObject); ok {
-		if err := validResponse.VisitListColumnsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListTableSnapshots operation middleware
-func (sh *strictHandler) ListTableSnapshots(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, namespace string, table string) {
-	var request ListTableSnapshotsRequestObject
-
-	request.CatalogId = catalogId
-	request.Namespace = namespace
-	request.Table = table
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListTableSnapshots(ctx, request.(ListTableSnapshotsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListTableSnapshots")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListTableSnapshotsResponseObject); ok {
-		if err := validResponse.VisitListTableSnapshotsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11261,6 +11317,143 @@ func (sh *strictHandler) DeleteFolder(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteFolderResponseObject); ok {
 		if err := validResponse.VisitDeleteFolderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMetadataCatalogs operation middleware
+func (sh *strictHandler) ListMetadataCatalogs(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListMetadataCatalogsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMetadataCatalogs(ctx, request.(ListMetadataCatalogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMetadataCatalogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMetadataCatalogsResponseObject); ok {
+		if err := validResponse.VisitListMetadataCatalogsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMetadataNamespaces operation middleware
+func (sh *strictHandler) ListMetadataNamespaces(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataNamespacesParams) {
+	var request ListMetadataNamespacesRequestObject
+
+	request.Id = id
+	request.CatalogId = catalogId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMetadataNamespaces(ctx, request.(ListMetadataNamespacesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMetadataNamespaces")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMetadataNamespacesResponseObject); ok {
+		if err := validResponse.VisitListMetadataNamespacesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMetadataTables operation middleware
+func (sh *strictHandler) ListMetadataTables(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataTablesParams) {
+	var request ListMetadataTablesRequestObject
+
+	request.Id = id
+	request.CatalogId = catalogId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMetadataTables(ctx, request.(ListMetadataTablesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMetadataTables")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMetadataTablesResponseObject); ok {
+		if err := validResponse.VisitListMetadataTablesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchMetadata operation middleware
+func (sh *strictHandler) SearchMetadata(w http.ResponseWriter, r *http.Request, id PathId, params SearchMetadataParams) {
+	var request SearchMetadataRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchMetadata(ctx, request.(SearchMetadataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchMetadata")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchMetadataResponseObject); ok {
+		if err := validResponse.VisitSearchMetadataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMetadataTable operation middleware
+func (sh *strictHandler) GetMetadataTable(w http.ResponseWriter, r *http.Request, id PathId, tableId openapi_types.UUID, params GetMetadataTableParams) {
+	var request GetMetadataTableRequestObject
+
+	request.Id = id
+	request.TableId = tableId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMetadataTable(ctx, request.(GetMetadataTableRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMetadataTable")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMetadataTableResponseObject); ok {
+		if err := validResponse.VisitGetMetadataTableResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

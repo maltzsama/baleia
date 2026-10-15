@@ -64,6 +64,36 @@ func (q *Queries) FinishMetadataSyncRun(ctx context.Context, arg FinishMetadataS
 	return err
 }
 
+const getCatalogBindingForDisplay = `-- name: GetCatalogBindingForDisplay :one
+SELECT b.id, b.engine_catalog_name, e.kind AS engine_kind
+FROM catalog_bindings b
+JOIN engines e ON e.id = b.engine_id
+WHERE b.catalog_id = $1 AND b.enabled AND e.enabled
+  AND ($2::uuid IS NULL OR b.id = $2::uuid)
+ORDER BY b.created_at, b.id
+LIMIT 1
+`
+
+type GetCatalogBindingForDisplayParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	BindingID pgtype.UUID `json:"binding_id"`
+}
+
+type GetCatalogBindingForDisplayRow struct {
+	ID                pgtype.UUID `json:"id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	EngineKind        string      `json:"engine_kind"`
+}
+
+// An enabled binding of the catalog (the given one, else the first) and its
+// engine kind, to render types and names in that engine's dialect.
+func (q *Queries) GetCatalogBindingForDisplay(ctx context.Context, arg GetCatalogBindingForDisplayParams) (GetCatalogBindingForDisplayRow, error) {
+	row := q.db.QueryRow(ctx, getCatalogBindingForDisplay, arg.CatalogID, arg.BindingID)
+	var i GetCatalogBindingForDisplayRow
+	err := row.Scan(&i.ID, &i.EngineCatalogName, &i.EngineKind)
+	return i, err
+}
+
 const getCatalogForSync = `-- name: GetCatalogForSync :one
 SELECT c.id, c.name, c.origin, c.source_ref, c.warehouse, c.enabled,
        cc.id AS connection_id, cc.type AS connection_type
@@ -120,6 +150,102 @@ func (q *Queries) GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID
 	row := q.db.QueryRow(ctx, getCatalogSyncState, catalogID)
 	var i GetCatalogSyncStateRow
 	err := row.Scan(&i.LastStatus, &i.LastErrorCode, &i.SyncedAt)
+	return i, err
+}
+
+const getGrantedMetadataCatalog = `-- name: GetGrantedMetadataCatalog :one
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = $2::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = $2::uuid AND c.enabled
+)
+SELECT v.id,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = v.id AND r.status = 'finished')::timestamptz AS metadata_synced_at
+FROM visible v
+WHERE v.id = $1::uuid
+`
+
+type GetGrantedMetadataCatalogParams struct {
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+type GetGrantedMetadataCatalogRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	MetadataSyncedAt pgtype.Timestamptz `json:"metadata_synced_at"`
+}
+
+// A catalog the workspace may use, with its freshness; no row: not visible
+// from this workspace.
+func (q *Queries) GetGrantedMetadataCatalog(ctx context.Context, arg GetGrantedMetadataCatalogParams) (GetGrantedMetadataCatalogRow, error) {
+	row := q.db.QueryRow(ctx, getGrantedMetadataCatalog, arg.CatalogID, arg.WorkspaceID)
+	var i GetGrantedMetadataCatalogRow
+	err := row.Scan(&i.ID, &i.MetadataSyncedAt)
+	return i, err
+}
+
+const getGrantedMetadataTable = `-- name: GetGrantedMetadataTable :one
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = $2::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = $2::uuid AND c.enabled
+)
+SELECT t.id, t.catalog_id, t.namespace, t.name, t.kind, t.properties, t.comment, t.last_changed_at, t.removed_at,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = t.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
+FROM metadata_tables t
+JOIN visible v ON v.id = t.catalog_id
+WHERE t.id = $1::uuid
+`
+
+type GetGrantedMetadataTableParams struct {
+	TableID     pgtype.UUID `json:"table_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+type GetGrantedMetadataTableRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	CatalogID        pgtype.UUID        `json:"catalog_id"`
+	Namespace        []string           `json:"namespace"`
+	Name             string             `json:"name"`
+	Kind             string             `json:"kind"`
+	Properties       []byte             `json:"properties"`
+	Comment          *string            `json:"comment"`
+	LastChangedAt    pgtype.Timestamptz `json:"last_changed_at"`
+	RemovedAt        pgtype.Timestamptz `json:"removed_at"`
+	MetadataSyncedAt pgtype.Timestamptz `json:"metadata_synced_at"`
+}
+
+// A table of a catalog the workspace may use (tombstoned ones too, with
+// removed_at), with its catalog freshness.
+func (q *Queries) GetGrantedMetadataTable(ctx context.Context, arg GetGrantedMetadataTableParams) (GetGrantedMetadataTableRow, error) {
+	row := q.db.QueryRow(ctx, getGrantedMetadataTable, arg.TableID, arg.WorkspaceID)
+	var i GetGrantedMetadataTableRow
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.Namespace,
+		&i.Name,
+		&i.Kind,
+		&i.Properties,
+		&i.Comment,
+		&i.LastChangedAt,
+		&i.RemovedAt,
+		&i.MetadataSyncedAt,
+	)
 	return i, err
 }
 
@@ -195,6 +321,155 @@ func (q *Queries) InsertMetadataColumns(ctx context.Context, arg InsertMetadataC
 	return err
 }
 
+const listChildNamespaces = `-- name: ListChildNamespaces :many
+SELECT namespace FROM metadata_namespaces
+WHERE catalog_id = $1 AND removed_at IS NULL
+  AND cardinality(namespace) = cardinality($2::text[]) + 1
+  AND namespace[1:cardinality($2::text[])] = $2::text[]
+ORDER BY namespace
+`
+
+type ListChildNamespacesParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	Parent    []string    `json:"parent"`
+}
+
+// The namespaces one level below parent ('{}' = the top level).
+func (q *Queries) ListChildNamespaces(ctx context.Context, arg ListChildNamespacesParams) ([][]string, error) {
+	rows, err := q.db.Query(ctx, listChildNamespaces, arg.CatalogID, arg.Parent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items [][]string
+	for rows.Next() {
+		var namespace []string
+		if err := rows.Scan(&namespace); err != nil {
+			return nil, err
+		}
+		items = append(items, namespace)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMetadataCatalogs = `-- name: ListMetadataCatalogs :many
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = $1::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = $1::uuid AND c.enabled
+)
+SELECT c.id, c.name, c.origin, cc.type AS provider_kind,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished')::timestamptz AS metadata_synced_at,
+       COALESCE((SELECT r.status FROM metadata_sync_runs r WHERE r.catalog_id = c.id ORDER BY r.started_at DESC LIMIT 1), 'never')::text AS metadata_sync_status,
+       COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                      'binding_id', b.id, 'engine_id', b.engine_id, 'engine_name', e.name, 'engine_kind', e.kind,
+                      'engine_catalog_name', b.engine_catalog_name, 'mode', b.mode, 'status', COALESCE(s.sync_status, 'pending'))
+                  ORDER BY b.created_at, b.id)
+           FROM catalog_bindings b
+           JOIN engines e ON e.id = b.engine_id
+           LEFT JOIN binding_status_v s ON s.binding_id = b.id
+           WHERE b.catalog_id = c.id AND b.enabled AND e.enabled
+       ), '[]'::jsonb)::jsonb AS bindings
+FROM visible v
+JOIN catalogs c ON c.id = v.id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+ORDER BY c.name, c.id
+`
+
+type ListMetadataCatalogsRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Name               string             `json:"name"`
+	Origin             string             `json:"origin"`
+	ProviderKind       string             `json:"provider_kind"`
+	MetadataSyncedAt   pgtype.Timestamptz `json:"metadata_synced_at"`
+	MetadataSyncStatus string             `json:"metadata_sync_status"`
+	Bindings           []byte             `json:"bindings"`
+}
+
+// The catalogs a workspace may use with their freshness and their enabled
+// bindings (what the editor's target selector offers, #24).
+func (q *Queries) ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]ListMetadataCatalogsRow, error) {
+	rows, err := q.db.Query(ctx, listMetadataCatalogs, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMetadataCatalogsRow
+	for rows.Next() {
+		var i ListMetadataCatalogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Origin,
+			&i.ProviderKind,
+			&i.MetadataSyncedAt,
+			&i.MetadataSyncStatus,
+			&i.Bindings,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMetadataColumns = `-- name: ListMetadataColumns :many
+SELECT ordinal, name, native_type, type_system, nullable, comment
+FROM metadata_columns
+WHERE table_id = $1
+ORDER BY ordinal
+`
+
+type ListMetadataColumnsRow struct {
+	Ordinal    int32   `json:"ordinal"`
+	Name       string  `json:"name"`
+	NativeType string  `json:"native_type"`
+	TypeSystem string  `json:"type_system"`
+	Nullable   *bool   `json:"nullable"`
+	Comment    *string `json:"comment"`
+}
+
+func (q *Queries) ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]ListMetadataColumnsRow, error) {
+	rows, err := q.db.Query(ctx, listMetadataColumns, tableID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMetadataColumnsRow
+	for rows.Next() {
+		var i ListMetadataColumnsRow
+		if err := rows.Scan(
+			&i.Ordinal,
+			&i.Name,
+			&i.NativeType,
+			&i.TypeSystem,
+			&i.Nullable,
+			&i.Comment,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMetadataSyncRuns = `-- name: ListMetadataSyncRuns :many
 SELECT id, catalog_id, status, source_path, started_at, finished_at, tables_seen, tables_changed, tables_removed, error_code
 FROM metadata_sync_runs
@@ -241,6 +516,61 @@ func (q *Queries) ListMetadataSyncRuns(ctx context.Context, arg ListMetadataSync
 			&i.TablesChanged,
 			&i.TablesRemoved,
 			&i.ErrorCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMetadataTablesPage = `-- name: ListMetadataTablesPage :many
+SELECT id, name, kind, comment, last_changed_at
+FROM metadata_tables
+WHERE catalog_id = $1 AND namespace = $2::text[] AND removed_at IS NULL AND name > $3::text
+ORDER BY name
+LIMIT $4
+`
+
+type ListMetadataTablesPageParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	Namespace []string    `json:"namespace"`
+	After     string      `json:"after"`
+	Lim       int32       `json:"lim"`
+}
+
+type ListMetadataTablesPageRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	Name          string             `json:"name"`
+	Kind          string             `json:"kind"`
+	Comment       *string            `json:"comment"`
+	LastChangedAt pgtype.Timestamptz `json:"last_changed_at"`
+}
+
+// One page of the tables in a namespace, by name, after the cursor.
+func (q *Queries) ListMetadataTablesPage(ctx context.Context, arg ListMetadataTablesPageParams) ([]ListMetadataTablesPageRow, error) {
+	rows, err := q.db.Query(ctx, listMetadataTablesPage,
+		arg.CatalogID,
+		arg.Namespace,
+		arg.After,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMetadataTablesPageRow
+	for rows.Next() {
+		var i ListMetadataTablesPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.Comment,
+			&i.LastChangedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -378,6 +708,103 @@ SELECT pg_advisory_unlock(hashtext('metadata-sync:' || $1::text))
 func (q *Queries) ReleaseMetadataSyncLock(ctx context.Context, catalogID string) error {
 	_, err := q.db.Exec(ctx, releaseMetadataSyncLock, catalogID)
 	return err
+}
+
+const searchMetadata = `-- name: SearchMetadata :many
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = $2::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = $2::uuid AND c.enabled
+), granted AS (
+    SELECT id FROM visible
+    WHERE $3::uuid IS NULL OR id = $3::uuid
+), hits AS (
+    SELECT 'table'::text AS kind, t.id AS table_id, t.catalog_id, t.namespace, t.name AS table_name,
+           ''::text AS column_name, ''::text AS native_type,
+           similarity(t.name, $4::text)::float8 AS score, length(t.name) AS len
+    FROM metadata_tables t
+    WHERE t.catalog_id IN (SELECT id FROM granted) AND t.removed_at IS NULL
+      AND (t.name % $4::text OR $4::text <% t.name)
+      AND $5::text IN ('table', 'all')
+    UNION ALL
+    SELECT 'column', t.id, t.catalog_id, t.namespace, t.name, c.name, c.native_type,
+           similarity(c.name, $4::text)::float8, length(c.name)
+    FROM metadata_columns c
+    JOIN metadata_tables t ON t.id = c.table_id
+    WHERE t.catalog_id IN (SELECT id FROM granted) AND t.removed_at IS NULL
+      AND (c.name % $4::text OR $4::text <% c.name)
+      AND $5::text IN ('column', 'all')
+)
+SELECT h.kind, h.table_id, h.catalog_id, h.namespace, h.table_name, h.column_name, h.native_type, h.score,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = h.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
+FROM hits h
+ORDER BY h.score DESC, h.len, h.table_name, h.column_name
+LIMIT $1
+`
+
+type SearchMetadataParams struct {
+	Lim         int32       `json:"lim"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+	Q           string      `json:"q"`
+	Kind        string      `json:"kind"`
+}
+
+type SearchMetadataRow struct {
+	Kind             string             `json:"kind"`
+	TableID          pgtype.UUID        `json:"table_id"`
+	CatalogID        pgtype.UUID        `json:"catalog_id"`
+	Namespace        []string           `json:"namespace"`
+	TableName        string             `json:"table_name"`
+	ColumnName       string             `json:"column_name"`
+	NativeType       string             `json:"native_type"`
+	Score            float64            `json:"score"`
+	MetadataSyncedAt pgtype.Timestamptz `json:"metadata_synced_at"`
+}
+
+// Tables and columns of the catalogs the workspace may use whose names are
+// trigram-similar to q (or contain a word similar to it), best first.
+func (q *Queries) SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error) {
+	rows, err := q.db.Query(ctx, searchMetadata,
+		arg.Lim,
+		arg.WorkspaceID,
+		arg.CatalogID,
+		arg.Q,
+		arg.Kind,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchMetadataRow
+	for rows.Next() {
+		var i SearchMetadataRow
+		if err := rows.Scan(
+			&i.Kind,
+			&i.TableID,
+			&i.CatalogID,
+			&i.Namespace,
+			&i.TableName,
+			&i.ColumnName,
+			&i.NativeType,
+			&i.Score,
+			&i.MetadataSyncedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const startMetadataSyncRun = `-- name: StartMetadataSyncRun :one
