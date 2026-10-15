@@ -16,6 +16,21 @@ body:json {
   }
 }
 
+script:pre-request {
+  // The limiter allows a burst (RATE_LIMIT_BURST, default 10) per client
+  // address: spend it, so this request is the one refused.
+  const axios = require("axios");
+  const url = bru.getEnvVar("base_url") + "/auth/refresh";
+  for (let i = 0; i < 15; i++) {
+    await axios.post(url, { refresh_token: "invalid-token-to-trigger-rate-limit" }, { validateStatus: () => true });
+  }
+}
+
 assert {
   res.status: eq 429
+}
+
+docs {
+  Spends the refresh limiter's burst, then expects 429. The limiter refills
+  at RATE_LIMIT_RPS, so later requests are not affected.
 }

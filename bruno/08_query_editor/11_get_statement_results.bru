@@ -16,5 +16,10 @@ auth:bearer {
 
 assert {
   res.status: eq 200
-  res.content-type: eq application/vnd.apache.arrow.stream
+}
+
+tests {
+  test("results are an Arrow IPC stream", function () {
+    expect(res.getHeader("content-type")).to.equal("application/vnd.apache.arrow.stream");
+  });
 }

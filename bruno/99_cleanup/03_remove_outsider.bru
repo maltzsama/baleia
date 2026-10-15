@@ -1,0 +1,26 @@
+meta {
+  name: Remove Outsider (kept)
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{base_url}}/users/{{outsider_user_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq user_owns_workspace
+}
+
+docs {
+  The outsider logged in, so it owns a personal workspace: removing it is
+  refused rather than deleting the workspace's content. The outsider stays
+  for the next run.
+}

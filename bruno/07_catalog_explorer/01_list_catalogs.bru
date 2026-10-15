@@ -16,7 +16,8 @@ auth:bearer {
 
 assert {
   res.status: eq 200
-  res.body[0].name: eq baleia
+  res.body[0].name: eq Bruno Explorer
+  res.body[0].trino_catalog_name: eq bruno_explorer
 }
 
 vars:post-response {

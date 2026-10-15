@@ -1,0 +1,19 @@
+meta {
+  name: Delete Retriever
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/retrievers/{{retriever_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}

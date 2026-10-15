@@ -1,0 +1,26 @@
+meta {
+  name: Login Outsider
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "outsider@baleia.io",
+    "password": "outsider123456"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+vars:post-response {
+  other_token: res.body.token
+}

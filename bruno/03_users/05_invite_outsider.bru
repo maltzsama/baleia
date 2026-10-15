@@ -1,0 +1,42 @@
+meta {
+  name: Invite Outsider
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/users/invite
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "email": "outsider@baleia.io",
+    "role": "member"
+  }
+}
+
+assert {
+  res.status: in 201, 409
+}
+
+script:post-response {
+  // 409: the outsider exists from an earlier run (a user who has logged in
+  // owns a workspace and is kept, see 99_cleanup/03_remove_outsider).
+  const axios = require("axios");
+  const users = await axios.get(bru.getEnvVar("base_url") + "/users", { headers: { Authorization: "Bearer " + bru.getVar("token") } });
+  const list = Array.isArray(users.data) ? users.data : (users.data.data || []);
+  const u = list.find((u) => u.email === "outsider@baleia.io");
+  bru.setVar("outsider_user_id", u ? u.id : "");
+}
+
+docs {
+  The outsider is a second, non-admin user that owns nothing of the admin's:
+  the `*_foreign` requests use its token (`other_token`) and expect 404, since
+  other users' resources must not be visible.
+}

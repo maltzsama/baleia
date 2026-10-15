@@ -16,11 +16,16 @@ auth:bearer {
 
 body:json {
   {
-    "catalog_id": "{{catalog_id}}",
+    "catalog_id": "00000000-0000-4000-8000-000000000001",
     "permission": "read"
   }
 }
 
 assert {
   res.status: eq 404
+}
+
+docs {
+  The workspace is not the outsider's, so it is refused before the catalog id
+  is looked at: any well-formed id will do.
 }
