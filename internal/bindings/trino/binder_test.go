@@ -153,6 +153,12 @@ func TestProject_Kinds(t *testing.T) {
 			}
 		})
 	}
+	for tls, want := range map[string]string{"preferred": "jdbc:mysql://my:3306", "skip-verify": "jdbc:mysql://my:3306?sslMode=REQUIRED", "false": "jdbc:mysql://my:3306?sslMode=DISABLED"} {
+		p, err := b.Project(bindings.BindingSpec{EngineCatalog: "shop"}, cfg(connections.KindMySQL, map[string]string{"host": "my", "tls": tls}, nil))
+		if err != nil || p.Properties["connection-url"] != want {
+			t.Errorf("mysql tls=%s: %s, %v", tls, p.Properties["connection-url"], err)
+		}
+	}
 	// A PostgreSQL host that tries to smuggle JDBC parameters is not a host;
 	// the provider rejects it at validation and the URL escapes what is left.
 	p, err := b.Project(bindings.BindingSpec{EngineCatalog: "x"}, cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "database": "a?socketFactory=evil"}, nil))

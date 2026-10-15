@@ -192,8 +192,10 @@ func mysqlProjection(src connections.Config) (projection, error) {
 		return projection{}, err
 	}
 	jdbc := "jdbc:mysql://" + addr
-	if src.Value("tls") == "true" {
-		jdbc += "?sslMode=VERIFY_IDENTITY"
+	// The provider's tls modes as Connector/J sslMode; preferred is the
+	// driver's default.
+	if mode, ok := map[string]string{"true": "VERIFY_IDENTITY", "skip-verify": "REQUIRED", "false": "DISABLED"}[src.Value("tls")]; ok {
+		jdbc += "?sslMode=" + mode
 	}
 	p := projection{props: map[string]string{"connection-url": jdbc}}
 	sqlCredentials(&p, src)
