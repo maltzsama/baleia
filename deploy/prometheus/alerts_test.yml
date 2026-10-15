@@ -1,0 +1,92 @@
+# promtool test rules deploy/prometheus/alerts_test.yml
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - name: schedules are judged by their own interval
+    interval: 1m
+    input_series:
+      # Last success at t=0 for both; at 5m the 30s poller is stale, the hourly job is not.
+      - series: 'baleia_schedule_last_success_timestamp_seconds{schedule="lens-query-poller",instance="w1"}'
+        values: '0x10'
+      - series: 'baleia_schedule_last_success_timestamp_seconds{schedule="lens-table-health",instance="w1"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BaleiaScheduleStale
+        exp_alerts:
+          - exp_labels: {severity: warning, schedule: lens-query-poller}
+            exp_annotations:
+              summary: Schedule lens-query-poller has not succeeded in 3 intervals
+              description: The last successful pass of lens-query-poller was 5m 0s ago.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaschedulestale
+
+  - name: 5xx ratio over 5% for 10m
+    interval: 1m
+    input_series:
+      - series: 'baleia_http_requests_total{route="/api/v1/catalogs",method="GET",status_class="2xx"}'
+        values: '0+90x30'
+      - series: 'baleia_http_requests_total{route="/api/v1/catalogs",method="GET",status_class="5xx"}'
+        values: '0+10x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BaleiaHighErrorRate
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BaleiaHighErrorRate
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: More than 5% of API requests fail with 5xx
+              description: 10% of API requests returned 5xx over the last 10 minutes.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiahigherrorrate
+
+  - name: slow routes, excluding result downloads
+    interval: 1m
+    input_series:
+      - series: 'baleia_http_request_duration_seconds_bucket{route="/api/v1/catalogs",method="GET",le="2.5"}'
+        values: '0x30'
+      - series: 'baleia_http_request_duration_seconds_bucket{route="/api/v1/catalogs",method="GET",le="5"}'
+        values: '0+10x30'
+      - series: 'baleia_http_request_duration_seconds_bucket{route="/api/v1/catalogs",method="GET",le="+Inf"}'
+        values: '0+10x30'
+      - series: 'baleia_http_request_duration_seconds_bucket{route="/api/v1/workspaces/{id}/executions/{execution_id}/statements/{position}/results",method="GET",le="2.5"}'
+        values: '0x30'
+      - series: 'baleia_http_request_duration_seconds_bucket{route="/api/v1/workspaces/{id}/executions/{execution_id}/statements/{position}/results",method="GET",le="+Inf"}'
+        values: '0+10x30'
+    alert_rule_test:
+      - eval_time: 26m
+        alertname: BaleiaSlowAPI
+        exp_alerts:
+          - exp_labels: {severity: warning, route: /api/v1/catalogs}
+            exp_annotations:
+              summary: API p95 latency above 2s on /api/v1/catalogs
+              description: p95 of /api/v1/catalogs has been 4.875s for 15 minutes.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaslowapi
+
+  - name: pool saturation and catalogs in error
+    interval: 1m
+    input_series:
+      - series: 'baleia_db_pool_acquired_conns{process="api",instance="a1"}'
+        values: '19x20'
+      - series: 'baleia_db_pool_max_conns{process="api",instance="a1"}'
+        values: '20x20'
+      - series: 'baleia_catalogs_by_state{state="error",instance="a1"}'
+        values: '2x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BaleiaDBPoolSaturated
+        exp_alerts:
+          - exp_labels: {severity: warning, process: api, instance: a1}
+            exp_annotations:
+              summary: Database pool of api (a1) is over 90% in use
+              description: 95% of the pool has been in use for 10 minutes.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiadbpoolsaturated
+      - eval_time: 35m
+        alertname: BaleiaCatalogsInError
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: 2 managed catalog bindings are in error
+              description: Managed catalog bindings have been in the error state for 30 minutes.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiacatalogsinerror
