@@ -1,0 +1,34 @@
+# Source database for provider and dialect tests (#11, #14); not part of the
+# dev stack. kubectl apply -f deploy/dev/sources/mariadb.yaml (make k8s-source NAME=mariadb).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: src-mariadb
+  namespace: baleia-dev
+  labels: { app: src-mariadb, baleia/role: source }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: src-mariadb }
+  template:
+    metadata:
+      labels: { app: src-mariadb, baleia/role: source }
+    spec:
+      containers:
+        - name: mariadb
+          image: mariadb:11.4
+          ports:
+            - containerPort: 3306
+          env:
+            - { name: MARIADB_ROOT_PASSWORD, value: baleia_dev }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: src-mariadb
+  namespace: baleia-dev
+spec:
+  selector: { app: src-mariadb }
+  ports:
+    - port: 3306
+      targetPort: 3306

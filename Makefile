@@ -12,7 +12,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate migrate-credentials migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down
+.PHONY: dev worker migrate migrate-credentials migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch plugin-clone plugin-build clean-plugin up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down dialect-lists
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -162,6 +162,23 @@ k8s-logs:
 
 k8s-seed-tpch:
 	kubectl -n $(K8S_NS) exec -i statefulset/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql
+
+# Start one source database (deploy/dev/sources/<NAME>.yaml) for provider and
+# dialect tests; k8s-source-down removes it. scripts/gen-dialect-lists.sh
+# starts and removes them by itself.
+k8s-source:
+	kubectl apply -f deploy/dev/sources/$(NAME).yaml
+	kubectl -n $(K8S_NS) rollout status deployment/src-$(NAME) --timeout=15m
+
+k8s-source-down:
+	kubectl delete -f deploy/dev/sources/$(NAME).yaml
+
+# Regenerate every dialect's keyword and function lists from real servers on
+# the dev cluster, running each dialect's execution test (one source at a time).
+dialect-lists:
+	for d in postgresql trino mysql mariadb tsql oracle clickhouse sqlite flightsql-generic; do \
+		scripts/gen-dialect-lists.sh $$d || exit 1; \
+	done
 
 k8s-down:
 	helm -n $(K8S_NS) uninstall baleia || true

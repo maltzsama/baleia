@@ -36,12 +36,18 @@ func TestRegistry(t *testing.T) {
 
 func TestQuoteIdent(t *testing.T) {
 	want := map[string]string{
-		Trino: `"a""b"`, PostgreSQL: `"a""b"`, Oracle: `"a""b"`, SQLite: `"a""b"`, FlightSQL: `"a""b"`,
+		Trino: `"a""b"`, PostgreSQL: `"a""b"`, SQLite: `"a""b"`, FlightSQL: `"a""b"`,
 		MySQL: "`a\"b`", MariaDB: "`a\"b`", ClickHouse: "`a\"b`", TSQL: `[a"b]`,
 	}
 	for _, n := range all {
 		d := MustGet(n)
-		if got, err := d.QuoteIdent(`a"b`); err != nil || got != want[n] {
+		got, err := d.QuoteIdent(`a"b`)
+		if n == Oracle {
+			// Oracle has no escape for " inside a quoted identifier (ORA-25716).
+			if !errors.Is(err, ErrInvalid) {
+				t.Errorf("oracle: %q accepted (%q)", `a"b`, got)
+			}
+		} else if err != nil || got != want[n] {
 			t.Errorf("%s: %q, %v", n, got, err)
 		}
 		for _, bad := range []string{"", "a\x00b", "\xff"} {

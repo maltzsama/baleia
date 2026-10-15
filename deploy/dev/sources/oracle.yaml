@@ -1,0 +1,36 @@
+# Source database for provider and dialect tests (#11, #14); not part of the
+# dev stack. kubectl apply -f deploy/dev/sources/oracle.yaml (make k8s-source NAME=oracle).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: src-oracle
+  namespace: baleia-dev
+  labels: { app: src-oracle, baleia/role: source }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: src-oracle }
+  template:
+    metadata:
+      labels: { app: src-oracle, baleia/role: source }
+    spec:
+      containers:
+        - name: oracle
+          image: gvenzl/oracle-free:23-slim
+          ports:
+            - containerPort: 1521
+          env:
+            - { name: ORACLE_PASSWORD, value: baleia_dev }
+            - { name: APP_USER, value: baleia }
+            - { name: APP_USER_PASSWORD, value: baleia_dev }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: src-oracle
+  namespace: baleia-dev
+spec:
+  selector: { app: src-oracle }
+  ports:
+    - port: 1521
+      targetPort: 1521

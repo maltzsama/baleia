@@ -21,6 +21,7 @@ type spec struct {
 	identOpen, identClose string // `"`, "`" or "[" "]"
 	maxIdent              int    // 0 = unknown
 	identBytes            bool   // the limit counts bytes, not characters
+	identForbidden        string // characters a quoted identifier cannot hold at all (Oracle: ")
 
 	// Strings: backslash also escapes (MySQL, ClickHouse); national prefix N (T-SQL).
 	backslashStrings bool
@@ -68,6 +69,9 @@ func (d *spec) QuoteIdent(s string) (string, error) {
 	}
 	if !utf8.ValidString(s) {
 		return "", fmt.Errorf("%w: identifier is not valid UTF-8", ErrInvalid)
+	}
+	if d.identForbidden != "" && strings.ContainsAny(s, d.identForbidden) {
+		return "", fmt.Errorf("%w: %s identifiers cannot contain %q", ErrInvalid, d.name, d.identForbidden)
 	}
 	if n := identLen(s, d.identBytes); d.maxIdent > 0 && n > d.maxIdent {
 		return "", fmt.Errorf("%w: identifier is longer than %d %s", ErrInvalid, d.maxIdent, unit(d.identBytes))

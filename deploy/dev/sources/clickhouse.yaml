@@ -1,0 +1,36 @@
+# Source database for provider and dialect tests (#11, #14); not part of the
+# dev stack. kubectl apply -f deploy/dev/sources/clickhouse.yaml (make k8s-source NAME=clickhouse).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: src-clickhouse
+  namespace: baleia-dev
+  labels: { app: src-clickhouse, baleia/role: source }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: src-clickhouse }
+  template:
+    metadata:
+      labels: { app: src-clickhouse, baleia/role: source }
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24.8
+          ports:
+            - containerPort: 8123
+          env:
+            - { name: CLICKHOUSE_USER, value: baleia }
+            - { name: CLICKHOUSE_PASSWORD, value: baleia_dev }
+            - { name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT, value: "1" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: src-clickhouse
+  namespace: baleia-dev
+spec:
+  selector: { app: src-clickhouse }
+  ports:
+    - port: 8123
+      targetPort: 8123
