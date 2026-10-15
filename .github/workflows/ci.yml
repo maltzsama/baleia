@@ -58,6 +58,21 @@ jobs:
           args: --offline --no-progress --include-fragments 'docs/**/*.md'
           fail: true
 
+  prometheus:
+    name: Prometheus rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install promtool
+        run: |
+          curl -sSLo /tmp/prometheus.tgz https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-amd64.tar.gz
+          tar -xzf /tmp/prometheus.tgz -C /tmp prometheus-3.5.0.linux-amd64/promtool
+          sudo install -m 0755 /tmp/prometheus-3.5.0.linux-amd64/promtool /usr/local/bin/promtool
+      - name: Check and test alerting rules
+        run: |
+          promtool check rules deploy/prometheus/alerts.yml
+          promtool test rules deploy/prometheus/alerts_test.yml
+
   build:
     name: Build
     runs-on: ubuntu-latest

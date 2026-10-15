@@ -220,6 +220,16 @@ Connection credentials are stored as `v1:<key-id>:<base64>` envelopes: AES-256-G
 - **Upgrading from `JWT_SECRET`-encrypted credentials:** set `BALEIA_ENCRYPTION_KEY`, keep the existing `JWT_SECRET`, then run the one-shot, idempotent migration (`make migrate-credentials`, or `/migrate -cmd=credentials` in the image). It requires a valid `JWT_SECRET` to open the legacy values. Rows that cannot be decrypted are listed by id and left untouched; re-enter those credentials.
 - **Rotating the key:** move the old value to `BALEIA_ENCRYPTION_KEY_PREVIOUS` and set the new `BALEIA_ENCRYPTION_KEY`. Values are read with either key, but reading never re-seals them. Run `make migrate-credentials` (or `/migrate -cmd=credentials`) to move every envelope to the new key; only after it reports no failures is it safe to drop `BALEIA_ENCRYPTION_KEY_PREVIOUS`. Envelopes left on the old key become `credentials_unreadable` once it is removed.
 
+## Monitoring
+
+Both processes expose Prometheus metrics:
+- **API:** `GET /metrics` on its port.
+- **Worker:** `GET /metrics` on `:9090`, its own listener.
+
+The output covers Baleia's catalog (`baleia_*`: HTTP, auth, engines, schedules, catalog bindings, storage, database pool) and the Temporal SDK's `temporal_*`. Labels never carry identifiers or SQL.
+
+[`deploy/prometheus/alerts.yml`](deploy/prometheus/alerts.yml) has the alerting rules. [`docs/operations.md`](docs/operations.md) covers the scrape config, the full catalog and a runbook per alert.
+
 ## Project structure
 
 ```

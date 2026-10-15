@@ -1,0 +1,110 @@
+# Baleia alerting rules (#87). Plain Prometheus rule groups: load them with
+# rule_files, or paste the groups into a PrometheusRule's spec.groups.
+# Jobs: the API is scraped as job="baleia-api", the worker as
+# job="baleia-worker" (docs/operations.md#scraping). Each alert links its
+# runbook in docs/operations.md.
+groups:
+  - name: baleia
+    rules:
+      - alert: BaleiaAPIDown
+        expr: up{job="baleia-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Baleia API target {{ $labels.instance }} is down
+          description: Prometheus has not scraped the API at {{ $labels.instance }} for 2 minutes.
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaapidown
+
+      - alert: BaleiaWorkerDown
+        # The worker runs every schedule; its own gauges vanish with it, so
+        # BaleiaScheduleStale cannot fire while it is down.
+        expr: up{job="baleia-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Baleia worker target {{ $labels.instance }} is down
+          description: Prometheus has not scraped the worker at {{ $labels.instance }} for 2 minutes; executions, schedules and catalog jobs do not run.
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaworkerdown
+
+      - alert: BaleiaHighErrorRate
+        expr: |
+          sum(rate(baleia_http_requests_total{status_class="5xx"}[10m]))
+            / sum(rate(baleia_http_requests_total[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of API requests fail with 5xx
+          description: '{{ $value | humanizePercentage }} of API requests returned 5xx over the last 10 minutes.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiahigherrorrate
+
+      - alert: BaleiaSlowAPI
+        # Result downloads and the execution stream are long by design.
+        expr: |
+          histogram_quantile(0.95, sum by (le, route) (
+            rate(baleia_http_request_duration_seconds_bucket{route!~".*/results|/api/v1/ws/.*"}[10m])
+          )) > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'API p95 latency above 2s on {{ $labels.route }}'
+          description: 'p95 of {{ $labels.route }} has been {{ $value | humanizeDuration }} for 15 minutes.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaslowapi
+
+      - alert: BaleiaEngineUnavailable
+        expr: sum by (engine) (rate(baleia_engine_errors_total{code="engine_unavailable"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $labels.engine }} engines are unreachable'
+          description: Statements on {{ $labels.engine }} engines have been failing with engine_unavailable for 5 minutes.
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaengineunavailable
+
+      - alert: BaleiaScheduleStale
+        # 3x each schedule's interval (cmd/worker/main.go); max over workers.
+        expr: |
+          (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule=~"lens-query-poller|lens-cluster-poller"}) > 3 * 30)
+          or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="retriever-scheduler"}) > 3 * 60)
+          or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="lens-table-health"}) > 3 * 3600)
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Schedule {{ $labels.schedule }} has not succeeded in 3 intervals'
+          description: 'The last successful pass of {{ $labels.schedule }} was {{ $value | humanizeDuration }} ago.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaschedulestale
+
+      - alert: BaleiaMetadataStale
+        # baleia_metadata_staleness_seconds_max is produced by metadata sync (#17).
+        expr: max(baleia_metadata_staleness_seconds_max) > 3600
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Catalog metadata is more than an hour old
+          description: 'The stalest catalog metadata is {{ $value | humanizeDuration }} old.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiametadatastale
+
+      - alert: BaleiaCatalogsInError
+        expr: max(baleia_catalogs_by_state{state="error"}) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value }} managed catalog bindings are in error'
+          description: Managed catalog bindings have been in the error state for 30 minutes.
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiacatalogsinerror
+
+      - alert: BaleiaDBPoolSaturated
+        expr: baleia_db_pool_acquired_conns / baleia_db_pool_max_conns > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Database pool of {{ $labels.process }} ({{ $labels.instance }}) is over 90% in use'
+          description: '{{ $value | humanizePercentage }} of the pool has been in use for 10 minutes.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiadbpoolsaturated
