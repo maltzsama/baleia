@@ -146,6 +146,36 @@ func (q *Queries) GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, err
 	return i, err
 }
 
+const getTrinoCatalogRegistryState = `-- name: GetTrinoCatalogRegistryState :one
+SELECT catalog_version, enabled, sync_status, updated_by
+  FROM trino_catalog_registry
+ WHERE cluster_id = $1 AND catalog_name = $2
+`
+
+type GetTrinoCatalogRegistryStateParams struct {
+	ClusterID   pgtype.UUID `json:"cluster_id"`
+	CatalogName string      `json:"catalog_name"`
+}
+
+type GetTrinoCatalogRegistryStateRow struct {
+	CatalogVersion *string `json:"catalog_version"`
+	Enabled        bool    `json:"enabled"`
+	SyncStatus     string  `json:"sync_status"`
+	UpdatedBy      string  `json:"updated_by"`
+}
+
+func (q *Queries) GetTrinoCatalogRegistryState(ctx context.Context, arg GetTrinoCatalogRegistryStateParams) (GetTrinoCatalogRegistryStateRow, error) {
+	row := q.db.QueryRow(ctx, getTrinoCatalogRegistryState, arg.ClusterID, arg.CatalogName)
+	var i GetTrinoCatalogRegistryStateRow
+	err := row.Scan(
+		&i.CatalogVersion,
+		&i.Enabled,
+		&i.SyncStatus,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const getTrinoClusterByID = `-- name: GetTrinoClusterByID :one
 SELECT id, name, coordinator_url, node_version, created_at, updated_at, engine_id FROM trino_clusters WHERE id = $1
 `

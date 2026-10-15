@@ -5268,6 +5268,17 @@ func (response CreateCatalog404JSONResponse) VisitCreateCatalogResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateCatalog422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateCatalog422JSONResponse) VisitCreateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteCatalogRequestObject struct {
 	ConnectionId openapi_types.UUID `json:"connection_id"`
 	CatalogId    openapi_types.UUID `json:"catalog_id"`
@@ -5389,6 +5400,17 @@ type UpdateCatalog404JSONResponse struct{ NotFoundJSONResponse }
 func (response UpdateCatalog404JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalog422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateCatalog422JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }

@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/galileostudio/baleia/internal/bindings"
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"log/slog"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
-	catalogs "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/db"
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -72,7 +72,9 @@ func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequest
 }
 
 // CreateCatalog — POST /connections/{connection_id}/catalogs
-// Write-through flow. See CR-017 §I7b.
+// Write-through flow (CR-017 §I7b) through the Trino binder (#80): the
+// catalog row and the registry row are written in one transaction, then
+// CREATE CATALOG is sent.
 func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogRequestObject) (CreateCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
@@ -90,153 +92,166 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 		return nil, err
 	}
 	if request.Body == nil {
-		return CreateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "missing body"}}, nil
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "missing body"}}, nil
 	}
 	body := *request.Body
 	if body.TrinoCatalogName == "" || body.Name == "" || body.Warehouse == "" {
-		return CreateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "trino_catalog_name, name, warehouse are required"}}, nil
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "trino_catalog_name, name and warehouse are required"}}, nil
 	}
 
 	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get default cluster: %w", err)
 	}
-	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
-	if err != nil {
-		slog.Error("decode creds for create", "err", err)
-		return nil, err
-	}
-
-	connector := "iceberg"
-	if body.Connector != nil && *body.Connector != "" {
+	connector := ""
+	if body.Connector != nil {
 		connector = *body.Connector
 	}
-	extraProps := []byte("{}")
+	extra := map[string]string{}
 	if body.ExtraProps != nil {
-		extraProps, _ = json.Marshal(*body.ExtraProps)
+		extra = *body.ExtraProps
 	}
+	spec := bindings.BindingSpec{EngineCatalog: body.TrinoCatalogName, Connector: connector, SourceRef: body.Warehouse, ExtraProps: extra}
+	proj, err := h.projectBinding(conn, spec)
+	if bindingInvalid(err) {
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	extraProps, _ := json.Marshal(extra)
+	eng := bindings.EngineRef{ClusterID: cluster.ID}
 
-	cat, version, txErr := h.createCatalogTx(ctx, db.CreateCatalogParams{
-		ConnectionID:     connID,
-		Name:             body.Name,
-		Description:      body.Description,
-		TrinoCatalogName: &body.TrinoCatalogName,
-		ClusterID:        cluster.ID,
-		Warehouse:        &body.Warehouse,
-		Connector:        &connector,
-		ExtraProps:       extraProps,
-	}, conn, creds)
+	var cat db.Catalog
+	txErr := withTx(ctx, h.pool, func(tx pgx.Tx) error {
+		qtx := db.New(tx)
+		c, err := qtx.CreateCatalog(ctx, db.CreateCatalogParams{
+			ConnectionID:     connID,
+			Name:             body.Name,
+			Description:      body.Description,
+			TrinoCatalogName: &body.TrinoCatalogName,
+			ClusterID:        cluster.ID,
+			Warehouse:        &body.Warehouse,
+			Connector:        &proj.Connector,
+			ExtraProps:       extraProps,
+		})
+		if err != nil {
+			return err
+		}
+		cat = c
+		return h.binder.WithStore(qtx).Stage(ctx, eng, proj)
+	})
 	if txErr != nil {
 		return nil, fmt.Errorf("create catalog: %w", txErr)
 	}
 
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	if err := h.emitCreateCatalog(ddlCtx, cat, conn, creds); err != nil {
-		errPtr := err.Error()
-		_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
-			ClusterID:   cluster.ID,
-			CatalogName: cat.TrinoName(),
-			SyncError:   &errPtr,
-		})
-		c := dbCatalogToPublic(cat)
-		c.SyncStatus = ptrSyncStatus(CatalogSyncStatusError)
-		c.SyncError = &errPtr
+	if err := h.binder.Apply(ddlCtx, proj); err != nil {
+		c := h.markSyncError(ctx, cat, err)
 		return CreateCatalog201JSONResponse(c), nil
 	}
 
 	h.catalogCache.Clear()
 	c := dbCatalogToPublic(cat)
-	c.CatalogVersion = &version
+	c.CatalogVersion = &proj.Version
 	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusSynced)
 	return CreateCatalog201JSONResponse(c), nil
 }
 
-// createCatalogTx wraps the domain-row INSERT + registry UPSERT in a single
-// transaction. If either fails, everything rolls back.
-func (h *Handlers) createCatalogTx(ctx context.Context, params db.CreateCatalogParams, conn db.CatalogConnection, creds catalogs.Credentials) (db.Catalog, string, error) {
-	var created db.Catalog
-	var version string
-
-	txErr := withTx(ctx, h.pool, func(tx pgx.Tx) error {
-		qtx := db.New(tx)
-		c, err := qtx.CreateCatalog(ctx, params)
-		if err != nil {
-			return err
-		}
-		created = c
-
-		proj, err := catalogs.Project(conn, c, creds)
-		if err != nil {
-			return err
-		}
-		version = catalogs.Version(proj.Row.CatalogName, proj.Row.ConnectorName, proj.Row.Properties)
-
-		propsJSON, _ := json.Marshal(proj.Row.Properties)
-		return qtx.UpsertTrinoCatalogRegistry(ctx, db.UpsertTrinoCatalogRegistryParams{
-			ClusterID:      pgtype.UUID{Bytes: proj.Row.ClusterID, Valid: true},
-			CatalogName:    proj.Row.CatalogName,
-			ConnectorName:  proj.Row.ConnectorName,
-			Column4:        propsJSON,
-			CatalogVersion: &version,
-		})
-	})
-	if txErr != nil {
-		return db.Catalog{}, "", txErr
+// projectBinding projects a binding of conn through the Trino binder.
+func (h *Handlers) projectBinding(conn db.CatalogConnection, spec bindings.BindingSpec) (bindings.Projection, error) {
+	_, cfg, err := h.connectionConfig(conn)
+	if err != nil {
+		return bindings.Projection{}, err
 	}
-	return created, version, nil
+	return h.binder.Project(spec, cfg)
 }
 
-// emitCreateCatalog sends CREATE CATALOG to Trino with the spec built from
-// the Projection. SecretKeys ensure the DDL text carries only @baleia-secret
-// placeholders — never the real secret. The caller supplies the deadline.
-func (h *Handlers) emitCreateCatalog(ctx context.Context, cat db.Catalog, conn db.CatalogConnection, creds catalogs.Credentials) error {
-	proj, err := catalogs.Project(conn, cat, creds)
-	if err != nil {
-		return err
+// catalogSpec is the binding a catalog row describes. Stored extra_props
+// must be a flat string map; anything else is an invalid binding.
+func catalogSpec(cat db.Catalog) (bindings.BindingSpec, error) {
+	extra := map[string]string{}
+	if len(cat.ExtraProps) > 0 && string(cat.ExtraProps) != "null" {
+		if err := json.Unmarshal(cat.ExtraProps, &extra); err != nil {
+			return bindings.BindingSpec{}, fmt.Errorf("%w: extra_props must be a flat string map", bindings.ErrInvalid)
+		}
 	}
-	return h.catalogDDL.CreateCatalog(ctx, bindtrino.CatalogSpec{
-		Name:       proj.Row.CatalogName,
-		Connector:  proj.Row.ConnectorName,
-		Properties: proj.Row.Properties,
-		SecretKeys: proj.SecretKeys,
-	})
+	return bindings.BindingSpec{EngineCatalog: cat.TrinoName(), Connector: cat.ConnectorName(), SourceRef: cat.WarehouseName(), ExtraProps: extra}, nil
 }
 
-// recreateCatalog replaces the live Trino catalog with the current projection
-// and returns the new catalog version. The order is load-bearing: the plugin
-// soft-disables the registry row on DROP CATALOG, and CREATE CATALOG resolves
-// its @baleia-secret placeholders from an enabled row, so the row is upserted
-// (re-enabled, with the new properties) between the two.
-func (h *Handlers) recreateCatalog(ctx context.Context, cat db.Catalog, conn db.CatalogConnection, creds catalogs.Credentials, dropName string) (string, error) {
-	proj, err := catalogs.Project(conn, cat, creds)
+// projectCatalog projects a stored catalog.
+func (h *Handlers) projectCatalog(conn db.CatalogConnection, cat db.Catalog) (bindings.Projection, error) {
+	spec, err := catalogSpec(cat)
 	if err != nil {
-		return "", fmt.Errorf("project: %w", err)
+		return bindings.Projection{}, err
 	}
-	version := catalogs.Version(proj.Row.CatalogName, proj.Row.ConnectorName, proj.Row.Properties)
-	propsJSON, err := json.Marshal(proj.Row.Properties)
-	if err != nil {
-		return "", fmt.Errorf("marshal properties: %w", err)
-	}
+	return h.projectBinding(conn, spec)
+}
 
-	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-	defer cancel()
-	if err := h.catalogDDL.DropCatalog(ddlCtx, dropName); err != nil {
-		slog.Warn("drop catalog before re-create", "catalog", dropName, "err", err)
+// bindingInvalid reports a binding the request got wrong (422), as opposed
+// to a server failure.
+func bindingInvalid(err error) bool {
+	return errors.Is(err, bindings.ErrInvalid) || errors.Is(err, bindings.ErrPropertyNotOverridable) ||
+		errors.Is(err, bindings.ErrReservedName) || errors.Is(err, bindings.ErrUnsupportedSource) ||
+		errors.Is(err, catalogs.ErrCredentialsUnreadable)
+}
+
+func bindingUnprocessable(err error) UnprocessableEntityJSONResponse {
+	code := "validation_error"
+	switch {
+	case errors.Is(err, bindings.ErrPropertyNotOverridable):
+		code = "property_not_overridable"
+	case errors.Is(err, bindings.ErrReservedName):
+		code = "reserved_name"
+	case errors.Is(err, bindings.ErrUnsupportedSource):
+		code = "binding_unsupported"
+	case errors.Is(err, catalogs.ErrCredentialsUnreadable):
+		code = "credentials_unreadable"
 	}
-	if err := h.queries.UpsertTrinoCatalogRegistry(ctx, db.UpsertTrinoCatalogRegistryParams{
-		ClusterID:      pgtype.UUID{Bytes: proj.Row.ClusterID, Valid: true},
-		CatalogName:    proj.Row.CatalogName,
-		ConnectorName:  proj.Row.ConnectorName,
-		Column4:        propsJSON,
-		CatalogVersion: &version,
-	}); err != nil {
-		return "", fmt.Errorf("upsert registry: %w", err)
+	field, msg := "", err.Error()
+	var pe *bindings.PropertyError
+	if errors.As(err, &pe) {
+		field, msg = "extra_props."+pe.Key, pe.Err.Error()
 	}
-	if err := h.emitCreateCatalog(ddlCtx, cat, conn, creds); err != nil {
+	out := UnprocessableEntityJSONResponse{Code: code, Message: err.Error(), Errors: []struct {
+		Field   *string `json:"field,omitempty"`
+		Message *string `json:"message,omitempty"`
+	}{{Message: &msg}}}
+	if field != "" {
+		out.Errors[0].Field = &field
+	}
+	return out
+}
+
+// markSyncError records err on the catalog's registry row and returns the
+// catalog as the API shows it.
+func (h *Handlers) markSyncError(ctx context.Context, cat db.Catalog, err error) Catalog {
+	errMsg := err.Error()
+	_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
+		ClusterID:   cat.ClusterID,
+		CatalogName: cat.TrinoName(),
+		SyncError:   &errMsg,
+	})
+	c := dbCatalogToPublic(cat)
+	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusError)
+	c.SyncError = &errMsg
+	return c
+}
+
+// recreateCatalog replaces the live Trino catalog with the catalog's current
+// projection (binder Replace) and returns the new catalog version.
+func (h *Handlers) recreateCatalog(ctx context.Context, cat db.Catalog, conn db.CatalogConnection) (string, error) {
+	proj, err := h.projectCatalog(conn, cat)
+	if err != nil {
 		return "", err
 	}
-	return version, nil
+	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
+	defer cancel()
+	if err := h.binder.WithStore(h.queries).Replace(ddlCtx, bindings.EngineRef{ClusterID: cat.ClusterID}, proj); err != nil {
+		return "", err
+	}
+	return proj.Version, nil
 }
 
 // catalogAccessError maps an authz error to the generic not-found/forbidden
@@ -289,11 +304,6 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "missing body"}}, nil
 	}
 	body := *request.Body
-	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
-	if err != nil {
-		slog.Error("decode creds for update", "err", err)
-		return nil, err
-	}
 
 	newTrinoName := existing.TrinoName()
 	if body.TrinoCatalogName != "" {
@@ -316,15 +326,15 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		extraProps, _ = json.Marshal(*body.ExtraProps)
 	}
 
-	// Rename: DROP the old name and soft-delete its registry row first.
-	if newTrinoName != existing.TrinoName() {
-		dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
-		_ = h.catalogDDL.DropCatalog(dropCtx, existing.TrinoName())
-		cancel()
-		_ = h.queries.SoftDeleteTrinoCatalogRegistry(ctx, db.SoftDeleteTrinoCatalogRegistryParams{
-			ClusterID:   existing.ClusterID,
-			CatalogName: existing.TrinoName(),
-		})
+	// The new binding must project before anything changes.
+	next := existing
+	next.TrinoCatalogName, next.Warehouse, next.Connector, next.ExtraProps = &newTrinoName, &newWarehouse, &newConnector, extraProps
+	proj, err := h.projectCatalog(conn, next)
+	if bindingInvalid(err) {
+		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	updated, err := h.queries.UpdateCatalog(ctx, db.UpdateCatalogParams{
@@ -332,7 +342,7 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		Name:             newName,
 		Description:      body.Description,
 		Warehouse:        &newWarehouse,
-		Connector:        &newConnector,
+		Connector:        &proj.Connector,
 		ExtraProps:       extraProps,
 		TrinoCatalogName: &newTrinoName,
 	})
@@ -340,24 +350,22 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		return nil, fmt.Errorf("update catalog: %w", err)
 	}
 
-	version, err := h.recreateCatalog(ctx, updated, conn, creds, updated.TrinoName())
-	c := dbCatalogToPublic(updated)
-	if err != nil {
-		slog.Warn("re-create catalog after update", "err", err)
-		errMsg := err.Error()
-		_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
-			ClusterID:   updated.ClusterID,
-			CatalogName: updated.TrinoName(),
-			SyncError:   &errMsg,
-		})
-		c.SyncStatus = ptrSyncStatus(CatalogSyncStatusError)
-		c.SyncError = &errMsg
-		h.catalogCache.Clear()
-		return UpdateCatalog200JSONResponse(c), nil
+	eng := bindings.EngineRef{ClusterID: updated.ClusterID}
+	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
+	defer cancel()
+	b := h.binder.WithStore(h.queries)
+	if newTrinoName != existing.TrinoName() {
+		err = b.Rename(ddlCtx, eng, existing.TrinoName(), proj) // create the new name, then drop the old
+	} else {
+		err = b.Replace(ddlCtx, eng, proj)
 	}
-
 	h.catalogCache.Clear()
-	c.CatalogVersion = &version
+	if err != nil {
+		slog.Warn("apply catalog after update", "err", err)
+		return UpdateCatalog200JSONResponse(h.markSyncError(ctx, updated, err)), nil
+	}
+	c := dbCatalogToPublic(updated)
+	c.CatalogVersion = &proj.Version
 	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusSynced)
 	return UpdateCatalog200JSONResponse(c), nil
 }
@@ -388,17 +396,16 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 		if err := qtx.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: id, Enabled: false}); err != nil {
 			return err
 		}
-		return qtx.SoftDeleteTrinoCatalogRegistry(ctx, db.SoftDeleteTrinoCatalogRegistryParams{
-			ClusterID:   cat.ClusterID,
-			CatalogName: cat.TrinoName(),
-		})
+		return h.binder.WithStore(qtx).Unstage(ctx, bindings.EngineRef{ClusterID: cat.ClusterID}, cat.TrinoName())
 	})
 	if txErr != nil {
 		return nil, txErr
 	}
 	dropCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
-	_ = h.catalogDDL.DropCatalog(dropCtx, cat.TrinoName())
+	if err := h.binder.Remove(dropCtx, cat.TrinoName()); err != nil {
+		slog.Warn("drop catalog", "catalog", cat.TrinoName(), "err", err)
+	}
 	h.catalogCache.Clear()
 	return DeleteCatalog204Response{}, nil
 }
@@ -421,15 +428,10 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 		}
 		return nil, err
 	}
-	creds, err := catalogs.DecodeCredentials(conn, h.keyring)
-	if err != nil {
-		// Fail closed before touching Trino: the live catalog is left as is and
-		// the registry row records why it could not be re-synced.
-		slog.Error("decode creds for sync", "err", err)
-		return h.syncFailed(ctx, cat, err), nil
-	}
-
-	version, err := h.recreateCatalog(ctx, cat, conn, creds, cat.TrinoName())
+	// A projection failure (e.g. unreadable credentials) fails closed before
+	// touching Trino: the live catalog is left as is and the registry row
+	// records why it could not be re-synced.
+	version, err := h.recreateCatalog(ctx, cat, conn)
 	if err != nil {
 		return h.syncFailed(ctx, cat, err), nil
 	}
@@ -442,16 +444,7 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 
 // syncFailed records err on the registry row and builds the 409 response.
 func (h *Handlers) syncFailed(ctx context.Context, cat db.Catalog, err error) SyncCatalogResponseObject {
-	errMsg := err.Error()
-	_ = h.queries.MarkTrinoCatalogRegistryError(ctx, db.MarkTrinoCatalogRegistryErrorParams{
-		ClusterID:   cat.ClusterID,
-		CatalogName: cat.TrinoName(),
-		SyncError:   &errMsg,
-	})
-	c := dbCatalogToPublic(cat)
-	c.SyncStatus = ptrSyncStatus(CatalogSyncStatusError)
-	c.SyncError = &errMsg
-	return SyncCatalog409JSONResponse(c)
+	return SyncCatalog409JSONResponse(h.markSyncError(ctx, cat, err))
 }
 
 // ReconcileTrino — POST /trino/reconcile
@@ -469,7 +462,7 @@ func (h *Handlers) ReconcileTrino(ctx context.Context, _ ReconcileTrinoRequestOb
 	if err != nil {
 		return nil, fmt.Errorf("list enabled catalogs: %w", err)
 	}
-	live, err := h.catalogDDL.ListCatalogs(ctx)
+	live, err := h.binder.ListCatalogs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list trino catalogs: %w", err)
 	}

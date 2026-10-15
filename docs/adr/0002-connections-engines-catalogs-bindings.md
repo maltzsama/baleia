@@ -94,10 +94,13 @@ Partially compliant.
   and mysql. Create and update validate through `Provider.Validate`, store non-secret values in
   `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the
   schemas. Connection tests and Lens table health read through the registry (#11).
-- The `url` column is still written (derived with `providers.LegacyURL`) and the credentials blob
-  of older rows still carries non-secret values, because the Trino projection reads them:
-  `internal/catalogs/projection.go` (`switch conn.Type`) and `trinoConnector` in
-  `internal/api/handlers_catalog_connections.go` move to binders in #80. The typed
+- The binder contract is `internal/bindings`; the Trino binder (`internal/bindings/trino`) owns
+  the projection of each bindable kind (polaris, nessie, iceberg REST, postgresql, mysql) and the
+  registry and DDL, reading the provider's validated config (JDBC URLs are built from host, port
+  and database, never taken from users; protected properties cannot be overridden). The catalog
+  handlers write through it (#80 PR 1); the binding API, the remaining projections and the end
+  of the transitional trigger are #80 PR 2. The `url` column is still written (derived with
+  `providers.LegacyURL`) for rows read by older code paths. The typed
   `*_credentials` request fields (`internal/api/catalog_credentials.go`) stay until the UI uses
   the provider schema (#22).
 - Glue and Hive have no provider yet (#86).

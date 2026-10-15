@@ -2,13 +2,14 @@ package providers
 
 import (
 	"fmt"
+	"github.com/galileostudio/baleia/internal/bindings"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/connections"
 )
 
 // Markdown renders docs/connections.md from the registry.
-func Markdown(reg *connections.Registry) string {
+func Markdown(reg *connections.Registry, binders ...bindings.Binder) string {
 	var b strings.Builder
 	b.WriteString("# Connection providers\n\n")
 	b.WriteString("<!-- Generated from internal/connections/providers. Do not edit by hand:\n")
@@ -16,11 +17,11 @@ func Markdown(reg *connections.Registry) string {
 	b.WriteString("Every connection kind Baleia knows, what it can be used for, and its configuration.\n")
 	b.WriteString("See [ADR 0002](adr/0002-connections-engines-catalogs-bindings.md) for the model and\n")
 	b.WriteString("[ADR 0011](adr/0011-direct-connections-security.md) for network safety.\n\n")
-	b.WriteString("Which federated engines can bind each kind is declared by binders and is added to this\n")
-	b.WriteString("page when they land (#80).\n\n")
+	b.WriteString("*Bindable into* lists the federated engines whose binder can bind the kind, with the\n")
+	b.WriteString("connectors it may use (the first is the default; `internal/bindings`).\n\n")
 
-	b.WriteString("| Kind | Label | Family | Roles | Engine kind | Status |\n")
-	b.WriteString("|---|---|---|---|---|---|\n")
+	b.WriteString("| Kind | Label | Family | Roles | Engine kind | Bindable into | Status |\n")
+	b.WriteString("|---|---|---|---|---|---|---|\n")
 	for _, p := range reg.All() {
 		roles := make([]string, 0, len(p.Roles()))
 		for _, r := range p.Roles() {
@@ -34,7 +35,17 @@ func Markdown(reg *connections.Registry) string {
 		if r := p.Status().Reason; r != "" {
 			status += " (" + r + ")"
 		}
-		fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s | %s |\n", p.Kind(), p.Label(), p.Family(), strings.Join(roles, ", "), engine, status)
+		var bindable []string
+		for _, bd := range binders {
+			if connectors, ok := bd.Supports()[p.Kind()]; ok {
+				bindable = append(bindable, bd.EngineKind()+" ("+strings.Join(connectors, ", ")+")")
+			}
+		}
+		into := "—"
+		if len(bindable) > 0 {
+			into = strings.Join(bindable, "; ")
+		}
+		fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s | %s | %s |\n", p.Kind(), p.Label(), p.Family(), strings.Join(roles, ", "), engine, into, status)
 	}
 
 	for _, p := range reg.All() {

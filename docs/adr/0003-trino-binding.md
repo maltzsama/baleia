@@ -47,11 +47,12 @@ The Trino binder is one implementation of `bindings.Binder` ([0002](0002-connect
 Partially compliant.
 
 - Registry, placeholders and the version algorithm exist (`db/migrations/00018_trino_catalog_store.sql`,
-  `internal/trino/secret.go`, `internal/catalogs/version.go`).
+  `internal/trino/secret.go`, `internal/bindings/trino/version.go`); the Trino binder
+  (`internal/bindings/trino`, #80) is the only code that writes the registry and catalog DDL.
 - Provenance is implicit in `trino_catalog_registry.updated_by IN ('baleia','trino')`; there is no
   `managed`/`adopted` binding mode yet (#13, #80).
 - Desired, effective and observed state are not separated (#38).
-- Golden vectors are copied into `internal/catalogs/testdata/` rather than fetched from the plugin's
+- Golden vectors are copied into `internal/bindings/trino/testdata/` rather than fetched from the plugin's
   contract fixtures (#39).
 - `SecretPlaceholder` emits only the catalog-origin form; env/file references are #31.
 

@@ -3,7 +3,7 @@
 // Trino plugin, and a byte-for-byte replica of Trino's
 // FileCatalogStore.computeCatalogVersion so that the Baleia backend and the
 // plugin Java side can agree on a stable catalog_version hash.
-package catalogs
+package trino
 
 import (
 	"crypto/sha256"

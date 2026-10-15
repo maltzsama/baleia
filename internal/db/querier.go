@@ -96,6 +96,7 @@ type Querier interface {
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
 	GetTeamMemberRole(ctx context.Context, arg GetTeamMemberRoleParams) (string, error)
+	GetTrinoCatalogRegistryState(ctx context.Context, arg GetTrinoCatalogRegistryStateParams) (GetTrinoCatalogRegistryStateRow, error)
 	GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (TrinoCluster, error)
 	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (TrinoQuerySnapshot, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)

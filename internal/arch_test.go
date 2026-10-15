@@ -372,3 +372,21 @@ func TestSQLDialectsOwnLimit(t *testing.T) {
 		})
 	})
 }
+
+var catalogPropertyRe = regexp.MustCompile(`"(iceberg\.rest-catalog\.|iceberg\.catalog\.type|connection-url|connection-user|connection-password|hive\.metastore|fs\.s3\.)`)
+
+// TestProjectionOnlyInBinders: engine catalog properties are written only by
+// binders (#80); providers and handlers never spell them.
+func TestProjectionOnlyInBinders(t *testing.T) {
+	goSources(t, func(rel string, f *ast.File) {
+		if strings.HasPrefix(rel, "internal/bindings/") {
+			return
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && catalogPropertyRe.MatchString(lit.Value) {
+				t.Errorf("%s spells the catalog property %s; projections live in internal/bindings/<engine>", rel, lit.Value)
+			}
+			return true
+		})
+	})
+}

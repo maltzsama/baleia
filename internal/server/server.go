@@ -104,9 +104,9 @@ func (s *Server) routes() {
 	// identity (docs/adr/0005). Both dial through the connections dialer.
 	engines := queryengine.NewManager(s.queries, s.keyring, conns, dialer)
 	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, dialer.HTTPClient(60*time.Second))
-	catalogDDL := bindtrino.NewDDL(trinoAdmin)
+	binder := bindtrino.New(trinoAdmin, s.queries)
 
-	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, catalogDDL)
+	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
 
 	// OIDC needs cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)

@@ -179,7 +179,7 @@ func TestExplorer_TrinoErrorsAreNotReturned(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"q","error":{"message":"line 1:1: Catalog \"secret-name\" /etc/trino " broke","errorName":"X"}}`)
 	}))
 	defer failing.Close()
-	h.engines, h.catalogDDL = trinoBackends(failing.URL)
+	h.engines, h.binder = trinoBackends(failing.URL)
 	router := explorerRouter(h, ownerID, "member")
 	code, body := get(t, router, "/connections/"+conn+"/catalogs/wh/namespaces")
 	if code != 502 {
