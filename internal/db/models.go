@@ -120,6 +120,51 @@ type EngineCatalogObservation struct {
 	ObservedAt  pgtype.Timestamptz `json:"observed_at"`
 }
 
+type MetadataColumn struct {
+	TableID    pgtype.UUID `json:"table_id"`
+	Ordinal    int32       `json:"ordinal"`
+	Name       string      `json:"name"`
+	NativeType string      `json:"native_type"`
+	TypeSystem string      `json:"type_system"`
+	Nullable   *bool       `json:"nullable"`
+	Comment    *string     `json:"comment"`
+}
+
+type MetadataNamespace struct {
+	CatalogID  pgtype.UUID        `json:"catalog_id"`
+	Namespace  []string           `json:"namespace"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+	RemovedAt  pgtype.Timestamptz `json:"removed_at"`
+}
+
+type MetadataSyncRun struct {
+	ID            pgtype.UUID        `json:"id"`
+	CatalogID     pgtype.UUID        `json:"catalog_id"`
+	StartedAt     pgtype.Timestamptz `json:"started_at"`
+	FinishedAt    pgtype.Timestamptz `json:"finished_at"`
+	Status        string             `json:"status"`
+	TablesSeen    *int32             `json:"tables_seen"`
+	TablesChanged *int32             `json:"tables_changed"`
+	TablesRemoved *int32             `json:"tables_removed"`
+	ErrorCode     *string            `json:"error_code"`
+	ErrorMessage  *string            `json:"error_message"`
+	SourcePath    string             `json:"source_path"`
+}
+
+type MetadataTable struct {
+	ID            pgtype.UUID        `json:"id"`
+	CatalogID     pgtype.UUID        `json:"catalog_id"`
+	Namespace     []string           `json:"namespace"`
+	Name          string             `json:"name"`
+	Kind          string             `json:"kind"`
+	Fingerprint   string             `json:"fingerprint"`
+	Properties    []byte             `json:"properties"`
+	Comment       *string            `json:"comment"`
+	LastSeenAt    pgtype.Timestamptz `json:"last_seen_at"`
+	LastChangedAt pgtype.Timestamptz `json:"last_changed_at"`
+	RemovedAt     pgtype.Timestamptz `json:"removed_at"`
+}
+
 type Migration struct {
 	ID                        pgtype.UUID        `json:"id"`
 	CreatedBy                 pgtype.UUID        `json:"created_by"`

@@ -122,6 +122,13 @@ type MetadataQueries struct {
 	Schemas string // schema_name
 	Tables  string // table_name, table_type ('TABLE' or 'VIEW')
 	Columns string // column_name, data_type, is_nullable ('YES'/'NO'), ordinal_position
+	// Catalog reads every table of the session's catalog with its columns in
+	// one query, for the metadata sync through an engine (#15): table_schema,
+	// table_name, table_type ('TABLE' or 'VIEW'), column_name, data_type,
+	// is_nullable ('YES'/'NO'), ordinal_position, ordered by schema, table
+	// and position; a table without columns has NULL column fields. Empty
+	// when the engine has no such query.
+	Catalog string
 }
 
 // Dialect is how one engine kind spells SQL.

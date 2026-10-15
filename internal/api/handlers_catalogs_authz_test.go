@@ -483,6 +483,14 @@ func visitCode(t *testing.T, resp interface{}) int {
 	}:
 		_ = r.VisitSyncCatalogResponse(rec)
 	case interface {
+		VisitSyncCatalogMetadataResponse(http.ResponseWriter) error
+	}:
+		_ = r.VisitSyncCatalogMetadataResponse(rec)
+	case interface {
+		VisitListCatalogMetadataSyncRunsResponse(http.ResponseWriter) error
+	}:
+		_ = r.VisitListCatalogMetadataSyncRunsResponse(rec)
+	case interface {
 		VisitDeleteCatalogResponse(http.ResponseWriter) error
 	}:
 		_ = r.VisitDeleteCatalogResponse(rec)

@@ -42,6 +42,12 @@ func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
 func (*Provider) EngineKind() string { return "sqlserver" }
+
+// WalksCatalogs: the reader reads a whole catalog in one query (#15).
+func (*Provider) WalksCatalogs() bool { return true }
+
+var _ connections.CatalogWalker = (*reader)(nil)
+
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }
@@ -303,6 +309,62 @@ func notFoundOr(err error) error {
 		return fmt.Errorf("%w: %s", connections.ErrNotFound, me.Message)
 	}
 	return err
+}
+
+// WalkCatalog reads every table and view of a database with its columns in
+// one query.
+func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(connections.TableMeta) error) error {
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	// Column comments are MS_Description extended properties.
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT t.TABLE_SCHEMA, t.TABLE_NAME, t.TABLE_TYPE,
+		       COALESCE(c.COLUMN_NAME, ''),
+		       COALESCE(c.DATA_TYPE + CASE
+		           WHEN c.CHARACTER_MAXIMUM_LENGTH = -1 THEN '(max)'
+		           WHEN c.CHARACTER_MAXIMUM_LENGTH IS NOT NULL THEN '(' + CAST(c.CHARACTER_MAXIMUM_LENGTH AS varchar(10)) + ')'
+		           WHEN c.DATA_TYPE IN ('decimal', 'numeric') THEN '(' + CAST(c.NUMERIC_PRECISION AS varchar(3)) + ',' + CAST(c.NUMERIC_SCALE AS varchar(3)) + ')'
+		           ELSE '' END, ''),
+		       CASE WHEN c.IS_NULLABLE = 'NO' THEN 0 ELSE 1 END,
+		       COALESCE(CAST(ep.value AS nvarchar(4000)), ''),
+		       COALESCE(c.ORDINAL_POSITION, 0)
+		FROM %[1]s.INFORMATION_SCHEMA.TABLES t
+		LEFT JOIN %[1]s.INFORMATION_SCHEMA.COLUMNS c
+		       ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
+		LEFT JOIN %[1]s.sys.columns sc
+		       ON sc.object_id = OBJECT_ID(QUOTENAME(@p1) + '.' + QUOTENAME(t.TABLE_SCHEMA) + '.' + QUOTENAME(t.TABLE_NAME))
+		      AND sc.name = c.COLUMN_NAME
+		LEFT JOIN %[1]s.sys.extended_properties ep
+		       ON ep.class = 1 AND ep.name = 'MS_Description' AND ep.major_id = sc.object_id AND ep.minor_id = sc.column_id
+		WHERE t.TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest') AND t.TABLE_SCHEMA NOT LIKE 'db[_]%%'
+		ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME, c.ORDINAL_POSITION`, quoteIdent(catalog)), catalog)
+	if err != nil {
+		return notFoundOr(err)
+	}
+	defer rows.Close()
+	g := connections.NewTableGrouper(catalog, visit)
+	for rows.Next() {
+		var schema, typ string
+		var nullable int
+		var row connections.CatalogRow
+		if err := rows.Scan(&schema, &row.Table, &typ, &row.Column.Name, &row.Column.NativeType,
+			&nullable, &row.Column.Comment, &row.Column.Position); err != nil {
+			return err
+		}
+		row.Namespace = connections.Namespace{schema}
+		row.Column.Nullable = nullable == 1
+		row.Type, row.Format = "TABLE", "sqlserver"
+		if typ == "VIEW" {
+			row.Type = "VIEW"
+		}
+		if err := g.Add(row); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return g.Flush()
 }
 
 func (r *reader) Close() error { return r.db.Close() }

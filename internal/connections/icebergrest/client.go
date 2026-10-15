@@ -121,9 +121,16 @@ func (c *Client) bearer(ctx context.Context) (string, error) {
 
 // Get sends an authenticated GET to base+path and decodes the JSON answer.
 func (c *Client) Get(ctx context.Context, op, path string, query url.Values, out any) error {
+	_, _, err := c.get(ctx, op, path, query, nil, out)
+	return err
+}
+
+// get is Get with extra request headers; it returns the answer's status and
+// headers. A 304 Not Modified is not an error and decodes nothing.
+func (c *Client) get(ctx context.Context, op, path string, query url.Values, extra http.Header, out any) (int, http.Header, error) {
 	tok, err := c.bearer(ctx)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	u := c.base + path
 	if len(query) > 0 {
@@ -131,7 +138,7 @@ func (c *Client) Get(ctx context.Context, op, path string, query url.Values, out
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	req.Header.Set("Accept", "application/json")
 	if tok != "" {
@@ -140,25 +147,31 @@ func (c *Client) Get(ctx context.Context, op, path string, query url.Values, out
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
+	for k, v := range extra {
+		req.Header[k] = v
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("%w: %s", connections.ErrNotFound, op)
+		return resp.StatusCode, resp.Header, fmt.Errorf("%w: %s", connections.ErrNotFound, op)
+	}
+	if resp.StatusCode == http.StatusNotModified {
+		return resp.StatusCode, resp.Header, nil
 	}
 	if resp.StatusCode >= 300 {
-		return &StatusError{Op: op, Status: resp.StatusCode}
+		return resp.StatusCode, resp.Header, &StatusError{Op: op, Status: resp.StatusCode}
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
-		return nil
+		return resp.StatusCode, resp.Header, nil
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("iceberg rest %s: decode: %w", op, err)
+		return resp.StatusCode, resp.Header, fmt.Errorf("iceberg rest %s: decode: %w", op, err)
 	}
-	return nil
+	return resp.StatusCode, resp.Header, nil
 }
 
 // Config calls /v1/config for a warehouse ("" = server default) and returns
@@ -334,25 +347,46 @@ type tableMetadata struct {
 }
 
 func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connections.TableMeta, error) {
-	root, err := r.c.root(ctx, r.warehouseOf(t.Catalog))
-	if err != nil {
-		return nil, err
-	}
-	var out struct {
-		Metadata tableMetadata `json:"metadata"`
-	}
-	path := root + "/namespaces/" + encodeNamespace(t.Namespace) + "/tables/" + url.PathEscape(t.Name)
-	if err := r.c.Get(ctx, "load table", path, nil, &out); err != nil {
-		return nil, err
-	}
-	return toTableMeta(t, out.Metadata), nil
+	meta, _, err := r.LoadTableIfChanged(ctx, t, "")
+	return meta, err
 }
 
-func toTableMeta(t connections.TableRef, m tableMetadata) *connections.TableMeta {
+// LoadTableIfChanged sends If-None-Match with etag: a server that keeps the
+// table's ETag (Polaris) answers 304 for an unchanged table, which loads
+// nothing. Servers without ETags always answer with the table.
+func (r *reader) LoadTableIfChanged(ctx context.Context, t connections.TableRef, etag string) (*connections.TableMeta, string, error) {
+	root, err := r.c.root(ctx, r.warehouseOf(t.Catalog))
+	if err != nil {
+		return nil, "", err
+	}
+	var out struct {
+		MetadataLocation string        `json:"metadata-location"`
+		Metadata         tableMetadata `json:"metadata"`
+	}
+	var extra http.Header
+	if etag != "" {
+		extra = http.Header{"If-None-Match": {etag}}
+	}
+	path := root + "/namespaces/" + encodeNamespace(t.Namespace) + "/tables/" + url.PathEscape(t.Name)
+	status, hdr, err := r.c.get(ctx, "load table", path, nil, extra, &out)
+	if err != nil {
+		return nil, "", err
+	}
+	if status == http.StatusNotModified {
+		return nil, etag, nil
+	}
+	return toTableMeta(t, out.MetadataLocation, out.Metadata), hdr.Get("ETag"), nil
+}
+
+func toTableMeta(t connections.TableRef, metadataLocation string, m tableMetadata) *connections.TableMeta {
 	meta := &connections.TableMeta{
-		Ref:        t,
-		Format:     "iceberg",
-		Properties: map[string]string{"location": m.Location, "table_uuid": m.TableUUID, "format_version": fmt.Sprint(m.FormatVersion)},
+		Ref:    t,
+		Format: "iceberg",
+		Properties: map[string]string{
+			"location": m.Location, "table_uuid": m.TableUUID, "format_version": fmt.Sprint(m.FormatVersion),
+			// It changes on every commit: the metadata sync's change detector.
+			"metadata_location": metadataLocation,
+		},
 	}
 	if meta.Ref.Type == "" {
 		meta.Ref.Type = "TABLE"
@@ -387,20 +421,42 @@ func toTableMeta(t connections.TableRef, m tableMetadata) *connections.TableMeta
 	return meta
 }
 
-// typeName renders an Iceberg type: primitives are strings, nested types are
-// objects whose "type" is struct, list or map.
+// typeName renders an Iceberg type. Primitives are JSON strings; nested
+// types are objects rendered as list<T>, map<K, V> and
+// struct<name: T, ...> (what internal/metadata/typemap parses).
 func typeName(raw json.RawMessage) string {
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
 		return s
 	}
 	var obj struct {
-		Type string `json:"type"`
+		Type    string          `json:"type"`
+		Element json.RawMessage `json:"element"`
+		Key     json.RawMessage `json:"key"`
+		Value   json.RawMessage `json:"value"`
+		Fields  []struct {
+			Name string          `json:"name"`
+			Type json.RawMessage `json:"type"`
+		} `json:"fields"`
 	}
-	if json.Unmarshal(raw, &obj) == nil && obj.Type != "" {
-		return obj.Type
+	if json.Unmarshal(raw, &obj) != nil {
+		return string(raw)
 	}
-	return string(raw)
+	switch obj.Type {
+	case "list":
+		return "list<" + typeName(obj.Element) + ">"
+	case "map":
+		return "map<" + typeName(obj.Key) + ", " + typeName(obj.Value) + ">"
+	case "struct":
+		parts := make([]string, len(obj.Fields))
+		for i, f := range obj.Fields {
+			parts[i] = f.Name + ": " + typeName(f.Type)
+		}
+		return "struct<" + strings.Join(parts, ", ") + ">"
+	case "":
+		return string(raw)
+	}
+	return obj.Type
 }
 
 func (r *reader) Close() error { return nil }

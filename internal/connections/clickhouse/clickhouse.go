@@ -43,6 +43,12 @@ func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
 func (*Provider) EngineKind() string { return "clickhouse" }
+
+// WalksCatalogs: the reader reads a whole catalog in one query (#15).
+func (*Provider) WalksCatalogs() bool { return true }
+
+var _ connections.CatalogWalker = (*reader)(nil)
+
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }
@@ -119,11 +125,49 @@ func (e *HTTPError) Error() string {
 
 // query runs a read-only statement and decodes FORMAT JSONCompact rows.
 func (c *client) query(ctx context.Context, sql string, params map[string]string) ([][]json.RawMessage, error) {
+	resp, err := c.post(ctx, sql, params, "JSONCompact", statementTimeout)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Data [][]json.RawMessage `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("clickhouse decode: %w", err)
+	}
+	return out.Data, nil
+}
+
+// stream runs a read-only statement and hands each row to fn as it arrives
+// (FORMAT JSONCompactEachRow), so a large answer is never held in memory.
+func (c *client) stream(ctx context.Context, sql string, params map[string]string, timeout time.Duration, fn func([]json.RawMessage) error) error {
+	resp, err := c.post(ctx, sql, params, "JSONCompactEachRow", timeout)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	dec := json.NewDecoder(resp.Body)
+	for {
+		var row []json.RawMessage
+		if err := dec.Decode(&row); err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("clickhouse decode: %w", err)
+		}
+		if err := fn(row); err != nil {
+			return err
+		}
+	}
+}
+
+// post sends a read-only statement; the caller closes the body of an OK answer.
+func (c *client) post(ctx context.Context, sql string, params map[string]string, format string, timeout time.Duration) (*http.Response, error) {
 	q := url.Values{}
 	q.Set("database", c.database)
 	q.Set("readonly", "1")
-	q.Set("max_execution_time", strconv.Itoa(int(statementTimeout.Seconds())))
-	q.Set("default_format", "JSONCompact")
+	q.Set("max_execution_time", strconv.Itoa(int(timeout.Seconds())))
+	q.Set("default_format", format)
 	for k, v := range params {
 		q.Set("param_"+k, v)
 	}
@@ -137,8 +181,8 @@ func (c *client) query(ctx context.Context, sql string, params map[string]string
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
 		_, _ = io.Copy(io.Discard, resp.Body)
 		code, _ := strconv.Atoi(resp.Header.Get("X-ClickHouse-Exception-Code"))
 		if code == 81 || code == 60 { // UNKNOWN_DATABASE, UNKNOWN_TABLE
@@ -146,13 +190,7 @@ func (c *client) query(ctx context.Context, sql string, params map[string]string
 		}
 		return nil, &HTTPError{Status: resp.StatusCode, Code: code}
 	}
-	var out struct {
-		Data [][]json.RawMessage `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("clickhouse decode: %w", err)
-	}
-	return out.Data, nil
+	return resp, nil
 }
 
 func str(v json.RawMessage) string {
@@ -286,6 +324,48 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 		Ref: ref, Columns: cols, Comment: str(tables[0][1]),
 		Format: strings.ToLower(engine), Properties: map[string]string{"engine": engine},
 	}, nil
+}
+
+// WalkCatalog reads every table of the server with its columns in one
+// streamed query.
+func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(connections.TableMeta) error) error {
+	if err := checkCatalog(catalog); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	g := connections.NewTableGrouper(catalog, visit)
+	err := r.c.stream(ctx, `
+		SELECT t.database, t.name, t.engine, t.comment, c.name, c.type, c.comment, c.position
+		FROM system.tables t
+		LEFT JOIN system.columns c ON c.database = t.database AND c.table = t.name
+		WHERE t.database NOT IN ({s1:String}, {s2:String}, {s3:String}) AND NOT t.is_temporary
+		ORDER BY t.database, t.name, c.position`,
+		map[string]string{"s1": systemDatabases[0], "s2": systemDatabases[1], "s3": systemDatabases[2]},
+		connections.WalkTimeout,
+		func(row []json.RawMessage) error {
+			engine, typ := str(row[2]), str(row[5])
+			pos, _ := strconv.Atoi(str(row[7]))
+			r := connections.CatalogRow{
+				Namespace: connections.Namespace{str(row[0])}, Table: str(row[1]), Comment: str(row[3]),
+				Type: "TABLE", Format: strings.ToLower(engine), Properties: map[string]string{"engine": engine},
+				Column: connections.Column{
+					Name: str(row[4]), NativeType: typ, Comment: str(row[6]), Position: pos,
+					Nullable: strings.HasPrefix(typ, "Nullable("),
+				},
+			}
+			switch engine {
+			case "View":
+				r.Type = "VIEW"
+			case "MaterializedView":
+				r.Type = "MATERIALIZED_VIEW"
+			}
+			return g.Add(r)
+		})
+	if err != nil {
+		return err
+	}
+	return g.Flush()
 }
 
 func (r *reader) Close() error { return nil }

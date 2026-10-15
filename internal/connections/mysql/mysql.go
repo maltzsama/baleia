@@ -76,6 +76,12 @@ func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
 func (p *Provider) EngineKind() string { return string(p.Kind()) }
+
+// WalksCatalogs: the reader reads a whole catalog in one query (#15).
+func (*Provider) WalksCatalogs() bool { return true }
+
+var _ connections.CatalogWalker = (*reader)(nil)
+
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }
@@ -298,6 +304,50 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 		Format:     format,
 		Properties: map[string]string{"engine": engine.String},
 	}, nil
+}
+
+// WalkCatalog reads every table and view of the server with its columns in
+// one query.
+func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(connections.TableMeta) error) error {
+	if err := checkCatalog(catalog); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	// The hint lifts the session's max_execution_time for this read (MySQL;
+	// MariaDB reads it as a comment).
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT /*+ MAX_EXECUTION_TIME(%d) */ t.TABLE_SCHEMA, t.TABLE_NAME, t.TABLE_TYPE, COALESCE(t.ENGINE, ''), COALESCE(t.TABLE_COMMENT, ''),
+		       COALESCE(c.COLUMN_NAME, ''), COALESCE(c.COLUMN_TYPE, ''), COALESCE(c.IS_NULLABLE = 'YES', 1),
+		       COALESCE(c.COLUMN_COMMENT, ''), COALESCE(c.ORDINAL_POSITION, 0)
+		FROM information_schema.TABLES t
+		LEFT JOIN information_schema.COLUMNS c ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
+		WHERE t.TABLE_SCHEMA NOT IN (?, ?, ?, ?)
+		ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME, c.ORDINAL_POSITION`, connections.WalkTimeout.Milliseconds()),
+		systemSchemas[0], systemSchemas[1], systemSchemas[2], systemSchemas[3])
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	g := connections.NewTableGrouper(catalog, visit)
+	for rows.Next() {
+		var schema, typ, engine string
+		var row connections.CatalogRow
+		if err := rows.Scan(&schema, &row.Table, &typ, &engine, &row.Comment,
+			&row.Column.Name, &row.Column.NativeType, &row.Column.Nullable, &row.Column.Comment, &row.Column.Position); err != nil {
+			return err
+		}
+		row.Namespace = connections.Namespace{schema}
+		row.Type, row.Format = tableTypes[typ], strings.ToLower(engine)
+		row.Properties = map[string]string{"engine": engine}
+		if err := g.Add(row); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return g.Flush()
 }
 
 func (r *reader) Close() error { return r.db.Close() }

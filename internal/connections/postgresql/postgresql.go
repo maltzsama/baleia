@@ -36,6 +36,12 @@ func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
 func (*Provider) EngineKind() string { return "postgresql" }
+
+// WalksCatalogs: the reader reads a whole catalog in one query (#15).
+func (*Provider) WalksCatalogs() bool { return true }
+
+var _ connections.CatalogWalker = (*reader)(nil)
+
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }
@@ -300,6 +306,58 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 		Format:     "postgresql",
 		Properties: map[string]string{"relkind": kind},
 	}, nil
+}
+
+// WalkCatalog reads every table and view of a database with its columns in
+// one query, in a read-only transaction with a longer statement timeout.
+func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(connections.TableMeta) error) error {
+	c, err := r.conn(ctx, catalog)
+	if err != nil {
+		return err
+	}
+	tx, err := c.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL statement_timeout = %d", connections.WalkTimeout.Milliseconds())); err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT n.nspname, c.relname, c.relkind::text, coalesce(obj_description(c.oid, 'pg_class'), ''),
+		       coalesce(a.attname, ''), coalesce(format_type(a.atttypid, a.atttypmod), ''), coalesce(NOT a.attnotnull, true),
+		       coalesce(col_description(a.attrelid, a.attnum), ''), coalesce(a.attnum::int, 0)
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+		WHERE c.relkind IN ('r', 'p', 'f', 'v', 'm') AND NOT c.relispartition
+		  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+		  AND n.nspname NOT LIKE 'pg\_toast%' AND n.nspname NOT LIKE 'pg\_temp\_%'
+		  AND has_schema_privilege(n.oid, 'USAGE')
+		ORDER BY n.nspname, c.relname, a.attnum`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	g := connections.NewTableGrouper(catalog, visit)
+	for rows.Next() {
+		var schema, kind string
+		var row connections.CatalogRow
+		if err := rows.Scan(&schema, &row.Table, &kind, &row.Comment,
+			&row.Column.Name, &row.Column.NativeType, &row.Column.Nullable, &row.Column.Comment, &row.Column.Position); err != nil {
+			return err
+		}
+		row.Namespace = connections.Namespace{schema}
+		row.Type, row.Format = relTypes[kind], "postgresql"
+		row.Properties = map[string]string{"relkind": kind}
+		if err := g.Add(row); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return g.Flush()
 }
 
 func (r *reader) Close() error {

@@ -295,6 +295,28 @@ func runDialect(t *testing.T, name string, fx fixture) {
 		if err != nil || len(cols) == 0 {
 			t.Errorf("columns: %v, %v", cols, err)
 		}
+		if m.Catalog != "" {
+			all, err := fx.run(ctx, m.Catalog)
+			if err != nil {
+				t.Fatalf("catalog: %v", err)
+			}
+			n := 0
+			for _, r := range all {
+				if len(r) != 7 {
+					t.Fatalf("catalog query row %v: want 7 fields", r)
+				}
+				if strings.EqualFold(text(r[0]), "information_schema") {
+					t.Errorf("catalog query lists information_schema: %v", r)
+				}
+				if strings.EqualFold(text(r[0]), fx.schema) && strings.EqualFold(text(r[1]), fx.table) {
+					n++
+				}
+			}
+			// The catalog query leaves information_schema out on purpose.
+			if !strings.EqualFold(fx.schema, "information_schema") && n != len(cols) {
+				t.Errorf("catalog query lists %d columns of %s.%s, the columns query %d", n, fx.schema, fx.table, len(cols))
+			}
+		}
 	})
 }
 

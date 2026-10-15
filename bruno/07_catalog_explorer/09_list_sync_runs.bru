@@ -1,0 +1,38 @@
+meta {
+  name: List Metadata Sync Runs
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/catalogs/{{explorer_catalog_id}}/metadata/sync-runs?limit=5
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+script:pre-request {
+  // The pass runs on the worker: wait (up to 60s) until it ends.
+  const axios = require("axios");
+  const url = bru.getEnvVar("base_url") + "/catalogs/" + bru.getVar("explorer_catalog_id") + "/metadata/sync-runs?limit=1";
+  const headers = { Authorization: "Bearer " + bru.getVar("token") };
+  for (let i = 0; i < 60; i++) {
+    const r = await axios.get(url, { headers });
+    if (r.data.length > 0 && r.data[0].status !== "running") break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].status: eq finished
+  res.body[0].source_path: eq provider
+}
+
+docs {
+  Latest passes, newest first, with tables seen/changed/removed and, for a
+  failed pass, an `error_code` only (never the source's message).
+}

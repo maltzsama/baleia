@@ -82,6 +82,27 @@ A metric is registered only where something produces it. The metadata-sync metri
 (`baleia_metadata_*`) arrive with #17, and binding reconciliation
 (`baleia_catalog_reconcile_actions_total`) with #37.
 
+## Metadata snapshots
+
+The explorer, autocomplete and search read stored metadata (namespaces, tables, columns), not live
+`SHOW`/`DESCRIBE` calls. A pass of a catalog (`MetadataSyncWorkflow`, workflow id
+`metadata-sync-<catalog id>`) stores what the catalog's source reports:
+
+- **Iceberg catalog managers** (Polaris, Nessie, Iceberg REST): namespaces recursively, then each
+  table. The fingerprint is the table's `metadata-location`; Polaris answers an unchanged table
+  with `304` to the stored ETag, so a pass over an unchanged catalog loads no table.
+- **Databases** (PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, SQLite, ClickHouse): one query per
+  catalog for every table and column. The fingerprint is an md5 of the columns.
+- **Through an engine** (catalogs adopted from Trino, Flight SQL, kinds Baleia cannot read
+  directly): the dialect's one-query catalog listing, in a read-only session as the engine's
+  service identity, through the catalog's first active binding.
+
+Tables a pass does not see are tombstoned (`removed_at`) and purged after 7 days. One pass per
+catalog runs at a time (an advisory lock, and the workflow id). `GET
+/catalogs/{id}/metadata/sync-runs` lists the latest passes with an `error_code` when one failed;
+the source's own message is in `metadata_sync_runs.error_message` and the worker's log. A pass left
+`running` by a crashed worker is failed with `interrupted` by the next pass of the catalog.
+
 ## Runbooks
 
 ### BaleiaAPIDown

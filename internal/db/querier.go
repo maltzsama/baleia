@@ -61,6 +61,7 @@ type Querier interface {
 	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
 	DeleteEngine(ctx context.Context, id pgtype.UUID) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
+	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
 	// The native catalogs of an engine, deleted with it (their bindings cascade).
 	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error
@@ -74,6 +75,10 @@ type Querier interface {
 	// True when the engine has a binding of a catalog granted to a workspace the
 	// user belongs to.
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)
+	// A run left running by a crashed worker ends failed when the next pass of
+	// the same catalog starts (that pass holds the catalog sync lock).
+	FailStaleMetadataSyncRuns(ctx context.Context, catalogID pgtype.UUID) error
+	FinishMetadataSyncRun(ctx context.Context, arg FinishMetadataSyncRunParams) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
@@ -85,6 +90,9 @@ type Querier interface {
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error)
 	GetCatalogByTrinoName(ctx context.Context, arg GetCatalogByTrinoNameParams) (Catalog, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)
+	// A catalog with what the sync needs to pick its source: the connection
+	// kind and the reference inside it (warehouse, database).
+	GetCatalogForSync(ctx context.Context, id pgtype.UUID) (GetCatalogForSyncRow, error)
 	GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, error)
 	// The engine linked to the 'default' Trino cluster, with its connection.
 	GetDefaultTrinoEngine(ctx context.Context) (GetDefaultTrinoEngineRow, error)
@@ -107,6 +115,8 @@ type Querier interface {
 	// have (and must not trust) a caller-supplied workspace id.
 	GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
+	// What the last passes stored, so a source can skip loading unchanged tables.
+	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
 	GetTeamMemberRole(ctx context.Context, arg GetTeamMemberRoleParams) (string, error)
@@ -122,6 +132,7 @@ type Querier interface {
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
 	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
+	InsertMetadataColumns(ctx context.Context, arg InsertMetadataColumnsParams) error
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
@@ -145,6 +156,7 @@ type Querier interface {
 	// hosting a catalog granted to one of their workspaces.
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
+	ListMetadataSyncRuns(ctx context.Context, arg ListMetadataSyncRunsParams) ([]ListMetadataSyncRunsRow, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
@@ -158,6 +170,10 @@ type Querier interface {
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
 	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]ListRunningStatementHandlesRow, error)
 	ListSavedQueries(ctx context.Context, arg ListSavedQueriesParams) ([]SavedQuery, error)
+	// The catalog enabled bindings on enabled engines, oldest first: the
+	// engine path introspects through the first one (a native catalog has only
+	// its native binding).
+	ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) ([]ListSyncBindingsRow, error)
 	ListTableHealthByConnection(ctx context.Context, arg ListTableHealthByConnectionParams) ([]TableHealthSnapshot, error)
 	ListTableHealthSnapshots(ctx context.Context, arg ListTableHealthSnapshotsParams) ([]TableHealthSnapshot, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
@@ -184,6 +200,11 @@ type Querier interface {
 	// binding owns them any more (an old name that failed to drop): they stay
 	// managed, never adopted, for the reconciler (#37) to drop.
 	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
+	// Tombstones older than 7 days go: the explorer shows "removed" for a while,
+	// history does not grow forever.
+	PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtype.UUID) error
+	ReleaseMetadataSyncLock(ctx context.Context, catalogID string) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
@@ -200,12 +221,22 @@ type Querier interface {
 	// skipped.
 	SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error
 	SoftDeleteTrinoCatalogRegistry(ctx context.Context, arg SoftDeleteTrinoCatalogRegistryParams) error
+	StartMetadataSyncRun(ctx context.Context, arg StartMetadataSyncRunParams) (StartMetadataSyncRunRow, error)
 	// A pending statement becomes the running one. Zero rows means the
 	// statement is no longer pending (already abandoned).
 	StartQueryStatement(ctx context.Context, arg StartQueryStatementParams) (int64, error)
+	TombstoneMissingNamespaces(ctx context.Context, arg TombstoneMissingNamespacesParams) error
+	// Tables the pass did not see were removed at the source.
+	TombstoneMissingTables(ctx context.Context, arg TombstoneMissingTablesParams) (int64, error)
+	// A table the source reported unchanged (same fingerprint, columns not
+	// loaded): it is still there.
+	TouchMetadataTable(ctx context.Context, arg TouchMetadataTableParams) (int64, error)
 	// Moves a binding between lifecycle states, guarded by the expected ones; no
 	// row means a concurrent change (#38).
 	TransitionBinding(ctx context.Context, arg TransitionBindingParams) (CatalogBinding, error)
+	// One sync per catalog at a time; a session-level lock released by
+	// ReleaseMetadataSyncLock on the same connection.
+	TryMetadataSyncLock(ctx context.Context, catalogID string) (bool, error)
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
 	// Writes the desired state and enters lifecycle_state, guarded by the states
 	// a change may start from; no row means a concurrent change.
@@ -247,6 +278,11 @@ type Querier interface {
 	// The managed binding of a catalog on an engine (one per pair), entering
 	// lifecycle_state with the projection version it wants (#38).
 	UpsertManagedBinding(ctx context.Context, arg UpsertManagedBindingParams) (CatalogBinding, error)
+	UpsertMetadataNamespace(ctx context.Context, arg UpsertMetadataNamespaceParams) error
+	// Records a table seen by the pass. changed is true when the table is new,
+	// came back from a tombstone or has a new fingerprint: its columns must be
+	// replaced.
+	UpsertMetadataTable(ctx context.Context, arg UpsertMetadataTableParams) (UpsertMetadataTableRow, error)
 	UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindingParams) (CatalogBinding, error)
 	// A catalog found inside an engine, owned by the engine's connection.
 	UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatalogParams) (Catalog, error)

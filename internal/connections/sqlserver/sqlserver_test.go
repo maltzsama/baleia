@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/conntest"
 	_ "github.com/microsoft/go-mssqldb"
 )
 
@@ -103,6 +104,8 @@ func TestMetadataReader_sqlserver(t *testing.T) {
 		meta.Columns[2].NativeType != "nvarchar(200)" || meta.Columns[2].Comment != "free text" {
 		t.Errorf("columns = %+v", meta.Columns)
 	}
+	conntest.CheckWalk(t, r, "baleia_fixture", tables...)
+
 	if _, err := r.LoadTable(ctx, connections.TableRef{Catalog: "baleia_fixture", Namespace: connections.Namespace{"sales"}, Name: "nope"}); !errors.Is(err, connections.ErrNotFound) {
 		t.Errorf("missing table: %v", err)
 	}

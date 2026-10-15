@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/conntest"
 	goora "github.com/sijms/go-ora/v2"
 )
 
@@ -104,6 +105,8 @@ func TestMetadataReader_oracle(t *testing.T) {
 		meta.Columns[1].NativeType != "NUMBER(12,2)" || meta.Columns[2].NativeType != "VARCHAR2(200)" || meta.Columns[2].Comment != "free text" {
 		t.Errorf("meta = %+v", meta)
 	}
+	conntest.CheckWalk(t, r, service, tables...)
+
 	if _, err := r.LoadTable(ctx, connections.TableRef{Catalog: service, Namespace: connections.Namespace{owner}, Name: "NOPE"}); !errors.Is(err, connections.ErrNotFound) {
 		t.Errorf("missing table: %v", err)
 	}

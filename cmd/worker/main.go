@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/galileostudio/baleia/internal/dbpool"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/metadata"
+	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/temporal/dial"
 
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
@@ -19,6 +21,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
+
 	// Engine kinds register themselves.
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
@@ -113,6 +116,7 @@ func main() {
 
 	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor)
 	act.SetMetrics(reg)
+	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(db.New(pool), keyring, conns, engines)))
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV2)
@@ -122,6 +126,7 @@ func main() {
 	w.RegisterWorkflow(workflows.LensMaintenanceWorkflow)
 	w.RegisterWorkflow(workflows.RetrieverDispatchWorkflow)
 	w.RegisterWorkflow(workflows.RetrieverRefreshWorkflow)
+	w.RegisterWorkflow(workflows.MetadataSyncWorkflow)
 
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every

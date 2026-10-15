@@ -46,6 +46,8 @@ type Activities struct {
 	keyring *crypto.Keyring
 	// connections reads metadata from catalog managers (table health).
 	connections *connections.Registry
+	// metadata stores catalog metadata snapshots (#15).
+	metadata metadataSyncer
 }
 
 // s3Client is the slice of the storage client result streaming needs. It is an
@@ -92,6 +94,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(RetrieverRefresh)
 	w.RegisterActivity(RetrieverDispatch)
 	w.RegisterActivity(AdvanceRetrieverSchedule)
+	w.RegisterActivity(SyncCatalogMetadata)
 }
 
 type SplitSQLParams struct {

@@ -1,0 +1,27 @@
+meta {
+  name: Sync Catalog Metadata
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/catalogs/{{explorer_catalog_id}}/metadata/sync
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 202
+  res.body.workflow_id: eq metadata-sync-{{explorer_catalog_id}}
+}
+
+docs {
+  Starts one metadata pass of the catalog on the worker (#15): namespaces,
+  tables and columns are read from the catalog's own source (here Polaris)
+  and stored once per catalog. 409 `sync_in_progress` while a pass of the
+  same catalog runs. Owner of the connection or admin only.
+}
