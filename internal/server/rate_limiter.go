@@ -93,7 +93,8 @@ func (rl *RateLimiter) cleanup(interval time.Duration) {
 	}
 }
 
-func RateLimitRefreshMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
+// onRefreshLimited, when set, observes refresh attempts the limiter refused.
+func RateLimitRefreshMiddleware(rl *RateLimiter, onRefreshLimited func()) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			limited := r.URL.Path == "/api/v1/auth/refresh" ||
@@ -111,6 +112,9 @@ func RateLimitRefreshMiddleware(rl *RateLimiter) func(http.Handler) http.Handler
 			}
 
 			if !rl.Allow(ip) {
+				if onRefreshLimited != nil && r.URL.Path == "/api/v1/auth/refresh" {
+					onRefreshLimited()
+				}
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
 				w.Write([]byte(`{"code":"rate_limited","message":"too many refresh requests"}`))

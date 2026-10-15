@@ -31,7 +31,13 @@ import (
 // CREATE/DROP CATALOG surfaces as a sync error instead of blocking the request.
 var catalogDDLTimeout = 30 * time.Second
 
-func (h *Handlers) authz() *authz.Checker { return authz.New(h.queries) }
+func (h *Handlers) authz() *authz.Checker {
+	c := authz.New(h.queries)
+	if h.metrics.authz != nil {
+		c.WithDenials(h.metrics.authz.Denied)
+	}
+	return c
+}
 
 // ListCatalogs — GET /connections/{connection_id}/catalogs
 func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error) {

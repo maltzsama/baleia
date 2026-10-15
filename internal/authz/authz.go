@@ -75,15 +75,39 @@ type Store interface {
 }
 
 // Checker evaluates the rules against a Store.
-type Checker struct{ q Store }
+type Checker struct {
+	q      Store
+	denied func(resource, reason string)
+}
 
 // New returns a Checker reading from q.
 func New(q Store) *Checker { return &Checker{q: q} }
 
+// WithDenials reports every refusal as (resource, "not_found" | "forbidden"),
+// e.g. to metrics.Authz (#87). It returns c.
+func (c *Checker) WithDenials(fn func(resource, reason string)) *Checker {
+	c.denied = fn
+	return c
+}
+
+// observe reports a refusal through the denial hook.
+func (c *Checker) observe(resource string, err *error) {
+	if c.denied == nil || *err == nil {
+		return
+	}
+	switch {
+	case errors.Is(*err, ErrNotFound):
+		c.denied(resource, "not_found")
+	case errors.Is(*err, ErrForbidden):
+		c.denied(resource, "forbidden")
+	}
+}
+
 // Connection loads the connection and checks the caller may perform act on it.
 // Today every action requires being the connection's owner or a global admin;
 // a missing created_by never matches an owner. Anyone else gets ErrNotFound.
-func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUID, act Action) (db.CatalogConnection, error) {
+func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUID, act Action) (_ db.CatalogConnection, err error) {
+	defer c.observe("connection", &err)
 	conn, err := c.q.GetCatalogConnectionByID(ctx, connID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -103,7 +127,8 @@ func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUI
 // The connection owner and a global admin may do anything. A member of a
 // workspace the catalog is granted to may read it (ErrForbidden for anything
 // else, since they can already see it). Everyone else gets ErrNotFound.
-func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUID, act Action) (db.Catalog, db.CatalogConnection, error) {
+func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUID, act Action) (_ db.Catalog, _ db.CatalogConnection, err error) {
+	defer c.observe("catalog", &err)
 	cat, err := c.q.GetCatalogByID(ctx, catalogID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -138,7 +163,8 @@ func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUI
 // the owner of the engine's connection and a global admin may do anything; a
 // member of a workspace granted a catalog the engine hosts may read it
 // (ErrForbidden for anything else); everyone else gets ErrNotFound.
-func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID, act Action) (db.Engine, db.CatalogConnection, error) {
+func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID, act Action) (_ db.Engine, _ db.CatalogConnection, err error) {
+	defer c.observe("engine", &err)
 	eng, err := c.q.GetEngineByID(ctx, engineID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -179,7 +205,9 @@ func (c *Checker) CatalogOfConnection(ctx context.Context, p Principal, connID, 
 		return db.Catalog{}, db.CatalogConnection{}, err
 	}
 	if cat.ConnectionID.Bytes != connID.Bytes {
-		return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
+		err := ErrNotFound
+		c.observe("catalog", &err) // Catalog itself allowed it
+		return db.Catalog{}, db.CatalogConnection{}, err
 	}
 	return cat, conn, nil
 }
@@ -188,7 +216,8 @@ func (c *Checker) CatalogOfConnection(ctx context.Context, p Principal, connID, 
 // do anything; a member may read; changing it needs its owner (the user of a
 // personal workspace, an owner of the team of a shared one). A non-member gets
 // ErrNotFound, a member who is not an owner gets ErrForbidden.
-func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, act Action) (db.Workspace, error) {
+func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, act Action) (_ db.Workspace, err error) {
+	defer c.observe("workspace", &err)
 	ws, err := c.q.GetWorkspaceByID(ctx, wsID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -222,7 +251,8 @@ func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, 
 // Team loads the team and checks the caller on it. A global admin may do
 // anything; a member may read; changing it needs a team owner. A non-member
 // gets ErrNotFound, a member who is not an owner gets ErrForbidden.
-func (c *Checker) Team(ctx context.Context, p Principal, teamID pgtype.UUID, act Action) (db.Team, error) {
+func (c *Checker) Team(ctx context.Context, p Principal, teamID pgtype.UUID, act Action) (_ db.Team, err error) {
+	defer c.observe("team", &err)
 	team, err := c.q.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

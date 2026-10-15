@@ -22,6 +22,7 @@ func (h *Handlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bindings.
 		Engine:       bindings.EngineRef{ID: eng.ID, ClusterID: cluster.ID},
 		ConnectionID: eng.ConnectionID,
 		DDLTimeout:   catalogDDLTimeout,
+		OnDDL:        h.metrics.catalog.DDL,
 	}
 }
 

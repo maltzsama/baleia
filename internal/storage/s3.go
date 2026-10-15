@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -24,6 +25,7 @@ type S3Client struct {
 	bucket    string
 	useSSL    bool
 	client    *minio.Client
+	metrics   *metrics.Storage // nil-safe
 }
 
 // New creates the adapter. The endpoint is a host[:port] (no scheme).
@@ -75,9 +77,13 @@ func (c *S3Client) MakeBucket(ctx context.Context) error {
 	return nil
 }
 
+// SetMetrics records operations in m (#87).
+func (c *S3Client) SetMetrics(m *metrics.Storage) { c.metrics = m }
+
 // Put uploads already-buffered bytes.
-func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType string) error {
-	_, err := c.client.PutObject(ctx, c.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType string) (err error) {
+	defer func() { c.metrics.Op("put", err, int64(len(data))) }()
+	_, err = c.client.PutObject(ctx, c.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
@@ -89,7 +95,8 @@ func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType
 // PutStream uploads r using S3 multipart upload (minio-go splits at 8 MiB) so
 // unbounded-stream results are not held in memory. It returns the number of
 // bytes written.
-func (c *S3Client) PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error) {
+func (c *S3Client) PutStream(ctx context.Context, key string, r io.Reader, contentType string) (n int64, err error) {
+	defer func() { c.metrics.Op("put", err, n) }()
 	// size -1 tells minio-go to use multipart and read until EOF.
 	info, err := c.client.PutObject(ctx, c.bucket, key, r, -1, minio.PutObjectOptions{
 		ContentType: contentType,
@@ -101,14 +108,15 @@ func (c *S3Client) PutStream(ctx context.Context, key string, r io.Reader, conte
 }
 
 // Get downloads the object into memory and also returns its content type.
-func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) {
-	r, contentType, err := c.GetReader(ctx, key)
+func (c *S3Client) Get(ctx context.Context, key string) (data []byte, contentType string, err error) {
+	defer func() { c.metrics.Op("get", err, int64(len(data))) }()
+	r, contentType, err := c.getReader(ctx, key)
 	if err != nil {
 		return nil, "", err
 	}
 	defer r.Close()
 
-	data, err := io.ReadAll(r)
+	data, err = io.ReadAll(r)
 	if err != nil {
 		return nil, "", fmt.Errorf("s3 get read: %w", err)
 	}
@@ -117,7 +125,13 @@ func (c *S3Client) Get(ctx context.Context, key string) ([]byte, string, error) 
 
 // GetReader streams the object body, returning an io.ReadCloser plus the
 // stored content type. The caller owns the reader and must close it.
-func (c *S3Client) GetReader(ctx context.Context, key string) (io.ReadCloser, string, error) {
+// GetReader's bytes are not counted: the caller streams them.
+func (c *S3Client) GetReader(ctx context.Context, key string) (_ io.ReadCloser, _ string, err error) {
+	defer func() { c.metrics.Op("get", err, 0) }()
+	return c.getReader(ctx, key)
+}
+
+func (c *S3Client) getReader(ctx context.Context, key string) (io.ReadCloser, string, error) {
 	obj, err := c.client.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, "", fmt.Errorf("s3 get: %w", err)
