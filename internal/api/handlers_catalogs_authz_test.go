@@ -2,6 +2,10 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/galileostudio/baleia/internal/bindings"
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -515,3 +519,21 @@ func TestSyncCatalog_StuckDDLTimesOut(t *testing.T) {
 }
 
 func strp(s string) *string { return &s }
+
+// TestBindingErrorsAre422: projection errors the request or the connection
+// caused are client errors, including credentials that cannot be opened.
+func TestBindingErrorsAre422(t *testing.T) {
+	cases := map[error]string{
+		fmt.Errorf("x: %w", catalogs.ErrCredentialsUnreadable):                                  "credentials_unreadable",
+		fmt.Errorf("x: %w", bindings.ErrReservedName):                                           "reserved_name",
+		&bindings.PropertyError{Key: "connection-url", Err: bindings.ErrPropertyNotOverridable}: "property_not_overridable",
+	}
+	for err, want := range cases {
+		if !bindingInvalid(err) || bindingUnprocessable(err).Code != want {
+			t.Errorf("%v: %v %q", err, bindingInvalid(err), bindingUnprocessable(err).Code)
+		}
+	}
+	if bindingInvalid(errors.New("network down")) {
+		t.Error("a server failure is not a 422")
+	}
+}

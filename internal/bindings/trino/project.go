@@ -173,7 +173,9 @@ func postgresProjection(spec bindings.BindingSpec, src connections.Config) (proj
 	if database == "" {
 		database = "postgres"
 	}
-	u := url.URL{Scheme: "postgresql", Host: addr, Path: "/" + path.Clean(database)}
+	// One path segment, escaped: pgJDBC decodes a%2Fb back to a/b, and ?, #
+	// or / in a name can never become parameters or extra segments.
+	u := url.URL{Scheme: "postgresql", Host: addr, Path: "/" + database, RawPath: "/" + url.PathEscape(database)}
 	q := url.Values{}
 	if mode := src.Value("sslmode"); mode != "" {
 		q.Set("sslmode", mode)

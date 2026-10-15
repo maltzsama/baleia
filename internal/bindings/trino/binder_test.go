@@ -165,8 +165,14 @@ func TestProject_Kinds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(p.Properties["connection-url"], "?socketFactory") {
-		t.Errorf("database name injected a parameter: %s", p.Properties["connection-url"])
+	if got := p.Properties["connection-url"]; got != "jdbc:postgresql://db:5432/a%3FsocketFactory=evil" {
+		t.Errorf("database name injected a parameter: %s", got)
+	}
+	for db, want := range map[string]string{"a/b": "jdbc:postgresql://db:5432/a%2Fb", "a/../b": "jdbc:postgresql://db:5432/a%2F..%2Fb"} {
+		p, _ := b.Project(bindings.BindingSpec{EngineCatalog: "x", SourceRef: db}, cfg(connections.KindPostgreSQL, map[string]string{"host": "db"}, nil))
+		if got := p.Properties["connection-url"]; got != want {
+			t.Errorf("database %q: %s, want %s", db, got, want)
+		}
 	}
 }
 

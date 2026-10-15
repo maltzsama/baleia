@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/galileostudio/baleia/internal/bindings"
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"log/slog"
 	"time"
 
@@ -192,7 +193,8 @@ func (h *Handlers) projectCatalog(conn db.CatalogConnection, cat db.Catalog) (bi
 // to a server failure.
 func bindingInvalid(err error) bool {
 	return errors.Is(err, bindings.ErrInvalid) || errors.Is(err, bindings.ErrPropertyNotOverridable) ||
-		errors.Is(err, bindings.ErrReservedName) || errors.Is(err, bindings.ErrUnsupportedSource)
+		errors.Is(err, bindings.ErrReservedName) || errors.Is(err, bindings.ErrUnsupportedSource) ||
+		errors.Is(err, catalogs.ErrCredentialsUnreadable)
 }
 
 func bindingUnprocessable(err error) UnprocessableEntityJSONResponse {
@@ -204,6 +206,8 @@ func bindingUnprocessable(err error) UnprocessableEntityJSONResponse {
 		code = "reserved_name"
 	case errors.Is(err, bindings.ErrUnsupportedSource):
 		code = "binding_unsupported"
+	case errors.Is(err, catalogs.ErrCredentialsUnreadable):
+		code = "credentials_unreadable"
 	}
 	field, msg := "", err.Error()
 	var pe *bindings.PropertyError
