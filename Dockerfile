@@ -29,4 +29,6 @@ COPY --from=go /migrate /migrate
 COPY --from=web /web/build /web/build
 COPY api/ /api-spec/
 COPY db/migrations/ /db/migrations/
+# Apache 2.0, section 4(a): recipients of the image get a copy of the license.
+COPY LICENSE /usr/share/licenses/baleia/LICENSE
 USER 10001
