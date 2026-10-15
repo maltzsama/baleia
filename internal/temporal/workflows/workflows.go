@@ -3,18 +3,81 @@ package workflows
 import (
 	"time"
 
+	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/google/uuid"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-// QueryExecutionWorkflow runs every statement of a query sequentially against
-// Trino, stopping on the first error. It carries control only; result rows live
-// in object storage (#89).
+// QueryExecutionInput is the V2 workflow input (#13). It carries control
+// only: the activity loads the engine's connection and decrypts it, so no
+// secret ever enters workflow history (TestV2_InputHasNoSecrets).
+type QueryExecutionInput struct {
+	ExecutionID      string
+	WorkspaceID      string
+	SQL              string
+	Target           queryengine.Target
+	Identity         queryengine.Identity
+	StatementTimeout time.Duration
+	RequestID        string
+}
+
+// QueryExecutionWorkflowV2 runs every statement of a query on the target's
+// engine, in the target's catalog and schema, read-only when the target is.
+// Registered beside QueryExecutionWorkflow until V1 runs drain (#27).
+func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) error {
+	d, ok := dialect.ForEngineKind(in.Target.EngineKind)
+	dialectName := dialect.Trino
+	if ok {
+		dialectName = d.Name()
+	}
+	engineID := ""
+	if in.Target.EngineID.Valid {
+		engineID = uuid.UUID(in.Target.EngineID.Bytes).String()
+	}
+	return runExecution(ctx, in.ExecutionID, in.SQL, dialectName, in.StatementTimeout, func(position int32, stmt string) activities.ExecuteStatementParams {
+		return activities.ExecuteStatementParams{
+			ExecutionID:  in.ExecutionID,
+			Position:     position,
+			SQL:          stmt,
+			TrinoCatalog: in.Target.EngineCatalog,
+			RequestID:    in.RequestID,
+			User:         in.Identity.UserID,
+			Timeout:      in.StatementTimeout,
+			EngineID:     engineID,
+			Schema:       in.Target.Schema,
+			ReadOnly:     in.Target.ReadOnly,
+			Dialect:      dialectName,
+		}
+	})
+}
+
+// QueryExecutionWorkflow is V1: every statement on the default Trino engine
+// in trinoCatalog. New executions start V2; V1 stays registered so runs
+// started before the upgrade can finish (#27 removes it).
 //
 // statementTimeout bounds each statement. It is passed as input because
 // workflow code must stay deterministic and never read the environment.
 func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql, trinoCatalog, requestID, user string, statementTimeout time.Duration) error {
+	return runExecution(ctx, executionID, sql, "", statementTimeout, func(position int32, stmt string) activities.ExecuteStatementParams {
+		return activities.ExecuteStatementParams{
+			ExecutionID:  executionID,
+			Position:     position,
+			SQL:          stmt,
+			TrinoCatalog: trinoCatalog,
+			RequestID:    requestID,
+			User:         user,
+			Timeout:      statementTimeout,
+		}
+	})
+}
+
+// runExecution runs every statement sequentially, stopping on the first
+// error. It carries control only; result rows live in object storage (#89).
+// V1 and V2 issue the same commands, so V1 histories replay unchanged.
+func runExecution(ctx workflow.Context, executionID, sql, dialectName string, statementTimeout time.Duration, statement func(position int32, stmt string) activities.ExecuteStatementParams) error {
 	// Bookkeeping activities are idempotent DB updates and may be retried.
 	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
@@ -29,15 +92,10 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 
-	// (Removed the EnsureCatalog activity call — CR-017 §I3/T1.)
-	// With the baleia-trino-catalog-store plugin, Trino loads all catalogs
-	// from trino_catalog_registry at boot. The write-through flow of the
-	// CreateCatalog handler + the plugin's addOrReplaceCatalog callback
-	// cover both boot-time and runtime catalog enrollment.
-
 	var splitResult activities.SplitSQLResult
 	if err := workflow.ExecuteActivity(bookkeepingCtx, activities.SplitSQL, activities.SplitSQLParams{
-		SQL: sql,
+		SQL:     sql,
+		Dialect: dialectName,
 	}).Get(bookkeepingCtx, &splitResult); err != nil {
 		return failExecution(bookkeepingCtx, executionID, err)
 	}
@@ -56,15 +114,7 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 		position := int32(i + 1)
 
 		var execResult activities.ExecuteStatementResult
-		err := workflow.ExecuteActivity(statementCtx, activities.ExecuteStatement, activities.ExecuteStatementParams{
-			ExecutionID:  executionID,
-			Position:     position,
-			SQL:          stmt,
-			TrinoCatalog: trinoCatalog,
-			RequestID:    requestID,
-			User:         user,
-			Timeout:      statementTimeout,
-		}).Get(statementCtx, &execResult)
+		err := workflow.ExecuteActivity(statementCtx, activities.ExecuteStatement, statement(position, stmt)).Get(statementCtx, &execResult)
 
 		// A cancelled workflow (UI cancel, timeout) cancels the statement
 		// activity, which kills the Trino query. Record the cancellation on a
@@ -98,15 +148,15 @@ func QueryExecutionWorkflow(ctx workflow.Context, executionID, workspaceID, sql,
 		}
 
 		_ = workflow.ExecuteActivity(bookkeepingCtx, activities.UpdateStatementRecord, activities.UpdateStatementRecordParams{
-			ExecutionID:  executionID,
-			Position:     position,
-			Status:       "finished",
+			ExecutionID:   executionID,
+			Position:      position,
+			Status:        "finished",
 			EngineQueryID: execResult.EngineQueryID,
-			RowsReturned: execResult.RowCount,
-			DurationMs:   execResult.DurationMs,
-			ResultKey:    execResult.ResultKey,
-			ResultBytes:  execResult.ResultBytes,
-			Truncated:    execResult.Truncated,
+			RowsReturned:  execResult.RowCount,
+			DurationMs:    execResult.DurationMs,
+			ResultKey:     execResult.ResultKey,
+			ResultBytes:   execResult.ResultBytes,
+			Truncated:     execResult.Truncated,
 		}).Get(bookkeepingCtx, nil)
 
 		totalRows += execResult.RowCount
