@@ -100,3 +100,43 @@ JOIN catalogs c ON c.id = p.catalog_id
 JOIN catalog_bindings b ON b.catalog_id = c.id
 JOIN engines e ON e.id = b.engine_id
 ORDER BY c.name, e.name;
+
+-- name: GetBinding :one
+SELECT * FROM catalog_bindings WHERE id = $1;
+
+-- name: UpsertManagedBinding :one
+-- The managed binding of a catalog on an engine (one per pair).
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
+VALUES ($1, $2, $3, $4, $5, 'managed', $6)
+ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
+    engine_catalog_name = EXCLUDED.engine_catalog_name,
+    connector           = EXCLUDED.connector,
+    extra_props         = EXCLUDED.extra_props,
+    enabled             = EXCLUDED.enabled,
+    updated_at          = now()
+RETURNING *;
+
+-- name: CreateManagedBinding :one
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
+VALUES ($1, $2, $3, $4, $5, 'managed', true)
+RETURNING *;
+
+-- name: UpdateBinding :one
+UPDATE catalog_bindings SET
+    engine_catalog_name = $2,
+    connector           = $3,
+    extra_props         = $4,
+    enabled             = $5,
+    updated_at          = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteBinding :exec
+DELETE FROM catalog_bindings WHERE id = $1;
+
+-- name: DisableManagedBindingsOfCatalog :exec
+UPDATE catalog_bindings SET enabled = false, updated_at = now()
+WHERE catalog_id = $1 AND mode = 'managed';
+
+-- name: GetTrinoClusterByEngine :one
+SELECT * FROM trino_clusters WHERE engine_id = $1;

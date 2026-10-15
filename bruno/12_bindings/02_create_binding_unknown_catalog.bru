@@ -1,0 +1,32 @@
+meta {
+  name: Create Binding (unknown catalog)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/catalogs/00000000-0000-0000-0000-000000000000/bindings
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "engine_id": "{{trino_engine_id}}",
+    "engine_catalog_name": "nowhere"
+  }
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  POST /catalogs/{id}/bindings binds a source catalog into a federated
+  engine through its binder (Trino: registry row, then CREATE CATALOG).
+  It needs write access to the catalog's connection and to the engine.
+}

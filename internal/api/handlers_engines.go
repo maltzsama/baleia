@@ -62,7 +62,13 @@ func bindingToPublic(b db.CatalogBinding) CatalogBinding {
 		Connector:         b.Connector,
 		Mode:              CatalogBindingMode(b.Mode),
 		Enabled:           b.Enabled,
+		ExtraProps:        ptrExtraProps(b.ExtraProps),
 	}
+}
+
+func ptrExtraProps(raw []byte) *map[string]string {
+	m := extraPropsOf(raw)
+	return &m
 }
 
 func engineNotFound() NotFoundJSONResponse {

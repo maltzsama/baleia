@@ -30,6 +30,7 @@ tests {
     expect(trino.capabilities.supports_cancel).to.equal(true);
     expect(trino).to.have.property("version"); // null while Trino is unreachable
     bru.setVar("dialect_name", trino.dialect.name);
+    bru.setVar("trino_engine_id", trino.id);
   });
 }
 

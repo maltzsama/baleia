@@ -336,3 +336,38 @@ func TestEngineVocabulary(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+const versionNoTransitionalTriggers = 27
+
+// TestTransitionalTriggersDropped: from 00027 the catalog writes no longer
+// touch catalog_bindings (the handlers write bindings, #80); down restores
+// the 00024 triggers.
+func TestTransitionalTriggersDropped(t *testing.T) {
+	db, dir := testDB(t, versionVocabulary)
+	seed(t, db, "pg")
+	if err := goose.UpTo(db, dir, versionNoTransitionalTriggers); err != nil {
+		t.Fatal(err)
+	}
+	if n := scalar[int](t, db, `SELECT count(*) FROM pg_trigger WHERE tgname IN ('catalogs_upsert_managed_binding', 'catalogs_set_source_ref')`); n != 0 {
+		t.Fatalf("%d transitional triggers left", n)
+	}
+	before := scalar[int](t, db, `SELECT count(*) FROM catalog_bindings`)
+	mustExec(t, db, `UPDATE catalogs SET trino_catalog_name = 'lake2', warehouse = 'wh2' WHERE id = '00000000-0000-0000-0000-0000000000d1'`)
+	if name := scalar[string](t, db, `SELECT engine_catalog_name FROM catalog_bindings WHERE catalog_id = '00000000-0000-0000-0000-0000000000d1'`); name != "lake" {
+		t.Errorf("a catalog write still moved its binding to %q", name)
+	}
+	if ref := scalar[string](t, db, `SELECT source_ref FROM catalogs WHERE id = '00000000-0000-0000-0000-0000000000d1'`); ref != "wh1" {
+		t.Errorf("a catalog write still set source_ref to %q", ref)
+	}
+	if after := scalar[int](t, db, `SELECT count(*) FROM catalog_bindings`); after != before {
+		t.Errorf("bindings %d -> %d", before, after)
+	}
+
+	if err := goose.DownTo(db, dir, versionVocabulary); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `UPDATE catalogs SET trino_catalog_name = 'lake3' WHERE id = '00000000-0000-0000-0000-0000000000d1'`)
+	if name := scalar[string](t, db, `SELECT engine_catalog_name FROM catalog_bindings WHERE catalog_id = '00000000-0000-0000-0000-0000000000d1'`); name != "lake3" {
+		t.Errorf("after down the trigger must keep the binding in step, got %q", name)
+	}
+}

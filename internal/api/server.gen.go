@@ -54,6 +54,15 @@ type ServerInterface interface {
 	// Exchange refresh token for new access token pair
 	// (POST /auth/refresh)
 	RefreshToken(w http.ResponseWriter, r *http.Request)
+	// Remove a managed binding from its engine
+	// (DELETE /bindings/{id})
+	DeleteCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
+	// Rename, reconfigure, enable or disable a managed binding
+	// (PATCH /bindings/{id})
+	UpdateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
+	// Re-apply a managed binding's current projection to its engine
+	// (POST /bindings/{id}/sync)
+	SyncCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
 	// List all catalog connections — admin only
 	// (GET /catalog-connections)
 	ListCatalogConnections(w http.ResponseWriter, r *http.Request)
@@ -90,6 +99,9 @@ type ServerInterface interface {
 	// Engines a catalog is bound to (anyone who may read the catalog)
 	// (GET /catalogs/{id}/bindings)
 	ListCatalogBindings(w http.ResponseWriter, r *http.Request, id PathId)
+	// Bind a source catalog into a federated engine
+	// (POST /catalogs/{id}/bindings)
+	CreateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
 	// Connection kinds, their roles and config schemas (drives the connection forms)
 	// (GET /connection-providers)
 	ListConnectionProviders(w http.ResponseWriter, r *http.Request)
@@ -129,6 +141,9 @@ type ServerInterface interface {
 	// Enable or disable an engine (owner of its connection or an admin)
 	// (PATCH /engines/{id})
 	UpdateEngine(w http.ResponseWriter, r *http.Request, id PathId)
+	// Source kinds this engine can bind, with connectors, protected extra-property keys and reserved names
+	// (GET /engines/{id}/binding-support)
+	GetEngineBindingSupport(w http.ResponseWriter, r *http.Request, id PathId)
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(w http.ResponseWriter, r *http.Request, id PathId)
@@ -372,6 +387,24 @@ func (_ Unimplemented) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Remove a managed binding from its engine
+// (DELETE /bindings/{id})
+func (_ Unimplemented) DeleteCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename, reconfigure, enable or disable a managed binding
+// (PATCH /bindings/{id})
+func (_ Unimplemented) UpdateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Re-apply a managed binding's current projection to its engine
+// (POST /bindings/{id}/sync)
+func (_ Unimplemented) SyncCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List all catalog connections — admin only
 // (GET /catalog-connections)
 func (_ Unimplemented) ListCatalogConnections(w http.ResponseWriter, r *http.Request) {
@@ -441,6 +474,12 @@ func (_ Unimplemented) SyncCatalog(w http.ResponseWriter, r *http.Request, catal
 // Engines a catalog is bound to (anyone who may read the catalog)
 // (GET /catalogs/{id}/bindings)
 func (_ Unimplemented) ListCatalogBindings(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Bind a source catalog into a federated engine
+// (POST /catalogs/{id}/bindings)
+func (_ Unimplemented) CreateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -519,6 +558,12 @@ func (_ Unimplemented) GetEngine(w http.ResponseWriter, r *http.Request, id Path
 // Enable or disable an engine (owner of its connection or an admin)
 // (PATCH /engines/{id})
 func (_ Unimplemented) UpdateEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Source kinds this engine can bind, with connectors, protected extra-property keys and reserved names
+// (GET /engines/{id}/binding-support)
+func (_ Unimplemented) GetEngineBindingSupport(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1135,6 +1180,105 @@ func (siw *ServerInterfaceWrapper) RefreshToken(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteCatalogBinding operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCatalogBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCatalogBinding(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCatalogBinding operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCatalogBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCatalogBinding(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncCatalogBinding operation middleware
+func (siw *ServerInterfaceWrapper) SyncCatalogBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncCatalogBinding(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListCatalogConnections operation middleware
 func (siw *ServerInterfaceWrapper) ListCatalogConnections(w http.ResponseWriter, r *http.Request) {
 
@@ -1545,6 +1689,39 @@ func (siw *ServerInterfaceWrapper) ListCatalogBindings(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCatalogBindings(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCatalogBinding operation middleware
+func (siw *ServerInterfaceWrapper) CreateCatalogBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCatalogBinding(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1992,6 +2169,39 @@ func (siw *ServerInterfaceWrapper) UpdateEngine(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateEngine(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEngineBindingSupport operation middleware
+func (siw *ServerInterfaceWrapper) GetEngineBindingSupport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEngineBindingSupport(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4092,6 +4302,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/refresh", wrapper.RefreshToken)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/bindings/{id}", wrapper.DeleteCatalogBinding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/bindings/{id}", wrapper.UpdateCatalogBinding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/bindings/{id}/sync", wrapper.SyncCatalogBinding)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalog-connections", wrapper.ListCatalogConnections)
 	})
 	r.Group(func(r chi.Router) {
@@ -4126,6 +4345,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{id}/bindings", wrapper.ListCatalogBindings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{id}/bindings", wrapper.CreateCatalogBinding)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/connection-providers", wrapper.ListConnectionProviders)
@@ -4165,6 +4387,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/engines/{id}", wrapper.UpdateEngine)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/binding-support", wrapper.GetEngineBindingSupport)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engines/{id}/bindings", wrapper.ListEngineBindings)
@@ -4654,6 +4879,197 @@ type RefreshToken401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response RefreshToken401JSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogBindingRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DeleteCatalogBindingResponseObject interface {
+	VisitDeleteCatalogBindingResponse(w http.ResponseWriter) error
+}
+
+type DeleteCatalogBinding204Response = NoContentResponse
+
+func (response DeleteCatalogBinding204Response) VisitDeleteCatalogBindingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCatalogBinding401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteCatalogBinding401JSONResponse) VisitDeleteCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogBinding403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteCatalogBinding403JSONResponse) VisitDeleteCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogBinding404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteCatalogBinding404JSONResponse) VisitDeleteCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogBinding409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteCatalogBinding409JSONResponse) VisitDeleteCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogBinding422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DeleteCatalogBinding422JSONResponse) VisitDeleteCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogBindingRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *UpdateCatalogBindingJSONRequestBody
+}
+
+type UpdateCatalogBindingResponseObject interface {
+	VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error
+}
+
+type UpdateCatalogBinding200JSONResponse CatalogBinding
+
+func (response UpdateCatalogBinding200JSONResponse) VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogBinding401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateCatalogBinding401JSONResponse) VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogBinding403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateCatalogBinding403JSONResponse) VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogBinding404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateCatalogBinding404JSONResponse) VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogBinding409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateCatalogBinding409JSONResponse) VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogBinding422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateCatalogBinding422JSONResponse) VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogBindingRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type SyncCatalogBindingResponseObject interface {
+	VisitSyncCatalogBindingResponse(w http.ResponseWriter) error
+}
+
+type SyncCatalogBinding200JSONResponse CatalogBinding
+
+func (response SyncCatalogBinding200JSONResponse) VisitSyncCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogBinding401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SyncCatalogBinding401JSONResponse) VisitSyncCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogBinding403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SyncCatalogBinding403JSONResponse) VisitSyncCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogBinding404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SyncCatalogBinding404JSONResponse) VisitSyncCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogBinding409JSONResponse CatalogBinding
+
+func (response SyncCatalogBinding409JSONResponse) VisitSyncCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SyncCatalogBinding422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SyncCatalogBinding422JSONResponse) VisitSyncCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -5159,6 +5575,71 @@ type ListCatalogBindings404JSONResponse struct{ NotFoundJSONResponse }
 func (response ListCatalogBindings404JSONResponse) VisitListCatalogBindingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogBindingRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateCatalogBindingJSONRequestBody
+}
+
+type CreateCatalogBindingResponseObject interface {
+	VisitCreateCatalogBindingResponse(w http.ResponseWriter) error
+}
+
+type CreateCatalogBinding201JSONResponse CatalogBinding
+
+func (response CreateCatalogBinding201JSONResponse) VisitCreateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogBinding401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateCatalogBinding401JSONResponse) VisitCreateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogBinding403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateCatalogBinding403JSONResponse) VisitCreateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogBinding404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateCatalogBinding404JSONResponse) VisitCreateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogBinding409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateCatalogBinding409JSONResponse) VisitCreateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogBinding422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateCatalogBinding422JSONResponse) VisitCreateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -5727,6 +6208,41 @@ func (response UpdateEngine403JSONResponse) VisitUpdateEngineResponse(w http.Res
 type UpdateEngine404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateEngine404JSONResponse) VisitUpdateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineBindingSupportRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetEngineBindingSupportResponseObject interface {
+	VisitGetEngineBindingSupportResponse(w http.ResponseWriter) error
+}
+
+type GetEngineBindingSupport200JSONResponse map[string]BindingSupport
+
+func (response GetEngineBindingSupport200JSONResponse) VisitGetEngineBindingSupportResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineBindingSupport401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetEngineBindingSupport401JSONResponse) VisitGetEngineBindingSupportResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineBindingSupport404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetEngineBindingSupport404JSONResponse) VisitGetEngineBindingSupportResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -7837,6 +8353,15 @@ type StrictServerInterface interface {
 	// Exchange refresh token for new access token pair
 	// (POST /auth/refresh)
 	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
+	// Remove a managed binding from its engine
+	// (DELETE /bindings/{id})
+	DeleteCatalogBinding(ctx context.Context, request DeleteCatalogBindingRequestObject) (DeleteCatalogBindingResponseObject, error)
+	// Rename, reconfigure, enable or disable a managed binding
+	// (PATCH /bindings/{id})
+	UpdateCatalogBinding(ctx context.Context, request UpdateCatalogBindingRequestObject) (UpdateCatalogBindingResponseObject, error)
+	// Re-apply a managed binding's current projection to its engine
+	// (POST /bindings/{id}/sync)
+	SyncCatalogBinding(ctx context.Context, request SyncCatalogBindingRequestObject) (SyncCatalogBindingResponseObject, error)
 	// List all catalog connections — admin only
 	// (GET /catalog-connections)
 	ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error)
@@ -7873,6 +8398,9 @@ type StrictServerInterface interface {
 	// Engines a catalog is bound to (anyone who may read the catalog)
 	// (GET /catalogs/{id}/bindings)
 	ListCatalogBindings(ctx context.Context, request ListCatalogBindingsRequestObject) (ListCatalogBindingsResponseObject, error)
+	// Bind a source catalog into a federated engine
+	// (POST /catalogs/{id}/bindings)
+	CreateCatalogBinding(ctx context.Context, request CreateCatalogBindingRequestObject) (CreateCatalogBindingResponseObject, error)
 	// Connection kinds, their roles and config schemas (drives the connection forms)
 	// (GET /connection-providers)
 	ListConnectionProviders(ctx context.Context, request ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error)
@@ -7912,6 +8440,9 @@ type StrictServerInterface interface {
 	// Enable or disable an engine (owner of its connection or an admin)
 	// (PATCH /engines/{id})
 	UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error)
+	// Source kinds this engine can bind, with connectors, protected extra-property keys and reserved names
+	// (GET /engines/{id}/binding-support)
+	GetEngineBindingSupport(ctx context.Context, request GetEngineBindingSupportRequestObject) (GetEngineBindingSupportResponseObject, error)
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error)
@@ -8445,6 +8976,91 @@ func (sh *strictHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteCatalogBinding operation middleware
+func (sh *strictHandler) DeleteCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DeleteCatalogBindingRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCatalogBinding(ctx, request.(DeleteCatalogBindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCatalogBinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCatalogBindingResponseObject); ok {
+		if err := validResponse.VisitDeleteCatalogBindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCatalogBinding operation middleware
+func (sh *strictHandler) UpdateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request UpdateCatalogBindingRequestObject
+
+	request.Id = id
+
+	var body UpdateCatalogBindingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCatalogBinding(ctx, request.(UpdateCatalogBindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCatalogBinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCatalogBindingResponseObject); ok {
+		if err := validResponse.VisitUpdateCatalogBindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SyncCatalogBinding operation middleware
+func (sh *strictHandler) SyncCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request SyncCatalogBindingRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SyncCatalogBinding(ctx, request.(SyncCatalogBindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SyncCatalogBinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SyncCatalogBindingResponseObject); ok {
+		if err := validResponse.VisitSyncCatalogBindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListCatalogConnections operation middleware
 func (sh *strictHandler) ListCatalogConnections(w http.ResponseWriter, r *http.Request) {
 	var request ListCatalogConnectionsRequestObject
@@ -8765,6 +9381,39 @@ func (sh *strictHandler) ListCatalogBindings(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListCatalogBindingsResponseObject); ok {
 		if err := validResponse.VisitListCatalogBindingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCatalogBinding operation middleware
+func (sh *strictHandler) CreateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateCatalogBindingRequestObject
+
+	request.Id = id
+
+	var body CreateCatalogBindingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCatalogBinding(ctx, request.(CreateCatalogBindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCatalogBinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCatalogBindingResponseObject); ok {
+		if err := validResponse.VisitCreateCatalogBindingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9136,6 +9785,32 @@ func (sh *strictHandler) UpdateEngine(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateEngineResponseObject); ok {
 		if err := validResponse.VisitUpdateEngineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEngineBindingSupport operation middleware
+func (sh *strictHandler) GetEngineBindingSupport(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetEngineBindingSupportRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEngineBindingSupport(ctx, request.(GetEngineBindingSupportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEngineBindingSupport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEngineBindingSupportResponseObject); ok {
+		if err := validResponse.VisitGetEngineBindingSupportResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

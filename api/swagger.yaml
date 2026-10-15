@@ -680,6 +680,42 @@ components:
         connector: { type: string, nullable: true }
         mode: { type: string, enum: [managed, adopted, native] }
         enabled: { type: boolean }
+        extra_props:
+          type: object
+          additionalProperties: { type: string }
+        version: { type: string, nullable: true, description: "Version of the projection last applied (write responses only)" }
+        sync_status: { type: string, enum: [synced, error], nullable: true, description: "Write responses only" }
+        sync_error: { type: string, nullable: true }
+
+    CreateBindingRequest:
+      type: object
+      required: [engine_id, engine_catalog_name]
+      properties:
+        engine_id: { type: string, format: uuid }
+        engine_catalog_name: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        connector: { type: string, description: "One of the engine's connectors for the source kind (GET /engines/{id}/binding-support); default the first" }
+        extra_props:
+          type: object
+          additionalProperties: { type: string }
+          description: "Merged over the projection; protected keys cannot be overridden"
+
+    UpdateBindingRequest:
+      type: object
+      properties:
+        engine_catalog_name: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        extra_props:
+          type: object
+          additionalProperties: { type: string }
+          description: "Replaces the binding's extra properties"
+        enabled: { type: boolean }
+
+    BindingSupport:
+      type: object
+      required: [connectors, protected_key_patterns, reserved_names]
+      properties:
+        connectors: { type: array, items: { type: string }, description: "The first is the default" }
+        protected_key_patterns: { type: array, items: { type: string }, description: "Glob patterns (case-insensitive) of extra-property keys that cannot be overridden" }
+        reserved_names: { type: array, items: { type: string } }
 
     ConnectionProviderField:
       type: object
@@ -1892,6 +1928,123 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CatalogBinding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Engines]
+      operationId: createCatalogBinding
+      summary: "Bind a source catalog into a federated engine"
+      description: >
+        The engine's binder projects the catalog's connection into the engine
+        and materializes it (Trino: registry row, then CREATE CATALOG).
+        Requires write access to the catalog's connection and to the engine
+        (G-admin or owner of the engine's connection). 409 binding_exists
+        when the catalog already has a binding on the engine, name_in_use
+        when the engine already has a catalog of that name. 422
+        binding_unsupported (native catalog, direct engine, or a source kind
+        or connector the binder cannot bind), property_not_overridable,
+        reserved_name, validation_error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBindingRequest" }
+      responses:
+        "201":
+          description: "Binding created; sync_status says whether the engine applied it"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogBinding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /bindings/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    patch:
+      tags: [Engines]
+      operationId: updateCatalogBinding
+      summary: "Rename, reconfigure, enable or disable a managed binding"
+      description: >
+        A new engine_catalog_name creates the catalog under the new name, then
+        drops the old one. Disabling drops it from the engine; enabling
+        creates it again. Native and adopted bindings answer 422
+        binding_not_managed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBindingRequest" }
+      responses:
+        "200":
+          description: "Binding updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogBinding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Engines]
+      operationId: deleteCatalogBinding
+      summary: "Remove a managed binding from its engine"
+      description: >
+        409 binding_is_primary for the binding a catalog was created with on
+        the default Trino engine: delete the catalog instead (until #22).
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /bindings/{id}/sync:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Engines]
+      operationId: syncCatalogBinding
+      summary: "Re-apply a managed binding's current projection to its engine"
+      responses:
+        "200":
+          description: "Applied"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogBinding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "The engine did not apply it; sync_error says why"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogBinding" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /engines/{id}/binding-support:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: getEngineBindingSupport
+      summary: "Source kinds this engine can bind, with connectors, protected extra-property keys and reserved names"
+      description: >
+        Empty for engines without a binder (direct engines). The UI uses it
+        instead of duplicating the binder's rules.
+      responses:
+        "200":
+          description: "Support per source kind"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { $ref: "#/components/schemas/BindingSupport" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 

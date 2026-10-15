@@ -7,6 +7,9 @@ package trino
 //   - S3 file system:       https://trino.io/docs/483/object-storage/file-system-s3.html
 //   - PostgreSQL connector: https://trino.io/docs/483/connector/postgresql.html
 //   - MySQL connector:      https://trino.io/docs/483/connector/mysql.html
+//   - MariaDB connector:    https://trino.io/docs/483/connector/mariadb.html
+//   - SQL Server connector: https://trino.io/docs/483/connector/sqlserver.html
+//   - Oracle connector:     https://trino.io/docs/483/connector/oracle.html
 
 import (
 	"fmt"
@@ -56,6 +59,12 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return postgresProjection(spec, src)
 	case connections.KindMySQL:
 		return mysqlProjection(src)
+	case connections.KindMariaDB:
+		return mariadbProjection(src)
+	case connections.KindSQLServer:
+		return sqlserverProjection(spec, src)
+	case connections.KindOracle:
+		return oracleProjection(spec, src)
 	}
 	return projection{}, fmt.Errorf("%w: %s", bindings.ErrUnsupportedSource, src.Kind)
 }
@@ -200,6 +209,79 @@ func mysqlProjection(src connections.Config) (projection, error) {
 		jdbc += "?sslMode=" + mode
 	}
 	p := projection{props: map[string]string{"connection-url": jdbc}}
+	sqlCredentials(&p, src)
+	return p, nil
+}
+
+// mariadbProjection is mysqlProjection for MariaDB Connector/J.
+func mariadbProjection(src connections.Config) (projection, error) {
+	addr, err := hostPort(src, "3306")
+	if err != nil {
+		return projection{}, err
+	}
+	jdbc := "jdbc:mariadb://" + addr
+	if mode, ok := map[string]string{"true": "verify-full", "skip-verify": "trust", "false": "disable"}[src.Value("tls")]; ok {
+		jdbc += "?sslMode=" + mode
+	}
+	p := projection{props: map[string]string{"connection-url": jdbc}}
+	sqlCredentials(&p, src)
+	return p, nil
+}
+
+// jdbcValueRe is what a value inside a ;-separated JDBC URL may hold: a
+// database name with ; = { or } would add or end parameters.
+var jdbcValueRe = regexp.MustCompile(`^[A-Za-z0-9_$.#@ -]{1,128}$`)
+
+// sqlserverProjection: one catalog per database; the database is the
+// binding's source ref, else the connection's.
+func sqlserverProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
+	addr, err := hostPort(src, "1433")
+	if err != nil {
+		return projection{}, err
+	}
+	database := spec.SourceRef
+	if database == "" {
+		database = src.Value("database")
+	}
+	jdbc := "jdbc:sqlserver://" + addr
+	if database != "" {
+		if !jdbcValueRe.MatchString(database) {
+			return projection{}, fmt.Errorf("%w: database name %q", bindings.ErrInvalid, database)
+		}
+		jdbc += ";databaseName=" + database
+	}
+	// The provider's encrypt modes; disable turns TLS off entirely.
+	encrypt := map[string]string{"true": "true", "false": "false", "disable": "false", "strict": "strict"}[src.Value("encrypt")]
+	if encrypt == "" {
+		encrypt = "true"
+	}
+	jdbc += ";encrypt=" + encrypt
+	if src.Value("trust_server_certificate") == "true" {
+		jdbc += ";trustServerCertificate=true"
+	}
+	p := projection{props: map[string]string{"connection-url": jdbc}}
+	sqlCredentials(&p, src)
+	return p, nil
+}
+
+// serviceRe is an Oracle service name.
+var serviceRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_$#.-]{0,127}$`)
+
+// oracleProjection connects to a service; the binding's source ref, else the
+// connection's service name.
+func oracleProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
+	addr, err := hostPort(src, "1521")
+	if err != nil {
+		return projection{}, err
+	}
+	service := spec.SourceRef
+	if service == "" {
+		service = src.Value("service_name")
+	}
+	if !serviceRe.MatchString(service) {
+		return projection{}, fmt.Errorf("%w: service name %q", bindings.ErrInvalid, service)
+	}
+	p := projection{props: map[string]string{"connection-url": "jdbc:oracle:thin:@//" + addr + "/" + service}}
 	sqlCredentials(&p, src)
 	return p, nil
 }

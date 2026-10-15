@@ -70,9 +70,9 @@ Partially compliant.
 
 - `engines` and `catalog_bindings` exist and `catalogs` has `origin`/`source_ref` (#13 PR 1,
   migration 00024). Every Trino cluster is backed by a system-owned `trino` connection and a
-  federated engine; every catalog has a `managed` binding. A transitional trigger keeps that
-  binding in step while the catalog handlers still write the Trino columns of `catalogs`; it is
-  dropped when those writes move to bindings (#80).
+  federated engine; every catalog has a `managed` binding. A transitional trigger kept that
+  binding in step while the catalog handlers wrote only the Trino columns of `catalogs`; migration
+  00027 drops it now that they write bindings (#80).
 - Runs resolve an explicit target (binding + schema), the workspace default or the workspace's only
   target, and store it with a snapshot; the editor picks targets from
   `GET /workspaces/{id}/targets`. New executions start `QueryExecutionWorkflowV2`, whose input
@@ -95,11 +95,14 @@ Partially compliant.
   `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the
   schemas. Connection tests and Lens table health read through the registry (#11).
 - The binder contract is `internal/bindings`; the Trino binder (`internal/bindings/trino`) owns
-  the projection of each bindable kind (polaris, nessie, iceberg REST, postgresql, mysql) and the
-  registry and DDL, reading the provider's validated config (JDBC URLs are built from host, port
-  and database, never taken from users; protected properties cannot be overridden). The catalog
-  handlers write through it (#80 PR 1); the binding API, the remaining projections and the end
-  of the transitional trigger are #80 PR 2. The `url` column is still written (derived with
+  the projection of each bindable kind (polaris, nessie, iceberg REST, postgresql, mysql, mariadb,
+  sqlserver, oracle) and the registry and DDL, reading the provider's validated config (JDBC URLs
+  are built from host, port and database, never taken from users; protected properties cannot be
+  overridden). The catalog handlers and the binding API (`/catalogs/{id}/bindings`,
+  `/bindings/{id}`, `/bindings/{id}/sync`, `/engines/{id}/binding-support`) write through it and
+  write `catalog_bindings` themselves (#80). A catalog's binding on its Trino cluster's engine
+  ("primary") keeps the catalog's Trino columns in step, which the explorer, Lens and retrievers
+  still read, and cannot be deleted on its own. The `url` column is still written (derived with
   `providers.LegacyURL`) for rows read by older code paths. The typed
   `*_credentials` request fields (`internal/api/catalog_credentials.go`) stay until the UI uses
   the provider schema (#22).

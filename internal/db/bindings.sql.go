@@ -11,6 +11,53 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createManagedBinding = `-- name: CreateManagedBinding :one
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
+VALUES ($1, $2, $3, $4, $5, 'managed', true)
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+`
+
+type CreateManagedBindingParams struct {
+	CatalogID         pgtype.UUID `json:"catalog_id"`
+	EngineID          pgtype.UUID `json:"engine_id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	Connector         *string     `json:"connector"`
+	ExtraProps        []byte      `json:"extra_props"`
+}
+
+func (q *Queries) CreateManagedBinding(ctx context.Context, arg CreateManagedBindingParams) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, createManagedBinding,
+		arg.CatalogID,
+		arg.EngineID,
+		arg.EngineCatalogName,
+		arg.Connector,
+		arg.ExtraProps,
+	)
+	var i CatalogBinding
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.EngineID,
+		&i.EngineCatalogName,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Mode,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteBinding = `-- name: DeleteBinding :exec
+DELETE FROM catalog_bindings WHERE id = $1
+`
+
+func (q *Queries) DeleteBinding(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteBinding, id)
+	return err
+}
+
 const deleteNativeCatalogsOfEngine = `-- name: DeleteNativeCatalogsOfEngine :exec
 DELETE FROM catalogs c
 USING catalog_bindings b
@@ -21,6 +68,38 @@ WHERE b.catalog_id = c.id AND b.engine_id = $1 AND b.mode = 'native' AND c.origi
 func (q *Queries) DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteNativeCatalogsOfEngine, engineID)
 	return err
+}
+
+const disableManagedBindingsOfCatalog = `-- name: DisableManagedBindingsOfCatalog :exec
+UPDATE catalog_bindings SET enabled = false, updated_at = now()
+WHERE catalog_id = $1 AND mode = 'managed'
+`
+
+func (q *Queries) DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, disableManagedBindingsOfCatalog, catalogID)
+	return err
+}
+
+const getBinding = `-- name: GetBinding :one
+SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at FROM catalog_bindings WHERE id = $1
+`
+
+func (q *Queries) GetBinding(ctx context.Context, id pgtype.UUID) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, getBinding, id)
+	var i CatalogBinding
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.EngineID,
+		&i.EngineCatalogName,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Mode,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getBindingForTarget = `-- name: GetBindingForTarget :one
@@ -73,6 +152,25 @@ func (q *Queries) GetBindingForTarget(ctx context.Context, id pgtype.UUID) (GetB
 		&i.CatalogID,
 		&i.CatalogName,
 		&i.CatalogEnabled,
+	)
+	return i, err
+}
+
+const getTrinoClusterByEngine = `-- name: GetTrinoClusterByEngine :one
+SELECT id, name, coordinator_url, node_version, created_at, updated_at, engine_id FROM trino_clusters WHERE engine_id = $1
+`
+
+func (q *Queries) GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.UUID) (TrinoCluster, error) {
+	row := q.db.QueryRow(ctx, getTrinoClusterByEngine, engineID)
+	var i TrinoCluster
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CoordinatorUrl,
+		&i.NodeVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EngineID,
 	)
 	return i, err
 }
@@ -284,6 +382,96 @@ type SetWorkspaceDefaultTargetParams struct {
 func (q *Queries) SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error {
 	_, err := q.db.Exec(ctx, setWorkspaceDefaultTarget, arg.ID, arg.DefaultBindingID, arg.DefaultSchema)
 	return err
+}
+
+const updateBinding = `-- name: UpdateBinding :one
+UPDATE catalog_bindings SET
+    engine_catalog_name = $2,
+    connector           = $3,
+    extra_props         = $4,
+    enabled             = $5,
+    updated_at          = now()
+WHERE id = $1
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+`
+
+type UpdateBindingParams struct {
+	ID                pgtype.UUID `json:"id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	Connector         *string     `json:"connector"`
+	ExtraProps        []byte      `json:"extra_props"`
+	Enabled           bool        `json:"enabled"`
+}
+
+func (q *Queries) UpdateBinding(ctx context.Context, arg UpdateBindingParams) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, updateBinding,
+		arg.ID,
+		arg.EngineCatalogName,
+		arg.Connector,
+		arg.ExtraProps,
+		arg.Enabled,
+	)
+	var i CatalogBinding
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.EngineID,
+		&i.EngineCatalogName,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Mode,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertManagedBinding = `-- name: UpsertManagedBinding :one
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
+VALUES ($1, $2, $3, $4, $5, 'managed', $6)
+ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
+    engine_catalog_name = EXCLUDED.engine_catalog_name,
+    connector           = EXCLUDED.connector,
+    extra_props         = EXCLUDED.extra_props,
+    enabled             = EXCLUDED.enabled,
+    updated_at          = now()
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+`
+
+type UpsertManagedBindingParams struct {
+	CatalogID         pgtype.UUID `json:"catalog_id"`
+	EngineID          pgtype.UUID `json:"engine_id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	Connector         *string     `json:"connector"`
+	ExtraProps        []byte      `json:"extra_props"`
+	Enabled           bool        `json:"enabled"`
+}
+
+// The managed binding of a catalog on an engine (one per pair).
+func (q *Queries) UpsertManagedBinding(ctx context.Context, arg UpsertManagedBindingParams) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, upsertManagedBinding,
+		arg.CatalogID,
+		arg.EngineID,
+		arg.EngineCatalogName,
+		arg.Connector,
+		arg.ExtraProps,
+		arg.Enabled,
+	)
+	var i CatalogBinding
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.EngineID,
+		&i.EngineCatalogName,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Mode,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const upsertNativeBinding = `-- name: UpsertNativeBinding :one

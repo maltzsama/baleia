@@ -16,14 +16,14 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `doris` | Apache Doris | engine | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
 | `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | — | supported |
 | `iceberg` | Iceberg REST catalog | iceberg | metadata | — | trino (iceberg) | supported |
-| `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | — | supported |
+| `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | trino (mariadb) | supported |
 | `mysql` | MySQL | database | metadata, direct_engine | mysql | trino (mysql) | supported |
 | `nessie` | Project Nessie | iceberg | metadata | — | trino (iceberg) | supported |
-| `oracle` | Oracle Database | database | metadata, direct_engine | oracle | — | supported |
+| `oracle` | Oracle Database | database | metadata, direct_engine | oracle | trino (oracle) | supported |
 | `polaris` | Apache Polaris | iceberg | metadata | — | trino (iceberg) | supported |
 | `postgresql` | PostgreSQL | database | metadata, direct_engine | postgresql | trino (postgresql) | supported |
 | `sqlite` | SQLite | database | metadata, direct_engine | sqlite | — | unsupported (BALEIA_SQLITE_ROOT not set) |
-| `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | — | supported |
+| `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | trino (sqlserver) | supported |
 | `starrocks` | StarRocks | engine | federated_engine | starrocks | — | unsupported (planned after v1 (#30)) |
 | `trino` | Trino | engine | metadata, federated_engine | trino | — | supported |
 

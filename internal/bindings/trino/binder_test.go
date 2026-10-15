@@ -134,6 +134,35 @@ func TestProject_Kinds(t *testing.T) {
 			},
 			secrets: []string{"connection-password"},
 		},
+		{
+			name: "mariadb",
+			src:  cfg(connections.KindMariaDB, map[string]string{"host": "ma", "tls": "true", "username": "u"}, map[string]string{"password": "pw"}),
+			spec: bindings.BindingSpec{EngineCatalog: "shop"},
+			want: map[string]string{
+				"connection-url": "jdbc:mariadb://ma:3306?sslMode=verify-full", "connection-user": "u", "connection-password": "pw",
+			},
+			secrets: []string{"connection-password"},
+		},
+		{
+			name: "sqlserver",
+			src: cfg(connections.KindSQLServer, map[string]string{"host": "ms", "database": "sales", "encrypt": "disable", "trust_server_certificate": "true", "username": "sa"},
+				map[string]string{"password": "pw"}),
+			spec: bindings.BindingSpec{EngineCatalog: "sales"},
+			want: map[string]string{
+				"connection-url":  "jdbc:sqlserver://ms:1433;databaseName=sales;encrypt=false;trustServerCertificate=true",
+				"connection-user": "sa", "connection-password": "pw",
+			},
+			secrets: []string{"connection-password"},
+		},
+		{
+			name: "oracle: the binding's source ref is the service",
+			src:  cfg(connections.KindOracle, map[string]string{"host": "ora", "port": "1522", "service_name": "FREEPDB1", "username": "app"}, map[string]string{"password": "pw"}),
+			spec: bindings.BindingSpec{EngineCatalog: "erp", SourceRef: "ERP.example"},
+			want: map[string]string{
+				"connection-url": "jdbc:oracle:thin:@//ora:1522/ERP.example", "connection-user": "app", "connection-password": "pw",
+			},
+			secrets: []string{"connection-password"},
+		},
 	}
 	b := New(nil, nil)
 	for _, c := range cases {
@@ -157,6 +186,21 @@ func TestProject_Kinds(t *testing.T) {
 		p, err := b.Project(bindings.BindingSpec{EngineCatalog: "shop"}, cfg(connections.KindMySQL, map[string]string{"host": "my", "tls": tls}, nil))
 		if err != nil || p.Properties["connection-url"] != want {
 			t.Errorf("mysql tls=%s: %s, %v", tls, p.Properties["connection-url"], err)
+		}
+	}
+	// Values inside ;-separated JDBC URLs cannot add parameters.
+	for _, bad := range []struct {
+		kind connections.Kind
+		vals map[string]string
+		ref  string
+	}{
+		{connections.KindSQLServer, map[string]string{"host": "ms"}, "sales;integratedSecurity=true"},
+		{connections.KindSQLServer, map[string]string{"host": "ms"}, "{x}"},
+		{connections.KindOracle, map[string]string{"host": "ora"}, "svc)(HOST=evil"},
+		{connections.KindOracle, map[string]string{"host": "ora"}, ""},
+	} {
+		if _, err := b.Project(bindings.BindingSpec{EngineCatalog: "x", SourceRef: bad.ref}, cfg(bad.kind, bad.vals, nil)); !errors.Is(err, bindings.ErrInvalid) {
+			t.Errorf("%s %q: %v", bad.kind, bad.ref, err)
 		}
 	}
 	// A PostgreSQL host that tries to smuggle JDBC parameters is not a host;
@@ -281,6 +325,9 @@ func TestDDLHasNoSecrets(t *testing.T) {
 		cfg(connections.KindIcebergREST, map[string]string{"url": "http://r", "warehouse": "w", "client_id": "id"}, map[string]string{"client_secret": "FIXTURE-SECRET-3"}),
 		cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-4"}),
 		cfg(connections.KindMySQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-5"}),
+		cfg(connections.KindMariaDB, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-6"}),
+		cfg(connections.KindSQLServer, map[string]string{"host": "db", "database": "d", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-7"}),
+		cfg(connections.KindOracle, map[string]string{"host": "db", "service_name": "S", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-8"}),
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
@@ -364,6 +411,7 @@ func TestSupports(t *testing.T) {
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
 		connections.KindPostgreSQL: {"postgresql"}, connections.KindMySQL: {"mysql"},
+		connections.KindMariaDB: {"mariadb"}, connections.KindSQLServer: {"sqlserver"}, connections.KindOracle: {"oracle"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("supports = %v", got)

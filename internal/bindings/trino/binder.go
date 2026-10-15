@@ -54,6 +54,9 @@ func (*Binder) Supports() map[connections.Kind][]string {
 		connections.KindIcebergREST: {"iceberg"},
 		connections.KindPostgreSQL:  {"postgresql"},
 		connections.KindMySQL:       {"mysql"},
+		connections.KindMariaDB:     {"mariadb"},
+		connections.KindSQLServer:   {"sqlserver"},
+		connections.KindOracle:      {"oracle"},
 	}
 }
 

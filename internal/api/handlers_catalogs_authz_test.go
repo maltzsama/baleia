@@ -54,15 +54,16 @@ func (f *fakeTrino) statements() []string {
 
 type authzFake struct {
 	db.Querier
-	conn        db.CatalogConnection
-	cat         db.Catalog
-	updated     []db.UpdateCatalogParams
-	upserts     []string
-	disabled    []string // registry rows soft-deleted
-	registryErr []string
-	order       []string
-	mu          sync.Mutex
-	g           grantsState
+	conn           db.CatalogConnection
+	cat            db.Catalog
+	updated        []db.UpdateCatalogParams
+	upserts        []string
+	disabled       []string // registry rows soft-deleted
+	bindingUpserts []db.UpsertManagedBindingParams
+	registryErr    []string
+	order          []string
+	mu             sync.Mutex
+	g              grantsState
 }
 
 func (q *authzFake) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
@@ -106,6 +107,19 @@ func (q *authzFake) MarkTrinoCatalogRegistryError(_ context.Context, p db.MarkTr
 	q.registryErr = append(q.registryErr, p.CatalogName)
 	return nil
 }
+
+func (q *authzFake) GetTrinoClusterByID(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
+	return db.TrinoCluster{ID: id, Name: "default", EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}}, nil
+}
+
+func (q *authzFake) UpsertManagedBinding(_ context.Context, p db.UpsertManagedBindingParams) (db.CatalogBinding, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.bindingUpserts = append(q.bindingUpserts, p)
+	return db.CatalogBinding{CatalogID: p.CatalogID, EngineID: p.EngineID, EngineCatalogName: p.EngineCatalogName, Mode: "managed", Enabled: p.Enabled}, nil
+}
+
+func (q *authzFake) DisableManagedBindingsOfCatalog(context.Context, pgtype.UUID) error { return nil }
 
 func (q *authzFake) SoftDeleteTrinoCatalogRegistry(_ context.Context, p db.SoftDeleteTrinoCatalogRegistryParams) error {
 	q.mu.Lock()
