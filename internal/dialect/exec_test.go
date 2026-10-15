@@ -351,15 +351,10 @@ func openOracle(t *testing.T, raw string) runner {
 }
 
 func TestExecute_oracle(t *testing.T) {
-	raw := env(t, "BALEIA_TEST_ORACLE_URL")
-	run := openOracle(t, raw)
-	u, _ := url.Parse(raw)
-	owner := strings.ToUpper(u.User.Username())
-	if _, err := run(context.Background(), `SELECT 1 FROM all_tables WHERE owner = :1 AND table_name = 'BALEIA_DIALECT'`, owner); err != nil {
-		t.Fatal(err)
-	}
-	_, _ = run(context.Background(), `CREATE TABLE baleia_dialect (id NUMBER)`) // the user's own schema; kept between runs
-	runDialect(t, dialect.Oracle, fixture{run: run, from: "FROM dual", schema: owner, table: "BALEIA_DIALECT"})
+	run := openOracle(t, env(t, "BALEIA_TEST_ORACLE_URL"))
+	// SYS.DUAL exists on every server: the test creates nothing, so it cannot
+	// disturb the provider tests that share the user's schema.
+	runDialect(t, dialect.Oracle, fixture{run: run, from: "FROM dual", schema: "SYS", table: "DUAL"})
 }
 
 func TestExecute_clickhouse(t *testing.T) {
