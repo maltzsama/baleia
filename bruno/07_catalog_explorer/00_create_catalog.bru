@@ -1,0 +1,37 @@
+meta {
+  name: Create Explorer Catalog
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{base_url}}/connections/{{catalog_connection_id}}/catalogs
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno Explorer",
+    "trino_catalog_name": "bruno_explorer",
+    "warehouse": "baleia_polaris"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+vars:post-response {
+  explorer_catalog_id: res.body.id
+}
+
+docs {
+  The run's own catalog on its Polaris connection (warehouse baleia_polaris,
+  which holds analytics.events). The explorer browses it, 08_query_editor
+  runs on it, 09_retrievers writes into it, and 99_cleanup deletes it.
+}

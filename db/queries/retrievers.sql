@@ -63,3 +63,7 @@ SELECT * FROM retriever_refresh_history
 WHERE retriever_id = $1
 ORDER BY started_at DESC
 LIMIT $2;
+
+-- name: DeleteRetriever :execrows
+-- Its refresh history goes with it (ON DELETE CASCADE).
+DELETE FROM retrievers WHERE id = $1 AND workspace_id = $2;

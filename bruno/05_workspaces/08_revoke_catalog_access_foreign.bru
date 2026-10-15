@@ -5,7 +5,7 @@ meta {
 }
 
 delete {
-  url: {{base_url}}/workspaces/{{workspace_id}}/catalog-access/{{catalog_id}}
+  url: {{base_url}}/workspaces/{{workspace_id}}/catalog-access/00000000-0000-4000-8000-000000000001
   body: none
   auth: bearer
 }
@@ -16,4 +16,9 @@ auth:bearer {
 
 assert {
   res.status: eq 404
+}
+
+docs {
+  The workspace is not the outsider's, so it is refused before the catalog id
+  is looked at: any well-formed id will do.
 }

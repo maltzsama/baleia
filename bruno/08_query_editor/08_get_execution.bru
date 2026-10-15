@@ -14,8 +14,22 @@ auth:bearer {
   token: {{token}}
 }
 
+script:pre-request {
+  // The execution runs on the worker: wait (up to 60s) until it ends, so the
+  // statements and results requests see it finished.
+  const axios = require("axios");
+  const url = bru.getEnvVar("base_url") + "/workspaces/" + bru.getVar("workspace_id") + "/executions/" + bru.getVar("execution_id");
+  const headers = { Authorization: "Bearer " + bru.getVar("token") };
+  for (let i = 0; i < 60; i++) {
+    const r = await axios.get(url, { headers });
+    if (r.data.status !== "running" && r.data.status !== "pending") break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
 assert {
   res.status: eq 200
+  res.body.status: eq finished
 }
 
 docs {

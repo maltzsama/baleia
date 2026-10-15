@@ -122,6 +122,24 @@ func (q *Queries) CreateRetrieverRefreshHistory(ctx context.Context, arg CreateR
 	return i, err
 }
 
+const deleteRetriever = `-- name: DeleteRetriever :execrows
+DELETE FROM retrievers WHERE id = $1 AND workspace_id = $2
+`
+
+type DeleteRetrieverParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Its refresh history goes with it (ON DELETE CASCADE).
+func (q *Queries) DeleteRetriever(ctx context.Context, arg DeleteRetrieverParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRetriever, arg.ID, arg.WorkspaceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getRetrieverByID = `-- name: GetRetrieverByID :one
 SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at FROM retrievers WHERE id = $1 AND workspace_id = $2
 `

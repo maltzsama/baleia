@@ -167,6 +167,13 @@ make k8s-forward     # port-forward api/trino/temporal-ui/mailpit/polaris
 make k8s-logs        # follow all baleia pod logs
 make k8s-down        # uninstall (keeps PVCs unless K8S_PURGE=1)
 ```
+
+The API's Bruno collection runs against it end to end, and can be run again:
+
+```bash
+make k8s-forward
+cd bruno && npx @usebruno/cli@2.13.0 run --env minikube
+```
 | `make compose-up` | Build and start all Docker services |
 | `make compose-logs` | Tail logs from api + worker containers |
 

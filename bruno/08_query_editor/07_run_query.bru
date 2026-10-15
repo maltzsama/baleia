@@ -22,12 +22,14 @@ body:json {
 }
 
 script:pre-request {
-  // Run on the target found by 05_workspaces/10_list_targets, if any; without
-  // one the API resolves the workspace default or answers 422 target_required.
+  // Without a target the API resolves the workspace default or answers 422
+  // target_required.
+  // Prefer the run's own catalog (07_catalog_explorer/00_create_catalog).
+  const catalog = bru.getVar("explorer_catalog_id");
   const binding = bru.getVar("binding_id");
-  if (binding) {
+  if (catalog || binding) {
     const body = req.getBody();
-    body.target = { binding_id: binding };
+    body.target = catalog ? { catalog_id: catalog } : { binding_id: binding };
     req.setBody(body);
   }
 }

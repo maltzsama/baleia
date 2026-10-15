@@ -12,11 +12,11 @@ post {
 
 body:json {
   {
-    "name": "daily_lineitem_snapshot",
-    "definition_sql": "SELECT l_orderkey, l_partkey, l_quantity FROM tpch.sf1.lineitem",
-    "dest_catalog": "baleia_polaris",
+    "name": "bruno_retriever_probe",
+    "definition_sql": "SELECT 1 AS id",
+    "dest_catalog": "bruno_explorer",
     "dest_namespace": "analytics",
-    "dest_table": "daily_lineitem",
+    "dest_table": "bruno_retriever_probe",
     "cron_schedule": "0 */6 * * *",
     "refresh_type": "full"
   }
@@ -28,5 +28,9 @@ auth:bearer {
 
 assert {
   res.status: eq 201
-  res.body.dest_table: eq daily_lineitem
+  res.body.dest_table: eq bruno_retriever_probe
+}
+
+vars:post-response {
+  retriever_id: res.body.id
 }

@@ -135,3 +135,40 @@ func TestCreateRetriever_StoresDestinationFields(t *testing.T) {
 		t.Fatalf("refresh type = %q, want full (default)", fake.created.RefreshType)
 	}
 }
+
+type fakeRetrieverDeleter struct {
+	fakeRetrieverQuerier
+	deleted *db.DeleteRetrieverParams
+	rows    int64
+}
+
+func (f *fakeRetrieverDeleter) DeleteRetriever(_ context.Context, arg db.DeleteRetrieverParams) (int64, error) {
+	f.deleted = &arg
+	return f.rows, nil
+}
+
+// TestDeleteRetriever: the row is deleted in the caller's workspace; one that
+// is not there is 404.
+func TestDeleteRetriever(t *testing.T) {
+	req := DeleteRetrieverRequestObject{Id: PathId{0xAA}, RetrieverId: [16]byte{0xBB}}
+
+	q := &fakeRetrieverDeleter{rows: 1}
+	resp, err := (&Handlers{queries: q}).DeleteRetriever(testContext(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(DeleteRetriever204Response); !ok {
+		t.Fatalf("want 204, got %T", resp)
+	}
+	if q.deleted == nil || q.deleted.ID.Bytes != [16]byte{0xBB} || q.deleted.WorkspaceID.Bytes != [16]byte{0xAA} {
+		t.Fatalf("deleted %+v, want the retriever in the request's workspace", q.deleted)
+	}
+
+	resp, err = (&Handlers{queries: &fakeRetrieverDeleter{rows: 0}}).DeleteRetriever(testContext(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(DeleteRetriever404JSONResponse); !ok {
+		t.Fatalf("missing retriever: want 404, got %T", resp)
+	}
+}

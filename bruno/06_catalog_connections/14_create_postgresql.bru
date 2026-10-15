@@ -19,7 +19,7 @@ body:json {
     "name": "Local PostgreSQL",
     "type": "postgresql",
     "config": {
-      "host": "localhost",
+      "host": "{{postgres_host}}",
       "port": "5432",
       "database": "baleia",
       "sslmode": "disable",
@@ -33,7 +33,7 @@ body:json {
 
 assert {
   res.status: eq 201
-  res.body.url: eq jdbc:postgresql://localhost:5432/baleia
+  res.body.url: eq jdbc:postgresql://{{postgres_host}}:5432/baleia
 }
 
 vars:post-response {

@@ -142,6 +142,7 @@ func (s *Server) routes() {
 
 	s.mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
+		r.Use(OptionalJSONBody)
 		baleiaapi.HandlerFromMux(strictHandler, r)
 
 		// Non-oapi routes (Lens and dynamic catalog browsing) share the chi auth

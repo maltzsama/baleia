@@ -1,8 +1,21 @@
 docs {
-  Run against `make dev` (API on :9000). `01_auth` logs in and sets `token`.
+  Run against minikube (`make k8s-up`, then `make k8s-forward`) with the
+  `minikube` environment:
 
-  `other_token` is the token of a second, non-admin user. The `*_foreign`
-  requests use it and expect 404: another user's resources must not be
-  visible. Invite a user (`03_users/02_invite_user`), log in as them and set
-  the variable.
+      npx @usebruno/cli@2.13.0 run --env minikube
+
+  The collection is self-contained and can be run again:
+  - `01_auth` logs in and sets `token`; the password reset reads its token
+    from Mailpit (`mailpit_url`).
+  - `03_users` creates the outsider, a second non-admin user, and logs it in
+    as `other_token`. The `*_foreign` requests use it and expect 404: other
+    users' resources must not be visible.
+  - `07_catalog_explorer` creates the run's own catalog (`bruno_explorer`) on
+    its Polaris connection; queries and the retriever use it.
+  - `99_cleanup` deletes what the run created.
+
+  `polaris_url` and `postgres_host` are addresses as the API sees them (the
+  cluster services in minikube). Loopback addresses are always refused for
+  connections, so the PostgreSQL engine does not work with the `local`
+  environment's `localhost`.
 }
