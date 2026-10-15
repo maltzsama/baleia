@@ -258,3 +258,10 @@ func TestEngineSource_ReadOnlySession(t *testing.T) {
 		t.Fatalf("view kind = %q", rec.tables[1].Kind)
 	}
 }
+
+func TestTruncateKeepsUTF8(t *testing.T) {
+	got := truncate("aé", 2) // "é" is 2 bytes: cutting at 2 splits it
+	if got != "a" {
+		t.Fatalf("truncate = %q", got)
+	}
+}

@@ -85,6 +85,8 @@ type client struct {
 	password string
 	database string
 	http     *http.Client
+	// walkHTTP streams catalog walks, which may run up to WalkTimeout.
+	walkHTTP *http.Client
 }
 
 func (p *Provider) client(cfg connections.Config) *client {
@@ -102,6 +104,7 @@ func (p *Provider) client(cfg connections.Config) *client {
 		password: cfg.Secret("password"),
 		database: valueOr(cfg.Value("database"), "default"),
 		http:     p.dialer.HTTPClient(statementTimeout + 5*time.Second),
+		walkHTTP: p.dialer.HTTPClient(connections.WalkTimeout + 5*time.Second),
 	}
 }
 
@@ -177,7 +180,11 @@ func (c *client) post(ctx context.Context, sql string, params map[string]string,
 	}
 	req.Header.Set("X-ClickHouse-User", c.user)
 	req.Header.Set("X-ClickHouse-Key", c.password)
-	resp, err := c.http.Do(req)
+	hc := c.http
+	if timeout > statementTimeout && c.walkHTTP != nil {
+		hc = c.walkHTTP
+	}
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, err
 	}

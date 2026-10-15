@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/metadata"
@@ -34,8 +35,9 @@ type SyncCatalogMetadataResult struct {
 	TablesRemoved int
 }
 
-// metadataHeartbeatInterval throttles the sync's heartbeats.
-const metadataHeartbeatInterval = 10 * time.Second
+// metadataHeartbeatInterval is how often the sync heartbeats; a var so tests
+// can shrink it.
+var metadataHeartbeatInterval = 10 * time.Second
 
 // SyncCatalogMetadata applies one full metadata pass to a catalog. It
 // heartbeats the tables processed; a pass is idempotent, so it may be
@@ -52,14 +54,30 @@ func (a *Activities) syncCatalogMetadata(ctx context.Context, p SyncCatalogMetad
 	if a.metadata == nil {
 		return nil, temporal.NewNonRetryableApplicationError("metadata sync is not configured", "unavailable", nil)
 	}
-	var last time.Time
-	progress := func(seen int) {
-		if now := time.Now(); now.Sub(last) >= metadataHeartbeatInterval {
-			last = now
-			activity.RecordHeartbeat(ctx, seen)
+	// Heartbeat on a ticker for the whole pass: a one-query catalog walk can
+	// run minutes before its first table arrives.
+	var seen atomic.Int64
+	progress := func(n int) { seen.Store(int64(n)) }
+	done := make(chan struct{})
+	beating := make(chan struct{})
+	go func() {
+		defer close(beating)
+		t := time.NewTicker(metadataHeartbeatInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				activity.RecordHeartbeat(ctx, seen.Load())
+			}
 		}
-	}
+	}()
 	stats, err := a.metadata.Sync(ctx, pgtype.UUID{Bytes: id, Valid: true}, progress)
+	close(done)
+	<-beating
 	switch {
 	case errors.Is(err, metadata.ErrSyncInProgress):
 		return nil, temporal.NewNonRetryableApplicationError(err.Error(), "sync_in_progress", err)
