@@ -85,14 +85,32 @@ func (e *Engine) Close() error                 { return nil }
 // Capabilities of Trino in v1.
 func (e *Engine) Capabilities() queryengine.Capabilities {
 	return queryengine.Capabilities{
+		Dialect:            dialect.Trino,
 		IdentityModes:      []string{"impersonation"},
 		ReadOnly:           queryengine.ReadOnlyEnforced, // the catalog guard's read-only mode (#92)
 		CancelScope:        queryengine.CancelAnyProcess,
+		SupportsCancel:     true,
 		Transactions:       false,
 		MultipleResultSets: false,
+		MultipleCatalogs:   true,
+		NamespaceDepth:     1,
+		SessionSchema:      true,
+		SupportsExplain:    true,
+		SupportsTimeTravel: true, // Iceberg tables
+		SupportsCatalogDDL: true,
 		Monitoring:         true,
 		IcebergMaintenance: true,
+		IdentifierCase:     "lower",
 	}
+}
+
+// Version is the coordinator's node version.
+func (e *Engine) Version(ctx context.Context) (string, error) {
+	info, err := e.client.Info(ctx)
+	if err != nil {
+		return "", err
+	}
+	return info.NodeVersion.Version, nil
 }
 
 // Ping fails while the coordinator is down or still starting.

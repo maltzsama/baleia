@@ -19,8 +19,25 @@ assert {
   res.body: isArray
 }
 
+tests {
+  test("the default trino engine carries capabilities, dialect and version", function() {
+    const trino = res.getBody().find(e => e.kind === "trino");
+    expect(trino, "default trino engine").to.exist;
+    expect(trino.dialect.name).to.equal("trino");
+    expect(trino.dialect.formatter_language).to.equal("trino");
+    expect(trino.capabilities.dialect).to.equal("trino");
+    expect(trino.capabilities.read_only).to.equal("enforced");
+    expect(trino.capabilities.supports_cancel).to.equal(true);
+    expect(trino).to.have.property("version"); // null while Trino is unreachable
+    bru.setVar("dialect_name", trino.dialect.name);
+  });
+}
+
 docs {
   An admin sees every engine, including the default Trino engine Baleia
   creates from TRINO_URL. Others see engines on connections they own and
   engines hosting a catalog granted to one of their workspaces.
+
+  Each engine has its dialect, and — when it is enabled and its adapter is
+  available — its capabilities and the version it reports (cached 5 min).
 }

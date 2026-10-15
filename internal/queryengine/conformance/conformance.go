@@ -75,6 +75,23 @@ func Run(t *testing.T, newEngine func(t *testing.T) queryengine.Engine, fx Fixtu
 	e := newEngine(t)
 	caps := e.Capabilities()
 
+	t.Run("capabilities", func(t *testing.T) {
+		if caps.Dialect == "" || caps.Dialect != e.Dialect().Name() {
+			t.Errorf("capabilities name dialect %q, Dialect() is %q", caps.Dialect, e.Dialect().Name())
+		}
+		if caps.SupportsCancel != (caps.CancelScope != "") {
+			t.Error("SupportsCancel and CancelScope disagree")
+		}
+		switch caps.IdentifierCase {
+		case "preserve", "lower", "upper":
+		default:
+			t.Errorf("identifier case %q", caps.IdentifierCase)
+		}
+		if caps.NamespaceDepth < 0 {
+			t.Errorf("namespace depth %d", caps.NamespaceDepth)
+		}
+	})
+
 	t.Run("types", func(t *testing.T) {
 		tbl, err := queryengine.Collect(ctx, e, queryengine.SessionSpec{}, fx.TypesSQL, 10)
 		if err != nil {

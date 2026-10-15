@@ -87,7 +87,7 @@ func (h *Handlers) ListEngines(ctx context.Context, _ ListEnginesRequestObject) 
 	}
 	out := make([]Engine, 0, len(engines))
 	for _, e := range engines {
-		out = append(out, engineToPublic(e))
+		out = append(out, h.describeEngine(ctx, e))
 	}
 	return ListEngines200JSONResponse(out), nil
 }
@@ -104,7 +104,7 @@ func (h *Handlers) GetEngine(ctx context.Context, request GetEngineRequestObject
 	if err != nil {
 		return nil, err
 	}
-	return GetEngine200JSONResponse(engineToPublic(eng)), nil
+	return GetEngine200JSONResponse(h.describeEngine(ctx, eng)), nil
 }
 
 // CreateEngine registers a direct engine on a connection the caller owns (or

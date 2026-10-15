@@ -1,0 +1,23 @@
+meta {
+  name: Get Dialect (Not Modified)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/dialects/trino
+  body: none
+  auth: bearer
+}
+
+headers {
+  If-None-Match: {{dialect_etag}}
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 304
+}

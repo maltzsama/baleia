@@ -1,0 +1,42 @@
+meta {
+  name: Split Statements
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/dialects/postgresql/split
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "sql": "SELECT 'é;'; DO $$ BEGIN PERFORM 1; END $$;\nSELECT 2"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body.length: eq 3
+}
+
+tests {
+  test("offsets are JavaScript string indices", function() {
+    const sql = req.getBody().sql;
+    const spans = res.getBody();
+    expect(sql.slice(spans[0].start, spans[0].end)).to.equal("SELECT 'é;'");
+    expect(sql.slice(spans[1].start, spans[1].end)).to.equal("DO $$ BEGIN PERFORM 1; END $$");
+    expect(sql.slice(spans[2].start, spans[2].end)).to.equal("SELECT 2");
+  });
+}
+
+docs {
+  Splits a script with the dialect's rules, as the server does before
+  running it, so "run current statement" in the editor matches.
+}

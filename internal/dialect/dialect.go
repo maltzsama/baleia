@@ -174,6 +174,16 @@ type Dialect interface {
 	CodeMirrorBase() string    // @codemirror/lang-sql base dialect
 }
 
+// ForEngineKind returns the dialect of a query-engine kind.
+func ForEngineKind(kind string) (Dialect, bool) {
+	name := map[string]string{
+		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
+		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
+		"flightsql": FlightSQL, "fake": FlightSQL,
+	}[kind]
+	return Get(name)
+}
+
 var registry = map[string]Dialect{}
 
 func register(d Dialect) Dialect {

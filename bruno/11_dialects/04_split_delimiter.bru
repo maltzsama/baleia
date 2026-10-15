@@ -1,0 +1,26 @@
+meta {
+  name: Split Statements (DELIMITER)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/dialects/mysql/split
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "sql": "DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END//"
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq unsupported_syntax
+}

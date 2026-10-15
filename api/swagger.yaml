@@ -582,6 +582,80 @@ components:
         enabled: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        version:
+          type: string
+          nullable: true
+          description: "Server version reported by the engine (cached 5 minutes); null when unknown or unreachable"
+        capabilities:
+          allOf: [{ $ref: "#/components/schemas/EngineCapabilities" }]
+          nullable: true
+          description: "What the engine can do; null when the engine is disabled or no adapter for its kind is available yet"
+        dialect:
+          allOf: [{ $ref: "#/components/schemas/EngineDialect" }]
+          nullable: true
+          description: "How to write SQL for it; keyword and function lists are at GET /dialects/{name}"
+
+    EngineCapabilities:
+      type: object
+      description: >
+        What an engine can do. Capabilities never authorize anything: what a
+        user may run is decided by policy (catalog DDL is never allowed in the
+        editor, whatever supports_catalog_ddl says).
+      required: [dialect, identity_modes, read_only, supports_cancel, transactions, multiple_result_sets,
+        multiple_catalogs, namespace_depth, session_schema, supports_explain, supports_time_travel,
+        supports_catalog_ddl, monitoring, iceberg_maintenance, arrow_native, max_identifier_length, identifier_case]
+      properties:
+        dialect: { type: string }
+        identity_modes:
+          type: array
+          items: { type: string, enum: [impersonation, connection, per_user] }
+        read_only: { type: string, enum: [enforced, none], description: "enforced: the engine guarantees read-only sessions; none: only a read-only database role can" }
+        supports_cancel: { type: boolean }
+        cancel_scope: { type: string, enum: [any_process, in_process], nullable: true }
+        transactions: { type: boolean }
+        multiple_result_sets: { type: boolean }
+        multiple_catalogs: { type: boolean }
+        namespace_depth: { type: integer, description: "Schema depth in SQL; 0 when the engine has no schemas" }
+        session_schema: { type: boolean }
+        supports_explain: { type: boolean }
+        supports_time_travel: { type: boolean }
+        supports_catalog_ddl: { type: boolean, description: "Informational only" }
+        monitoring: { type: boolean }
+        iceberg_maintenance: { type: boolean }
+        arrow_native: { type: boolean }
+        max_identifier_length: { type: integer, description: "0 when unknown" }
+        identifier_case: { type: string, enum: [preserve, lower, upper] }
+
+    EngineDialect:
+      type: object
+      required: [name, formatter_language, codemirror_base]
+      properties:
+        name: { type: string }
+        formatter_language: { type: string, description: "sql-formatter language id" }
+        codemirror_base: { type: string, description: "@codemirror/lang-sql base dialect" }
+
+    Dialect:
+      allOf:
+        - $ref: "#/components/schemas/EngineDialect"
+        - type: object
+          required: [keywords, functions]
+          properties:
+            keywords: { type: array, items: { type: string } }
+            functions: { type: array, items: { type: string } }
+
+    SplitStatementsRequest:
+      type: object
+      required: [sql]
+      properties:
+        sql: { type: string, maxLength: 1048576 }
+
+    StatementSpan:
+      type: object
+      required: [start, end]
+      description: "One statement, as offsets into the submitted SQL in UTF-16 code units (JavaScript string indices), end exclusive"
+      properties:
+        start: { type: integer }
+        end: { type: integer }
 
     CreateEngineRequest:
       type: object
@@ -1722,6 +1796,68 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /dialects/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Engines]
+      operationId: getDialect
+      summary: "A SQL dialect with its keyword and function lists (for the editor)"
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: "Dialect"
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dialect" }
+        "304":
+          description: "Not modified (If-None-Match matched the ETag)"
+          headers:
+            ETag: { schema: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /dialects/{name}/split:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Engines]
+      operationId: splitStatements
+      summary: "Split a script into statements with the dialect's rules"
+      description: >
+        Used by the editor to run the statement under the cursor, so the client
+        and the server split the same way. Unterminated strings, quoted
+        identifiers or comments, and MySQL's DELIMITER command, answer 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SplitStatementsRequest" }
+      responses:
+        "200":
+          description: "Statements in order"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StatementSpan" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /engines/{id}/bindings:
     parameters:
