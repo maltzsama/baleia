@@ -78,6 +78,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 - name: SMTP_PASSWORD
   valueFrom:
     secretKeyRef: { name: {{ $name }}, key: SMTP_PASSWORD }
+- name: BALEIA_METRICS_TOKEN
+  valueFrom:
+    secretKeyRef: { name: {{ $name }}, key: BALEIA_METRICS_TOKEN, optional: true }
 {{- end }}
 
 {{- define "baleia.podSecurityContext" -}}

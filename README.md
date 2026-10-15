@@ -200,7 +200,7 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_CONNECTIONS_DENY_CIDRS` | _(unset)_ | Comma-separated CIDRs that connections may never reach, added to the built-in deny list (loopback, link-local incl. cloud metadata `169.254.169.254`, `0.0.0.0/8`) — see [ADR 0011](docs/adr/0011-direct-connections-security.md) |
 | `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, connections may only reach these comma-separated CIDRs (the deny list still wins) |
 | `BALEIA_METRICS_ENABLED` | `true` | Serve Prometheus metrics at the API's `/metrics` (the catalog is `internal/metrics`, #87) |
-| `BALEIA_METRICS_TOKEN` | _(unset)_ | When set, `/metrics` (API and worker) needs `Authorization: Bearer <token>`; it is never behind the user JWT |
+| `BALEIA_METRICS_TOKEN` | _(unset)_ | When set, `/metrics` (API and worker) needs `Authorization: Bearer <token>`; it is never behind the user JWT. A credential: in the chart it is the optional Secret key `BALEIA_METRICS_TOKEN` (`secrets.values` or `existingSecret`), never `config` |
 | `BALEIA_WORKER_METRICS_ADDR` | `:9090` | The worker's listener for `/metrics` (Temporal SDK, pool, build) and `/healthz`; empty disables it |
 | `BALEIA_DB_MAX_CONNS` | api `20`, worker `10` | Size of Baleia's own database pool (observable as `baleia_db_pool_*`) |
 | `BALEIA_DB_MIN_CONNS` | `2` | Connections the pool keeps open |
