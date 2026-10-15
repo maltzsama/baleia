@@ -27,6 +27,7 @@ type Querier interface {
 	// What stops an engine from being deleted: managed bindings and executions
 	// still running on it. Native bindings go with the engine.
 	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (CountEngineBlockersRow, error)
+	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
 	// A source catalog's source_ref is its warehouse (or database).

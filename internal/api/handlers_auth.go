@@ -12,8 +12,10 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/version"
+	"github.com/galileostudio/baleia/internal/metrics"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -86,7 +88,8 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error) {
+func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp LoginResponseObject, err error) {
+	defer func() { h.metrics.auth.Attempt(metrics.AuthPassword, authOutcome(resp, err)) }()
 	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err != nil {
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid credentials"}}, nil
@@ -183,7 +186,8 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 
 // ── Refresh Token ─────────────────────────────────────────────────────────────
 
-func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error) {
+func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (resp RefreshTokenResponseObject, err error) {
+	defer func() { h.metrics.auth.Attempt(metrics.AuthRefresh, authOutcome(resp, err)) }()
 	hash := auth.HashRefreshToken(request.Body.RefreshToken)
 
 	rt, err := h.queries.GetRefreshTokenByHash(ctx, hash)
@@ -399,6 +403,9 @@ func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
+	ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+	w = ww
+	defer func() { h.metrics.auth.Attempt(metrics.AuthOIDC, statusOutcome(ww.Status())) }()
 	providerID := r.PathValue("provider_id")
 	provider, err := h.loadOIDCProvider(r, providerID)
 	if err != nil {
@@ -503,4 +510,30 @@ func randomState() string {
 	// RawURLEncoding: URL-safe and no '=' padding, so the token survives being
 	// embedded raw in a query string (password reset link, OIDC state).
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+// authOutcome classifies a strict auth handler's result for
+// baleia_auth_attempts_total.
+func authOutcome(resp any, err error) string {
+	switch {
+	case err != nil:
+		return metrics.OutcomeError
+	case resp == nil:
+		return metrics.OutcomeError
+	}
+	switch resp.(type) {
+	case Login200JSONResponse, RefreshToken200JSONResponse:
+		return metrics.OutcomeSuccess
+	}
+	return metrics.OutcomeInvalidCredentials
+}
+
+// statusOutcome classifies a raw handler's status.
+func statusOutcome(status int) string {
+	switch {
+	case status == 0 || status < 400:
+		return metrics.OutcomeSuccess
+	case status >= 500:
+		return metrics.OutcomeError
+	}
+	return metrics.OutcomeInvalidCredentials
 }

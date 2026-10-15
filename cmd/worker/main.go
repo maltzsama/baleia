@@ -112,6 +112,7 @@ func main() {
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, dialer.HTTPClient(60*time.Second)))
 
 	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor)
+	act.SetMetrics(reg)
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflow) // V1: drains runs started before V2 (#27 removes it)
@@ -127,10 +128,10 @@ func main() {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
 		// boot. Each workflow does a single pass and returns.
 		if err := schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
-			{ID: "lens-query-poller", Workflow: workflows.LensQueryPollWorkflow, Every: 30 * time.Second},
-			{ID: "lens-cluster-poller", Workflow: workflows.LensClusterPollWorkflow, Every: 30 * time.Second},
-			{ID: "lens-table-health", Workflow: workflows.LensTableHealthWorkflow, Every: time.Hour},
-			{ID: "retriever-scheduler", Workflow: workflows.RetrieverDispatchWorkflow, Every: 60 * time.Second},
+			{ID: schedules.LensQueryPoller, Workflow: workflows.LensQueryPollWorkflow, Every: 30 * time.Second},
+			{ID: schedules.LensClusterPoller, Workflow: workflows.LensClusterPollWorkflow, Every: 30 * time.Second},
+			{ID: schedules.LensTableHealth, Workflow: workflows.LensTableHealthWorkflow, Every: time.Hour},
+			{ID: schedules.RetrieverScheduler, Workflow: workflows.RetrieverDispatchWorkflow, Every: 60 * time.Second},
 		}); err != nil {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)

@@ -56,6 +56,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, keyring *crypto.Keyring, tempor
 
 func (s *Server) routes() {
 	s.mux.Use(middleware.RequestID)
+	if s.metrics != nil {
+		s.mux.Use(s.metrics.HTTP().Middleware) // route templates, never raw paths (#87)
+	}
 	s.mux.Use(RequestIDHeader)
 	s.mux.Use(StructuredLogger(slog.Default()))
 	s.mux.Use(middleware.Recoverer)
@@ -117,6 +120,13 @@ func (s *Server) routes() {
 	binder := bindtrino.New(trinoAdmin, s.queries)
 
 	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
+	var onRefreshLimited func()
+	if s.metrics != nil {
+		h.SetMetrics(s.metrics)
+		s3Client.SetMetrics(s.metrics.Storage())
+		auth := h.AuthMetrics()
+		onRefreshLimited = func() { auth.Attempt(metrics.AuthRefresh, metrics.OutcomeRateLimited) }
+	}
 
 	// OIDC needs cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)
@@ -131,7 +141,7 @@ func (s *Server) routes() {
 	})
 
 	s.mux.Route("/api/v1", func(r chi.Router) {
-		r.Use(RateLimitRefreshMiddleware(s.rl))
+		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
 		baleiaapi.HandlerFromMux(strictHandler, r)
 
 		// Non-oapi routes (Lens and dynamic catalog browsing) share the chi auth

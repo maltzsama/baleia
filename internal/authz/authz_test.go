@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -303,5 +304,22 @@ func TestEngine(t *testing.T) {
 	}
 	if _, _, err := c.Engine(ctx, admin, uid(99), ActRead); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing engine: %v", err)
+	}
+}
+
+// TestDenialHook: every refusal is reported once, by resource and reason;
+// allowed calls report nothing.
+func TestDenialHook(t *testing.T) {
+	var got []string
+	c := fixture().WithDenials(func(resource, reason string) { got = append(got, resource+":"+reason) })
+	ctx := context.Background()
+	_, _ = c.Connection(ctx, owner, connA, ActRead)                   // allowed
+	_, _ = c.Connection(ctx, other, connA, ActRead)                   // not_found
+	_, _, _ = c.Catalog(ctx, reader, catA, ActWrite)                  // forbidden: a reader cannot write
+	_, _, _ = c.CatalogOfConnection(ctx, owner, connB, catA, ActRead) // wrong connection: not_found
+	_, _ = c.Workspace(ctx, other, wsX, ActRead)                      // not_found
+	want := []string{"connection:not_found", "catalog:forbidden", "catalog:not_found", "workspace:not_found"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("denials = %v, want %v", got, want)
 	}
 }

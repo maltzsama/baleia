@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countManagedBindingsByState = `-- name: CountManagedBindingsByState :many
+SELECT lifecycle_state, count(*)::bigint AS count FROM catalog_bindings WHERE mode = 'managed' GROUP BY lifecycle_state
+`
+
+type CountManagedBindingsByStateRow struct {
+	LifecycleState string `json:"lifecycle_state"`
+	Count          int64  `json:"count"`
+}
+
+func (q *Queries) CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error) {
+	rows, err := q.db.Query(ctx, countManagedBindingsByState)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountManagedBindingsByStateRow
+	for rows.Next() {
+		var i CountManagedBindingsByStateRow
+		if err := rows.Scan(&i.LifecycleState, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createManagedBinding = `-- name: CreateManagedBinding :one
 INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled,
                               lifecycle_state, desired_version)

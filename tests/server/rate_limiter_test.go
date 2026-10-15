@@ -77,7 +77,7 @@ func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
-	middleware := server.RateLimitRefreshMiddleware(rl)
+	middleware := server.RateLimitRefreshMiddleware(rl, nil)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -114,7 +114,8 @@ func TestRateLimiterMiddlewareBlocksRefresh(t *testing.T) {
 	rl := server.NewRateLimiter(cfg)
 	defer rl.Stop()
 
-	middleware := server.RateLimitRefreshMiddleware(rl)
+	limited := 0
+	middleware := server.RateLimitRefreshMiddleware(rl, func() { limited++ })
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -136,6 +137,9 @@ func TestRateLimiterMiddlewareBlocksRefresh(t *testing.T) {
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", rec.Code)
 	}
+	if limited != 1 {
+		t.Fatalf("rate-limit hook ran %d times, want 1 (the refused refresh)", limited)
+	}
 }
 
 func TestRateLimiterMiddlewareBlocksResults(t *testing.T) {
@@ -143,7 +147,7 @@ func TestRateLimiterMiddlewareBlocksResults(t *testing.T) {
 	rl := server.NewRateLimiter(cfg)
 	defer rl.Stop()
 
-	middleware := server.RateLimitRefreshMiddleware(rl)
+	middleware := server.RateLimitRefreshMiddleware(rl, nil)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -224,7 +228,7 @@ func TestRateLimiterMiddlewareNonRefreshUnlimited(t *testing.T) {
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
-	middleware := server.RateLimitRefreshMiddleware(rl)
+	middleware := server.RateLimitRefreshMiddleware(rl, nil)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

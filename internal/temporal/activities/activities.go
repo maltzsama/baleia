@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -46,6 +47,7 @@ type lensMonitor interface {
 }
 
 type Activities struct {
+	metrics workerMetrics
 	queries db.Querier
 	engines engineSource
 	monitor lensMonitor
@@ -88,6 +90,7 @@ func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns 
 
 func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SplitSQL)
+	w.RegisterActivity(SchedulePassSucceeded)
 	w.RegisterActivity(CreateStatementRecords)
 	w.RegisterActivity(ExecuteStatement)
 	w.RegisterActivity(UpdateStatementRecord)
@@ -356,6 +359,9 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	}
 
 	durationMs := time.Since(start).Milliseconds()
+	observe := func(outcome string, err error, rows, bytes int64) {
+		a.metrics.engine.Statement(eng.Kind(), outcome, string(queryengine.CodeOf(err)), time.Since(start), rows, bytes)
+	}
 	cancelOnEngine := func(reason string) {
 		if handle.QueryID == "" {
 			return
@@ -372,6 +378,7 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 	if ctx.Err() != nil {
 		sink.abort()
 		cancelOnEngine("cancelled by baleia")
+		observe(metrics.StatementCancelled, nil, 0, 0)
 		return nil, temporal.NewCanceledError()
 	}
 
@@ -387,6 +394,7 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 
 	// A failed upload also fails the writes into its pipe: report the upload.
 	if sink.uploadErr != nil {
+		observe(metrics.StatementError, sink.uploadErr, sink.rows, 0)
 		return &ExecuteStatementResult{
 			EngineQueryID: handle.QueryID,
 			RowCount:      sink.rows,
@@ -395,6 +403,7 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 		}, nil
 	}
 	if err != nil {
+		observe(metrics.StatementError, err, 0, 0)
 		return &ExecuteStatementResult{
 			EngineQueryID: handle.QueryID,
 			DurationMs:    durationMs,
@@ -413,6 +422,11 @@ func (a *Activities) executeStatement(ctx context.Context, params ExecuteStateme
 		res.ResultKey = sink.key
 		res.ResultBytes = sink.uploaded
 	}
+	outcome := metrics.StatementSuccess
+	if sink.truncated {
+		outcome = metrics.StatementTruncated
+	}
+	observe(outcome, nil, sink.rows, res.ResultBytes)
 	return res, nil
 }
 
@@ -717,4 +731,37 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 		return nil
 	}
 	return err
+}
+
+// workerMetrics are the worker's producers (#87); nil-safe, zero without
+// SetMetrics.
+type workerMetrics struct {
+	engine    *metrics.Engine
+	schedules *metrics.Schedules
+}
+
+// SetMetrics registers the worker's producers on reg.
+func (a *Activities) SetMetrics(reg *metrics.Registry) {
+	a.metrics = workerMetrics{engine: reg.Engine(), schedules: reg.Schedules()}
+	if s3, ok := a.s3.(interface{ SetMetrics(*metrics.Storage) }); ok {
+		s3.SetMetrics(reg.Storage())
+	}
+}
+
+// passDone records a successful pass of a schedule.
+func (a *Activities) passDone(schedule string, err error) {
+	if a != nil && err == nil {
+		a.metrics.schedules.Succeeded(schedule)
+	}
+}
+
+// SchedulePassSucceededParams names the schedule whose pass completed.
+type SchedulePassSucceededParams struct{ Schedule string }
+
+// SchedulePassSucceeded records a completed pass of a scheduled workflow that
+// does more than one activity (table health, retriever dispatch): the
+// workflow calls it last, so the gauge never runs ahead of the pass.
+func SchedulePassSucceeded(ctx context.Context, params SchedulePassSucceededParams) error {
+	defaultActivities.passDone(params.Schedule, nil)
+	return nil
 }

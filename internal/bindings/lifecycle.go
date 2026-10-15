@@ -77,6 +77,15 @@ type Lifecycle struct {
 	// never inherit it, so an engine that times out still leaves the binding
 	// in error with the cause recorded.
 	DDLTimeout time.Duration
+	// OnDDL observes each catalog DDL the engine was asked for (action
+	// create, replace or drop); nil for none (metrics.Catalog.DDL).
+	OnDDL func(action string, err error)
+}
+
+func (l Lifecycle) ddl(action string, err error) {
+	if l.OnDDL != nil {
+		l.OnDDL(action, err)
+	}
 }
 
 // stateWriteTimeout bounds a state write once the request may be gone.
@@ -154,6 +163,7 @@ func (l Lifecycle) create(ctx context.Context, p Projection) error {
 	ectx, cancel := l.engine(ctx)
 	defer cancel()
 	err := l.Binder.Create(ectx, l.Engine, p)
+	l.ddl("create", err)
 	if errors.Is(err, ErrCatalogExists) {
 		if u, ok := l.Binder.(Unstager); ok {
 			uctx, ucancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
@@ -167,13 +177,17 @@ func (l Lifecycle) create(ctx context.Context, p Projection) error {
 func (l Lifecycle) drop(ctx context.Context, name string) error {
 	ectx, cancel := l.engine(ctx)
 	defer cancel()
-	return l.Binder.Drop(ectx, l.Engine, name)
+	err := l.Binder.Drop(ectx, l.Engine, name)
+	l.ddl("drop", err)
+	return err
 }
 
 func (l Lifecycle) replace(ctx context.Context, p Projection) error {
 	ectx, cancel := l.engine(ctx)
 	defer cancel()
-	return l.Binder.Replace(ectx, l.Engine, p)
+	err := l.Binder.Replace(ectx, l.Engine, p)
+	l.ddl("replace", err)
+	return err
 }
 
 // Update applies a changed projection under the same name to a binding

@@ -80,3 +80,12 @@ func Ensure(ctx context.Context, c client.Client, taskQueue string, specs []Spec
 	}
 	return nil
 }
+
+// IDs of the recurring jobs the worker ensures; metrics label them by these
+// (baleia_schedule_last_success_timestamp_seconds{schedule}).
+const (
+	LensQueryPoller    = "lens-query-poller"
+	LensClusterPoller  = "lens-cluster-poller"
+	LensTableHealth    = "lens-table-health"
+	RetrieverScheduler = "retriever-scheduler"
+)

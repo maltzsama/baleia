@@ -213,3 +213,6 @@ WHERE engine_id = $1 AND mode = 'managed' AND present;
 INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode)
 VALUES ($1, $2, true, 'managed')
 ON CONFLICT (engine_id, catalog_name) DO UPDATE SET mode = 'managed', present = true, observed_at = now();
+
+-- name: CountManagedBindingsByState :many
+SELECT lifecycle_state, count(*)::bigint AS count FROM catalog_bindings WHERE mode = 'managed' GROUP BY lifecycle_state;

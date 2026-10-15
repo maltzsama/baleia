@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
@@ -22,7 +23,9 @@ import (
 type LensPollTrinoQueriesParams struct{}
 
 func LensPollTrinoQueries(ctx context.Context, params LensPollTrinoQueriesParams) error {
-	return defaultActivities.lensPollTrinoQueries(ctx)
+	err := defaultActivities.lensPollTrinoQueries(ctx)
+	defaultActivities.passDone(schedules.LensQueryPoller, err)
+	return err
 }
 
 func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
@@ -102,7 +105,9 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 type LensPollTrinoClusterParams struct{}
 
 func LensPollTrinoCluster(ctx context.Context, params LensPollTrinoClusterParams) error {
-	return defaultActivities.lensPollTrinoCluster(ctx)
+	err := defaultActivities.lensPollTrinoCluster(ctx)
+	defaultActivities.passDone(schedules.LensClusterPoller, err)
+	return err
 }
 
 func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {

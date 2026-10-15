@@ -14,6 +14,7 @@ import (
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/metrics"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -37,6 +38,35 @@ type Handlers struct {
 	// the admin identity (docs/adr/0005, #80). Both are built at the wiring site.
 	engines engineSource
 	binder  *bindtrino.Binder
+	metrics apiMetrics
+}
+
+// apiMetrics are the API's producers (#87); all nil-safe, zero without
+// SetMetrics.
+type apiMetrics struct {
+	auth    *metrics.Auth
+	authz   *metrics.Authz
+	catalog *metrics.Catalog
+}
+
+// AuthMetrics is the authentication producer (for the server's rate limiter).
+func (h *Handlers) AuthMetrics() *metrics.Auth { return h.metrics.auth }
+
+// SetMetrics registers the API's producers on reg and exports bindings by
+// lifecycle state.
+func (h *Handlers) SetMetrics(reg *metrics.Registry) {
+	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog()}
+	reg.WatchBindingStates(func(ctx context.Context) (map[string]int64, error) {
+		rows, err := h.queries.CountManagedBindingsByState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string]int64, len(rows))
+		for _, r := range rows {
+			out[r.LifecycleState] = r.Count
+		}
+		return out, nil
+	})
 }
 
 // engineSource returns engines; *queryengine.Manager implements it.
