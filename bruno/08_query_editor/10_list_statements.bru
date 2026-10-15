@@ -16,10 +16,17 @@ auth:bearer {
 
 assert {
   res.status: eq 200
+  res.body[0].status: eq finished
 }
 
 docs {
   `engine_query_id` (formerly `trino_query_id`) is the statement's id on its
   engine. Statements also list their stored `result_sets`
   ({result_index, rows, bytes, truncated}).
+
+  All statements run in order in one engine session. `status` is one of
+  pending, running, finished, failed, cancelled, skipped (never ran: an
+  earlier statement failed, the run was cancelled or interrupted).
+  `error_code` is the typed reason of a failed/cancelled statement (engine
+  code, `editor_rejected`, or `interrupted` after a worker crash).
 }

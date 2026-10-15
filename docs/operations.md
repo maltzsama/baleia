@@ -114,6 +114,19 @@ The worker's own gauges (`baleia_schedule_*`) vanish with it, so this alert, not
    - the `metrics` port;
    - the token.
 
+### Interrupted executions
+
+All statements of an execution run in one worker activity holding one engine session. If the
+worker dies mid-statement (crash, eviction, `kubectl delete pod`), Temporal notices the missing
+heartbeat within 30 s and the workflow:
+- marks the running statement `failed` with `error_code = interrupted`;
+- asks the engine to stop that statement by its persisted handle (best effort);
+- marks the remaining statements `skipped` and the execution `failed`.
+
+The interrupted statement is not run again: its outcome on the engine is unknown (an `INSERT` may
+have committed). `BALEIA_STATEMENT_TIMEOUT` bounds each statement; `BALEIA_EXECUTION_TIMEOUT`
+(default `2h`) bounds the whole script.
+
 ### BaleiaHighErrorRate
 
 More than 5% of API requests returned 5xx over 10 minutes.

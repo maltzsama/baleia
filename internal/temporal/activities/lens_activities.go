@@ -20,6 +20,13 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
+// lensMonitor reads the Trino coordinator's runtime state for Lens;
+// *trino/monitor.Monitor implements it.
+type lensMonitor interface {
+	ListQueries(ctx context.Context) ([]monitor.QueryInfo, error)
+	ClusterStats(ctx context.Context) (*monitor.ClusterStats, error)
+}
+
 type LensPollTrinoQueriesParams struct{}
 
 func LensPollTrinoQueries(ctx context.Context, params LensPollTrinoQueriesParams) error {

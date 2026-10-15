@@ -55,10 +55,13 @@ type Config struct {
 	S3SecretKey  string
 	S3Bucket     string
 	S3UseSSL     bool
-	// StatementTimeout bounds a single statement execution. It is used as the
-	// activity StartToCloseTimeout and sent to Trino as the session property
-	// query_max_execution_time so the cluster enforces it too.
+	// StatementTimeout bounds a single statement execution. The script
+	// activity enforces it per statement and passes it to the engine (Trino:
+	// query_max_execution_time) so the engine enforces it too.
 	StatementTimeout time.Duration
+	// ExecutionTimeout caps a whole script (every statement of an
+	// execution, run in one activity, #27).
+	ExecutionTimeout time.Duration
 	// ResultMaxRows / ResultMaxBytes cap one statement's result. When a cap is
 	// hit the remaining query is killed and the result is marked truncated.
 	ResultMaxRows  int64
@@ -118,6 +121,7 @@ func Load() *Config {
 		S3Bucket:     getEnv("S3_BUCKET", "baleia"),
 		S3UseSSL:         getEnv("S3_USE_SSL", "false") == "true",
 		StatementTimeout: getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
+		ExecutionTimeout: getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
 		ResultMaxRows:    getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
 		ResultMaxBytes:   getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
 		SchedulesEnabled: getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
@@ -185,6 +189,9 @@ func (c *Config) Validate() error {
 	}
 	if c.StatementTimeout != 0 && c.StatementTimeout < time.Minute {
 		return fmt.Errorf("BALEIA_STATEMENT_TIMEOUT must be at least 1m (got %s)", c.StatementTimeout)
+	}
+	if c.ExecutionTimeout != 0 && c.ExecutionTimeout < time.Minute {
+		return fmt.Errorf("BALEIA_EXECUTION_TIMEOUT must be at least 1m (got %s)", c.ExecutionTimeout)
 	}
 	return nil
 }

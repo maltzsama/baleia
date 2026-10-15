@@ -115,7 +115,6 @@ func main() {
 	act.SetMetrics(reg)
 	activities.Register(w, act)
 
-	w.RegisterWorkflow(workflows.QueryExecutionWorkflow) // V1: drains runs started before V2 (#27 removes it)
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV2)
 	w.RegisterWorkflow(workflows.LensQueryPollWorkflow)
 	w.RegisterWorkflow(workflows.LensClusterPollWorkflow)

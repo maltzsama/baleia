@@ -11,6 +11,10 @@ import (
 )
 
 type Querier interface {
+	// Ends the statements still running after the script activity stopped
+	// (cancel, crash, heartbeat timeout) and returns their handles so the engine
+	// can be asked to stop them.
+	AbandonRunningStatements(ctx context.Context, arg AbandonRunningStatementsParams) ([]AbandonRunningStatementsRow, error)
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
 	// Fired by the dispatcher when a refresh run is started: schedule the next run
 	// from the cron expression immediately, so a long refresh never triggers a
@@ -192,7 +196,13 @@ type Querier interface {
 	// so the API can cancel it from another process.
 	SetStatementQueryHandle(ctx context.Context, arg SetStatementQueryHandleParams) error
 	SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error
+	// After a failure, a cancel or a crash the statements that never ran are
+	// skipped.
+	SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error
 	SoftDeleteTrinoCatalogRegistry(ctx context.Context, arg SoftDeleteTrinoCatalogRegistryParams) error
+	// A pending statement becomes the running one. Zero rows means the
+	// statement is no longer pending (already abandoned).
+	StartQueryStatement(ctx context.Context, arg StartQueryStatementParams) (int64, error)
 	// Moves a binding between lifecycle states, guarded by the expected ones; no
 	// row means a concurrent change (#38).
 	TransitionBinding(ctx context.Context, arg TransitionBindingParams) (CatalogBinding, error)

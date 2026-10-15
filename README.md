@@ -200,7 +200,8 @@ All settings are environment variables. Defaults work for local development with
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outbound email (password reset, invites) |
 | `RATE_LIMIT_RPS` | `60` | Max requests per second (rate limiter) |
 | `RATE_LIMIT_BURST` | `10` | Rate limiter burst size |
-| `BALEIA_STATEMENT_TIMEOUT` | `30m` | Per-statement execution timeout; enforced by Temporal and by Trino (`query_max_execution_time`) |
+| `BALEIA_STATEMENT_TIMEOUT` | `30m` | Per-statement execution timeout; enforced by the worker and by the engine (Trino: `query_max_execution_time`) |
+| `BALEIA_EXECUTION_TIMEOUT` | `2h` | Cap for a whole execution: all statements run in one engine session, so a script may take statements × statement timeout, capped by this |
 | `BALEIA_RESULT_MAX_ROWS` | `1000000` | Max rows buffered per statement result before truncation |
 | `BALEIA_RESULT_MAX_BYTES` | `536870912` | Max Arrow bytes per statement result before truncation |
 | `BALEIA_SCHEDULES_ENABLED` | `true` | Ensure recurring Temporal Schedules (Lens pollers, table health, retriever) at worker boot |
