@@ -105,30 +105,45 @@ ORDER BY c.name, e.name;
 SELECT * FROM catalog_bindings WHERE id = $1;
 
 -- name: UpsertManagedBinding :one
--- The managed binding of a catalog on an engine (one per pair).
-INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
-VALUES ($1, $2, $3, $4, $5, 'managed', $6)
+-- The managed binding of a catalog on an engine (one per pair), entering
+-- lifecycle_state with the projection version it wants (#38).
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled,
+                              lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at)
+VALUES ($1, $2, $3, $4, $5, 'managed', $6, sqlc.arg(lifecycle_state), sqlc.narg(desired_version), NULL, NULL, now())
 ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
     engine_catalog_name = EXCLUDED.engine_catalog_name,
     connector           = EXCLUDED.connector,
     extra_props         = EXCLUDED.extra_props,
     enabled             = EXCLUDED.enabled,
+    lifecycle_state     = EXCLUDED.lifecycle_state,
+    desired_version     = EXCLUDED.desired_version,
+    last_error_code     = NULL,
+    last_error_message  = NULL,
+    state_changed_at    = now(),
     updated_at          = now()
 RETURNING *;
 
 -- name: CreateManagedBinding :one
-INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
-VALUES ($1, $2, $3, $4, $5, 'managed', true)
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled,
+                              lifecycle_state, desired_version)
+VALUES ($1, $2, $3, $4, $5, 'managed', true, 'provisioning', sqlc.narg(desired_version))
 RETURNING *;
 
 -- name: UpdateBinding :one
+-- Writes the desired state and enters lifecycle_state, guarded by the states
+-- a change may start from; no row means a concurrent change.
 UPDATE catalog_bindings SET
     engine_catalog_name = $2,
     connector           = $3,
     extra_props         = $4,
     enabled             = $5,
+    lifecycle_state     = sqlc.arg(lifecycle_state),
+    desired_version     = COALESCE(sqlc.narg(desired_version), desired_version),
+    last_error_code     = NULL,
+    last_error_message  = NULL,
+    state_changed_at    = now(),
     updated_at          = now()
-WHERE id = $1
+WHERE id = $1 AND lifecycle_state = ANY(sqlc.arg(from_states)::text[])
 RETURNING *;
 
 -- name: DeleteBinding :exec
@@ -140,3 +155,61 @@ WHERE catalog_id = $1 AND mode = 'managed';
 
 -- name: GetTrinoClusterByEngine :one
 SELECT * FROM trino_clusters WHERE engine_id = $1;
+
+-- name: TransitionBinding :one
+-- Moves a binding between lifecycle states, guarded by the expected ones; no
+-- row means a concurrent change (#38).
+UPDATE catalog_bindings SET
+    lifecycle_state    = sqlc.arg(to_state),
+    last_error_code    = sqlc.narg(error_code),
+    last_error_message = sqlc.narg(error_message),
+    engine_catalog_name = COALESCE(sqlc.narg(engine_catalog_name), engine_catalog_name),
+    desired_version    = COALESCE(sqlc.narg(desired_version), desired_version),
+    state_changed_at   = now(),
+    updated_at         = now()
+WHERE id = sqlc.arg(id) AND lifecycle_state = ANY(sqlc.arg(from_states)::text[])
+RETURNING *;
+
+-- name: GetBindingStatus :one
+SELECT * FROM binding_status_v WHERE binding_id = $1;
+
+-- name: ListBindingStatusByCatalog :many
+SELECT s.* FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id WHERE b.catalog_id = $1;
+
+-- name: ManagedBindingNamesOfEngine :many
+SELECT engine_catalog_name FROM catalog_bindings WHERE engine_id = $1 AND mode = 'managed';
+
+-- name: UpsertEngineCatalogObservation :exec
+INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode, connector)
+VALUES ($1, $2, true, $3, $4)
+ON CONFLICT (engine_id, catalog_name) DO UPDATE SET
+    present     = true,
+    mode        = EXCLUDED.mode,
+    connector   = EXCLUDED.connector,
+    observed_at = now();
+
+-- name: MarkEngineCatalogsAbsent :exec
+-- Catalogs the engine no longer reports.
+UPDATE engine_catalog_observations SET present = false, observed_at = now()
+WHERE engine_id = $1 AND NOT (catalog_name = ANY(sqlc.arg(present_names)::text[]));
+
+-- name: UpsertAdoptedBinding :exec
+-- A catalog found in an engine that no managed binding created (#38, #13).
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, mode, enabled, lifecycle_state)
+VALUES ($1, $2, $3, $4, 'adopted', true, 'active')
+ON CONFLICT (engine_id, engine_catalog_name) DO NOTHING;
+
+-- name: GetManagedBindingOfCatalog :one
+SELECT * FROM catalog_bindings WHERE catalog_id = $1 AND engine_id = $2 AND mode = 'managed';
+
+-- name: ObservedManagedNamesOfEngine :many
+-- Catalogs Baleia managed and still sees in the engine, though no managed
+-- binding owns them any more (an old name that failed to drop): they stay
+-- managed, never adopted, for the reconciler (#37) to drop.
+SELECT catalog_name FROM engine_catalog_observations
+WHERE engine_id = $1 AND mode = 'managed' AND present;
+
+-- name: MarkEngineCatalogManaged :exec
+INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode)
+VALUES ($1, $2, true, 'managed')
+ON CONFLICT (engine_id, catalog_name) DO UPDATE SET mode = 'managed', present = true, observed_at = now();

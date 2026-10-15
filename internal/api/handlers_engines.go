@@ -63,12 +63,23 @@ func bindingToPublic(b db.CatalogBinding) CatalogBinding {
 		Mode:              CatalogBindingMode(b.Mode),
 		Enabled:           b.Enabled,
 		ExtraProps:        ptrExtraProps(b.ExtraProps),
+		LifecycleState:    ptrLifecycle(b.LifecycleState),
+		LastErrorCode:     b.LastErrorCode,
+		LastErrorMessage:  b.LastErrorMessage,
 	}
 }
 
 func ptrExtraProps(raw []byte) *map[string]string {
 	m := extraPropsOf(raw)
 	return &m
+}
+
+func ptrLifecycle(s string) *CatalogBindingLifecycleState {
+	if s == "" {
+		return nil
+	}
+	v := CatalogBindingLifecycleState(s)
+	return &v
 }
 
 func engineNotFound() NotFoundJSONResponse {
@@ -321,7 +332,7 @@ func (h *Handlers) ListEngineBindings(ctx context.Context, request ListEngineBin
 				return nil, err
 			}
 		}
-		out = append(out, bindingToPublic(b))
+		out = append(out, h.bindingResponse(ctx, b, ""))
 	}
 	return ListEngineBindings200JSONResponse(out), nil
 }
@@ -344,7 +355,7 @@ func (h *Handlers) ListCatalogBindings(ctx context.Context, request ListCatalogB
 	}
 	out := make([]CatalogBinding, 0, len(bindings))
 	for _, b := range bindings {
-		out = append(out, bindingToPublic(b))
+		out = append(out, h.bindingResponse(ctx, b, ""))
 	}
 	return ListCatalogBindings200JSONResponse(out), nil
 }

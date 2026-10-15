@@ -22,10 +22,21 @@ const (
 
 // Defines values for CatalogSyncStatus.
 const (
+	CatalogSyncStatusDisabled CatalogSyncStatus = "disabled"
 	CatalogSyncStatusDraining CatalogSyncStatus = "draining"
 	CatalogSyncStatusError    CatalogSyncStatus = "error"
 	CatalogSyncStatusPending  CatalogSyncStatus = "pending"
 	CatalogSyncStatusSynced   CatalogSyncStatus = "synced"
+)
+
+// Defines values for CatalogBindingLifecycleState.
+const (
+	CatalogBindingLifecycleStateActive         CatalogBindingLifecycleState = "active"
+	CatalogBindingLifecycleStateDeprovisioning CatalogBindingLifecycleState = "deprovisioning"
+	CatalogBindingLifecycleStateDisabled       CatalogBindingLifecycleState = "disabled"
+	CatalogBindingLifecycleStateError          CatalogBindingLifecycleState = "error"
+	CatalogBindingLifecycleStateProvisioning   CatalogBindingLifecycleState = "provisioning"
+	CatalogBindingLifecycleStateUpdating       CatalogBindingLifecycleState = "updating"
 )
 
 // Defines values for CatalogBindingMode.
@@ -37,8 +48,10 @@ const (
 
 // Defines values for CatalogBindingSyncStatus.
 const (
-	CatalogBindingSyncStatusError  CatalogBindingSyncStatus = "error"
-	CatalogBindingSyncStatusSynced CatalogBindingSyncStatus = "synced"
+	CatalogBindingSyncStatusDisabled CatalogBindingSyncStatus = "disabled"
+	CatalogBindingSyncStatusError    CatalogBindingSyncStatus = "error"
+	CatalogBindingSyncStatusPending  CatalogBindingSyncStatus = "pending"
+	CatalogBindingSyncStatusSynced   CatalogBindingSyncStatus = "synced"
 )
 
 // Defines values for ConnectionProviderFamily.
@@ -284,10 +297,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	Cancelled ListExecutionsParamsStatus = "cancelled"
-	Failed    ListExecutionsParamsStatus = "failed"
-	Finished  ListExecutionsParamsStatus = "finished"
-	Running   ListExecutionsParamsStatus = "running"
+	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
+	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
+	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
+	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
@@ -349,7 +362,7 @@ type Catalog struct {
 	Name           *string             `json:"name,omitempty"`
 	SyncError      *string             `json:"sync_error"`
 
-	// SyncStatus State of the baleia-trino-catalog-store plugin's view of this catalog.
+	// SyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
 	SyncStatus *CatalogSyncStatus `json:"sync_status,omitempty"`
 
 	// TrinoCatalogName Trino catalog identifier (lowercase, letters/digits/underscore).
@@ -360,7 +373,7 @@ type Catalog struct {
 	Warehouse *string `json:"warehouse,omitempty"`
 }
 
-// CatalogSyncStatus State of the baleia-trino-catalog-store plugin's view of this catalog.
+// CatalogSyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
 type CatalogSyncStatus string
 
 // CatalogBinding defines model for CatalogBinding.
@@ -374,20 +387,29 @@ type CatalogBinding struct {
 	EngineId          openapi_types.UUID `json:"engine_id"`
 	ExtraProps        *map[string]string `json:"extra_props,omitempty"`
 	Id                openapi_types.UUID `json:"id"`
-	Mode              CatalogBindingMode `json:"mode"`
-	SyncError         *string            `json:"sync_error"`
 
-	// SyncStatus Write responses only
+	// LastErrorCode e.g. plugin_not_confirmed, engine_unavailable, the engine's error name
+	LastErrorCode    *string `json:"last_error_code"`
+	LastErrorMessage *string `json:"last_error_message"`
+
+	// LifecycleState Where Baleia is in applying the binding (#38)
+	LifecycleState *CatalogBindingLifecycleState `json:"lifecycle_state,omitempty"`
+	Mode           CatalogBindingMode            `json:"mode"`
+
+	// SyncStatus Derived: synced when the binding is active, the engine confirmed the desired version (Trino: the plugin rewrote the registry row) and the engine does not report it missing; pending while provisioning or updating or not yet confirmed; error; disabled while deprovisioning or disabled.
 	SyncStatus *CatalogBindingSyncStatus `json:"sync_status"`
 
-	// Version Version of the projection last applied (write responses only)
+	// Version Version of the projection applied (write responses, when synced)
 	Version *string `json:"version"`
 }
+
+// CatalogBindingLifecycleState Where Baleia is in applying the binding (#38)
+type CatalogBindingLifecycleState string
 
 // CatalogBindingMode defines model for CatalogBinding.Mode.
 type CatalogBindingMode string
 
-// CatalogBindingSyncStatus Write responses only
+// CatalogBindingSyncStatus Derived: synced when the binding is active, the engine confirmed the desired version (Trino: the plugin rewrote the registry row) and the engine does not report it missing; pending while provisioning or updating or not yet confirmed; error; disabled while deprovisioning or disabled.
 type CatalogBindingSyncStatus string
 
 // CatalogConnection defines model for CatalogConnection.

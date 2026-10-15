@@ -1,0 +1,32 @@
+meta {
+  name: Lifecycle - Create Catalog
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/connections/{{lifecycle_connection_id}}/catalogs
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno Lifecycle",
+    "trino_catalog_name": "bruno_lifecycle",
+    "warehouse": "baleia_polaris"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.sync_status: eq synced
+}
+
+script:post-response {
+  bru.setVar("lifecycle_catalog_id", res.getBody().id);
+}

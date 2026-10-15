@@ -1,0 +1,26 @@
+meta {
+  name: Lifecycle - Binding Is Active
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/bindings
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].mode: eq managed
+  res.body[0].lifecycle_state: eq active
+  res.body[0].sync_status: eq synced
+}
+
+script:post-response {
+  bru.setVar("lifecycle_binding_id", res.getBody()[0].id);
+}

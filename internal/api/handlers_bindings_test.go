@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -29,12 +30,11 @@ var (
 // bindingQuerier is a catalog on a PostgreSQL connection owned by ownerID, a
 // Trino engine on a system-owned connection, and its bindings.
 type bindingQuerier struct {
-	db.Querier
+	lifecycleFake
 	mu            sync.Mutex
 	catalog       db.Catalog
 	engineKind    string
 	clusterOfEng  pgtype.UUID
-	binding       *db.CatalogBinding
 	createErr     error
 	updatedCats   []db.UpdateCatalogParams
 	createdBinds  []db.CreateManagedBindingParams
@@ -97,23 +97,27 @@ func (q *bindingQuerier) CreateManagedBinding(_ context.Context, p db.CreateMana
 		return db.CatalogBinding{}, q.createErr
 	}
 	q.createdBinds = append(q.createdBinds, p)
-	return db.CatalogBinding{ID: bBinding, CatalogID: p.CatalogID, EngineID: p.EngineID, EngineCatalogName: p.EngineCatalogName, Connector: p.Connector, ExtraProps: p.ExtraProps, Mode: "managed", Enabled: true}, nil
+	return q.track(db.CatalogBinding{ID: bBinding, CatalogID: p.CatalogID, EngineID: p.EngineID, EngineCatalogName: p.EngineCatalogName, Connector: p.Connector,
+		ExtraProps: p.ExtraProps, Mode: "managed", Enabled: true, LifecycleState: "provisioning", DesiredVersion: p.DesiredVersion}), nil
 }
 
 func (q *bindingQuerier) GetBinding(_ context.Context, id pgtype.UUID) (db.CatalogBinding, error) {
-	if q.binding == nil || id != q.binding.ID {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+	if b, ok := q.current(id); ok {
+		return b, nil
 	}
-	return *q.binding, nil
+	return db.CatalogBinding{}, pgx.ErrNoRows
 }
 
 func (q *bindingQuerier) UpdateBinding(_ context.Context, p db.UpdateBindingParams) (db.CatalogBinding, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.updatedBinds = append(q.updatedBinds, p)
-	b := *q.binding
-	b.EngineCatalogName, b.Connector, b.ExtraProps, b.Enabled = p.EngineCatalogName, p.Connector, p.ExtraProps, p.Enabled
-	return b, nil
+	b, ok := q.current(p.ID)
+	if !ok || !slices.Contains(p.FromStates, b.LifecycleState) {
+		return db.CatalogBinding{}, pgx.ErrNoRows
+	}
+	b.EngineCatalogName, b.Connector, b.ExtraProps, b.Enabled, b.LifecycleState = p.EngineCatalogName, p.Connector, p.ExtraProps, p.Enabled, p.LifecycleState
+	return q.track(b), nil
 }
 
 func (q *bindingQuerier) DeleteBinding(context.Context, pgtype.UUID) error {
@@ -134,6 +138,7 @@ func (q *bindingQuerier) SetCatalogEnabled(context.Context, db.SetCatalogEnabled
 
 func (q *bindingQuerier) UpsertTrinoCatalogRegistry(_ context.Context, p db.UpsertTrinoCatalogRegistryParams) error {
 	q.registry = append(q.registry, "upsert "+p.CatalogName)
+	q.noteRegistry(p.CatalogName, p.CatalogVersion)
 	return nil
 }
 
@@ -245,7 +250,7 @@ func TestBindingAPI_UpdateDeleteSync(t *testing.T) {
 	q := newBindingQuerier(t)
 	h, ft := bindingHandlers(t, q)
 	admin := ctxAs(adminID, "admin")
-	q.binding = &db.CatalogBinding{ID: bBinding, CatalogID: bCatalog, EngineID: bEngine, EngineCatalogName: "old", Connector: strp("postgresql"), ExtraProps: []byte("{}"), Mode: "managed", Enabled: true}
+	q.track(db.CatalogBinding{ID: bBinding, CatalogID: bCatalog, EngineID: bEngine, EngineCatalogName: "old", Connector: strp("postgresql"), ExtraProps: []byte("{}"), Mode: "managed", Enabled: true, LifecycleState: "active"})
 	id := openapi_types.UUID(bBinding.Bytes)
 
 	// Rename on a secondary binding: create the new name, then drop the old.
@@ -276,6 +281,7 @@ func TestBindingAPI_UpdateDeleteSync(t *testing.T) {
 	// The primary binding (on the catalog's own cluster) cannot be deleted and
 	// keeps the catalog's Trino columns in step when it changes.
 	q.clusterOfEng = bCluster
+	q.track(db.CatalogBinding{ID: bBinding, CatalogID: bCatalog, EngineID: bEngine, EngineCatalogName: "renamed", Connector: strp("postgresql"), ExtraProps: []byte("{}"), Mode: "managed", Enabled: true, LifecycleState: "active"})
 	dresp, _ = h.DeleteCatalogBinding(admin, DeleteCatalogBindingRequestObject{Id: id})
 	if c, b := code(t, func(r *httptest.ResponseRecorder) error { return dresp.VisitDeleteCatalogBindingResponse(r) }); c != 409 || !strings.Contains(b, "binding_is_primary") {
 		t.Errorf("delete primary: %d %s", c, b)
@@ -287,13 +293,16 @@ func TestBindingAPI_UpdateDeleteSync(t *testing.T) {
 	}
 
 	// Native bindings are not Baleia's to change.
-	q.binding.Mode = "native"
+	nb, _ := q.current(bBinding)
+	nb.Mode = "native"
+	q.track(nb)
 	resp, _ = h.UpdateCatalogBinding(admin, UpdateCatalogBindingRequestObject{Id: id, Body: &UpdateBindingRequest{Enabled: new(bool)}})
 	if c, b := code(t, func(r *httptest.ResponseRecorder) error { return resp.VisitUpdateCatalogBindingResponse(r) }); c != 422 || !strings.Contains(b, "binding_not_managed") {
 		t.Errorf("native binding: %d %s", c, b)
 	}
 	// A stranger learns nothing.
-	q.binding.Mode = "managed"
+	nb.Mode = "managed"
+	q.track(nb)
 	resp, _ = h.UpdateCatalogBinding(ctxAs(strangerID, "member"), UpdateCatalogBindingRequestObject{Id: id, Body: &UpdateBindingRequest{}})
 	if c, _ := code(t, func(r *httptest.ResponseRecorder) error { return resp.VisitUpdateCatalogBindingResponse(r) }); c != 404 {
 		t.Errorf("stranger: %d", c)

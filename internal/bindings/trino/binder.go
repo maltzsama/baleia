@@ -118,12 +118,16 @@ func (b *Binder) Stage(ctx context.Context, eng bindings.EngineRef, p bindings.P
 // keys. It never writes the registry afterwards: the plugin's write is the
 // confirmation (Confirm).
 func (b *Binder) Apply(ctx context.Context, p bindings.Projection) error {
-	return b.admin.CreateCatalog(ctx, trinoclient.CatalogSpec{
+	err := b.admin.CreateCatalog(ctx, trinoclient.CatalogSpec{
 		Name:       p.EngineCatalog,
 		Connector:  p.Connector,
 		Properties: p.Properties,
 		SecretKeys: p.SecretKeys,
 	})
+	if errors.Is(err, trinoclient.ErrCatalogExists) {
+		return fmt.Errorf("%w: %w", bindings.ErrCatalogExists, err)
+	}
+	return err
 }
 
 func (b *Binder) Create(ctx context.Context, eng bindings.EngineRef, p bindings.Projection) error {

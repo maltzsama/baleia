@@ -12,9 +12,10 @@ import (
 )
 
 const createManagedBinding = `-- name: CreateManagedBinding :one
-INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
-VALUES ($1, $2, $3, $4, $5, 'managed', true)
-RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled,
+                              lifecycle_state, desired_version)
+VALUES ($1, $2, $3, $4, $5, 'managed', true, 'provisioning', $6)
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at
 `
 
 type CreateManagedBindingParams struct {
@@ -23,6 +24,7 @@ type CreateManagedBindingParams struct {
 	EngineCatalogName string      `json:"engine_catalog_name"`
 	Connector         *string     `json:"connector"`
 	ExtraProps        []byte      `json:"extra_props"`
+	DesiredVersion    *string     `json:"desired_version"`
 }
 
 func (q *Queries) CreateManagedBinding(ctx context.Context, arg CreateManagedBindingParams) (CatalogBinding, error) {
@@ -32,6 +34,7 @@ func (q *Queries) CreateManagedBinding(ctx context.Context, arg CreateManagedBin
 		arg.EngineCatalogName,
 		arg.Connector,
 		arg.ExtraProps,
+		arg.DesiredVersion,
 	)
 	var i CatalogBinding
 	err := row.Scan(
@@ -45,6 +48,11 @@ func (q *Queries) CreateManagedBinding(ctx context.Context, arg CreateManagedBin
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LifecycleState,
+		&i.DesiredVersion,
+		&i.LastErrorCode,
+		&i.LastErrorMessage,
+		&i.StateChangedAt,
 	)
 	return i, err
 }
@@ -81,7 +89,7 @@ func (q *Queries) DisableManagedBindingsOfCatalog(ctx context.Context, catalogID
 }
 
 const getBinding = `-- name: GetBinding :one
-SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at FROM catalog_bindings WHERE id = $1
+SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at FROM catalog_bindings WHERE id = $1
 `
 
 func (q *Queries) GetBinding(ctx context.Context, id pgtype.UUID) (CatalogBinding, error) {
@@ -98,6 +106,11 @@ func (q *Queries) GetBinding(ctx context.Context, id pgtype.UUID) (CatalogBindin
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LifecycleState,
+		&i.DesiredVersion,
+		&i.LastErrorCode,
+		&i.LastErrorMessage,
+		&i.StateChangedAt,
 	)
 	return i, err
 }
@@ -156,6 +169,49 @@ func (q *Queries) GetBindingForTarget(ctx context.Context, id pgtype.UUID) (GetB
 	return i, err
 }
 
+const getBindingStatus = `-- name: GetBindingStatus :one
+SELECT binding_id, lifecycle_state, sync_status FROM binding_status_v WHERE binding_id = $1
+`
+
+func (q *Queries) GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (BindingStatusV, error) {
+	row := q.db.QueryRow(ctx, getBindingStatus, bindingID)
+	var i BindingStatusV
+	err := row.Scan(&i.BindingID, &i.LifecycleState, &i.SyncStatus)
+	return i, err
+}
+
+const getManagedBindingOfCatalog = `-- name: GetManagedBindingOfCatalog :one
+SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at FROM catalog_bindings WHERE catalog_id = $1 AND engine_id = $2 AND mode = 'managed'
+`
+
+type GetManagedBindingOfCatalogParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	EngineID  pgtype.UUID `json:"engine_id"`
+}
+
+func (q *Queries) GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, getManagedBindingOfCatalog, arg.CatalogID, arg.EngineID)
+	var i CatalogBinding
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.EngineID,
+		&i.EngineCatalogName,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Mode,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LifecycleState,
+		&i.DesiredVersion,
+		&i.LastErrorCode,
+		&i.LastErrorMessage,
+		&i.StateChangedAt,
+	)
+	return i, err
+}
+
 const getTrinoClusterByEngine = `-- name: GetTrinoClusterByEngine :one
 SELECT id, name, coordinator_url, node_version, created_at, updated_at, engine_id FROM trino_clusters WHERE engine_id = $1
 `
@@ -175,8 +231,32 @@ func (q *Queries) GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.U
 	return i, err
 }
 
+const listBindingStatusByCatalog = `-- name: ListBindingStatusByCatalog :many
+SELECT s.binding_id, s.lifecycle_state, s.sync_status FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id WHERE b.catalog_id = $1
+`
+
+func (q *Queries) ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]BindingStatusV, error) {
+	rows, err := q.db.Query(ctx, listBindingStatusByCatalog, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BindingStatusV
+	for rows.Next() {
+		var i BindingStatusV
+		if err := rows.Scan(&i.BindingID, &i.LifecycleState, &i.SyncStatus); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBindingsByCatalog = `-- name: ListBindingsByCatalog :many
-SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at FROM catalog_bindings WHERE catalog_id = $1 ORDER BY created_at
+SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at FROM catalog_bindings WHERE catalog_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]CatalogBinding, error) {
@@ -199,6 +279,11 @@ func (q *Queries) ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UU
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LifecycleState,
+			&i.DesiredVersion,
+			&i.LastErrorCode,
+			&i.LastErrorMessage,
+			&i.StateChangedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -211,7 +296,7 @@ func (q *Queries) ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UU
 }
 
 const listBindingsByEngine = `-- name: ListBindingsByEngine :many
-SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at FROM catalog_bindings WHERE engine_id = $1 ORDER BY engine_catalog_name
+SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at FROM catalog_bindings WHERE engine_id = $1 ORDER BY engine_catalog_name
 `
 
 func (q *Queries) ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error) {
@@ -234,6 +319,11 @@ func (q *Queries) ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LifecycleState,
+			&i.DesiredVersion,
+			&i.LastErrorCode,
+			&i.LastErrorMessage,
+			&i.StateChangedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -334,6 +424,90 @@ func (q *Queries) ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.U
 	return items, nil
 }
 
+const managedBindingNamesOfEngine = `-- name: ManagedBindingNamesOfEngine :many
+SELECT engine_catalog_name FROM catalog_bindings WHERE engine_id = $1 AND mode = 'managed'
+`
+
+func (q *Queries) ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, managedBindingNamesOfEngine, engineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var engine_catalog_name string
+		if err := rows.Scan(&engine_catalog_name); err != nil {
+			return nil, err
+		}
+		items = append(items, engine_catalog_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markEngineCatalogManaged = `-- name: MarkEngineCatalogManaged :exec
+INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode)
+VALUES ($1, $2, true, 'managed')
+ON CONFLICT (engine_id, catalog_name) DO UPDATE SET mode = 'managed', present = true, observed_at = now()
+`
+
+type MarkEngineCatalogManagedParams struct {
+	EngineID    pgtype.UUID `json:"engine_id"`
+	CatalogName string      `json:"catalog_name"`
+}
+
+func (q *Queries) MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error {
+	_, err := q.db.Exec(ctx, markEngineCatalogManaged, arg.EngineID, arg.CatalogName)
+	return err
+}
+
+const markEngineCatalogsAbsent = `-- name: MarkEngineCatalogsAbsent :exec
+UPDATE engine_catalog_observations SET present = false, observed_at = now()
+WHERE engine_id = $1 AND NOT (catalog_name = ANY($2::text[]))
+`
+
+type MarkEngineCatalogsAbsentParams struct {
+	EngineID     pgtype.UUID `json:"engine_id"`
+	PresentNames []string    `json:"present_names"`
+}
+
+// Catalogs the engine no longer reports.
+func (q *Queries) MarkEngineCatalogsAbsent(ctx context.Context, arg MarkEngineCatalogsAbsentParams) error {
+	_, err := q.db.Exec(ctx, markEngineCatalogsAbsent, arg.EngineID, arg.PresentNames)
+	return err
+}
+
+const observedManagedNamesOfEngine = `-- name: ObservedManagedNamesOfEngine :many
+SELECT catalog_name FROM engine_catalog_observations
+WHERE engine_id = $1 AND mode = 'managed' AND present
+`
+
+// Catalogs Baleia managed and still sees in the engine, though no managed
+// binding owns them any more (an old name that failed to drop): they stay
+// managed, never adopted, for the reconciler (#37) to drop.
+func (q *Queries) ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, observedManagedNamesOfEngine, engineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var catalog_name string
+		if err := rows.Scan(&catalog_name); err != nil {
+			return nil, err
+		}
+		items = append(items, catalog_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setExecutionTarget = `-- name: SetExecutionTarget :exec
 UPDATE query_executions
 SET engine_id         = $2,
@@ -384,32 +558,40 @@ func (q *Queries) SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspac
 	return err
 }
 
-const updateBinding = `-- name: UpdateBinding :one
+const transitionBinding = `-- name: TransitionBinding :one
 UPDATE catalog_bindings SET
-    engine_catalog_name = $2,
-    connector           = $3,
-    extra_props         = $4,
-    enabled             = $5,
-    updated_at          = now()
-WHERE id = $1
-RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+    lifecycle_state    = $1,
+    last_error_code    = $2,
+    last_error_message = $3,
+    engine_catalog_name = COALESCE($4, engine_catalog_name),
+    desired_version    = COALESCE($5, desired_version),
+    state_changed_at   = now(),
+    updated_at         = now()
+WHERE id = $6 AND lifecycle_state = ANY($7::text[])
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at
 `
 
-type UpdateBindingParams struct {
+type TransitionBindingParams struct {
+	ToState           string      `json:"to_state"`
+	ErrorCode         *string     `json:"error_code"`
+	ErrorMessage      *string     `json:"error_message"`
+	EngineCatalogName *string     `json:"engine_catalog_name"`
+	DesiredVersion    *string     `json:"desired_version"`
 	ID                pgtype.UUID `json:"id"`
-	EngineCatalogName string      `json:"engine_catalog_name"`
-	Connector         *string     `json:"connector"`
-	ExtraProps        []byte      `json:"extra_props"`
-	Enabled           bool        `json:"enabled"`
+	FromStates        []string    `json:"from_states"`
 }
 
-func (q *Queries) UpdateBinding(ctx context.Context, arg UpdateBindingParams) (CatalogBinding, error) {
-	row := q.db.QueryRow(ctx, updateBinding,
-		arg.ID,
+// Moves a binding between lifecycle states, guarded by the expected ones; no
+// row means a concurrent change (#38).
+func (q *Queries) TransitionBinding(ctx context.Context, arg TransitionBindingParams) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, transitionBinding,
+		arg.ToState,
+		arg.ErrorCode,
+		arg.ErrorMessage,
 		arg.EngineCatalogName,
-		arg.Connector,
-		arg.ExtraProps,
-		arg.Enabled,
+		arg.DesiredVersion,
+		arg.ID,
+		arg.FromStates,
 	)
 	var i CatalogBinding
 	err := row.Scan(
@@ -423,20 +605,143 @@ func (q *Queries) UpdateBinding(ctx context.Context, arg UpdateBindingParams) (C
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LifecycleState,
+		&i.DesiredVersion,
+		&i.LastErrorCode,
+		&i.LastErrorMessage,
+		&i.StateChangedAt,
 	)
 	return i, err
 }
 
+const updateBinding = `-- name: UpdateBinding :one
+UPDATE catalog_bindings SET
+    engine_catalog_name = $2,
+    connector           = $3,
+    extra_props         = $4,
+    enabled             = $5,
+    lifecycle_state     = $6,
+    desired_version     = COALESCE($7, desired_version),
+    last_error_code     = NULL,
+    last_error_message  = NULL,
+    state_changed_at    = now(),
+    updated_at          = now()
+WHERE id = $1 AND lifecycle_state = ANY($8::text[])
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at
+`
+
+type UpdateBindingParams struct {
+	ID                pgtype.UUID `json:"id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	Connector         *string     `json:"connector"`
+	ExtraProps        []byte      `json:"extra_props"`
+	Enabled           bool        `json:"enabled"`
+	LifecycleState    string      `json:"lifecycle_state"`
+	DesiredVersion    *string     `json:"desired_version"`
+	FromStates        []string    `json:"from_states"`
+}
+
+// Writes the desired state and enters lifecycle_state, guarded by the states
+// a change may start from; no row means a concurrent change.
+func (q *Queries) UpdateBinding(ctx context.Context, arg UpdateBindingParams) (CatalogBinding, error) {
+	row := q.db.QueryRow(ctx, updateBinding,
+		arg.ID,
+		arg.EngineCatalogName,
+		arg.Connector,
+		arg.ExtraProps,
+		arg.Enabled,
+		arg.LifecycleState,
+		arg.DesiredVersion,
+		arg.FromStates,
+	)
+	var i CatalogBinding
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.EngineID,
+		&i.EngineCatalogName,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Mode,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LifecycleState,
+		&i.DesiredVersion,
+		&i.LastErrorCode,
+		&i.LastErrorMessage,
+		&i.StateChangedAt,
+	)
+	return i, err
+}
+
+const upsertAdoptedBinding = `-- name: UpsertAdoptedBinding :exec
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, mode, enabled, lifecycle_state)
+VALUES ($1, $2, $3, $4, 'adopted', true, 'active')
+ON CONFLICT (engine_id, engine_catalog_name) DO NOTHING
+`
+
+type UpsertAdoptedBindingParams struct {
+	CatalogID         pgtype.UUID `json:"catalog_id"`
+	EngineID          pgtype.UUID `json:"engine_id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	Connector         *string     `json:"connector"`
+}
+
+// A catalog found in an engine that no managed binding created (#38, #13).
+func (q *Queries) UpsertAdoptedBinding(ctx context.Context, arg UpsertAdoptedBindingParams) error {
+	_, err := q.db.Exec(ctx, upsertAdoptedBinding,
+		arg.CatalogID,
+		arg.EngineID,
+		arg.EngineCatalogName,
+		arg.Connector,
+	)
+	return err
+}
+
+const upsertEngineCatalogObservation = `-- name: UpsertEngineCatalogObservation :exec
+INSERT INTO engine_catalog_observations (engine_id, catalog_name, present, mode, connector)
+VALUES ($1, $2, true, $3, $4)
+ON CONFLICT (engine_id, catalog_name) DO UPDATE SET
+    present     = true,
+    mode        = EXCLUDED.mode,
+    connector   = EXCLUDED.connector,
+    observed_at = now()
+`
+
+type UpsertEngineCatalogObservationParams struct {
+	EngineID    pgtype.UUID `json:"engine_id"`
+	CatalogName string      `json:"catalog_name"`
+	Mode        string      `json:"mode"`
+	Connector   *string     `json:"connector"`
+}
+
+func (q *Queries) UpsertEngineCatalogObservation(ctx context.Context, arg UpsertEngineCatalogObservationParams) error {
+	_, err := q.db.Exec(ctx, upsertEngineCatalogObservation,
+		arg.EngineID,
+		arg.CatalogName,
+		arg.Mode,
+		arg.Connector,
+	)
+	return err
+}
+
 const upsertManagedBinding = `-- name: UpsertManagedBinding :one
-INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled)
-VALUES ($1, $2, $3, $4, $5, 'managed', $6)
+INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled,
+                              lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at)
+VALUES ($1, $2, $3, $4, $5, 'managed', $6, $7, $8, NULL, NULL, now())
 ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
     engine_catalog_name = EXCLUDED.engine_catalog_name,
     connector           = EXCLUDED.connector,
     extra_props         = EXCLUDED.extra_props,
     enabled             = EXCLUDED.enabled,
+    lifecycle_state     = EXCLUDED.lifecycle_state,
+    desired_version     = EXCLUDED.desired_version,
+    last_error_code     = NULL,
+    last_error_message  = NULL,
+    state_changed_at    = now(),
     updated_at          = now()
-RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at
 `
 
 type UpsertManagedBindingParams struct {
@@ -446,9 +751,12 @@ type UpsertManagedBindingParams struct {
 	Connector         *string     `json:"connector"`
 	ExtraProps        []byte      `json:"extra_props"`
 	Enabled           bool        `json:"enabled"`
+	LifecycleState    string      `json:"lifecycle_state"`
+	DesiredVersion    *string     `json:"desired_version"`
 }
 
-// The managed binding of a catalog on an engine (one per pair).
+// The managed binding of a catalog on an engine (one per pair), entering
+// lifecycle_state with the projection version it wants (#38).
 func (q *Queries) UpsertManagedBinding(ctx context.Context, arg UpsertManagedBindingParams) (CatalogBinding, error) {
 	row := q.db.QueryRow(ctx, upsertManagedBinding,
 		arg.CatalogID,
@@ -457,6 +765,8 @@ func (q *Queries) UpsertManagedBinding(ctx context.Context, arg UpsertManagedBin
 		arg.Connector,
 		arg.ExtraProps,
 		arg.Enabled,
+		arg.LifecycleState,
+		arg.DesiredVersion,
 	)
 	var i CatalogBinding
 	err := row.Scan(
@@ -470,6 +780,11 @@ func (q *Queries) UpsertManagedBinding(ctx context.Context, arg UpsertManagedBin
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LifecycleState,
+		&i.DesiredVersion,
+		&i.LastErrorCode,
+		&i.LastErrorMessage,
+		&i.StateChangedAt,
 	)
 	return i, err
 }
@@ -480,7 +795,7 @@ VALUES ($1, $2, $3, 'native')
 ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
     engine_catalog_name = EXCLUDED.engine_catalog_name,
     updated_at          = now()
-RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at
+RETURNING id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at
 `
 
 type UpsertNativeBindingParams struct {
@@ -503,6 +818,11 @@ func (q *Queries) UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindi
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LifecycleState,
+		&i.DesiredVersion,
+		&i.LastErrorCode,
+		&i.LastErrorMessage,
+		&i.StateChangedAt,
 	)
 	return i, err
 }

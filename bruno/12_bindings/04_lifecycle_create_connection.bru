@@ -1,0 +1,38 @@
+meta {
+  name: Lifecycle - Create Polaris Connection
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/catalog-connections
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "bruno-lifecycle",
+    "type": "polaris",
+    "config": { "url": "{{polaris_url}}", "client_id": "admin" },
+    "credentials": { "client_secret": "admin" }
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  bru.setVar("lifecycle_connection_id", res.getBody().id);
+}
+
+docs {
+  The binding lifecycle (#38) on a real Polaris warehouse: create, update,
+  rename, sync, a failing change, delete. polaris_url is where the API
+  reaches Polaris (http://polaris:8181 on the dev cluster).
+}

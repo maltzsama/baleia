@@ -74,6 +74,7 @@ type Querier interface {
 	// Everything an execution target needs about a binding: its engine and its
 	// logical catalog.
 	GetBindingForTarget(ctx context.Context, id pgtype.UUID) (GetBindingForTargetRow, error)
+	GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (BindingStatusV, error)
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error)
 	GetCatalogByTrinoName(ctx context.Context, arg GetCatalogByTrinoNameParams) (Catalog, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)
@@ -84,6 +85,7 @@ type Querier interface {
 	// The engine and the connection it runs on (decrypted by the caller, #19).
 	GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (GetEngineWithConnectionRow, error)
 	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
+	GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
 	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
 	// Workspace-scoped lookup: an execution id from another workspace must not be
@@ -119,6 +121,7 @@ type Querier interface {
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
+	ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]BindingStatusV, error)
 	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]CatalogBinding, error)
 	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
 	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error)
@@ -166,7 +169,15 @@ type Querier interface {
 	// Disabled bindings, engines and catalogs are included; callers filter.
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
+	ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error
+	// Catalogs the engine no longer reports.
+	MarkEngineCatalogsAbsent(ctx context.Context, arg MarkEngineCatalogsAbsentParams) error
 	MarkTrinoCatalogRegistryError(ctx context.Context, arg MarkTrinoCatalogRegistryErrorParams) error
+	// Catalogs Baleia managed and still sees in the engine, though no managed
+	// binding owns them any more (an old name that failed to drop): they stay
+	// managed, never adopted, for the reconciler (#37) to drop.
+	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
@@ -180,7 +191,12 @@ type Querier interface {
 	SetStatementQueryHandle(ctx context.Context, arg SetStatementQueryHandleParams) error
 	SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error
 	SoftDeleteTrinoCatalogRegistry(ctx context.Context, arg SoftDeleteTrinoCatalogRegistryParams) error
+	// Moves a binding between lifecycle states, guarded by the expected ones; no
+	// row means a concurrent change (#38).
+	TransitionBinding(ctx context.Context, arg TransitionBindingParams) (CatalogBinding, error)
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
+	// Writes the desired state and enters lifecycle_state, guarded by the states
+	// a change may start from; no row means a concurrent change.
 	UpdateBinding(ctx context.Context, arg UpdateBindingParams) (CatalogBinding, error)
 	UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (Catalog, error)
 	// Partial update: only fields present in the request are written. COALESCE with
@@ -213,7 +229,11 @@ type Querier interface {
 	UpdateUserPersonalWorkspace(ctx context.Context, arg UpdateUserPersonalWorkspaceParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
-	// The managed binding of a catalog on an engine (one per pair).
+	// A catalog found in an engine that no managed binding created (#38, #13).
+	UpsertAdoptedBinding(ctx context.Context, arg UpsertAdoptedBindingParams) error
+	UpsertEngineCatalogObservation(ctx context.Context, arg UpsertEngineCatalogObservationParams) error
+	// The managed binding of a catalog on an engine (one per pair), entering
+	// lifecycle_state with the projection version it wants (#38).
 	UpsertManagedBinding(ctx context.Context, arg UpsertManagedBindingParams) (CatalogBinding, error)
 	UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindingParams) (CatalogBinding, error)
 	// A catalog found inside an engine, owned by the engine's connection.

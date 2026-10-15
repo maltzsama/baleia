@@ -426,9 +426,9 @@ components:
         enabled:             { type: boolean, default: true }
         sync_status:
           type: string
-          enum: [pending, synced, error, draining]
+          enum: [pending, synced, error, draining, disabled]
           readOnly: true
-          description: State of the baleia-trino-catalog-store plugin's view of this catalog.
+          description: The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
         sync_error:          { type: string, nullable: true, readOnly: true }
         catalog_version:    { type: string, nullable: true, readOnly: true, description: SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion) }
         created_at:          { type: string, format: date-time }
@@ -683,9 +683,23 @@ components:
         extra_props:
           type: object
           additionalProperties: { type: string }
-        version: { type: string, nullable: true, description: "Version of the projection last applied (write responses only)" }
-        sync_status: { type: string, enum: [synced, error], nullable: true, description: "Write responses only" }
-        sync_error: { type: string, nullable: true }
+        version: { type: string, nullable: true, description: "Version of the projection applied (write responses, when synced)" }
+        lifecycle_state:
+          type: string
+          enum: [provisioning, active, updating, error, deprovisioning, disabled]
+          description: "Where Baleia is in applying the binding (#38)"
+        sync_status:
+          type: string
+          enum: [synced, pending, error, disabled]
+          nullable: true
+          description: >
+            Derived: synced when the binding is active, the engine confirmed
+            the desired version (Trino: the plugin rewrote the registry row)
+            and the engine does not report it missing; pending while
+            provisioning or updating or not yet confirmed; error; disabled
+            while deprovisioning or disabled.
+        last_error_code: { type: string, nullable: true, description: "e.g. plugin_not_confirmed, engine_unavailable, the engine's error name" }
+        last_error_message: { type: string, nullable: true }
 
     CreateBindingRequest:
       type: object
@@ -2089,6 +2103,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /connections/{connection_id}/catalogs/{catalog_id}:
     parameters:
@@ -2131,6 +2146,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       tags: [Catalog]
       operationId: deleteCatalog
@@ -2140,6 +2156,8 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /catalogs/{catalog_id}/sync:
     parameters:
@@ -2171,6 +2189,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Catalog" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /trino/reconcile:
     post:

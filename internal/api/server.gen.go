@@ -5544,6 +5544,17 @@ func (response SyncCatalog409JSONResponse) VisitSyncCatalogResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type SyncCatalog422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SyncCatalog422JSONResponse) VisitSyncCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListCatalogBindingsRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -5749,6 +5760,15 @@ func (response CreateCatalog404JSONResponse) VisitCreateCatalogResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateCatalog409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateCatalog409JSONResponse) VisitCreateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateCatalog422JSONResponse struct {
 	UnprocessableEntityJSONResponse
 }
@@ -5799,6 +5819,26 @@ type DeleteCatalog404JSONResponse struct{ NotFoundJSONResponse }
 func (response DeleteCatalog404JSONResponse) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalog409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteCatalog409JSONResponse) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalog422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DeleteCatalog422JSONResponse) VisitDeleteCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -5881,6 +5921,15 @@ type UpdateCatalog404JSONResponse struct{ NotFoundJSONResponse }
 func (response UpdateCatalog404JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalog409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateCatalog409JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
 
 	return json.NewEncoder(w).Encode(response)
 }

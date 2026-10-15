@@ -1,0 +1,19 @@
+meta {
+  name: Lifecycle - Delete Connection
+  type: http
+  seq: 12
+}
+
+delete {
+  url: {{base_url}}/catalog-connections/{{lifecycle_connection_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}
