@@ -148,16 +148,35 @@ const (
 	CancelInProcess CancelScope = "in_process"
 )
 
-// Capabilities declare what an engine supports; generic code never assumes
-// any of them. #14 adds the dialect-facing capabilities.
+// Capabilities declare what an engine can do; generic code never assumes any
+// of them. They never authorize anything: what a user may do is
+// internal/policy (TestGateNotCapabilityDriven).
 type Capabilities struct {
+	Dialect            string   // internal/dialect registry key
 	IdentityModes      []string // "impersonation", "connection", "per_user"
 	ReadOnly           ReadOnlySupport
 	CancelScope        CancelScope
-	Transactions       bool
+	SupportsCancel     bool
+	Transactions       bool // BEGIN/COMMIT/ROLLBACK within a session
 	MultipleResultSets bool
-	Monitoring         bool // a cluster monitor extension exists (Trino)
-	IcebergMaintenance bool // ALTER TABLE … EXECUTE optimize/expire_snapshots
+	MultipleCatalogs   bool // three-part names across catalogs in one statement
+	// NamespaceDepth is the schema depth in SQL: 1 for most engines, 0 when
+	// there are no schemas (SQLite).
+	NamespaceDepth      int
+	SessionSchema       bool // a default schema can be set per session
+	SupportsExplain     bool
+	SupportsTimeTravel  bool   // FOR VERSION/TIMESTAMP AS OF
+	SupportsCatalogDDL  bool   // informational; never used by policy
+	Monitoring          bool   // a cluster monitor extension exists (Trino)
+	IcebergMaintenance  bool   // ALTER TABLE … EXECUTE optimize/expire_snapshots
+	ArrowNative         bool   // results arrive as Arrow (Flight SQL)
+	MaxIdentifierLength int    // 0 = unknown
+	IdentifierCase      string // unquoted identifiers: "preserve", "lower" or "upper"
+}
+
+// Versioner is implemented by engines that report their server version.
+type Versioner interface {
+	Version(ctx context.Context) (string, error)
 }
 
 // Dialect is how an engine spells SQL (internal/dialect).

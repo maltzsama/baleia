@@ -86,11 +86,16 @@ func (e *Engine) Ping(context.Context) error   { return nil }
 
 func (e *Engine) Capabilities() queryengine.Capabilities {
 	return queryengine.Capabilities{
+		Dialect:            dialect.FlightSQL,
 		IdentityModes:      []string{"connection"},
 		ReadOnly:           e.opts.ReadOnly,
 		CancelScope:        queryengine.CancelAnyProcess,
+		SupportsCancel:     true,
 		Transactions:       true,
 		MultipleResultSets: true,
+		NamespaceDepth:     1,
+		SessionSchema:      true,
+		IdentifierCase:     "preserve",
 	}
 }
 

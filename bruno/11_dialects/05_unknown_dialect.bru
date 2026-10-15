@@ -1,0 +1,19 @@
+meta {
+  name: Unknown Dialect
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/dialects/cobol
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 404
+}

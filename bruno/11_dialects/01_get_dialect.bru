@@ -1,0 +1,38 @@
+meta {
+  name: Get Dialect
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/dialects/trino
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq trino
+  res.body.keywords: isArray
+  res.body.functions: isArray
+}
+
+script:post-response {
+  bru.setVar("dialect_etag", res.getHeader("etag"));
+}
+
+tests {
+  test("has a strong ETag", function() {
+    expect(res.getHeader("etag")).to.match(/^"[0-9a-f]+"$/);
+  });
+}
+
+docs {
+  Editor support for a SQL dialect: the sql-formatter language, the
+  CodeMirror base dialect and the keyword and function lists, generated from
+  real servers. Cacheable: send If-None-Match with the ETag.
+}

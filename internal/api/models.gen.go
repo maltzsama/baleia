@@ -93,9 +93,35 @@ const (
 
 // Defines values for EngineIdentityMode.
 const (
-	Connection    EngineIdentityMode = "connection"
-	Impersonation EngineIdentityMode = "impersonation"
-	PerUser       EngineIdentityMode = "per_user"
+	EngineIdentityModeConnection    EngineIdentityMode = "connection"
+	EngineIdentityModeImpersonation EngineIdentityMode = "impersonation"
+	EngineIdentityModePerUser       EngineIdentityMode = "per_user"
+)
+
+// Defines values for EngineCapabilitiesCancelScope.
+const (
+	AnyProcess EngineCapabilitiesCancelScope = "any_process"
+	InProcess  EngineCapabilitiesCancelScope = "in_process"
+)
+
+// Defines values for EngineCapabilitiesIdentifierCase.
+const (
+	Lower    EngineCapabilitiesIdentifierCase = "lower"
+	Preserve EngineCapabilitiesIdentifierCase = "preserve"
+	Upper    EngineCapabilitiesIdentifierCase = "upper"
+)
+
+// Defines values for EngineCapabilitiesIdentityModes.
+const (
+	EngineCapabilitiesIdentityModesConnection    EngineCapabilitiesIdentityModes = "connection"
+	EngineCapabilitiesIdentityModesImpersonation EngineCapabilitiesIdentityModes = "impersonation"
+	EngineCapabilitiesIdentityModesPerUser       EngineCapabilitiesIdentityModes = "per_user"
+)
+
+// Defines values for EngineCapabilitiesReadOnly.
+const (
+	Enforced EngineCapabilitiesReadOnly = "enforced"
+	None     EngineCapabilitiesReadOnly = "none"
 )
 
 // Defines values for ExecutionStatus.
@@ -524,11 +550,28 @@ type CreateWorkspaceRequest struct {
 // CreateWorkspaceRequestType defines model for CreateWorkspaceRequest.Type.
 type CreateWorkspaceRequestType string
 
+// Dialect defines model for Dialect.
+type Dialect struct {
+	// CodemirrorBase @codemirror/lang-sql base dialect
+	CodemirrorBase string `json:"codemirror_base"`
+
+	// FormatterLanguage sql-formatter language id
+	FormatterLanguage string   `json:"formatter_language"`
+	Functions         []string `json:"functions"`
+	Keywords          []string `json:"keywords"`
+	Name              string   `json:"name"`
+}
+
 // Engine defines model for Engine.
 type Engine struct {
-	Class        EngineClass        `json:"class"`
-	ConnectionId openapi_types.UUID `json:"connection_id"`
-	CreatedAt    time.Time          `json:"created_at"`
+	// Capabilities What the engine can do; null when the engine is disabled or no adapter for its kind is available yet
+	Capabilities *EngineCapabilities `json:"capabilities"`
+	Class        EngineClass         `json:"class"`
+	ConnectionId openapi_types.UUID  `json:"connection_id"`
+	CreatedAt    time.Time           `json:"created_at"`
+
+	// Dialect How to write SQL for it; keyword and function lists are at GET /dialects/{name}
+	Dialect      *EngineDialect     `json:"dialect"`
 	Enabled      bool               `json:"enabled"`
 	Id           openapi_types.UUID `json:"id"`
 	IdentityMode EngineIdentityMode `json:"identity_mode"`
@@ -537,6 +580,9 @@ type Engine struct {
 	Kind      string     `json:"kind"`
 	Name      string     `json:"name"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// Version Server version reported by the engine (cached 5 minutes); null when unknown or unreachable
+	Version *string `json:"version"`
 }
 
 // EngineClass defines model for Engine.Class.
@@ -544,6 +590,58 @@ type EngineClass string
 
 // EngineIdentityMode defines model for Engine.IdentityMode.
 type EngineIdentityMode string
+
+// EngineCapabilities What an engine can do. Capabilities never authorize anything: what a user may run is decided by policy (catalog DDL is never allowed in the editor, whatever supports_catalog_ddl says).
+type EngineCapabilities struct {
+	ArrowNative        bool                              `json:"arrow_native"`
+	CancelScope        *EngineCapabilitiesCancelScope    `json:"cancel_scope"`
+	Dialect            string                            `json:"dialect"`
+	IcebergMaintenance bool                              `json:"iceberg_maintenance"`
+	IdentifierCase     EngineCapabilitiesIdentifierCase  `json:"identifier_case"`
+	IdentityModes      []EngineCapabilitiesIdentityModes `json:"identity_modes"`
+
+	// MaxIdentifierLength 0 when unknown
+	MaxIdentifierLength int  `json:"max_identifier_length"`
+	Monitoring          bool `json:"monitoring"`
+	MultipleCatalogs    bool `json:"multiple_catalogs"`
+	MultipleResultSets  bool `json:"multiple_result_sets"`
+
+	// NamespaceDepth Schema depth in SQL; 0 when the engine has no schemas
+	NamespaceDepth int `json:"namespace_depth"`
+
+	// ReadOnly enforced: the engine guarantees read-only sessions; none: only a read-only database role can
+	ReadOnly       EngineCapabilitiesReadOnly `json:"read_only"`
+	SessionSchema  bool                       `json:"session_schema"`
+	SupportsCancel bool                       `json:"supports_cancel"`
+
+	// SupportsCatalogDdl Informational only
+	SupportsCatalogDdl bool `json:"supports_catalog_ddl"`
+	SupportsExplain    bool `json:"supports_explain"`
+	SupportsTimeTravel bool `json:"supports_time_travel"`
+	Transactions       bool `json:"transactions"`
+}
+
+// EngineCapabilitiesCancelScope defines model for EngineCapabilities.CancelScope.
+type EngineCapabilitiesCancelScope string
+
+// EngineCapabilitiesIdentifierCase defines model for EngineCapabilities.IdentifierCase.
+type EngineCapabilitiesIdentifierCase string
+
+// EngineCapabilitiesIdentityModes defines model for EngineCapabilities.IdentityModes.
+type EngineCapabilitiesIdentityModes string
+
+// EngineCapabilitiesReadOnly enforced: the engine guarantees read-only sessions; none: only a read-only database role can
+type EngineCapabilitiesReadOnly string
+
+// EngineDialect defines model for EngineDialect.
+type EngineDialect struct {
+	// CodemirrorBase @codemirror/lang-sql base dialect
+	CodemirrorBase string `json:"codemirror_base"`
+
+	// FormatterLanguage sql-formatter language id
+	FormatterLanguage string `json:"formatter_language"`
+	Name              string `json:"name"`
+}
 
 // Error defines model for Error.
 type Error struct {
@@ -850,10 +948,21 @@ type SetupStatus struct {
 	Version      string `json:"version"`
 }
 
+// SplitStatementsRequest defines model for SplitStatementsRequest.
+type SplitStatementsRequest struct {
+	Sql string `json:"sql"`
+}
+
 // SqlCredentials defines model for SqlCredentials.
 type SqlCredentials struct {
 	Password *string `json:"password,omitempty"`
 	Username *string `json:"username,omitempty"`
+}
+
+// StatementSpan One statement, as offsets into the submitted SQL in UTF-16 code units (JavaScript string indices), end exclusive
+type StatementSpan struct {
+	End   int `json:"end"`
+	Start int `json:"start"`
 }
 
 // TargetRequest Where to run. binding_id names a target; catalog_id picks the catalog's only enabled binding, or the one on engine_id when it has several. Omitted, the workspace default applies, else the workspace's only target; otherwise 422 target_required.
@@ -1071,6 +1180,11 @@ type OidcCallbackParams struct {
 	State string `form:"state" json:"state"`
 }
 
+// GetDialectParams defines parameters for GetDialect.
+type GetDialectParams struct {
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
 // ListMigrationItemsParams defines parameters for ListMigrationItems.
 type ListMigrationItemsParams struct {
 	Status  *ListMigrationItemsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
@@ -1155,6 +1269,9 @@ type CreateCatalogJSONRequestBody = CreateCatalogRequest
 
 // UpdateCatalogJSONRequestBody defines body for UpdateCatalog for application/json ContentType.
 type UpdateCatalogJSONRequestBody = CreateCatalogRequest
+
+// SplitStatementsJSONRequestBody defines body for SplitStatements for application/json ContentType.
+type SplitStatementsJSONRequestBody = SplitStatementsRequest
 
 // CreateEngineJSONRequestBody defines body for CreateEngine for application/json ContentType.
 type CreateEngineJSONRequestBody = CreateEngineRequest

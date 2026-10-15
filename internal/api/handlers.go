@@ -30,6 +30,7 @@ type Handlers struct {
 	temporalClient client.Client
 	s3             *storage.S3Client
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
+	versionCache   *TTLStore[*string] // engine id@updated_at → reported version
 	// connections holds every connection provider (docs/adr/0002).
 	connections *connections.Registry
 	// engines runs SQL (docs/adr/0002); catalogDDL manages Trino catalogs as
@@ -63,6 +64,7 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		engines:        engines,
 		catalogDDL:     ddl,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		versionCache:   NewTTLStore[*string](engineVersionTTL),
 	}
 }
 

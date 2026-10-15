@@ -108,6 +108,12 @@ type ServerInterface interface {
 	// Update a catalog
 	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 	UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID)
+	// A SQL dialect with its keyword and function lists (for the editor)
+	// (GET /dialects/{name})
+	GetDialect(w http.ResponseWriter, r *http.Request, name string, params GetDialectParams)
+	// Split a script into statements with the dialect's rules
+	// (POST /dialects/{name}/split)
+	SplitStatements(w http.ResponseWriter, r *http.Request, name string)
 	// Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
 	// (GET /engines)
 	ListEngines(w http.ResponseWriter, r *http.Request)
@@ -471,6 +477,18 @@ func (_ Unimplemented) GetCatalog(w http.ResponseWriter, r *http.Request, connec
 // Update a catalog
 // (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 func (_ Unimplemented) UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A SQL dialect with its keyword and function lists (for the editor)
+// (GET /dialects/{name})
+func (_ Unimplemented) GetDialect(w http.ResponseWriter, r *http.Request, name string, params GetDialectParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Split a script into statements with the dialect's rules
+// (POST /dialects/{name}/split)
+func (_ Unimplemented) SplitStatements(w http.ResponseWriter, r *http.Request, name string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1741,6 +1759,96 @@ func (siw *ServerInterfaceWrapper) UpdateCatalog(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCatalog(w, r, connectionId, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDialect operation middleware
+func (siw *ServerInterfaceWrapper) GetDialect(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", chi.URLParam(r, "name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDialectParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDialect(w, r, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SplitStatements operation middleware
+func (siw *ServerInterfaceWrapper) SplitStatements(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", chi.URLParam(r, "name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SplitStatements(w, r, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4038,6 +4146,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/connections/{connection_id}/catalogs/{catalog_id}", wrapper.UpdateCatalog)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/dialects/{name}", wrapper.GetDialect)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/dialects/{name}/split", wrapper.SplitStatements)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engines", wrapper.ListEngines)
 	})
 	r.Group(func(r chi.Router) {
@@ -5275,6 +5389,113 @@ type UpdateCatalog404JSONResponse struct{ NotFoundJSONResponse }
 func (response UpdateCatalog404JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDialectRequestObject struct {
+	Name   string `json:"name"`
+	Params GetDialectParams
+}
+
+type GetDialectResponseObject interface {
+	VisitGetDialectResponse(w http.ResponseWriter) error
+}
+
+type GetDialect200ResponseHeaders struct {
+	CacheControl string
+	ETag         string
+}
+
+type GetDialect200JSONResponse struct {
+	Body    Dialect
+	Headers GetDialect200ResponseHeaders
+}
+
+func (response GetDialect200JSONResponse) VisitGetDialectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDialect304ResponseHeaders struct {
+	ETag string
+}
+
+type GetDialect304Response struct {
+	Headers GetDialect304ResponseHeaders
+}
+
+func (response GetDialect304Response) VisitGetDialectResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetDialect401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetDialect401JSONResponse) VisitGetDialectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDialect404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetDialect404JSONResponse) VisitGetDialectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SplitStatementsRequestObject struct {
+	Name string `json:"name"`
+	Body *SplitStatementsJSONRequestBody
+}
+
+type SplitStatementsResponseObject interface {
+	VisitSplitStatementsResponse(w http.ResponseWriter) error
+}
+
+type SplitStatements200JSONResponse []StatementSpan
+
+func (response SplitStatements200JSONResponse) VisitSplitStatementsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SplitStatements401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SplitStatements401JSONResponse) VisitSplitStatementsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SplitStatements404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SplitStatements404JSONResponse) VisitSplitStatementsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SplitStatements422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SplitStatements422JSONResponse) VisitSplitStatementsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -7648,6 +7869,12 @@ type StrictServerInterface interface {
 	// Update a catalog
 	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 	UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error)
+	// A SQL dialect with its keyword and function lists (for the editor)
+	// (GET /dialects/{name})
+	GetDialect(ctx context.Context, request GetDialectRequestObject) (GetDialectResponseObject, error)
+	// Split a script into statements with the dialect's rules
+	// (POST /dialects/{name}/split)
+	SplitStatements(ctx context.Context, request SplitStatementsRequestObject) (SplitStatementsResponseObject, error)
 	// Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
 	// (GET /engines)
 	ListEngines(ctx context.Context, request ListEnginesRequestObject) (ListEnginesResponseObject, error)
@@ -8687,6 +8914,66 @@ func (sh *strictHandler) UpdateCatalog(w http.ResponseWriter, r *http.Request, c
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCatalogResponseObject); ok {
 		if err := validResponse.VisitUpdateCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDialect operation middleware
+func (sh *strictHandler) GetDialect(w http.ResponseWriter, r *http.Request, name string, params GetDialectParams) {
+	var request GetDialectRequestObject
+
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDialect(ctx, request.(GetDialectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDialect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDialectResponseObject); ok {
+		if err := validResponse.VisitGetDialectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SplitStatements operation middleware
+func (sh *strictHandler) SplitStatements(w http.ResponseWriter, r *http.Request, name string) {
+	var request SplitStatementsRequestObject
+
+	request.Name = name
+
+	var body SplitStatementsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SplitStatements(ctx, request.(SplitStatementsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SplitStatements")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SplitStatementsResponseObject); ok {
+		if err := validResponse.VisitSplitStatementsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
