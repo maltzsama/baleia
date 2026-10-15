@@ -1,8 +1,9 @@
 -- +goose Up
 -- A managed binding whose registry row the plugin marked 'error' (it could not
 -- load the catalog at boot: bad properties, an unresolvable secret) is in
--- error, not pending forever; engine_error is the plugin's message ('' when
--- there is none).
+-- error, not pending forever; engine_error is the plugin's message (a generic
+-- one when it gave none) in that state and '' otherwise, so it alone tells
+-- the API the engine refused the catalog.
 CREATE OR REPLACE VIEW binding_status_v AS
 SELECT b.id AS binding_id,
        b.lifecycle_state,
@@ -18,7 +19,7 @@ SELECT b.id AS binding_id,
        END AS sync_status,
        COALESCE(CASE
            WHEN b.lifecycle_state = 'active' AND b.mode = 'managed' AND r.enabled AND r.sync_status = 'error'
-               THEN r.sync_error
+               THEN COALESCE(NULLIF(r.sync_error, ''), 'the engine could not load the catalog')
        END, '')::text AS engine_error
 FROM catalog_bindings b
 LEFT JOIN trino_clusters tc ON tc.engine_id = b.engine_id

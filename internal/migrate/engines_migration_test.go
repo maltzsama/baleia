@@ -462,6 +462,11 @@ func TestBindingStatusEngineError(t *testing.T) {
 	if s, e := status(); s != "error" || e != "circular reference at lake:k" {
 		t.Errorf("skipped at boot: %s/%q, want error with the plugin's message", s, e)
 	}
+	// Without a message from the plugin it is still identified.
+	mustExec(t, db, `UPDATE trino_catalog_registry SET sync_error = NULL WHERE catalog_name = 'lake'`)
+	if s, e := status(); s != "error" || e != "the engine could not load the catalog" {
+		t.Errorf("no message: %s/%q, want error with the generic message", s, e)
+	}
 	// A binding being changed is pending, whatever the last boot said.
 	mustExec(t, db, `UPDATE catalog_bindings SET lifecycle_state = 'updating' WHERE engine_catalog_name = 'lake'`)
 	if s, e := status(); s != "pending" || e != "" {
