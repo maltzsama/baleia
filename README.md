@@ -271,6 +271,12 @@ The OpenAPI spec is served at `GET /openapi.yaml` and is the single source of tr
 5. Until binders land (#80), extend `trinoConnector()` and `catalogs.Project` for the Trino projection
 6. The API validates and stores connections through the provider's schema (`GET /connection-providers` exposes it), so no OpenAPI change is needed. Until the UI reads that endpoint (#22), add the card to `web/src/routes/(app)/datasources/+page.svelte`
 
+## Source databases and SQL dialects
+
+Provider (#11) and dialect (#14) integration tests run against real databases. On the minikube dev cluster (`make k8s-up`), `make k8s-source NAME=<mysql|mariadb|sqlserver|oracle|clickhouse>` starts one from `deploy/dev/sources/` and `make k8s-source-down NAME=…` removes it. The tests read `BALEIA_TEST_<KIND>_URL`; the `Sources` workflow runs them all nightly and on PRs that touch providers or dialects.
+
+Each dialect (`internal/dialect`) ships keyword and function lists generated from the real server and committed with its version. `scripts/gen-dialect-lists.sh <dialect>` regenerates one (starting and removing its source database) and runs that dialect's execution test; `make dialect-lists` regenerates them all.
+
 ## Roadmap
 
 - Remaining backend models/handlers: `QueryFolder`, `QueryFile`, `Execution`, `ExecutionStatement`

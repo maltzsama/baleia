@@ -1,0 +1,34 @@
+# Source database for provider and dialect tests (#11, #14); not part of the
+# dev stack. kubectl apply -f deploy/dev/sources/mysql.yaml (make k8s-source NAME=mysql).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: src-mysql
+  namespace: baleia-dev
+  labels: { app: src-mysql, baleia/role: source }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: src-mysql }
+  template:
+    metadata:
+      labels: { app: src-mysql, baleia/role: source }
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4
+          ports:
+            - containerPort: 3306
+          env:
+            - { name: MYSQL_ROOT_PASSWORD, value: baleia_dev }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: src-mysql
+  namespace: baleia-dev
+spec:
+  selector: { app: src-mysql }
+  ports:
+    - port: 3306
+      targetPort: 3306

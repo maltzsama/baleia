@@ -1,6 +1,7 @@
 name: Sources
 
-# Integration tests of the connection providers against real databases (#11).
+# Integration tests of the connection providers (#11) and of the SQL each
+# dialect generates (#14) against real databases.
 # Nightly, on demand, and on pull requests that touch the providers. Oracle
 # starts slowly; it runs here too, so a provider change is checked against
 # every database before it merges.
@@ -12,6 +13,7 @@ on:
     paths:
       - "internal/connections/**"
       - "internal/trino/**"
+      - "internal/dialect/**"
       - ".github/workflows/sources.yml"
 
 jobs:
@@ -115,9 +117,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test -count=1 -v ./internal/connections/... | tee test.log
+          go test -count=1 -v ./internal/connections/... ./internal/dialect/... | tee test.log
           # Every integration test must have run, not been skipped (Polaris
-          # needs its bootstrap; it is covered against the compose stack).
-          if grep -E -- '--- SKIP: TestMetadataReader_' test.log | grep -v polaris; then
+          # needs its bootstrap; it is covered against the dev stack).
+          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_)' test.log | grep -v polaris; then
             echo "an integration test was skipped" && exit 1
           fi

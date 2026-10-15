@@ -217,9 +217,10 @@ var oracleDialect = register(&spec{
 	name:      Oracle,
 	identOpen: `"`, identClose: `"`,
 	maxIdent: 128, identBytes: true,
-	lex:         lexRules{identQuotes: `"`, qQuotes: true, plsqlBlocks: true},
-	schemaDepth: 1, // the catalog is the service the connection opened
-	placeholder: numbered(":"),
+	identForbidden: `"`, // ORA-25716: no escape exists
+	lex:            lexRules{identQuotes: `"`, qQuotes: true, plsqlBlocks: true},
+	schemaDepth:    1, // the catalog is the service the connection opened
+	placeholder:    numbered(":"),
 	preview: func(obj string, n int) string {
 		return fmt.Sprintf("SELECT * FROM %s FETCH FIRST %d ROWS ONLY", obj, n)
 	},
