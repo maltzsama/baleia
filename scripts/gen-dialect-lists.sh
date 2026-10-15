@@ -61,10 +61,23 @@ wait_ready() {
   return 1
 }
 
-run_tests() {
+gen_lists() {
   BALEIA_UPDATE_LISTS="$dialect" go test -count=1 -run TestGenerateLists -v ./internal/dialect/ | grep -E 'words|FAIL|ok'
-  # The execution test must run, not skip.
-  go test -count=1 -run "TestExecute_${exec_name:-$dialect}\$" -v ./internal/dialect/ | tee /dev/stderr | grep -q -- "--- PASS: TestExecute_"
+}
+
+# exec_test <name>: the execution test must run and pass, not skip.
+exec_test() {
+  local log
+  log=$(mktemp)
+  go test -count=1 -run "TestExecute_$1\$" -v ./internal/dialect/ >"$log" 2>&1 || { cat "$log"; rm -f "$log"; return 1; }
+  cat "$log"
+  grep -q -- "--- PASS: TestExecute_$1" "$log" || { echo "TestExecute_$1 did not run" >&2; rm -f "$log"; return 1; }
+  rm -f "$log"
+}
+
+run_tests() {
+  gen_lists
+  exec_test "$dialect"
 }
 
 case "$dialect" in
@@ -99,18 +112,19 @@ case "$dialect" in
     wait_ready oracle healthcheck.sh
     forward src-oracle 11521 1521
     # Lists read V$ views (SYSTEM); the execution test uses the app user.
-    BALEIA_TEST_ORACLE_URL="oracle://system:baleia_dev@127.0.0.1:11521/FREEPDB1" \
-      BALEIA_UPDATE_LISTS=oracle go test -count=1 -run TestGenerateLists -v ./internal/dialect/ | grep -E 'words|FAIL|ok'
-    BALEIA_TEST_ORACLE_URL="oracle://baleia:baleia_dev@127.0.0.1:11521/FREEPDB1" \
-      go test -count=1 -run 'TestExecute_oracle$' -v ./internal/dialect/ | tee /dev/stderr | grep -q -- "--- PASS: TestExecute_" ;;
+    BALEIA_TEST_ORACLE_URL="oracle://system:baleia_dev@127.0.0.1:11521/FREEPDB1" gen_lists
+    BALEIA_TEST_ORACLE_URL="oracle://baleia:baleia_dev@127.0.0.1:11521/FREEPDB1" exec_test oracle ;;
   clickhouse)
     start_source clickhouse
     wait_ready clickhouse wget -qO- http://127.0.0.1:8123/ping
     forward src-clickhouse 18123 8123
     export BALEIA_TEST_CLICKHOUSE_URL="http://baleia:baleia_dev@127.0.0.1:18123"
     run_tests ;;
-  sqlite|flightsql-generic)
-    BALEIA_UPDATE_LISTS="$dialect" go test -count=1 -run TestGenerateLists -v ./internal/dialect/ | grep -E 'words|FAIL|ok' ;;
+  sqlite)
+    gen_lists
+    exec_test sqlite ;;
+  flightsql-generic)
+    gen_lists ;;
   *)
     echo "unknown dialect: $dialect" >&2
     exit 2 ;;
