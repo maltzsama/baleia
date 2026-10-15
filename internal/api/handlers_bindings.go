@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/galileostudio/baleia/internal/authz"
@@ -372,7 +373,11 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
 	defer cancel()
 	if cur.Enabled {
-		_ = h.binder.Remove(ddlCtx, cur.EngineCatalogName)
+		if err := h.binder.Remove(ddlCtx, cur.EngineCatalogName); err != nil {
+			// The binding is gone; the catalog may still be live in Trino and
+			// shows up as orphan_in_trino in /trino/reconcile.
+			slog.Warn("drop catalog of deleted binding", "catalog", cur.EngineCatalogName, "err", err)
+		}
 	}
 	h.catalogCache.Clear()
 	return DeleteCatalogBinding204Response{}, nil
@@ -404,6 +409,9 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(cur.ExtraProps)))
 	if err != nil {
 		h.markBindingError(ctx, t, cur.EngineCatalogName, err)
+		if bindingInvalid(err) {
+			return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
+		}
 		return SyncCatalogBinding409JSONResponse(bindingWithSync(cur, "", err)), nil
 	}
 	ddlCtx, cancel := context.WithTimeout(ctx, catalogDDLTimeout)
