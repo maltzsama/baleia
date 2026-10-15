@@ -16,6 +16,18 @@ groups:
           description: Prometheus has not scraped the API at {{ $labels.instance }} for 2 minutes.
           runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaapidown
 
+      - alert: BaleiaWorkerDown
+        # The worker runs every schedule; its own gauges vanish with it, so
+        # BaleiaScheduleStale cannot fire while it is down.
+        expr: up{job="baleia-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Baleia worker target {{ $labels.instance }} is down
+          description: Prometheus has not scraped the worker at {{ $labels.instance }} for 2 minutes; executions, schedules and catalog jobs do not run.
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaworkerdown
+
       - alert: BaleiaHighErrorRate
         expr: |
           sum(rate(baleia_http_requests_total{status_class="5xx"}[10m]))

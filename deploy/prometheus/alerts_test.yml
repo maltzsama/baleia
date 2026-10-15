@@ -21,6 +21,24 @@ tests:
               description: The last successful pass of lens-query-poller was 5m 0s ago.
               runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaschedulestale
 
+  - name: a worker that stopped answering scrapes
+    interval: 1m
+    input_series:
+      - series: 'up{job="baleia-worker",instance="w1"}'
+        values: '1 1 0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BaleiaWorkerDown
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: BaleiaWorkerDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: baleia-worker, instance: w1}
+            exp_annotations:
+              summary: Baleia worker target w1 is down
+              description: Prometheus has not scraped the worker at w1 for 2 minutes; executions, schedules and catalog jobs do not run.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaworkerdown
+
   - name: 5xx ratio over 5% for 10m
     interval: 1m
     input_series:

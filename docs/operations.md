@@ -98,6 +98,22 @@ Prometheus has not scraped an API pod for 2 minutes.
    - `BALEIA_METRICS_ENABLED=false`;
    - a token mismatch, which shows as 401 in the target's last error.
 
+### BaleiaWorkerDown
+
+Prometheus has not scraped a worker pod for 2 minutes. While no worker runs, nothing on the task queue moves:
+- query executions;
+- the schedules;
+- catalog jobs.
+
+The worker's own gauges (`baleia_schedule_*`) vanish with it, so this alert, not [BaleiaScheduleStale](#baleiaschedulestale), is the one that fires.
+
+1. Check the pod: `kubectl get pods -l app.kubernetes.io/component=worker`. Then run `kubectl describe pod` and `kubectl logs --previous` on it.
+2. If the pod is in a crash loop, read the last log lines. `temporal at <host> unreachable` means Temporal is down. Database errors mean Postgres.
+3. If the pod is running but the target is down, the scrape cannot reach `:9090`. Check the following:
+   - `BALEIA_WORKER_METRICS_ADDR`;
+   - the `metrics` port;
+   - the token.
+
 ### BaleiaHighErrorRate
 
 More than 5% of API requests returned 5xx over 10 minutes.
@@ -143,7 +159,7 @@ A recurring job has not succeeded in three of its intervals:
 | `retriever-scheduler` | 60 s |
 | `lens-table-health` | 1 h |
 
-1. Check that a worker is running (`up{job="baleia-worker"}`) and polling. If `temporal_worker_task_slots_available` is flat or `temporal_*` is missing, no worker is polling.
+1. Check that a worker is running and polling. A worker that is down raises [BaleiaWorkerDown](#baleiaworkerdown). If `temporal_worker_task_slots_available` is flat or `temporal_*` is missing, no worker is polling.
 2. In the Temporal UI, open the schedule (its ID is the alert's `schedule` label). Read the last runs' failures.
 3. The gauge is set when a pass completes: for table health and retriever dispatch, after the whole pass, not its first activity. It restarts empty with the worker. Right after a worker restart, a schedule shows up once its next pass succeeds.
 
