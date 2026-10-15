@@ -147,9 +147,6 @@ func (q *bindingQuerier) SoftDeleteTrinoCatalogRegistry(_ context.Context, p db.
 	return nil
 }
 
-func (q *bindingQuerier) MarkTrinoCatalogRegistryError(context.Context, db.MarkTrinoCatalogRegistryErrorParams) error {
-	return nil
-}
 
 func bindingHandlers(t *testing.T, q *bindingQuerier) (*Handlers, *fakeTrino) {
 	ft := newFakeTrino(t)

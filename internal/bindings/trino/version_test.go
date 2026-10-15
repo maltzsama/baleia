@@ -1,63 +1,15 @@
 package trino
 
-import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
-// vector mirrors the wire shape of catalog_version_vectors.json, the shared
-// golden file between this Go package and the baleia-trino-catalog-store
-// Java plugin (ComputeCatalogVersionTest). Both sides read the same JSON
-// from their respective testdata / src/test/resources — the file ships in
-// both repos so any change in the algorithm or inputs is caught on both
-// sides as a single golden-source-of-truth.
-type vector struct {
-	Name         string            `json:"name"`
-	Connector    string            `json:"connector"`
-	Properties   map[string]string `json:"properties"`
-	ExpectedHash string            `json:"expected_hash"`
-	Note         string            `json:"note"`
-}
-
-// loadVectors reads testdata/catalog_version_vectors.json. If the file is
-// missing or empty the test fails loudly — a silent pass would mean we are
-// no longer pinned to the plugin Java side.
-func loadVectors(t *testing.T) []vector {
-	t.Helper()
-	path := filepath.Join("testdata", "catalog_version_vectors.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	var vs []vector
-	if err := json.Unmarshal(data, &vs); err != nil {
-		t.Fatalf("parse %s: %v", path, err)
-	}
-	if len(vs) == 0 {
-		t.Fatalf("%s contains no vectors", path)
-	}
-	return vs
-}
-
-// TestVersion_SharedVectors pins Version() against the golden vectors shared
-// with the Java plugin. Both sides read catalog_version_vectors.json; this
-// test fails if the Go implementation diverges from the recorded hashes
-// (e.g. due to a wrong UTF-16 length prefix or an unordered iteration).
-//
-// If you regenerated the hashes intentionally (algorithm changed, inputs
-// changed), update testdata/catalog_version_vectors.json AND re-run
-// ComputeCatalogVersionTest on the Java side so the contract stays in sync.
-func TestVersion_SharedVectors(t *testing.T) {
-	for _, v := range loadVectors(t) {
-		t.Run(v.Name, func(t *testing.T) {
-			got := Version(v.Name, v.Connector, v.Properties)
-			if got != v.ExpectedHash {
-				t.Errorf("Version(%q,%q,%v) = %q; want %q (note: %s)",
-					v.Name, v.Connector, v.Properties, got, v.ExpectedHash, v.Note)
-			}
-		})
+// TestVersion_Golden pins one vector the plugin also pins. The full shared
+// set lives in the plugin release's contract/ and is checked by
+// internal/contract (make contract-fetch; go test -tags contract), so no
+// copy of the vector file is kept here (#39).
+func TestVersion_Golden(t *testing.T) {
+	props := map[string]string{"tpch.splits-per-node": "4"}
+	if got := Version("tpch_test", "tpch", props); got != "2f8450cf6bb5940875d1a8d60a13e7d0541a4bb3b9eaa46a1063de16b108f636" {
+		t.Errorf("Version = %s; the algorithm no longer matches the plugin's", got)
 	}
 }
 

@@ -111,12 +111,6 @@ func (q *authzFake) UpsertTrinoCatalogRegistry(_ context.Context, p db.UpsertTri
 	return nil
 }
 
-func (q *authzFake) MarkTrinoCatalogRegistryError(_ context.Context, p db.MarkTrinoCatalogRegistryErrorParams) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.registryErr = append(q.registryErr, p.CatalogName)
-	return nil
-}
 
 func (q *authzFake) GetTrinoClusterByID(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
 	return db.TrinoCluster{ID: id, Name: "default", EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}}, nil

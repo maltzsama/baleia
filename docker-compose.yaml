@@ -8,6 +8,7 @@ networks:
 volumes:
   postgres-data:
   rustfs-data:
+  trino_plugin:
 
 services:
   # ============================================
@@ -254,6 +255,33 @@ services:
   # QUERY ENGINE - Trino
   # ============================================
 
+  # Installs the pinned baleia-trino-catalog-store release (BALEIA_PLUGIN_VERSION,
+  # the Makefile's pin) into the trino_plugin volume once; a volume that already
+  # holds that VERSION is left alone. Set BALEIA_PLUGIN_URL to install another
+  # tarball (its .sha256 must sit beside it).
+  trino-plugin-init:
+    image: alpine:3.20
+    container_name: baleia_trino_plugin_init
+    environment:
+      PLUGIN_URL: "${BALEIA_PLUGIN_URL:-https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v${BALEIA_PLUGIN_VERSION:-0.9.0}/baleia-catalog-store-${BALEIA_PLUGIN_VERSION:-0.9.0}+trino${TRINO_VERSION:-483}.tar.gz}"
+      WANT: "${BALEIA_PLUGIN_VERSION:-0.9.0}+trino${TRINO_VERSION:-483}"
+    volumes:
+      - trino_plugin:/plugin
+    command:
+      - sh
+      - -ec
+      - |
+        [ "$$(cat /plugin/VERSION 2>/dev/null)" = "$$WANT" ] && exit 0
+        rm -rf /plugin/* 2>/dev/null || true
+        wget -qO /tmp/p.tgz "$$PLUGIN_URL"
+        wget -qO /tmp/p.sha256 "$$PLUGIN_URL.sha256"
+        echo "$$(cut -d' ' -f1 /tmp/p.sha256)  /tmp/p.tgz" | sha256sum -c -
+        tar xzf /tmp/p.tgz -C /plugin
+        test "$$(cat /plugin/VERSION)" = "$$WANT"
+    restart: "no"
+    networks:
+      - app_net
+
   trino:
     # Pinned to 483 — the SPI contracts the baleia-trino-catalog-store plugin
     # was compiled against (CatalogStore/CatalogStoreFactory) live in Trino 483
@@ -262,10 +290,9 @@ services:
     # and break every catalog registration. Do not bump without re-running the
     # Phase 0 port of the plugin (see CR-014 rev.3).
     #
-    # The baleia-catalog-store plugin is built from the sibling repository
-    # (baleia-trino-catalog-store) via `make plugin-build` and mounted as a bind
-    # mount. Without the built sibling repository, Trino starts without the
-    # plugin and catalogs do not load. Use `make up` (which runs plugin-build first).
+    # The baleia-catalog-store plugin comes from its released tarball, which
+    # trino-plugin-init downloads and checks (sha256 and VERSION) into the
+    # trino_plugin volume; Trino itself is the official image (#88).
     image: trinodb/trino:${TRINO_VERSION:-483}
     container_name: baleia_trino
     environment:
@@ -279,8 +306,14 @@ services:
     expose:
       - "8080"
     volumes:
-      # Plugin JARs compilados (make plugin-build clona + compila).
-      - ${BALEIA_PLUGIN_DIR:-./.plugin/baleia-trino-catalog-store}/target/baleia-catalog-store:/usr/lib/trino/plugin/baleia-catalog-store:ro
+      # The plugin directory of the extracted release (volume subpath needs
+      # Docker Compose >= 2.23 and Engine >= 25).
+      - type: volume
+        source: trino_plugin
+        target: /usr/lib/trino/plugin/baleia-catalog-store
+        read_only: true
+        volume:
+          subpath: baleia-catalog-store
       # Baleia owns its Trino configuration (deploy/trino/*, the same files the
       # chart ships): dynamic catalogs, the catalog store, and the catalog guard
       # as the active access control.
@@ -292,6 +325,8 @@ services:
     networks:
       - app_net
     depends_on:
+      trino-plugin-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       polaris:
