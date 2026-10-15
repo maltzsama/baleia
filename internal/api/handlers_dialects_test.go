@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -67,6 +68,13 @@ func TestSplitStatements_UTF16Offsets(t *testing.T) {
 			t.Errorf("%s %q: %T", name, sql, resp)
 		}
 	}
+	long := strings.Repeat("é", maxSplitSQL+1) // characters, not bytes, count
+	if resp, _ := h.SplitStatements(testContext(), SplitStatementsRequestObject{Name: "trino", Body: &SplitStatementsRequest{Sql: long}}); func() bool { _, ok := resp.(SplitStatements422JSONResponse); return !ok }() {
+		t.Error("sql over maxLength must be 422")
+	}
+	if resp, _ := h.SplitStatements(testContext(), SplitStatementsRequestObject{Name: "trino", Body: &SplitStatementsRequest{Sql: long[:len(long)-2]}}); func() bool { _, ok := resp.(SplitStatements200JSONResponse); return !ok }() {
+		t.Error("sql at maxLength must be accepted")
+	}
 	if resp, _ := h.SplitStatements(testContext(), SplitStatementsRequestObject{Name: "cobol", Body: &SplitStatementsRequest{Sql: "x"}}); func() bool { _, ok := resp.(SplitStatements404JSONResponse); return !ok }() {
 		t.Error("unknown dialect must be 404")
 	}
@@ -117,5 +125,36 @@ func TestDescribeEngine(t *testing.T) {
 	e := h.describeEngine(context.Background(), row)
 	if e.Capabilities != nil || e.Version != nil || e.Dialect == nil || e.Dialect.Name != "postgresql" {
 		t.Errorf("engine without adapter = %+v", e)
+	}
+}
+
+// slowEngines answers like failingEngines after a delay.
+type slowEngines struct{ delay time.Duration }
+
+func (s slowEngines) Get(context.Context, pgtype.UUID) (queryengine.Engine, error) {
+	time.Sleep(s.delay)
+	return nil, errors.New("no adapter")
+}
+func (s slowEngines) DefaultTrino(context.Context) (queryengine.Engine, error) {
+	return nil, errors.New("no adapter")
+}
+
+// TestDescribeEngines_ParallelInOrder: slow engines overlap and the list
+// keeps its order.
+func TestDescribeEngines_ParallelInOrder(t *testing.T) {
+	h := &Handlers{engines: slowEngines{delay: 100 * time.Millisecond}}
+	rows := make([]db.Engine, 8)
+	for i := range rows {
+		rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
+	}
+	start := time.Now()
+	out := h.describeEngines(context.Background(), rows)
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Errorf("8 slow engines took %s; lookups must overlap", d)
+	}
+	for i, e := range out {
+		if e.Name != rows[i].Name {
+			t.Fatalf("order lost: %d is %s", i, e.Name)
+		}
 	}
 }

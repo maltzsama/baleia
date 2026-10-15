@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -23,7 +25,30 @@ const (
 	// engineVersionTimeout bounds asking an engine for its version, so a list
 	// never waits long on an unreachable engine (failures are cached too).
 	engineVersionTimeout = 2 * time.Second
+	// describeParallelism bounds how many engines a list describes at once:
+	// cold version lookups overlap instead of adding up.
+	describeParallelism = 8
+	// maxSplitSQL is SplitStatementsRequest.sql's maxLength, in characters.
+	maxSplitSQL = 1 << 20
 )
+
+// describeEngines describes every engine, in order, at most
+// describeParallelism at a time.
+func (h *Handlers) describeEngines(ctx context.Context, engines []db.Engine) []Engine {
+	out := make([]Engine, len(engines))
+	sem := make(chan struct{}, describeParallelism)
+	var wg sync.WaitGroup
+	for i, e := range engines {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			out[i] = h.describeEngine(ctx, e)
+		}()
+	}
+	wg.Wait()
+	return out
+}
 
 func dialectToPublic(d dialect.Dialect) *EngineDialect {
 	return &EngineDialect{Name: d.Name(), FormatterLanguage: d.FormatterLanguage(), CodemirrorBase: d.CodeMirrorBase()}
@@ -159,6 +184,11 @@ func (h *Handlers) SplitStatements(ctx context.Context, request SplitStatementsR
 		return SplitStatements422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "sql is required"}}, nil
 	}
 	sql := request.Body.Sql
+	if utf8.RuneCountInString(sql) > maxSplitSQL {
+		return SplitStatements422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+			Code: "validation_error", Message: fmt.Sprintf("sql is longer than %d characters", maxSplitSQL),
+		}}, nil
+	}
 	spans, err := d.Statements(sql)
 	if err != nil {
 		code := "invalid_sql"

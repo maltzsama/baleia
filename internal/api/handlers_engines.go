@@ -85,11 +85,7 @@ func (h *Handlers) ListEngines(ctx context.Context, _ ListEnginesRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Engine, 0, len(engines))
-	for _, e := range engines {
-		out = append(out, h.describeEngine(ctx, e))
-	}
-	return ListEngines200JSONResponse(out), nil
+	return ListEngines200JSONResponse(h.describeEngines(ctx, engines)), nil
 }
 
 func (h *Handlers) GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error) {
