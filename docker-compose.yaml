@@ -263,8 +263,8 @@ services:
     image: alpine:3.20
     container_name: baleia_trino_plugin_init
     environment:
-      PLUGIN_URL: "${BALEIA_PLUGIN_URL:-https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v${BALEIA_PLUGIN_VERSION:-0.9.0}/baleia-catalog-store-${BALEIA_PLUGIN_VERSION:-0.9.0}+trino${TRINO_VERSION:-483}.tar.gz}"
-      WANT: "${BALEIA_PLUGIN_VERSION:-0.9.0}+trino${TRINO_VERSION:-483}"
+      PLUGIN_URL: "${BALEIA_PLUGIN_URL:-https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v${BALEIA_PLUGIN_VERSION:-0.9.1}/baleia-catalog-store-${BALEIA_PLUGIN_VERSION:-0.9.1}+trino${TRINO_VERSION:-483}.tar.gz}"
+      WANT: "${BALEIA_PLUGIN_VERSION:-0.9.1}+trino${TRINO_VERSION:-483}"
     volumes:
       - trino_plugin:/plugin
     command:
