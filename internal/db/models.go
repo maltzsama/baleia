@@ -31,6 +31,7 @@ type BindingStatusV struct {
 	BindingID      pgtype.UUID `json:"binding_id"`
 	LifecycleState string      `json:"lifecycle_state"`
 	SyncStatus     string      `json:"sync_status"`
+	EngineError    string      `json:"engine_error"`
 }
 
 type Catalog struct {

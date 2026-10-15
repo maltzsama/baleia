@@ -696,9 +696,11 @@ components:
             Derived: synced when the binding is active, the engine confirmed
             the desired version (Trino: the plugin rewrote the registry row)
             and the engine does not report it missing; pending while
-            provisioning or updating or not yet confirmed; error; disabled
-            while deprovisioning or disabled.
-        last_error_code: { type: string, nullable: true, description: "e.g. plugin_not_confirmed, engine_unavailable, the engine's error name" }
+            provisioning or updating or not yet confirmed; error (also when
+            the engine could not load the active binding's catalog at boot,
+            last_error_code engine_load_failed); disabled while deprovisioning
+            or disabled.
+        last_error_code: { type: string, nullable: true, description: "e.g. plugin_not_confirmed, engine_unavailable, engine_load_failed (the engine refused to load the catalog; sync the binding to apply it again), the engine's error name" }
         last_error_message: { type: string, nullable: true }
 
     CreateBindingRequest:

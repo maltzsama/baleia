@@ -431,3 +431,47 @@ func TestBindingLifecycleMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+const versionBindingStatusEngineError = 30
+
+// TestBindingStatusEngineError: an active managed binding whose registry row
+// the plugin marked 'error' (it could not load the catalog at boot) is in
+// error with the plugin's message, not pending.
+func TestBindingStatusEngineError(t *testing.T) {
+	db, dir := testDB(t, versionBeforeEngines)
+	seedLegacy(t, db)
+	if err := goose.UpTo(db, dir, versionBindingStatusEngineError); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `INSERT INTO trino_catalog_registry (cluster_id, catalog_name, connector_name, properties, catalog_version, updated_by)
+		SELECT id, 'lake', 'iceberg', '{}'::jsonb, 'v1', 'trino' FROM trino_clusters WHERE name = 'default'
+		ON CONFLICT (cluster_id, catalog_name) DO UPDATE SET catalog_version = 'v1', updated_by = 'trino', enabled = true, sync_status = 'synced', sync_error = NULL`)
+	mustExec(t, db, `UPDATE catalog_bindings SET lifecycle_state = 'active', desired_version = 'v1' WHERE engine_catalog_name = 'lake'`)
+	status := func() (string, string) {
+		var sync, engineErr string
+		if err := db.QueryRow(`SELECT s.sync_status, s.engine_error FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id
+			WHERE b.engine_catalog_name = 'lake'`).Scan(&sync, &engineErr); err != nil {
+			t.Fatal(err)
+		}
+		return sync, engineErr
+	}
+	if s, e := status(); s != "synced" || e != "" {
+		t.Errorf("confirmed: %s/%q, want synced with no engine error", s, e)
+	}
+	mustExec(t, db, `UPDATE trino_catalog_registry SET sync_status = 'error', sync_error = 'circular reference at lake:k' WHERE catalog_name = 'lake'`)
+	if s, e := status(); s != "error" || e != "circular reference at lake:k" {
+		t.Errorf("skipped at boot: %s/%q, want error with the plugin's message", s, e)
+	}
+	// A binding being changed is pending, whatever the last boot said.
+	mustExec(t, db, `UPDATE catalog_bindings SET lifecycle_state = 'updating' WHERE engine_catalog_name = 'lake'`)
+	if s, e := status(); s != "pending" || e != "" {
+		t.Errorf("updating: %s/%q, want pending", s, e)
+	}
+
+	if err := goose.DownTo(db, dir, versionBindingLifecycle); err != nil {
+		t.Fatal(err)
+	}
+	if err := goose.UpTo(db, dir, versionBindingStatusEngineError); err != nil {
+		t.Fatal(err)
+	}
+}
