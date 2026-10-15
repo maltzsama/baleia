@@ -17,3 +17,17 @@ auth:bearer {
 assert {
   res.status: eq 204
 }
+
+script:post-response {
+  // Look the retriever up again: a 204 that left it in place must fail.
+  const axios = require("axios");
+  const r = await axios.get(bru.getEnvVar("base_url") + "/workspaces/" + bru.getVar("workspace_id") + "/retrievers/" + bru.getVar("retriever_id"),
+    { headers: { Authorization: "Bearer " + bru.getVar("token") }, validateStatus: () => true });
+  bru.setVar("retriever_status_after_delete", r.status);
+}
+
+tests {
+  test("the retriever is gone", function () {
+    expect(bru.getVar("retriever_status_after_delete")).to.equal(404);
+  });
+}

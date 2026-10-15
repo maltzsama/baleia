@@ -225,10 +225,14 @@ func (h *Handlers) DeleteRetriever(ctx context.Context, request DeleteRetrieverR
 	retrieverID.Bytes = request.RetrieverId
 	retrieverID.Valid = true
 
-	if _, err := h.queries.GetRetrieverByID(ctx, db.GetRetrieverByIDParams{
+	n, err := h.queries.DeleteRetriever(ctx, db.DeleteRetrieverParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 		ID:          retrieverID,
-	}); err != nil {
+	})
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
 		return DeleteRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "retriever not found"}}, nil
 	}
 

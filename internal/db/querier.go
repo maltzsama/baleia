@@ -60,6 +60,8 @@ type Querier interface {
 	// The native catalogs of an engine, deleted with it (their bindings cascade).
 	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error
+	// Its refresh history goes with it (ON DELETE CASCADE).
+	DeleteRetriever(ctx context.Context, arg DeleteRetrieverParams) (int64, error)
 	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
