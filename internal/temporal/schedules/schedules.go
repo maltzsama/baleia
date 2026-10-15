@@ -9,6 +9,7 @@ import (
 	"time"
 
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 )
@@ -90,4 +91,16 @@ const (
 	RetrieverScheduler = "retriever-scheduler"
 	MetadataSync       = "metadata-sync"
 	AuditPartitions    = "audit-partitions"
+	CatalogReconcile   = "catalog-reconcile"
 )
+
+// Remove deletes a schedule an earlier configuration created; a schedule
+// that does not exist is not an error. Opt-in jobs use it when turned off.
+func Remove(ctx context.Context, c client.Client, id string) error {
+	err := c.ScheduleClient().GetHandle(ctx, id).Delete(ctx)
+	var nf *serviceerror.NotFound
+	if err == nil || errors.As(err, &nf) {
+		return nil
+	}
+	return err
+}

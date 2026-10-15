@@ -551,7 +551,7 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 // ReconcileTrino — POST /trino/reconcile
 // Read-only comparison of the registry vs live Trino catalog list. It exposes
 // every catalog in the cluster, so it is for global administrators only.
-func (h *Handlers) ReconcileTrino(ctx context.Context, _ ReconcileTrinoRequestObject) (ReconcileTrinoResponseObject, error) {
+func (h *Handlers) ReconcileTrino(ctx context.Context, request ReconcileTrinoRequestObject) (ReconcileTrinoResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ReconcileTrino401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
@@ -559,40 +559,21 @@ func (h *Handlers) ReconcileTrino(ctx context.Context, _ ReconcileTrinoRequestOb
 	if err := p.RequireAdmin(); err != nil {
 		return ReconcileTrino403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "administrator role required"}}, nil
 	}
-	registry, err := h.queries.ListEnabledCatalogs(ctx)
+	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list enabled catalogs: %w", err)
+		return nil, fmt.Errorf("default trino cluster: %w", err)
 	}
-	live, err := h.binder.ListCatalogs(ctx)
+	if !cluster.EngineID.Valid {
+		return ReconcileTrino422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("engine_unsupported", "the default Trino cluster has no engine")}, nil
+	}
+	run, unsupported, err := h.reconcile(ctx, cluster.EngineID, request.Params.DryRun == nil || *request.Params.DryRun)
 	if err != nil {
-		return nil, fmt.Errorf("list trino catalogs: %w", err)
+		return nil, err
 	}
-	liveSet := make(map[string]struct{}, len(live))
-	for _, n := range live {
-		liveSet[n] = struct{}{}
+	if unsupported != nil {
+		return ReconcileTrino422JSONResponse{UnprocessableEntityJSONResponse: *unsupported}, nil
 	}
-
-	pending := make([]Catalog, 0)
-	ok := make([]Catalog, 0)
-	for _, c := range registry {
-		pub := dbCatalogToPublic(c)
-		if _, present := liveSet[c.TrinoName()]; present {
-			ok = append(ok, pub)
-		} else {
-			pending = append(pending, pub)
-		}
-		delete(liveSet, c.TrinoName())
-	}
-	orphan := make([]string, 0, len(liveSet))
-	for n := range liveSet {
-		orphan = append(orphan, n)
-	}
-	h.audited(ctx, audit.Event{Action: audit.CatalogReconcile, ResourceType: "engine", Outcome: audit.Allowed})
-	return ReconcileTrino200JSONResponse{
-		Pending:       &pending,
-		OrphanInTrino: &orphan,
-		Ok:            &ok,
-	}, nil
+	return ReconcileTrino200JSONResponse(run), nil
 }
 
 // ─────────────────────────────────────────────────────────────────────────

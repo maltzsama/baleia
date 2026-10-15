@@ -1,0 +1,20 @@
+meta {
+  name: Reconcile Runs
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{base_url}}/engines/{{trino_engine_id}}/reconcile-runs?limit=5
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].dry_run: eq true
+}

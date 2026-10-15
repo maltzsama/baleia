@@ -65,6 +65,10 @@ type Config struct {
 	// MetadataSyncInterval is how often every catalog's metadata snapshot is
 	// refreshed (#17).
 	MetadataSyncInterval time.Duration
+	// ReconcileMaxActions bounds the changes of one reconcile run (#37);
+	// ReconcileInterval schedules runs, none when 0 (the default).
+	ReconcileMaxActions int
+	ReconcileInterval   time.Duration
 	// ResultMaxRows / ResultMaxBytes cap one statement's result. When a cap is
 	// hit the remaining query is killed and the result is marked truncated.
 	ResultMaxRows  int64
@@ -126,6 +130,8 @@ func Load() *Config {
 		StatementTimeout: getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
 		ExecutionTimeout: getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
 		MetadataSyncInterval: getEnvDuration("BALEIA_METADATA_SYNC_INTERVAL", 15*time.Minute),
+		ReconcileMaxActions: getEnvInt("BALEIA_RECONCILE_MAX_ACTIONS", 20),
+		ReconcileInterval:   getEnvDuration("BALEIA_RECONCILE_INTERVAL", 0),
 		ResultMaxRows:    getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
 		ResultMaxBytes:   getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
 		SchedulesEnabled: getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
@@ -190,6 +196,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.ValidateEncryptionKeys(); err != nil {
 		return err
+	}
+	if c.ReconcileInterval != 0 && c.ReconcileInterval < 5*time.Minute {
+		return fmt.Errorf("BALEIA_RECONCILE_INTERVAL must be at least 5m (got %s)", c.ReconcileInterval)
 	}
 	if c.MetadataSyncInterval < 0 || (c.MetadataSyncInterval > 0 && c.MetadataSyncInterval < 5*time.Minute) {
 		return fmt.Errorf("BALEIA_METADATA_SYNC_INTERVAL must be at least 5m (got %s)", c.MetadataSyncInterval)

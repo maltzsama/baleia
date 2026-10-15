@@ -239,3 +239,28 @@ ON CONFLICT (engine_id, catalog_name) DO UPDATE SET mode = 'managed', present = 
 
 -- name: CountManagedBindingsByState :many
 SELECT lifecycle_state, count(*)::bigint AS count FROM catalog_bindings WHERE mode = 'managed' GROUP BY lifecycle_state;
+
+-- name: ListManagedBindingsOfEngine :many
+-- The managed bindings of an engine the reconciler checks (#37).
+SELECT * FROM catalog_bindings
+WHERE engine_id = $1 AND mode = 'managed'
+ORDER BY engine_catalog_name;
+
+-- name: InsertReconcileRun :one
+WITH run AS (
+    INSERT INTO catalog_reconcile_runs (engine_id, started_at, finished_at, dry_run, actions, adopted, error)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *
+), pruned AS (
+    DELETE FROM catalog_reconcile_runs
+    WHERE engine_id = $1 AND id NOT IN (
+        SELECT id FROM catalog_reconcile_runs WHERE engine_id = $1 ORDER BY started_at DESC LIMIT 99
+    )
+)
+SELECT * FROM run;
+
+-- name: ListReconcileRuns :many
+SELECT * FROM catalog_reconcile_runs
+WHERE engine_id = $1
+ORDER BY started_at DESC
+LIMIT $2;
