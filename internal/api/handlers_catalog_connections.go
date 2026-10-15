@@ -246,7 +246,8 @@ func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnectio
 	if err != nil {
 		return nil, fmt.Errorf("get default cluster: %w", err)
 	}
-	proj, err := h.projectBinding(conn, bindings.BindingSpec{EngineCatalog: testName, SourceRef: testName})
+	// No source ref: the catalog reaches the connection's own database.
+	proj, err := h.projectBinding(conn, bindings.BindingSpec{EngineCatalog: testName})
 	if err != nil {
 		errMsg := err.Error()
 		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
