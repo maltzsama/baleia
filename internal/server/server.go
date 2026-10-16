@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metrics"
+	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/trino"
