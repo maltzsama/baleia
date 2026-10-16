@@ -78,6 +78,9 @@ jobs:
         ports: ["8123:8123"]
         options: >-
           --health-cmd "wget -qO- http://127.0.0.1:8123/ping" --health-interval 5s --health-timeout 5s --health-retries 30
+      moto:
+        image: motoserver/moto:5.2.4
+        ports: ["5000:5000"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -113,6 +116,7 @@ jobs:
           BALEIA_TEST_SQLSERVER_URL: sqlserver://sa:Baleia_dev_2026@127.0.0.1:1433
           BALEIA_TEST_ORACLE_URL: oracle://baleia:baleia_dev@127.0.0.1:1521/FREEPDB1
           BALEIA_TEST_CLICKHOUSE_URL: http://baleia:baleia_dev@127.0.0.1:8123
+          BALEIA_TEST_MOTO_URL: http://127.0.0.1:5000
           BALEIA_TEST_NESSIE_URL: http://127.0.0.1:19120
           BALEIA_TEST_TRINO_URL: http://127.0.0.1:8080
         shell: bash
