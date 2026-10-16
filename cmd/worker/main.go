@@ -31,6 +31,7 @@ import (
 	_ "github.com/galileostudio/baleia/internal/queryengine/mysql"
 	_ "github.com/galileostudio/baleia/internal/queryengine/oracle"
 	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
+	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
 	_ "github.com/galileostudio/baleia/internal/queryengine/sqlserver"
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
@@ -117,6 +118,9 @@ func main() {
 		slog.Error("connection providers", "err", err)
 		os.Exit(1)
 	}
+	// The SQLite engine confines files to the same root the provider uses
+	// (docs/adr/0011).
+	sqliteengine.Configure(sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite})
 
 	// Statements run on engines (docs/adr/0002); Lens reads the Trino
 	// coordinator's runtime state as the service identity.
