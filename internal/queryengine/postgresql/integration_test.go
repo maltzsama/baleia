@@ -11,14 +11,21 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
 
-// testEngine builds an engine against BALEIA_TEST_POSTGRES_URL, skipping when
-// it is unset.
-func testEngine(t *testing.T) queryengine.Engine {
+// requirePostgres returns BALEIA_TEST_POSTGRES_URL, skipping when it is unset.
+func requirePostgres(t *testing.T) string {
 	t.Helper()
 	raw := os.Getenv("BALEIA_TEST_POSTGRES_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_POSTGRES_URL not set")
 	}
+	return raw
+}
+
+// testEngine builds an engine against BALEIA_TEST_POSTGRES_URL, skipping when
+// it is unset.
+func testEngine(t *testing.T) queryengine.Engine {
+	t.Helper()
+	raw := requirePostgres(t)
 	u, err := url.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +46,7 @@ func testEngine(t *testing.T) queryengine.Engine {
 // DDL. The connection's user may write; the wrapping read-only transaction
 // stops it.
 func TestReadOnlyBlocksWrites(t *testing.T) {
-	setup(t, os.Getenv("BALEIA_TEST_POSTGRES_URL"))
+	setup(t, requirePostgres(t))
 	e := testEngine(t)
 	s, err := e.OpenSession(context.Background(), queryengine.SessionSpec{ReadOnly: true})
 	if err != nil {
