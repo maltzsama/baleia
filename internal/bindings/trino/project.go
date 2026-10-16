@@ -22,6 +22,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
 	"github.com/galileostudio/baleia/internal/connections/polaris"
 	"github.com/galileostudio/baleia/internal/connections/unity"
@@ -56,6 +57,10 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return nessieProjection(spec, src)
 	case connections.KindIcebergREST:
 		return icebergRESTProjection(spec, src)
+	case connections.KindHiveMetastore:
+		return hiveProjection(connector, src)
+	case connections.KindLakekeeper:
+		return lakekeeperProjection(spec, src)
 	case connections.KindUnity:
 		return unityProjection(spec, src)
 	case connections.KindPostgreSQL:
@@ -147,6 +152,37 @@ func icebergRESTProjection(spec bindings.BindingSpec, src connections.Config) (p
 	return icebergREST(strings.TrimRight(src.Value("url"), "/"), w, src), nil
 }
 
+// lakekeeperProjection binds a Lakekeeper warehouse as an Iceberg REST catalog.
+// The warehouse (the binding's source ref) is the addressing key; OAuth2 client
+// credentials authenticate when auth_mode=oauth2. The OAuth2 credential is the
+// only secret; the rest are real connection values. Property names for Trino
+// 483: https://trino.io/docs/483/connector/iceberg.html
+func lakekeeperProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
+	w, err := warehouseOf(spec, src)
+	if err != nil {
+		return projection{}, err
+	}
+	p := projection{props: map[string]string{
+		"iceberg.catalog.type":                            "rest",
+		"iceberg.rest-catalog.uri":                        lakekeeper.New(nil).RESTURI(src),
+		"iceberg.rest-catalog.warehouse":                  w,
+		"iceberg.rest-catalog.vended-credentials-enabled": "true",
+		"fs.s3.enabled":                                   "true",
+	}}
+	if src.Value("auth_mode") == "oauth2" {
+		p.props["iceberg.rest-catalog.security"] = "OAUTH2"
+		p.props["iceberg.rest-catalog.oauth2.credential"] = src.Value("client_id") + ":" + src.Secret("client_secret")
+		if s := src.Value("token_endpoint"); s != "" {
+			p.props["iceberg.rest-catalog.oauth2.server-uri"] = s
+		}
+		if s := src.Value("scope"); s != "" {
+			p.props["iceberg.rest-catalog.oauth2.scope"] = s
+		}
+		p.secrets = append(p.secrets, "iceberg.rest-catalog.oauth2.credential")
+	}
+	return p, nil
+}
+
 // unityProjection binds a Unity catalog as an Iceberg REST catalog. The
 // catalog (the binding's source ref) is the warehouse; a bearer token
 // authenticates when configured. Unity bindings are read-oriented: the binder
@@ -169,6 +205,55 @@ func unityProjection(spec bindings.BindingSpec, src connections.Config) (project
 		p.secrets = append(p.secrets, "iceberg.rest-catalog.oauth2.token")
 	}
 	return p, nil
+}
+
+// hiveProjection binds a Hive Metastore connection as an Iceberg, Hive or
+// Delta Lake catalog. One connection can hold tables of every format; the
+// binding's connector picks which one the catalog exposes. Trino reads the
+// metastore over Thrift (hive.metastore.uri) and the table data from
+// S3-compatible storage. Property names for Trino 483:
+//   - Iceberg:    https://trino.io/docs/483/connector/iceberg.html
+//   - Hive:       https://trino.io/docs/483/connector/hive.html
+//   - Delta Lake: https://trino.io/docs/483/connector/delta-lake.html
+func hiveProjection(connector string, src connections.Config) (projection, error) {
+	uri := src.Value("metastore_uri")
+	if uri == "" {
+		return projection{}, fmt.Errorf("%w: the connection has no metastore URI", bindings.ErrInvalid)
+	}
+	p := projection{props: map[string]string{"hive.metastore.uri": uri}}
+	switch connector {
+	case "iceberg":
+		p.props["iceberg.catalog.type"] = "hive_metastore"
+	case "hive":
+		p.props["hive.metastore"] = "thrift"
+	case "delta_lake":
+		p.props["hive.metastore"] = "thrift"
+	}
+	s3Storage(&p, src)
+	return p, nil
+}
+
+// s3Storage adds the S3 file-system properties of an object-storage
+// connection the metastore's table data lives on. The secret key never
+// appears in DDL text or logs.
+func s3Storage(p *projection, src connections.Config) {
+	p.props["fs.s3.enabled"] = "true"
+	if e := src.Value("storage.endpoint"); e != "" {
+		p.props["s3.endpoint"] = e
+	}
+	if r := src.Value("storage.region"); r != "" {
+		p.props["s3.region"] = r
+	}
+	if src.Value("storage.path_style") == "true" {
+		p.props["s3.path-style-access"] = "true"
+	}
+	if k := src.Value("storage.access_key"); k != "" {
+		p.props["s3.aws-access-key"] = k
+	}
+	if s := src.Secret("storage.secret_key"); s != "" {
+		p.props["s3.aws-secret-key"] = s
+		p.secrets = append(p.secrets, "s3.aws-secret-key")
+	}
 }
 
 // hostPort is the validated host and port of a database connection.

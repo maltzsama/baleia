@@ -95,7 +95,9 @@ services:
     command: >
       sh -c "
       psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE temporal;' 2>/dev/null || true;
-      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE polaris;' 2>/dev/null || true
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE polaris;' 2>/dev/null || true;
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE hive_metastore;' 2>/dev/null || true;
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE lakekeeper;' 2>/dev/null || true
       "
     restart: on-failure
 
@@ -494,6 +496,115 @@ services:
       - "18123:8123"
     networks:
       - app_net
+
+  # ============================================
+  # LAKEKEEPER - Iceberg REST catalog (#35)
+  # Started only with `docker compose --profile sources up -d`. Backed by
+  # Baleia's PostgreSQL (database "lakekeeper") and RustFS as its storage; a
+  # migrate job, a bootstrap job and a warehouse seeding job run before it is
+  # usable. API on the host port 18181.
+  # ============================================
+
+  lakekeeper-migrate:
+    image: quay.io/lakekeeper/catalog:v0.14.0
+    container_name: baleia_src_lakekeeper_migrate
+    profiles: ["sources"]
+    command: ["migrate"]
+    environment:
+      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://baleia:baleia@postgres:5432/lakekeeper
+      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://baleia:baleia@postgres:5432/lakekeeper
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:v0.14.0
+    container_name: baleia_src_lakekeeper
+    profiles: ["sources"]
+    command: ["serve"]
+    environment:
+      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://baleia:baleia@postgres:5432/lakekeeper
+      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://baleia:baleia@postgres:5432/lakekeeper
+    ports:
+      - "18181:8181"
+    networks:
+      - app_net
+    depends_on:
+      lakekeeper-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  lakekeeper-bootstrap:
+    image: curlimages/curl:8.11.1
+    container_name: baleia_src_lakekeeper_bootstrap
+    profiles: ["sources"]
+    networks:
+      - app_net
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+    command: ["-sf", "-X", "POST", "http://lakekeeper:8181/management/v1/bootstrap", "-H", "Content-Type: application/json", "--data", "{\"accept-terms-of-use\": true}"]
+    restart: "no"
+
+  lakekeeper-warehouse:
+    image: curlimages/curl:8.11.1
+    container_name: baleia_src_lakekeeper_warehouse
+    profiles: ["sources"]
+    networks:
+      - app_net
+    volumes:
+      - ./deploy/dev/files/lakekeeper-warehouse.json:/wh.json:ro
+    depends_on:
+      lakekeeper-bootstrap:
+        condition: service_completed_successfully
+      rustfs:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    command: ["-sf", "-X", "POST", "http://lakekeeper:8181/management/v1/warehouse", "-H", "Content-Type: application/json", "--data", "@/wh.json"]
+    restart: "no"
+
+  # Hive Metastore (#86): a standalone metastore backed by Baleia's PostgreSQL,
+  # the metadata store for Iceberg, Hive and Delta tables on RustFS. Started
+  # only with `docker compose --profile sources up -d`. The image adds the
+  # PostgreSQL JDBC driver the official image omits; SERVICE_OPTS configures
+  # the JDO connection. Ports: 19083 on the host (9083 in the network).
+  hive-metastore:
+    build:
+      context: deploy/dev
+      dockerfile: hive.Dockerfile
+    image: baleia-hive-metastore:4.0.1
+    container_name: baleia_src_hive_metastore
+    profiles: ["sources"]
+    environment:
+      - SERVICE_NAME=metastore
+      - DB_DRIVER=postgres
+      - SERVICE_OPTS=-Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/hive_metastore -Djavax.jdo.option.ConnectionUserName=baleia -Djavax.jdo.option.ConnectionPassword=baleia
+    ports:
+      - "19083:9083"
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9083"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
 
   # Unity Catalog OSS (#32): the browsing API and the Iceberg REST endpoint for
   # reading tables (UniForm). Started only with
