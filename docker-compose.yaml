@@ -618,3 +618,15 @@ services:
       - "18080:8080"
     networks:
       - app_net
+
+  # AWS emulator (#86): the Glue provider's metadata reader is tested against
+  # moto. `docker compose --profile sources up -d`, then point the provider at
+  # http://localhost:15000 (BALEIA_TEST_MOTO_URL=http://localhost:15000).
+  moto:
+    image: motoserver/moto:5.2.4
+    container_name: baleia_src_moto
+    profiles: ["sources"]
+    ports:
+      - "15000:5000"
+    networks:
+      - app_net

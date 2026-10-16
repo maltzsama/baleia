@@ -53,6 +53,7 @@ func (*Binder) Supports() map[connections.Kind][]string {
 		connections.KindNessie:        {"iceberg"},
 		connections.KindIcebergREST:   {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
+		connections.KindGlue:          {"iceberg", "hive", "delta_lake"},
 		connections.KindLakekeeper:    {"iceberg"},
 		connections.KindUnity:         {"iceberg"},
 		connections.KindPostgreSQL:    {"postgresql"},

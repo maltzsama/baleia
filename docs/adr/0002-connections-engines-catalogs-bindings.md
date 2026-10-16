@@ -132,8 +132,13 @@ Partially compliant.
   in the compose `sources` profile.
 - Hive Metastore has a provider (`internal/connections/hive`, #86): it executes no SQL and offers
   no direct metadata role — Baleia reads its tables by introspecting the federated engine that
-  hosts a binding (#15) — so its `Ping` is TCP reachability through the dialer. Glue is next
-  (#86 PR 2).
+  hosts a binding (#15) — so its `Ping` is TCP reachability through the dialer.
+- Glue has a provider (`internal/connections/glue`, #86): Baleia reads its Data Catalog directly
+  through the AWS SDK for Go v2 with explicit credentials (optionally assuming a role); it never
+  falls back to the host's default credential chain unless the operator sets
+  `BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS`. Both Hive Metastore and Glue bind into Trino as a whole
+  metastore with the Iceberg, Hive or Delta connector; the compose `sources` profile runs a
+  PostgreSQL-backed HMS and a pinned moto for the tests.
 - Unity Catalog is a read-oriented provider (`internal/connections/unity`, #32): catalogs/schemas/
   tables are browsed through the Unity REST API and table metadata is read through its Iceberg REST
   endpoint (`<url>/api/2.1/unity-catalog/iceberg`); the binder projects it as an Iceberg REST

@@ -90,6 +90,10 @@ type Config struct {
 	// asks for it open its file read-write.
 	SQLiteRoot       string
 	SQLiteAllowWrite bool
+	// AllowAmbientAWSCredentials lets a Glue connection with no explicit keys
+	// or role use the host's default AWS credential chain (#86). Off by
+	// default: any connection owner could otherwise use the platform's IAM role.
+	AllowAmbientAWSCredentials bool
 	// Metrics (#87): /metrics on the API (MetricsEnabled, optional bearer
 	// MetricsToken) and the worker's own listener (WorkerMetricsAddr).
 	MetricsEnabled    bool
@@ -143,6 +147,7 @@ func Load() *Config {
 		ConnectionsAllowLoopback: getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
 		SQLiteRoot:               getEnv("BALEIA_SQLITE_ROOT", ""),
 		SQLiteAllowWrite:         getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
+		AllowAmbientAWSCredentials: getEnv("BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS", "false") == "true",
 		MetricsEnabled:           getEnv("BALEIA_METRICS_ENABLED", "true") == "true",
 		MetricsToken:             getEnv("BALEIA_METRICS_TOKEN", ""),
 		WorkerMetricsAddr:        getEnv("BALEIA_WORKER_METRICS_ADDR", ":9090"),

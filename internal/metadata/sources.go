@@ -47,6 +47,7 @@ var typeSystems = map[connections.Kind]string{
 	connections.KindOracle:     "oracle",
 	connections.KindSQLite:     "sqlite",
 	connections.KindClickHouse: "clickhouse",
+	connections.KindGlue:       "glue",
 }
 
 // SourceStore is the slice of the database Sources reads.

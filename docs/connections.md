@@ -15,6 +15,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `clickhouse` | ClickHouse | database | metadata, direct_engine | clickhouse | — | supported |
 | `doris` | Apache Doris | engine | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
 | `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | — | supported |
+| `glue` | AWS Glue Data Catalog | metastore | metadata | — | trino (iceberg, hive, delta_lake) | supported |
 | `hive` | Hive Metastore | metastore |  | — | trino (iceberg, hive, delta_lake) | supported |
 | `iceberg` | Iceberg REST catalog | iceberg | metadata | — | trino (iceberg) | supported |
 | `lakekeeper` | Lakekeeper | iceberg | metadata | — | trino (iceberg) | supported |
@@ -61,6 +62,24 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `username` | text |  |  | Basic authentication |
 | `password` | secret |  |  | Basic authentication |
 | `token` | secret |  |  | Token authentication |
+
+## `glue` — AWS Glue Data Catalog
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `region` | text | yes |  | AWS region of the Data Catalog, e.g. us-east-1 |
+| `catalog_id` | text |  |  | Cross-account Data Catalog ID; empty uses the caller's account |
+| `endpoint` | text |  |  | Override for tests or regional endpoints, e.g. http://moto:5000; empty uses the AWS default |
+| `access_key` | text |  |  | Static credentials; when empty the operator must allow ambient credentials (a role ARN alone still needs base credentials) |
+| `secret_key` | secret |  |  |  |
+| `role_arn` | text |  |  | Assume this role (with the keys, or the ambient chain) for Glue and S3 |
+| `external_id` | text |  |  | External ID of the assumed role's trust policy |
+| `storage.type` | select |  | `s3` | one of `s3`. Object storage the table data resides on (S3-compatible in v1) |
+| `storage.endpoint` | text |  |  | empty uses the AWS default for the region |
+| `storage.region` | text |  |  |  |
+| `storage.path_style` | bool |  | `false` | Required by most S3-compatible stores (RustFS, MinIO) |
+| `storage.access_key` | text |  |  | Only when the table data is not on AWS S3 with the Glue credentials |
+| `storage.secret_key` | secret |  |  |  |
 
 ## `hive` — Hive Metastore
 

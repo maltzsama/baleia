@@ -186,7 +186,6 @@ func TestCreateConnection_Rejects(t *testing.T) {
 		"bad port":     {&CreateCatalogConnectionRequest{Name: "x", Type: "postgresql", Config: strMap("host", "db", "port", "99999", "username", "u")}, "validation_error", "port"},
 		"bad url":      {&CreateCatalogConnectionRequest{Name: "x", Type: "nessie", Config: strMap("url", "ftp://n")}, "validation_error", "url"},
 		"bad jdbc":     {&CreateCatalogConnectionRequest{Name: "x", Type: "postgresql", Url: func() *string { s := "not a url"; return &s }()}, "validation_error", "url"},
-		"no provider":  {&CreateCatalogConnectionRequest{Name: "x", Type: "glue", Config: strMap("url", "http://g")}, "provider_unsupported", "type"},
 		"unknown kind": {&CreateCatalogConnectionRequest{Name: "x", Type: "duckdb"}, "provider_unsupported", "type"},
 	}
 	for name, c := range cases {

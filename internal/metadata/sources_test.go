@@ -14,8 +14,8 @@ import (
 )
 
 // TestSourceFor: catalog managers and walking databases are read from their
-// own source; Trino connections (adopted catalogs), Flight SQL and kinds
-// without a provider (Hive Metastore in v1) go through an engine.
+// own source; Trino connections (adopted catalogs), Flight SQL and kinds with
+// no direct metadata role (Hive Metastore, #86) go through an engine.
 func TestSourceFor(t *testing.T) {
 	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
@@ -41,6 +41,7 @@ func TestSourceFor(t *testing.T) {
 		connections.KindTrino:         PathEngine,
 		connections.KindFlightSQL:     PathEngine,
 		connections.KindHiveMetastore: PathEngine,
+		connections.KindGlue:          PathProvider,
 	}
 	for kind, path := range want {
 		p, _ := reg.Get(kind)

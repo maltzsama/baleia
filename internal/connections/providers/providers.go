@@ -6,6 +6,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/clickhouse"
 	"github.com/galileostudio/baleia/internal/connections/flightsql"
+	"github.com/galileostudio/baleia/internal/connections/glue"
 	"github.com/galileostudio/baleia/internal/connections/hive"
 	"github.com/galileostudio/baleia/internal/connections/iceberg"
 	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
@@ -24,6 +25,7 @@ import (
 // Options are server-side settings of providers that need them.
 type Options struct {
 	SQLite sqlite.Options
+	Glue   glue.Options
 }
 
 // New returns the registry of every provider, all dialing through d.
@@ -37,6 +39,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		nessie.New(d),
 		iceberg.New(d),
 		hive.New(d),
+		glue.New(d, o.Glue),
 		lakekeeper.New(d),
 		unity.New(d),
 		postgresql.New(d),

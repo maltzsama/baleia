@@ -147,7 +147,6 @@ func (q *bindingQuerier) SoftDeleteTrinoCatalogRegistry(_ context.Context, p db.
 	return nil
 }
 
-
 func bindingHandlers(t *testing.T, q *bindingQuerier) (*Handlers, *fakeTrino) {
 	ft := newFakeTrino(t)
 	h := &Handlers{queries: q, connections: testRegistry(t), cfg: &config.Config{}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
@@ -318,7 +317,7 @@ func TestEngineBindingSupport(t *testing.T) {
 		t.Fatalf("response = %T", resp)
 	}
 	pg := support["postgresql"]
-	if len(support) != 11 || len(pg.Connectors) != 1 || pg.Connectors[0] != "postgresql" || len(pg.ProtectedKeyPatterns) == 0 || len(pg.ReservedNames) == 0 {
+	if len(support) != 12 || len(pg.Connectors) != 1 || pg.Connectors[0] != "postgresql" || len(pg.ProtectedKeyPatterns) == 0 || len(pg.ReservedNames) == 0 {
 		t.Errorf("support = %+v", support)
 	}
 	q.engineKind = "postgresql"

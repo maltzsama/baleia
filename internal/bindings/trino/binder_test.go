@@ -232,6 +232,28 @@ func TestProject_Kinds(t *testing.T) {
 			spec: bindings.BindingSpec{EngineCatalog: "delta", Connector: "delta_lake"},
 			want: map[string]string{"hive.metastore": "thrift", "hive.metastore.uri": "thrift://hms:9083", "fs.s3.enabled": "true"},
 		},
+		{
+			name: "glue as an iceberg catalog (default connector)",
+			src: cfg(connections.KindGlue, map[string]string{
+				"region": "us-east-1", "catalog_id": "123456789012", "role_arn": "arn:aws:iam::123456789012:role/baleia",
+				"access_key": "AKIA", "endpoint": "https://glue.us-east-1.amazonaws.com", "storage.region": "us-east-1",
+			}, map[string]string{"secret_key": "SECRET"}),
+			spec: bindings.BindingSpec{EngineCatalog: "lake"},
+			want: map[string]string{
+				"iceberg.catalog.type": "glue", "hive.metastore.glue.region": "us-east-1",
+				"hive.metastore.glue.catalogid": "123456789012", "hive.metastore.glue.iam-role": "arn:aws:iam::123456789012:role/baleia",
+				"hive.metastore.glue.aws-access-key": "AKIA", "hive.metastore.glue.aws-secret-key": "SECRET",
+				"hive.metastore.glue.endpoint": "https://glue.us-east-1.amazonaws.com",
+				"fs.s3.enabled":                "true", "s3.region": "us-east-1",
+			},
+			secrets: []string{"hive.metastore.glue.aws-secret-key"},
+		},
+		{
+			name: "glue as a hive catalog without explicit credentials",
+			src:  cfg(connections.KindGlue, map[string]string{"region": "eu-west-1"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "warehouse", Connector: "hive"},
+			want: map[string]string{"hive.metastore": "glue", "hive.metastore.glue.region": "eu-west-1", "fs.s3.enabled": "true"},
+		},
 	}
 	b := New(nil, nil)
 	for _, c := range cases {
@@ -400,6 +422,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 		cfg(connections.KindHiveMetastore, map[string]string{"metastore_uri": "thrift://hms:9083", "storage.access_key": "k"}, map[string]string{"storage.secret_key": "FIXTURE-SECRET-9"}),
 		cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp/token"}, map[string]string{"client_secret": "FIXTURE-SECRET-10"}),
 		cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080"}, map[string]string{"token": "FIXTURE-SECRET-11"}),
+		cfg(connections.KindGlue, map[string]string{"region": "us-east-1", "access_key": "k"}, map[string]string{"secret_key": "FIXTURE-SECRET-12"}),
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
@@ -483,6 +506,7 @@ func TestSupports(t *testing.T) {
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
+		connections.KindGlue:          {"iceberg", "hive", "delta_lake"},
 		connections.KindLakekeeper:    {"iceberg"},
 		connections.KindUnity:         {"iceberg"},
 		connections.KindPostgreSQL:    {"postgresql"}, connections.KindMySQL: {"mysql"},
