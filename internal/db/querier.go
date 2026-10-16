@@ -212,7 +212,8 @@ type Querier interface {
 	// Catalogs the engine no longer reports.
 	MarkEngineCatalogsAbsent(ctx context.Context, arg MarkEngineCatalogsAbsentParams) error
 	// Seconds since the stalest syncable catalog last finished a pass (never:
-	// since it was created). One number, no catalog label (#87).
+	// since it was created). One number, no catalog label (#87). Same
+	// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
 	MaxMetadataStalenessSeconds(ctx context.Context) (float64, error)
 	// Catalogs Baleia managed and still sees in the engine, though no managed
 	// binding owns them any more (an old name that failed to drop): they stay

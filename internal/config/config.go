@@ -191,7 +191,7 @@ func (c *Config) Validate() error {
 	if err := c.ValidateEncryptionKeys(); err != nil {
 		return err
 	}
-	if c.MetadataSyncInterval != 0 && c.MetadataSyncInterval < 5*time.Minute {
+	if c.MetadataSyncInterval < 0 || (c.MetadataSyncInterval > 0 && c.MetadataSyncInterval < 5*time.Minute) {
 		return fmt.Errorf("BALEIA_METADATA_SYNC_INTERVAL must be at least 5m (got %s)", c.MetadataSyncInterval)
 	}
 	if c.StatementTimeout != 0 && c.StatementTimeout < time.Minute {
@@ -254,4 +254,17 @@ func (c *Config) PoolSize(processDefault int) int32 {
 		return int32(c.DBMaxConns)
 	}
 	return int32(processDefault)
+}
+
+// DefaultMetadataSyncInterval is used when BALEIA_METADATA_SYNC_INTERVAL is
+// 0 or unset.
+const DefaultMetadataSyncInterval = 15 * time.Minute
+
+// MetadataSyncEvery is the metadata-sync schedule's interval: 0 means the
+// default, never "no interval" (a schedule needs one).
+func (c *Config) MetadataSyncEvery() time.Duration {
+	if c.MetadataSyncInterval <= 0 {
+		return DefaultMetadataSyncInterval
+	}
+	return c.MetadataSyncInterval
 }

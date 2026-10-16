@@ -335,10 +335,13 @@ SELECT COALESCE(max(EXTRACT(EPOCH FROM now() - COALESCE(
     c.created_at))), 0)::float8
 FROM catalogs c
 WHERE c.enabled
+  AND (c.origin = 'source' OR EXISTS (
+      SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled))
 `
 
 // Seconds since the stalest syncable catalog last finished a pass (never:
-// since it was created). One number, no catalog label (#87).
+// since it was created). One number, no catalog label (#87). Same
+// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
 func (q *Queries) MaxMetadataStalenessSeconds(ctx context.Context) (float64, error) {
 	row := q.db.QueryRow(ctx, maxMetadataStalenessSeconds)
 	var column_1 float64
