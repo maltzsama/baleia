@@ -123,10 +123,14 @@ Partially compliant.
   The `url` column is still written (derived with `providers.LegacyURL`) for rows read by older
   code paths. The typed `*_credentials` request fields (`internal/api/catalog_credentials.go`) stay
   until the UI uses the provider schema (#22).
-- Hive Metastore has a provider (`internal/connections/hive`, #86): it executes no SQL and offers
-  no direct metadata role — Baleia reads its tables by introspecting the federated engine that
-  hosts a binding (#15) — so its `Ping` is TCP reachability through the dialer. Glue is next
-  (#86 PR 2).
+- Hive Metastore and Glue have providers (#86). Hive (`internal/connections/hive`) executes no SQL
+  and offers no direct metadata role — Baleia reads its tables by introspecting the federated
+  engine that hosts a binding (#15) — so its `Ping` is TCP reachability through the dialer. Glue
+  (`internal/connections/glue`) reads its Data Catalog through the AWS SDK for Go v2 with explicit
+  credentials (optionally assuming a role); it never falls back to the host's default credential
+  chain unless the operator sets `BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS`. Both bind into Trino as a
+  whole metastore with the Iceberg, Hive or Delta connector; the compose `sources` profile runs a
+  PostgreSQL-backed HMS and a pinned moto for the tests.
 
 ## Alternatives considered
 

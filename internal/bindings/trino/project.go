@@ -57,6 +57,8 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return icebergRESTProjection(spec, src)
 	case connections.KindHiveMetastore:
 		return hiveProjection(connector, src)
+	case connections.KindGlue:
+		return glueProjection(connector, src)
 	case connections.KindPostgreSQL:
 		return postgresProjection(spec, src)
 	case connections.KindMySQL:
@@ -167,6 +169,45 @@ func hiveProjection(connector string, src connections.Config) (projection, error
 		p.props["hive.metastore"] = "thrift"
 	case "delta_lake":
 		p.props["hive.metastore"] = "thrift"
+	}
+	s3Storage(&p, src)
+	return p, nil
+}
+
+// glueProjection binds an AWS Glue Data Catalog connection as an Iceberg,
+// Hive or Delta Lake catalog. Trino reads the metastore through the Glue API
+// (hive.metastore.glue.*) and the table data from S3-compatible storage.
+// Property names for Trino 483:
+//   - Iceberg:    https://trino.io/docs/483/connector/iceberg.html
+//   - Hive:       https://trino.io/docs/483/connector/hive.html
+//   - Delta Lake: https://trino.io/docs/483/connector/delta-lake.html
+func glueProjection(connector string, src connections.Config) (projection, error) {
+	region := src.Value("region")
+	if region == "" {
+		return projection{}, fmt.Errorf("%w: the connection has no region", bindings.ErrInvalid)
+	}
+	p := projection{props: map[string]string{"hive.metastore.glue.region": region}}
+	if id := src.Value("catalog_id"); id != "" {
+		p.props["hive.metastore.glue.catalogid"] = id
+	}
+	if role := src.Value("role_arn"); role != "" {
+		p.props["hive.metastore.glue.iam-role"] = role
+	}
+	if ak := src.Value("access_key"); ak != "" {
+		p.props["hive.metastore.glue.aws-access-key"] = ak
+	}
+	if sk := src.Secret("secret_key"); sk != "" {
+		p.props["hive.metastore.glue.aws-secret-key"] = sk
+		p.secrets = append(p.secrets, "hive.metastore.glue.aws-secret-key")
+	}
+	if ep := src.Value("endpoint"); ep != "" {
+		p.props["hive.metastore.glue.endpoint"] = ep
+	}
+	switch connector {
+	case "iceberg":
+		p.props["iceberg.catalog.type"] = "glue"
+	case "hive", "delta_lake":
+		p.props["hive.metastore"] = "glue"
 	}
 	s3Storage(&p, src)
 	return p, nil

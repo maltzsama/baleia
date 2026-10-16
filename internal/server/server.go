@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/glue"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -117,6 +118,7 @@ func (s *Server) routes() {
 	}
 	conns, err := providers.New(dialer, providers.Options{
 		SQLite: sqlite.Options{Root: s.cfg.SQLiteRoot, AllowWrite: s.cfg.SQLiteAllowWrite},
+		Glue:   glue.Options{AllowAmbientCredentials: s.cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: s.cfg.ConnectionsAllowLoopback},
 	})
 	if err != nil {
 		panic("connection providers: " + err.Error())
