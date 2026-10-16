@@ -309,3 +309,32 @@ func (a *Audit) WriteFailed() {
 	}
 	a.failures.Inc()
 }
+
+// AuditExport observes the audit export to OpenSearch (#50).
+type AuditExport struct {
+	events *prometheus.CounterVec
+	lag    prometheus.Gauge
+}
+
+// AuditExport registers baleia_audit_export_events_total{outcome} and
+// baleia_audit_export_lag_seconds.
+func (r *Registry) AuditExport() *AuditExport {
+	a := &AuditExport{
+		events: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace, Name: "audit_export_events_total", Help: "Audit events exported, per outcome.",
+		}, []string{"outcome"}),
+		lag: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: Namespace, Name: "audit_export_lag_seconds", Help: "Age of the newest audit event not yet exported.",
+		}),
+	}
+	r.reg.MustRegister(a.events, a.lag)
+	return a
+}
+
+// Observe counts one export batch's outcome.
+func (a *AuditExport) Observe(outcome string, n int) {
+	a.events.WithLabelValues(outcome).Add(float64(n))
+}
+
+// SetLag records the current export lag in seconds.
+func (a *AuditExport) SetLag(seconds float64) { a.lag.Set(seconds) }

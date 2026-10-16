@@ -379,10 +379,16 @@ var limitClause = regexp.MustCompile(`(?i)\bLIMIT\s+([0-9]|\$|\?|\{|%|:)`)
 
 // TestSQLDialectsOwnLimit: row limits are dialect SQL (LIMIT, TOP, FETCH
 // FIRST). Only internal/dialect, a provider's own package (which speaks one
-// engine) and generated queries may spell one.
+// engine), generated queries and the audit subsystem (which reads Baleia's own
+// Postgres, not a user engine) may spell one.
 func TestSQLDialectsOwnLimit(t *testing.T) {
 	allowed := func(rel string) bool {
 		if strings.HasPrefix(rel, "internal/dialect/") || strings.HasPrefix(rel, "internal/db/") {
+			return true
+		}
+		// The audit export (#50) reads audit_events in Baleia's own database:
+		// its LIMIT is not dialect SQL and needs no engine dialect.
+		if strings.HasPrefix(rel, "internal/audit/") {
 			return true
 		}
 		rest, ok := strings.CutPrefix(rel, "internal/connections/")

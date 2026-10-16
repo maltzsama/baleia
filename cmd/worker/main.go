@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
+	auditexport "github.com/galileostudio/baleia/internal/audit/export"
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/bindings/stored"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
@@ -172,6 +173,25 @@ func main() {
 		return r.Run(ctx, dryRun)
 	})
 	act.SetAudit(audit.NewPostgres(db.New(pool), conns.SecretKeys(), reg.Audit().WriteFailed))
+
+	// Audit export to OpenSearch (#50): disabled unless a URL is configured.
+	if cfg.AuditExportURL != "" {
+		sink, err := auditexport.NewHTTPBulk(auditexport.Config{
+			URL: cfg.AuditExportURL, Index: cfg.AuditExportIndex, Auth: cfg.AuditExportAuth,
+			User: cfg.AuditExportUser, Password: cfg.AuditExportPassword, Token: cfg.AuditExportToken, CAFile: cfg.AuditExportCAFile,
+		}, obs.WrapHTTPClient(&http.Client{Timeout: 60 * time.Second}))
+		if err != nil {
+			slog.Error("audit export sink", "err", err)
+			os.Exit(1)
+		}
+		pg := auditexport.Postgres{Pool: pool}
+		act.SetAuditExporter(&auditexport.Exporter{
+			Source: pg, Cursor: pg, Sink: sink,
+			Index: cfg.AuditExportIndex, Batch: cfg.AuditExportBatch, Lag: auditexport.DefaultSafetyLag,
+			OnBatch: reg.AuditExport().Observe,
+			OnLag:   func(t time.Time) { reg.AuditExport().SetLag(time.Since(t).Seconds()) },
+		})
+	}
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV2)
@@ -184,6 +204,7 @@ func main() {
 	w.RegisterWorkflow(workflows.MetadataSyncWorkflow)
 	w.RegisterWorkflow(workflows.MetadataSyncDispatchWorkflow)
 	w.RegisterWorkflow(workflows.AuditPartitionsWorkflow)
+	w.RegisterWorkflow(workflows.AuditExportWorkflow)
 	w.RegisterWorkflow(workflows.CatalogReconcileWorkflow)
 	w.RegisterWorkflow(workflows.EphemeralCatalogSweepWorkflow)
 
@@ -215,6 +236,19 @@ func main() {
 			os.Exit(1)
 		}
 		slog.Info("temporal schedules ensured")
+	}
+	// Audit export to OpenSearch (#50) runs only when a sink is configured.
+	if cfg.SchedulesEnabled {
+		if cfg.AuditExportURL != "" {
+			if err := schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
+				{ID: schedules.AuditExport, Workflow: workflows.AuditExportWorkflow, Every: cfg.AuditExportInterval},
+			}); err != nil {
+				slog.Error("failed to ensure the audit export schedule", "err", err)
+				os.Exit(1)
+			}
+		} else {
+			_ = schedules.Remove(context.Background(), c, schedules.AuditExport)
+		}
 	}
 
 	slog.Info("worker started", "queue", taskQueue, "schedules_enabled", cfg.SchedulesEnabled)

@@ -91,6 +91,7 @@ const (
 	RetrieverScheduler = "retriever-scheduler"
 	MetadataSync       = "metadata-sync"
 	AuditPartitions    = "audit-partitions"
+	AuditExport        = "audit-export"
 	CatalogReconcile   = "catalog-reconcile"
 	// EphemeralCatalogSweeper drops expired connection-test catalogs (#12).
 	EphemeralCatalogSweeper = "ephemeral-catalog-sweeper"

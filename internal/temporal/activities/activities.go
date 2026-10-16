@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
+	auditexport "github.com/galileostudio/baleia/internal/audit/export"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -57,7 +58,12 @@ type Activities struct {
 	reconcileEngine engineReconciler
 	// sweepEphemeral drops expired connection-test catalogs (#12).
 	sweepEphemeral ephemeralSweeper
+	// auditExport ships audit events to OpenSearch (#50); nil when disabled.
+	auditExport *auditexport.Exporter
 }
+
+// SetAuditExporter wires the audit export pass (#50).
+func (a *Activities) SetAuditExporter(e *auditexport.Exporter) { a.auditExport = e }
 
 // SetAudit wires the audit recorder (#45).
 func (a *Activities) SetAudit(r audit.Recorder) { a.audit = r }
@@ -109,6 +115,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(AdvanceRetrieverSchedule)
 	w.RegisterActivity(SyncCatalogMetadata)
 	w.RegisterActivity(EnsureAuditPartitions)
+	w.RegisterActivity(ExportAuditEvents)
 	w.RegisterActivity(ReconcileCatalogs)
 	w.RegisterActivity(SweepEphemeralCatalogs)
 	w.RegisterActivity(RefreshEngineCatalogs)
