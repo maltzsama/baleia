@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/migrate"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
 	"github.com/jackc/pgx/v5"
 )
@@ -35,6 +36,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	shutdownTracing, err := obs.Setup(ctx, cfg.TracingEnabled, "api")
+	if err != nil {
+		slog.Error("tracing setup", "err", err)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
+
 	// run migrations automatically on startup
 	if err := migrate.Up(ctx, cfg.DatabaseURL); err != nil {
 		slog.Error("migration failed", "err", err)
@@ -44,7 +52,7 @@ func main() {
 	reg := metrics.New("api")
 	pool, err := dbpool.Open(ctx, cfg.DatabaseURL, dbpool.Options{
 		MaxConns: cfg.PoolSize(20), MinConns: int32(cfg.DBMinConns), MaxConnLifetime: cfg.DBMaxConnLifetime,
-		Tracer: reg.NewPoolTracer(),
+		Tracer: obs.PGXTracer(reg.NewPoolTracer()),
 	})
 	if err != nil {
 		slog.Error("failed to connect to database", "err", err)
@@ -86,7 +94,7 @@ func main() {
 	reg.WatchPool(pool)
 	temporalMetrics, flushTemporal := reg.TemporalHandler()
 	defer func() { _ = flushTemporal() }()
-	temporalClient, err := dial.Temporal(ctx, cfg.TemporalHost, temporalMetrics, 30*time.Second)
+	temporalClient, err := dial.Temporal(ctx, cfg.TemporalHost, temporalMetrics, 30*time.Second, obs.ClientInterceptors())
 	if err != nil {
 		slog.Error("temporal", "err", err)
 		os.Exit(1)

@@ -10,15 +10,17 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/interceptor"
 )
 
 // Temporal dials host until it answers or wait elapses. handler reports the
-// SDK's metrics; nil for none.
-func Temporal(ctx context.Context, host string, handler client.MetricsHandler, wait time.Duration) (client.Client, error) {
+// SDK's metrics; nil for none. interceptors are the client interceptors (the
+// tracing interceptor, #47); nil for none.
+func Temporal(ctx context.Context, host string, handler client.MetricsHandler, wait time.Duration, interceptors []interceptor.ClientInterceptor) (client.Client, error) {
 	deadline := time.Now().Add(wait)
 	backoff := 500 * time.Millisecond
 	for {
-		c, err := client.DialContext(ctx, client.Options{HostPort: host, MetricsHandler: handler})
+		c, err := client.DialContext(ctx, client.Options{HostPort: host, MetricsHandler: handler, Interceptors: interceptors})
 		if err == nil {
 			return c, nil
 		}
