@@ -54,6 +54,7 @@ func (*Binder) Supports() map[connections.Kind][]string {
 		connections.KindIcebergREST:   {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
 		connections.KindLakekeeper:    {"iceberg"},
+		connections.KindUnity:         {"iceberg"},
 		connections.KindPostgreSQL:    {"postgresql"},
 		connections.KindMySQL:         {"mysql"},
 		connections.KindMariaDB:       {"mariadb"},
@@ -64,6 +65,13 @@ func (*Binder) Supports() map[connections.Kind][]string {
 
 func (*Binder) ProtectedKeyPatterns() []string { return slices.Clone(protectedPatterns) }
 func (*Binder) ReservedNames() []string        { return slices.Clone(reservedNames) }
+
+// ReadOnlySources lists the bindable kinds whose bindings are read-only:
+// Baleia does not support writing through them. Unity Catalog is read-oriented
+// (#32). The API exposes it so the UI can warn.
+func (*Binder) ReadOnlySources() map[connections.Kind]bool {
+	return map[connections.Kind]bool{connections.KindUnity: true}
+}
 
 // Project builds the registry properties (REAL values) of a binding, the keys
 // the DDL text replaces with placeholders, and the plugin's catalog_version.

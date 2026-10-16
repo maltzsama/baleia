@@ -288,6 +288,7 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 		connections.KindIcebergREST:   {Values: map[string]string{"url": "http://localhost:8181/catalog"}},
 		connections.KindHiveMetastore: {Values: map[string]string{"metastore_uri": "thrift://localhost:9083"}},
 		connections.KindLakekeeper:    {Values: map[string]string{"url": "http://localhost:8181"}},
+		connections.KindUnity:         {Values: map[string]string{"url": "http://localhost:8080"}},
 		connections.KindPostgreSQL:    {Values: map[string]string{"host": "localhost", "username": "u", "sslmode": "disable"}},
 		connections.KindMySQL:         {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
 		connections.KindMariaDB:       {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},

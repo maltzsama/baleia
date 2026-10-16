@@ -30,6 +30,7 @@ func TestSourceFor(t *testing.T) {
 		connections.KindNessie:        PathProvider,
 		connections.KindIcebergREST:   PathProvider,
 		connections.KindLakekeeper:    PathProvider,
+		connections.KindUnity:         PathProvider,
 		connections.KindPostgreSQL:    PathProvider,
 		connections.KindMySQL:         PathProvider,
 		connections.KindMariaDB:       PathProvider,

@@ -105,12 +105,12 @@ Partially compliant.
   the catalogs the workspace may use only, never an engine call. The live chi explorer routes
   (`/connections/{id}/catalogs/{name}/namespaces…`) stay until the UI switches (#23).
 - The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, hive,
-  lakekeeper,
+  lakekeeper, unity,
   postgresql and mysql. Create and update validate through `Provider.Validate`, store non-secret
   values in `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes
   the schemas. Connection tests and Lens table health read through the registry (#11).
 - The binder contract is `internal/bindings`; the Trino binder (`internal/bindings/trino`) owns
-  the projection of each bindable kind (polaris, nessie, iceberg REST, hive, lakekeeper,
+  the projection of each bindable kind (polaris, nessie, iceberg REST, hive, lakekeeper, unity,
   postgresql, mysql, mariadb, sqlserver, oracle) and the registry and DDL, reading the provider's
   validated config (JDBC URLs are built from host, port and database, never taken from users;
   protected properties cannot be overridden). A Hive Metastore or Glue connection binds as an
@@ -134,6 +134,12 @@ Partially compliant.
   no direct metadata role — Baleia reads its tables by introspecting the federated engine that
   hosts a binding (#15) — so its `Ping` is TCP reachability through the dialer. Glue is next
   (#86 PR 2).
+- Unity Catalog is a read-oriented provider (`internal/connections/unity`, #32): catalogs/schemas/
+  tables are browsed through the Unity REST API and table metadata is read through its Iceberg REST
+  endpoint (`<url>/api/2.1/unity-catalog/iceberg`); the binder projects it as an Iceberg REST
+  catalog and marks the kind read-only (`GET /engines/{id}/binding-support` returns
+  `writes_supported=false`). A pinned `unitycatalog/unitycatalog:v0.7.0` runs in the compose
+  `sources` profile.
 
 ## Alternatives considered
 

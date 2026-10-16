@@ -186,6 +186,26 @@ func TestProject_Kinds(t *testing.T) {
 			secrets: []string{"iceberg.rest-catalog.oauth2.credential"},
 		},
 		{
+			name: "unity without a token",
+			src:  cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "unity"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://unity:8080/api/2.1/unity-catalog/iceberg",
+				"iceberg.rest-catalog.warehouse": "unity", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+			},
+		},
+		{
+			name: "unity with a token",
+			src:  cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080/"}, map[string]string{"token": "tok"}),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "unity"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://unity:8080/api/2.1/unity-catalog/iceberg",
+				"iceberg.rest-catalog.warehouse": "unity", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+				"iceberg.rest-catalog.security": "OAUTH2", "iceberg.rest-catalog.oauth2.token": "tok",
+			},
+			secrets: []string{"iceberg.rest-catalog.oauth2.token"},
+		},
+		{
 			name: "hive metastore as an iceberg catalog (default connector)",
 			src: cfg(connections.KindHiveMetastore, map[string]string{
 				"metastore_uri": "thrift://hms:9083", "storage.type": "s3",
@@ -379,6 +399,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 		cfg(connections.KindOracle, map[string]string{"host": "db", "service_name": "S", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-8"}),
 		cfg(connections.KindHiveMetastore, map[string]string{"metastore_uri": "thrift://hms:9083", "storage.access_key": "k"}, map[string]string{"storage.secret_key": "FIXTURE-SECRET-9"}),
 		cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp/token"}, map[string]string{"client_secret": "FIXTURE-SECRET-10"}),
+		cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080"}, map[string]string{"token": "FIXTURE-SECRET-11"}),
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
@@ -463,6 +484,7 @@ func TestSupports(t *testing.T) {
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
 		connections.KindLakekeeper:    {"iceberg"},
+		connections.KindUnity:         {"iceberg"},
 		connections.KindPostgreSQL:    {"postgresql"}, connections.KindMySQL: {"mysql"},
 		connections.KindMariaDB: {"mariadb"}, connections.KindSQLServer: {"sqlserver"}, connections.KindOracle: {"oracle"},
 	}

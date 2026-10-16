@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/connections/sqlserver"
 	"github.com/galileostudio/baleia/internal/connections/trino"
+	"github.com/galileostudio/baleia/internal/connections/unity"
 )
 
 // Options are server-side settings of providers that need them.
@@ -37,6 +38,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		iceberg.New(d),
 		hive.New(d),
 		lakekeeper.New(d),
+		unity.New(d),
 		postgresql.New(d),
 		mysql.New(d),
 		mysql.NewMariaDB(d),
