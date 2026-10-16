@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Glue between the handlers and the binding lifecycle (#38): the catalog
@@ -97,7 +98,32 @@ func (h *Handlers) catalogResponse(ctx context.Context, cat db.Catalog, b db.Cat
 	if version != "" && status == CatalogSyncStatusSynced {
 		c.CatalogVersion = &version
 	}
+	h.metadataFreshness(ctx, cat.ID, &c)
 	return c
+}
+
+// metadataFreshness fills a catalog's metadata sync fields from its latest
+// passes (#17). A read error leaves them unset rather than failing the
+// response.
+func (h *Handlers) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Catalog) {
+	st, err := h.queries.GetCatalogSyncState(ctx, id)
+	if err != nil {
+		slog.Warn("catalog metadata freshness", "err", err)
+		return
+	}
+	status := CatalogMetadataSyncStatusNever
+	if st.LastStatus != "" {
+		status = CatalogMetadataSyncStatus(st.LastStatus)
+	}
+	c.MetadataSyncStatus = &status
+	if st.LastStatus == "failed" && st.LastErrorCode != "" {
+		code := st.LastErrorCode
+		c.MetadataSyncErrorCode = &code
+	}
+	if st.SyncedAt.Valid {
+		t := st.SyncedAt.Time
+		c.MetadataSyncedAt = &t
+	}
 }
 
 // bindingResponse is a binding with its derived status and lifecycle.
@@ -119,16 +145,21 @@ func (h *Handlers) bindingResponse(ctx context.Context, b db.CatalogBinding, ver
 // catalogWithStatus is a stored catalog with its primary binding's status,
 // or the bare catalog when it has none (native catalogs).
 func (h *Handlers) catalogWithStatus(ctx context.Context, cat db.Catalog) Catalog {
+	bare := func() Catalog {
+		c := dbCatalogToPublic(cat)
+		h.metadataFreshness(ctx, cat.ID, &c)
+		return c
+	}
 	if cat.Origin != "source" || !cat.ClusterID.Valid {
-		return dbCatalogToPublic(cat)
+		return bare()
 	}
 	_, eng, err := h.catalogEngine(ctx, cat)
 	if err != nil {
-		return dbCatalogToPublic(cat)
+		return bare()
 	}
 	b, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: cat.ID, EngineID: eng.ID})
 	if err != nil {
-		return dbCatalogToPublic(cat)
+		return bare()
 	}
 	c := h.catalogResponse(ctx, cat, b, "")
 	c.CatalogVersion = b.DesiredVersion

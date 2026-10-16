@@ -74,12 +74,12 @@ CI runs `promtool check rules` and `promtool test rules deploy/prometheus/alerts
 | Engines (worker) | `baleia_engine_statements_total`, `baleia_engine_statement_duration_seconds`, `baleia_engine_errors_total`, `baleia_engine_rows_returned_total`, `baleia_engine_result_bytes_total` | `engine` (engine kind), `outcome`, `code` |
 | Schedules (worker) | `baleia_schedule_last_success_timestamp_seconds` | `schedule` |
 | Catalogs (API) | `baleia_catalog_ddl_total`, `baleia_catalogs_by_state` | `action` (`create`, `replace`, `drop`), `outcome`, `state` |
+| Metadata (worker) | `baleia_metadata_sync_duration_seconds`, `baleia_metadata_staleness_seconds_max` (the stalest enabled catalog; no catalog label) | `outcome` |
 | Storage | `baleia_storage_operations_total`, `baleia_storage_bytes_total` | `operation` (`put`, `get`), `outcome` |
 | Database pool | `baleia_db_pool_acquired_conns`, `baleia_db_pool_idle_conns`, `baleia_db_pool_max_conns`, `baleia_db_pool_acquire_duration_seconds` | `process` (`api`, `worker`) |
 | Build | `baleia_build_info` | `version`, `commit` |
 
-A metric is registered only where something produces it. The metadata-sync metrics
-(`baleia_metadata_*`) arrive with #17, and binding reconciliation
+A metric is registered only where something produces it. Binding reconciliation
 (`baleia_catalog_reconcile_actions_total`) with #37.
 
 ## Metadata snapshots
@@ -96,6 +96,12 @@ The explorer, autocomplete and search read stored metadata (namespaces, tables, 
 - **Through an engine** (catalogs adopted from Trino, Flight SQL, kinds Baleia cannot read
   directly): the dialect's one-query catalog listing, in a read-only session as the engine's
   service identity, through the catalog's first active binding.
+
+Every enabled catalog is refreshed every `BALEIA_METADATA_SYNC_INTERVAL` (default 15 min, at least
+5 min) by the `metadata-sync` schedule, and right after it is created or changed (a new direct
+engine's native catalogs too). Each scheduled pass first refreshes every enabled engine's catalogs:
+new databases of a direct engine become native catalogs (missing ones are disabled, never deleted)
+and catalogs found in Trino are adopted. At most 4 catalogs sync at once.
 
 Tables a pass does not see are tombstoned (`removed_at`) and purged after 7 days. One pass per
 catalog runs at a time (an advisory lock, and the workflow id). `GET
@@ -192,17 +198,20 @@ A recurring job has not succeeded in three of its intervals:
 | `lens-cluster-poller` | 30 s |
 | `retriever-scheduler` | 60 s |
 | `lens-table-health` | 1 h |
+| `metadata-sync` | `BALEIA_METADATA_SYNC_INTERVAL` (15 min) |
 
 1. Check that a worker is running and polling. A worker that is down raises [BaleiaWorkerDown](#baleiaworkerdown). If `temporal_worker_task_slots_available` is flat or `temporal_*` is missing, no worker is polling.
 2. In the Temporal UI, open the schedule (its ID is the alert's `schedule` label). Read the last runs' failures.
-3. The gauge is set when a pass completes: for table health and retriever dispatch, after the whole pass, not its first activity. It restarts empty with the worker. Right after a worker restart, a schedule shows up once its next pass succeeds.
+3. The gauge is set when a pass completes: for table health, retriever dispatch and metadata sync, after the whole pass, not its first activity. It restarts empty with the worker. Right after a worker restart, a schedule shows up once its next pass succeeds.
 
 ### BaleiaMetadataStale
 
-The stalest catalog metadata is more than an hour old. The producer comes with metadata synchronization (#17); until then this alert cannot fire.
+The stalest enabled catalog has not finished a metadata pass for more than an hour (`baleia_metadata_staleness_seconds_max`; a catalog that never synced counts from its creation).
 
-1. Find the failing sync runs in the Temporal UI.
-2. Test the catalog's connection with `POST /api/v1/catalog-connections/{id}/test`.
+1. Find the catalog: `GET /api/v1/connections/{id}/catalogs` shows `metadata_sync_status`, `metadata_synced_at` and `metadata_sync_error_code`, and `GET /api/v1/catalogs/{id}/metadata/sync-runs` its latest passes.
+2. If the `metadata-sync` schedule itself is not running, see [BaleiaScheduleStale](#baleiaschedulestale).
+3. Test the catalog's connection with `POST /api/v1/catalog-connections/{id}/test`. For an `engine` source path, check its engine (see [BaleiaEngineUnavailable](#baleiaengineunavailable)).
+4. Retry one catalog with `POST /api/v1/catalogs/{id}/metadata/sync`.
 
 ### BaleiaCatalogsInError
 

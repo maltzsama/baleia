@@ -230,6 +230,68 @@ func (q *Queries) LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClust
 	return err
 }
 
+const listEnabledEnginesWithConnection = `-- name: ListEnabledEnginesWithConnection :many
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only, tc.id AS cluster_id
+FROM engines e
+JOIN catalog_connections c ON c.id = e.connection_id
+LEFT JOIN trino_clusters tc ON tc.engine_id = e.id
+WHERE e.enabled
+ORDER BY e.name
+`
+
+type ListEnabledEnginesWithConnectionRow struct {
+	Engine            Engine            `json:"engine"`
+	CatalogConnection CatalogConnection `json:"catalog_connection"`
+	ClusterID         pgtype.UUID       `json:"cluster_id"`
+}
+
+// Every enabled engine with its connection and, for a Trino engine, its
+// cluster: the metadata dispatcher refreshes their catalogs (#17).
+func (q *Queries) ListEnabledEnginesWithConnection(ctx context.Context) ([]ListEnabledEnginesWithConnectionRow, error) {
+	rows, err := q.db.Query(ctx, listEnabledEnginesWithConnection)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEnabledEnginesWithConnectionRow
+	for rows.Next() {
+		var i ListEnabledEnginesWithConnectionRow
+		if err := rows.Scan(
+			&i.Engine.ID,
+			&i.Engine.Name,
+			&i.Engine.Kind,
+			&i.Engine.Class,
+			&i.Engine.ConnectionID,
+			&i.Engine.IdentityMode,
+			&i.Engine.Enabled,
+			&i.Engine.CreatedBy,
+			&i.Engine.CreatedAt,
+			&i.Engine.UpdatedAt,
+			&i.CatalogConnection.ID,
+			&i.CatalogConnection.Name,
+			&i.CatalogConnection.Type,
+			&i.CatalogConnection.Url,
+			&i.CatalogConnection.CredentialsEnc,
+			&i.CatalogConnection.DefaultReadonly,
+			&i.CatalogConnection.CreatedAt,
+			&i.CatalogConnection.UpdatedAt,
+			&i.CatalogConnection.Host,
+			&i.CatalogConnection.Port,
+			&i.CatalogConnection.CreatedBy,
+			&i.CatalogConnection.Config,
+			&i.CatalogConnection.CredentialsReadOnly,
+			&i.ClusterID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEngines = `-- name: ListEngines :many
 SELECT id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at FROM engines ORDER BY name
 `

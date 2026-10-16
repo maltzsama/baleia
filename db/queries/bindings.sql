@@ -48,12 +48,23 @@ ON CONFLICT (connection_id, name) DO UPDATE SET updated_at = now()
 RETURNING *;
 
 -- name: UpsertNativeBinding :one
+-- A native binding is enabled while its engine reports the catalog: native
+-- bindings are only ever disabled by discovery (DisableMissingNativeBindings).
 INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode)
 VALUES ($1, $2, $3, 'native')
 ON CONFLICT (catalog_id, engine_id) DO UPDATE SET
     engine_catalog_name = EXCLUDED.engine_catalog_name,
+    enabled             = true,
     updated_at          = now()
 RETURNING *;
+
+-- name: DisableMissingNativeBindings :execrows
+-- Native catalogs an engine no longer reports are disabled, never deleted
+-- (#17): their metadata and history stay.
+UPDATE catalog_bindings
+SET enabled = false, updated_at = now()
+WHERE engine_id = $1 AND mode = 'native' AND enabled
+  AND NOT (engine_catalog_name = ANY(sqlc.arg(present)::text[]));
 
 -- name: DeleteNativeCatalogsOfEngine :exec
 -- The native catalogs of an engine, deleted with it (their bindings cascade).
@@ -195,9 +206,21 @@ WHERE engine_id = $1 AND NOT (catalog_name = ANY(sqlc.arg(present_names)::text[]
 
 -- name: UpsertAdoptedBinding :exec
 -- A catalog found in an engine that no managed binding created (#38, #13).
-INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, connector, mode, enabled, lifecycle_state)
+-- An adopted binding the engine reports again is enabled again; a managed
+-- binding of the same name is never touched.
+INSERT INTO catalog_bindings AS b (catalog_id, engine_id, engine_catalog_name, connector, mode, enabled, lifecycle_state)
 VALUES ($1, $2, $3, $4, 'adopted', true, 'active')
-ON CONFLICT (engine_id, engine_catalog_name) DO NOTHING;
+ON CONFLICT (engine_id, engine_catalog_name) DO UPDATE SET enabled = true, updated_at = now()
+WHERE b.mode = 'adopted' AND NOT b.enabled;
+
+-- name: DisableMissingAdoptedBindings :execrows
+-- Adopted catalogs the engine no longer reports are disabled, never deleted
+-- (#17): their metadata and history stay.
+UPDATE catalog_bindings b
+SET enabled = false, updated_at = now()
+FROM engine_catalog_observations o
+WHERE b.engine_id = $1 AND b.mode = 'adopted' AND b.enabled
+  AND o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name AND NOT o.present;
 
 -- name: GetManagedBindingOfCatalog :one
 SELECT * FROM catalog_bindings WHERE catalog_id = $1 AND engine_id = $2 AND mode = 'managed';

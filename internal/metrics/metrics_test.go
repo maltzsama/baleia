@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -36,6 +37,8 @@ func registry(t *testing.T) *Registry {
 	if err := flush(); err != nil {
 		t.Fatal(err)
 	}
+	r.Metadata().Synced(time.Second, nil)
+	r.WatchMetadataStaleness(func(context.Context) (float64, error) { return 42, nil })
 	return r
 }
 
@@ -72,6 +75,20 @@ func TestLabelAllowList(t *testing.T) {
 	}
 	if n < 5 { // build_info, the three pool gauges, the acquire histogram
 		t.Errorf("only %d baleia_ families registered", n)
+	}
+}
+
+// TestMetadataMetrics: the sync's freshness gauge and duration histogram are
+// exported under the names the alert rules use, without catalog labels.
+func TestMetadataMetrics(t *testing.T) {
+	_, body := scrape(t, registry(t).Handler(""), "")
+	for _, want := range []string{
+		"baleia_metadata_staleness_seconds_max 42",
+		`baleia_metadata_sync_duration_seconds_count{outcome="success"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape lacks %q", want)
+		}
 	}
 }
 

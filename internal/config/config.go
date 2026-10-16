@@ -62,6 +62,9 @@ type Config struct {
 	// ExecutionTimeout caps a whole script (every statement of an
 	// execution, run in one activity, #27).
 	ExecutionTimeout time.Duration
+	// MetadataSyncInterval is how often every catalog's metadata snapshot is
+	// refreshed (#17).
+	MetadataSyncInterval time.Duration
 	// ResultMaxRows / ResultMaxBytes cap one statement's result. When a cap is
 	// hit the remaining query is killed and the result is marked truncated.
 	ResultMaxRows  int64
@@ -122,6 +125,7 @@ func Load() *Config {
 		S3UseSSL:         getEnv("S3_USE_SSL", "false") == "true",
 		StatementTimeout: getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
 		ExecutionTimeout: getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
+		MetadataSyncInterval: getEnvDuration("BALEIA_METADATA_SYNC_INTERVAL", 15*time.Minute),
 		ResultMaxRows:    getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
 		ResultMaxBytes:   getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
 		SchedulesEnabled: getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
@@ -187,6 +191,9 @@ func (c *Config) Validate() error {
 	if err := c.ValidateEncryptionKeys(); err != nil {
 		return err
 	}
+	if c.MetadataSyncInterval < 0 || (c.MetadataSyncInterval > 0 && c.MetadataSyncInterval < 5*time.Minute) {
+		return fmt.Errorf("BALEIA_METADATA_SYNC_INTERVAL must be at least 5m (got %s)", c.MetadataSyncInterval)
+	}
 	if c.StatementTimeout != 0 && c.StatementTimeout < time.Minute {
 		return fmt.Errorf("BALEIA_STATEMENT_TIMEOUT must be at least 1m (got %s)", c.StatementTimeout)
 	}
@@ -247,4 +254,17 @@ func (c *Config) PoolSize(processDefault int) int32 {
 		return int32(c.DBMaxConns)
 	}
 	return int32(processDefault)
+}
+
+// DefaultMetadataSyncInterval is used when BALEIA_METADATA_SYNC_INTERVAL is
+// 0 or unset.
+const DefaultMetadataSyncInterval = 15 * time.Minute
+
+// MetadataSyncEvery is the metadata-sync schedule's interval: 0 means the
+// default, never "no interval" (a schedule needs one).
+func (c *Config) MetadataSyncEvery() time.Duration {
+	if c.MetadataSyncInterval <= 0 {
+		return DefaultMetadataSyncInterval
+	}
+	return c.MetadataSyncInterval
 }

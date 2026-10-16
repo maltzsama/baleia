@@ -101,6 +101,28 @@ func (q *Queries) GetCatalogForSync(ctx context.Context, id pgtype.UUID) (GetCat
 	return i, err
 }
 
+const getCatalogSyncState = `-- name: GetCatalogSyncState :one
+SELECT
+    COALESCE((SELECT r.status FROM metadata_sync_runs r WHERE r.catalog_id = $1 ORDER BY r.started_at DESC LIMIT 1), '')::text AS last_status,
+    COALESCE((SELECT r.error_code FROM metadata_sync_runs r WHERE r.catalog_id = $1 ORDER BY r.started_at DESC LIMIT 1), '')::text AS last_error_code,
+    (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = $1 AND r.status = 'finished')::timestamptz AS synced_at
+`
+
+type GetCatalogSyncStateRow struct {
+	LastStatus    string             `json:"last_status"`
+	LastErrorCode string             `json:"last_error_code"`
+	SyncedAt      pgtype.Timestamptz `json:"synced_at"`
+}
+
+// The freshness of a catalog snapshot: its latest pass and the end of its
+// latest finished one.
+func (q *Queries) GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (GetCatalogSyncStateRow, error) {
+	row := q.db.QueryRow(ctx, getCatalogSyncState, catalogID)
+	var i GetCatalogSyncStateRow
+	err := row.Scan(&i.LastStatus, &i.LastErrorCode, &i.SyncedAt)
+	return i, err
+}
+
 const getTableFingerprints = `-- name: GetTableFingerprints :many
 SELECT namespace, name, fingerprint, properties
 FROM metadata_tables
@@ -274,6 +296,57 @@ func (q *Queries) ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const listSyncableCatalogs = `-- name: ListSyncableCatalogs :many
+SELECT c.id
+FROM catalogs c
+WHERE c.enabled
+  AND (c.origin = 'source' OR EXISTS (
+      SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled))
+ORDER BY c.id
+`
+
+// Every catalog the scheduled sync refreshes: enabled, and readable from its
+// source or through at least one enabled binding.
+func (q *Queries) ListSyncableCatalogs(ctx context.Context) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listSyncableCatalogs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const maxMetadataStalenessSeconds = `-- name: MaxMetadataStalenessSeconds :one
+SELECT COALESCE(max(EXTRACT(EPOCH FROM now() - COALESCE(
+    (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished'),
+    c.created_at))), 0)::float8
+FROM catalogs c
+WHERE c.enabled
+  AND (c.origin = 'source' OR EXISTS (
+      SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled))
+`
+
+// Seconds since the stalest syncable catalog last finished a pass (never:
+// since it was created). One number, no catalog label (#87). Same
+// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
+func (q *Queries) MaxMetadataStalenessSeconds(ctx context.Context) (float64, error) {
+	row := q.db.QueryRow(ctx, maxMetadataStalenessSeconds)
+	var column_1 float64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const purgeMetadataNamespaceTombstones = `-- name: PurgeMetadataNamespaceTombstones :exec

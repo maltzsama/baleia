@@ -48,6 +48,8 @@ type Activities struct {
 	connections *connections.Registry
 	// metadata stores catalog metadata snapshots (#15).
 	metadata metadataSyncer
+	// observeEngine observes a federated engine's catalogs (#17).
+	observeEngine engineObserver
 }
 
 // s3Client is the slice of the storage client result streaming needs. It is an
@@ -95,6 +97,8 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(RetrieverDispatch)
 	w.RegisterActivity(AdvanceRetrieverSchedule)
 	w.RegisterActivity(SyncCatalogMetadata)
+	w.RegisterActivity(RefreshEngineCatalogs)
+	w.RegisterActivity(ListSyncableCatalogs)
 }
 
 type SplitSQLParams struct {
@@ -307,11 +311,12 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 type workerMetrics struct {
 	engine    *metrics.Engine
 	schedules *metrics.Schedules
+	metadata  *metrics.Metadata
 }
 
 // SetMetrics registers the worker's producers on reg.
 func (a *Activities) SetMetrics(reg *metrics.Registry) {
-	a.metrics = workerMetrics{engine: reg.Engine(), schedules: reg.Schedules()}
+	a.metrics = workerMetrics{engine: reg.Engine(), schedules: reg.Schedules(), metadata: reg.Metadata()}
 	if s3, ok := a.s3.(interface{ SetMetrics(*metrics.Storage) }); ok {
 		s3.SetMetrics(reg.Storage())
 	}

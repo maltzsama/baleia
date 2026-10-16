@@ -9,6 +9,16 @@ SELECT * FROM engines WHERE id = $1;
 -- name: ListEngines :many
 SELECT * FROM engines ORDER BY name;
 
+-- name: ListEnabledEnginesWithConnection :many
+-- Every enabled engine with its connection and, for a Trino engine, its
+-- cluster: the metadata dispatcher refreshes their catalogs (#17).
+SELECT sqlc.embed(e), sqlc.embed(c), tc.id AS cluster_id
+FROM engines e
+JOIN catalog_connections c ON c.id = e.connection_id
+LEFT JOIN trino_clusters tc ON tc.engine_id = e.id
+WHERE e.enabled
+ORDER BY e.name;
+
 -- name: GetEngineWithConnection :one
 -- The engine and the connection it runs on (decrypted by the caller, #19).
 SELECT sqlc.embed(e), sqlc.embed(c)

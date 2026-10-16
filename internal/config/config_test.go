@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestValidateRejectsInsecureJWTSecret(t *testing.T) {
 	for _, secret := range []string{"", DefaultJWTSecret, "short"} {
@@ -38,6 +41,20 @@ func TestValidateEncryptionKeys(t *testing.T) {
 		err := tc.cfg.Validate()
 		if (err == nil) != tc.ok {
 			t.Errorf("%s: Validate() = %v, want ok=%v", tc.name, err, tc.ok)
+		}
+	}
+}
+
+func TestMetadataSyncEvery(t *testing.T) {
+	for in, want := range map[time.Duration]time.Duration{0: DefaultMetadataSyncInterval, 30 * time.Minute: 30 * time.Minute} {
+		if got := (&Config{MetadataSyncInterval: in}).MetadataSyncEvery(); got != want {
+			t.Errorf("%s -> %s, want %s", in, got, want)
+		}
+	}
+	const jwt = "a-long-random-value-not-the-default"
+	for _, bad := range []time.Duration{-time.Minute, time.Minute} {
+		if err := (&Config{JWTSecret: jwt, MetadataSyncInterval: bad}).Validate(); err == nil {
+			t.Errorf("Validate accepted interval %s", bad)
 		}
 	}
 }

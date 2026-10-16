@@ -122,3 +122,33 @@ FROM metadata_sync_runs
 WHERE catalog_id = $1
 ORDER BY started_at DESC
 LIMIT $2;
+
+-- name: ListSyncableCatalogs :many
+-- Every catalog the scheduled sync refreshes: enabled, and readable from its
+-- source or through at least one enabled binding.
+SELECT c.id
+FROM catalogs c
+WHERE c.enabled
+  AND (c.origin = 'source' OR EXISTS (
+      SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled))
+ORDER BY c.id;
+
+-- name: GetCatalogSyncState :one
+-- The freshness of a catalog snapshot: its latest pass and the end of its
+-- latest finished one.
+SELECT
+    COALESCE((SELECT r.status FROM metadata_sync_runs r WHERE r.catalog_id = $1 ORDER BY r.started_at DESC LIMIT 1), '')::text AS last_status,
+    COALESCE((SELECT r.error_code FROM metadata_sync_runs r WHERE r.catalog_id = $1 ORDER BY r.started_at DESC LIMIT 1), '')::text AS last_error_code,
+    (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = $1 AND r.status = 'finished')::timestamptz AS synced_at;
+
+-- name: MaxMetadataStalenessSeconds :one
+-- Seconds since the stalest syncable catalog last finished a pass (never:
+-- since it was created). One number, no catalog label (#87). Same
+-- predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
+SELECT COALESCE(max(EXTRACT(EPOCH FROM now() - COALESCE(
+    (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished'),
+    c.created_at))), 0)::float8
+FROM catalogs c
+WHERE c.enabled
+  AND (c.origin = 'source' OR EXISTS (
+      SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled));

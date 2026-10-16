@@ -170,6 +170,7 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 	}
 	observe(ctx, l)
 	h.catalogCache.Clear()
+	h.startMetadataSync(ctx, cat.ID)
 	return CreateCatalog201JSONResponse(h.catalogResponse(ctx, cat, binding, proj.Version)), nil
 }
 
@@ -394,6 +395,7 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	}
 	observe(ctx, l)
 	h.catalogCache.Clear()
+	h.startMetadataSync(ctx, updated.ID)
 	return UpdateCatalog200JSONResponse(h.catalogResponse(ctx, updated, binding, proj.Version)), nil
 }
 

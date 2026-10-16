@@ -72,6 +72,12 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
 	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error
+	// Adopted catalogs the engine no longer reports are disabled, never deleted
+	// (#17): their metadata and history stay.
+	DisableMissingAdoptedBindings(ctx context.Context, engineID pgtype.UUID) (int64, error)
+	// Native catalogs an engine no longer reports are disabled, never deleted
+	// (#17): their metadata and history stay.
+	DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error)
 	// True when the engine has a binding of a catalog granted to a workspace the
 	// user belongs to.
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)
@@ -93,6 +99,9 @@ type Querier interface {
 	// A catalog with what the sync needs to pick its source: the connection
 	// kind and the reference inside it (warehouse, database).
 	GetCatalogForSync(ctx context.Context, id pgtype.UUID) (GetCatalogForSyncRow, error)
+	// The freshness of a catalog snapshot: its latest pass and the end of its
+	// latest finished one.
+	GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (GetCatalogSyncStateRow, error)
 	GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, error)
 	// The engine linked to the 'default' Trino cluster, with its connection.
 	GetDefaultTrinoEngine(ctx context.Context) (GetDefaultTrinoEngineRow, error)
@@ -148,6 +157,9 @@ type Querier interface {
 	ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
 	ListEnabledCatalogs(ctx context.Context) ([]Catalog, error)
+	// Every enabled engine with its connection and, for a Trino engine, its
+	// cluster: the metadata dispatcher refreshes their catalogs (#17).
+	ListEnabledEnginesWithConnection(ctx context.Context) ([]ListEnabledEnginesWithConnectionRow, error)
 	// Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
 	// Iceberg REST, Nessie), used by the Lens table-health fan-out.
 	ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error)
@@ -174,6 +186,9 @@ type Querier interface {
 	// engine path introspects through the first one (a native catalog has only
 	// its native binding).
 	ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) ([]ListSyncBindingsRow, error)
+	// Every catalog the scheduled sync refreshes: enabled, and readable from its
+	// source or through at least one enabled binding.
+	ListSyncableCatalogs(ctx context.Context) ([]pgtype.UUID, error)
 	ListTableHealthByConnection(ctx context.Context, arg ListTableHealthByConnectionParams) ([]TableHealthSnapshot, error)
 	ListTableHealthSnapshots(ctx context.Context, arg ListTableHealthSnapshotsParams) ([]TableHealthSnapshot, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
@@ -196,6 +211,10 @@ type Querier interface {
 	MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error
 	// Catalogs the engine no longer reports.
 	MarkEngineCatalogsAbsent(ctx context.Context, arg MarkEngineCatalogsAbsentParams) error
+	// Seconds since the stalest syncable catalog last finished a pass (never:
+	// since it was created). One number, no catalog label (#87). Same
+	// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
+	MaxMetadataStalenessSeconds(ctx context.Context) (float64, error)
 	// Catalogs Baleia managed and still sees in the engine, though no managed
 	// binding owns them any more (an old name that failed to drop): they stay
 	// managed, never adopted, for the reconciler (#37) to drop.
@@ -273,6 +292,8 @@ type Querier interface {
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 	// A catalog found in an engine that no managed binding created (#38, #13).
+	// An adopted binding the engine reports again is enabled again; a managed
+	// binding of the same name is never touched.
 	UpsertAdoptedBinding(ctx context.Context, arg UpsertAdoptedBindingParams) error
 	UpsertEngineCatalogObservation(ctx context.Context, arg UpsertEngineCatalogObservationParams) error
 	// The managed binding of a catalog on an engine (one per pair), entering
@@ -283,6 +304,8 @@ type Querier interface {
 	// came back from a tombstone or has a new fingerprint: its columns must be
 	// replaced.
 	UpsertMetadataTable(ctx context.Context, arg UpsertMetadataTableParams) (UpsertMetadataTableRow, error)
+	// A native binding is enabled while its engine reports the catalog: native
+	// bindings are only ever disabled by discovery (DisableMissingNativeBindings).
 	UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindingParams) (CatalogBinding, error)
 	// A catalog found inside an engine, owned by the engine's connection.
 	UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatalogParams) (Catalog, error)

@@ -431,6 +431,22 @@ components:
           description: The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
         sync_error:          { type: string, nullable: true, readOnly: true }
         catalog_version:    { type: string, nullable: true, readOnly: true, description: SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion) }
+        metadata_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+          description: End of the latest finished metadata pass of the catalog (#17); null before the first one.
+        metadata_sync_status:
+          type: string
+          enum: [never, running, finished, failed]
+          readOnly: true
+          description: Status of the latest metadata pass. Every catalog is refreshed every BALEIA_METADATA_SYNC_INTERVAL (15m) and right after it is created or changed.
+        metadata_sync_error_code:
+          type: string
+          nullable: true
+          readOnly: true
+          description: The latest pass's error code when it failed (see MetadataSyncRun.error_code).
         created_at:          { type: string, format: date-time }
         updated_at:          { type: string, format: date-time }
 
