@@ -93,6 +93,9 @@ type Querier interface {
 	// logical catalog.
 	GetBindingForTarget(ctx context.Context, id pgtype.UUID) (GetBindingForTargetRow, error)
 	GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (BindingStatusV, error)
+	// An enabled binding of the catalog (the given one, else the first) and its
+	// engine kind, to render types and names in that engine's dialect.
+	GetCatalogBindingForDisplay(ctx context.Context, arg GetCatalogBindingForDisplayParams) (GetCatalogBindingForDisplayRow, error)
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error)
 	GetCatalogByTrinoName(ctx context.Context, arg GetCatalogByTrinoNameParams) (Catalog, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)
@@ -108,6 +111,12 @@ type Querier interface {
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (Engine, error)
 	// The engine and the connection it runs on (decrypted by the caller, #19).
 	GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (GetEngineWithConnectionRow, error)
+	// A catalog the workspace may use, with its freshness; no row: not visible
+	// from this workspace.
+	GetGrantedMetadataCatalog(ctx context.Context, arg GetGrantedMetadataCatalogParams) (GetGrantedMetadataCatalogRow, error)
+	// A table of a catalog the workspace may use (tombstoned ones too, with
+	// removed_at), with its catalog freshness.
+	GetGrantedMetadataTable(ctx context.Context, arg GetGrantedMetadataTableParams) (GetGrantedMetadataTableRow, error)
 	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
 	GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
@@ -155,6 +164,8 @@ type Querier interface {
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
 	// The catalogs of one connection that a user reaches through workspace grants.
 	ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error)
+	// The namespaces one level below parent ('{}' = the top level).
+	ListChildNamespaces(ctx context.Context, arg ListChildNamespacesParams) ([][]string, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
 	ListEnabledCatalogs(ctx context.Context) ([]Catalog, error)
 	// Every enabled engine with its connection and, for a Trino engine, its
@@ -168,7 +179,13 @@ type Querier interface {
 	// hosting a catalog granted to one of their workspaces.
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
+	// The catalogs a workspace may use with their freshness and their enabled
+	// bindings (what the editor's target selector offers, #24).
+	ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]ListMetadataCatalogsRow, error)
+	ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]ListMetadataColumnsRow, error)
 	ListMetadataSyncRuns(ctx context.Context, arg ListMetadataSyncRunsParams) ([]ListMetadataSyncRunsRow, error)
+	// One page of the tables in a namespace, by name, after the cursor.
+	ListMetadataTablesPage(ctx context.Context, arg ListMetadataTablesPageParams) ([]ListMetadataTablesPageRow, error)
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
@@ -226,6 +243,9 @@ type Querier interface {
 	ReleaseMetadataSyncLock(ctx context.Context, catalogID string) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
+	// Tables and columns of the catalogs the workspace may use whose names are
+	// trigram-similar to q (or contain a word similar to it), best first.
+	SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error)
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	// Stores the resolved target of an execution. target_snapshot is immutable

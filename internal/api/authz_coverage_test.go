@@ -167,10 +167,13 @@ var operationAccess = map[string]access{
 	"TriggerRetrieverRefresh": {kind: kindChecked, calls: wsMember},
 
 	// ── placeholders that answer a constant
-	"ListNamespaces":     {kind: kindStub}, // the real routes are the chi ones below
-	"ListTables":         {kind: kindStub},
-	"ListColumns":        {kind: kindStub},
-	"ListTableSnapshots": {kind: kindStub},
+	// Metadata snapshot reads (#18): workspace members (metadataWorkspace
+	// wraps requireWorkspaceAccess), granted catalogs only (in each query).
+	"ListMetadataCatalogs":   checked("metadataWorkspace"),
+	"ListMetadataNamespaces": checked("metadataWorkspace", "grantedCatalog"),
+	"ListMetadataTables":     checked("metadataWorkspace", "grantedCatalog"),
+	"GetMetadataTable":       checked("metadataWorkspace", "GetGrantedMetadataTable"),
+	"SearchMetadata":         checked("metadataWorkspace", "SearchMetadata"),
 	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below
 	"ListMigrations":     {kind: kindStub},
 	"CreateMigration":    {kind: kindStub},

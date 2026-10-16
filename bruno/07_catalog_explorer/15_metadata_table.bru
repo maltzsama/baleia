@@ -1,0 +1,29 @@
+meta {
+  name: Metadata Table
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/tables/{{metadata_table_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.columns.length: gt 0
+  res.body.qualified_name: isString
+  res.body.columns[0].type_system: eq iceberg
+  res.body.columns[0].display_type: isString
+}
+
+docs {
+  The table with its columns: `native_type` as the source reports it, and
+  `display_type` and `qualified_name` for the binding browsed through
+  (`binding_id`, default the catalog's first enabled binding).
+}

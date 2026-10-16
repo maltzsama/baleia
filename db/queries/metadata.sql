@@ -152,3 +152,150 @@ FROM catalogs c
 WHERE c.enabled
   AND (c.origin = 'source' OR EXISTS (
       SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled));
+
+-- name: ListMetadataCatalogs :many
+-- The catalogs a workspace may use with their freshness and their enabled
+-- bindings (what the editor's target selector offers, #24).
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = @workspace_id::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+)
+SELECT c.id, c.name, c.origin, cc.type AS provider_kind,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished')::timestamptz AS metadata_synced_at,
+       COALESCE((SELECT r.status FROM metadata_sync_runs r WHERE r.catalog_id = c.id ORDER BY r.started_at DESC LIMIT 1), 'never')::text AS metadata_sync_status,
+       COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                      'binding_id', b.id, 'engine_id', b.engine_id, 'engine_name', e.name, 'engine_kind', e.kind,
+                      'engine_catalog_name', b.engine_catalog_name, 'mode', b.mode, 'status', COALESCE(s.sync_status, 'pending'))
+                  ORDER BY b.created_at, b.id)
+           FROM catalog_bindings b
+           JOIN engines e ON e.id = b.engine_id
+           LEFT JOIN binding_status_v s ON s.binding_id = b.id
+           WHERE b.catalog_id = c.id AND b.enabled AND e.enabled
+       ), '[]'::jsonb)::jsonb AS bindings
+FROM visible v
+JOIN catalogs c ON c.id = v.id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+ORDER BY c.name, c.id;
+
+-- name: GetGrantedMetadataCatalog :one
+-- A catalog the workspace may use, with its freshness; no row: not visible
+-- from this workspace.
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = @workspace_id::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+)
+SELECT v.id,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = v.id AND r.status = 'finished')::timestamptz AS metadata_synced_at
+FROM visible v
+WHERE v.id = @catalog_id::uuid;
+
+-- name: ListChildNamespaces :many
+-- The namespaces one level below parent ('{}' = the top level).
+SELECT namespace FROM metadata_namespaces
+WHERE catalog_id = $1 AND removed_at IS NULL
+  AND cardinality(namespace) = cardinality(@parent::text[]) + 1
+  AND namespace[1:cardinality(@parent::text[])] = @parent::text[]
+ORDER BY namespace;
+
+-- name: ListMetadataTablesPage :many
+-- One page of the tables in a namespace, by name, after the cursor.
+SELECT id, name, kind, comment, last_changed_at
+FROM metadata_tables
+WHERE catalog_id = $1 AND namespace = @namespace::text[] AND removed_at IS NULL AND name > @after::text
+ORDER BY name
+LIMIT @lim;
+
+-- name: GetGrantedMetadataTable :one
+-- A table of a catalog the workspace may use (tombstoned ones too, with
+-- removed_at), with its catalog freshness.
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = @workspace_id::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+)
+SELECT t.id, t.catalog_id, t.namespace, t.name, t.kind, t.properties, t.comment, t.last_changed_at, t.removed_at,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = t.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
+FROM metadata_tables t
+JOIN visible v ON v.id = t.catalog_id
+WHERE t.id = @table_id::uuid;
+
+-- name: ListMetadataColumns :many
+SELECT ordinal, name, native_type, type_system, nullable, comment
+FROM metadata_columns
+WHERE table_id = $1
+ORDER BY ordinal;
+
+-- name: GetCatalogBindingForDisplay :one
+-- An enabled binding of the catalog (the given one, else the first) and its
+-- engine kind, to render types and names in that engine's dialect.
+SELECT b.id, b.engine_catalog_name, e.kind AS engine_kind
+FROM catalog_bindings b
+JOIN engines e ON e.id = b.engine_id
+WHERE b.catalog_id = $1 AND b.enabled AND e.enabled
+  AND (sqlc.narg(binding_id)::uuid IS NULL OR b.id = sqlc.narg(binding_id)::uuid)
+ORDER BY b.created_at, b.id
+LIMIT 1;
+
+-- name: SearchMetadata :many
+-- Tables and columns of the catalogs the workspace may use whose names are
+-- trigram-similar to q (or contain a word similar to it), best first.
+WITH visible AS (
+    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
+    -- owner's own catalogs in a personal workspace, and the granted ones.
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = @workspace_id::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+), granted AS (
+    SELECT id FROM visible
+    WHERE sqlc.narg(catalog_id)::uuid IS NULL OR id = sqlc.narg(catalog_id)::uuid
+), hits AS (
+    SELECT 'table'::text AS kind, t.id AS table_id, t.catalog_id, t.namespace, t.name AS table_name,
+           ''::text AS column_name, ''::text AS native_type,
+           similarity(t.name, @q::text)::float8 AS score, length(t.name) AS len
+    FROM metadata_tables t
+    WHERE t.catalog_id IN (SELECT id FROM granted) AND t.removed_at IS NULL
+      AND (t.name % @q::text OR @q::text <% t.name)
+      AND @kind::text IN ('table', 'all')
+    UNION ALL
+    SELECT 'column', t.id, t.catalog_id, t.namespace, t.name, c.name, c.native_type,
+           similarity(c.name, @q::text)::float8, length(c.name)
+    FROM metadata_columns c
+    JOIN metadata_tables t ON t.id = c.table_id
+    WHERE t.catalog_id IN (SELECT id FROM granted) AND t.removed_at IS NULL
+      AND (c.name % @q::text OR @q::text <% c.name)
+      AND @kind::text IN ('column', 'all')
+)
+SELECT h.kind, h.table_id, h.catalog_id, h.namespace, h.table_name, h.column_name, h.native_type, h.score,
+       (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = h.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
+FROM hits h
+ORDER BY h.score DESC, h.len, h.table_name, h.column_name
+LIMIT @lim;

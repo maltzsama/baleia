@@ -1,0 +1,32 @@
+meta {
+  name: Metadata Search
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/search?q={{metadata_table_name}}&kind=all&limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the table is the best hit", function () {
+    expect(res.body.length).to.be.greaterThan(0);
+    expect(res.body[0].kind).to.equal("table");
+    expect(res.body[0].table).to.equal(bru.getVar("metadata_table_name"));
+  });
+}
+
+docs {
+  Trigram search over table and column names (autocomplete, #24): `q` of 2
+  to 200 characters; removed tables are left out.
+}

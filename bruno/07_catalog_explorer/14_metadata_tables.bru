@@ -1,0 +1,32 @@
+meta {
+  name: Metadata Tables
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/catalogs/{{explorer_catalog_id}}/tables?ns={{metadata_ns}}&limit=50
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.items.length: gt 0
+}
+
+script:post-response {
+  if (res.body.items && res.body.items.length > 0) {
+    bru.setVar("metadata_table_id", res.body.items[0].id);
+    bru.setVar("metadata_table_name", res.body.items[0].name);
+  }
+}
+
+docs {
+  Tables of a namespace by name; pass `next_cursor` as `cursor` for the next
+  page.
+}

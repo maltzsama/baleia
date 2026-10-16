@@ -54,8 +54,9 @@ var constructionRules = []constructionRule{
 			{"github.com/jackc/pgx/v5/pgxpool", "New"},
 			{"github.com/jackc/pgx/v5/pgxpool", "NewWithConfig"},
 		},
-		// internal/dbpool is the binaries' helper for Baleia's own pool (#87).
-		allowed: []string{"cmd/", "internal/migrate/", "internal/dbpool/", "internal/queryengine/", "internal/connections/"},
+		// internal/dbpool is the binaries' helper for Baleia's own pool (#87);
+		// internal/testdb opens throwaway databases for tests only.
+		allowed: []string{"cmd/", "internal/migrate/", "internal/dbpool/", "internal/testdb/", "internal/queryengine/", "internal/connections/"},
 	},
 }
 

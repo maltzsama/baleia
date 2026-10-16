@@ -4,68 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 )
 
-// testPool creates a throwaway database on the server of
-// BALEIA_TEST_DATABASE_URL, migrated to the latest version.
-func testPool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
-	if admin == "" {
-		t.Skip("BALEIA_TEST_DATABASE_URL not set")
-	}
-	ctx := context.Background()
-	adminPool, err := pgxpool.New(ctx, admin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	name := fmt.Sprintf("baleia_metatest_%d", time.Now().UnixNano())
-	if _, err := adminPool.Exec(ctx, "CREATE DATABASE "+name); err != nil {
-		t.Fatal(err)
-	}
-	u, err := url.Parse(admin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.Path = "/" + name
-	sqlDB, err := goose.OpenDBWithDriver("pgx", u.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir, _ := filepath.Abs("../../db/migrations")
-	goose.SetLogger(goose.NopLogger())
-	if err := goose.SetDialect("postgres"); err != nil {
-		t.Fatal(err)
-	}
-	if err := goose.Up(sqlDB, dir); err != nil {
-		t.Fatal(err)
-	}
-	_ = sqlDB.Close()
-	pool, err := pgxpool.New(ctx, u.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		pool.Close()
-		_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
-		adminPool.Close()
-	})
-	return pool
-}
+func testPool(t *testing.T) *pgxpool.Pool { return testdb.New(t) }
 
 // testCatalog inserts a native catalog on a fresh connection.
 func testCatalog(t *testing.T, pool *pgxpool.Pool) pgtype.UUID {
