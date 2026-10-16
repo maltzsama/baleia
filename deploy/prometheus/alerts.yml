@@ -125,7 +125,7 @@ groups:
 
       - alert: BaleiaAuditExportLagging
         # The audit export (#50) must keep up: a stuck cursor means the SIEM sees nothing.
-        expr: max(baleia_audit_export_lag_seconds) > 900
+        expr: max by (instance) (baleia_audit_export_lag_seconds) > 900
         for: 15m
         labels:
           severity: warning
