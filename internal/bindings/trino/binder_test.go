@@ -185,6 +185,33 @@ func TestProject_Kinds(t *testing.T) {
 			},
 			secrets: []string{"iceberg.rest-catalog.oauth2.credential"},
 		},
+		{
+			name: "hive metastore as an iceberg catalog (default connector)",
+			src: cfg(connections.KindHiveMetastore, map[string]string{
+				"metastore_uri": "thrift://hms:9083", "storage.type": "s3",
+				"storage.endpoint": "http://rustfs:9000", "storage.region": "us-east-1", "storage.path_style": "true",
+				"storage.access_key": "rustfsadmin",
+			}, map[string]string{"storage.secret_key": "rustfsadmin"}),
+			spec: bindings.BindingSpec{EngineCatalog: "lake"},
+			want: map[string]string{
+				"iceberg.catalog.type": "hive_metastore", "hive.metastore.uri": "thrift://hms:9083",
+				"fs.s3.enabled": "true", "s3.endpoint": "http://rustfs:9000", "s3.region": "us-east-1",
+				"s3.path-style-access": "true", "s3.aws-access-key": "rustfsadmin", "s3.aws-secret-key": "rustfsadmin",
+			},
+			secrets: []string{"s3.aws-secret-key"},
+		},
+		{
+			name: "hive metastore as a hive catalog",
+			src:  cfg(connections.KindHiveMetastore, map[string]string{"metastore_uri": "thrift://hms:9083"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "warehouse", Connector: "hive"},
+			want: map[string]string{"hive.metastore": "thrift", "hive.metastore.uri": "thrift://hms:9083", "fs.s3.enabled": "true"},
+		},
+		{
+			name: "hive metastore as a delta catalog",
+			src:  cfg(connections.KindHiveMetastore, map[string]string{"metastore_uri": "thrift://hms:9083"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "delta", Connector: "delta_lake"},
+			want: map[string]string{"hive.metastore": "thrift", "hive.metastore.uri": "thrift://hms:9083", "fs.s3.enabled": "true"},
+		},
 	}
 	b := New(nil, nil)
 	for _, c := range cases {
@@ -350,7 +377,8 @@ func TestDDLHasNoSecrets(t *testing.T) {
 		cfg(connections.KindMariaDB, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-6"}),
 		cfg(connections.KindSQLServer, map[string]string{"host": "db", "database": "d", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-7"}),
 		cfg(connections.KindOracle, map[string]string{"host": "db", "service_name": "S", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-8"}),
-		cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp/token"}, map[string]string{"client_secret": "FIXTURE-SECRET-9"}),
+		cfg(connections.KindHiveMetastore, map[string]string{"metastore_uri": "thrift://hms:9083", "storage.access_key": "k"}, map[string]string{"storage.secret_key": "FIXTURE-SECRET-9"}),
+		cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp/token"}, map[string]string{"client_secret": "FIXTURE-SECRET-10"}),
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
@@ -433,8 +461,9 @@ func TestSupports(t *testing.T) {
 	got := New(nil, nil).Supports()
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
-		connections.KindLakekeeper: {"iceberg"},
-		connections.KindPostgreSQL: {"postgresql"}, connections.KindMySQL: {"mysql"},
+		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
+		connections.KindLakekeeper:    {"iceberg"},
+		connections.KindPostgreSQL:    {"postgresql"}, connections.KindMySQL: {"mysql"},
 		connections.KindMariaDB: {"mariadb"}, connections.KindSQLServer: {"sqlserver"}, connections.KindOracle: {"oracle"},
 	}
 	if len(got) != len(want) {

@@ -44,9 +44,12 @@ func TestEveryProviderIsComplete(t *testing.T) {
 			if !slices.Contains(storedKinds, p.Kind()) {
 				t.Errorf("kind %q is not allowed by catalog_connections.type", p.Kind())
 			}
-			if p.Label() == "" || p.Family() == "" || len(p.Roles()) == 0 || len(p.ConfigSchema()) == 0 {
-				t.Fatal("label, family, roles and schema are required")
+			if p.Label() == "" || p.Family() == "" || len(p.ConfigSchema()) == 0 {
+				t.Fatal("label, family and schema are required")
 			}
+			// Roles may be empty: a metastore that is only a bindable source
+			// (Hive Metastore, #86) declares none — "bindable" is declared by
+			// binders, not providers.
 			if connections.HasRole(p, connections.RoleBindable) {
 				t.Error("bindable is declared by binders, not providers")
 			}
@@ -280,18 +283,19 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 	// ErrDeniedNetwork before reaching anything.
 	reg := registry(t, connections.DialerOptions{})
 	configs := map[connections.Kind]connections.Config{
-		connections.KindPolaris:     {Values: map[string]string{"url": "http://localhost:8181", "client_id": "a"}, Secrets: map[string]string{"client_secret": "b"}},
-		connections.KindNessie:      {Values: map[string]string{"url": "http://localhost:19120"}},
-		connections.KindIcebergREST: {Values: map[string]string{"url": "http://localhost:8181/catalog"}},
-		connections.KindLakekeeper:  {Values: map[string]string{"url": "http://localhost:8181"}},
-		connections.KindPostgreSQL:  {Values: map[string]string{"host": "localhost", "username": "u", "sslmode": "disable"}},
-		connections.KindMySQL:       {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
-		connections.KindMariaDB:     {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
-		connections.KindSQLServer:   {Values: map[string]string{"host": "localhost", "username": "u", "encrypt": "disable"}},
-		connections.KindOracle:      {Values: map[string]string{"host": "localhost", "service_name": "FREEPDB1", "username": "u"}},
-		connections.KindClickHouse:  {Values: map[string]string{"host": "localhost"}},
-		connections.KindFlightSQL:   {Values: map[string]string{"host": "localhost", "port": "32010", "tls": "false"}},
-		connections.KindTrino:       {Values: map[string]string{"url": "http://localhost:8080"}},
+		connections.KindPolaris:       {Values: map[string]string{"url": "http://localhost:8181", "client_id": "a"}, Secrets: map[string]string{"client_secret": "b"}},
+		connections.KindNessie:        {Values: map[string]string{"url": "http://localhost:19120"}},
+		connections.KindIcebergREST:   {Values: map[string]string{"url": "http://localhost:8181/catalog"}},
+		connections.KindHiveMetastore: {Values: map[string]string{"metastore_uri": "thrift://localhost:9083"}},
+		connections.KindLakekeeper:    {Values: map[string]string{"url": "http://localhost:8181"}},
+		connections.KindPostgreSQL:    {Values: map[string]string{"host": "localhost", "username": "u", "sslmode": "disable"}},
+		connections.KindMySQL:         {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
+		connections.KindMariaDB:       {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
+		connections.KindSQLServer:     {Values: map[string]string{"host": "localhost", "username": "u", "encrypt": "disable"}},
+		connections.KindOracle:        {Values: map[string]string{"host": "localhost", "service_name": "FREEPDB1", "username": "u"}},
+		connections.KindClickHouse:    {Values: map[string]string{"host": "localhost"}},
+		connections.KindFlightSQL:     {Values: map[string]string{"host": "localhost", "port": "32010", "tls": "false"}},
+		connections.KindTrino:         {Values: map[string]string{"url": "http://localhost:8080"}},
 	}
 	// SQLite opens no network connection (TestSQLiteRootConfinement guards
 	// it); planned kinds never connect.

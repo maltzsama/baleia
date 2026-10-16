@@ -173,7 +173,7 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	if body.ExtraProps != nil {
 		extra = *body.ExtraProps
 	}
-	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, body.EngineCatalogName, connector, extra))
+	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, body.EngineCatalogName, connector, extra))
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -279,7 +279,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	if cur.Connector != nil {
 		connector = *cur.Connector
 	}
-	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, name, connector, extra))
+	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, name, connector, extra))
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -435,7 +435,7 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	if cur.Connector != nil {
 		connector = *cur.Connector
 	}
-	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(cur.ExtraProps)))
+	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(cur.ExtraProps)))
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil

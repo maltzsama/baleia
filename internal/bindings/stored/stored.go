@@ -22,6 +22,7 @@ import (
 type Store interface {
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
+	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error)
 }
 
 // Projector projects stored bindings.
@@ -62,6 +63,11 @@ func (p Projector) Project(ctx context.Context, b db.CatalogBinding) (bindings.P
 	}
 	if cat.SourceRef != nil {
 		spec.SourceRef = *cat.SourceRef
+	}
+	// A Hive-connector catalog of a metastore whose connection also exposes an
+	// Iceberg or Delta catalog here delegates those tables to it (#86).
+	if err := bindings.HiveRedirection(ctx, p.Store, connections.Kind(conn.Type), conn.ID, b.EngineID, b.CatalogID, spec.Connector, extra); err != nil {
+		return bindings.Projection{}, fmt.Errorf("hive redirection: %w", err)
 	}
 	return p.Binder.Project(spec, cfg)
 }
