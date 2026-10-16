@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,6 +58,9 @@ func (h *Handlers) CreateApiKey(ctx context.Context, request CreateApiKeyRequest
 		return nil, err
 	}
 
+	// The key's secret is never audited, only its name.
+	h.audited(ctx, audit.Event{Action: audit.APIKeyCreate, ResourceType: "api_key", ResourceID: idString(key.ID), Outcome: audit.Allowed,
+		Changes: map[string]audit.Change{"name": {To: key.Name}}})
 	pub := dbApiKeyToPublic(key)
 	return CreateApiKey201JSONResponse{
 		Id:        pub.Id,
@@ -75,8 +79,10 @@ func (h *Handlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequest
 		return DeleteApiKey401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 
+	ev := audit.Event{Action: audit.APIKeyRevoke, ResourceType: "api_key", ResourceID: request.Id.String()}
 	keyID, err := uuidFromString(request.Id.String())
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "api key not found"}}, nil
 	}
 
@@ -84,9 +90,11 @@ func (h *Handlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequest
 		ID:     keyID,
 		UserID: uid,
 	}); err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "api key not found"}}, nil
 	}
 
+	h.audited(ctx, ev.Allowed())
 	return DeleteApiKey204Response{}, nil
 }
 

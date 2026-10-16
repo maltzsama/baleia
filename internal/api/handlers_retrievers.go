@@ -8,11 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/robfig/cron"
@@ -39,7 +41,9 @@ func (h *Handlers) ListRetrievers(ctx context.Context, request ListRetrieversReq
 }
 
 func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverRequestObject) (CreateRetrieverResponseObject, error) {
+	ev := audit.Event{Action: audit.RetrieverCreate, ResourceType: "retriever", WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return CreateRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
@@ -57,6 +61,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 		{request.Body.DestTable, "dest_table"},
 	} {
 		if err := validateDestIdentifier(field.value, field.name); err != nil {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
 			return CreateRetriever422JSONResponse{
 				UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 					Code:    "validation_error",
@@ -67,6 +72,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 	}
 
 	if err := validateRetrieverDefinition(request.Body.DefinitionSql); err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateRetriever422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "validation_error",
@@ -80,6 +86,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 		refreshType = string(*request.Body.RefreshType)
 	}
 	if refreshType != "full" {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateRetriever422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "not_supported",
@@ -90,6 +97,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 
 	wsID := workspaceIDFromRequest(request.Id)
 	if !h.workspaceHasEnabledCatalog(ctx, wsID, request.Body.DestCatalog) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateRetriever422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "validation_error",
@@ -101,6 +109,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 	cronExpr := request.Body.CronSchedule
 	schedule, err := parseRetrieverCron(cronExpr)
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateRetriever422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "validation_error",
@@ -127,6 +136,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 		return nil, err
 	}
 
+	h.audited(ctx, withID(ev, retriever.ID).Allowed())
 	return CreateRetriever201JSONResponse(dbRetrieverToPublic(retriever)), nil
 }
 
@@ -151,7 +161,9 @@ func (h *Handlers) GetRetriever(ctx context.Context, request GetRetrieverRequest
 }
 
 func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverRequestObject) (UpdateRetrieverResponseObject, error) {
+	ev := audit.Event{Action: audit.RetrieverUpdate, ResourceType: "retriever", ResourceID: uuid.UUID(request.RetrieverId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return UpdateRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
@@ -164,6 +176,7 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 		ID:          retrieverID,
 	})
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "retriever not found"}}, nil
 	}
 
@@ -183,6 +196,7 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 		refreshType = string(*request.Body.RefreshType)
 	}
 	if refreshType != "full" {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateRetriever422JSONResponse{
 			Code:    "not_supported",
 			Message: "only 'full' refresh is supported in v1; 'incremental' requires a separate design",
@@ -194,6 +208,7 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 
 	schedule, err := parseRetrieverCron(cronExpr)
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateRetriever422JSONResponse{Code: "validation_error", Message: err.Error()}, nil
 	}
 
@@ -213,11 +228,14 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 		return nil, err
 	}
 
+	h.audited(ctx, ev.Allowed())
 	return UpdateRetriever200JSONResponse(dbRetrieverToPublic(updated)), nil
 }
 
 func (h *Handlers) DeleteRetriever(ctx context.Context, request DeleteRetrieverRequestObject) (DeleteRetrieverResponseObject, error) {
+	ev := audit.Event{Action: audit.RetrieverDelete, ResourceType: "retriever", ResourceID: uuid.UUID(request.RetrieverId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return DeleteRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
@@ -233,14 +251,18 @@ func (h *Handlers) DeleteRetriever(ctx context.Context, request DeleteRetrieverR
 		return nil, err
 	}
 	if n == 0 {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return DeleteRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "retriever not found"}}, nil
 	}
 
+	h.audited(ctx, ev.Allowed())
 	return DeleteRetriever204Response{}, nil
 }
 
 func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error) {
+	ev := audit.Event{Action: audit.RetrieverRefresh, ResourceType: "retriever", ResourceID: uuid.UUID(request.RetrieverId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return TriggerRetrieverRefresh401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
@@ -253,6 +275,7 @@ func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerR
 		ID:          retrieverID,
 	})
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return TriggerRetrieverRefresh404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "retriever not found"}}, nil
 	}
 
@@ -261,6 +284,7 @@ func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerR
 		refreshType = string(*request.Body.RefreshType)
 	}
 	if refreshType != "full" {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return TriggerRetrieverRefresh422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "not_supported",
@@ -284,6 +308,7 @@ func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerR
 		return nil, err
 	}
 
+	h.audited(ctx, ev.Allowed())
 	return TriggerRetrieverRefresh202JSONResponse{
 		Id:     openapi_types.UUID(retrieverID.Bytes),
 		Status: RetrieverRefreshHistoryStatus("running"),

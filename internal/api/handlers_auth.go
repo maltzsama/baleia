@@ -9,6 +9,7 @@ import (
 	"time"
 	"log/slog"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/version"
@@ -90,16 +91,26 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 
 func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp LoginResponseObject, err error) {
 	defer func() { h.metrics.auth.Attempt(metrics.AuthPassword, authOutcome(resp, err)) }()
+	ev := audit.Event{Action: audit.AuthLogin, ResourceType: "user"}
+	// A failed login is recorded by a fingerprint of the e-mail, never the
+	// e-mail itself or the password.
+	failed := func(reason string) {
+		actx := audit.WithAuthMethod(audit.WithAnonymous(ctx, audit.EmailFingerprint(string(request.Body.Email))), audit.AuthPassword)
+		h.audited(actx, ev.Denied(reason))
+	}
 	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err != nil {
+		failed("invalid_credentials")
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid credentials"}}, nil
 	}
 
 	if user.AuthProvider != "local" {
+		failed("invalid_credentials")
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "use SSO to login"}}, nil
 	}
 
 	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, request.Body.Password) {
+		failed("invalid_credentials")
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid credentials"}}, nil
 	}
 
@@ -122,6 +133,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	}
 
 	h.ensurePersonalWorkspace(ctx, user.ID)
+	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthPassword), withID(ev, user.ID).Allowed())
 
 	return Login200JSONResponse{
 		Token:        accessToken,
@@ -136,6 +148,8 @@ func (h *Handlers) Logout(ctx context.Context, request LogoutRequestObject) (Log
 		hash := auth.HashRefreshToken(*request.Body.RefreshToken)
 		if rt, err := h.queries.GetRefreshTokenByHash(ctx, hash); err == nil {
 			_ = h.queries.RevokeRefreshToken(ctx, rt.ID)
+			h.audited(audit.AsUser(ctx, idString(rt.UserID), audit.AuthRefreshTok),
+				audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(rt.UserID), Outcome: audit.Allowed})
 		}
 	}
 	return Logout204Response{}, nil
@@ -190,8 +204,10 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	defer func() { h.metrics.auth.Attempt(metrics.AuthRefresh, authOutcome(resp, err)) }()
 	hash := auth.HashRefreshToken(request.Body.RefreshToken)
 
+	ev := audit.Event{Action: audit.AuthRefresh, ResourceType: "user"}
 	rt, err := h.queries.GetRefreshTokenByHash(ctx, hash)
 	if err != nil {
+		h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("invalid_token"))
 		return RefreshToken401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid or expired refresh token"},
 		}, nil
@@ -224,6 +240,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 		return nil, err
 	}
 
+	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthRefreshTok), withID(ev, user.ID).Allowed())
 	return RefreshToken200JSONResponse{
 		Token:        accessToken,
 		RefreshToken: newRefreshToken,
@@ -242,6 +259,10 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 		}, nil
 	}
 
+	// Recorded the same whether the e-mail exists or not (the answer does
+	// not reveal it either), by the e-mail's fingerprint.
+	h.audited(audit.WithAnonymous(ctx, audit.EmailFingerprint(string(request.Body.Email))),
+		audit.Event{Action: audit.AuthPasswordResetRequest, ResourceType: "user", Outcome: audit.Allowed})
 	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err != nil {
 		return RequestPasswordReset204Response{}, nil
@@ -269,8 +290,10 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 }
 
 func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPasswordResetRequestObject) (ConfirmPasswordResetResponseObject, error) {
+	ev := audit.Event{Action: audit.AuthPasswordResetConfirm, ResourceType: "user"}
 	user, err := h.queries.GetUserByResetToken(ctx, &request.Body.Token)
 	if err != nil {
+		h.audited(ctx, ev.Denied("invalid_token"))
 		return ConfirmPasswordReset401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid or expired token"},
 		}, nil
@@ -288,6 +311,7 @@ func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPass
 		return nil, err
 	}
 
+	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthPassword), withID(ev, user.ID).Allowed())
 	return ConfirmPasswordReset204Response{}, nil
 }
 
@@ -421,6 +445,7 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	info, err := provider.Exchange(r.Context(), r.URL.Query().Get("code"))
 	if err != nil {
+		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
 		respondError(w, http.StatusUnauthorized, "unauthorized", "oidc exchange failed")
 		return
 	}
@@ -471,6 +496,7 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audited(audit.AsUser(r.Context(), user.ID.String(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", ResourceID: idString(user.ID), Outcome: audit.Allowed})
 	http.Redirect(w, r, "/?token="+accessToken+"&refresh_token="+refreshToken, http.StatusFound)
 }
 

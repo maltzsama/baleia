@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
@@ -133,8 +134,10 @@ func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersR
 }
 
 func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberRequestObject) (AddTeamMemberResponseObject, error) {
+	ev := audit.Event{Action: audit.TeamMemberAdd, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return AddTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
 	}
 
@@ -144,6 +147,7 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 
 	_, err := h.queries.GetTeamByID(ctx, teamID)
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
 	}
 
@@ -159,10 +163,13 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 		Role:   memberRole,
 	})
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return AddTeamMember409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "user already in team"}}, nil
 	}
 	// Team membership decides who is a member of the team's workspaces.
 	h.catalogCache.Clear()
+	ev.Changes = map[string]audit.Change{"member": {To: idString(userID)}, "role": {To: memberRole}}
+	h.audited(ctx, ev.Allowed())
 
 	user, err := h.queries.GetUserByID(ctx, userID)
 	if err != nil {
@@ -177,8 +184,11 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 }
 
 func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error) {
+	ev := audit.Event{Action: audit.TeamMemberRemove, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true}),
+		Changes: map[string]audit.Change{"member": {From: idString(pgtype.UUID{Bytes: request.UserId, Valid: true})}}}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return RemoveTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
 	}
 
@@ -194,10 +204,11 @@ func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMembe
 		TeamID: teamID,
 		UserID: userID,
 	}); err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return RemoveTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "member not found"}}, nil
 	}
 	h.catalogCache.Clear()
-
+	h.audited(ctx, ev.Allowed())
 	return RemoveTeamMember204Response{}, nil
 }
 

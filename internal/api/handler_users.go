@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -54,13 +55,16 @@ func (h *Handlers) ListUsers(ctx context.Context, request ListUsersRequestObject
 }
 
 func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObject) (InviteUserResponseObject, error) {
+	ev := audit.Event{Action: audit.UserInvite, ResourceType: "user"}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return InviteUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
 	}
 
 	_, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err == nil {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return InviteUser409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "email already exists"}}, nil
 	}
 
@@ -99,12 +103,17 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 		slog.Warn("failed to send invite email", "err", err, "url", inviteURL)
 	}
 
+	ev = withID(ev, user.ID)
+	ev.Changes = map[string]audit.Change{"role": {To: user.Role}}
+	h.audited(ctx, ev.Allowed())
 	return InviteUser201JSONResponse(dbUserToPublic(user)), nil
 }
 
 func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleRequestObject) (UpdateUserRoleResponseObject, error) {
+	ev := audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return UpdateUserRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
 	}
 
@@ -112,8 +121,9 @@ func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleReq
 	uid.Bytes = request.Id
 	uid.Valid = true
 
-	_, err := h.queries.GetUserByID(ctx, uid)
+	before, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateUserRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "user not found"}}, nil
 	}
 
@@ -129,12 +139,16 @@ func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleReq
 		return nil, err
 	}
 
+	ev.Changes = map[string]audit.Change{"role": {From: before.Role, To: user.Role}}
+	h.audited(ctx, ev.Allowed())
 	return UpdateUserRole200JSONResponse(dbUserToPublic(user)), nil
 }
 
 func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObject) (RemoveUserResponseObject, error) {
+	ev := audit.Event{Action: audit.UserDisable, ResourceType: "user", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return RemoveUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
 	}
 
@@ -144,16 +158,19 @@ func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObje
 
 	_, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return RemoveUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "user not found"}}, nil
 	}
 
 	if err := h.queries.DeleteUser(ctx, uid); err != nil {
 		if c, ok := removeUserConflict(err); ok {
+			h.audited(ctx, ev.Failed(audit.ReasonConflict))
 			return RemoveUser409JSONResponse{ConflictJSONResponse: c}, nil
 		}
 		return nil, err
 	}
 
+	h.audited(ctx, ev.Allowed())
 	return RemoveUser204Response{}, nil
 }
 // removeUserConflict maps a delete the database refused because the user is

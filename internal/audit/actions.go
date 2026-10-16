@@ -18,6 +18,11 @@ const (
 	CatalogSync      Action = "catalog.sync"
 	CatalogReconcile Action = "catalog.reconcile"
 
+	BindingCreate Action = "binding.create"
+	BindingUpdate Action = "binding.update"
+	BindingDelete Action = "binding.delete"
+	BindingSync   Action = "binding.sync"
+
 	GrantCreate Action = "grant.create"
 	GrantRevoke Action = "grant.revoke"
 
@@ -59,6 +64,7 @@ const (
 var allActions = []Action{
 	ConnectionCreate, ConnectionUpdate, ConnectionDelete, ConnectionTest,
 	CatalogCreate, CatalogUpdate, CatalogRename, CatalogDelete, CatalogSync, CatalogReconcile,
+	BindingCreate, BindingUpdate, BindingDelete, BindingSync,
 	GrantCreate, GrantRevoke,
 	WorkspaceUpdate,
 	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,

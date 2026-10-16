@@ -15,6 +15,7 @@ package authz
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
@@ -78,6 +79,7 @@ type Store interface {
 type Checker struct {
 	q      Store
 	denied func(resource, reason string)
+	onDeny func(ctx context.Context, resource, id, reason string)
 }
 
 // New returns a Checker reading from q.
@@ -90,24 +92,48 @@ func (c *Checker) WithDenials(fn func(resource, reason string)) *Checker {
 	return c
 }
 
-// observe reports a refusal through the denial hook.
-func (c *Checker) observe(resource string, err *error) {
-	if c.denied == nil || *err == nil {
+// OnDeny reports every refusal once, with the request context and the
+// resource id, e.g. to the audit trail (#43). It returns c.
+func (c *Checker) OnDeny(fn func(ctx context.Context, resource, id, reason string)) *Checker {
+	c.onDeny = fn
+	return c
+}
+
+// observe reports a refusal through the denial hooks.
+func (c *Checker) observe(ctx context.Context, resource string, id pgtype.UUID, err *error) {
+	if *err == nil {
 		return
 	}
+	reason := ""
 	switch {
 	case errors.Is(*err, ErrNotFound):
-		c.denied(resource, "not_found")
+		reason = "not_found"
 	case errors.Is(*err, ErrForbidden):
-		c.denied(resource, "forbidden")
+		reason = "forbidden"
+	default:
+		return
 	}
+	if c.denied != nil {
+		c.denied(resource, reason)
+	}
+	if c.onDeny != nil {
+		c.onDeny(ctx, resource, uuidString(id), reason)
+	}
+}
+
+func uuidString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	b := id.Bytes
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // Connection loads the connection and checks the caller may perform act on it.
 // Today every action requires being the connection's owner or a global admin;
 // a missing created_by never matches an owner. Anyone else gets ErrNotFound.
 func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUID, act Action) (_ db.CatalogConnection, err error) {
-	defer c.observe("connection", &err)
+	defer c.observe(ctx, "connection", connID, &err)
 	conn, err := c.q.GetCatalogConnectionByID(ctx, connID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -128,7 +154,7 @@ func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUI
 // workspace the catalog is granted to may read it (ErrForbidden for anything
 // else, since they can already see it). Everyone else gets ErrNotFound.
 func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUID, act Action) (_ db.Catalog, _ db.CatalogConnection, err error) {
-	defer c.observe("catalog", &err)
+	defer c.observe(ctx, "catalog", catalogID, &err)
 	cat, err := c.q.GetCatalogByID(ctx, catalogID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -164,7 +190,7 @@ func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUI
 // member of a workspace granted a catalog the engine hosts may read it
 // (ErrForbidden for anything else); everyone else gets ErrNotFound.
 func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID, act Action) (_ db.Engine, _ db.CatalogConnection, err error) {
-	defer c.observe("engine", &err)
+	defer c.observe(ctx, "engine", engineID, &err)
 	eng, err := c.q.GetEngineByID(ctx, engineID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -206,7 +232,7 @@ func (c *Checker) CatalogOfConnection(ctx context.Context, p Principal, connID, 
 	}
 	if cat.ConnectionID.Bytes != connID.Bytes {
 		err := ErrNotFound
-		c.observe("catalog", &err) // Catalog itself allowed it
+		c.observe(ctx, "catalog", catalogID, &err) // Catalog itself allowed it
 		return db.Catalog{}, db.CatalogConnection{}, err
 	}
 	return cat, conn, nil
@@ -217,7 +243,7 @@ func (c *Checker) CatalogOfConnection(ctx context.Context, p Principal, connID, 
 // personal workspace, an owner of the team of a shared one). A non-member gets
 // ErrNotFound, a member who is not an owner gets ErrForbidden.
 func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, act Action) (_ db.Workspace, err error) {
-	defer c.observe("workspace", &err)
+	defer c.observe(ctx, "workspace", wsID, &err)
 	ws, err := c.q.GetWorkspaceByID(ctx, wsID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -252,7 +278,7 @@ func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, 
 // anything; a member may read; changing it needs a team owner. A non-member
 // gets ErrNotFound, a member who is not an owner gets ErrForbidden.
 func (c *Checker) Team(ctx context.Context, p Principal, teamID pgtype.UUID, act Action) (_ db.Team, err error) {
-	defer c.observe("team", &err)
+	defer c.observe(ctx, "team", teamID, &err)
 	team, err := c.q.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -9,6 +9,7 @@ import (
     "unicode"
 
     "github.com/galileostudio/baleia/internal/auth"
+    "github.com/galileostudio/baleia/internal/audit"
     "github.com/galileostudio/baleia/internal/authz"
     "github.com/galileostudio/baleia/internal/db"
     openapi_types "github.com/oapi-codegen/runtime/types"
@@ -112,6 +113,8 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 		return UpdateWorkspace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 	uid := workspaceIDFromRequest(request.Id)
+	ev := audit.Event{Action: audit.WorkspaceUpdate, ResourceType: "workspace", ResourceID: idString(uid), WorkspaceID: idString(uid)}
+	ctx = audit.WithAction(ctx, ev.Action)
 	current, err := h.authz().Workspace(ctx, p, uid, authz.ActWrite)
 	if err != nil {
 		switch {
@@ -145,6 +148,7 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 				if te.notFound {
 					te = &targetError{code: "target_unavailable", message: "the binding is not a target of this workspace"}
 				}
+				h.audited(ctx, ev.Failed(audit.ReasonValidation))
 				return UpdateWorkspace422JSONResponse{UnprocessableEntityJSONResponse: te.unprocessable()}, nil
 			}
 			if err != nil {
@@ -178,6 +182,8 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 		return nil, err
 	}
 
+	ev.Changes = workspaceChanges(current, workspace, newDefault || clearDefault)
+	h.audited(ctx, ev.Allowed())
 	return UpdateWorkspace200JSONResponse(dbWorkspaceToPublic(workspace)), nil
 }
 
@@ -221,6 +227,8 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
 		return GrantCatalogAccess401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 	wsID := workspaceIDFromRequest(request.Id)
+	ev := audit.Event{Action: audit.GrantCreate, ResourceType: "grant", ResourceID: idString(pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}), WorkspaceID: idString(wsID)}
+	ctx = audit.WithAction(ctx, ev.Action)
 	if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin); err != nil {
 		return grantAccessError(err)
 	}
@@ -230,6 +238,7 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
 		return grantAccessError(err)
 	}
 	if request.Body.Permission != GrantCatalogAccessRequestPermissionRead && request.Body.Permission != GrantCatalogAccessRequestPermissionWrite {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return GrantCatalogAccess422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "validation_error",
@@ -249,6 +258,8 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
 		return nil, err
 	}
 	h.catalogCache.Clear()
+	ev.Changes = map[string]audit.Change{"permission": {To: grant.Permission}}
+	h.audited(ctx, ev.Allowed())
 
 	name := cat.TrinoName()
 	if name == "" {
@@ -281,6 +292,8 @@ func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalo
 	}
 	wsID := workspaceIDFromRequest(request.Id)
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	ev := audit.Event{Action: audit.GrantRevoke, ResourceType: "grant", ResourceID: idString(catalogID), WorkspaceID: idString(wsID)}
+	ctx = audit.WithAction(ctx, ev.Action)
 	if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin); err != nil {
 		return revokeAccessError(err)
 	}
@@ -292,9 +305,11 @@ func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalo
 		return nil, err
 	}
 	if n == 0 {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "grant not found"}}, nil
 	}
 	h.catalogCache.Clear()
+	h.audited(ctx, ev.Allowed())
 	return RevokeCatalogAccess204Response{}, nil
 }
 

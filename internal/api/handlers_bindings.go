@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -146,7 +147,10 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	if err != nil {
 		return CreateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
+	ev := audit.Event{Action: audit.BindingCreate, ResourceType: "binding"}
+	ctx = audit.WithAction(ctx, ev.Action)
 	if request.Body == nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
 	}
 	body := *request.Body
@@ -159,6 +163,7 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	case denied != nil:
 		return CreateCatalogBinding403JSONResponse{ForbiddenJSONResponse: denied.forbiddenResponse()}, nil
 	case invalid != nil:
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: *invalid}, nil
 	}
 	connector, extra := "", map[string]string{}
@@ -170,6 +175,7 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	}
 	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, body.EngineCatalogName, connector, extra))
 	if bindingInvalid(err) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
 	}
 	if err != nil {
@@ -190,6 +196,7 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 		return syncPrimaryCatalog(ctx, qtx, t, b)
 	})
 	if c, ok := bindingConflict(txErr); ok {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return CreateCatalogBinding409JSONResponse{ConflictJSONResponse: c}, nil
 	}
 	if txErr != nil {
@@ -198,6 +205,7 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	l := h.lifecycleOn(t.cluster, t.engine)
 	created, err = l.Provision(ctx, created, proj)
 	if errors.Is(err, bindings.ErrConcurrentChange) {
+		h.audited(ctx, withID(ev, created.ID).Failed(audit.ReasonConflict))
 		return CreateCatalogBinding409JSONResponse{ConflictJSONResponse: concurrentChange(created)}, nil
 	}
 	if err != nil {
@@ -205,6 +213,7 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 	}
 	observe(ctx, l)
 	h.catalogCache.Clear()
+	h.audited(ctx, withID(ev, created.ID).Allowed())
 	return CreateCatalogBinding201JSONResponse(h.bindingResponse(ctx, created, proj.Version)), nil
 }
 
@@ -237,6 +246,8 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	if err != nil {
 		return UpdateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
+	ev := audit.Event{Action: audit.BindingUpdate, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ctx = audit.WithAction(ctx, ev.Action)
 	cur, t, denied, invalid, err := h.managedBinding(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true})
 	switch {
 	case err != nil:
@@ -246,9 +257,11 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	case denied != nil:
 		return UpdateCatalogBinding403JSONResponse{ForbiddenJSONResponse: denied.forbiddenResponse()}, nil
 	case invalid != nil:
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: *invalid}, nil
 	}
 	if request.Body == nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
 	}
 	body := *request.Body
@@ -268,6 +281,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	}
 	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, name, connector, extra))
 	if bindingInvalid(err) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
 	}
 	if err != nil {
@@ -298,11 +312,13 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 		return syncPrimaryCatalog(ctx, qtx, t, b)
 	})
 	if errors.Is(txErr, pgx.ErrNoRows) {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: "concurrent_change", Message: "the binding is " + cur.LifecycleState + "; retry when it settles",
 		}}, nil
 	}
 	if c, ok := bindingConflict(txErr); ok {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: c}, nil
 	}
 	if txErr != nil {
@@ -326,6 +342,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 		updated, err = l.Update(ctx, updated, proj)
 	}
 	if errors.Is(err, bindings.ErrConcurrentChange) {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: concurrentChange(cur)}, nil
 	}
 	if err != nil {
@@ -333,6 +350,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	}
 	observe(ctx, l)
 	h.catalogCache.Clear()
+	h.audited(ctx, ev.Allowed())
 	return UpdateCatalogBinding200JSONResponse(h.bindingResponse(ctx, updated, proj.Version)), nil
 }
 
@@ -341,6 +359,8 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 	if err != nil {
 		return DeleteCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
+	ev := audit.Event{Action: audit.BindingDelete, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ctx = audit.WithAction(ctx, ev.Action)
 	cur, t, denied, invalid, err := h.managedBinding(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true})
 	switch {
 	case err != nil:
@@ -350,9 +370,11 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 	case denied != nil:
 		return DeleteCatalogBinding403JSONResponse{ForbiddenJSONResponse: denied.forbiddenResponse()}, nil
 	case invalid != nil:
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return DeleteCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: *invalid}, nil
 	}
 	if t.primary() {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: "binding_is_primary", Message: "this is the catalog's own binding on its Trino cluster; delete the catalog instead",
 		}}, nil
@@ -363,6 +385,7 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 		gone, err = l.Deprovision(ctx, cur)
 	}
 	if errors.Is(err, bindings.ErrConcurrentChange) {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "concurrent_change", Message: "the binding changed; retry"}}, nil
 	}
 	if err != nil {
@@ -374,12 +397,14 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 		if gone.LastErrorMessage != nil {
 			msg += ": " + *gone.LastErrorMessage
 		}
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "drop_failed", Message: msg}}, nil
 	}
 	if err := h.queries.DeleteBinding(ctx, cur.ID); err != nil {
 		return nil, err
 	}
 	h.catalogCache.Clear()
+	h.audited(ctx, ev.Allowed())
 	return DeleteCatalogBinding204Response{}, nil
 }
 
@@ -388,6 +413,8 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	if err != nil {
 		return SyncCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
+	ev := audit.Event{Action: audit.BindingSync, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ctx = audit.WithAction(ctx, ev.Action)
 	cur, t, denied, invalid, err := h.managedBinding(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true})
 	switch {
 	case err != nil:
@@ -397,9 +424,11 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	case denied != nil:
 		return SyncCatalogBinding403JSONResponse{ForbiddenJSONResponse: denied.forbiddenResponse()}, nil
 	case invalid != nil:
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: *invalid}, nil
 	}
 	if !cur.Enabled {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("binding_disabled", "enable the binding to apply it")}, nil
 	}
 	connector := ""
@@ -408,12 +437,14 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	}
 	proj, err := h.projectBinding(t.conn, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(cur.ExtraProps)))
 	if bindingInvalid(err) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
 	}
 	if err != nil {
 		out := h.bindingResponse(ctx, cur, "")
 		msg, status := err.Error(), CatalogBindingSyncStatusError
 		out.LastErrorMessage, out.SyncStatus = &msg, &status
+		h.audited(ctx, ev.Failed(audit.ReasonEngineError))
 		return SyncCatalogBinding409JSONResponse(out), nil
 	}
 	l := h.lifecycleOn(t.cluster, t.engine)
@@ -422,6 +453,7 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 		out := h.bindingResponse(ctx, cur, "")
 		msg := "the binding is " + cur.LifecycleState + "; it cannot be synced now"
 		out.LastErrorMessage = &msg
+		h.audited(ctx, ev.Failed(audit.ReasonEngineError))
 		return SyncCatalogBinding409JSONResponse(out), nil
 	}
 	if err != nil {
@@ -430,8 +462,10 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	observe(ctx, l)
 	out := h.bindingResponse(ctx, synced, proj.Version)
 	if synced.LifecycleState != bindings.StateActive {
+		h.audited(ctx, ev.Failed(audit.ReasonEngineError))
 		return SyncCatalogBinding409JSONResponse(out), nil
 	}
+	h.audited(ctx, ev.Allowed())
 	return SyncCatalogBinding200JSONResponse(out), nil
 }
 
