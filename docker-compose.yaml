@@ -647,3 +647,23 @@ services:
       - "4318:4318" # OTLP HTTP
     networks:
       - app_net
+
+  # ============================================
+  # OPENSEARCH - audit export target (#50)
+  # Started only with `docker compose --profile opensearch up -d`. Point Baleia
+  # at it with BALEIA_AUDIT_EXPORT_URL=http://opensearch:9200 and install the
+  # index template from deploy/opensearch/audit-template.json.
+  # ============================================
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    container_name: baleia_opensearch
+    profiles: ["opensearch"]
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - app_net

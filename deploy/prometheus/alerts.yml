@@ -122,3 +122,14 @@ groups:
           summary: 'Database pool of {{ $labels.process }} ({{ $labels.instance }}) is over 90% in use'
           description: '{{ $value | humanizePercentage }} of the pool has been in use for 10 minutes.'
           runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiadbpoolsaturated
+
+      - alert: BaleiaAuditExportLagging
+        # The audit export (#50) must keep up: a stuck cursor means the SIEM sees nothing.
+        expr: max by (instance) (baleia_audit_export_lag_seconds) > 900
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The audit export is more than 15 minutes behind
+          description: 'The newest unexported audit event is {{ $value }} seconds old.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaauditexportlagging

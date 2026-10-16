@@ -1,0 +1,52 @@
+{
+  "index_patterns": ["baleia-audit-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "event": {
+          "properties": {
+            "action": { "type": "keyword" },
+            "outcome": { "type": "keyword" },
+            "reason": { "type": "keyword" }
+          }
+        },
+        "actor": {
+          "properties": {
+            "kind": { "type": "keyword" },
+            "id": { "type": "keyword" },
+            "auth_method": { "type": "keyword" }
+          }
+        },
+        "resource": {
+          "properties": {
+            "type": { "type": "keyword" },
+            "id": { "type": "keyword" }
+          }
+        },
+        "workspace_id": { "type": "keyword" },
+        "trace": {
+          "properties": {
+            "request_id": { "type": "keyword" },
+            "trace_id": { "type": "keyword" }
+          }
+        },
+        "client": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "user_agent": { "type": "keyword" }
+          }
+        },
+        "changes": { "type": "object", "enabled": true },
+        "baleia": {
+          "properties": { "sink": { "type": "keyword" } }
+        }
+      }
+    }
+  }
+}

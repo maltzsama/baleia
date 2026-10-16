@@ -156,3 +156,21 @@ tests:
               summary: Audit events are being lost
               description: '1 audit events could not be written in the last 10 minutes.'
               runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaauditwritefailures
+
+  - name: the audit export falls behind
+    interval: 1m
+    input_series:
+      - series: 'baleia_audit_export_lag_seconds{instance="w1"}'
+        values: '0x5 1000x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BaleiaAuditExportLagging
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BaleiaAuditExportLagging
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: w1}
+            exp_annotations:
+              summary: The audit export is more than 15 minutes behind
+              description: 'The newest unexported audit event is 1000 seconds old.'
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaauditexportlagging

@@ -103,6 +103,29 @@ lists them, newest first: admins see every event, anyone else only their own.
   `migrate -cmd=audit-prune -before=YYYY-MM` detaches and drops the partitions of the months before
   that one. It refuses the current month.
 
+## Audit export
+
+Organisations can ship the audit trail to an OpenSearch/Elasticsearch-compatible `_bulk` endpoint
+(#50). It is **off by default**: set `BALEIA_AUDIT_EXPORT_URL` to enable it. Application logs stay
+on stdout and are not exported.
+
+- **Configuration:** `BALEIA_AUDIT_EXPORT_URL`, `_INDEX` (default `baleia-audit`, monthly
+  `baleia-audit-YYYY.MM`), `_AUTH` (`none`|`basic`|`bearer`|`api_key`), `_USER`/`_PASSWORD`/`_TOKEN`,
+  `_BATCH` (500), `_INTERVAL` (30s), `_CA_FILE`.
+- **Schedule:** the `audit-export` schedule runs `AuditExportWorkflow` every `_INTERVAL`; one pass
+  loops batches until caught up (up to 5 minutes) and returns.
+- **At-least-once, ordered, resumable:** the cursor (`audit_export_cursor`) stores the last
+  accepted `(occurred_at, id)` and only moves forward, never past a failed item. Documents use a
+  deterministic `_id` (`<occurred_at unix nanos>-<id>`), so re-sends overwrite.
+- **Safety lag:** events newer than 10 s are not exported, so a concurrent transaction that
+  commits an earlier `occurred_at` is not skipped.
+- **`audit_events` is never modified.**
+- **Index template:** install `deploy/opensearch/audit-template.json`.
+- **Lag:** `baleia_audit_export_lag_seconds` is the age of the newest unexported event;
+  `baleia_audit_export_events_total{outcome}` counts batches. A lag over 15 minutes for 15 minutes
+  fires [BaleiaAuditExportLagging](#baleiaauditexportlagging). A local target runs under the
+  compose `opensearch` profile.
+
 ## Binding reconciliation
 
 `POST /api/v1/engines/{id}/reconcile` (admins; dry run unless `?dry_run=false`) checks every
@@ -303,3 +326,15 @@ More than 90% of a process's database pool has been in use for 10 minutes. Reque
 
 1. Compare the pool size (`baleia_db_pool_max_conns`) with the load. Raise `BALEIA_DB_MAX_CONNS` for that process (default: API 20, worker 10). Keep the total across replicas under Postgres's `max_connections`.
 2. If usage stays high without load, connections may be held by long transactions. Look for `idle in transaction` sessions in `pg_stat_activity`.
+
+### BaleiaAuditExportLagging
+
+The newest unexported audit event is more than 15 minutes old for 15 minutes.
+
+1. `baleia_audit_export_lag_seconds` is `now - occurred_at` at the cursor. Check the worker log for
+   `audit export` errors and the OpenSearch endpoint's health.
+2. A failing `_bulk` (auth, mapping, TLS) leaves the cursor in place: nothing is lost, it just waits.
+   Fix the sink; the next pass resumes from the cursor.
+3. A partial failure advances only to the last contiguous success. The failed item's index and
+   reason are logged (never the document body).
+4. Confirm the cursor moved: `SELECT * FROM audit_export_cursor WHERE sink = 'opensearch';`.

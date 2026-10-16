@@ -103,6 +103,17 @@ type Config struct {
 	// default; the OTLP endpoint and service name come from the standard OTEL_*
 	// environment variables.
 	TracingEnabled bool
+	// AuditExport* ship audit events to an OpenSearch-compatible store (#50).
+	// URL empty disables the export.
+	AuditExportURL      string
+	AuditExportIndex    string
+	AuditExportAuth     string
+	AuditExportUser     string
+	AuditExportPassword string
+	AuditExportToken    string
+	AuditExportCAFile   string
+	AuditExportBatch    int
+	AuditExportInterval time.Duration
 	// Baleia's database pool; DBMaxConns 0 means the process default (api 20,
 	// worker 10).
 	DBMaxConns        int
@@ -156,6 +167,15 @@ func Load() *Config {
 		MetricsToken:               getEnv("BALEIA_METRICS_TOKEN", ""),
 		WorkerMetricsAddr:          getEnv("BALEIA_WORKER_METRICS_ADDR", ":9090"),
 		TracingEnabled:             getEnv("BALEIA_TRACING_ENABLED", "false") == "true",
+		AuditExportURL:             getEnv("BALEIA_AUDIT_EXPORT_URL", ""),
+		AuditExportIndex:           getEnv("BALEIA_AUDIT_EXPORT_INDEX", "baleia-audit"),
+		AuditExportAuth:            getEnv("BALEIA_AUDIT_EXPORT_AUTH", "none"),
+		AuditExportUser:            getEnv("BALEIA_AUDIT_EXPORT_USER", ""),
+		AuditExportPassword:        getEnv("BALEIA_AUDIT_EXPORT_PASSWORD", ""),
+		AuditExportToken:           getEnv("BALEIA_AUDIT_EXPORT_TOKEN", ""),
+		AuditExportCAFile:          getEnv("BALEIA_AUDIT_EXPORT_CA_FILE", ""),
+		AuditExportBatch:           getEnvInt("BALEIA_AUDIT_EXPORT_BATCH", 500),
+		AuditExportInterval:        getEnvDuration("BALEIA_AUDIT_EXPORT_INTERVAL", 30*time.Second),
 		DBMaxConns:                 getEnvInt("BALEIA_DB_MAX_CONNS", 0),
 		DBMinConns:                 getEnvInt("BALEIA_DB_MIN_CONNS", 2),
 		DBMaxConnLifetime:          getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
