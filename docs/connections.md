@@ -64,7 +64,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
-| `metastore_uri` | text | yes |  | thrift://host:port of the Hive Metastore |
+| `metastore_uri` | text | yes |  | Thrift URI of the Hive Metastore, e.g. thrift://hms:9083 |
 | `storage.type` | select |  | `s3` | one of `s3`. Object storage the table data resides on (S3-compatible in v1) |
 | `storage.endpoint` | text |  |  | e.g. http://rustfs:9000; empty uses the AWS default for the region |
 | `storage.region` | text |  |  | e.g. us-east-1 |
