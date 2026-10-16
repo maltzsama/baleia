@@ -72,6 +72,7 @@ groups:
           or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="lens-table-health"}) > 3 * 3600)
           # metadata-sync runs every BALEIA_METADATA_SYNC_INTERVAL (default 15m).
           or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="metadata-sync"}) > 3 * 900)
+          or (time() - max by (schedule) (baleia_schedule_last_success_timestamp_seconds{schedule="audit-partitions"}) > 3 * 86400)
         for: 0m
         labels:
           severity: warning
@@ -90,6 +91,17 @@ groups:
           summary: Catalog metadata is more than an hour old
           description: 'The stalest catalog metadata is {{ $value | humanizeDuration }} old.'
           runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiametadatastale
+
+      - alert: BaleiaAuditWriteFailures
+        # The audit trail is best-effort (#45): a lost event must be seen.
+        expr: sum(increase(baleia_audit_write_failures_total[10m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Audit events are being lost
+          description: '{{ $value }} audit events could not be written in the last 10 minutes.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaauditwritefailures
 
       - alert: BaleiaCatalogsInError
         expr: max(baleia_catalogs_by_state{state="error"}) > 0

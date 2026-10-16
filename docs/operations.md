@@ -74,6 +74,7 @@ CI runs `promtool check rules` and `promtool test rules deploy/prometheus/alerts
 | Engines (worker) | `baleia_engine_statements_total`, `baleia_engine_statement_duration_seconds`, `baleia_engine_errors_total`, `baleia_engine_rows_returned_total`, `baleia_engine_result_bytes_total` | `engine` (engine kind), `outcome`, `code` |
 | Schedules (worker) | `baleia_schedule_last_success_timestamp_seconds` | `schedule` |
 | Catalogs (API) | `baleia_catalog_ddl_total`, `baleia_catalogs_by_state` | `action` (`create`, `replace`, `drop`), `outcome`, `state` |
+| Audit (API, worker) | `baleia_audit_write_failures_total` | — |
 | Metadata (worker) | `baleia_metadata_sync_duration_seconds`, `baleia_metadata_staleness_seconds_max` (the stalest enabled catalog; no catalog label) | `outcome` |
 | Storage | `baleia_storage_operations_total`, `baleia_storage_bytes_total` | `operation` (`put`, `get`), `outcome` |
 | Database pool | `baleia_db_pool_acquired_conns`, `baleia_db_pool_idle_conns`, `baleia_db_pool_max_conns`, `baleia_db_pool_acquire_duration_seconds` | `process` (`api`, `worker`) |
@@ -81,6 +82,26 @@ CI runs `promtool check rules` and `promtool test rules deploy/prometheus/alerts
 
 A metric is registered only where something produces it. Binding reconciliation
 (`baleia_catalog_reconcile_actions_total`) with #37.
+
+## Audit trail
+
+Security and data operations are recorded in `audit_events` (#45): who (`actor_kind`,
+`actor_id`, `auth_method`), what (`action`, `resource_type`, `resource_id`, `workspace_id`), how
+it ended (`outcome`, `reason`) and from where (`request_id`, `client_ip`, `user_agent`). Field
+changes are kept in `changes`, with secret values stored as `***`. `GET /api/v1/audit/events`
+lists them, newest first: admins see every event, anyone else only their own.
+
+- **Append-only:** a trigger rejects every `UPDATE` and `DELETE`, also for the role that owns
+  the table.
+- **Best-effort:** a failed write never fails the user's request. It is logged with
+  `error_code=audit_write_failed` and counted in `baleia_audit_write_failures_total`
+  ([BaleiaAuditWriteFailures](#baleiaauditwritefailures)).
+- **Partitions:** the table is partitioned by month. The `audit-partitions` schedule creates the
+  partitions three months ahead, daily, and never drops one. There is no default partition: an
+  event whose month has no partition fails to write.
+- **Retention:** 400 days by default. Retention is an explicit operator action:
+  `migrate -cmd=audit-prune -before=YYYY-MM` detaches and drops the partitions of the months before
+  that one. It refuses the current month.
 
 ## Metadata snapshots
 
@@ -199,6 +220,7 @@ A recurring job has not succeeded in three of its intervals:
 | `retriever-scheduler` | 60 s |
 | `lens-table-health` | 1 h |
 | `metadata-sync` | `BALEIA_METADATA_SYNC_INTERVAL` (15 min) |
+| `audit-partitions` | 24 h |
 
 1. Check that a worker is running and polling. A worker that is down raises [BaleiaWorkerDown](#baleiaworkerdown). If `temporal_worker_task_slots_available` is flat or `temporal_*` is missing, no worker is polling.
 2. In the Temporal UI, open the schedule (its ID is the alert's `schedule` label). Read the last runs' failures.
@@ -212,6 +234,17 @@ The stalest enabled catalog has not finished a metadata pass for more than an ho
 2. If the `metadata-sync` schedule itself is not running, see [BaleiaScheduleStale](#baleiaschedulestale).
 3. Test the catalog's connection with `POST /api/v1/catalog-connections/{id}/test`. For an `engine` source path, check its engine (see [BaleiaEngineUnavailable](#baleiaengineunavailable)).
 4. Retry one catalog with `POST /api/v1/catalogs/{id}/metadata/sync`.
+
+### BaleiaAuditWriteFailures
+
+Audit events could not be written in the last 10 minutes, so the trail has gaps.
+
+1. Read the API and worker logs for `error_code=audit_write_failed`.
+2. If the error names a missing partition (`no partition of relation "audit_events" found for
+   row`), the `audit-partitions` schedule is not running. Check
+   [BaleiaScheduleStale](#baleiaschedulestale), then create the partitions by hand with
+   `SELECT audit_ensure_partitions(3);`.
+3. If the database is slow or down, see [BaleiaDBPoolSaturated](#baleiadbpoolsaturated).
 
 ### BaleiaCatalogsInError
 

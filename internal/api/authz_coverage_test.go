@@ -174,6 +174,8 @@ var operationAccess = map[string]access{
 	"ListMetadataTables":     checked("metadataWorkspace", "grantedCatalog"),
 	"GetMetadataTable":       checked("metadataWorkspace", "GetGrantedMetadataTable"),
 	"SearchMetadata":         checked("metadataWorkspace", "SearchMetadata"),
+	// Audit trail (#45): admins see all, anyone else only their own events.
+	"ListAuditEvents":    checked("PrincipalFromContext", "IsAdmin"),
 	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below
 	"ListMigrations":     {kind: kindStub},
 	"CreateMigration":    {kind: kindStub},

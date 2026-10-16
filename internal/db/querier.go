@@ -81,6 +81,8 @@ type Querier interface {
 	// True when the engine has a binding of a catalog granted to a workspace the
 	// user belongs to.
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)
+	// Creates the monthly partitions of this month and the next months ahead.
+	EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error
 	// A run left running by a crashed worker ends failed when the next pass of
 	// the same catalog starts (that pass holds the catalog sync lock).
 	FailStaleMetadataSyncRuns(ctx context.Context, catalogID pgtype.UUID) error
@@ -148,6 +150,7 @@ type Querier interface {
 	GetUserByResetToken(ctx context.Context, passwordResetToken *string) (User, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
+	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
 	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
 	InsertMetadataColumns(ctx context.Context, arg InsertMetadataColumnsParams) error
@@ -156,6 +159,9 @@ type Querier interface {
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
+	// Newest first, keyset-paginated on (occurred_at, id): the cursor is the
+	// last row of the previous page. Every filter is optional.
+	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]BindingStatusV, error)
 	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]CatalogBinding, error)

@@ -685,6 +685,44 @@ components:
       properties:
         enabled: { type: boolean }
 
+    AuditEvent:
+      type: object
+      required: [id, occurred_at, actor_kind, action, resource_type, outcome]
+      properties:
+        id: { type: integer, format: int64 }
+        occurred_at: { type: string, format: date-time }
+        actor_kind: { type: string, enum: [user, service, agent, anonymous] }
+        actor_id: { type: string, nullable: true }
+        auth_method: { type: string, nullable: true }
+        action: { type: string, description: "<resource>.<verb>, from a bounded vocabulary (internal/audit/actions.go)" }
+        resource_type: { type: string }
+        resource_id: { type: string, nullable: true }
+        workspace_id: { type: string, format: uuid, nullable: true }
+        outcome: { type: string, enum: [allowed, denied, error] }
+        reason: { type: string, nullable: true }
+        request_id: { type: string, nullable: true }
+        trace_id: { type: string, nullable: true }
+        client_ip: { type: string, nullable: true }
+        user_agent: { type: string, nullable: true }
+        changes:
+          type: object
+          nullable: true
+          description: '{"field": {"from": …, "to": …}}; secret values are "***"'
+          additionalProperties:
+            type: object
+            properties:
+              from: {}
+              to: {}
+
+    AuditEventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEvent" }
+        next_cursor: { type: string, nullable: true }
+
     MetadataFreshness:
       type: object
       properties:
@@ -1755,6 +1793,34 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /audit/events:
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      summary: "Audit trail, newest first — admins see every event, others their own"
+      description: >
+        Append-only record of security and data operations (#45). A global
+        admin sees all events; any other user only events they performed
+        (actor_id is forced to the caller).
+      parameters:
+        - { name: resource_type, in: query, schema: { type: string } }
+        - { name: resource_id, in: query, schema: { type: string } }
+        - { name: actor_id, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: outcome, in: query, schema: { type: string, enum: [allowed, denied, error] } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: cursor, in: query, description: "next_cursor of the previous page", schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: "One page of events"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/metadata/catalogs:

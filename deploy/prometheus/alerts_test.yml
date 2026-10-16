@@ -138,3 +138,21 @@ tests:
               summary: Catalog metadata is more than an hour old
               description: The stalest catalog metadata is 2h 0m 0s old.
               runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiametadatastale
+
+  - name: lost audit events
+    interval: 1m
+    input_series:
+      - series: 'baleia_audit_write_failures_total{instance="api1"}'
+        values: '0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BaleiaAuditWriteFailures
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: BaleiaAuditWriteFailures
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Audit events are being lost
+              description: '1 audit events could not be written in the last 10 minutes.'
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaauditwritefailures

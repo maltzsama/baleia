@@ -7,18 +7,21 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
-	"github.com/pressly/goose/v3"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/migrate"
 )
 
 func main() {
-	var command string
-	flag.StringVar(&command, "cmd", "up", "command: up, down, status, reset, version (goose) or credentials (re-seal legacy credentials)")
+	var command, before string
+	flag.StringVar(&command, "cmd", "up", "command: up, down, status, reset, version (goose), credentials (re-seal legacy credentials) or audit-prune (drop audit partitions before -before)")
+	flag.StringVar(&before, "before", "", "audit-prune: drop the audit partitions of the months before this one (YYYY-MM)")
 	flag.Parse()
 
 	cfg := config.Load()
@@ -50,6 +53,12 @@ func main() {
 		err = goose.VersionContext(ctx, db, "db/migrations")
 	case "credentials":
 		err = migrateCredentials(ctx, db, cfg)
+	case "audit-prune":
+		var dropped []string
+		dropped, err = audit.Prune(ctx, db, before, time.Now().UTC())
+		for _, name := range dropped {
+			slog.Info("audit partition dropped", "partition", name)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
 		os.Exit(1)

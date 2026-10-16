@@ -1,0 +1,19 @@
+meta {
+  name: List Audit Events (invalid cursor -> 422)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/audit/events?cursor=not-a-cursor
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 422
+}

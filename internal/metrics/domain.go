@@ -288,3 +288,24 @@ func (c *stalenessCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	ch <- prometheus.MustNewConstMetric(metadataStaleness, prometheus.GaugeValue, v)
 }
+
+// Audit counts audit events that could not be written (#45): the trail is
+// best-effort, so gaps must be visible.
+type Audit struct{ failures prometheus.Counter }
+
+// Audit registers baleia_audit_write_failures_total.
+func (r *Registry) Audit() *Audit {
+	a := &Audit{failures: prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: Namespace, Name: "audit_write_failures_total", Help: "Audit events that could not be written.",
+	})}
+	r.reg.MustRegister(a.failures)
+	return a
+}
+
+// WriteFailed counts one lost audit event.
+func (a *Audit) WriteFailed() {
+	if a == nil {
+		return
+	}
+	a.failures.Inc()
+}

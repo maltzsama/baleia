@@ -27,6 +27,9 @@ type ServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId)
+	// Audit trail, newest first — admins see every event, others their own
+	// (GET /audit/events)
+	ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams)
 	// Authenticate and receive JWT
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -339,6 +342,12 @@ func (_ Unimplemented) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 // Remove an API key
 // (DELETE /api-keys/{id})
 func (_ Unimplemented) DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Audit trail, newest first — admins see every event, others their own
+// (GET /audit/events)
+func (_ Unimplemented) ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1001,6 +1010,105 @@ func (siw *ServerInterfaceWrapper) DeleteApiKey(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteApiKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAuditEvents operation middleware
+func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAuditEventsParams
+
+	// ------------- Optional query parameter "resource_type" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "resource_type", r.URL.Query(), &params.ResourceType)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resource_type", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "resource_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "resource_id", r.URL.Query(), &params.ResourceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resource_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "actor_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "actor_id", r.URL.Query(), &params.ActorId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "action", r.URL.Query(), &params.Action)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "outcome" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "outcome", r.URL.Query(), &params.Outcome)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "outcome", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuditEvents(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4485,6 +4593,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/api-keys/{id}", wrapper.DeleteApiKey)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/audit/events", wrapper.ListAuditEvents)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
 	})
 	r.Group(func(r chi.Router) {
@@ -4878,6 +4989,43 @@ type DeleteApiKey404JSONResponse struct{ NotFoundJSONResponse }
 func (response DeleteApiKey404JSONResponse) VisitDeleteApiKeyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAuditEventsRequestObject struct {
+	Params ListAuditEventsParams
+}
+
+type ListAuditEventsResponseObject interface {
+	VisitListAuditEventsResponse(w http.ResponseWriter) error
+}
+
+type ListAuditEvents200JSONResponse AuditEventPage
+
+func (response ListAuditEvents200JSONResponse) VisitListAuditEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAuditEvents401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAuditEvents401JSONResponse) VisitListAuditEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAuditEvents422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListAuditEvents422JSONResponse) VisitListAuditEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -8736,6 +8884,9 @@ type StrictServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error)
+	// Audit trail, newest first — admins see every event, others their own
+	// (GET /audit/events)
+	ListAuditEvents(ctx context.Context, request ListAuditEventsRequestObject) (ListAuditEventsResponseObject, error)
 	// Authenticate and receive JWT
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
@@ -9132,6 +9283,32 @@ func (sh *strictHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteApiKeyResponseObject); ok {
 		if err := validResponse.VisitDeleteApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAuditEvents operation middleware
+func (sh *strictHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams) {
+	var request ListAuditEventsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAuditEvents(ctx, request.(ListAuditEventsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAuditEvents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuditEventsResponseObject); ok {
+		if err := validResponse.VisitListAuditEventsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
