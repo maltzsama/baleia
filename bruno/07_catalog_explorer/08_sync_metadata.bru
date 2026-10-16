@@ -17,9 +17,9 @@ auth:bearer {
 script:pre-request {
   // 09 waits for a pass newer than the ones already recorded.
   const axios = require("axios");
-  const url = bru.getEnvVar("base_url") + "/catalogs/" + bru.getVar("explorer_catalog_id") + "/metadata/sync-runs?limit=100";
+  const url = bru.getEnvVar("base_url") + "/catalogs/" + bru.getVar("explorer_catalog_id") + "/metadata/sync-runs?limit=1";
   const r = await axios.get(url, { headers: { Authorization: "Bearer " + bru.getVar("token") } });
-  bru.setVar("metadata_runs_before", r.data.length);
+  bru.setVar("metadata_newest_run_before", r.data.length > 0 ? r.data[0].id : "");
 }
 
 script:post-response {

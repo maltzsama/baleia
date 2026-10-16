@@ -32,8 +32,16 @@ func New(t *testing.T) *pgxpool.Pool {
 	}
 	name := fmt.Sprintf("baleia_test_%d", time.Now().UnixNano())
 	if _, err := adminPool.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		adminPool.Close()
 		t.Fatal(err)
 	}
+	// Registered before anything else can fail, so a broken migration
+	// leaves no database behind. Cleanups run last-in first-out: the pool
+	// below is closed before this drops the database.
+	t.Cleanup(func() {
+		_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+		adminPool.Close()
+	})
 	u, err := url.Parse(admin)
 	if err != nil {
 		t.Fatal(err)
@@ -45,21 +53,19 @@ func New(t *testing.T) *pgxpool.Pool {
 	}
 	goose.SetLogger(goose.NopLogger())
 	if err := goose.SetDialect("postgres"); err != nil {
+		_ = sqlDB.Close()
 		t.Fatal(err)
 	}
-	if err := goose.Up(sqlDB, migrationsDir()); err != nil {
-		t.Fatal(err)
-	}
+	err = goose.Up(sqlDB, migrationsDir())
 	_ = sqlDB.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	pool, err := pgxpool.New(ctx, u.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		pool.Close()
-		_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
-		adminPool.Close()
-	})
+	t.Cleanup(pool.Close)
 	return pool
 }
 

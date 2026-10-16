@@ -1,0 +1,32 @@
+meta {
+  name: Metadata Namespaces (catalog without a grant -> 404)
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{base_url}}/workspaces/{{other_workspace_id}}/metadata/catalogs/{{explorer_catalog_id}}/namespaces
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+script:pre-request {
+  // The other user's own workspace: a member there, with no grant on this
+  // catalog.
+  const axios = require("axios");
+  const r = await axios.get(bru.getEnvVar("base_url") + "/workspaces", { headers: { Authorization: "Bearer " + bru.getVar("other_token") } });
+  bru.setVar("other_workspace_id", r.data[0].id);
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  A workspace member reads only the catalogs the workspace may use: another
+  user's catalog is a 404, as is a foreign workspace (17).
+}
