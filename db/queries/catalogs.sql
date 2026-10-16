@@ -76,3 +76,20 @@ UPDATE trino_catalog_registry
 SELECT catalog_version, enabled, sync_status, updated_by
   FROM trino_catalog_registry
  WHERE cluster_id = $1 AND catalog_name = $2;
+
+-- name: InsertEphemeralRegistryRow :exec
+-- A connection test's short-lived catalog (#12): enabled (the plugin
+-- resolves placeholders only from enabled rows) and expiring.
+INSERT INTO trino_catalog_registry
+    (cluster_id, catalog_name, connector_name, properties, catalog_version, enabled, sync_status, updated_by, expires_at)
+VALUES ($1, $2, $3, $4::jsonb, $5, TRUE, 'pending', 'baleia', now() + @ttl::interval);
+
+-- name: DeleteEphemeralRegistryRow :exec
+-- Hard delete: the row holds real credentials. Permanent rows are never
+-- matched.
+DELETE FROM trino_catalog_registry
+WHERE cluster_id = $1 AND catalog_name = $2 AND expires_at IS NOT NULL;
+
+-- name: ListExpiredEphemeralRegistryRows :many
+SELECT cluster_id, catalog_name FROM trino_catalog_registry
+WHERE expires_at IS NOT NULL AND expires_at < now();

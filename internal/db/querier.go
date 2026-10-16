@@ -60,6 +60,9 @@ type Querier interface {
 	DeleteCatalog(ctx context.Context, id pgtype.UUID) error
 	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
 	DeleteEngine(ctx context.Context, id pgtype.UUID) error
+	// Hard delete: the row holds real credentials. Permanent rows are never
+	// matched.
+	DeleteEphemeralRegistryRow(ctx context.Context, arg DeleteEphemeralRegistryRowParams) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
 	// The native catalogs of an engine, deleted with it (their bindings cascade).
@@ -153,6 +156,9 @@ type Querier interface {
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
 	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
+	// A connection test's short-lived catalog (#12): enabled (the plugin
+	// resolves placeholders only from enabled rows) and expiring.
+	InsertEphemeralRegistryRow(ctx context.Context, arg InsertEphemeralRegistryRowParams) error
 	InsertMetadataColumns(ctx context.Context, arg InsertMetadataColumnsParams) error
 	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
@@ -185,6 +191,7 @@ type Querier interface {
 	// The engines a non-admin may see: those on connections they own and those
 	// hosting a catalog granted to one of their workspaces.
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
+	ListExpiredEphemeralRegistryRows(ctx context.Context) ([]ListExpiredEphemeralRegistryRowsRow, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
 	// The managed bindings of an engine the reconciler checks (#37).
 	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)

@@ -326,6 +326,21 @@ const (
 	TeamMemberRoleOwner  TeamMemberRole = "owner"
 )
 
+// Defines values for TestCatalogConnectionResultErrorCode.
+const (
+	TestCatalogConnectionResultErrorCodeAuthFailed              TestCatalogConnectionResultErrorCode = "auth_failed"
+	TestCatalogConnectionResultErrorCodeConnectionDeniedNetwork TestCatalogConnectionResultErrorCode = "connection_denied_network"
+	TestCatalogConnectionResultErrorCodeEngineUnavailable       TestCatalogConnectionResultErrorCode = "engine_unavailable"
+	TestCatalogConnectionResultErrorCodeForbidden               TestCatalogConnectionResultErrorCode = "forbidden"
+	TestCatalogConnectionResultErrorCodeInternal                TestCatalogConnectionResultErrorCode = "internal"
+	TestCatalogConnectionResultErrorCodeLessThannil             TestCatalogConnectionResultErrorCode = "<nil>"
+	TestCatalogConnectionResultErrorCodeNotFound                TestCatalogConnectionResultErrorCode = "not_found"
+	TestCatalogConnectionResultErrorCodeProviderUnsupported     TestCatalogConnectionResultErrorCode = "provider_unsupported"
+	TestCatalogConnectionResultErrorCodeTimeout                 TestCatalogConnectionResultErrorCode = "timeout"
+	TestCatalogConnectionResultErrorCodeTls                     TestCatalogConnectionResultErrorCode = "tls"
+	TestCatalogConnectionResultErrorCodeUnreachable             TestCatalogConnectionResultErrorCode = "unreachable"
+)
+
 // Defines values for UpdateRetrieverRequestRefreshType.
 const (
 	UpdateRetrieverRequestRefreshTypeFull        UpdateRetrieverRequestRefreshType = "full"
@@ -591,6 +606,19 @@ type CatalogConnection struct {
 
 	// Url Deprecated: read config. Kept while the Trino projection still reads it (#80)
 	Url string `json:"url"`
+}
+
+// ConnectionCheck defines model for ConnectionCheck.
+type ConnectionCheck struct {
+	Detail    *string `json:"detail"`
+	ErrorCode *string `json:"error_code"`
+
+	// Name ping, list_catalogs, direct_engine, bind:<engine name>
+	Name string `json:"name"`
+	Ok   bool   `json:"ok"`
+
+	// Skipped Not run (e.g. no engine adapter for the kind yet)
+	Skipped *bool `json:"skipped,omitempty"`
 }
 
 // ConnectionProvider defines model for ConnectionProvider.
@@ -1407,10 +1435,48 @@ type TeamMemberRole string
 
 // TestCatalogConnectionResult defines model for TestCatalogConnectionResult.
 type TestCatalogConnectionResult struct {
-	Error     *string `json:"error"`
-	LatencyMs int     `json:"latency_ms"`
-	Success   bool    `json:"success"`
-	Version   *string `json:"version"`
+	Checks *[]ConnectionCheck `json:"checks,omitempty"`
+
+	// Error Deprecated: error_message
+	Error *string `json:"error"`
+
+	// ErrorCode Why the first failing check failed
+	ErrorCode *TestCatalogConnectionResultErrorCode `json:"error_code"`
+
+	// ErrorMessage A short sentence; upstream bodies are logged, not returned
+	ErrorMessage *string `json:"error_message"`
+	LatencyMs    int     `json:"latency_ms"`
+	Success      bool    `json:"success"`
+	Version      *string `json:"version"`
+}
+
+// TestCatalogConnectionResultErrorCode Why the first failing check failed
+type TestCatalogConnectionResultErrorCode string
+
+// TestConnectionRequest defines model for TestConnectionRequest.
+type TestConnectionRequest struct {
+	// Config Non-secret fields of the provider's config schema
+	Config *map[string]string `json:"config,omitempty"`
+
+	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
+	Credentials        *map[string]interface{} `json:"credentials,omitempty"`
+	DefaultReadonly    *bool                   `json:"default_readonly,omitempty"`
+	GlueCredentials    *GlueCredentials        `json:"glue_credentials,omitempty"`
+	HiveCredentials    *HiveCredentials        `json:"hive_credentials,omitempty"`
+	IcebergCredentials *IcebergCredentials     `json:"iceberg_credentials,omitempty"`
+
+	// Intents Checks to run: metadata, direct_engine, bind:<engine_id>. Default: every role the provider declares (a bind check on the default Trino engine for databases it can bind).
+	Intents               *[]string          `json:"intents,omitempty"`
+	MysqlCredentials      *SqlCredentials    `json:"mysql_credentials,omitempty"`
+	Name                  string             `json:"name"`
+	NessieCredentials     *NessieCredentials `json:"nessie_credentials,omitempty"`
+	PostgresqlCredentials *SqlCredentials    `json:"postgresql_credentials,omitempty"`
+
+	// Type A kind listed by GET /connection-providers
+	Type string `json:"type"`
+
+	// Url Older shape: the endpoint URL (a JDBC URL for databases). Prefer config
+	Url *string `json:"url,omitempty"`
 }
 
 // UpdateBindingRequest defines model for UpdateBindingRequest.
@@ -1757,6 +1823,9 @@ type UpdateCatalogBindingJSONRequestBody = UpdateBindingRequest
 
 // CreateCatalogConnectionJSONRequestBody defines body for CreateCatalogConnection for application/json ContentType.
 type CreateCatalogConnectionJSONRequestBody = CreateCatalogConnectionRequest
+
+// TestConnectionDraftJSONRequestBody defines body for TestConnectionDraft for application/json ContentType.
+type TestConnectionDraftJSONRequestBody = TestConnectionRequest
 
 // UpdateCatalogConnectionJSONRequestBody defines body for UpdateCatalogConnection for application/json ContentType.
 type UpdateCatalogConnectionJSONRequestBody = UpdateCatalogConnectionRequest

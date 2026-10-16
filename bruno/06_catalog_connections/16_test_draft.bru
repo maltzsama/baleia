@@ -1,0 +1,40 @@
+meta {
+  name: Test Draft Connection (PostgreSQL)
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{base_url}}/catalog-connections/test
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Draft PostgreSQL",
+    "type": "postgresql",
+    "config": {
+      "host": "{{postgres_host}}",
+      "port": "5432",
+      "database": "baleia",
+      "sslmode": "disable",
+      "username": "baleia"
+    },
+    "credentials": {
+      "password": "baleia"
+    },
+    "intents": ["metadata"]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.checks[0].name: eq ping
+  res.body.checks[0].ok: eq true
+}

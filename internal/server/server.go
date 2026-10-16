@@ -129,6 +129,7 @@ func (s *Server) routes() {
 	}
 	auditRec := audit.NewPostgres(s.queries, conns.SecretKeys(), auditMetrics.WriteFailed)
 	h.SetAudit(auditRec)
+	h.SetDialer(dialer)
 	var onRefreshLimited func()
 	if s.metrics != nil {
 		h.SetMetrics(s.metrics)

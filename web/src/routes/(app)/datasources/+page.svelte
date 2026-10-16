@@ -18,7 +18,6 @@
 	});
 	let testStatus = $state<'idle' | 'testing' | 'success' | 'fail'>('idle');
 	let testMessage = $state('');
-	let verifiedId = $state('');
 	let hasStoredCredentials = $state(false);
 
 	const engineLabels: Record<string, string> = {
@@ -62,7 +61,7 @@
 		}
 		modalOpen = true;
 	}
-	function closeModal() { modalOpen = false; testStatus = 'idle'; testMessage = ''; verifiedId = ''; }
+	function closeModal() { modalOpen = false; testStatus = 'idle'; testMessage = ''; testedSnapshot = ''; }
 
 	function credentialsTouched() {
 		if (isIcebergType()) return !!(form.client_id || form.client_secret);
@@ -112,9 +111,9 @@
 		return form.url;
 	}
 
-	function buildConnBody(connUrl: string) {
+	function buildConnBody(connUrl: string, draft = false) {
 		const body: any = { name: form.name, type: form.type, url: connUrl, default_readonly: false };
-		if (editingId) {
+		if (editingId && !draft) {
 			// Only send credentials when the complete pair is present; otherwise
 			// the stored secret is preserved by the partial update.
 			if (credentialsComplete()) {
@@ -137,48 +136,51 @@
 		return body;
 	}
 
+	// The settings that passed the last test (#12). Any change to the form
+	// clears it, so Create is only possible for values that were tested.
+	let testedSnapshot = $state('');
+	$effect(() => {
+		const snap = JSON.stringify(form);
+		if (testedSnapshot && snap !== testedSnapshot) {
+			testedSnapshot = '';
+			testStatus = 'idle';
+			testMessage = '';
+		}
+	});
+
+	function testErrorMessage(r: any) {
+		return r.error_message || r.error || 'Connection test failed';
+	}
+
+	// testConnection checks the current values without saving anything: a
+	// draft test, or, when editing without new credentials, the stored
+	// connection's settings.
 	async function testConnection() {
 		testStatus = 'testing';
 		testMessage = '';
-		verifiedId = '';
-
-		const connUrl = buildConnUrl();
-		const body = buildConnBody(connUrl);
-		const method = editingId ? 'PATCH' : 'POST';
-		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
-
+		const snap = JSON.stringify(form);
+		const draft = !editingId || credentialsComplete();
 		try {
-			const saveRes = await fetch(apiUrl, {
-				method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify(body)
-			});
-			if (!saveRes.ok) {
+			const res = draft
+				? await fetch('/api/v1/catalog-connections/test', {
+					method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify(buildConnBody(buildConnUrl(), true))
+				})
+				: await fetch(`/api/v1/catalog-connections/${editingId}/test`, {
+					method: 'POST', headers: { Authorization: `Bearer ${token}` }
+				});
+			const r = await res.json().catch(() => ({}));
+			if (!res.ok) {
 				testStatus = 'fail';
-				const body = await saveRes.json().catch(() => ({}));
-				testMessage = body.message || body.error || `Save failed (HTTP ${saveRes.status})`;
+				testMessage = r.message || `Test failed (HTTP ${res.status})`;
 				return;
 			}
-
-			const saved = await saveRes.json();
-			const testId = saved.id || editingId;
-
-			const testRes = await fetch(`/api/v1/catalog-connections/${testId}/test`, {
-				method: 'POST', headers: { Authorization: `Bearer ${token}` }
-			});
-			const testResult = await testRes.json();
-
-			if (testResult.success) {
+			if (r.success) {
 				testStatus = 'success';
-				testMessage = '';
-				verifiedId = testId;
+				testedSnapshot = snap;
 			} else {
 				testStatus = 'fail';
-				testMessage = testResult.error || 'Connection test failed';
-				if (!editingId) {
-					await fetch(`/api/v1/catalog-connections/${testId}`, {
-						method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
-					});
-				}
+				testMessage = testErrorMessage(r);
 			}
 		} catch (e: any) {
 			testStatus = 'fail';
@@ -187,17 +189,16 @@
 	}
 
 	async function saveConnection() {
-		if (verifiedId) {
-			closeModal();
-			loadConnections();
-			workspaceStore.load();
-			return;
-		}
-		const connUrl = buildConnUrl();
-		const body = buildConnBody(connUrl);
+		const body = buildConnBody(buildConnUrl());
 		const method = editingId ? 'PATCH' : 'POST';
 		const apiUrl = editingId ? `/api/v1/catalog-connections/${editingId}` : '/api/v1/catalog-connections';
-		await fetch(apiUrl, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+		const res = await fetch(apiUrl, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+		if (!res.ok) {
+			const r = await res.json().catch(() => ({}));
+			testStatus = 'fail';
+			testMessage = r.message || `Save failed (HTTP ${res.status})`;
+			return;
+		}
 		closeModal(); loadConnections(); workspaceStore.load();
 	}
 
@@ -346,8 +347,9 @@
 					<button class="btn-cancel h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer transition-colors duration-150 hover:border-border-hover hover:text-text-main" onclick={closeModal}>Cancel</button>
 					<button class="btn-save flex items-center gap-1.5 h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer transition-colors duration-150 hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed"
 						onclick={saveConnection}
-						disabled={!editingId && testStatus !== 'success'}>
-						{editingId ? (testStatus === 'success' ? 'Save' : 'Save anyway') : (testStatus === 'success' ? 'Create' : 'Save anyway')}
+						disabled={!editingId && testStatus !== 'success'}
+						title={!editingId && testStatus !== 'success' ? 'Test the connection first' : ''}>
+						{editingId ? (testStatus === 'success' ? 'Save' : 'Save anyway') : 'Create'}
 					</button>
 				</div>
 			</div>

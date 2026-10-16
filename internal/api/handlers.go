@@ -42,6 +42,8 @@ type Handlers struct {
 	metrics apiMetrics
 	// audit records security and data operations (#45; call sites #43).
 	audit audit.Recorder
+	// dialer is the SSRF-safe dialer for transient engines (#12).
+	dialer *connections.Dialer
 }
 
 // apiMetrics are the API's producers (#87); all nil-safe, zero without
@@ -94,6 +96,9 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		audit:          audit.Nop{},
 	}
 }
+
+// SetDialer wires the dialer connection tests build transient engines with.
+func (h *Handlers) SetDialer(d *connections.Dialer) { h.dialer = d }
 
 // SetAudit wires the audit recorder (#45).
 func (h *Handlers) SetAudit(r audit.Recorder) { h.audit = r }

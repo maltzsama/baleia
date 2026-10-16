@@ -19,3 +19,13 @@ func CatalogReconcileWorkflow(ctx workflow.Context) error {
 	})
 	return workflow.ExecuteActivity(ctx, activities.ReconcileCatalogs, activities.ReconcileCatalogsParams{DryRun: false}).Get(ctx, nil)
 }
+
+// EphemeralCatalogSweepWorkflow drops expired connection-test catalogs
+// (schedule ephemeral-catalog-sweeper, every minute, #12).
+func EphemeralCatalogSweepWorkflow(ctx workflow.Context) error {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+	return workflow.ExecuteActivity(ctx, activities.SweepEphemeralCatalogs).Get(ctx, nil)
+}
