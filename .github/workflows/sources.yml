@@ -14,6 +14,7 @@ on:
       - "internal/connections/**"
       - "internal/trino/**"
       - "internal/dialect/**"
+      - "internal/queryengine/**"
       - ".github/workflows/sources.yml"
 
 jobs:
@@ -117,9 +118,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test -count=1 -v ./internal/connections/... ./internal/dialect/... | tee test.log
+          go test -count=1 -v ./internal/connections/... ./internal/dialect/... ./internal/queryengine/postgresql/... | tee test.log
           # Every integration test must have run, not been skipped (Polaris
-          # needs its bootstrap; it is covered against the dev stack).
-          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_)' test.log | grep -v polaris; then
+          # needs its bootstrap; it is covered against the dev stack). A
+          # conformance subtest may skip by design; only a skipped top-level
+          # test fails the job.
+          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \()' test.log | grep -v polaris; then
             echo "an integration test was skipped" && exit 1
           fi
