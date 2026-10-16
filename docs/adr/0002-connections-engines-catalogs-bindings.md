@@ -104,22 +104,27 @@ Partially compliant.
   and search read the snapshot through `/workspaces/{id}/metadata/…` (#18): workspace members only,
   the catalogs the workspace may use only, never an engine call. The live chi explorer routes
   (`/connections/{id}/catalogs/{name}/namespaces…`) stay until the UI switches (#23).
-- The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, postgresql
-  and mysql. Create and update validate through `Provider.Validate`, store non-secret values in
-  `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes the
-  schemas. Connection tests and Lens table health read through the registry (#11).
+- The provider registry exists (`internal/connections`) for polaris, nessie, iceberg, lakekeeper,
+  postgresql and mysql. Create and update validate through `Provider.Validate`, store non-secret
+  values in `catalog_connections.config` and seal only secrets; `GET /connection-providers` exposes
+  the schemas. Connection tests and Lens table health read through the registry (#11).
 - The binder contract is `internal/bindings`; the Trino binder (`internal/bindings/trino`) owns
-  the projection of each bindable kind (polaris, nessie, iceberg REST, postgresql, mysql, mariadb,
-  sqlserver, oracle) and the registry and DDL, reading the provider's validated config (JDBC URLs
-  are built from host, port and database, never taken from users; protected properties cannot be
-  overridden). The catalog handlers and the binding API (`/catalogs/{id}/bindings`,
-  `/bindings/{id}`, `/bindings/{id}/sync`, `/engines/{id}/binding-support`) write through it and
-  write `catalog_bindings` themselves (#80). A catalog's binding on its Trino cluster's engine
-  ("primary") keeps the catalog's Trino columns in step, which the explorer, Lens and retrievers
-  still read, and cannot be deleted on its own. The `url` column is still written (derived with
-  `providers.LegacyURL`) for rows read by older code paths. The typed
-  `*_credentials` request fields (`internal/api/catalog_credentials.go`) stay until the UI uses
-  the provider schema (#22).
+  the projection of each bindable kind (polaris, nessie, iceberg REST, lakekeeper, postgresql,
+  mysql, mariadb, sqlserver, oracle) and the registry and DDL, reading the provider's validated
+  config (JDBC URLs are built from host, port and database, never taken from users; protected
+  properties cannot be overridden). The catalog handlers and the binding API
+  (`/catalogs/{id}/bindings`, `/bindings/{id}`, `/bindings/{id}/sync`,
+  `/engines/{id}/binding-support`) write through it and write `catalog_bindings` themselves (#80).
+  A catalog's binding on its Trino cluster's engine ("primary") keeps the catalog's Trino columns
+  in step, which the explorer, Lens and retrievers still read, and cannot be deleted on its own.
+  The `url` column is still written (derived with `providers.LegacyURL`) for rows read by older
+  code paths. The typed `*_credentials` request fields (`internal/api/catalog_credentials.go`) stay
+  until the UI uses the provider schema (#22).
+- Lakekeeper is a provider (`internal/connections/lakekeeper`, #35): warehouses are listed through
+  its management API (`/management/v1/warehouse`), read through the shared Iceberg REST reader at
+  `<url>/catalog`, and projected into Trino as an Iceberg REST catalog with vended credentials;
+  anonymous (dev) or OAuth2 client credentials. A pinned `quay.io/lakekeeper/catalog:v0.14.0` runs
+  in the compose `sources` profile.
 - Glue and Hive have no provider yet (#86).
 
 ## Alternatives considered

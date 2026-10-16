@@ -7,6 +7,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/clickhouse"
 	"github.com/galileostudio/baleia/internal/connections/flightsql"
 	"github.com/galileostudio/baleia/internal/connections/iceberg"
+	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
 	"github.com/galileostudio/baleia/internal/connections/mysql"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
 	"github.com/galileostudio/baleia/internal/connections/oracle"
@@ -33,6 +34,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		polaris.New(d),
 		nessie.New(d),
 		iceberg.New(d),
+		lakekeeper.New(d),
 		postgresql.New(d),
 		mysql.New(d),
 		mysql.NewMariaDB(d),

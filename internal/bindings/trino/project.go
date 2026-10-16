@@ -22,6 +22,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
 	"github.com/galileostudio/baleia/internal/connections/polaris"
 )
@@ -55,6 +56,8 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return nessieProjection(spec, src)
 	case connections.KindIcebergREST:
 		return icebergRESTProjection(spec, src)
+	case connections.KindLakekeeper:
+		return lakekeeperProjection(spec, src)
 	case connections.KindPostgreSQL:
 		return postgresProjection(spec, src)
 	case connections.KindMySQL:
@@ -142,6 +145,37 @@ func icebergRESTProjection(spec bindings.BindingSpec, src connections.Config) (p
 		return projection{}, err
 	}
 	return icebergREST(strings.TrimRight(src.Value("url"), "/"), w, src), nil
+}
+
+// lakekeeperProjection binds a Lakekeeper warehouse as an Iceberg REST catalog.
+// The warehouse (the binding's source ref) is the addressing key; OAuth2 client
+// credentials authenticate when auth_mode=oauth2. The OAuth2 credential is the
+// only secret; the rest are real connection values. Property names for Trino
+// 483: https://trino.io/docs/483/connector/iceberg.html
+func lakekeeperProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
+	w, err := warehouseOf(spec, src)
+	if err != nil {
+		return projection{}, err
+	}
+	p := projection{props: map[string]string{
+		"iceberg.catalog.type":                            "rest",
+		"iceberg.rest-catalog.uri":                        lakekeeper.New(nil).RESTURI(src),
+		"iceberg.rest-catalog.warehouse":                  w,
+		"iceberg.rest-catalog.vended-credentials-enabled": "true",
+		"fs.s3.enabled":                                   "true",
+	}}
+	if src.Value("auth_mode") == "oauth2" {
+		p.props["iceberg.rest-catalog.security"] = "OAUTH2"
+		p.props["iceberg.rest-catalog.oauth2.credential"] = src.Value("client_id") + ":" + src.Secret("client_secret")
+		if s := src.Value("token_endpoint"); s != "" {
+			p.props["iceberg.rest-catalog.oauth2.server-uri"] = s
+		}
+		if s := src.Value("scope"); s != "" {
+			p.props["iceberg.rest-catalog.oauth2.scope"] = s
+		}
+		p.secrets = append(p.secrets, "iceberg.rest-catalog.oauth2.credential")
+	}
+	return p, nil
 }
 
 // hostPort is the validated host and port of a database connection.

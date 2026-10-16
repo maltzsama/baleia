@@ -163,6 +163,28 @@ func TestProject_Kinds(t *testing.T) {
 			},
 			secrets: []string{"connection-password"},
 		},
+		{
+			name: "lakekeeper without auth",
+			src:  cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "wh"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://lk:8181/catalog",
+				"iceberg.rest-catalog.warehouse": "wh", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+			},
+		},
+		{
+			name: "lakekeeper with oauth2",
+			src: cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181/", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp.example/token", "scope": "catalog"},
+				map[string]string{"client_secret": "sec"}),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "wh"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://lk:8181/catalog",
+				"iceberg.rest-catalog.warehouse": "wh", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+				"iceberg.rest-catalog.security": "OAUTH2", "iceberg.rest-catalog.oauth2.credential": "id:sec",
+				"iceberg.rest-catalog.oauth2.server-uri": "https://idp.example/token", "iceberg.rest-catalog.oauth2.scope": "catalog",
+			},
+			secrets: []string{"iceberg.rest-catalog.oauth2.credential"},
+		},
 	}
 	b := New(nil, nil)
 	for _, c := range cases {
@@ -328,6 +350,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 		cfg(connections.KindMariaDB, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-6"}),
 		cfg(connections.KindSQLServer, map[string]string{"host": "db", "database": "d", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-7"}),
 		cfg(connections.KindOracle, map[string]string{"host": "db", "service_name": "S", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-8"}),
+		cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp/token"}, map[string]string{"client_secret": "FIXTURE-SECRET-9"}),
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
@@ -410,6 +433,7 @@ func TestSupports(t *testing.T) {
 	got := New(nil, nil).Supports()
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
+		connections.KindLakekeeper: {"iceberg"},
 		connections.KindPostgreSQL: {"postgresql"}, connections.KindMySQL: {"mysql"},
 		connections.KindMariaDB: {"mariadb"}, connections.KindSQLServer: {"sqlserver"}, connections.KindOracle: {"oracle"},
 	}

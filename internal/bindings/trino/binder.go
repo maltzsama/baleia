@@ -52,6 +52,7 @@ func (*Binder) Supports() map[connections.Kind][]string {
 		connections.KindPolaris:     {"iceberg"},
 		connections.KindNessie:      {"iceberg"},
 		connections.KindIcebergREST: {"iceberg"},
+		connections.KindLakekeeper:  {"iceberg"},
 		connections.KindPostgreSQL:  {"postgresql"},
 		connections.KindMySQL:       {"mysql"},
 		connections.KindMariaDB:     {"mariadb"},

@@ -283,6 +283,7 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 		connections.KindPolaris:     {Values: map[string]string{"url": "http://localhost:8181", "client_id": "a"}, Secrets: map[string]string{"client_secret": "b"}},
 		connections.KindNessie:      {Values: map[string]string{"url": "http://localhost:19120"}},
 		connections.KindIcebergREST: {Values: map[string]string{"url": "http://localhost:8181/catalog"}},
+		connections.KindLakekeeper:  {Values: map[string]string{"url": "http://localhost:8181"}},
 		connections.KindPostgreSQL:  {Values: map[string]string{"host": "localhost", "username": "u", "sslmode": "disable"}},
 		connections.KindMySQL:       {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
 		connections.KindMariaDB:     {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
@@ -344,8 +345,8 @@ func TestFromStored(t *testing.T) {
 		t.Errorf("postgresql = %+v", cfg)
 	}
 
-	if _, err := FromStored(reg, connections.KindGlue, pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
-		t.Errorf("glue: want ErrUnknownKind, got %v", err)
+	if _, err := FromStored(reg, connections.Kind("duckdb"), pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
+		t.Errorf("duckdb: want ErrUnknownKind, got %v", err)
 	}
 }
 
