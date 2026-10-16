@@ -509,6 +509,9 @@ type BindingSupport struct {
 	// ProtectedKeyPatterns Glob patterns (case-insensitive) of extra-property keys that cannot be overridden
 	ProtectedKeyPatterns []string `json:"protected_key_patterns"`
 	ReservedNames        []string `json:"reserved_names"`
+
+	// WritesSupported Whether Baleia supports writing through a binding of this kind; false for read-oriented sources (Unity Catalog)
+	WritesSupported bool `json:"writes_supported"`
 }
 
 // Catalog defines model for Catalog.

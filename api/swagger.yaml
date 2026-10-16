@@ -956,11 +956,12 @@ components:
 
     BindingSupport:
       type: object
-      required: [connectors, protected_key_patterns, reserved_names]
+      required: [connectors, protected_key_patterns, reserved_names, writes_supported]
       properties:
         connectors: { type: array, items: { type: string }, description: "The first is the default" }
         protected_key_patterns: { type: array, items: { type: string }, description: "Glob patterns (case-insensitive) of extra-property keys that cannot be overridden" }
         reserved_names: { type: array, items: { type: string } }
+        writes_supported: { type: boolean, description: "Whether Baleia supports writing through a binding of this kind; false for read-oriented sources (Unity Catalog)" }
 
     ConnectionProviderField:
       type: object

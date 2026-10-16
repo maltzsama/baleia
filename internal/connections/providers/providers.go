@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/glue"
 	"github.com/galileostudio/baleia/internal/connections/hive"
 	"github.com/galileostudio/baleia/internal/connections/iceberg"
+	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
 	"github.com/galileostudio/baleia/internal/connections/mysql"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
 	"github.com/galileostudio/baleia/internal/connections/oracle"
@@ -18,6 +19,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/connections/sqlserver"
 	"github.com/galileostudio/baleia/internal/connections/trino"
+	"github.com/galileostudio/baleia/internal/connections/unity"
 )
 
 // Options are server-side settings of providers that need them.
@@ -38,6 +40,8 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		iceberg.New(d),
 		hive.New(d),
 		glue.New(d, o.Glue),
+		lakekeeper.New(d),
+		unity.New(d),
 		postgresql.New(d),
 		mysql.New(d),
 		mysql.NewMariaDB(d),

@@ -283,19 +283,21 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 	// ErrDeniedNetwork before reaching anything.
 	reg := registry(t, connections.DialerOptions{})
 	configs := map[connections.Kind]connections.Config{
-		connections.KindPolaris:     {Values: map[string]string{"url": "http://localhost:8181", "client_id": "a"}, Secrets: map[string]string{"client_secret": "b"}},
-		connections.KindNessie:      {Values: map[string]string{"url": "http://localhost:19120"}},
-		connections.KindIcebergREST: {Values: map[string]string{"url": "http://localhost:8181/catalog"}},
+		connections.KindPolaris:       {Values: map[string]string{"url": "http://localhost:8181", "client_id": "a"}, Secrets: map[string]string{"client_secret": "b"}},
+		connections.KindNessie:        {Values: map[string]string{"url": "http://localhost:19120"}},
+		connections.KindIcebergREST:   {Values: map[string]string{"url": "http://localhost:8181/catalog"}},
 		connections.KindHiveMetastore: {Values: map[string]string{"metastore_uri": "thrift://localhost:9083"}},
 		connections.KindGlue:          {Values: map[string]string{"region": "us-east-1", "access_key": "a", "endpoint": "https://169.254.169.254:443"}, Secrets: map[string]string{"secret_key": "b"}},
-		connections.KindPostgreSQL:  {Values: map[string]string{"host": "localhost", "username": "u", "sslmode": "disable"}},
-		connections.KindMySQL:       {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
-		connections.KindMariaDB:     {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
-		connections.KindSQLServer:   {Values: map[string]string{"host": "localhost", "username": "u", "encrypt": "disable"}},
-		connections.KindOracle:      {Values: map[string]string{"host": "localhost", "service_name": "FREEPDB1", "username": "u"}},
-		connections.KindClickHouse:  {Values: map[string]string{"host": "localhost"}},
-		connections.KindFlightSQL:   {Values: map[string]string{"host": "localhost", "port": "32010", "tls": "false"}},
-		connections.KindTrino:       {Values: map[string]string{"url": "http://localhost:8080"}},
+		connections.KindLakekeeper:    {Values: map[string]string{"url": "http://localhost:8181"}},
+		connections.KindUnity:         {Values: map[string]string{"url": "http://localhost:8080"}},
+		connections.KindPostgreSQL:    {Values: map[string]string{"host": "localhost", "username": "u", "sslmode": "disable"}},
+		connections.KindMySQL:         {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
+		connections.KindMariaDB:       {Values: map[string]string{"host": "localhost", "username": "u", "tls": "false"}},
+		connections.KindSQLServer:     {Values: map[string]string{"host": "localhost", "username": "u", "encrypt": "disable"}},
+		connections.KindOracle:        {Values: map[string]string{"host": "localhost", "service_name": "FREEPDB1", "username": "u"}},
+		connections.KindClickHouse:    {Values: map[string]string{"host": "localhost"}},
+		connections.KindFlightSQL:     {Values: map[string]string{"host": "localhost", "port": "32010", "tls": "false"}},
+		connections.KindTrino:         {Values: map[string]string{"url": "http://localhost:8080"}},
 	}
 	// SQLite opens no network connection (TestSQLiteRootConfinement guards
 	// it); planned kinds never connect.
@@ -349,8 +351,8 @@ func TestFromStored(t *testing.T) {
 		t.Errorf("postgresql = %+v", cfg)
 	}
 
-	if _, err := FromStored(reg, connections.KindLakekeeper, pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
-		t.Errorf("lakekeeper: want ErrUnknownKind, got %v", err)
+	if _, err := FromStored(reg, connections.Kind("duckdb"), pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
+		t.Errorf("duckdb: want ErrUnknownKind, got %v", err)
 	}
 }
 
