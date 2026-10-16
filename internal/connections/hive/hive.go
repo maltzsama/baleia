@@ -39,7 +39,7 @@ func (*Provider) Status() connections.Status {
 
 func (*Provider) ConfigSchema() []connections.Field {
 	return []connections.Field{
-		{Key: "metastore_uri", Label: "Metastore URI", Type: connections.FieldText, Required: true, Help: "thrift://host:port of the Hive Metastore"},
+		{Key: "metastore_uri", Label: "Metastore URI", Type: connections.FieldText, Required: true, Help: "Thrift URI of the Hive Metastore, e.g. thrift://hms:9083"},
 		{Key: "storage.type", Label: "Storage type", Type: connections.FieldSelect, Options: []string{"s3"}, Default: "s3", Help: "Object storage the table data resides on (S3-compatible in v1)"},
 		{Key: "storage.endpoint", Label: "S3 endpoint", Type: connections.FieldText, Help: "e.g. http://rustfs:9000; empty uses the AWS default for the region"},
 		{Key: "storage.region", Label: "S3 region", Type: connections.FieldText, Help: "e.g. us-east-1"},
