@@ -15,6 +15,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `clickhouse` | ClickHouse | database | metadata, direct_engine | clickhouse | — | supported |
 | `doris` | Apache Doris | engine | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
 | `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | — | supported |
+| `hive` | Hive Metastore | metastore |  | — | trino (iceberg, hive, delta_lake) | supported |
 | `iceberg` | Iceberg REST catalog | iceberg | metadata | — | trino (iceberg) | supported |
 | `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | trino (mariadb) | supported |
 | `mysql` | MySQL | database | metadata, direct_engine | mysql | trino (mysql) | supported |
@@ -58,6 +59,18 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `username` | text |  |  | Basic authentication |
 | `password` | secret |  |  | Basic authentication |
 | `token` | secret |  |  | Token authentication |
+
+## `hive` — Hive Metastore
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `metastore_uri` | text | yes |  | thrift://host:port of the Hive Metastore |
+| `storage.type` | select |  | `s3` | one of `s3`. Object storage the table data resides on (S3-compatible in v1) |
+| `storage.endpoint` | text |  |  | e.g. http://rustfs:9000; empty uses the AWS default for the region |
+| `storage.region` | text |  |  | e.g. us-east-1 |
+| `storage.path_style` | bool |  | `false` | Required by most S3-compatible stores (RustFS, MinIO) |
+| `storage.access_key` | text |  |  |  |
+| `storage.secret_key` | secret |  |  |  |
 
 ## `iceberg` — Iceberg REST catalog
 

@@ -299,7 +299,7 @@ func (h *Handlers) planTest(ctx context.Context, p authz.Principal, provider con
 	if intents == nil || len(*intents) == 0 {
 		t.metadata = true
 		t.direct = slices.Contains(roles, connections.RoleDirect)
-		if provider.Family() == connections.FamilyDatabase && h.binder != nil && len(h.binder.Supports()[provider.Kind()]) > 0 {
+		if (provider.Family() == connections.FamilyDatabase || provider.Family() == connections.FamilyMetastore) && h.binder != nil && len(h.binder.Supports()[provider.Kind()]) > 0 {
 			if cluster, err := h.queries.GetDefaultTrinoCluster(ctx); err == nil && cluster.EngineID.Valid {
 				if eng, err := h.queries.GetEngineByID(ctx, cluster.EngineID); err == nil && eng.Enabled {
 					t.binds = append(t.binds, testBind{engine: eng, cluster: cluster})

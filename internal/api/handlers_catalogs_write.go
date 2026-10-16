@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -131,7 +132,7 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 		extra = *body.ExtraProps
 	}
 	spec := bindings.BindingSpec{EngineCatalog: body.TrinoCatalogName, Connector: connector, SourceRef: body.Warehouse, ExtraProps: extra}
-	proj, err := h.projectBinding(conn, spec)
+	proj, err := h.projectBinding(ctx, conn, cluster.EngineID, pgtype.UUID{}, spec)
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -203,10 +204,18 @@ func upsertPrimaryBinding(ctx context.Context, q db.Querier, cluster db.TrinoClu
 	})
 }
 
-// projectBinding projects a binding of conn through the Trino binder.
-func (h *Handlers) projectBinding(conn db.CatalogConnection, spec bindings.BindingSpec) (bindings.Projection, error) {
+// projectBinding projects a binding of conn through the Trino binder. A
+// Hive-connector catalog of a metastore whose connection also exposes Iceberg
+// or Delta catalogs on engineID gets Trino table redirection (#86).
+func (h *Handlers) projectBinding(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, spec bindings.BindingSpec) (bindings.Projection, error) {
 	_, cfg, err := h.connectionConfig(conn)
 	if err != nil {
+		return bindings.Projection{}, err
+	}
+	if spec.ExtraProps == nil {
+		spec.ExtraProps = map[string]string{}
+	}
+	if err := bindings.HiveRedirection(ctx, h.queries, connections.Kind(conn.Type), conn.ID, engineID, catalogID, spec.Connector, spec.ExtraProps); err != nil {
 		return bindings.Projection{}, err
 	}
 	return h.binder.Project(spec, cfg)
@@ -225,12 +234,12 @@ func catalogSpec(cat db.Catalog) (bindings.BindingSpec, error) {
 }
 
 // projectCatalog projects a stored catalog.
-func (h *Handlers) projectCatalog(conn db.CatalogConnection, cat db.Catalog) (bindings.Projection, error) {
+func (h *Handlers) projectCatalog(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, cat db.Catalog) (bindings.Projection, error) {
 	spec, err := catalogSpec(cat)
 	if err != nil {
 		return bindings.Projection{}, err
 	}
-	return h.projectBinding(conn, spec)
+	return h.projectBinding(ctx, conn, engineID, catalogID, spec)
 }
 
 // bindingInvalid reports a binding the request got wrong (422), as opposed
@@ -351,9 +360,13 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 	ev.Changes = catalogChanges(existing, newName, newTrinoName, newWarehouse, newConnector, extraProps)
 
 	// The new binding must project before anything changes.
+	cluster, eng, err := h.catalogEngine(ctx, existing)
+	if err != nil {
+		return nil, err
+	}
 	next := existing
 	next.TrinoCatalogName, next.Warehouse, next.Connector, next.ExtraProps = &newTrinoName, &newWarehouse, &newConnector, extraProps
-	proj, err := h.projectCatalog(conn, next)
+	proj, err := h.projectCatalog(ctx, conn, eng.ID, existing.ID, next)
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -362,10 +375,6 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		return nil, err
 	}
 
-	cluster, eng, err := h.catalogEngine(ctx, existing)
-	if err != nil {
-		return nil, err
-	}
 	cur, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: existing.ID, EngineID: eng.ID})
 	if err != nil {
 		return nil, fmt.Errorf("catalog binding: %w", err)
@@ -517,7 +526,7 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 	}
 	// A projection failure (e.g. unreadable credentials) fails closed before
 	// touching Trino.
-	proj, err := h.projectCatalog(conn, cat)
+	proj, err := h.projectCatalog(ctx, conn, eng.ID, cat.ID, cat)
 	if err != nil {
 		c := h.catalogResponse(ctx, cat, binding, "")
 		msg, status := err.Error(), CatalogSyncStatusError
