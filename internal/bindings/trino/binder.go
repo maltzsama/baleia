@@ -49,15 +49,16 @@ func (*Binder) EngineKind() string { return "trino" }
 
 func (*Binder) Supports() map[connections.Kind][]string {
 	return map[connections.Kind][]string{
-		connections.KindPolaris:     {"iceberg"},
-		connections.KindNessie:      {"iceberg"},
-		connections.KindIcebergREST: {"iceberg"},
+		connections.KindPolaris:       {"iceberg"},
+		connections.KindNessie:        {"iceberg"},
+		connections.KindIcebergREST:   {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
-		connections.KindPostgreSQL:  {"postgresql"},
-		connections.KindMySQL:       {"mysql"},
-		connections.KindMariaDB:     {"mariadb"},
-		connections.KindSQLServer:   {"sqlserver"},
-		connections.KindOracle:      {"oracle"},
+		connections.KindLakekeeper:    {"iceberg"},
+		connections.KindPostgreSQL:    {"postgresql"},
+		connections.KindMySQL:         {"mysql"},
+		connections.KindMariaDB:       {"mariadb"},
+		connections.KindSQLServer:     {"sqlserver"},
+		connections.KindOracle:        {"oracle"},
 	}
 }
 

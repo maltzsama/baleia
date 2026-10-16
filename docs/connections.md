@@ -17,6 +17,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | — | supported |
 | `hive` | Hive Metastore | metastore |  | — | trino (iceberg, hive, delta_lake) | supported |
 | `iceberg` | Iceberg REST catalog | iceberg | metadata | — | trino (iceberg) | supported |
+| `lakekeeper` | Lakekeeper | iceberg | metadata | — | trino (iceberg) | supported |
 | `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | trino (mariadb) | supported |
 | `mysql` | MySQL | database | metadata, direct_engine | mysql | trino (mysql) | supported |
 | `nessie` | Project Nessie | iceberg | metadata | — | trino (iceberg) | supported |
@@ -82,6 +83,17 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `client_id` | text |  |  |  |
 | `client_secret` | secret |  |  |  |
 | `oauth2_server_uri` | url |  |  | Default: <REST URI>/v1/oauth/tokens |
+| `scope` | text |  |  |  |
+
+## `lakekeeper` — Lakekeeper
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `url` | url | yes |  | Server root, e.g. http://lakekeeper:8181 (without /catalog) |
+| `auth_mode` | select |  | `none` | one of `none`, `oauth2`. none is for servers with authorization off |
+| `client_id` | text |  |  | Required with auth_mode=oauth2 |
+| `client_secret` | secret |  |  | Required with auth_mode=oauth2 |
+| `token_endpoint` | url |  |  | The IdP token endpoint (not the Lakekeeper URL); required with auth_mode=oauth2 |
 | `scope` | text |  |  |  |
 
 ## `mariadb` — MariaDB

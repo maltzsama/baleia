@@ -164,6 +164,28 @@ func TestProject_Kinds(t *testing.T) {
 			secrets: []string{"connection-password"},
 		},
 		{
+			name: "lakekeeper without auth",
+			src:  cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "wh"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://lk:8181/catalog",
+				"iceberg.rest-catalog.warehouse": "wh", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+			},
+		},
+		{
+			name: "lakekeeper with oauth2",
+			src: cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181/", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp.example/token", "scope": "catalog"},
+				map[string]string{"client_secret": "sec"}),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "wh"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://lk:8181/catalog",
+				"iceberg.rest-catalog.warehouse": "wh", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+				"iceberg.rest-catalog.security": "OAUTH2", "iceberg.rest-catalog.oauth2.credential": "id:sec",
+				"iceberg.rest-catalog.oauth2.server-uri": "https://idp.example/token", "iceberg.rest-catalog.oauth2.scope": "catalog",
+			},
+			secrets: []string{"iceberg.rest-catalog.oauth2.credential"},
+		},
+		{
 			name: "hive metastore as an iceberg catalog (default connector)",
 			src: cfg(connections.KindHiveMetastore, map[string]string{
 				"metastore_uri": "thrift://hms:9083", "storage.type": "s3",
@@ -356,6 +378,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 		cfg(connections.KindSQLServer, map[string]string{"host": "db", "database": "d", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-7"}),
 		cfg(connections.KindOracle, map[string]string{"host": "db", "service_name": "S", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-8"}),
 		cfg(connections.KindHiveMetastore, map[string]string{"metastore_uri": "thrift://hms:9083", "storage.access_key": "k"}, map[string]string{"storage.secret_key": "FIXTURE-SECRET-9"}),
+		cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181", "auth_mode": "oauth2", "client_id": "id", "token_endpoint": "https://idp/token"}, map[string]string{"client_secret": "FIXTURE-SECRET-10"}),
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
@@ -439,6 +462,7 @@ func TestSupports(t *testing.T) {
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
+		connections.KindLakekeeper:    {"iceberg"},
 		connections.KindPostgreSQL:    {"postgresql"}, connections.KindMySQL: {"mysql"},
 		connections.KindMariaDB: {"mariadb"}, connections.KindSQLServer: {"sqlserver"}, connections.KindOracle: {"oracle"},
 	}
