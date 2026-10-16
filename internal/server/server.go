@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metrics"
+	_ "github.com/galileostudio/baleia/internal/queryengine/clickhouse"
 	_ "github.com/galileostudio/baleia/internal/queryengine/mysql"
 	_ "github.com/galileostudio/baleia/internal/queryengine/oracle"
 	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
