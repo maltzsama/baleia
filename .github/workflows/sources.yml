@@ -118,7 +118,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test -count=1 -v ./internal/connections/... ./internal/dialect/... ./internal/queryengine/mysql/... ./internal/queryengine/postgresql/... ./internal/queryengine/sqlserver/... | tee test.log
+          # -p 1: Oracle exposes one namespace per user, and the provider and the
+          # engine conformance both use it; a serial run keeps their fixtures
+          # apart. Everything else uses a dedicated database and could run in
+          # parallel.
+          go test -count=1 -v -p 1 ./internal/connections/... ./internal/dialect/... ./internal/queryengine/mysql/... ./internal/queryengine/oracle/... ./internal/queryengine/postgresql/... ./internal/queryengine/sqlserver/... | tee test.log
           # Every integration test must have run, not been skipped (Polaris
           # needs its bootstrap; it is covered against the dev stack). A
           # conformance subtest may skip by design; only a skipped top-level
