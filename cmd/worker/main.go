@@ -28,6 +28,7 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 
 	// Engine kinds register themselves.
+	_ "github.com/galileostudio/baleia/internal/queryengine/clickhouse"
 	_ "github.com/galileostudio/baleia/internal/queryengine/mysql"
 	_ "github.com/galileostudio/baleia/internal/queryengine/oracle"
 	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
