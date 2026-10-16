@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -38,11 +39,12 @@ func New(endpoint, accessKey, secretKey, bucket string, useSSL bool) *S3Client {
 	var opts *minio.Options
 	if accessKey != "" || secretKey != "" {
 		opts = &minio.Options{
-			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-			Secure: useSSL,
+			Creds:     credentials.NewStaticV4(accessKey, secretKey, ""),
+			Secure:    useSSL,
+			Transport: obs.Transport(nil),
 		}
 	} else {
-		opts = &minio.Options{Secure: useSSL}
+		opts = &minio.Options{Secure: useSSL, Transport: obs.Transport(nil)}
 	}
 
 	mc, err := minio.New(ep, opts)

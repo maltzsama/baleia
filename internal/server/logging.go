@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // responseRecorder captures the status code and body size for logging.
@@ -73,6 +74,9 @@ func StructuredLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			}
 			if actor != "" {
 				attrs = append(attrs, "actor_id", actor)
+			}
+			if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+				attrs = append(attrs, "trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
 			}
 
 			logger.Info("http_request", attrs...)

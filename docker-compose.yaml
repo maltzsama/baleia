@@ -630,3 +630,20 @@ services:
       - "15000:5000"
     networks:
       - app_net
+
+  # ============================================
+  # TRACING - Jaeger (OTLP) (#47)
+  # Started only with `docker compose --profile tracing up -d`. Point Baleia
+  # at it with BALEIA_TRACING_ENABLED=true and
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317 (gRPC).
+  # ============================================
+  jaeger:
+    image: jaegertracing/jaeger:2.6.0
+    container_name: baleia_jaeger
+    profiles: ["tracing"]
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    networks:
+      - app_net

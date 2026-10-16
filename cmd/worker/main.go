@@ -26,6 +26,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 
 	// Engine kinds register themselves.
@@ -55,10 +56,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	shutdownTracing, err := obs.Setup(context.Background(), cfg.TracingEnabled, "worker")
+	if err != nil {
+		slog.Error("tracing setup", "err", err)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
+
 	reg := metrics.New("worker")
 	pool, err := dbpool.Open(context.Background(), cfg.DatabaseURL, dbpool.Options{
 		MaxConns: cfg.PoolSize(10), MinConns: int32(cfg.DBMinConns), MaxConnLifetime: cfg.DBMaxConnLifetime,
-		Tracer: reg.NewPoolTracer(),
+		Tracer: obs.PGXTracer(reg.NewPoolTracer()),
 	})
 	if err != nil {
 		slog.Error("failed to connect to database", "err", err)
@@ -69,7 +77,7 @@ func main() {
 
 	temporalMetrics, flushTemporal := reg.TemporalHandler()
 	defer func() { _ = flushTemporal() }()
-	c, err := dial.Temporal(context.Background(), cfg.TemporalHost, temporalMetrics, 30*time.Second)
+	c, err := dial.Temporal(context.Background(), cfg.TemporalHost, temporalMetrics, 30*time.Second, obs.ClientInterceptors())
 	if err != nil {
 		slog.Error("temporal", "err", err)
 		os.Exit(1)
@@ -88,7 +96,7 @@ func main() {
 		defer srv.Close()
 	}
 
-	w := worker.New(c, taskQueue, worker.Options{})
+	w := worker.New(c, taskQueue, worker.Options{Interceptors: obs.WorkerInterceptors()})
 
 	// The worker opens stored connection credentials (Lens table health), so it
 	// follows the same key policy as the API: refuse to start without a key

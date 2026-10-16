@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/glue"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 
 	// Engine kinds register themselves.
@@ -66,6 +67,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, keyring *crypto.Keyring, tempor
 
 func (s *Server) routes() {
 	s.mux.Use(middleware.RequestID)
+	s.mux.Use(obs.RouteName) // names the tracing span after chi has routed (#47)
 	if s.metrics != nil {
 		s.mux.Use(s.metrics.HTTP().Middleware) // route templates, never raw paths (#87)
 	}
@@ -130,7 +132,7 @@ func (s *Server) routes() {
 	// Engines run SQL (docs/adr/0002); catalog DDL runs as the Trino admin
 	// identity (docs/adr/0005). Both dial through the connections dialer.
 	engines := queryengine.NewManager(s.queries, s.keyring, conns, dialer)
-	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, dialer.HTTPClient(60*time.Second))
+	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, obs.WrapHTTPClient(dialer.HTTPClient(60*time.Second)))
 	binder := bindtrino.New(trinoAdmin, s.queries)
 
 	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
@@ -291,7 +293,7 @@ func extractToken(r *http.Request) string {
 }
 
 func (s *Server) Run(ctx context.Context) error {
-	srv := &http.Server{Addr: ":" + s.cfg.Port, Handler: s.mux}
+	srv := &http.Server{Addr: ":" + s.cfg.Port, Handler: obs.HTTPHandler(s.mux, "http.server")}
 	go func() {
 		<-ctx.Done()
 		srv.Shutdown(context.Background())

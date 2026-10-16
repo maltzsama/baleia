@@ -14,6 +14,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/connections"
 	trinoprovider "github.com/galileostudio/baleia/internal/connections/trino"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
 )
@@ -44,7 +45,7 @@ func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Con
 	}
 	service := valueOr(cfg.Value("service_user"), defaultServiceUser)
 	admin := valueOr(cfg.Value("admin_user"), defaultAdminUser)
-	hc := trinoprovider.HTTPClient(d, cfg, requestTimeout)
+	hc := obs.WrapHTTPClient(trinoprovider.HTTPClient(d, cfg, requestTimeout))
 	return &Engine{
 		id:     row.ID,
 		client: trinoclient.NewWithHTTPClient(url, service, hc),
@@ -54,7 +55,7 @@ func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Con
 
 // New builds an engine for a coordinator URL; tests and tools use it.
 func New(id, url, serviceUser, adminUser string, d *connections.Dialer) *Engine {
-	hc := d.HTTPClient(requestTimeout)
+	hc := obs.WrapHTTPClient(d.HTTPClient(requestTimeout))
 	return &Engine{
 		id:     id,
 		client: trinoclient.NewWithHTTPClient(url, valueOr(serviceUser, defaultServiceUser), hc),
