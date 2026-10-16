@@ -95,7 +95,8 @@ services:
     command: >
       sh -c "
       psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE temporal;' 2>/dev/null || true;
-      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE polaris;' 2>/dev/null || true
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE polaris;' 2>/dev/null || true;
+      psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE hive_metastore;' 2>/dev/null || true
       "
     restart: on-failure
 
@@ -494,3 +495,33 @@ services:
       - "18123:8123"
     networks:
       - app_net
+
+  # Hive Metastore (#86): a standalone metastore backed by Baleia's PostgreSQL,
+  # the metadata store for Iceberg, Hive and Delta tables on RustFS. Started
+  # only with `docker compose --profile sources up -d`. The image adds the
+  # PostgreSQL JDBC driver the official image omits; SERVICE_OPTS configures
+  # the JDO connection. Ports: 19083 on the host (9083 in the network).
+  hive-metastore:
+    build:
+      context: deploy/dev
+      dockerfile: hive.Dockerfile
+    image: baleia-hive-metastore:4.0.1
+    container_name: baleia_src_hive_metastore
+    profiles: ["sources"]
+    environment:
+      - SERVICE_NAME=metastore
+      - DB_DRIVER=postgres
+      - SERVICE_OPTS=-Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/hive_metastore -Djavax.jdo.option.ConnectionUserName=baleia -Djavax.jdo.option.ConnectionPassword=baleia
+    ports:
+      - "19083:9083"
+    networks:
+      - app_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9083"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
