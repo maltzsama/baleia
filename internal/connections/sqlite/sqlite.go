@@ -72,13 +72,21 @@ func (*Provider) ConfigSchema() []connections.Field {
 // ErrOutsideRoot means the path escapes BALEIA_SQLITE_ROOT.
 var ErrOutsideRoot = errors.New("database file is outside BALEIA_SQLITE_ROOT")
 
-// Resolve returns the real path of a database file, refusing anything that
-// leaves the root (../, absolute paths elsewhere, symlinks out of it).
+// Resolve returns the real path of a database file, confined to the
+// provider's root.
 func (p *Provider) Resolve(path string) (string, error) {
-	if p.opts.Root == "" {
+	return ResolvePath(p.opts.Root, path)
+}
+
+// ResolvePath returns the real path of a database file, refusing anything that
+// leaves root (../, absolute paths elsewhere, symlinks out of it). The
+// provider and the query engine (#83) confine through it, so both apply the
+// same rule (docs/adr/0011).
+func ResolvePath(root, path string) (string, error) {
+	if root == "" {
 		return "", errors.New("BALEIA_SQLITE_ROOT not set")
 	}
-	root, err := filepath.EvalSymlinks(filepath.Clean(p.opts.Root))
+	root, err := filepath.EvalSymlinks(filepath.Clean(root))
 	if err != nil {
 		return "", fmt.Errorf("BALEIA_SQLITE_ROOT: %w", err)
 	}
@@ -122,7 +130,28 @@ func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) 
 
 // writable reports whether both the connection and the server allow writes.
 func (p *Provider) writable(cfg connections.Config) bool {
-	return p.opts.AllowWrite && cfg.Value("read_write") == "true"
+	return WriteAllowed(p.opts.AllowWrite, cfg)
+}
+
+// WriteAllowed reports whether a connection may write: both the server
+// (BALEIA_SQLITE_ALLOW_WRITE) and the connection (read_write) must allow it.
+func WriteAllowed(serverAllowWrite bool, cfg connections.Config) bool {
+	return serverAllowWrite && cfg.Value("read_write") == "true"
+}
+
+// DSN is the file: URI of an already-resolved path. It is read-only (mode=ro
+// plus query_only) unless writable, and always bounds lock waits. The query
+// engine (#83) opens through it, so both share the read-only rule.
+func DSN(path string, writable bool) string {
+	q := url.Values{}
+	q.Add("_pragma", "busy_timeout(5000)")
+	if writable {
+		q.Set("mode", "rw")
+	} else {
+		q.Set("mode", "ro")
+		q.Add("_pragma", "query_only(1)")
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String() + "?" + q.Encode()
 }
 
 // open opens the resolved file. Confinement is path-based: it holds while
@@ -134,16 +163,7 @@ func (p *Provider) open(cfg connections.Config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	q := url.Values{}
-	q.Add("_pragma", "busy_timeout(5000)")
-	if p.writable(cfg) {
-		q.Set("mode", "rw")
-	} else {
-		q.Set("mode", "ro")
-		q.Add("_pragma", "query_only(1)")
-	}
-	dsn := (&url.URL{Scheme: "file", Path: path}).String() + "?" + q.Encode()
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", DSN(path, p.writable(cfg)))
 	if err != nil {
 		return nil, err
 	}

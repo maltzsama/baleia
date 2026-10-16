@@ -25,6 +25,7 @@ import (
 	_ "github.com/galileostudio/baleia/internal/queryengine/mysql"
 	_ "github.com/galileostudio/baleia/internal/queryengine/oracle"
 	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
+	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
 	_ "github.com/galileostudio/baleia/internal/queryengine/sqlserver"
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -118,6 +119,9 @@ func (s *Server) routes() {
 	if err != nil {
 		panic("connection providers: " + err.Error())
 	}
+	// The SQLite engine confines files to the same root the provider uses
+	// (docs/adr/0011).
+	sqliteengine.Configure(sqliteengine.Options{Root: s.cfg.SQLiteRoot, AllowWrite: s.cfg.SQLiteAllowWrite})
 
 	// Engines run SQL (docs/adr/0002); catalog DDL runs as the Trino admin
 	// identity (docs/adr/0005). Both dial through the connections dialer.
