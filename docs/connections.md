@@ -147,6 +147,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `database` | text |  | `master` | Database to connect to; every database the login may access is listed |
 | `encrypt` | select |  | `true` | one of `true`, `false`, `disable`, `strict` |
 | `trust_server_certificate` | bool |  | `false` |  |
+| `cancel_with_kill` | bool |  | `false` | Requires the ALTER ANY CONNECTION permission; lets a running statement be cancelled from another process |
 | `username` | text | yes |  |  |
 | `password` | secret |  |  |  |
 

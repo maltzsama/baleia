@@ -59,6 +59,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "database", Label: "Database", Type: connections.FieldText, Default: "master", Help: "Database to connect to; every database the login may access is listed"},
 		{Key: "encrypt", Label: "Encrypt", Type: connections.FieldSelect, Default: "true", Options: encryptModes},
 		{Key: "trust_server_certificate", Label: "Trust server certificate", Type: connections.FieldBool, Default: "false"},
+		{Key: "cancel_with_kill", Label: "Cancel statements with KILL", Type: connections.FieldBool, Default: "false", Help: "Requires the ALTER ANY CONNECTION permission; lets a running statement be cancelled from another process"},
 		{Key: "username", Label: "Username", Type: connections.FieldText, Required: true},
 		{Key: "password", Label: "Password", Type: connections.FieldSecret},
 	}

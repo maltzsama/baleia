@@ -24,6 +24,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metrics"
 	_ "github.com/galileostudio/baleia/internal/queryengine/mysql"
 	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
+	_ "github.com/galileostudio/baleia/internal/queryengine/sqlserver"
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/trino"
