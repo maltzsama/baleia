@@ -162,8 +162,8 @@ const (
 
 // Defines values for EngineCapabilitiesReadOnly.
 const (
-	Enforced EngineCapabilitiesReadOnly = "enforced"
-	None     EngineCapabilitiesReadOnly = "none"
+	EngineCapabilitiesReadOnlyEnforced EngineCapabilitiesReadOnly = "enforced"
+	EngineCapabilitiesReadOnlyNone     EngineCapabilitiesReadOnly = "none"
 )
 
 // Defines values for ExecutionStatus.
@@ -278,6 +278,22 @@ const (
 	QueryStatementStatusSkipped   QueryStatementStatus = "skipped"
 )
 
+// Defines values for ReconcileActionKind.
+const (
+	ReconcileActionKindCreate   ReconcileActionKind = "create"
+	ReconcileActionKindDrop     ReconcileActionKind = "drop"
+	ReconcileActionKindNone     ReconcileActionKind = "none"
+	ReconcileActionKindRecreate ReconcileActionKind = "recreate"
+)
+
+// Defines values for ReconcileActionResult.
+const (
+	ReconcileActionResultApplied       ReconcileActionResult = "applied"
+	ReconcileActionResultFailed        ReconcileActionResult = "failed"
+	ReconcileActionResultReported      ReconcileActionResult = "reported"
+	ReconcileActionResultSkippedDryRun ReconcileActionResult = "skipped_dry_run"
+)
+
 // Defines values for RetrieverRefreshType.
 const (
 	RetrieverRefreshTypeFull        RetrieverRefreshType = "full"
@@ -383,10 +399,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
-	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
-	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
-	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
+	Cancelled ListExecutionsParamsStatus = "cancelled"
+	Failed    ListExecutionsParamsStatus = "failed"
+	Finished  ListExecutionsParamsStatus = "finished"
+	Running   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for SearchMetadataParamsKind.
@@ -1239,6 +1255,38 @@ type QueryStatement struct {
 // QueryStatementStatus All statements of an execution run in order in one engine session. `pending` has not started yet; `skipped` never ran because an earlier statement failed, the execution was cancelled, or the worker was interrupted.
 type QueryStatementStatus string
 
+// ReconcileAction defines model for ReconcileAction.
+type ReconcileAction struct {
+	// Catalog The catalog's name in the engine
+	Catalog   string              `json:"catalog"`
+	ErrorCode *string             `json:"error_code"`
+	Kind      ReconcileActionKind `json:"kind"`
+
+	// Reason missing_in_engine, version_mismatch, binding_in_error, pending_drop, already_dropped, unprojectable, unknown
+	Reason string                `json:"reason"`
+	Result ReconcileActionResult `json:"result"`
+}
+
+// ReconcileActionKind defines model for ReconcileAction.Kind.
+type ReconcileActionKind string
+
+// ReconcileActionResult defines model for ReconcileAction.Result.
+type ReconcileActionResult string
+
+// ReconcileRun defines model for ReconcileRun.
+type ReconcileRun struct {
+	Actions []ReconcileAction `json:"actions"`
+
+	// Adopted Catalogs the engine has that Baleia does not manage: reported, never dropped
+	Adopted    []string           `json:"adopted"`
+	DryRun     bool               `json:"dry_run"`
+	EngineId   openapi_types.UUID `json:"engine_id"`
+	Error      *string            `json:"error"`
+	FinishedAt time.Time          `json:"finished_at"`
+	Id         openapi_types.UUID `json:"id"`
+	StartedAt  time.Time          `json:"started_at"`
+}
+
 // RefreshRequest defines model for RefreshRequest.
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
@@ -1583,6 +1631,16 @@ type GetDialectParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
+// ReconcileEngineParams defines parameters for ReconcileEngine.
+type ReconcileEngineParams struct {
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty"`
+}
+
+// ListReconcileRunsParams defines parameters for ListReconcileRuns.
+type ListReconcileRunsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListMigrationItemsParams defines parameters for ListMigrationItems.
 type ListMigrationItemsParams struct {
 	Status  *ListMigrationItemsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
@@ -1592,6 +1650,11 @@ type ListMigrationItemsParams struct {
 
 // ListMigrationItemsParamsStatus defines parameters for ListMigrationItems.
 type ListMigrationItemsParamsStatus string
+
+// ReconcileTrinoParams defines parameters for ReconcileTrino.
+type ReconcileTrinoParams struct {
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty"`
+}
 
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {

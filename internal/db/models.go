@@ -106,6 +106,17 @@ type CatalogConnection struct {
 	CredentialsReadOnly bool               `json:"credentials_read_only"`
 }
 
+type CatalogReconcileRun struct {
+	ID         pgtype.UUID        `json:"id"`
+	EngineID   pgtype.UUID        `json:"engine_id"`
+	StartedAt  pgtype.Timestamptz `json:"started_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	DryRun     bool               `json:"dry_run"`
+	Actions    []byte             `json:"actions"`
+	Adopted    []string           `json:"adopted"`
+	Error      *string            `json:"error"`
+}
+
 type ClusterSnapshot struct {
 	ID               pgtype.UUID        `json:"id"`
 	CapturedAt       pgtype.Timestamptz `json:"captured_at"`

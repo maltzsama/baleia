@@ -144,6 +144,12 @@ type ServerInterface interface {
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(w http.ResponseWriter, r *http.Request, id PathId)
+	// Repair the engine's managed catalog drift and report the rest — admins
+	// (POST /engines/{id}/reconcile)
+	ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams)
+	// Latest reconcile runs of the engine, newest first — admins
+	// (GET /engines/{id}/reconcile-runs)
+	ListReconcileRuns(w http.ResponseWriter, r *http.Request, id PathId, params ListReconcileRunsParams)
 	// Current user profile
 	// (GET /me)
 	GetProfile(w http.ResponseWriter, r *http.Request)
@@ -198,9 +204,9 @@ type ServerInterface interface {
 	// Remove user from team — admin only
 	// (DELETE /teams/{id}/members/{user_id})
 	RemoveTeamMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID)
-	// Compare the registry against the live Trino catalogs and report divergences
+	// Deprecated alias of POST /engines/{id}/reconcile for the default Trino engine
 	// (POST /trino/reconcile)
-	ReconcileTrino(w http.ResponseWriter, r *http.Request)
+	ReconcileTrino(w http.ResponseWriter, r *http.Request, params ReconcileTrinoParams)
 	// List all users — admin only
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -579,6 +585,18 @@ func (_ Unimplemented) ListEngineBindings(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Repair the engine's managed catalog drift and report the rest — admins
+// (POST /engines/{id}/reconcile)
+func (_ Unimplemented) ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Latest reconcile runs of the engine, newest first — admins
+// (GET /engines/{id}/reconcile-runs)
+func (_ Unimplemented) ListReconcileRuns(w http.ResponseWriter, r *http.Request, id PathId, params ListReconcileRunsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Current user profile
 // (GET /me)
 func (_ Unimplemented) GetProfile(w http.ResponseWriter, r *http.Request) {
@@ -687,9 +705,9 @@ func (_ Unimplemented) RemoveTeamMember(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Compare the registry against the live Trino catalogs and report divergences
+// Deprecated alias of POST /engines/{id}/reconcile for the default Trino engine
 // (POST /trino/reconcile)
-func (_ Unimplemented) ReconcileTrino(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) ReconcileTrino(w http.ResponseWriter, r *http.Request, params ReconcileTrinoParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2279,6 +2297,94 @@ func (siw *ServerInterfaceWrapper) ListEngineBindings(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ReconcileEngine operation middleware
+func (siw *ServerInterfaceWrapper) ReconcileEngine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReconcileEngineParams
+
+	// ------------- Optional query parameter "dry_run" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dry_run", r.URL.Query(), &params.DryRun)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dry_run", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReconcileEngine(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListReconcileRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListReconcileRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListReconcileRunsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReconcileRuns(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProfile operation middleware
 func (siw *ServerInterfaceWrapper) GetProfile(w http.ResponseWriter, r *http.Request) {
 
@@ -2797,6 +2903,8 @@ func (siw *ServerInterfaceWrapper) RemoveTeamMember(w http.ResponseWriter, r *ht
 // ReconcileTrino operation middleware
 func (siw *ServerInterfaceWrapper) ReconcileTrino(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -2805,8 +2913,19 @@ func (siw *ServerInterfaceWrapper) ReconcileTrino(w http.ResponseWriter, r *http
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReconcileTrinoParams
+
+	// ------------- Optional query parameter "dry_run" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dry_run", r.URL.Query(), &params.DryRun)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dry_run", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ReconcileTrino(w, r)
+		siw.Handler.ReconcileTrino(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4708,6 +4827,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engines/{id}/bindings", wrapper.ListEngineBindings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engines/{id}/reconcile", wrapper.ReconcileEngine)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/reconcile-runs", wrapper.ListReconcileRuns)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetProfile)
@@ -6629,6 +6754,107 @@ func (response ListEngineBindings404JSONResponse) VisitListEngineBindingsRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ReconcileEngineRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ReconcileEngineParams
+}
+
+type ReconcileEngineResponseObject interface {
+	VisitReconcileEngineResponse(w http.ResponseWriter) error
+}
+
+type ReconcileEngine200JSONResponse ReconcileRun
+
+func (response ReconcileEngine200JSONResponse) VisitReconcileEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReconcileEngine401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReconcileEngine401JSONResponse) VisitReconcileEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReconcileEngine403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReconcileEngine403JSONResponse) VisitReconcileEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReconcileEngine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReconcileEngine404JSONResponse) VisitReconcileEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReconcileEngine422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ReconcileEngine422JSONResponse) VisitReconcileEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListReconcileRunsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListReconcileRunsParams
+}
+
+type ListReconcileRunsResponseObject interface {
+	VisitListReconcileRunsResponse(w http.ResponseWriter) error
+}
+
+type ListReconcileRuns200JSONResponse []ReconcileRun
+
+func (response ListReconcileRuns200JSONResponse) VisitListReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListReconcileRuns401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListReconcileRuns401JSONResponse) VisitListReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListReconcileRuns403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListReconcileRuns403JSONResponse) VisitListReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListReconcileRuns404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListReconcileRuns404JSONResponse) VisitListReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetProfileRequestObject struct {
 }
 
@@ -7280,22 +7506,14 @@ func (response RemoveTeamMember404JSONResponse) VisitRemoveTeamMemberResponse(w 
 }
 
 type ReconcileTrinoRequestObject struct {
+	Params ReconcileTrinoParams
 }
 
 type ReconcileTrinoResponseObject interface {
 	VisitReconcileTrinoResponse(w http.ResponseWriter) error
 }
 
-type ReconcileTrino200JSONResponse struct {
-	// Ok Registry rows confirmed present in Trino and at the right version
-	Ok *[]Catalog `json:"ok,omitempty"`
-
-	// OrphanInTrino Live Trino catalog names with no enabled registry row
-	OrphanInTrino *[]string `json:"orphan_in_trino,omitempty"`
-
-	// Pending Registry rows with sync_status != synced
-	Pending *[]Catalog `json:"pending,omitempty"`
-}
+type ReconcileTrino200JSONResponse ReconcileRun
 
 func (response ReconcileTrino200JSONResponse) VisitReconcileTrinoResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -7318,6 +7536,17 @@ type ReconcileTrino403JSONResponse struct{ ForbiddenJSONResponse }
 func (response ReconcileTrino403JSONResponse) VisitReconcileTrinoResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReconcileTrino422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ReconcileTrino422JSONResponse) VisitReconcileTrinoResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9001,6 +9230,12 @@ type StrictServerInterface interface {
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error)
+	// Repair the engine's managed catalog drift and report the rest — admins
+	// (POST /engines/{id}/reconcile)
+	ReconcileEngine(ctx context.Context, request ReconcileEngineRequestObject) (ReconcileEngineResponseObject, error)
+	// Latest reconcile runs of the engine, newest first — admins
+	// (GET /engines/{id}/reconcile-runs)
+	ListReconcileRuns(ctx context.Context, request ListReconcileRunsRequestObject) (ListReconcileRunsResponseObject, error)
 	// Current user profile
 	// (GET /me)
 	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
@@ -9055,7 +9290,7 @@ type StrictServerInterface interface {
 	// Remove user from team — admin only
 	// (DELETE /teams/{id}/members/{user_id})
 	RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error)
-	// Compare the registry against the live Trino catalogs and report divergences
+	// Deprecated alias of POST /engines/{id}/reconcile for the default Trino engine
 	// (POST /trino/reconcile)
 	ReconcileTrino(ctx context.Context, request ReconcileTrinoRequestObject) (ReconcileTrinoResponseObject, error)
 	// List all users — admin only
@@ -10384,6 +10619,60 @@ func (sh *strictHandler) ListEngineBindings(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ReconcileEngine operation middleware
+func (sh *strictHandler) ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams) {
+	var request ReconcileEngineRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReconcileEngine(ctx, request.(ReconcileEngineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReconcileEngine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReconcileEngineResponseObject); ok {
+		if err := validResponse.VisitReconcileEngineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListReconcileRuns operation middleware
+func (sh *strictHandler) ListReconcileRuns(w http.ResponseWriter, r *http.Request, id PathId, params ListReconcileRunsParams) {
+	var request ListReconcileRunsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListReconcileRuns(ctx, request.(ListReconcileRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListReconcileRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListReconcileRunsResponseObject); ok {
+		if err := validResponse.VisitListReconcileRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetProfile operation middleware
 func (sh *strictHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	var request GetProfileRequestObject
@@ -10879,8 +11168,10 @@ func (sh *strictHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request
 }
 
 // ReconcileTrino operation middleware
-func (sh *strictHandler) ReconcileTrino(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ReconcileTrino(w http.ResponseWriter, r *http.Request, params ReconcileTrinoParams) {
 	var request ReconcileTrinoRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ReconcileTrino(ctx, request.(ReconcileTrinoRequestObject))

@@ -305,6 +305,65 @@ func (q *Queries) GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.U
 	return i, err
 }
 
+const insertReconcileRun = `-- name: InsertReconcileRun :one
+WITH run AS (
+    INSERT INTO catalog_reconcile_runs (engine_id, started_at, finished_at, dry_run, actions, adopted, error)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING id, engine_id, started_at, finished_at, dry_run, actions, adopted, error
+), pruned AS (
+    DELETE FROM catalog_reconcile_runs
+    WHERE engine_id = $1 AND id NOT IN (
+        SELECT id FROM catalog_reconcile_runs WHERE engine_id = $1 ORDER BY started_at DESC LIMIT 99
+    )
+)
+SELECT id, engine_id, started_at, finished_at, dry_run, actions, adopted, error FROM run
+`
+
+type InsertReconcileRunParams struct {
+	EngineID   pgtype.UUID        `json:"engine_id"`
+	StartedAt  pgtype.Timestamptz `json:"started_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	DryRun     bool               `json:"dry_run"`
+	Actions    []byte             `json:"actions"`
+	Adopted    []string           `json:"adopted"`
+	Error      *string            `json:"error"`
+}
+
+type InsertReconcileRunRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	EngineID   pgtype.UUID        `json:"engine_id"`
+	StartedAt  pgtype.Timestamptz `json:"started_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	DryRun     bool               `json:"dry_run"`
+	Actions    []byte             `json:"actions"`
+	Adopted    []string           `json:"adopted"`
+	Error      *string            `json:"error"`
+}
+
+func (q *Queries) InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error) {
+	row := q.db.QueryRow(ctx, insertReconcileRun,
+		arg.EngineID,
+		arg.StartedAt,
+		arg.FinishedAt,
+		arg.DryRun,
+		arg.Actions,
+		arg.Adopted,
+		arg.Error,
+	)
+	var i InsertReconcileRunRow
+	err := row.Scan(
+		&i.ID,
+		&i.EngineID,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.DryRun,
+		&i.Actions,
+		&i.Adopted,
+		&i.Error,
+	)
+	return i, err
+}
+
 const listBindingStatusByCatalog = `-- name: ListBindingStatusByCatalog :many
 SELECT s.binding_id, s.lifecycle_state, s.sync_status, s.engine_error FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id WHERE b.catalog_id = $1
 `
@@ -403,6 +462,90 @@ func (q *Queries) ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID
 			&i.LastErrorCode,
 			&i.LastErrorMessage,
 			&i.StateChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listManagedBindingsOfEngine = `-- name: ListManagedBindingsOfEngine :many
+SELECT id, catalog_id, engine_id, engine_catalog_name, connector, extra_props, mode, enabled, created_at, updated_at, lifecycle_state, desired_version, last_error_code, last_error_message, state_changed_at FROM catalog_bindings
+WHERE engine_id = $1 AND mode = 'managed'
+ORDER BY engine_catalog_name
+`
+
+// The managed bindings of an engine the reconciler checks (#37).
+func (q *Queries) ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error) {
+	rows, err := q.db.Query(ctx, listManagedBindingsOfEngine, engineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CatalogBinding
+	for rows.Next() {
+		var i CatalogBinding
+		if err := rows.Scan(
+			&i.ID,
+			&i.CatalogID,
+			&i.EngineID,
+			&i.EngineCatalogName,
+			&i.Connector,
+			&i.ExtraProps,
+			&i.Mode,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LifecycleState,
+			&i.DesiredVersion,
+			&i.LastErrorCode,
+			&i.LastErrorMessage,
+			&i.StateChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReconcileRuns = `-- name: ListReconcileRuns :many
+SELECT id, engine_id, started_at, finished_at, dry_run, actions, adopted, error FROM catalog_reconcile_runs
+WHERE engine_id = $1
+ORDER BY started_at DESC
+LIMIT $2
+`
+
+type ListReconcileRunsParams struct {
+	EngineID pgtype.UUID `json:"engine_id"`
+	Limit    int32       `json:"limit"`
+}
+
+func (q *Queries) ListReconcileRuns(ctx context.Context, arg ListReconcileRunsParams) ([]CatalogReconcileRun, error) {
+	rows, err := q.db.Query(ctx, listReconcileRuns, arg.EngineID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CatalogReconcileRun
+	for rows.Next() {
+		var i CatalogReconcileRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.EngineID,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.DryRun,
+			&i.Actions,
+			&i.Adopted,
+			&i.Error,
 		); err != nil {
 			return nil, err
 		}

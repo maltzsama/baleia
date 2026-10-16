@@ -1,0 +1,19 @@
+meta {
+  name: Reconcile (member -> 403)
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{base_url}}/engines/{{trino_engine_id}}/reconcile
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 403
+}

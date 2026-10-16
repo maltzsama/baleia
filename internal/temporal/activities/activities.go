@@ -53,6 +53,8 @@ type Activities struct {
 	observeEngine engineObserver
 	// audit records data operations (#45; call sites #43).
 	audit audit.Recorder
+	// reconcileEngine reconciles a federated engine's bindings (#37).
+	reconcileEngine engineReconciler
 }
 
 // SetAudit wires the audit recorder (#45).
@@ -105,6 +107,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(AdvanceRetrieverSchedule)
 	w.RegisterActivity(SyncCatalogMetadata)
 	w.RegisterActivity(EnsureAuditPartitions)
+	w.RegisterActivity(ReconcileCatalogs)
 	w.RegisterActivity(RefreshEngineCatalogs)
 	w.RegisterActivity(ListSyncableCatalogs)
 }

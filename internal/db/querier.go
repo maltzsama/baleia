@@ -154,6 +154,7 @@ type Querier interface {
 	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
 	InsertMetadataColumns(ctx context.Context, arg InsertMetadataColumnsParams) error
+	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
@@ -185,6 +186,8 @@ type Querier interface {
 	// hosting a catalog granted to one of their workspaces.
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
+	// The managed bindings of an engine the reconciler checks (#37).
+	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
 	// The catalogs a workspace may use with their freshness and their enabled
 	// bindings (what the editor's target selector offers, #24).
 	ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]ListMetadataCatalogsRow, error)
@@ -200,6 +203,7 @@ type Querier interface {
 	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error)
 	// Only returns statements of an execution that belongs to the given workspace.
 	ListQueryStatementsByWorkspace(ctx context.Context, arg ListQueryStatementsByWorkspaceParams) ([]QueryStatement, error)
+	ListReconcileRuns(ctx context.Context, arg ListReconcileRunsParams) ([]CatalogReconcileRun, error)
 	ListRetrieverRefreshHistory(ctx context.Context, arg ListRetrieverRefreshHistoryParams) ([]RetrieverRefreshHistory, error)
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)

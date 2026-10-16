@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/bindings"
+	"github.com/galileostudio/baleia/internal/bindings/stored"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/dbpool"
 	"github.com/galileostudio/baleia/internal/metadata"
@@ -135,6 +136,20 @@ func main() {
 		return err
 	})
 	reg.WatchMetadataStaleness(db.New(pool).MaxMetadataStalenessSeconds)
+	// Binding reconciliation (#37): managed drift only; adopted catalogs are
+	// reported, never changed.
+	projector := stored.Projector{Store: db.New(pool), Keyring: keyring, Providers: conns, Binder: binder}
+	act.SetEngineReconciler(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID, dryRun bool, onAction func(context.Context, bindings.Action)) (bindings.Report, error) {
+		q := db.New(pool)
+		r := bindings.Reconciler{
+			Lifecycle:  bindings.Lifecycle{Store: q, Binder: binder.WithStore(q), Engine: bindings.EngineRef{ID: eng.ID, ClusterID: clusterID}, ConnectionID: eng.ConnectionID},
+			Store:      q,
+			Project:    projector.Project,
+			MaxActions: cfg.ReconcileMaxActions,
+			OnAction:   onAction,
+		}
+		return r.Run(ctx, dryRun)
+	})
 	act.SetAudit(audit.NewPostgres(db.New(pool), conns.SecretKeys(), reg.Audit().WriteFailed))
 	activities.Register(w, act)
 
@@ -148,6 +163,7 @@ func main() {
 	w.RegisterWorkflow(workflows.MetadataSyncWorkflow)
 	w.RegisterWorkflow(workflows.MetadataSyncDispatchWorkflow)
 	w.RegisterWorkflow(workflows.AuditPartitionsWorkflow)
+	w.RegisterWorkflow(workflows.CatalogReconcileWorkflow)
 
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
@@ -163,12 +179,31 @@ func main() {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)
 		}
+		// Binding reconciliation on a schedule is opt-in (#37).
+		if cfg.ReconcileInterval > 0 {
+			err = schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
+				{ID: schedules.CatalogReconcile, Workflow: workflows.CatalogReconcileWorkflow, Every: cfg.ReconcileInterval},
+			})
+		} else {
+			err = schedules.Remove(context.Background(), c, schedules.CatalogReconcile)
+		}
+		if err != nil {
+			slog.Error("failed to ensure the reconcile schedule", "err", err)
+			os.Exit(1)
+		}
 		slog.Info("temporal schedules ensured")
 	}
 
 	slog.Info("worker started", "queue", taskQueue, "schedules_enabled", cfg.SchedulesEnabled)
 
 	go serveHealth("WORKER_HEALTH_PORT", "8081")
+
+	// One dry reconcile at boot: drift shows up in the log (counts only).
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		act.ReconcileAtBoot(ctx)
+	}()
 
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		slog.Error("worker error", "err", err)

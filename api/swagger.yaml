@@ -723,6 +723,34 @@ components:
           items: { $ref: "#/components/schemas/AuditEvent" }
         next_cursor: { type: string, nullable: true }
 
+    ReconcileAction:
+      type: object
+      required: [catalog, kind, reason, result]
+      properties:
+        catalog: { type: string, description: "The catalog's name in the engine" }
+        kind: { type: string, enum: [create, recreate, drop, none] }
+        reason: { type: string, description: "missing_in_engine, version_mismatch, binding_in_error, pending_drop, already_dropped, unprojectable, unknown" }
+        result: { type: string, enum: [applied, failed, skipped_dry_run, reported] }
+        error_code: { type: string, nullable: true }
+
+    ReconcileRun:
+      type: object
+      required: [id, engine_id, started_at, finished_at, dry_run, actions, adopted]
+      properties:
+        id: { type: string, format: uuid }
+        engine_id: { type: string, format: uuid }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        dry_run: { type: boolean }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/ReconcileAction" }
+        adopted:
+          type: array
+          items: { type: string }
+          description: "Catalogs the engine has that Baleia does not manage: reported, never dropped"
+        error: { type: string, nullable: true }
+
     MetadataFreshness:
       type: object
       properties:
@@ -2649,25 +2677,68 @@ paths:
     post:
       tags: [Catalog]
       operationId: reconcileTrino
-      summary: "Compare the registry against the live Trino catalogs and report divergences"
-      description: |
-        On-demand verification (NOT a loop). Lists every catalog row whose
-        `sync_status` is not `synced`, and every live Trino catalog with no
-        matching enabled row. Does not re-issue DDL by itself; callers use
-        the per-row /catalogs/{id}/sync endpoint to fix drift.
+      deprecated: true
+      summary: "Deprecated alias of POST /engines/{id}/reconcile for the default Trino engine"
+      parameters:
+        - { name: dry_run, in: query, schema: { type: boolean, default: true } }
       responses:
         "200":
           description: "Reconcile report"
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  pending:    { type: array, items: { $ref: "#/components/schemas/Catalog" }, description: "Registry rows with sync_status != synced" }
-                  orphan_in_trino: { type: array, items: { type: string }, description: "Live Trino catalog names with no enabled registry row" }
-                  ok:         { type: array, items: { $ref: "#/components/schemas/Catalog" }, description: "Registry rows confirmed present in Trino and at the right version" }
+              schema: { $ref: "#/components/schemas/ReconcileRun" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /engines/{id}/reconcile:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Engines]
+      operationId: reconcileEngine
+      summary: "Repair the engine's managed catalog drift and report the rest — admins"
+      description: >
+        Checks every managed binding of a federated engine against what the
+        engine reports (#37): a managed catalog missing or at an older
+        version is applied again, one being deprovisioned is dropped, at
+        most BALEIA_RECONCILE_MAX_ACTIONS changes per run (the rest are
+        reported). Catalogs the engine has that Baleia does not manage are
+        reported as adopted and never dropped or changed. Dry run by
+        default: pass dry_run=false to apply.
+      parameters:
+        - { name: dry_run, in: query, schema: { type: boolean, default: true } }
+      responses:
+        "200":
+          description: "The run, persisted"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconcileRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /engines/{id}/reconcile-runs:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: listReconcileRuns
+      summary: "Latest reconcile runs of the engine, newest first — admins"
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        "200":
+          description: "Runs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReconcileRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/folders:
     parameters:
