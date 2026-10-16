@@ -108,6 +108,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `host` | text | yes |  |  |
 | `port` | int |  | `1521` |  |
 | `service_name` | text | yes |  | e.g. FREEPDB1 |
+| `cancel_with_alter_system` | bool |  | `false` | Requires the ALTER SYSTEM permission; lets a running statement be cancelled from another process |
 | `username` | text | yes |  |  |
 | `password` | secret |  |  |  |
 
