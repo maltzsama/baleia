@@ -111,12 +111,14 @@ var operationAccess = map[string]access{
 	"UpdateCatalogConnection": checked("Connection"),
 	"DeleteCatalogConnection": checked("Connection"),
 	"TestCatalogConnection":   checked("Connection"),
-	"CreateEngine":            checked("Connection"),
-	"GetEngine":               checked("Engine"),
-	"UpdateEngine":            checked("Engine"),
-	"DeleteEngine":            checked("Engine"),
-	"ListEngineBindings":      checked("Engine"),
-	"ListCatalogBindings":     checked("Catalog"),
+	// Any signed-in user tests settings they hold; bind: intents go through the engine check.
+	"TestConnectionDraft": checked("PrincipalFromContext", "planTest"),
+	"CreateEngine":        checked("Connection"),
+	"GetEngine":           checked("Engine"),
+	"UpdateEngine":        checked("Engine"),
+	"DeleteEngine":        checked("Engine"),
+	"ListEngineBindings":  checked("Engine"),
+	"ListCatalogBindings": checked("Catalog"),
 	// bindingAccess and managedBinding run Catalog and Engine with ActWrite
 	// (handlers_bindings.go; TestBindingAPI_Authz).
 	"CreateCatalogBinding":        checked("bindingAccess"),

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/bindings"
 
 	catalogs "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -228,85 +227,26 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 		return nil, err
 	}
 
-	start := time.Now()
-
-	if conn.Type == "postgresql" || conn.Type == "mysql" {
-		resp, err := h.testSQLViaTrino(ctx, conn, start)
-		if r, ok := resp.(TestCatalogConnection200JSONResponse); ok {
-			h.audited(ctx, testOutcome(ev, r.Success))
-		}
-		return resp, err
-	}
-
 	provider, cfg, err := h.connectionConfig(conn)
 	if err != nil {
-		errMsg := connectionTestError(err)
+		code := classifyTestError(err)
+		msg := codeMessages[code]
+		ec := TestCatalogConnectionResultErrorCode(code)
 		h.audited(ctx, testOutcome(ev, false))
-		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
+		return TestCatalogConnection200JSONResponse{Success: false, Error: ptr(code + ": " + msg), ErrorCode: &ec, ErrorMessage: &msg}, nil
 	}
-
-	testErr := provider.Ping(ctx, cfg)
-	latencyMs := int(time.Since(start).Milliseconds())
-	if testErr != nil {
-		errMsg := connectionTestError(testErr)
-		h.audited(ctx, testOutcome(ev, false))
-		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: latencyMs, Error: &errMsg}, nil
-	}
-
-	v := conn.Type
-	h.audited(ctx, testOutcome(ev, true))
-	return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
-}
-
-// testSQLViaTrino binds a throwaway catalog of the connection into Trino
-// through the binder (registry row first: the plugin resolves the
-// placeholders from it), lists its schemas, then drops it.
-func (h *Handlers) testSQLViaTrino(ctx context.Context, conn db.CatalogConnection, start time.Time) (TestCatalogConnectionResponseObject, error) {
-	testName := "baleia_test_" + uuid.NewString()[:8]
-
-	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get default cluster: %w", err)
-	}
-	// No source ref: the catalog reaches the connection's own database.
-	proj, err := h.projectBinding(conn, bindings.BindingSpec{EngineCatalog: testName})
-	if err != nil {
-		errMsg := err.Error()
-		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: 0, Error: &errMsg}, nil
-	}
-	eng := bindings.EngineRef{ClusterID: cluster.ID}
-	b := h.binder.WithStore(h.queries)
-
-	trinoCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	defer func() {
-		dropCtx, dropCancel := context.WithTimeout(context.WithoutCancel(ctx), catalogDDLTimeout)
-		defer dropCancel()
-		_ = b.Drop(dropCtx, eng, testName)
-	}()
-	if err := b.Create(trinoCtx, eng, proj); err != nil {
-		errMsg := err.Error()
-		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
-	}
-
-	engine, err := h.engines.DefaultTrino(trinoCtx)
+	t, _, err := h.planTest(ctx, p, provider, cfg, conn.Name, nil)
 	if err != nil {
 		return nil, err
 	}
-	testTarget, err := engine.Dialect().QualifiedName(testName)
-	if err != nil {
-		return nil, err
+	res := t.run(ctx)
+	if res.Success {
+		res.Version = &conn.Type
 	}
-	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "connection-test", RequestID: middleware.GetReqID(ctx)}}
-	if _, err := queryengine.CollectStrings(trinoCtx, engine, spec, "SHOW SCHEMAS FROM "+testTarget, 10000); err != nil {
-		errMsg := err.Error()
-		return TestCatalogConnection200JSONResponse{Success: false, LatencyMs: int(time.Since(start).Milliseconds()), Error: &errMsg}, nil
-	}
-
-	latencyMs := int(time.Since(start).Milliseconds())
-	v := conn.Type
-	return TestCatalogConnection200JSONResponse{Success: true, LatencyMs: latencyMs, Version: &v}, nil
+	h.audited(ctx, testOutcome(ev, res.Success))
+	return TestCatalogConnection200JSONResponse(res), nil
 }
+
 
 // connectionConfig returns the provider of a stored connection and its
 // decrypted config.

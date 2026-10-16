@@ -92,6 +92,8 @@ const (
 	MetadataSync       = "metadata-sync"
 	AuditPartitions    = "audit-partitions"
 	CatalogReconcile   = "catalog-reconcile"
+	// EphemeralCatalogSweeper drops expired connection-test catalogs (#12).
+	EphemeralCatalogSweeper = "ephemeral-catalog-sweeper"
 )
 
 // Remove deletes a schedule an earlier configuration created; a schedule

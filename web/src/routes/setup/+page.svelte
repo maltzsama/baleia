@@ -17,7 +17,6 @@
 	let connPass = $state('');
 	let testStatus = $state<'idle' | 'testing' | 'ok' | 'err'>('idle');
 	let testMsg = $state('');
-	let verifiedId = $state('');
 
 	let ssoIssuer = $state('');
 	let ssoClientId = $state('');
@@ -74,14 +73,26 @@
 			}
 		}
 		if (step === 2 && connName) {
-			if (!verifiedId) {
-				try {
-					await fetch(`${apiBase}/catalog-connections`, {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token()}` },
-						body: JSON.stringify(buildConnBody())
-					});
-				} catch { /* optional */ }
+			// A connection is created only for the values that passed a test
+			// (#12); Skip leaves this step without one.
+			if (testedSnapshot !== connSnapshot()) {
+				error = 'Test the connection first, or skip this step.';
+				return;
+			}
+			try {
+				const res = await fetch(`${apiBase}/catalog-connections`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token()}` },
+					body: JSON.stringify(buildConnBody())
+				});
+				if (!res.ok) {
+					const body = await res.json().catch(() => ({}));
+					error = body.message || `Could not save the connection (HTTP ${res.status})`;
+					return;
+				}
+			} catch {
+				error = 'Connection error. Is the server running?';
+				return;
 			}
 		}
 		if (step === 3) {
@@ -109,6 +120,22 @@
 		engine = code;
 	}
 
+	// The connection values that passed the last test; editing any of them
+	// invalidates it.
+	let testedSnapshot = $state('');
+	function connSnapshot() {
+		return JSON.stringify([engine, connName, connUrl, connUser, connPass]);
+	}
+	$effect(() => {
+		const snap = connSnapshot();
+		if (testedSnapshot && snap !== testedSnapshot) {
+			testedSnapshot = '';
+			testStatus = 'idle';
+			testMsg = '';
+		}
+	});
+
+	// testConnection checks the values without saving anything (#12).
 	async function testConnection() {
 		if (!connName || !connUrl || !connUser || !connPass) {
 			testStatus = 'err';
@@ -117,41 +144,33 @@
 		}
 		testStatus = 'testing';
 		testMsg = '';
-		verifiedId = '';
+		const snap = connSnapshot();
 		try {
-			const saveRes = await fetch(`${apiBase}/catalog-connections`, {
+			const res = await fetch(`${apiBase}/catalog-connections/test`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token()}` },
 				body: JSON.stringify(buildConnBody())
 			});
-			if (!saveRes.ok) {
-				const body = await saveRes.json().catch(() => ({}));
+			const r = await res.json().catch(() => ({}));
+			if (!res.ok) {
 				testStatus = 'err';
-				testMsg = body.message || body.error || `Save failed (HTTP ${saveRes.status})`;
+				testMsg = r.message || `Test failed (HTTP ${res.status})`;
 				return;
 			}
-			const saved = await saveRes.json();
-			const testId = saved.id;
-			const testRes = await fetch(`${apiBase}/catalog-connections/${testId}/test`, {
-				method: 'POST', headers: { 'Authorization': `Bearer ${token()}` }
-			});
-			const testResult = await testRes.json();
-			if (testResult.success) {
+			if (r.success) {
 				testStatus = 'ok';
-				testMsg = `Connection successful — ${testResult.latency_ms}ms`;
-				verifiedId = testId;
+				testMsg = `Connection successful — ${r.latency_ms}ms`;
+				testedSnapshot = snap;
 			} else {
 				testStatus = 'err';
-				testMsg = testResult.error || 'Connection test failed';
-				await fetch(`${apiBase}/catalog-connections/${testId}`, {
-					method: 'DELETE', headers: { 'Authorization': `Bearer ${token()}` }
-				});
+				testMsg = r.error_message || r.error || 'Connection test failed';
 			}
 		} catch (e: any) {
 			testStatus = 'err';
 			testMsg = e.message || 'Connection error';
 		}
 	}
+
 
 	let engines = [
 		{ code: 'polaris', label: 'Polaris', cls: 'bg-blue-50 text-blue-700' },

@@ -65,3 +65,14 @@ func Kinds() []string {
 	sort.Strings(out)
 	return out
 }
+
+// Transient builds an engine of kind from a connection's config without an
+// `engines` row: never registered, never cached, for one check (a
+// connection test, #12). The caller closes it.
+func Transient(ctx context.Context, kind string, cfg connections.Config, d *connections.Dialer) (Engine, error) {
+	e, ok := lookupKind(kind)
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", ErrKindNotRegistered, kind)
+	}
+	return e.factory(ctx, EngineRow{Name: "connection-test", Kind: kind, Class: e.class, IdentityMode: "connection"}, cfg, d)
+}

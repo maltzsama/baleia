@@ -151,6 +151,26 @@ catalog runs at a time (an advisory lock, and the workflow id). `GET
 the source's own message is in `metadata_sync_runs.error_message` and the worker's log. A pass left
 `running` by a crashed worker is failed with `interrupted` by the next pass of the catalog.
 
+## Connection tests
+
+`POST /api/v1/catalog-connections/test` checks connection settings before they are saved and
+persists nothing (#12); `POST /api/v1/catalog-connections/{id}/test` runs the same checks on a
+saved connection. The UI only enables *Create* after a test of the exact settings succeeded.
+The checks are the connection's roles, or the `intents` asked for:
+
+| Check | What it proves |
+|---|---|
+| `ping`, `list_catalogs` | Baleia can reach and read the source (`metadata`) |
+| `direct_engine` | Baleia can run SQL on it, through a transient engine that is never registered |
+| `bind:<engine>` | a federated engine can reach it, through a short-lived catalog `baleia_test_*` |
+
+A failed check carries a bounded `error_code` (`unreachable`, `tls`, `auth_failed`, `forbidden`,
+`not_found`, `timeout`, `provider_unsupported`, `connection_denied_network`, `engine_unavailable`,
+`internal`) and a short `error_message`; the upstream body is only logged. Each user may run 10
+tests a minute (`429` beyond). A test catalog is dropped as soon as its check ends; one left by a
+crash expires after 2 min and is dropped by the `ephemeral-catalog-sweeper` schedule (every
+minute).
+
 ## Runbooks
 
 ### BaleiaAPIDown

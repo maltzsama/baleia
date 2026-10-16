@@ -138,6 +138,7 @@ func main() {
 	reg.WatchMetadataStaleness(db.New(pool).MaxMetadataStalenessSeconds)
 	// Binding reconciliation (#37): managed drift only; adopted catalogs are
 	// reported, never changed.
+	act.SetEphemeralSweeper(func(ctx context.Context) (int, error) { return binder.SweepEphemeral(ctx, db.New(pool)) })
 	projector := stored.Projector{Store: db.New(pool), Keyring: keyring, Providers: conns, Binder: binder}
 	act.SetEngineReconciler(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID, dryRun bool, onAction func(context.Context, bindings.Action)) (bindings.Report, error) {
 		q := db.New(pool)
@@ -164,6 +165,7 @@ func main() {
 	w.RegisterWorkflow(workflows.MetadataSyncDispatchWorkflow)
 	w.RegisterWorkflow(workflows.AuditPartitionsWorkflow)
 	w.RegisterWorkflow(workflows.CatalogReconcileWorkflow)
+	w.RegisterWorkflow(workflows.EphemeralCatalogSweepWorkflow)
 
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
@@ -175,6 +177,7 @@ func main() {
 			{ID: schedules.RetrieverScheduler, Workflow: workflows.RetrieverDispatchWorkflow, Every: 60 * time.Second},
 			{ID: schedules.MetadataSync, Workflow: workflows.MetadataSyncDispatchWorkflow, Every: cfg.MetadataSyncEvery()},
 			{ID: schedules.AuditPartitions, Workflow: workflows.AuditPartitionsWorkflow, Every: 24 * time.Hour},
+			{ID: schedules.EphemeralCatalogSweeper, Workflow: workflows.EphemeralCatalogSweepWorkflow, Every: time.Minute},
 		}); err != nil {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)

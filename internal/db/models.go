@@ -376,6 +376,7 @@ type TrinoCatalogRegistry struct {
 	SyncError      *string            `json:"sync_error"`
 	UpdatedBy      string             `json:"updated_by"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
 }
 
 type TrinoCluster struct {

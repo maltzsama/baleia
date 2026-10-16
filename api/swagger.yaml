@@ -1002,8 +1002,40 @@ components:
       properties:
         success: { type: boolean }
         latency_ms: { type: integer }
-        error: { type: string, nullable: true }
+        error: { type: string, nullable: true, description: "Deprecated: error_message" }
         version: { type: string, nullable: true }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectionCheck" }
+        error_code:
+          type: string
+          nullable: true
+          enum: [unreachable, tls, auth_failed, forbidden, not_found, timeout, provider_unsupported, connection_denied_network, engine_unavailable, internal, null]
+          description: "Why the first failing check failed"
+        error_message: { type: string, nullable: true, description: "A short sentence; upstream bodies are logged, not returned" }
+
+    ConnectionCheck:
+      type: object
+      required: [name, ok]
+      properties:
+        name: { type: string, description: "ping, list_catalogs, direct_engine, bind:<engine name>" }
+        ok: { type: boolean }
+        skipped: { type: boolean, description: "Not run (e.g. no engine adapter for the kind yet)" }
+        detail: { type: string, nullable: true }
+        error_code: { type: string, nullable: true }
+
+    TestConnectionRequest:
+      allOf:
+        - $ref: "#/components/schemas/CreateCatalogConnectionRequest"
+        - type: object
+          properties:
+            intents:
+              type: array
+              items: { type: string }
+              description: >
+                Checks to run: metadata, direct_engine, bind:<engine_id>.
+                Default: every role the provider declares (a bind check on
+                the default Trino engine for databases it can bind).
 
     WorkspaceCatalogAccess:
       type: object
@@ -2166,6 +2198,37 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /catalog-connections/test:
+    post:
+      tags: [CatalogConnections]
+      operationId: testConnectionDraft
+      summary: "Test connection settings before saving them"
+      description: >
+        Runs the checks on the submitted settings and persists nothing
+        (#12): metadata (can Baleia read it), direct_engine (can Baleia run
+        SQL on it, through a transient engine) and bind:<engine> (can a
+        federated engine reach it, through a short-lived catalog that is
+        always dropped). Rate limited per user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestConnectionRequest" }
+      responses:
+        "200":
+          description: "Test result"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCatalogConnectionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429":
+          description: "Too many tests"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /catalog-connections/{id}/test:
     parameters:

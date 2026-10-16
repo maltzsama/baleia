@@ -72,6 +72,9 @@ type ServerInterface interface {
 	// Create a catalog connection — admin only
 	// (POST /catalog-connections)
 	CreateCatalogConnection(w http.ResponseWriter, r *http.Request)
+	// Test connection settings before saving them
+	// (POST /catalog-connections/test)
+	TestConnectionDraft(w http.ResponseWriter, r *http.Request)
 	// Remove a connection — admin only
 	// (DELETE /catalog-connections/{id})
 	DeleteCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
@@ -438,6 +441,12 @@ func (_ Unimplemented) ListCatalogConnections(w http.ResponseWriter, r *http.Req
 // Create a catalog connection — admin only
 // (POST /catalog-connections)
 func (_ Unimplemented) CreateCatalogConnection(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Test connection settings before saving them
+// (POST /catalog-connections/test)
+func (_ Unimplemented) TestConnectionDraft(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1467,6 +1476,28 @@ func (siw *ServerInterfaceWrapper) CreateCatalogConnection(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateCatalogConnection(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestConnectionDraft operation middleware
+func (siw *ServerInterfaceWrapper) TestConnectionDraft(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestConnectionDraft(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4757,6 +4788,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalog-connections", wrapper.CreateCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalog-connections/test", wrapper.TestConnectionDraft)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/catalog-connections/{id}", wrapper.DeleteCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
@@ -5642,6 +5676,61 @@ type CreateCatalogConnection422JSONResponse struct {
 func (response CreateCatalogConnection422JSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestConnectionDraftRequestObject struct {
+	Body *TestConnectionDraftJSONRequestBody
+}
+
+type TestConnectionDraftResponseObject interface {
+	VisitTestConnectionDraftResponse(w http.ResponseWriter) error
+}
+
+type TestConnectionDraft200JSONResponse TestCatalogConnectionResult
+
+func (response TestConnectionDraft200JSONResponse) VisitTestConnectionDraftResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestConnectionDraft401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TestConnectionDraft401JSONResponse) VisitTestConnectionDraftResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestConnectionDraft404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response TestConnectionDraft404JSONResponse) VisitTestConnectionDraftResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestConnectionDraft422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response TestConnectionDraft422JSONResponse) VisitTestConnectionDraftResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestConnectionDraft429JSONResponse Error
+
+func (response TestConnectionDraft429JSONResponse) VisitTestConnectionDraftResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9158,6 +9247,9 @@ type StrictServerInterface interface {
 	// Create a catalog connection — admin only
 	// (POST /catalog-connections)
 	CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error)
+	// Test connection settings before saving them
+	// (POST /catalog-connections/test)
+	TestConnectionDraft(ctx context.Context, request TestConnectionDraftRequestObject) (TestConnectionDraftResponseObject, error)
 	// Remove a connection — admin only
 	// (DELETE /catalog-connections/{id})
 	DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error)
@@ -9940,6 +10032,37 @@ func (sh *strictHandler) CreateCatalogConnection(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateCatalogConnectionResponseObject); ok {
 		if err := validResponse.VisitCreateCatalogConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestConnectionDraft operation middleware
+func (sh *strictHandler) TestConnectionDraft(w http.ResponseWriter, r *http.Request) {
+	var request TestConnectionDraftRequestObject
+
+	var body TestConnectionDraftJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestConnectionDraft(ctx, request.(TestConnectionDraftRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestConnectionDraft")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestConnectionDraftResponseObject); ok {
+		if err := validResponse.VisitTestConnectionDraftResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

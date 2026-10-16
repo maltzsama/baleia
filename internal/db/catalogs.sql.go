@@ -71,6 +71,23 @@ func (q *Queries) DeleteCatalog(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteEphemeralRegistryRow = `-- name: DeleteEphemeralRegistryRow :exec
+DELETE FROM trino_catalog_registry
+WHERE cluster_id = $1 AND catalog_name = $2 AND expires_at IS NOT NULL
+`
+
+type DeleteEphemeralRegistryRowParams struct {
+	ClusterID   pgtype.UUID `json:"cluster_id"`
+	CatalogName string      `json:"catalog_name"`
+}
+
+// Hard delete: the row holds real credentials. Permanent rows are never
+// matched.
+func (q *Queries) DeleteEphemeralRegistryRow(ctx context.Context, arg DeleteEphemeralRegistryRowParams) error {
+	_, err := q.db.Exec(ctx, deleteEphemeralRegistryRow, arg.ClusterID, arg.CatalogName)
+	return err
+}
+
 const getCatalogByID = `-- name: GetCatalogByID :one
 SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE id = $1
 `
@@ -196,6 +213,35 @@ func (q *Queries) GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (Trin
 	return i, err
 }
 
+const insertEphemeralRegistryRow = `-- name: InsertEphemeralRegistryRow :exec
+INSERT INTO trino_catalog_registry
+    (cluster_id, catalog_name, connector_name, properties, catalog_version, enabled, sync_status, updated_by, expires_at)
+VALUES ($1, $2, $3, $4::jsonb, $5, TRUE, 'pending', 'baleia', now() + $6::interval)
+`
+
+type InsertEphemeralRegistryRowParams struct {
+	ClusterID      pgtype.UUID     `json:"cluster_id"`
+	CatalogName    string          `json:"catalog_name"`
+	ConnectorName  string          `json:"connector_name"`
+	Column4        []byte          `json:"column_4"`
+	CatalogVersion *string         `json:"catalog_version"`
+	Ttl            pgtype.Interval `json:"ttl"`
+}
+
+// A connection test's short-lived catalog (#12): enabled (the plugin
+// resolves placeholders only from enabled rows) and expiring.
+func (q *Queries) InsertEphemeralRegistryRow(ctx context.Context, arg InsertEphemeralRegistryRowParams) error {
+	_, err := q.db.Exec(ctx, insertEphemeralRegistryRow,
+		arg.ClusterID,
+		arg.CatalogName,
+		arg.ConnectorName,
+		arg.Column4,
+		arg.CatalogVersion,
+		arg.Ttl,
+	)
+	return err
+}
+
 const listCatalogsByConnection = `-- name: ListCatalogsByConnection :many
 SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE connection_id = $1 ORDER BY name
 `
@@ -306,6 +352,36 @@ func (q *Queries) ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabled
 			&i.Name,
 			&i.TrinoCatalogName,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExpiredEphemeralRegistryRows = `-- name: ListExpiredEphemeralRegistryRows :many
+SELECT cluster_id, catalog_name FROM trino_catalog_registry
+WHERE expires_at IS NOT NULL AND expires_at < now()
+`
+
+type ListExpiredEphemeralRegistryRowsRow struct {
+	ClusterID   pgtype.UUID `json:"cluster_id"`
+	CatalogName string      `json:"catalog_name"`
+}
+
+func (q *Queries) ListExpiredEphemeralRegistryRows(ctx context.Context) ([]ListExpiredEphemeralRegistryRowsRow, error) {
+	rows, err := q.db.Query(ctx, listExpiredEphemeralRegistryRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListExpiredEphemeralRegistryRowsRow
+	for rows.Next() {
+		var i ListExpiredEphemeralRegistryRowsRow
+		if err := rows.Scan(&i.ClusterID, &i.CatalogName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
