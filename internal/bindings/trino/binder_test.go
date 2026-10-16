@@ -163,6 +163,26 @@ func TestProject_Kinds(t *testing.T) {
 			},
 			secrets: []string{"connection-password"},
 		},
+		{
+			name: "unity without a token",
+			src:  cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "unity"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://unity:8080/api/2.1/unity-catalog/iceberg",
+				"iceberg.rest-catalog.warehouse": "unity", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+			},
+		},
+		{
+			name: "unity with a token",
+			src:  cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080/"}, map[string]string{"token": "tok"}),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "unity"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://unity:8080/api/2.1/unity-catalog/iceberg",
+				"iceberg.rest-catalog.warehouse": "unity", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+				"iceberg.rest-catalog.security": "OAUTH2", "iceberg.rest-catalog.oauth2.token": "tok",
+			},
+			secrets: []string{"iceberg.rest-catalog.oauth2.token"},
+		},
 	}
 	b := New(nil, nil)
 	for _, c := range cases {
@@ -328,6 +348,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 		cfg(connections.KindMariaDB, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-6"}),
 		cfg(connections.KindSQLServer, map[string]string{"host": "db", "database": "d", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-7"}),
 		cfg(connections.KindOracle, map[string]string{"host": "db", "service_name": "S", "username": "u"}, map[string]string{"password": "FIXTURE-SECRET-8"}),
+		cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080"}, map[string]string{"token": "FIXTURE-SECRET-9"}),
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
@@ -410,6 +431,7 @@ func TestSupports(t *testing.T) {
 	got := New(nil, nil).Supports()
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
+		connections.KindUnity:      {"iceberg"},
 		connections.KindPostgreSQL: {"postgresql"}, connections.KindMySQL: {"mysql"},
 		connections.KindMariaDB: {"mariadb"}, connections.KindSQLServer: {"sqlserver"}, connections.KindOracle: {"oracle"},
 	}

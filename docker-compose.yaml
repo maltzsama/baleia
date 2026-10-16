@@ -494,3 +494,16 @@ services:
       - "18123:8123"
     networks:
       - app_net
+
+  # Unity Catalog OSS (#32): the browsing API and the Iceberg REST endpoint for
+  # reading tables (UniForm). Started only with
+  # `docker compose --profile sources up -d`. API on the host port 18080; the
+  # image seeds a `unity` catalog with a `default` schema.
+  unity:
+    image: unitycatalog/unitycatalog:v0.7.0
+    container_name: baleia_src_unity
+    profiles: ["sources"]
+    ports:
+      - "18080:8080"
+    networks:
+      - app_net

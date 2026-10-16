@@ -26,6 +26,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | trino (sqlserver) | supported |
 | `starrocks` | StarRocks | engine | federated_engine | starrocks | — | unsupported (planned after v1 (#30)) |
 | `trino` | Trino | engine | metadata, federated_engine | trino | — | supported |
+| `unity` | Unity Catalog | iceberg | metadata | — | trino (iceberg) | supported |
 
 ## `clickhouse` — ClickHouse
 
@@ -170,3 +171,11 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `admin_user` | text |  | `baleia-admin` | Identity that cancels queries; never runs user SQL |
 | `username` | text |  |  | Password authentication (HTTPS only); must be allowed to impersonate the identities Baleia sends |
 | `password` | secret |  |  |  |
+
+## `unity` — Unity Catalog
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `url` | url | yes |  | Server root, e.g. http://unity:8080 or a Databricks workspace URL |
+| `token` | secret |  |  | OSS token or a Databricks personal access token |
+| `iceberg_path` | text |  | `/api/2.1/unity-catalog/iceberg` | Override for Databricks: /api/2.1/unity-catalog/iceberg-rest |

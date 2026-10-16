@@ -24,6 +24,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
 	"github.com/galileostudio/baleia/internal/connections/polaris"
+	"github.com/galileostudio/baleia/internal/connections/unity"
 )
 
 // nameRe is Trino's catalog and connector name grammar, mirrored by the
@@ -55,6 +56,8 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return nessieProjection(spec, src)
 	case connections.KindIcebergREST:
 		return icebergRESTProjection(spec, src)
+	case connections.KindUnity:
+		return unityProjection(spec, src)
 	case connections.KindPostgreSQL:
 		return postgresProjection(spec, src)
 	case connections.KindMySQL:
@@ -142,6 +145,30 @@ func icebergRESTProjection(spec bindings.BindingSpec, src connections.Config) (p
 		return projection{}, err
 	}
 	return icebergREST(strings.TrimRight(src.Value("url"), "/"), w, src), nil
+}
+
+// unityProjection binds a Unity catalog as an Iceberg REST catalog. The
+// catalog (the binding's source ref) is the warehouse; a bearer token
+// authenticates when configured. Unity bindings are read-oriented: the binder
+// marks the kind read-only.
+func unityProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
+	w, err := warehouseOf(spec, src)
+	if err != nil {
+		return projection{}, err
+	}
+	p := projection{props: map[string]string{
+		"iceberg.catalog.type":                            "rest",
+		"iceberg.rest-catalog.uri":                        unity.New(nil).RESTURI(src),
+		"iceberg.rest-catalog.warehouse":                  w,
+		"iceberg.rest-catalog.vended-credentials-enabled": "true",
+		"fs.s3.enabled":                                   "true",
+	}}
+	if tok := src.Secret("token"); tok != "" {
+		p.props["iceberg.rest-catalog.security"] = "OAUTH2"
+		p.props["iceberg.rest-catalog.oauth2.token"] = tok
+		p.secrets = append(p.secrets, "iceberg.rest-catalog.oauth2.token")
+	}
+	return p, nil
 }
 
 // hostPort is the validated host and port of a database connection.

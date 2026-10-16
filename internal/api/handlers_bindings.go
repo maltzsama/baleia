@@ -491,8 +491,9 @@ func (h *Handlers) GetEngineBindingSupport(ctx context.Context, request GetEngin
 		kinds = append(kinds, k)
 	}
 	slices.Sort(kinds)
+	readOnly := h.binder.ReadOnlySources()
 	for _, k := range kinds {
-		out[string(k)] = BindingSupport{Connectors: h.binder.Supports()[k], ProtectedKeyPatterns: protected, ReservedNames: reserved}
+		out[string(k)] = BindingSupport{Connectors: h.binder.Supports()[k], ProtectedKeyPatterns: protected, ReservedNames: reserved, WritesSupported: !readOnly[k]}
 	}
 	return out, nil
 }
