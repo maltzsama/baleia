@@ -53,9 +53,10 @@ WITH latest AS (
     WHERE workspace_id = @workspace_id::uuid AND change_kind IN ('delete', 'restore')
     ORDER BY entity_type, entity_id, version DESC
 )
-SELECT latest.*, u.name AS author_name
+SELECT latest.*, u.name AS author_name, s.name AS space_name
 FROM latest
 LEFT JOIN users u ON u.id = latest.author_id
+LEFT JOIN spaces s ON s.id = latest.space_id
 WHERE latest.change_kind = 'delete'
   AND (sqlc.narg(entity_type)::text IS NULL OR latest.entity_type = sqlc.narg(entity_type)::text)
 ORDER BY latest.created_at DESC

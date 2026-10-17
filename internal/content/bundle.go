@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/semantic"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -171,11 +172,13 @@ const (
 
 // ImportItem is one line of the report.
 type ImportItem struct {
-	Kind     string       `json:"kind"`
-	Slug     string       `json:"slug"`
-	Action   ImportAction `json:"action"`
-	Message  string       `json:"message,omitempty"`
-	Warnings []string     `json:"warnings,omitempty"`
+	Kind      string       `json:"kind"`
+	Slug      string       `json:"slug"`
+	Title     string       `json:"title,omitempty"`
+	Action    ImportAction `json:"action"`
+	MatchedID string       `json:"matched_id,omitempty"`
+	Message   string       `json:"message,omitempty"`
+	Warnings  []string     `json:"warnings,omitempty"`
 }
 
 // ImportReport is the dry-run/apply response.
@@ -304,8 +307,17 @@ func (im *importer) run(ctx context.Context) (ImportReport, error) {
 	}
 	report.OK = true
 	for _, p := range im.plan {
+		matched := ""
+		if p.existingID.Valid {
+			matched = uuid.UUID(p.existingID.Bytes).String()
+		}
+		title := p.item.Name
+		if p.item.Kind == KindSemanticMetric {
+			title = p.item.Label
+		}
 		report.Items = append(report.Items, ImportItem{
-			Kind: p.item.Kind, Slug: p.item.Slug, Action: p.action, Message: p.message, Warnings: p.warnings,
+			Kind: p.item.Kind, Slug: p.item.Slug, Title: title, Action: p.action,
+			MatchedID: matched, Message: p.message, Warnings: p.warnings,
 		})
 		if p.action == ActionError {
 			report.OK = false

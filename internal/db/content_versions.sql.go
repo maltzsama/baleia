@@ -302,9 +302,10 @@ WITH latest AS (
     WHERE workspace_id = $4::uuid AND change_kind IN ('delete', 'restore')
     ORDER BY entity_type, entity_id, version DESC
 )
-SELECT latest.id, latest.workspace_id, latest.space_id, latest.entity_type, latest.entity_id, latest.version, latest.change_kind, latest.snapshot, latest.author_id, latest.restored_from, latest.created_at, u.name AS author_name
+SELECT latest.id, latest.workspace_id, latest.space_id, latest.entity_type, latest.entity_id, latest.version, latest.change_kind, latest.snapshot, latest.author_id, latest.restored_from, latest.created_at, u.name AS author_name, s.name AS space_name
 FROM latest
 LEFT JOIN users u ON u.id = latest.author_id
+LEFT JOIN spaces s ON s.id = latest.space_id
 WHERE latest.change_kind = 'delete'
   AND ($1::text IS NULL OR latest.entity_type = $1::text)
 ORDER BY latest.created_at DESC
@@ -331,6 +332,7 @@ type ListDeletedContentRow struct {
 	RestoredFrom *int32             `json:"restored_from"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	AuthorName   *string            `json:"author_name"`
+	SpaceName    *string            `json:"space_name"`
 }
 
 // Entities whose latest delete/restore version is a delete (not restored yet).
@@ -361,6 +363,7 @@ func (q *Queries) ListDeletedContent(ctx context.Context, arg ListDeletedContent
 			&i.RestoredFrom,
 			&i.CreatedAt,
 			&i.AuthorName,
+			&i.SpaceName,
 		); err != nil {
 			return nil, err
 		}

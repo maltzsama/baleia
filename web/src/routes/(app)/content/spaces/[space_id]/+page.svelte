@@ -10,6 +10,8 @@
 		updateFolder,
 		type SemanticMetric
 	} from '$lib/content/client';
+	import HistoryDrawer from '$lib/content/HistoryDrawer.svelte';
+	import { exportSpace, importSpace, type ImportReport } from '$lib/content/history';
 	import MoveToSpaceDialog from '$lib/components/MoveToSpaceDialog.svelte';
 	import SpaceAccessDialog from '$lib/components/SpaceAccessDialog.svelte';
 	import SpaceDialog from '$lib/components/SpaceDialog.svelte';
@@ -83,6 +85,18 @@
 	let pending = $state<{ kind: 'query' | 'folder' | 'space'; id: string; name: string } | null>(
 		null
 	);
+
+	let historyOpen = $state(false);
+	let historyKind = $state<'saved_query' | 'semantic_metric'>('saved_query');
+	let historyId = $state('');
+	let exportBusy = $state(false);
+	let importOpen = $state(false);
+	let importError = $state('');
+	let importName = $state('');
+	let importBundle = $state<unknown>(null);
+	let importReport = $state<ImportReport | null>(null);
+	let importBusy = $state(false);
+	let importApplying = $state(false);
 
 	async function load() {
 		await workspaceStore.load();
@@ -195,6 +209,97 @@
 		deleteOpen = true;
 	}
 
+	function openHistory(kind: 'saved_query' | 'semantic_metric', id: string) {
+		historyKind = kind;
+		historyId = id;
+		historyOpen = true;
+	}
+
+	async function doExport() {
+		if (!workspaceId || !space) return;
+		exportBusy = true;
+		folderError = '';
+		try {
+			const bundle = await exportSpace(workspaceId, spaceId);
+			const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = `${space.slug}.baleia.json`;
+			anchor.click();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			folderError = e instanceof Error ? e.message : String(e);
+		} finally {
+			exportBusy = false;
+		}
+	}
+
+	function openImport() {
+		importError = '';
+		importReport = null;
+		importBundle = null;
+		importName = '';
+		importOpen = true;
+	}
+
+	async function readImport(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		importError = '';
+		importReport = null;
+		importBundle = null;
+		importName = file.name;
+		if (file.size > 10 * 1024 * 1024) {
+			importError = 'The bundle is larger than 10 MiB.';
+			return;
+		}
+		try {
+			const parsed = JSON.parse(await file.text());
+			if (parsed.format !== 'baleia.bundle' || parsed.format_version !== 1) {
+				importError = 'Unsupported bundle format or version.';
+				return;
+			}
+			importBundle = parsed;
+			await dryRun();
+		} catch (e) {
+			importError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function dryRun() {
+		if (!importBundle) return;
+		importBusy = true;
+		importError = '';
+		try {
+			const { report } = await importSpace(workspaceId, spaceId, 'dry_run', importBundle);
+			importReport = report ?? null;
+		} catch (e) {
+			importError = e instanceof Error ? e.message : String(e);
+		} finally {
+			importBusy = false;
+		}
+	}
+
+	async function applyImport() {
+		if (!importBundle || !importReport?.ok) return;
+		importApplying = true;
+		importError = '';
+		try {
+			const { report } = await importSpace(workspaceId, spaceId, 'apply', importBundle);
+			importReport = report ?? null;
+			if (report?.ok) {
+				importOpen = false;
+				await savedQueries.reload(workspaceId);
+			}
+		} catch (e) {
+			importError = e instanceof Error ? e.message : String(e);
+		} finally {
+			importApplying = false;
+		}
+	}
+
 	onMount(load);
 </script>
 
@@ -227,6 +332,11 @@
 				{#if canEdit}
 					<Button variant="primary" onclick={() => (folderOpen = true)}>New folder</Button>
 				{/if}
+				<Button loading={exportBusy} disabled={exportBusy} onclick={doExport}>Export</Button>
+				{#if canEdit}
+					<Button onclick={openImport}>Import…</Button>
+				{/if}
+				<Button onclick={() => (window.location.href = '/content/trash')}>Trash</Button>
 				{#if canManage && !space.is_default}
 					<Button variant="danger" onclick={() => ask('space', space.id, space.name)}>Delete</Button
 					>
@@ -370,6 +480,13 @@
 											>{#if query.updated_at}<RelativeTime at={query.updated_at} />{:else}—{/if}</td
 										>
 										<td class="px-3 py-1.5 text-right">
+											<button
+												type="button"
+												class="text-primary hover:underline"
+												onclick={() => openHistory('saved_query', query.id)}
+											>
+												History
+											</button>
 											{#if canEdit}
 												<button
 													type="button"
@@ -521,6 +638,95 @@
 <MoveToSpaceDialog bind:open={movingQueryOpen} query={movingQuery} />
 <SpaceAccessDialog bind:open={accessOpen} {space} />
 <SpaceDialog bind:open={editOpen} {space} ondone={() => savedQueries.reload(workspaceId)} />
+
+<HistoryDrawer
+	bind:open={historyOpen}
+	kind={historyKind}
+	entityId={historyId}
+	{workspaceId}
+	onrestored={() => savedQueries.reload(workspaceId)}
+/>
+
+<Modal bind:open={importOpen} title="Import space bundle">
+	<div class="flex flex-col gap-3 text-[12px]">
+		<input
+			type="file"
+			accept=".json,application/json"
+			class="block w-full text-[11px]"
+			onchange={readImport}
+		/>
+		{#if importName}
+			<p class="font-mono text-[11px]">{importName}</p>
+		{/if}
+		{#if importBusy}
+			<p class="text-[11px] text-slate-600 dark:text-slate-300">Running the dry run…</p>
+		{/if}
+		{#if importError}
+			<p class="text-danger" role="alert">{importError}</p>
+		{/if}
+		{#if importReport}
+			<div class="flex flex-wrap gap-1">
+				{#each ['CREATE', 'UPDATE', 'NO_CHANGES', 'ERROR'] as action (action)}
+					<Badge tone={action === 'ERROR' ? 'danger' : action === 'CREATE' ? 'success' : 'neutral'}>
+						{importReport.items.filter((item) => item.action === action).length}
+						{action}
+					</Badge>
+				{/each}
+			</div>
+			<div class="max-h-64 overflow-y-auto rounded border border-border">
+				<table class="w-full text-left text-[11px]">
+					<thead class="text-[10px] uppercase text-slate-600 dark:text-slate-300">
+						<tr>
+							<th class="px-2 py-1">Kind</th>
+							<th class="px-2 py-1">Title</th>
+							<th class="px-2 py-1">Action</th>
+							<th class="px-2 py-1">Message</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each importReport.items as item (item.kind + item.slug)}
+							<tr class="border-t border-border/60">
+								<td class="px-2 py-1">{item.kind}</td>
+								<td class="px-2 py-1">{item.title ?? item.slug}</td>
+								<td class="px-2 py-1">
+									<Badge
+										tone={item.action === 'ERROR'
+											? 'danger'
+											: item.action === 'CREATE'
+												? 'success'
+												: 'neutral'}
+									>
+										{item.action}
+									</Badge>
+								</td>
+								<td class="px-2 py-1">{item.message ?? (item.warnings ?? []).join(', ')}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			<p class="text-[10px] text-slate-600 dark:text-slate-300">
+				Items in this space that are not in the file are left unchanged. Metrics are validated when
+				you apply.
+			</p>
+		{/if}
+	</div>
+	{#snippet footer()}
+		<div class="flex justify-end gap-2">
+			<Button onclick={() => (importOpen = false)} disabled={importApplying}>Cancel</Button>
+			<Button
+				variant="primary"
+				loading={importApplying}
+				disabled={importApplying ||
+					!importReport?.ok ||
+					importReport.items.some((item) => item.action === 'ERROR')}
+				onclick={applyImport}
+			>
+				Apply
+			</Button>
+		</div>
+	{/snippet}
+</Modal>
 
 <ConfirmDialog
 	bind:open={deleteOpen}

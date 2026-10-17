@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Bundles (#34, ADR 0013): content-as-code. Export is deterministic; import
@@ -138,6 +139,16 @@ func importReportToPublic(r content.ImportReport) ImportReport {
 	}
 	for _, it := range r.Items {
 		item := ImportItem{Kind: it.Kind, Slug: it.Slug, Action: ImportItemAction(it.Action)}
+		if it.Title != "" {
+			title := it.Title
+			item.Title = &title
+		}
+		if it.MatchedID != "" {
+			if matched, err := uuidFromString(it.MatchedID); err == nil {
+				id := openapi_types.UUID(matched.Bytes)
+				item.MatchedId = &id
+			}
+		}
 		if it.Message != "" {
 			msg := it.Message
 			item.Message = &msg

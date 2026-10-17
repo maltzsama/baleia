@@ -1653,11 +1653,15 @@ type IcebergCredentials struct {
 
 // ImportItem defines model for ImportItem.
 type ImportItem struct {
-	Action   ImportItemAction `json:"action"`
-	Kind     string           `json:"kind"`
-	Message  *string          `json:"message,omitempty"`
-	Slug     string           `json:"slug"`
-	Warnings *[]string        `json:"warnings,omitempty"`
+	Action ImportItemAction `json:"action"`
+	Kind   string           `json:"kind"`
+
+	// MatchedId Destination item for UPDATE/NO_CHANGES
+	MatchedId *openapi_types.UUID `json:"matched_id"`
+	Message   *string             `json:"message,omitempty"`
+	Slug      string              `json:"slug"`
+	Title     *string             `json:"title,omitempty"`
+	Warnings  *[]string           `json:"warnings,omitempty"`
 }
 
 // ImportItemAction defines model for ImportItem.Action.
@@ -2520,9 +2524,13 @@ type TrashItem struct {
 	EntityId   openapi_types.UUID  `json:"entity_id"`
 	EntityType TrashItemEntityType `json:"entity_type"`
 	Name       *string             `json:"name,omitempty"`
-	Slug       string              `json:"slug"`
-	SpaceId    *openapi_types.UUID `json:"space_id,omitempty"`
-	Version    int                 `json:"version"`
+
+	// RestoreVersion Pass this to the restore endpoint; the delete version holds the last content
+	RestoreVersion int                 `json:"restore_version"`
+	Slug           string              `json:"slug"`
+	Space          *ContentSearchSpace `json:"space"`
+	SpaceId        *openapi_types.UUID `json:"space_id,omitempty"`
+	Version        int                 `json:"version"`
 }
 
 // TrashItemEntityType defines model for TrashItem.EntityType.
