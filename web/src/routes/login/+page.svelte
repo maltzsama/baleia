@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_ROOT, client, setAccessToken, setRefreshToken } from '$lib/api/client';
+	import { API_ROOT, clearSession, client, setAccessToken, setRefreshToken } from '$lib/api/client';
 
 	// Retry-After is either a number of seconds or an HTTP-date. Returns the
 	// remaining delay in whole seconds, capped at one hour; 0 when absent,
@@ -32,10 +32,6 @@
 	let retryTimer: ReturnType<typeof setInterval> | undefined;
 
 	onMount(() => {
-		if (localStorage.getItem('token')) {
-			window.location.href = '/sql';
-			return;
-		}
 		dark = document.body.classList.contains('dark');
 
 		// Shown once after /reset-password redirects here, then dropped from the address bar.
@@ -46,6 +42,22 @@
 		}
 
 		loadProviders();
+
+		// Validate a stored token before leaving. A stale token (another
+		// deployment, a revoked session) would otherwise bounce
+		// /login → /sql → /login forever. Keep the page usable while the check
+		// runs, and clear the rejected session instead of redirecting blind.
+		if (localStorage.getItem('token')) {
+			client.GET('/auth/me').then(({ data }) => {
+				if (!data) {
+					clearSession();
+					return;
+				}
+				const next = new URLSearchParams(window.location.search).get('next');
+				window.location.href = next && next.startsWith('/') ? next : '/sql';
+			});
+		}
+
 		return () => clearInterval(retryTimer);
 	});
 

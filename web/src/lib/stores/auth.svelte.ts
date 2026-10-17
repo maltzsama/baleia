@@ -40,8 +40,10 @@ function createAuthStore() {
 		try {
 			const { data } = await client.GET('/auth/me');
 			user = (data as AuthUser | undefined) ?? null;
+			if (!data) clearSession();
 		} catch {
 			user = null;
+			clearSession();
 		} finally {
 			loading = false;
 		}
