@@ -727,6 +727,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/semantic/metrics/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render a metric definition to SQL — no engine call */
+        post: operations["renderSemanticMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/metrics/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Probe a metric definition against its engine — caller identity, read-only */
+        post: operations["validateSemanticMetricDefinition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/metrics/{metric_id}": {
         parameters: {
             query?: never;
@@ -3289,6 +3327,8 @@ export interface components {
             type_system: string;
             /** @description native_type in the binding's engine dialect, when Baleia can map it */
             display_type?: string | null;
+            /** @description Portable semantic type (#115): boolean, int64, decimal, float64, string, date, timestamp, timestamptz, binary, json or other */
+            logical_type?: string;
             nullable?: boolean | null;
             comment?: string | null;
             doc?: components["schemas"]["SemanticDoc"];
@@ -3414,14 +3454,42 @@ export interface components {
             updated_by?: string;
             /** Format: date-time */
             updated_at: string;
+            /** Format: uuid */
+            certified_by?: string | null;
+            /** Format: date-time */
+            certified_at?: string | null;
+            readonly allowed_actions?: string[];
             /** @description Latest content version (#34); send it as expected_version on PATCH */
             version: number;
+        };
+        SemanticMetricRenderRequest: {
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            table: string;
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            binding_id?: string | null;
+            grain?: string | null;
+        };
+        SemanticMetricRenderResult: {
+            sql: string;
+        };
+        SemanticMetricValidateResult: {
+            ok: boolean;
         };
         SemanticMetricCreate: {
             slug: string;
             label: string;
             description?: string;
             certified?: boolean;
+            /**
+             * Format: uuid
+             * @description Omitted: the workspace's default space
+             */
+            space_id?: string | null;
             /** Format: uuid */
             catalog_id: string;
             namespace: string[];
@@ -5572,7 +5640,13 @@ export interface operations {
     };
     listSemanticMetrics: {
         parameters: {
-            query?: never;
+            query?: {
+                q?: string;
+                space_id?: string;
+                catalog_id?: string;
+                certified?: boolean;
+                owner_id?: string;
+            };
             header?: never;
             path: {
                 id: components["parameters"]["PathId"];
@@ -5622,6 +5696,66 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    renderSemanticMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticMetricRenderRequest"];
+            };
+        };
+        responses: {
+            /** @description SQL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetricRenderResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    validateSemanticMetricDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticMetricRenderRequest"];
+            };
+        };
+        responses: {
+            /** @description Valid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetricValidateResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };

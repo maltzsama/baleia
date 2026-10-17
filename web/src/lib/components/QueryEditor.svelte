@@ -396,6 +396,36 @@
 					}));
 			}
 		});
+		registerProvider({
+			id: 'metrics',
+			label: 'Metrics',
+			search: async (query) => {
+				const q = query.trim();
+				if (!workspaceId) return [];
+				const { data } = await client.GET('/workspaces/{id}/semantic/metrics', {
+					params: { path: { id: workspaceId }, query: q ? { q } : {} }
+				});
+				const tabBinding = editor.activeTab?.bindingId ?? '';
+				return (data ?? []).slice(0, 20).map((metric) => ({
+					id: `metric-${metric.id}`,
+					label: metric.label,
+					detail: metric.slug,
+					group: 'Metrics',
+					run: async () => {
+						const { data: rendered } = await client.GET(
+							'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
+							{
+								params: {
+									path: { id: workspaceId, metric_id: metric.id },
+									query: tabBinding ? { binding_id: tabBinding } : {}
+								}
+							}
+						);
+						if (rendered?.sql) editor.insert(rendered.sql);
+					}
+				}));
+			}
+		});
 	}
 
 	// Mirrors the store's active tab into CodeMirror when another component
@@ -577,6 +607,7 @@
 			window.removeEventListener('beforeunload', onBeforeUnload);
 			document.removeEventListener('visibilitychange', onVisibility);
 			unregisterProvider('actions');
+			unregisterProvider('metrics');
 			unregisterProvider('queries');
 			unregisterProvider('tables');
 			stream?.close();

@@ -249,6 +249,9 @@ var operationAccess = map[string]access{
 	"DeleteWorkspace":        checked("PrincipalFromContext", "Workspace"),
 	"GetWorkspaceImpact":     checked("PrincipalFromContext", "Workspace"),
 	"GetCatalogAccessImpact": checked("PrincipalFromContext", "Workspace"),
+	// Semantic metrics (#115).
+	"RenderSemanticMetric":             checked("metadataWorkspace", "semanticTarget"),
+	"ValidateSemanticMetricDefinition": checked("metadataWorkspace", "validateSemanticMetric"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),

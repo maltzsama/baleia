@@ -96,6 +96,18 @@
 			>
 		</a>
 		<a
+			href={resolve('/metrics')}
+			title="Metrics"
+			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+				{isActive('/metrics')
+				? 'bg-primary text-white'
+				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+		>
+			<svg viewBox="0 0 24 24" class="w-4 h-4"
+				><path d="M4 19V5M4 19h16" /><path d="M7 15l4-5 3 3 5-7" /></svg
+			>
+		</a>
+		<a
 			href={resolve('/engines')}
 			title="Engines"
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150

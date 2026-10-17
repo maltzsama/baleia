@@ -259,9 +259,10 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 		}
 	}
 	for _, c := range cols {
+		logical := typemap.Logical(c.TypeSystem, c.NativeType)
 		col := MetadataColumn{
 			Ordinal: int(c.Ordinal), Name: c.Name, NativeType: c.NativeType, TypeSystem: c.TypeSystem,
-			Nullable: c.Nullable, Comment: c.Comment,
+			LogicalType: &logical, Nullable: c.Nullable, Comment: c.Comment,
 		}
 		if d, ok := columnDocs[c.Name]; ok {
 			col.Doc = d
