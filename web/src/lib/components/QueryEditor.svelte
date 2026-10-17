@@ -14,8 +14,7 @@
 		type CompletionResult
 	} from '@codemirror/autocomplete';
 	import { format as formatSQLFormatter } from 'sql-formatter';
-	import { tableFromIPC } from 'apache-arrow';
-	import { API_ROOT, apiFetch, apiErrorMessage, client, getAccessToken } from '$lib/api/client';
+	import { API_ROOT, apiErrorMessage, client, getAccessToken } from '$lib/api/client';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -32,6 +31,7 @@
 	import { resolveAliasColumns } from '$lib/engines/completion';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
+	import ResultsPanel from './ResultsPanel.svelte';
 
 	type ExecutionEvent = {
 		type: string;
@@ -74,7 +74,6 @@
 
 	let saveModalOpen = $state(false);
 	let saveName = $state('');
-	let perPage = $state(50);
 
 	// ── Target resolution ────────────────────────────────────────────────
 	const selectedTarget = $derived(targets.find((t) => t.binding_id === activeTab.bindingId));
@@ -507,9 +506,7 @@
 					tab.statusText = 'Complete';
 					tab.rowCount = event.rows_returned || 0;
 					tab.durationMs = event.duration_ms || 0;
-					tab.page = 1;
 					ws.close();
-					await fetchResults(execId, idx);
 					executing = false;
 					break;
 				case 'failed':
@@ -529,28 +526,6 @@
 			executing = false;
 			tab.statusText = 'Connection error';
 		};
-	}
-
-	async function fetchResults(execId: string, idx: number) {
-		const tab = tabs[idx];
-		try {
-			const res = await apiFetch(`/workspaces/${workspaceId}/executions/${execId}/results`);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const buf = await res.arrayBuffer();
-			if (buf.byteLength > 0) {
-				const arr = new Uint8Array(buf);
-				const table = tableFromIPC(arr);
-				tab.columns = table.schema.fields.map((f) => f.name);
-				const decoded: unknown[][] = [];
-				for (const row of table.toArray()) {
-					decoded.push(tab.columns.map((c) => (row as Record<string, unknown>)[c]));
-				}
-				tab.results = decoded;
-				tab.rowCount = decoded.length;
-			}
-		} catch (e) {
-			tab.errorMsg = 'Results unavailable: ' + errorMessage(e);
-		}
 	}
 
 	function formatSQL() {
@@ -607,11 +582,6 @@
 			tabs[activeIdx].errorMsg = 'Save failed: ' + errorMessage(e);
 		}
 	}
-
-	const pagedRows = $derived(
-		activeTab.results.slice((activeTab.page - 1) * perPage, activeTab.page * perPage)
-	);
-	const totalPages = $derived(Math.max(1, Math.ceil(activeTab.results.length / perPage)));
 </script>
 
 <div class="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -619,27 +589,30 @@
 		class="flex items-stretch bg-bg-toolbar pt-1.5 px-2 gap-0.5 border-b border-border shrink-0 overflow-x-auto"
 	>
 		{#each tabs as tab, i (tab.id)}
-			<button
-				class="py-1.5 px-3.5 flex items-center gap-1.5 text-xs rounded-t-md cursor-pointer -mb-px border border-transparent border-b-0 transition-colors duration-150
-				{i === activeIdx
-					? 'bg-bg-panel text-primary font-semibold border-border'
-					: 'text-text-muted hover:bg-border/50'}"
-				onclick={() => switchTab(i)}
+			<div
+				class="flex items-center gap-0.5 rounded-t-md -mb-px border border-transparent border-b-0 transition-colors duration-150
+				{i === activeIdx ? 'bg-bg-panel border-border' : 'hover:bg-border/50'}"
 			>
-				<span class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">{tab.name}</span
+				<button
+					type="button"
+					class="flex items-center py-1.5 pl-3.5 pr-1.5 text-xs cursor-pointer {i === activeIdx
+						? 'text-primary font-semibold'
+						: 'text-text-muted'}"
+					onclick={() => switchTab(i)}
 				>
+					<span class="block max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap"
+						>{tab.name}</span
+					>
+				</button>
 				{#if tabs.length > 1}
 					<button
 						type="button"
 						aria-label="Close tab"
-						class="text-sm text-text-muted py-px px-1 rounded-[3px] hover:bg-border hover:text-text-main"
-						onclick={(e) => {
-							e.stopPropagation();
-							closeTab(i);
-						}}>×</button
+						class="mr-1.5 rounded-[3px] px-1 py-px text-sm text-text-muted hover:bg-border hover:text-text-main"
+						onclick={() => closeTab(i)}>×</button
 					>
 				{/if}
-			</button>
+			</div>
 		{/each}
 		<button
 			class="flex items-center justify-center w-8 text-lg text-text-muted cursor-pointer shrink-0 bg-none border-none hover:text-primary"
@@ -772,24 +745,20 @@
 		{#if activeTab.errorMsg}<span class="text-red-600">{activeTab.errorMsg}</span>{/if}
 	</div>
 
-	{#if activeTab.results.length > 0 || executing}
-		<div class="h-[42%] flex flex-col shrink-0">
-			<div class="flex items-stretch bg-bg-toolbar border-b border-border px-3 shrink-0">
-				<div
-					class="py-[7px] px-3 text-xs font-semibold cursor-pointer -mb-px text-primary border-b-2 border-b-primary"
-				>
-					Result <span
-						class="bg-blue-100 text-primary text-[10px] font-bold py-px px-[5px] rounded-full"
-						>{activeTab.rowCount}</span
-					>
-				</div>
-			</div>
+	{#if activeTab.executionId && (executing || activeTab.statusText === 'Complete')}
+		<div class="flex h-[46%] shrink-0 flex-col border-t border-border">
 			<div
-				class="py-1.5 px-3.5 flex items-center gap-5 border-b border-border text-xs bg-bg-panel shrink-0"
+				class="flex shrink-0 items-center gap-4 border-b border-border bg-bg-panel px-3.5 py-1.5 text-xs"
 			>
-				<span class="flex items-center gap-[5px] text-text-muted"
-					><span class="w-[7px] h-[7px] rounded-full bg-success"></span> Finished</span
-				>
+				{#if activeTab.statusText === 'Complete'}
+					<span class="flex items-center gap-[5px] text-text-muted"
+						><span class="h-[7px] w-[7px] rounded-full bg-success"></span> Finished</span
+					>
+				{:else}
+					<span class="flex items-center gap-[5px] text-text-muted"
+						><span class="h-[7px] w-[7px] animate-pulse rounded-full bg-primary"></span> Running</span
+					>
+				{/if}
 				{#if activeTab.runTarget}
 					<span class="flex items-center gap-1.5 text-text-muted">
 						ran on {activeTab.runTarget.engine_name} ·
@@ -799,68 +768,12 @@
 						{#if activeTab.runTarget.read_only}<Badge tone="warning">read-only</Badge>{/if}
 					</span>
 				{/if}
-				<span class="text-text-muted">{activeTab.rowCount} rows</span>
 				<span class="text-text-muted">{activeTab.durationMs}ms</span>
 			</div>
-			<div class="flex-1 overflow-auto">
-				<table class="w-full border-separate border-spacing-0 text-left text-xs">
-					<thead
-						><tr
-							><th
-								class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] uppercase text-right w-9"
-								>#</th
-							>
-							{#each activeTab.columns as col (col)}<th
-									class="bg-bg-toolbar py-[7px] px-3.5 font-semibold text-text-muted border-b border-border sticky top-0 z-[1] text-[11px] uppercase"
-									>{col}</th
-								>{/each}</tr
-						></thead
-					>
-					<tbody>
-						{#each pagedRows as row, i (i)}
-							<tr class="hover:[&>td]:bg-bg-toolbar">
-								<td
-									class="py-[7px] px-3.5 border-b border-border font-mono text-xs text-text-muted w-9 text-right opacity-60"
-									>{(activeTab.page - 1) * perPage + i + 1}</td
-								>
-								{#each row as cell, ci (ci)}<td
-										class="py-[7px] px-3.5 border-b border-border font-mono text-xs"
-										>{cell === null ? '<null>' : cell}</td
-									>{/each}
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-			<div
-				class="flex items-center gap-1.5 py-1.5 px-3 border-t border-border shrink-0 bg-bg-panel text-xs text-text-muted"
-			>
-				<button
-					disabled={activeTab.page <= 1}
-					onclick={() => activeTab.page--}
-					class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer text-text-muted hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed"
-					>← Prev</button
-				>
-				<span class="text-[11px]"
-					>Page <b class="text-text-main">{activeTab.page}</b> of
-					<b class="text-text-main">{totalPages}</b></span
-				>
-				<button
-					disabled={activeTab.page >= totalPages}
-					onclick={() => activeTab.page++}
-					class="h-[26px] px-2.5 rounded-[5px] border border-border bg-transparent text-[11px] font-semibold cursor-pointer text-text-muted hover:enabled:border-border-hover hover:enabled:text-text-main disabled:opacity-40 disabled:cursor-not-allowed"
-					>Next →</button
-				>
-				<span class="flex-1"></span>
-				<select
-					onchange={() => (tabs[activeIdx].page = 1)}
-					class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer"
-				>
-					<option value={25}>25</option><option value={50}>50</option><option value={100}
-						>100</option
-					>
-				</select>
-			</div>
+			<ResultsPanel
+				executionId={activeTab.executionId}
+				enabled={activeTab.statusText === 'Complete'}
+			/>
 		</div>
 	{/if}
 
