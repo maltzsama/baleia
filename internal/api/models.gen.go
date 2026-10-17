@@ -2238,6 +2238,18 @@ type WorkspaceTargetMode string
 // WorkspaceTargetPermission read targets run in read-only sessions where the engine enforces it
 type WorkspaceTargetPermission string
 
+// WsTicket defines model for WsTicket.
+type WsTicket struct {
+	ExpiresAt time.Time `json:"expires_at"`
+	Ticket    string    `json:"ticket"`
+}
+
+// WsTicketRequest defines model for WsTicketRequest.
+type WsTicketRequest struct {
+	// ExecutionId Scope the ticket to one execution; the WebSocket rejects another
+	ExecutionId *openapi_types.UUID `json:"execution_id,omitempty"`
+}
+
 // PathId defines model for PathId.
 type PathId = openapi_types.UUID
 
@@ -2336,6 +2348,15 @@ type ListExecutionsParams struct {
 
 // ListExecutionsParamsStatus defines parameters for ListExecutions.
 type ListExecutionsParamsStatus string
+
+// GetStatementResultsParams defines parameters for GetStatementResults.
+type GetStatementResultsParams struct {
+	// ResultIndex Which stored result set of the statement (0-based); default 0
+	ResultIndex *int `form:"result_index,omitempty" json:"result_index,omitempty"`
+
+	// Format `arrow` (default) streams the stored IPC object unchanged. `csv`, `tsv` and `jsonl` convert it server-side, row by row, without materializing the result, and answer with `Content-Disposition: attachment`.
+	Format *string `form:"format,omitempty" json:"format,omitempty"`
+}
 
 // ListFoldersParams defines parameters for ListFolders.
 type ListFoldersParams struct {
@@ -2492,7 +2513,7 @@ type ListTrashParamsEntityType string
 
 // StreamExecutionParams defines parameters for StreamExecution.
 type StreamExecutionParams struct {
-	Token string `form:"token" json:"token"`
+	Ticket string `form:"ticket" json:"ticket"`
 }
 
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
@@ -2623,3 +2644,6 @@ type ImportSpaceBundleJSONRequestBody ImportSpaceBundleJSONBody
 
 // SetSpaceMemberJSONRequestBody defines body for SetSpaceMember for application/json ContentType.
 type SetSpaceMemberJSONRequestBody = SetSpaceMemberRequest
+
+// IssueWsTicketJSONRequestBody defines body for IssueWsTicket for application/json ContentType.
+type IssueWsTicketJSONRequestBody = WsTicketRequest

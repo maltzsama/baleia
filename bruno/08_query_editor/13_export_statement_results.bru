@@ -1,0 +1,26 @@
+meta {
+  name: Export Statement Results
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}/statements/1/results?result_index=0&format=csv
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("csv export is an attachment", function () {
+    expect(res.getHeader("content-type")).to.contain("text/csv");
+    expect(res.getHeader("content-disposition")).to.contain("attachment");
+  });
+}

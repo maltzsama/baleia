@@ -17,6 +17,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -47,6 +48,19 @@ type Handlers struct {
 	dialer *connections.Dialer
 	// content is the only writer of saved content and its versions (#34).
 	content *content.Service
+	// wsTickets issues the single-use WebSocket tickets (#26); the WS handler
+	// shares this store.
+	wsTickets *wsticket.Store
+}
+
+// SetWSTickets wires the shared WebSocket ticket store (#26).
+func (h *Handlers) SetWSTickets(store *wsticket.Store) { h.wsTickets = store }
+
+func (h *Handlers) wsTicketStore() *wsticket.Store {
+	if h.wsTickets == nil {
+		h.wsTickets = wsticket.New()
+	}
+	return h.wsTickets
 }
 
 // contentService returns the content writer, constructing one for handlers
@@ -107,6 +121,7 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		versionCache:   NewTTLStore[*string](engineVersionTTL),
 		audit:          audit.Nop{},
 		content:        content.New(pool, queries),
+		wsTickets:      wsticket.New(),
 	}
 }
 

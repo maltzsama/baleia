@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -856,6 +857,9 @@ func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObje
 type arrowStreamResponse struct {
 	reader      io.ReadCloser
 	contentType string
+	// disposition is the Content-Disposition header for an export; empty for
+	// the viewer's inline Arrow stream.
+	disposition string
 }
 
 func (r arrowStreamResponse) VisitGetResultsResponse(w http.ResponseWriter) error {
@@ -869,6 +873,9 @@ func (r arrowStreamResponse) VisitGetStatementResultsResponse(w http.ResponseWri
 func (r arrowStreamResponse) write(w http.ResponseWriter) error {
 	defer r.reader.Close()
 	w.Header().Set("Content-Type", r.contentType)
+	if r.disposition != "" {
+		w.Header().Set("Content-Disposition", r.disposition)
+	}
 	w.WriteHeader(http.StatusOK)
 	_, err := io.Copy(w, r.reader)
 	return err
@@ -904,21 +911,67 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 			Message: "statement has no result yet",
 		}, nil
 	}
-	if statement.ResultKey == nil || *statement.ResultKey == "" {
+	resultIndex := 0
+	if request.Params.ResultIndex != nil {
+		resultIndex = *request.Params.ResultIndex
+	}
+	if resultIndex < 0 {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "result_index must be zero or greater")}, nil
+	}
+	format := exportArrow
+	if request.Params.Format != nil {
+		parsed, ok := parseExportFormat(*request.Params.Format)
+		if !ok {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "format must be arrow, csv, tsv or jsonl")}, nil
+		}
+		format = parsed
+	}
+
+	resultKey := resultKeyFor(statement.ResultSets, statement.ResultKey, resultIndex)
+	if resultKey == "" {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement produced no result set"}}, nil
 	}
 
-	reader, contentType, err := h.s3.GetReader(ctx, *statement.ResultKey)
+	reader, contentType, err := h.s3.GetReader(ctx, resultKey)
 	if err != nil {
 		return nil, err
 	}
-	if contentType == "" {
-		contentType = "application/vnd.apache.arrow.stream"
+	if contentType == "" || format != exportArrow {
+		contentType = format.contentType()
 	}
+	disposition := fmt.Sprintf("attachment; filename=%q", fmt.Sprintf("%s-%d.%s", request.ExecutionId, request.Position, format.extension()))
 
 	h.audited(ctx, ev.Allowed())
-	return arrowStreamResponse{reader: reader, contentType: contentType}, nil
+	if format == exportArrow {
+		return arrowStreamResponse{reader: reader, contentType: contentType, disposition: disposition}, nil
+	}
+
+	// Convert as the object streams out of storage; the pipe keeps memory
+	// bounded by one record batch.
+	pr, pw := io.Pipe()
+	go func() {
+		defer reader.Close()
+		pw.CloseWithError(convertResult(pw, reader, format))
+	}()
+	return arrowStreamResponse{reader: pr, contentType: contentType, disposition: disposition}, nil
+}
+
+// IssueWsTicket mints a single-use WebSocket ticket (#26) so the client never
+// puts the JWT in a URL.
+func (h *Handlers) IssueWsTicket(ctx context.Context, request IssueWsTicketRequestObject) (IssueWsTicketResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	if userID == "" {
+		return IssueWsTicket401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "not authenticated"}}, nil
+	}
+	executionID := ""
+	if request.Body != nil && request.Body.ExecutionId != nil {
+		executionID = request.Body.ExecutionId.String()
+	}
+	ticket, expiresAt := h.wsTicketStore().Issue(userID, executionID)
+	return IssueWsTicket201JSONResponse{Ticket: ticket, ExpiresAt: expiresAt}, nil
 }
 
 func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error) {

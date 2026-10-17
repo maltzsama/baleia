@@ -1,0 +1,99 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { http, server } from '../../test/server';
+import { subscribeExecution, type ExecutionEvent } from './stream';
+
+const WS = '00000000-0000-0000-0000-000000000001';
+const EXEC = '00000000-0000-0000-0000-0000000000e1';
+
+class FakeSocket {
+	static instances: FakeSocket[] = [];
+	onopen: (() => void) | null = null;
+	onmessage: ((event: { data: string }) => void) | null = null;
+	onclose: (() => void) | null = null;
+
+	constructor(readonly url: string) {
+		FakeSocket.instances.push(this);
+	}
+
+	close() {
+		this.onclose?.();
+	}
+
+	emit(event: ExecutionEvent) {
+		this.onmessage?.({ data: JSON.stringify(event) });
+	}
+}
+
+function ticketHandler() {
+	server.use(
+		http.post('/ws-tickets', ({ response }) =>
+			response(201).json({ ticket: 'ticket-1', expires_at: '2030-01-01T00:00:00Z' })
+		)
+	);
+}
+
+describe('subscribeExecution', () => {
+	beforeEach(() => {
+		FakeSocket.instances = [];
+		vi.stubGlobal('WebSocket', FakeSocket);
+		localStorage.setItem('token', 'secret-jwt');
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		localStorage.clear();
+	});
+
+	it('connects with a single-use ticket, never the JWT', async () => {
+		ticketHandler();
+		const events: ExecutionEvent[] = [];
+		const stream = subscribeExecution({
+			workspaceId: WS,
+			executionId: EXEC,
+			onEvent: (event) => events.push(event)
+		});
+
+		await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+		const url = FakeSocket.instances[0].url;
+		expect(url).toContain('ticket=ticket-1');
+		expect(url).not.toContain('secret-jwt');
+		expect(url).not.toContain('token=');
+
+		FakeSocket.instances[0].emit({ type: 'running' });
+		expect(events).toEqual([{ type: 'running' }]);
+		stream.close();
+	});
+
+	it('stops reconnecting after a terminal event', async () => {
+		ticketHandler();
+		const stream = subscribeExecution({
+			workspaceId: WS,
+			executionId: EXEC,
+			onEvent: () => {}
+		});
+
+		await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+		FakeSocket.instances[0].emit({ type: 'finished' });
+		FakeSocket.instances[0].close();
+
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(FakeSocket.instances).toHaveLength(1);
+		stream.close();
+	});
+
+	it('reconnects with a new ticket after a dropped connection', async () => {
+		ticketHandler();
+		const stream = subscribeExecution({
+			workspaceId: WS,
+			executionId: EXEC,
+			onEvent: () => {},
+			maxAttempts: 2
+		});
+
+		await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+		FakeSocket.instances[0].close();
+
+		await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(2), { timeout: 2000 });
+		stream.close();
+	});
+});

@@ -1644,7 +1644,12 @@ export interface paths {
     };
     "/workspaces/{id}/executions/{execution_id}/statements/{position}/results": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Which stored result set of the statement (0-based); default 0 */
+                result_index?: number;
+                /** @description `arrow` (default) streams the stored IPC object unchanged. `csv`, `tsv` and `jsonl` convert it server-side, row by row, without materializing the result, and answer with `Content-Disposition: attachment`. */
+                format?: "arrow" | "csv" | "tsv" | "jsonl";
+            };
             header?: never;
             path: {
                 id: components["parameters"]["PathId"];
@@ -1654,9 +1659,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Single-statement result as Arrow IPC stream
+         * Single-statement result as Arrow IPC stream or an export
          * @description Streams one statement's result set from object storage. A statement
-         *     whose result was truncated returns the buffered prefix.
+         *     whose result was truncated returns the buffered prefix. With
+         *     `format=csv|tsv|jsonl`, the object is converted as it streams.
          */
         get: operations["getStatementResults"];
         put?: never;
@@ -1690,6 +1696,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ws-tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a single-use WebSocket ticket (30 seconds)
+         * @description Keeps the JWT out of WebSocket URLs. The client connects to `/ws/workspaces/{id}/executions/{execution_id}?ticket=<ticket>` and the server consumes the ticket once. A ticket scoped to an execution is rejected on any other execution.
+         */
+        post: operations["issueWsTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ws/workspaces/{id}/executions/{execution_id}": {
         parameters: {
             query?: never;
@@ -1702,18 +1728,23 @@ export interface paths {
         };
         /**
          * WebSocket for real-time execution progress
-         * @description Authenticate via `?token=<jwt>`.
+         * @description Authenticate via `?ticket=<ticket>` from `POST /ws-tickets`; the ticket
+         *     is single-use and valid for 30 seconds. The JWT never appears in the
+         *     URL. The first message is the current execution state (an idempotent
+         *     snapshot), so a reconnect can miss no event.
          *
          *     ## Server → Client Events
          *     ```json
          *     { "type": "running", "execution_id": "...", "ts": "..." }
+         *     { "type": "statement_running", "execution_id": "...", "statement_position": 1, "ts": "..." }
          *     { "type": "progress", "execution_id": "...", "ts": "...", "rows_so_far": 1000 }
          *     { "type": "finished", "execution_id": "...", "ts": "...", "rows_returned": 9843, "duration_ms": 1240 }
          *     { "type": "failed", "execution_id": "...", "ts": "...", "message": "..." }
          *     { "type": "cancelled", "execution_id": "...", "ts": "..." }
          *     ```
-         *     After `finished`, fetch `GET .../results` for the Arrow IPC stream.
-         *     Connection closes automatically after any terminal event.
+         *     After `finished`, fetch `GET .../statements/{position}/results` for the
+         *     Arrow IPC stream. Connection closes automatically after any terminal
+         *     event.
          */
         get: operations["streamExecution"];
         put?: never;
@@ -2151,6 +2182,18 @@ export interface components {
             engine_catalog?: string;
             schema?: string | null;
             read_only?: boolean;
+        };
+        WsTicketRequest: {
+            /**
+             * Format: uuid
+             * @description Scope the ticket to one execution; the WebSocket rejects another
+             */
+            execution_id?: string;
+        };
+        WsTicket: {
+            ticket: string;
+            /** Format: date-time */
+            expires_at: string;
         };
         WorkspaceTarget: {
             /** Format: uuid */
@@ -6339,7 +6382,12 @@ export interface operations {
     };
     getStatementResults: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Which stored result set of the statement (0-based); default 0 */
+                result_index?: number;
+                /** @description `arrow` (default) streams the stored IPC object unchanged. `csv`, `tsv` and `jsonl` convert it server-side, row by row, without materializing the result, and answer with `Content-Disposition: attachment`. */
+                format?: "arrow" | "csv" | "tsv" | "jsonl";
+            };
             header?: never;
             path: {
                 id: components["parameters"]["PathId"];
@@ -6362,6 +6410,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getResults: {
@@ -6390,10 +6439,35 @@ export interface operations {
             };
         };
     };
+    issueWsTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WsTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description Ticket */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WsTicket"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     streamExecution: {
         parameters: {
             query: {
-                token: string;
+                ticket: string;
             };
             header?: never;
             path: {

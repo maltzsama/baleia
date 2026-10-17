@@ -12,6 +12,7 @@ import (
 // always decode a body, so an empty one would be refused with 400.
 var optionalBodyRoutes = []*regexp.Regexp{
 	regexp.MustCompile(`^/api/v1/auth/logout$`),
+	regexp.MustCompile(`^/api/v1/ws-tickets$`),
 	regexp.MustCompile(`^/api/v1/workspaces/[^/]+/retrievers/[^/]+/refresh$`),
 }
 
