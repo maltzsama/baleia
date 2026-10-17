@@ -1512,6 +1512,13 @@ components:
         saved_query_id: { type: string, format: uuid, nullable: true }
         sql: { type: string }
         target: { $ref: "#/components/schemas/TargetRequest" }
+        rerun:
+          type: object
+          description: "Re-run the statements of an earlier execution from from_position; the server copies them, never re-splits SQL it did not send"
+          required: [execution_id, from_position]
+          properties:
+            execution_id: { type: string, format: uuid }
+            from_position: { type: integer, minimum: 1 }
 
     Execution:
       type: object
@@ -1530,6 +1537,8 @@ components:
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
         target: { $ref: "#/components/schemas/ExecutionTarget" }
+        read_only: { type: boolean, description: "The target ran in a read-only session" }
+        error_code: { type: string, nullable: true }
 
     QueryStatement:
       type: object
@@ -1573,8 +1582,75 @@ components:
             resource_exhausted, engine_unavailable, read_only_unsupported,
             conflict, internal), `editor_rejected`, or `interrupted` when the
             worker stopped mid-statement (its outcome on the engine is unknown).
+        error_native: { type: string, nullable: true, description: "The engine's own error identifier (SQLSTATE, Trino errorName, gRPC status)" }
+        update_count: { type: integer, nullable: true, description: "Affected rows for DML/DDL when the engine reports it" }
+        result_count: { type: integer, description: "Number of result sets produced" }
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
+
+    ExecutionEvent:
+      type: object
+      description: >
+        One server -> client WebSocket message. Every event has `type`,
+        `execution_id`, a monotonic per-connection `seq` and `ts`. The first
+        message of every connection (including a reconnect) is `snapshot`.
+      oneOf:
+        - $ref: "#/components/schemas/ExecutionSnapshotEvent"
+        - $ref: "#/components/schemas/ExecutionStatusEvent"
+        - $ref: "#/components/schemas/StatementStatusEvent"
+        - $ref: "#/components/schemas/StatementProgressEvent"
+
+    ExecutionSnapshotEvent:
+      type: object
+      required: [type, execution_id, seq, ts, execution, statements]
+      properties:
+        type: { type: string, enum: [snapshot] }
+        execution_id: { type: string, format: uuid }
+        seq: { type: integer }
+        ts: { type: string, format: date-time }
+        execution: { $ref: "#/components/schemas/Execution" }
+        statements:
+          type: array
+          items: { $ref: "#/components/schemas/QueryStatement" }
+
+    ExecutionStatusEvent:
+      type: object
+      required: [type, execution_id, seq, ts, status]
+      properties:
+        type: { type: string, enum: [execution_status] }
+        execution_id: { type: string, format: uuid }
+        seq: { type: integer }
+        ts: { type: string, format: date-time }
+        status: { type: string, enum: [running, finished, failed, cancelled] }
+        error_code: { type: string, nullable: true }
+
+    StatementStatusEvent:
+      type: object
+      required: [type, execution_id, seq, ts, position, status]
+      properties:
+        type: { type: string, enum: [statement_status] }
+        execution_id: { type: string, format: uuid }
+        seq: { type: integer }
+        ts: { type: string, format: date-time }
+        position: { type: integer }
+        status: { type: string, enum: [pending, running, finished, failed, cancelled, skipped] }
+        error_code: { type: string, nullable: true }
+        error_message: { type: string, nullable: true }
+        rows_returned: { type: integer, nullable: true }
+        result_count: { type: integer }
+        truncated: { type: boolean }
+        duration_ms: { type: integer, nullable: true }
+
+    StatementProgressEvent:
+      type: object
+      required: [type, execution_id, seq, ts, position, rows_so_far]
+      properties:
+        type: { type: string, enum: [statement_progress] }
+        execution_id: { type: string, format: uuid }
+        seq: { type: integer }
+        ts: { type: string, format: date-time }
+        position: { type: integer }
+        rows_so_far: { type: integer }
 
     # ── Retrievers ─────────────────────────────────────────────
     Retriever:
@@ -4298,21 +4374,14 @@ paths:
       description: |
         Authenticate via `?ticket=<ticket>` from `POST /ws-tickets`; the ticket
         is single-use and valid for 30 seconds. The JWT never appears in the
-        URL. The first message is the current execution state (an idempotent
-        snapshot), so a reconnect can miss no event.
+        URL.
 
-        ## Server → Client Events
-        ```json
-        { "type": "running", "execution_id": "...", "ts": "..." }
-        { "type": "statement_running", "execution_id": "...", "statement_position": 1, "ts": "..." }
-        { "type": "progress", "execution_id": "...", "ts": "...", "rows_so_far": 1000 }
-        { "type": "finished", "execution_id": "...", "ts": "...", "rows_returned": 9843, "duration_ms": 1240 }
-        { "type": "failed", "execution_id": "...", "ts": "...", "message": "..." }
-        { "type": "cancelled", "execution_id": "...", "ts": "..." }
-        ```
-        After `finished`, fetch `GET .../statements/{position}/results` for the
-        Arrow IPC stream. Connection closes automatically after any terminal
-        event.
+        Every message is an `ExecutionEvent`. The first message of every
+        connection (including a reconnect) is `snapshot`, which replaces the
+        client state entirely. Events carry a monotonic per-connection `seq`;
+        the client ignores a `seq` it has already applied. After a terminal
+        `execution_status`, fetch `GET .../statements/{position}/results` for
+        the Arrow IPC stream. The connection closes after the terminal event.
       parameters:
         - name: ticket
           in: query

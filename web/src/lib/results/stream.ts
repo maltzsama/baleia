@@ -1,23 +1,18 @@
-// WebSocket execution stream (#26): single-use tickets keep the JWT out of the
-// URL, and a reconnect re-subscribes with backoff. The server sends the current
-// execution state on connect, so a missed event is harmless.
+// WebSocket execution stream (#26, #111): single-use tickets keep the JWT out
+// of the URL, and a reconnect re-subscribes with backoff. The server sends a
+// full snapshot first, so a missed event is harmless.
 import { API_ROOT, client } from '$lib/api/client';
+import type { components } from '$lib/api/schema';
 
-export type ExecutionEvent = {
-	type: string;
-	execution_id?: string;
-	statement_position?: number;
-	rows_so_far?: number;
-	rows_returned?: number;
-	duration_ms?: number;
-	message?: string;
-	result_url?: string;
-	ts?: string;
-};
+export type ExecutionEvent = components['schemas']['ExecutionEvent'];
 
 export type ExecutionStream = { close: () => void };
 
 const TERMINAL = new Set(['finished', 'failed', 'cancelled']);
+
+export function isTerminal(event: ExecutionEvent): boolean {
+	return event.type === 'execution_status' && TERMINAL.has(event.status);
+}
 
 export function subscribeExecution(options: {
 	workspaceId: string;
@@ -69,7 +64,7 @@ export function subscribeExecution(options: {
 			} catch {
 				return;
 			}
-			if (TERMINAL.has(event.type)) terminal = true;
+			if (isTerminal(event)) terminal = true;
 			options.onEvent(event);
 		};
 		socket.onclose = () => {

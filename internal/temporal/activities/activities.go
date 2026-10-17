@@ -169,21 +169,51 @@ func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*Spli
 }
 
 type CreateStatementRecordsParams struct {
-	ExecutionID string
-	Statements  []string
+	ExecutionID       string
+	Statements        []string
+	RerunExecutionID  string
+	RerunFromPosition int32
 }
 
-func CreateStatementRecords(ctx context.Context, params CreateStatementRecordsParams) error {
+// CreateStatementRecordsResult is the SQL the execution actually runs: the
+// split statements, or the copied statements of a rerun source (#111).
+type CreateStatementRecordsResult struct {
+	Statements []string
+}
+
+func CreateStatementRecords(ctx context.Context, params CreateStatementRecordsParams) (*CreateStatementRecordsResult, error) {
 	return defaultActivities.createStatementRecords(ctx, params)
 }
 
-func (a *Activities) createStatementRecords(ctx context.Context, params CreateStatementRecordsParams) error {
+func (a *Activities) createStatementRecords(ctx context.Context, params CreateStatementRecordsParams) (*CreateStatementRecordsResult, error) {
 	var execID pgtype.UUID
 	if err := execID.Scan(params.ExecutionID); err != nil {
-		return err
+		return nil, err
 	}
 
-	for i, sql := range params.Statements {
+	statements := params.Statements
+	if params.RerunExecutionID != "" {
+		var srcID pgtype.UUID
+		if err := srcID.Scan(params.RerunExecutionID); err != nil {
+			return nil, err
+		}
+		src, err := a.queries.ListQueryStatements(ctx, srcID)
+		if err != nil {
+			return nil, err
+		}
+		from := params.RerunFromPosition
+		if from < 1 {
+			from = 1
+		}
+		statements = nil
+		for _, stmt := range src {
+			if stmt.Position >= from {
+				statements = append(statements, stmt.Sql)
+			}
+		}
+	}
+
+	for i, sql := range statements {
 		_, err := a.queries.CreateQueryStatement(ctx, db.CreateQueryStatementParams{
 			ExecutionID: execID,
 			Position:    int32(i + 1),
@@ -191,10 +221,10 @@ func (a *Activities) createStatementRecords(ctx context.Context, params CreateSt
 			Status:      "pending",
 		})
 		if err != nil {
-			return fmt.Errorf("create statement record %d: %w", i+1, err)
+			return nil, fmt.Errorf("create statement record %d: %w", i+1, err)
 		}
 	}
-	return nil
+	return &CreateStatementRecordsResult{Statements: statements}, nil
 }
 
 // resultSet is one entry of query_statements.result_sets.

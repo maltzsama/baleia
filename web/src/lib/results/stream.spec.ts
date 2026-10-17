@@ -59,8 +59,14 @@ describe('subscribeExecution', () => {
 		expect(url).not.toContain('secret-jwt');
 		expect(url).not.toContain('token=');
 
-		FakeSocket.instances[0].emit({ type: 'running' });
-		expect(events).toEqual([{ type: 'running' }]);
+		FakeSocket.instances[0].emit({
+			type: 'execution_status',
+			execution_id: EXEC,
+			seq: 1,
+			ts: '2026-01-01T00:00:00Z',
+			status: 'running'
+		});
+		expect(events).toHaveLength(1);
 		stream.close();
 	});
 
@@ -73,7 +79,13 @@ describe('subscribeExecution', () => {
 		});
 
 		await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
-		FakeSocket.instances[0].emit({ type: 'finished' });
+		FakeSocket.instances[0].emit({
+			type: 'execution_status',
+			execution_id: EXEC,
+			seq: 2,
+			ts: '2026-01-01T00:00:00Z',
+			status: 'finished'
+		});
 		FakeSocket.instances[0].close();
 
 		await new Promise((resolve) => setTimeout(resolve, 50));

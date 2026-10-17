@@ -36,11 +36,13 @@
 	} from '$lib/engines/client';
 	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
 	import { resolveAliasColumns } from '$lib/engines/completion';
-	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import ResultsPanel from './ResultsPanel.svelte';
+	import RunPanel from '$lib/run/RunPanel.svelte';
+	import { applyEvent, initialRunState, type RunState } from '$lib/run/reducer';
 	import {
+		isTerminal,
 		subscribeExecution,
 		type ExecutionEvent,
 		type ExecutionStream
@@ -67,6 +69,8 @@
 	const activeTab = $derived(editor.activeTab);
 
 	let executing = $state(false);
+	let runState = $state<RunState | null>(null);
+	let baseTitle = '';
 	let dark = $state(browser && document.body.classList.contains('dark'));
 	let cursorLine = $state(1);
 	let cursorCol = $state(1);
@@ -516,8 +520,9 @@
 
 	onMount(() => {
 		registerPalette();
-		window.addEventListener('keydown', onGlobalKeydown);
+		window.addEventListener('keydown', onGlobalKeydown, true);
 		window.addEventListener('beforeunload', onBeforeUnload);
+		document.addEventListener('visibilitychange', onVisibility);
 		const observer = new MutationObserver(() => {
 			dark = document.body.classList.contains('dark');
 		});
@@ -568,8 +573,9 @@
 
 		return () => {
 			observer.disconnect();
-			window.removeEventListener('keydown', onGlobalKeydown);
+			window.removeEventListener('keydown', onGlobalKeydown, true);
 			window.removeEventListener('beforeunload', onBeforeUnload);
+			document.removeEventListener('visibilitychange', onVisibility);
 			unregisterProvider('actions');
 			unregisterProvider('queries');
 			unregisterProvider('tables');
@@ -650,6 +656,7 @@
 			}
 			tab.runTarget = data.target ?? null;
 			editor.setExecution(tab.id, data.id);
+			runState = initialRunState(data.id);
 			connectWS(data.id, idx);
 		} catch (e) {
 			tab.errorMsg = errorMessage(e);
@@ -707,6 +714,32 @@
 
 	let stream: ExecutionStream | null = null;
 
+	function executionStatusText(status: string): string {
+		switch (status) {
+			case 'finished':
+				return 'Complete';
+			case 'failed':
+				return 'Failed';
+			case 'cancelled':
+				return 'Cancelled';
+			default:
+				return 'Running...';
+		}
+	}
+
+	function notifyBackground(status: string) {
+		if (typeof document === 'undefined' || !document.hidden) return;
+		if (!baseTitle) baseTitle = document.title;
+		document.title = `${status === 'finished' ? '✓' : '✗'} ${baseTitle}`;
+	}
+
+	function onVisibility() {
+		if (typeof document !== 'undefined' && !document.hidden && baseTitle) {
+			document.title = baseTitle;
+			baseTitle = '';
+		}
+	}
+
 	function connectWS(execId: string, idx: number) {
 		stream?.close();
 		const tab = tabs[idx];
@@ -714,28 +747,16 @@
 			workspaceId,
 			executionId: execId,
 			onEvent: (event: ExecutionEvent) => {
-				switch (event.type) {
-					case 'running':
-						tab.statusText = 'Running...';
-						break;
-					case 'progress':
-						tab.statusText = `Running... ${event.rows_so_far || 0} rows`;
-						break;
-					case 'finished':
-						tab.statusText = 'Complete';
-						tab.rowCount = event.rows_returned || 0;
-						tab.durationMs = event.duration_ms || 0;
-						executing = false;
-						break;
-					case 'failed':
-						tab.errorMsg = event.message || 'Query failed';
-						executing = false;
-						tab.statusText = 'Failed';
-						break;
-					case 'cancelled':
-						tab.statusText = 'Cancelled';
-						executing = false;
-						break;
+				runState = applyEvent(runState ?? initialRunState(execId), event);
+				if (event.type === 'statement_status' && event.status === 'running') {
+					tab.statusText = `Running statement ${event.position}…`;
+					return;
+				}
+				if (event.type !== 'execution_status') return;
+				tab.statusText = executionStatusText(event.status);
+				if (isTerminal(event)) {
+					executing = false;
+					notifyBackground(event.status);
 				}
 			},
 			onGaveUp: () => {
@@ -743,6 +764,31 @@
 				tab.statusText = 'Connection lost';
 			}
 		});
+	}
+
+	async function rerun(fromPosition: number) {
+		const tab = activeTab;
+		if (!tab?.executionId || !workspaceId) return;
+		try {
+			const { data, error } = await client.POST('/workspaces/{id}/executions', {
+				params: { path: { id: workspaceId } },
+				body: {
+					workspace_id: workspaceId,
+					sql: tab.sql,
+					rerun: { execution_id: tab.executionId, from_position: fromPosition }
+				}
+			});
+			if (error || !data) throw new Error(apiErrorMessage(error, 'Could not re-run'));
+			tab.results = [];
+			tab.errorMsg = '';
+			tab.statusText = 'Running...';
+			executing = true;
+			editor.setExecution(tab.id, data.id);
+			runState = initialRunState(data.id);
+			connectWS(data.id, activeIdx);
+		} catch (e) {
+			tab.errorMsg = errorMessage(e);
+		}
 	}
 
 	function formatSQL() {
@@ -887,6 +933,14 @@
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{activeTab.readOnly ? 'Save a copy' : 'Save'}</button
 		>
+		<button
+			onclick={() => {
+				paletteMode = 'commands';
+				paletteOpen = true;
+			}}
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			>Commands</button
+		>
 		<div class="flex-1"></div>
 
 		<div class="flex items-center gap-1.5" aria-label="Query target">
@@ -987,35 +1041,22 @@
 		{#if activeTab.errorMsg}<span class="text-red-600">{activeTab.errorMsg}</span>{/if}
 	</div>
 
-	{#if activeTab.executionId && (executing || activeTab.statusText === 'Complete')}
+	{#if activeTab.executionId && runState}
 		<div class="flex h-[46%] shrink-0 flex-col border-t border-border">
-			<div
-				class="flex shrink-0 items-center gap-4 border-b border-border bg-bg-panel px-3.5 py-1.5 text-xs"
-			>
-				{#if activeTab.statusText === 'Complete'}
-					<span class="flex items-center gap-[5px] text-text-muted"
-						><span class="h-[7px] w-[7px] rounded-full bg-success"></span> Finished</span
-					>
-				{:else}
-					<span class="flex items-center gap-[5px] text-text-muted"
-						><span class="h-[7px] w-[7px] animate-pulse rounded-full bg-primary"></span> Running</span
-					>
-				{/if}
-				{#if activeTab.runTarget}
-					<span class="flex items-center gap-1.5 text-text-muted">
-						ran on {activeTab.runTarget.engine_name} ·
-						{activeTab.runTarget.catalog_name}{activeTab.runTarget.schema
-							? `.${activeTab.runTarget.schema}`
-							: ''}
-						{#if activeTab.runTarget.read_only}<Badge tone="warning">read-only</Badge>{/if}
-					</span>
-				{/if}
-				<span class="text-text-muted">{activeTab.durationMs}ms</span>
-			</div>
-			<ResultsPanel
-				executionId={activeTab.executionId}
-				enabled={activeTab.statusText === 'Complete'}
+			<RunPanel
+				state={runState}
+				{executing}
+				{canCancel}
+				oncancel={cancelExecution}
+				onrerun={rerun}
+				onpick={() => editorView?.focus()}
 			/>
+			<div class="min-h-0 flex-1">
+				<ResultsPanel
+					executionId={activeTab.executionId}
+					enabled={activeTab.statusText === 'Complete'}
+				/>
+			</div>
 		</div>
 	{/if}
 

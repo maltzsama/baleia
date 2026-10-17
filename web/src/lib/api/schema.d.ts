@@ -1755,21 +1755,14 @@ export interface paths {
          * WebSocket for real-time execution progress
          * @description Authenticate via `?ticket=<ticket>` from `POST /ws-tickets`; the ticket
          *     is single-use and valid for 30 seconds. The JWT never appears in the
-         *     URL. The first message is the current execution state (an idempotent
-         *     snapshot), so a reconnect can miss no event.
+         *     URL.
          *
-         *     ## Server → Client Events
-         *     ```json
-         *     { "type": "running", "execution_id": "...", "ts": "..." }
-         *     { "type": "statement_running", "execution_id": "...", "statement_position": 1, "ts": "..." }
-         *     { "type": "progress", "execution_id": "...", "ts": "...", "rows_so_far": 1000 }
-         *     { "type": "finished", "execution_id": "...", "ts": "...", "rows_returned": 9843, "duration_ms": 1240 }
-         *     { "type": "failed", "execution_id": "...", "ts": "...", "message": "..." }
-         *     { "type": "cancelled", "execution_id": "...", "ts": "..." }
-         *     ```
-         *     After `finished`, fetch `GET .../statements/{position}/results` for the
-         *     Arrow IPC stream. Connection closes automatically after any terminal
-         *     event.
+         *     Every message is an `ExecutionEvent`. The first message of every
+         *     connection (including a reconnect) is `snapshot`, which replaces the
+         *     client state entirely. Events carry a monotonic per-connection `seq`;
+         *     the client ignores a `seq` it has already applied. After a terminal
+         *     `execution_status`, fetch `GET .../statements/{position}/results` for
+         *     the Arrow IPC stream. The connection closes after the terminal event.
          */
         get: operations["streamExecution"];
         put?: never;
@@ -3196,6 +3189,12 @@ export interface components {
             saved_query_id?: string | null;
             sql: string;
             target?: components["schemas"]["TargetRequest"];
+            /** @description Re-run the statements of an earlier execution from from_position; the server copies them, never re-splits SQL it did not send */
+            rerun?: {
+                /** Format: uuid */
+                execution_id: string;
+                from_position: number;
+            };
         };
         Execution: {
             /** Format: uuid */
@@ -3223,6 +3222,9 @@ export interface components {
             /** Format: date-time */
             finished_at?: string | null;
             target?: components["schemas"]["ExecutionTarget"];
+            /** @description The target ran in a read-only session */
+            read_only?: boolean;
+            error_code?: string | null;
         };
         QueryStatement: {
             /** Format: uuid */
@@ -3252,10 +3254,70 @@ export interface components {
             error_message?: string | null;
             /** @description Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown). */
             error_code?: string | null;
+            /** @description The engine's own error identifier (SQLSTATE, Trino errorName, gRPC status) */
+            error_native?: string | null;
+            /** @description Affected rows for DML/DDL when the engine reports it */
+            update_count?: number | null;
+            /** @description Number of result sets produced */
+            result_count?: number;
             /** Format: date-time */
             started_at?: string | null;
             /** Format: date-time */
             finished_at?: string | null;
+        };
+        /** @description One server -> client WebSocket message. Every event has `type`, `execution_id`, a monotonic per-connection `seq` and `ts`. The first message of every connection (including a reconnect) is `snapshot`. */
+        ExecutionEvent: components["schemas"]["ExecutionSnapshotEvent"] | components["schemas"]["ExecutionStatusEvent"] | components["schemas"]["StatementStatusEvent"] | components["schemas"]["StatementProgressEvent"];
+        ExecutionSnapshotEvent: {
+            /** @enum {string} */
+            type: "snapshot";
+            /** Format: uuid */
+            execution_id: string;
+            seq: number;
+            /** Format: date-time */
+            ts: string;
+            execution: components["schemas"]["Execution"];
+            statements: components["schemas"]["QueryStatement"][];
+        };
+        ExecutionStatusEvent: {
+            /** @enum {string} */
+            type: "execution_status";
+            /** Format: uuid */
+            execution_id: string;
+            seq: number;
+            /** Format: date-time */
+            ts: string;
+            /** @enum {string} */
+            status: "running" | "finished" | "failed" | "cancelled";
+            error_code?: string | null;
+        };
+        StatementStatusEvent: {
+            /** @enum {string} */
+            type: "statement_status";
+            /** Format: uuid */
+            execution_id: string;
+            seq: number;
+            /** Format: date-time */
+            ts: string;
+            position: number;
+            /** @enum {string} */
+            status: "pending" | "running" | "finished" | "failed" | "cancelled" | "skipped";
+            error_code?: string | null;
+            error_message?: string | null;
+            rows_returned?: number | null;
+            result_count?: number;
+            truncated?: boolean;
+            duration_ms?: number | null;
+        };
+        StatementProgressEvent: {
+            /** @enum {string} */
+            type: "statement_progress";
+            /** Format: uuid */
+            execution_id: string;
+            seq: number;
+            /** Format: date-time */
+            ts: string;
+            position: number;
+            rows_so_far: number;
         };
         Retriever: {
             /** Format: uuid */
