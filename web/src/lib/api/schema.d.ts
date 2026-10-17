@@ -657,6 +657,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/semantic/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Tags used by docs on catalogs the workspace may use */
+        get: operations["listSemanticTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/docs": {
         parameters: {
             query: {
@@ -3400,12 +3419,29 @@ export interface components {
             updated_by: string;
             /** Format: date-time */
             updated_at: string;
+            certified?: boolean;
+            /** Format: uuid */
+            certified_by?: string | null;
+            /** Format: date-time */
+            certified_at?: string | null;
+            readonly allowed_actions?: string[];
         };
         SemanticDocUpsert: {
             description: string;
             tags?: string[];
             /** Format: uuid */
             owner_user_id?: string | null;
+            /** @description Only a workspace owner or admin may set true */
+            certified?: boolean;
+            /**
+             * Format: date-time
+             * @description Optimistic concurrency; stale → 409 version_conflict
+             */
+            expected_updated_at?: string | null;
+        };
+        SemanticTag: {
+            tag: string;
+            count: number;
         };
         SemanticDocSearchResult: {
             /** Format: uuid */
@@ -3423,6 +3459,12 @@ export interface components {
             updated_by: string;
             /** Format: date-time */
             updated_at: string;
+            certified?: boolean;
+            /** Format: uuid */
+            certified_by?: string | null;
+            /** Format: date-time */
+            certified_at?: string | null;
+            readonly allowed_actions?: string[];
             /** Format: double */
             score: number;
         };
@@ -5519,6 +5561,33 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    listSemanticTags: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticTag"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listSemanticDocs: {
         parameters: {
             query: {
@@ -5582,7 +5651,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
@@ -5614,6 +5685,8 @@ export interface operations {
             query: {
                 q: string;
                 tag?: string;
+                certified?: boolean;
+                owner_id?: string;
                 limit?: number;
             };
             header?: never;

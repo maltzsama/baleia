@@ -134,7 +134,7 @@ func (q *Queries) DeleteSemanticMetric(ctx context.Context, arg DeleteSemanticMe
 }
 
 const getSemanticDoc = `-- name: GetSemanticDoc :one
-SELECT id, workspace_id, catalog_id, namespace, table_name, column_name, description, tags, owner_user_id, updated_by, updated_at FROM semantic_docs
+SELECT id, workspace_id, catalog_id, namespace, table_name, column_name, description, tags, owner_user_id, updated_by, updated_at, certified, certified_by, certified_at FROM semantic_docs
 WHERE workspace_id = $1::uuid
   AND catalog_id = $2::uuid
   AND namespace = $3::text[]
@@ -171,6 +171,9 @@ func (q *Queries) GetSemanticDoc(ctx context.Context, arg GetSemanticDocParams) 
 		&i.OwnerUserID,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
 	)
 	return i, err
 }
@@ -250,7 +253,7 @@ func (q *Queries) GetSemanticMetricBySlug(ctx context.Context, arg GetSemanticMe
 const listSemanticDocsForTable = `-- name: ListSemanticDocsForTable :many
 
 
-SELECT id, workspace_id, catalog_id, namespace, table_name, column_name, description, tags, owner_user_id, updated_by, updated_at FROM semantic_docs
+SELECT id, workspace_id, catalog_id, namespace, table_name, column_name, description, tags, owner_user_id, updated_by, updated_at, certified, certified_by, certified_at FROM semantic_docs
 WHERE workspace_id = $1::uuid
   AND catalog_id = $2::uuid
   AND namespace = $3::text[]
@@ -300,6 +303,9 @@ func (q *Queries) ListSemanticDocsForTable(ctx context.Context, arg ListSemantic
 			&i.OwnerUserID,
 			&i.UpdatedBy,
 			&i.UpdatedAt,
+			&i.Certified,
+			&i.CertifiedBy,
+			&i.CertifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -334,6 +340,60 @@ func (q *Queries) ListSemanticMetricVersions(ctx context.Context, workspaceID pg
 	for rows.Next() {
 		var i ListSemanticMetricVersionsRow
 		if err := rows.Scan(&i.EntityID, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSemanticTags = `-- name: ListSemanticTags :many
+WITH visible AS (
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = $1::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = $1::uuid AND c.enabled
+)
+SELECT tag::text AS tag, count(*)::bigint AS count
+FROM semantic_docs d, unnest(d.tags) AS tag
+WHERE d.workspace_id = $1::uuid
+  AND d.catalog_id IN (SELECT id FROM visible)
+  AND ($2::text = '' OR tag ILIKE $2::text || '%' OR tag ILIKE '%' || $2::text || '%')
+GROUP BY tag
+ORDER BY (tag ILIKE $2::text || '%') DESC, count DESC, tag
+LIMIT $3::int
+`
+
+type ListSemanticTagsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Q           string      `json:"q"`
+	Lim         int32       `json:"lim"`
+}
+
+type ListSemanticTagsRow struct {
+	Tag   string `json:"tag"`
+	Count int64  `json:"count"`
+}
+
+// Distinct tags of docs on catalogs the workspace may use (#116). Prefix
+// matches rank first.
+func (q *Queries) ListSemanticTags(ctx context.Context, arg ListSemanticTagsParams) ([]ListSemanticTagsRow, error) {
+	rows, err := q.db.Query(ctx, listSemanticTags, arg.WorkspaceID, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSemanticTagsRow
+	for rows.Next() {
+		var i ListSemanticTagsRow
+		if err := rows.Scan(&i.Tag, &i.Count); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -411,7 +471,7 @@ WITH visible AS (
     JOIN catalogs c ON c.id = g.catalog_id
     WHERE g.workspace_id = $2::uuid AND c.enabled
 )
-SELECT d.id, d.workspace_id, d.catalog_id, d.namespace, d.table_name, d.column_name, d.description, d.tags, d.owner_user_id, d.updated_by, d.updated_at, greatest(
+SELECT d.id, d.workspace_id, d.catalog_id, d.namespace, d.table_name, d.column_name, d.description, d.tags, d.owner_user_id, d.updated_by, d.updated_at, d.certified, d.certified_by, d.certified_at, greatest(
     similarity(d.description, $1::text),
     similarity(d.table_name, $1::text),
     similarity(coalesce(d.column_name, ''), $1::text)
@@ -420,6 +480,8 @@ FROM semantic_docs d
 JOIN visible v ON v.id = d.catalog_id
 WHERE d.workspace_id = $2::uuid
   AND ($3::text IS NULL OR $3::text = ANY(d.tags))
+  AND ($4::boolean IS NULL OR d.certified = $4::boolean)
+  AND ($5::uuid IS NULL OR d.owner_user_id = $5::uuid)
   AND (
     d.description ILIKE '%' || $1::text || '%'
     OR d.table_name ILIKE '%' || $1::text || '%'
@@ -427,13 +489,15 @@ WHERE d.workspace_id = $2::uuid
     OR similarity(d.description, $1::text) > 0.1
   )
 ORDER BY score DESC, d.updated_at DESC
-LIMIT $4::int
+LIMIT $6::int
 `
 
 type SearchSemanticDocsParams struct {
 	Q           string      `json:"q"`
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	Tag         *string     `json:"tag"`
+	Certified   *bool       `json:"certified"`
+	OwnerID     pgtype.UUID `json:"owner_id"`
 	Lim         int32       `json:"lim"`
 }
 
@@ -449,6 +513,9 @@ type SearchSemanticDocsRow struct {
 	OwnerUserID pgtype.UUID        `json:"owner_user_id"`
 	UpdatedBy   pgtype.UUID        `json:"updated_by"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Certified   bool               `json:"certified"`
+	CertifiedBy pgtype.UUID        `json:"certified_by"`
+	CertifiedAt pgtype.Timestamptz `json:"certified_at"`
 	Score       float64            `json:"score"`
 }
 
@@ -459,6 +526,8 @@ func (q *Queries) SearchSemanticDocs(ctx context.Context, arg SearchSemanticDocs
 		arg.Q,
 		arg.WorkspaceID,
 		arg.Tag,
+		arg.Certified,
+		arg.OwnerID,
 		arg.Lim,
 	)
 	if err != nil {
@@ -480,6 +549,9 @@ func (q *Queries) SearchSemanticDocs(ctx context.Context, arg SearchSemanticDocs
 			&i.OwnerUserID,
 			&i.UpdatedBy,
 			&i.UpdatedAt,
+			&i.Certified,
+			&i.CertifiedBy,
+			&i.CertifiedAt,
 			&i.Score,
 		); err != nil {
 			return nil, err
@@ -622,20 +694,27 @@ func (q *Queries) UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMe
 const upsertSemanticDoc = `-- name: UpsertSemanticDoc :one
 INSERT INTO semantic_docs (
     workspace_id, catalog_id, namespace, table_name, column_name,
-    description, tags, owner_user_id, updated_by
+    description, tags, owner_user_id, updated_by, certified, certified_by, certified_at
 )
 VALUES (
     $1::uuid, $2::uuid, $3::text[], $4::text,
     $5::text, $6::text, $7::text[],
-    $8::uuid, $9::uuid
+    $8::uuid, $9::uuid, $10::boolean,
+    CASE WHEN $10::boolean THEN $9::uuid ELSE NULL END,
+    CASE WHEN $10::boolean THEN now() ELSE NULL END
 )
 ON CONFLICT (workspace_id, catalog_id, namespace, table_name, column_name) DO UPDATE
 SET description = EXCLUDED.description,
     tags = EXCLUDED.tags,
     owner_user_id = EXCLUDED.owner_user_id,
     updated_by = EXCLUDED.updated_by,
+    certified = EXCLUDED.certified,
+    certified_by = CASE WHEN EXCLUDED.certified
+        THEN COALESCE(semantic_docs.certified_by, EXCLUDED.certified_by) ELSE NULL END,
+    certified_at = CASE WHEN EXCLUDED.certified
+        THEN COALESCE(semantic_docs.certified_at, EXCLUDED.certified_at) ELSE NULL END,
     updated_at = now()
-RETURNING id, workspace_id, catalog_id, namespace, table_name, column_name, description, tags, owner_user_id, updated_by, updated_at
+RETURNING id, workspace_id, catalog_id, namespace, table_name, column_name, description, tags, owner_user_id, updated_by, updated_at, certified, certified_by, certified_at
 `
 
 type UpsertSemanticDocParams struct {
@@ -648,6 +727,7 @@ type UpsertSemanticDocParams struct {
 	Tags        []string    `json:"tags"`
 	OwnerUserID pgtype.UUID `json:"owner_user_id"`
 	UpdatedBy   pgtype.UUID `json:"updated_by"`
+	Certified   bool        `json:"certified"`
 }
 
 func (q *Queries) UpsertSemanticDoc(ctx context.Context, arg UpsertSemanticDocParams) (SemanticDoc, error) {
@@ -661,6 +741,7 @@ func (q *Queries) UpsertSemanticDoc(ctx context.Context, arg UpsertSemanticDocPa
 		arg.Tags,
 		arg.OwnerUserID,
 		arg.UpdatedBy,
+		arg.Certified,
 	)
 	var i SemanticDoc
 	err := row.Scan(
@@ -675,6 +756,9 @@ func (q *Queries) UpsertSemanticDoc(ctx context.Context, arg UpsertSemanticDocPa
 		&i.OwnerUserID,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
 	)
 	return i, err
 }

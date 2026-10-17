@@ -292,6 +292,9 @@ type Querier interface {
 	ListSemanticDocsForTable(ctx context.Context, arg ListSemanticDocsForTableParams) ([]SemanticDoc, error)
 	// Latest content version of every metric in the workspace, in one query.
 	ListSemanticMetricVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticMetricVersionsRow, error)
+	// Distinct tags of docs on catalogs the workspace may use (#116). Prefix
+	// matches rank first.
+	ListSemanticTags(ctx context.Context, arg ListSemanticTagsParams) ([]ListSemanticTagsRow, error)
 	// Bundles (#34): deterministic, portable content-as-code. Items are matched by
 	// (kind, slug), never by id; omitted items are never deleted.
 	ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]QueryFolder, error)

@@ -483,6 +483,9 @@ type ServerInterface interface {
 	// Restore a metric to a version — editor
 	// (POST /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore)
 	RestoreSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int)
+	// Tags used by docs on catalogs the workspace may use
+	// (GET /workspaces/{id}/semantic/tags)
+	ListSemanticTags(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticTagsParams)
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1458,6 +1461,12 @@ func (_ Unimplemented) GetSemanticMetricVersion(w http.ResponseWriter, r *http.R
 // Restore a metric to a version — editor
 // (POST /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore)
 func (_ Unimplemented) RestoreSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Tags used by docs on catalogs the workspace may use
+// (GET /workspaces/{id}/semantic/tags)
+func (_ Unimplemented) ListSemanticTags(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticTagsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7191,6 +7200,22 @@ func (siw *ServerInterfaceWrapper) SearchSemanticDocs(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Optional query parameter "certified" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "certified", r.URL.Query(), &params.Certified)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "certified", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "owner_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "owner_id", r.URL.Query(), &params.OwnerId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "owner_id", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "limit" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
@@ -7742,6 +7767,58 @@ func (siw *ServerInterfaceWrapper) RestoreSemanticMetricVersion(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestoreSemanticMetricVersion(w, r, id, metricId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSemanticTags operation middleware
+func (siw *ServerInterfaceWrapper) ListSemanticTags(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSemanticTagsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSemanticTags(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8963,6 +9040,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore", wrapper.RestoreSemanticMetricVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/tags", wrapper.ListSemanticTags)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/spaces", wrapper.ListSpaces)
@@ -14922,11 +15002,29 @@ func (response UpsertSemanticDoc401JSONResponse) VisitUpsertSemanticDocResponse(
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpsertSemanticDoc403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpsertSemanticDoc403JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type UpsertSemanticDoc404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpsertSemanticDoc404JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDoc409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpsertSemanticDoc409JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -15568,6 +15666,42 @@ type RestoreSemanticMetricVersion422JSONResponse struct {
 func (response RestoreSemanticMetricVersion422JSONResponse) VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticTagsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListSemanticTagsParams
+}
+
+type ListSemanticTagsResponseObject interface {
+	VisitListSemanticTagsResponse(w http.ResponseWriter) error
+}
+
+type ListSemanticTags200JSONResponse []SemanticTag
+
+func (response ListSemanticTags200JSONResponse) VisitListSemanticTagsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticTags401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSemanticTags401JSONResponse) VisitListSemanticTagsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticTags404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSemanticTags404JSONResponse) VisitListSemanticTagsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -16652,6 +16786,9 @@ type StrictServerInterface interface {
 	// Restore a metric to a version — editor
 	// (POST /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore)
 	RestoreSemanticMetricVersion(ctx context.Context, request RestoreSemanticMetricVersionRequestObject) (RestoreSemanticMetricVersionResponseObject, error)
+	// Tags used by docs on catalogs the workspace may use
+	// (GET /workspaces/{id}/semantic/tags)
+	ListSemanticTags(ctx context.Context, request ListSemanticTagsRequestObject) (ListSemanticTagsResponseObject, error)
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(ctx context.Context, request ListSpacesRequestObject) (ListSpacesResponseObject, error)
@@ -21095,6 +21232,33 @@ func (sh *strictHandler) RestoreSemanticMetricVersion(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RestoreSemanticMetricVersionResponseObject); ok {
 		if err := validResponse.VisitRestoreSemanticMetricVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSemanticTags operation middleware
+func (sh *strictHandler) ListSemanticTags(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticTagsParams) {
+	var request ListSemanticTagsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSemanticTags(ctx, request.(ListSemanticTagsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSemanticTags")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSemanticTagsResponseObject); ok {
+		if err := validResponse.VisitListSemanticTagsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

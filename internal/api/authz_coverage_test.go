@@ -252,6 +252,7 @@ var operationAccess = map[string]access{
 	// Semantic metrics (#115).
 	"RenderSemanticMetric":             checked("metadataWorkspace", "semanticTarget"),
 	"ValidateSemanticMetricDefinition": checked("metadataWorkspace", "validateSemanticMetric"),
+	"ListSemanticTags":                 checked("metadataWorkspace", "ListSemanticTags"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),

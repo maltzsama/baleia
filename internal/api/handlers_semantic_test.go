@@ -253,3 +253,26 @@ func isSemantic404(r any) bool {
 	}
 	return false
 }
+
+func TestNormalizeSemanticTags(t *testing.T) {
+	tags := []string{"Sales", " sales ", "revenue-2026"}
+	got, msg := normalizeSemanticTags(&tags)
+	if msg != "" {
+		t.Fatalf("unexpected error: %s", msg)
+	}
+	want := []string{"sales", "revenue-2026"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("normalizeSemanticTags = %v, want %v", got, want)
+	}
+	bad := []string{"Sales!"}
+	if _, msg := normalizeSemanticTags(&bad); msg == "" {
+		t.Fatal("invalid tag was accepted")
+	}
+	many := make([]string, 21)
+	for i := range many {
+		many[i] = "tag" + string(rune('a'+i%26))
+	}
+	if _, msg := normalizeSemanticTags(&many); msg == "" {
+		t.Fatal("21 tags were accepted")
+	}
+}
