@@ -136,7 +136,11 @@ const authMiddleware: Middleware = {
 	}
 };
 
-export const client = createClient<paths>({ baseUrl: API_ROOT });
+export const client = createClient<paths>({
+	baseUrl: API_ROOT,
+	// Resolve fetch at call time so test interceptors (MSW) and stubs apply.
+	fetch: (...args) => fetch(...args)
+});
 client.use(authMiddleware);
 
 /**

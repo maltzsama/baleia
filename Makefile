@@ -90,6 +90,17 @@ migrate-credentials:
 seed-tpch:
 	docker compose exec -T postgres psql -U baleia -d baleia < db/seed/tpch_test.sql
 
+# ── End-to-end (#106) ─────────────────────────────────────────────────────────
+e2e:
+	docker compose up -d
+	@echo "waiting for the API on :8080…"
+	@until curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; do sleep 1; done
+	go run -tags e2e ./cmd/e2e-seed
+	cd web && npx playwright test
+
+e2e-down:
+	docker compose down -v
+
 # ── Code Generation ───────────────────────────────────────────────────────────
 
 sqlc:

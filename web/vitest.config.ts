@@ -7,10 +7,17 @@ export default defineConfig({
 	// openapi-fetch builds absolute URLs; jsdom has no base URL to resolve a
 	// relative `/api/v1` against.
 	define: {
-		'import.meta.env.VITE_API_BASE': JSON.stringify('http://localhost')
+		// Matches jsdom's default origin so MSW's relative handlers resolve.
+		'import.meta.env.VITE_API_BASE': JSON.stringify('http://localhost:3000')
 	},
 	test: {
 		environment: 'jsdom',
+		server: {
+			deps: {
+				// MSW must be bundled so its interceptors replace the real fetch.
+				inline: ['msw', '@mswjs/interceptors']
+			}
+		},
 		include: ['src/**/*.{test,spec}.{js,ts}', 'src/**/*.svelte.{test,spec}.{js,ts}'],
 		setupFiles: ['./src/test/setup.ts'],
 		globals: false

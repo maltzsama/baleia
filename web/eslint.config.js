@@ -54,7 +54,8 @@ export default ts.config(
 			'src/lib/ui/patterns/kindIcon.ts',
 			'src/lib/api/schema.d.ts',
 			'src/**/*.spec.ts',
-			'src/**/*.examples.svelte'
+			'src/**/*.examples.svelte',
+			'src/test/**'
 		],
 		rules: {
 			// App state travels through typed stores (#29); window custom events
