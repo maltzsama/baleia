@@ -1,0 +1,33 @@
+meta {
+  name: Issue WebSocket Ticket
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{base_url}}/ws-tickets
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "execution_id": "{{execution_id}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("a single-use ticket is returned", function () {
+    expect(res.body.ticket).to.be.a("string");
+    expect(res.body.ticket.length).to.be.greaterThan(0);
+    expect(res.body.expires_at).to.be.a("string");
+  });
+}

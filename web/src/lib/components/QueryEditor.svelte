@@ -14,7 +14,7 @@
 		type CompletionResult
 	} from '@codemirror/autocomplete';
 	import { format as formatSQLFormatter } from 'sql-formatter';
-	import { API_ROOT, apiErrorMessage, client, getAccessToken } from '$lib/api/client';
+	import { apiErrorMessage, client } from '$lib/api/client';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -32,14 +32,11 @@
 	import Badge from '$lib/ui/Badge.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import ResultsPanel from './ResultsPanel.svelte';
-
-	type ExecutionEvent = {
-		type: string;
-		rows_so_far?: number;
-		rows_returned?: number;
-		duration_ms?: number;
-		message?: string;
-	};
+	import {
+		subscribeExecution,
+		type ExecutionEvent,
+		type ExecutionStream
+	} from '$lib/results/stream';
 
 	function errorMessage(e: unknown): string {
 		return e instanceof Error ? e.message : String(e);
@@ -366,7 +363,10 @@
 		const state = EditorState.create({ doc: editor.activeTab?.sql ?? '', extensions });
 		editorView = new EditorView({ state, parent: editorEl });
 
-		return () => observer.disconnect();
+		return () => {
+			observer.disconnect();
+			stream?.close();
+		};
 	});
 
 	$effect(() => {
@@ -487,45 +487,44 @@
 		}
 	}
 
+	let stream: ExecutionStream | null = null;
+
 	function connectWS(execId: string, idx: number) {
+		stream?.close();
 		const tab = tabs[idx];
-		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const ws = new WebSocket(
-			`${proto}//${location.host}${API_ROOT}/ws/workspaces/${workspaceId}/executions/${execId}?token=${getAccessToken() ?? ''}`
-		);
-		ws.onmessage = async (e) => {
-			const event = JSON.parse(e.data) as ExecutionEvent;
-			switch (event.type) {
-				case 'running':
-					tab.statusText = 'Running...';
-					break;
-				case 'progress':
-					tab.statusText = `Running... ${event.rows_so_far || 0} rows`;
-					break;
-				case 'finished':
-					tab.statusText = 'Complete';
-					tab.rowCount = event.rows_returned || 0;
-					tab.durationMs = event.duration_ms || 0;
-					ws.close();
-					executing = false;
-					break;
-				case 'failed':
-					tab.errorMsg = event.message || 'Query failed';
-					executing = false;
-					tab.statusText = 'Failed';
-					ws.close();
-					break;
-				case 'cancelled':
-					tab.statusText = 'Cancelled';
-					executing = false;
-					ws.close();
-					break;
+		stream = subscribeExecution({
+			workspaceId,
+			executionId: execId,
+			onEvent: (event: ExecutionEvent) => {
+				switch (event.type) {
+					case 'running':
+						tab.statusText = 'Running...';
+						break;
+					case 'progress':
+						tab.statusText = `Running... ${event.rows_so_far || 0} rows`;
+						break;
+					case 'finished':
+						tab.statusText = 'Complete';
+						tab.rowCount = event.rows_returned || 0;
+						tab.durationMs = event.duration_ms || 0;
+						executing = false;
+						break;
+					case 'failed':
+						tab.errorMsg = event.message || 'Query failed';
+						executing = false;
+						tab.statusText = 'Failed';
+						break;
+					case 'cancelled':
+						tab.statusText = 'Cancelled';
+						executing = false;
+						break;
+				}
+			},
+			onGaveUp: () => {
+				executing = false;
+				tab.statusText = 'Connection lost';
 			}
-		};
-		ws.onerror = () => {
-			executing = false;
-			tab.statusText = 'Connection error';
-		};
+		});
 	}
 
 	function formatSQL() {

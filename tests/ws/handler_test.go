@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/ws"
+	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -62,14 +62,16 @@ func finishedStatements() []ws.QuerierQueryStatement {
 	}
 }
 
-func testJWT(userID, role string) string {
-	token, _ := auth.NewAccessToken(userID, role, "test-secret")
-	return token
+// newHandler returns a handler wired to a fresh ticket store.
+func newHandler(mock *mockQuerier) (*ws.Handler, *wsticket.Store) {
+	handler := ws.New(mock, "test-secret", "", "", "", "", false)
+	tickets := wsticket.New()
+	handler.SetTickets(tickets)
+	return handler, tickets
 }
 
-func TestWebSocketMissingToken(t *testing.T) {
-	mock := &mockQuerier{}
-	handler := ws.New(mock, "test-secret", "", "", "", "", false)
+func TestWebSocketMissingTicket(t *testing.T) {
+	handler, _ := newHandler(&mockQuerier{})
 
 	req := httptest.NewRequest("GET", "/ws/workspaces/ws1/executions/exec1", nil)
 	req.SetPathValue("id", "00000000-0000-0000-0000-000000000001")
@@ -83,11 +85,26 @@ func TestWebSocketMissingToken(t *testing.T) {
 	}
 }
 
-func TestWebSocketInvalidToken(t *testing.T) {
-	mock := &mockQuerier{}
-	handler := ws.New(mock, "test-secret", "", "", "", "", false)
+func TestWebSocketInvalidTicket(t *testing.T) {
+	handler, _ := newHandler(&mockQuerier{})
 
-	req := httptest.NewRequest("GET", "/ws/workspaces/ws1/executions/exec1?token=invalid", nil)
+	req := httptest.NewRequest("GET", "/ws/workspaces/ws1/executions/exec1?ticket=invalid", nil)
+	req.SetPathValue("id", "00000000-0000-0000-0000-000000000001")
+	req.SetPathValue("execution_id", "00000000-0000-0000-0000-000000000002")
+	rec := httptest.NewRecorder()
+
+	handler.StreamExecution(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestWebSocketTicketScopedToAnotherExecution(t *testing.T) {
+	handler, tickets := newHandler(&mockQuerier{})
+	ticket, _ := tickets.Issue("00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000099")
+
+	req := httptest.NewRequest("GET", "/ws/workspaces/ws1/executions/exec1?ticket="+ticket, nil)
 	req.SetPathValue("id", "00000000-0000-0000-0000-000000000001")
 	req.SetPathValue("execution_id", "00000000-0000-0000-0000-000000000002")
 	rec := httptest.NewRecorder()
@@ -105,12 +122,14 @@ func TestWebSocketNoAccess(t *testing.T) {
 			return false, nil
 		},
 	}
-	handler := ws.New(mock, "test-secret", "", "", "", "", false)
+	handler, tickets := newHandler(mock)
 
-	token := testJWT("00000000-0000-0000-0000-000000000001", "admin")
-	req := httptest.NewRequest("GET", "/ws/workspaces/00000000-0000-0000-0000-000000000002/executions/00000000-0000-0000-0000-000000000003?token="+token, nil)
+	const userID = "00000000-0000-0000-0000-000000000001"
+	const executionID = "00000000-0000-0000-0000-000000000003"
+	ticket, _ := tickets.Issue(userID, executionID)
+	req := httptest.NewRequest("GET", "/ws/workspaces/00000000-0000-0000-0000-000000000002/executions/"+executionID+"?ticket="+ticket, nil)
 	req.SetPathValue("id", "00000000-0000-0000-0000-000000000002")
-	req.SetPathValue("execution_id", "00000000-0000-0000-0000-000000000003")
+	req.SetPathValue("execution_id", executionID)
 	rec := httptest.NewRecorder()
 
 	handler.StreamExecution(rec, req)
@@ -137,7 +156,7 @@ func TestWebSocketStreamFinished(t *testing.T) {
 		},
 	}
 
-	handler := ws.New(mock, "test-secret", "rustfs:9000", "key", "secret", "bucket", false)
+	handler, tickets := newHandler(mock)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.SetPathValue("id", wsID)
@@ -146,8 +165,8 @@ func TestWebSocketStreamFinished(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	token := testJWT(userID, "admin")
-	wsURL := strings.Replace(srv.URL, "http://", "ws://", 1) + "?token=" + token
+	ticket, _ := tickets.Issue(userID, execID)
+	wsURL := strings.Replace(srv.URL, "http://", "ws://", 1) + "?ticket=" + ticket
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -206,7 +225,7 @@ func TestWebSocketWithStatements(t *testing.T) {
 		},
 	}
 
-	handler := ws.New(mock, "test-secret", "rustfs:9000", "key", "secret", "bucket", false)
+	handler, tickets := newHandler(mock)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.SetPathValue("id", wsID)
@@ -215,8 +234,8 @@ func TestWebSocketWithStatements(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	token := testJWT(userID, "admin")
-	wsURL := strings.Replace(srv.URL, "http://", "ws://", 1) + "?token=" + token
+	ticket, _ := tickets.Issue(userID, execID)
+	wsURL := strings.Replace(srv.URL, "http://", "ws://", 1) + "?ticket=" + ticket
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {

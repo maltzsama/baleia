@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { http as mswHttp, HttpResponse } from 'msw';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -42,6 +42,13 @@ function mockResult(rows: Record<string, unknown[]>) {
 describe('ResultsPanel', () => {
 	beforeEach(() => {
 		workspaceStore.select(makeWorkspace({ id: WS }));
+		// Downloading in jsdom: object URLs and anchor navigation are stubs.
+		Object.defineProperty(URL, 'createObjectURL', {
+			value: vi.fn(() => 'blob:test'),
+			configurable: true
+		});
+		Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
+		vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 	});
 
 	it('streams the rows of the active statement', async () => {
@@ -98,5 +105,42 @@ describe('ResultsPanel', () => {
 
 		expect(await screen.findByText('Could not load the results')).toBeTruthy();
 		expect(await screen.findByText('execution not found')).toBeTruthy();
+	});
+
+	it('exports the active result set in the chosen format', async () => {
+		server.use(
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				response(200).json([
+					statement([{ result_index: 0, rows: 1, bytes: 100, truncated: false }])
+				])
+			)
+		);
+		const ipc = tableToIPC(tableFromArrays({ id: [1] }), 'stream');
+		const body = new Uint8Array(ipc.byteLength);
+		body.set(ipc);
+		let exportUrl = '';
+		server.use(
+			mswHttp.get(
+				'/api/v1/workspaces/:id/executions/:executionId/statements/:position/results',
+				({ request }) => {
+					if (request.url.includes('format=')) exportUrl = request.url;
+					return new HttpResponse(body.buffer as ArrayBuffer, {
+						status: 200,
+						headers: { 'Content-Type': 'application/vnd.apache.arrow.stream' }
+					});
+				}
+			)
+		);
+
+		render(ResultsPanel, { props: { executionId: EXEC, enabled: true } });
+		await screen.findByText('Statement 1');
+
+		await fireEvent.change(screen.getByLabelText('Export format'), {
+			target: { value: 'tsv' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+
+		await waitFor(() => expect(exportUrl).toContain('format=tsv'));
+		expect(exportUrl).toContain('result_index=0');
 	});
 });

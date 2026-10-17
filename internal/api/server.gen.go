@@ -261,9 +261,9 @@ type ServerInterface interface {
 	// List individual statements in a multi-statement execution
 	// (GET /workspaces/{id}/executions/{execution_id}/statements)
 	ListStatements(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
-	// Single-statement result as Arrow IPC stream
+	// Single-statement result as Arrow IPC stream or an export
 	// (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
-	GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int)
+	GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int, params GetStatementResultsParams)
 	// List folders of the spaces the caller can see
 	// (GET /workspaces/{id}/folders)
 	ListFolders(w http.ResponseWriter, r *http.Request, id PathId, params ListFoldersParams)
@@ -408,6 +408,9 @@ type ServerInterface interface {
 	// Deleted content that has not been restored — workspace members
 	// (GET /workspaces/{id}/trash)
 	ListTrash(w http.ResponseWriter, r *http.Request, id PathId, params ListTrashParams)
+	// Issue a single-use WebSocket ticket (30 seconds)
+	// (POST /ws-tickets)
+	IssueWsTicket(w http.ResponseWriter, r *http.Request)
 	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, params StreamExecutionParams)
@@ -903,9 +906,9 @@ func (_ Unimplemented) ListStatements(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Single-statement result as Arrow IPC stream
+// Single-statement result as Arrow IPC stream or an export
 // (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
-func (_ Unimplemented) GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int) {
+func (_ Unimplemented) GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int, params GetStatementResultsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1194,6 +1197,12 @@ func (_ Unimplemented) ListWorkspaceTargets(w http.ResponseWriter, r *http.Reque
 // Deleted content that has not been restored — workspace members
 // (GET /workspaces/{id}/trash)
 func (_ Unimplemented) ListTrash(w http.ResponseWriter, r *http.Request, id PathId, params ListTrashParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Issue a single-use WebSocket ticket (30 seconds)
+// (POST /ws-tickets)
+func (_ Unimplemented) IssueWsTicket(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3859,8 +3868,27 @@ func (siw *ServerInterfaceWrapper) GetStatementResults(w http.ResponseWriter, r 
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetStatementResultsParams
+
+	// ------------- Optional query parameter "result_index" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "result_index", r.URL.Query(), &params.ResultIndex)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "result_index", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "format", r.URL.Query(), &params.Format)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetStatementResults(w, r, id, executionId, position)
+		siw.Handler.GetStatementResults(w, r, id, executionId, position, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6268,6 +6296,28 @@ func (siw *ServerInterfaceWrapper) ListTrash(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// IssueWsTicket operation middleware
+func (siw *ServerInterfaceWrapper) IssueWsTicket(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueWsTicket(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StreamExecution operation middleware
 func (siw *ServerInterfaceWrapper) StreamExecution(w http.ResponseWriter, r *http.Request) {
 
@@ -6302,18 +6352,18 @@ func (siw *ServerInterfaceWrapper) StreamExecution(w http.ResponseWriter, r *htt
 	// Parameter object where we will unmarshal all parameters from the context
 	var params StreamExecutionParams
 
-	// ------------- Required query parameter "token" -------------
+	// ------------- Required query parameter "ticket" -------------
 
-	if paramValue := r.URL.Query().Get("token"); paramValue != "" {
+	if paramValue := r.URL.Query().Get("ticket"); paramValue != "" {
 
 	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "token"})
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ticket"})
 		return
 	}
 
-	err = runtime.BindQueryParameter("form", true, true, "token", r.URL.Query(), &params.Token)
+	err = runtime.BindQueryParameter("form", true, true, "ticket", r.URL.Query(), &params.Ticket)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticket", Err: err})
 		return
 	}
 
@@ -6830,6 +6880,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/trash", wrapper.ListTrash)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/ws-tickets", wrapper.IssueWsTicket)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ws/workspaces/{id}/executions/{execution_id}", wrapper.StreamExecution)
@@ -10146,6 +10199,7 @@ type GetStatementResultsRequestObject struct {
 	Id          PathId             `json:"id"`
 	ExecutionId openapi_types.UUID `json:"execution_id"`
 	Position    int                `json:"position"`
+	Params      GetStatementResultsParams
 }
 
 type GetStatementResultsResponseObject interface {
@@ -10193,6 +10247,17 @@ type GetStatementResults409JSONResponse Error
 func (response GetStatementResults409JSONResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetStatementResults422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response GetStatementResults422JSONResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -12395,6 +12460,32 @@ func (response ListTrash404JSONResponse) VisitListTrashResponse(w http.ResponseW
 	return json.NewEncoder(w).Encode(response)
 }
 
+type IssueWsTicketRequestObject struct {
+	Body *IssueWsTicketJSONRequestBody
+}
+
+type IssueWsTicketResponseObject interface {
+	VisitIssueWsTicketResponse(w http.ResponseWriter) error
+}
+
+type IssueWsTicket201JSONResponse WsTicket
+
+func (response IssueWsTicket201JSONResponse) VisitIssueWsTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IssueWsTicket401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response IssueWsTicket401JSONResponse) VisitIssueWsTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type StreamExecutionRequestObject struct {
 	Id          PathId             `json:"id"`
 	ExecutionId openapi_types.UUID `json:"execution_id"`
@@ -12667,7 +12758,7 @@ type StrictServerInterface interface {
 	// List individual statements in a multi-statement execution
 	// (GET /workspaces/{id}/executions/{execution_id}/statements)
 	ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error)
-	// Single-statement result as Arrow IPC stream
+	// Single-statement result as Arrow IPC stream or an export
 	// (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
 	GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error)
 	// List folders of the spaces the caller can see
@@ -12814,6 +12905,9 @@ type StrictServerInterface interface {
 	// Deleted content that has not been restored — workspace members
 	// (GET /workspaces/{id}/trash)
 	ListTrash(ctx context.Context, request ListTrashRequestObject) (ListTrashResponseObject, error)
+	// Issue a single-use WebSocket ticket (30 seconds)
+	// (POST /ws-tickets)
+	IssueWsTicket(ctx context.Context, request IssueWsTicketRequestObject) (IssueWsTicketResponseObject, error)
 	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error)
@@ -15113,12 +15207,13 @@ func (sh *strictHandler) ListStatements(w http.ResponseWriter, r *http.Request, 
 }
 
 // GetStatementResults operation middleware
-func (sh *strictHandler) GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int) {
+func (sh *strictHandler) GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int, params GetStatementResultsParams) {
 	var request GetStatementResultsRequestObject
 
 	request.Id = id
 	request.ExecutionId = executionId
 	request.Position = position
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetStatementResults(ctx, request.(GetStatementResultsRequestObject))
@@ -16541,6 +16636,37 @@ func (sh *strictHandler) ListTrash(w http.ResponseWriter, r *http.Request, id Pa
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListTrashResponseObject); ok {
 		if err := validResponse.VisitListTrashResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IssueWsTicket operation middleware
+func (sh *strictHandler) IssueWsTicket(w http.ResponseWriter, r *http.Request) {
+	var request IssueWsTicketRequestObject
+
+	var body IssueWsTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IssueWsTicket(ctx, request.(IssueWsTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IssueWsTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IssueWsTicketResponseObject); ok {
+		if err := validResponse.VisitIssueWsTicketResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { apiErrorMessage, client } from '$lib/api/client';
+	import { apiErrorMessage, apiFetch, client } from '$lib/api/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import type { components } from '$lib/api/schema';
 	import { ResultsStore } from '$lib/results/store.svelte';
+	import { toasts } from '$lib/ui/toast.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -26,6 +27,8 @@
 	let resultRetry = $state(0);
 	let lastResultKey = '';
 	let lastResultRetry = -1;
+	let exportFormat = $state<'csv' | 'tsv' | 'jsonl' | 'arrow'>('csv');
+	let exporting = $state(false);
 
 	function errorMessage(e: unknown): string {
 		return e instanceof Error ? e.message : String(e);
@@ -101,6 +104,29 @@
 	function statementTitle(statement: QueryStatement): string {
 		return statement.sql.trim().split('\n')[0]?.slice(0, 60) || `Statement ${statement.position}`;
 	}
+
+	async function download() {
+		if (activePosition == null || !workspaceId) return;
+		exporting = true;
+		try {
+			const url = `/workspaces/${workspaceId}/executions/${executionId}/statements/${activePosition}/results?result_index=${activeResultIndex}&format=${exportFormat}`;
+			const response = await apiFetch(url);
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			const blob = await response.blob();
+			const href = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = href;
+			link.download = `${executionId}-${activePosition}.${exportFormat}`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(href);
+		} catch (e) {
+			toasts.error('Export failed: ' + errorMessage(e));
+		} finally {
+			exporting = false;
+		}
+	}
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col" data-testid="results-panel">
@@ -146,6 +172,27 @@
 					<StatusBadge kind="statement" status={statement.status} />
 				</button>
 			{/each}
+			<span class="flex-1"></span>
+			<div class="flex shrink-0 items-center gap-1 pr-1 text-[11px] text-text-muted">
+				<select
+					bind:value={exportFormat}
+					aria-label="Export format"
+					class="rounded border border-border bg-bg-panel px-1.5 py-1 text-[11px]"
+				>
+					<option value="csv">CSV</option>
+					<option value="tsv">TSV</option>
+					<option value="jsonl">JSON Lines</option>
+					<option value="arrow">Arrow</option>
+				</select>
+				<button
+					type="button"
+					class="rounded border border-border px-2 py-1 font-medium text-text-muted hover:border-border-hover hover:text-text-main disabled:opacity-50"
+					disabled={activePosition == null || exporting}
+					onclick={download}
+				>
+					{exporting ? 'Exporting…' : 'Export'}
+				</button>
+			</div>
 		</div>
 
 		{#if resultSets.length > 1}

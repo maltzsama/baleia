@@ -438,6 +438,21 @@ components:
         schema: { type: string, nullable: true }
         read_only: { type: boolean }
 
+    WsTicketRequest:
+      type: object
+      properties:
+        execution_id:
+          type: string
+          format: uuid
+          description: "Scope the ticket to one execution; the WebSocket rejects another"
+
+    WsTicket:
+      type: object
+      required: [ticket, expires_at]
+      properties:
+        ticket: { type: string }
+        expires_at: { type: string, format: date-time }
+
     WorkspaceTarget:
       type: object
       required: [binding_id, catalog_id, catalog_name, engine_id, engine_name, engine_kind, engine_catalog_name, mode, permission, is_default]
@@ -4095,13 +4110,26 @@ paths:
         in: path
         required: true
         schema: { type: integer, minimum: 1 }
+      - name: result_index
+        in: query
+        description: "Which stored result set of the statement (0-based); default 0"
+        schema: { type: integer, minimum: 0, default: 0 }
+      - name: format
+        in: query
+        description: >
+          `arrow` (default) streams the stored IPC object unchanged. `csv`,
+          `tsv` and `jsonl` convert it server-side, row by row, without
+          materializing the result, and answer with
+          `Content-Disposition: attachment`.
+        schema: { type: string, enum: [arrow, csv, tsv, jsonl], default: arrow }
     get:
       tags: [Executions]
       operationId: getStatementResults
-      summary: "Single-statement result as Arrow IPC stream"
+      summary: "Single-statement result as Arrow IPC stream or an export"
       description: |
         Streams one statement's result set from object storage. A statement
-        whose result was truncated returns the buffered prefix.
+        whose result was truncated returns the buffered prefix. With
+        `format=csv|tsv|jsonl`, the object is converted as it streams.
       responses:
         "200": { $ref: "#/components/responses/ArrowStream" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -4111,6 +4139,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/executions/{execution_id}/results:
     parameters:
@@ -4135,6 +4164,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /ws-tickets:
+    post:
+      tags: [Executions]
+      operationId: issueWsTicket
+      summary: "Issue a single-use WebSocket ticket (30 seconds)"
+      description: >
+        Keeps the JWT out of WebSocket URLs. The client connects to
+        `/ws/workspaces/{id}/executions/{execution_id}?ticket=<ticket>` and the
+        server consumes the ticket once. A ticket scoped to an execution is
+        rejected on any other execution.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WsTicketRequest" }
+      responses:
+        "201":
+          description: "Ticket"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WsTicket" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /ws/workspaces/{id}/executions/{execution_id}:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -4147,20 +4199,25 @@ paths:
       operationId: streamExecution
       summary: "WebSocket for real-time execution progress"
       description: |
-        Authenticate via `?token=<jwt>`.
+        Authenticate via `?ticket=<ticket>` from `POST /ws-tickets`; the ticket
+        is single-use and valid for 30 seconds. The JWT never appears in the
+        URL. The first message is the current execution state (an idempotent
+        snapshot), so a reconnect can miss no event.
 
         ## Server → Client Events
         ```json
         { "type": "running", "execution_id": "...", "ts": "..." }
+        { "type": "statement_running", "execution_id": "...", "statement_position": 1, "ts": "..." }
         { "type": "progress", "execution_id": "...", "ts": "...", "rows_so_far": 1000 }
         { "type": "finished", "execution_id": "...", "ts": "...", "rows_returned": 9843, "duration_ms": 1240 }
         { "type": "failed", "execution_id": "...", "ts": "...", "message": "..." }
         { "type": "cancelled", "execution_id": "...", "ts": "..." }
         ```
-        After `finished`, fetch `GET .../results` for the Arrow IPC stream.
-        Connection closes automatically after any terminal event.
+        After `finished`, fetch `GET .../statements/{position}/results` for the
+        Arrow IPC stream. Connection closes automatically after any terminal
+        event.
       parameters:
-        - name: token
+        - name: ticket
           in: query
           required: true
           schema: { type: string }

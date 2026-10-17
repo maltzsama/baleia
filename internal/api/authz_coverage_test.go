@@ -78,6 +78,7 @@ var operationAccess = map[string]access{
 	"ListConnectionProviders": {kind: kindAuthenticated, why: "static provider metadata (kinds and config schemas), no tenant data"},
 	"GetDialect":              {kind: kindAuthenticated, why: "static dialect metadata (keyword and function lists), no tenant data"},
 	"SplitStatements":         {kind: kindAuthenticated, why: "splits the caller's own text with static rules; reads no data"},
+	"IssueWsTicket":           {kind: kindAuthenticated, why: "issues a single-use ticket for the caller's own session"},
 
 	// ── scoped to the caller
 	"GetMe":                   {kind: kindSelf, calls: selfID},
@@ -241,8 +242,9 @@ var routeAccess = map[string]access{
 	"GET /api/v1/auth/oidc/{provider_id}/login":    {kind: kindPublic},
 	"GET /api/v1/auth/oidc/{provider_id}/callback": {kind: kindPublic},
 
-	// The WebSocket authenticates with the token in the query string.
-	"GET /api/v1/ws/workspaces/{id}/executions/{execution_id}": {kind: kindChecked, pkg: "../ws", calls: []string{"ParseToken", "CheckWorkspaceAccess"}},
+	// The WebSocket authenticates with a single-use ticket issued by
+	// POST /ws-tickets; the JWT never appears in the URL (#26).
+	"GET /api/v1/ws/workspaces/{id}/executions/{execution_id}": {kind: kindChecked, pkg: "../ws", calls: []string{"Consume", "CheckWorkspaceAccess"}},
 
 	"GET /workspaces/{id}/catalogs":                                                                          checked("Workspace"),
 	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces":                                    checked("explorerTarget"),

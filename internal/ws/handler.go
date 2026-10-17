@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -55,12 +56,16 @@ type QuerierQueryStatement struct {
 type Handler struct {
 	queries     Querier
 	jwtSecret   string
+	tickets     *wsticket.Store
 	s3Endpoint  string
 	s3AccessKey string
 	s3SecretKey string
 	s3Bucket    string
 	s3UseSSL    bool
 }
+
+// SetTickets wires the shared single-use ticket store (#26).
+func (h *Handler) SetTickets(store *wsticket.Store) { h.tickets = store }
 
 func New(queries Querier, jwtSecret, s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket string, s3UseSSL bool) *Handler {
 	return &Handler{
@@ -75,36 +80,43 @@ func New(queries Querier, jwtSecret, s3Endpoint, s3AccessKey, s3SecretKey, s3Buc
 }
 
 type WSEvent struct {
-	Type          string `json:"type"`
-	ExecutionID   string `json:"execution_id,omitempty"`
-	Position      *int   `json:"statement_position,omitempty"`
-	RowsReturned  *int64 `json:"rows_returned,omitempty"`
-	RowsSoFar     *int64 `json:"rows_so_far,omitempty"`
-	DurationMs    *int64 `json:"duration_ms,omitempty"`
-	Message       string `json:"message,omitempty"`
-	ResultURL     string `json:"result_url,omitempty"`
-	Timestamp     string `json:"ts"`
+	Type         string `json:"type"`
+	ExecutionID  string `json:"execution_id,omitempty"`
+	Position     *int   `json:"statement_position,omitempty"`
+	RowsReturned *int64 `json:"rows_returned,omitempty"`
+	RowsSoFar    *int64 `json:"rows_so_far,omitempty"`
+	DurationMs   *int64 `json:"duration_ms,omitempty"`
+	Message      string `json:"message,omitempty"`
+	ResultURL    string `json:"result_url,omitempty"`
+	Timestamp    string `json:"ts"`
 }
 
 func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
+	token := r.URL.Query().Get("ticket")
 	if token == "" {
-		http.Error(w, "missing token", http.StatusUnauthorized)
+		http.Error(w, "missing ticket", http.StatusUnauthorized)
+		return
+	}
+	if h.tickets == nil {
+		http.Error(w, "tickets are not configured", http.StatusUnauthorized)
+		return
+	}
+	ticket, ok := h.tickets.Consume(token)
+	if !ok {
+		http.Error(w, "invalid or expired ticket", http.StatusUnauthorized)
 		return
 	}
 
-	claims, err := auth.ParseToken(token, h.jwtSecret)
-	if err != nil {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+	workspaceID := r.PathValue("id")
+	executionID := r.PathValue("execution_id")
+	if ticket.ExecutionID != "" && ticket.ExecutionID != executionID {
+		http.Error(w, "ticket is for another execution", http.StatusUnauthorized)
 		return
 	}
 
 	// Make the authenticated actor visible to the request-logging middleware,
 	// which logs after this handler returns.
-	auth.SetLogActor(r.Context(), claims.UserID)
-
-	workspaceID := r.PathValue("id")
-	executionID := r.PathValue("execution_id")
+	auth.SetLogActor(r.Context(), ticket.UserID)
 
 	var wsID pgtype.UUID
 	if err := wsID.Scan(workspaceID); err != nil {
@@ -113,7 +125,7 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var userID pgtype.UUID
-	if err := userID.Scan(claims.UserID); err != nil {
+	if err := userID.Scan(ticket.UserID); err != nil {
 		http.Error(w, "invalid user", http.StatusUnauthorized)
 		return
 	}
