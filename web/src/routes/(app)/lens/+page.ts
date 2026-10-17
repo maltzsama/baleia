@@ -1,2 +1,6 @@
-export const prerender = true;
-export const ssr = false;
+import { redirect } from '@sveltejs/kit';
+import type { PageLoad } from './$types';
+
+export const load: PageLoad = () => {
+	redirect(308, '/monitoring');
+};

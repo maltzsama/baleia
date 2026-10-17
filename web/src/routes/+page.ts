@@ -15,4 +15,5 @@ export const load: PageLoad = async () => {
 		// Server unreachable: fall through to the normal flow instead of trapping the user on /setup.
 	}
 	if (!configured) redirect(307, '/setup');
+	redirect(307, '/sql');
 };

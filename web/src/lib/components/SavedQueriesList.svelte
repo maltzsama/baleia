@@ -1,55 +1,44 @@
 <script lang="ts">
-	import { client, apiErrorMessage } from '$lib/api/client';
+	import { apiErrorMessage, client } from '$lib/api/client';
+	import { editor } from '$lib/stores/editor.svelte';
+	import { savedQueries, type SavedQuery } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
-	import type { components } from '$lib/api/schema';
-
-	type SavedQuery = components['schemas']['SavedQuery'];
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
+	const queries = $derived(savedQueries.list);
+	const loading = $derived(savedQueries.loading);
+	const loadError = $derived(savedQueries.error);
 
-	let queries = $state<SavedQuery[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let actionError = $state('');
 	let menuOpen = $state<string | null>(null);
 	let renameId = $state<string | null>(null);
 	let renameValue = $state('');
 
-	async function loadQueries() {
-		if (!workspaceId) return;
-		loading = true;
-		error = '';
-		const { data, error: err } = await client.GET('/workspaces/{id}/queries', {
-			params: { path: { id: workspaceId } }
-		});
-		if (err) error = apiErrorMessage(err, 'Failed to load saved queries');
-		queries = data ?? [];
-		loading = false;
-	}
-
 	$effect(() => {
-		if (workspaceId) void loadQueries();
-		else loading = false;
+		if (workspaceId) void savedQueries.reload(workspaceId);
 	});
 
-	if (typeof window !== 'undefined') {
-		window.addEventListener('query-saved', () => loadQueries());
-	}
-
 	async function deleteQuery(id: string) {
-		await client.DELETE('/workspaces/{id}/queries/{query_id}', {
+		const { error } = await client.DELETE('/workspaces/{id}/queries/{query_id}', {
 			params: { path: { id: workspaceId, query_id: id } }
 		});
 		menuOpen = null;
-		loadQueries();
+		if (error) actionError = apiErrorMessage(error, 'Failed to delete query');
+		else void savedQueries.reload(workspaceId);
 	}
 
 	async function renameQuery(q: SavedQuery) {
-		await client.PATCH('/workspaces/{id}/queries/{query_id}', {
+		const { error } = await client.PATCH('/workspaces/{id}/queries/{query_id}', {
 			params: { path: { id: workspaceId, query_id: q.id } },
 			body: { name: renameValue, sql: q.sql }
 		});
 		renameId = null;
-		loadQueries();
+		if (error) actionError = apiErrorMessage(error, 'Failed to rename query');
+		else void savedQueries.reload(workspaceId);
+	}
+
+	function openQuery(q: SavedQuery) {
+		editor.openSavedQuery(q);
 	}
 
 	function startRename(q: SavedQuery) {
@@ -62,8 +51,8 @@
 <div class="overflow-y-auto flex-1 px-1.5 pt-1.5 pb-2">
 	{#if loading}
 		<p class="text-xs text-text-muted px-2 py-4">Loading...</p>
-	{:else if error}
-		<p class="text-xs text-red-500 px-2 py-4">{error}</p>
+	{:else if loadError || actionError}
+		<p class="text-xs text-red-500 px-2 py-4">{loadError || actionError}</p>
 	{:else if queries.length === 0}
 		<p class="text-xs text-text-muted px-2 py-6 text-center">No saved queries yet.</p>
 	{:else}
@@ -76,7 +65,7 @@
 			<div class="relative group">
 				<button
 					class="flex items-center w-full text-left py-1.5 px-2 rounded-md gap-2 cursor-pointer mb-px hover:bg-slate-100 dark:hover:bg-[#1c2128] bg-none border-none text-inherit"
-					onclick={() => window.dispatchEvent(new CustomEvent('query-load', { detail: q }))}
+					onclick={() => openQuery(q)}
 				>
 					<svg viewBox="0 0 24 24" class="shrink-0 text-text-muted w-3.5 h-3.5"
 						><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline

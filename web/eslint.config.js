@@ -49,6 +49,30 @@ export default ts.config(
 		}
 	},
 	{
+		files: ['src/**/*.{ts,svelte}'],
+		rules: {
+			// App state travels through typed stores (#29); window custom events
+			// are not allowed. Plain DOM events (resize, keydown, …) stay allowed.
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: "NewExpression[callee.name='CustomEvent']",
+					message: 'Use the typed stores instead of CustomEvent (#29).'
+				},
+				{
+					selector:
+						"CallExpression[callee.object.name='window'][callee.property.name='dispatchEvent']",
+					message: 'Use the typed stores instead of window.dispatchEvent (#29).'
+				},
+				{
+					selector:
+						"CallExpression[callee.object.name='window'][callee.property.name='addEventListener'][arguments.0.value=/^[a-z]+-/]",
+					message: 'Use the typed stores for app events; this is not a DOM event (#29).'
+				}
+			]
+		}
+	},
+	{
 		rules: {
 			'@typescript-eslint/no-explicit-any': 'error',
 			'no-empty': ['error', { allowEmptyCatch: false }]

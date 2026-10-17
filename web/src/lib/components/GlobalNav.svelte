@@ -53,10 +53,10 @@
 			<svg viewBox="0 0 24 24" class="w-4 h-4"><path d="M4 17l6-6-6-6M12 19h8" /></svg>
 		</a>
 		<a
-			href={resolve('/datasources')}
-			title="Data Sources"
+			href={resolve('/data')}
+			title="Data Explorer"
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
-				{isActive('/datasources')
+				{isActive('/data')
 				? 'bg-primary text-white'
 				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
 		>
@@ -70,10 +70,24 @@
 			>
 		</a>
 		<a
-			href={resolve('/lens')}
+			href={resolve('/connections')}
+			title="Connections"
+			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+				{isActive('/connections')
+				? 'bg-primary text-white'
+				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+		>
+			<svg viewBox="0 0 24 24" class="w-4 h-4"
+				><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path
+					d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"
+				/></svg
+			>
+		</a>
+		<a
+			href={resolve('/monitoring')}
 			title="Monitoring"
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
-				{isActive('/lens')
+				{isActive('/monitoring')
 				? 'bg-primary text-white'
 				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
 		>
@@ -84,6 +98,18 @@
 					x2="6"
 					y2="14"
 				/></svg
+			>
+		</a>
+		<a
+			href={resolve('/history')}
+			title="Query History"
+			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+				{isActive('/history')
+				? 'bg-primary text-white'
+				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+		>
+			<svg viewBox="0 0 24 24" class="w-4 h-4"
+				><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg
 			>
 		</a>
 		<a

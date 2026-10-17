@@ -11,23 +11,10 @@
 	import { format as formatSQLFormatter } from 'sql-formatter';
 	import { tableFromIPC } from 'apache-arrow';
 	import { API_ROOT, apiFetch, apiErrorMessage, client, getAccessToken } from '$lib/api/client';
+	import { editor } from '$lib/stores/editor.svelte';
+	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
-	type Cell = unknown;
-	type Tab = {
-		id: string;
-		name: string;
-		sql: string;
-		savedId: string | null;
-		results: Cell[][];
-		columns: string[];
-		rowCount: number;
-		durationMs: number;
-		errorMsg: string;
-		statusText: string;
-		page: number;
-	};
-	type SavedQuery = { id: string; name: string; sql: string };
 	type ExecutionEvent = {
 		type: string;
 		rows_so_far?: number;
@@ -60,28 +47,19 @@
 	let editorEl: HTMLDivElement;
 	const themeCompartment = new Compartment();
 
-	let activeIdx = $state(0);
+	const tabs = $derived(editor.tabs);
+	const activeIdx = $derived(
+		Math.max(
+			0,
+			editor.tabs.findIndex((tab) => tab.id === editor.activeId)
+		)
+	);
+	const activeTab = $derived(editor.activeTab);
+
 	let executing = $state(false);
 	let executionId = $state('');
-	let tabs = $state<Tab[]>([
-		{
-			id: '1',
-			name: 'Untitled',
-			sql: 'SELECT 1;',
-			savedId: null,
-			results: [],
-			columns: [],
-			rowCount: 0,
-			durationMs: 0,
-			errorMsg: '',
-			statusText: 'Ready',
-			page: 1
-		}
-	]);
 	let dark = $state(browser && document.body.classList.contains('dark'));
 
-	const activeTab = $derived(tabs[activeIdx]);
-	let tabCounter = $state(2);
 	const workspaceId = $derived(workspaceStore.current?.id || '');
 	let targets = $state<Target[]>([]);
 	let targetId = $state('');
@@ -91,61 +69,29 @@
 	let perPage = $state(50);
 
 	function switchTab(idx: number) {
-		if (activeIdx !== idx) {
-			tabs[activeIdx].sql = editorView.state.doc.toString();
-		}
-		activeIdx = idx;
-		editorView.dispatch({
-			changes: { from: 0, to: editorView.state.doc.length, insert: tabs[idx].sql }
-		});
+		editor.activate(tabs[idx].id);
 	}
 
 	function newTab() {
-		tabs[activeIdx].sql = editorView.state.doc.toString();
-		tabs.push({
-			id: String(tabCounter++),
-			name: 'Untitled',
-			sql: 'SELECT 1;',
-			savedId: null,
-			results: [],
-			columns: [],
-			rowCount: 0,
-			durationMs: 0,
-			errorMsg: '',
-			statusText: 'Ready',
-			page: 1
-		});
-		activeIdx = tabs.length - 1;
-		editorView.dispatch({
-			changes: { from: 0, to: editorView.state.doc.length, insert: 'SELECT 1;' }
-		});
+		editor.addTab();
 	}
 
 	function closeTab(idx: number) {
-		if (tabs.length <= 1) return;
-		tabs.splice(idx, 1);
-		if (activeIdx >= tabs.length) activeIdx = tabs.length - 1;
-		const t = tabs[activeIdx];
-		editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: t.sql } });
+		editor.closeTab(tabs[idx].id);
 	}
 
-	function loadQuery(q: SavedQuery) {
-		tabs.push({
-			id: String(tabCounter++),
-			name: q.name,
-			sql: q.sql,
-			savedId: q.id,
-			results: [],
-			columns: [],
-			rowCount: 0,
-			durationMs: 0,
-			errorMsg: '',
-			statusText: 'Ready',
-			page: 1
-		});
-		activeIdx = tabs.length - 1;
-		editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: q.sql } });
-	}
+	// Mirrors the store's active tab into CodeMirror when another component
+	// (a saved query, the route) changes the selection.
+	let syncedTabId = $state('');
+	$effect(() => {
+		const id = editor.activeId;
+		if (!editorView || id === syncedTabId) return;
+		syncedTabId = id;
+		const sql = editor.activeTab?.sql ?? '';
+		if (editorView.state.doc.toString() !== sql) {
+			editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: sql } });
+		}
+	});
 
 	// Until the engine contract lands (#20) only Trino runs queries.
 	const runnable = (t: Target) => t.engine_kind === 'trino';
@@ -205,11 +151,6 @@
 
 		const state = EditorState.create({ doc: tabs[activeIdx].sql, extensions });
 		editorView = new EditorView({ state, parent: editorEl });
-
-		if (typeof window !== 'undefined') {
-			window.addEventListener('query-load', ((e: CustomEvent) =>
-				loadQuery(e.detail)) as EventListener);
-		}
 
 		return () => observer.disconnect();
 	});
@@ -297,7 +238,7 @@
 				const arr = new Uint8Array(buf);
 				const table = tableFromIPC(arr);
 				tabs[idx].columns = table.schema.fields.map((f) => f.name);
-				const decoded: Cell[][] = [];
+				const decoded: unknown[][] = [];
 				for (const row of table.toArray()) {
 					decoded.push(tabs[idx].columns.map((c) => (row as Record<string, unknown>)[c]));
 				}
@@ -351,11 +292,10 @@
 				tabs[activeIdx].errorMsg = apiErrorMessage(error, 'Save failed');
 				return;
 			}
-			tabs[activeIdx].savedId = saved.id;
-			tabs[activeIdx].name = saveName.trim();
+			editor.markSaved(editor.activeId, saved);
+			savedQueries.onSaved(saved);
 			saveModalOpen = false;
 			saveName = '';
-			window.dispatchEvent(new CustomEvent('query-saved'));
 		} catch (e) {
 			tabs[activeIdx].errorMsg = 'Save failed: ' + errorMessage(e);
 		}
