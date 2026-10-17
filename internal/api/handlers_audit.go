@@ -160,6 +160,9 @@ func connectionChanges(before, after db.CatalogConnection, creds *map[string]int
 	if before.DefaultReadonly != after.DefaultReadonly {
 		changes["default_readonly"] = audit.Change{From: before.DefaultReadonly, To: after.DefaultReadonly}
 	}
+	if before.CredentialsReadOnly != after.CredentialsReadOnly {
+		changes["credentials_read_only"] = audit.Change{From: before.CredentialsReadOnly, To: after.CredentialsReadOnly}
+	}
 	if before.Url != after.Url {
 		changes["url"] = audit.Change{From: before.Url, To: after.Url}
 	}

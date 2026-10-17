@@ -2291,6 +2291,8 @@ export interface components {
             /** @description Whether stored credentials exist; the secret itself is never returned */
             has_credentials: boolean;
             default_readonly: boolean;
+            /** @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59) */
+            credentials_read_only: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2309,6 +2311,11 @@ export interface components {
             };
             /** @default true */
             default_readonly: boolean;
+            /**
+             * @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+             * @default false
+             */
+            credentials_read_only: boolean;
             /** @description Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config */
             credentials?: Record<string, never>;
             nessie_credentials?: components["schemas"]["NessieCredentials"];
@@ -2361,6 +2368,8 @@ export interface components {
             };
             credentials?: Record<string, never>;
             default_readonly?: boolean;
+            /** @description The administrator asserts these credentials cannot modify data (#11/#13/#59) */
+            credentials_read_only?: boolean;
         };
         Engine: {
             readonly allowed_actions: components["schemas"]["EngineAllowedAction"][];

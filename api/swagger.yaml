@@ -540,7 +540,7 @@ components:
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
-      required: [id, name, type, url, config, default_readonly, has_credentials, created_at, allowed_actions]
+      required: [id, name, type, url, config, default_readonly, has_credentials, credentials_read_only, created_at, allowed_actions]
       properties:
         allowed_actions:
           type: array
@@ -558,6 +558,7 @@ components:
         port: { type: string }
         has_credentials: { type: boolean, description: "Whether stored credentials exist; the secret itself is never returned" }
         default_readonly: { type: boolean }
+        credentials_read_only: { type: boolean, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -579,6 +580,8 @@ components:
           additionalProperties: { type: string }
           description: "Non-secret fields of the provider's config schema"
         default_readonly: { type: boolean, default: true }
+        credentials_read_only:
+          { type: boolean, default: false, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
         credentials:
           type: object
           description: "Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config"
@@ -655,6 +658,8 @@ components:
           additionalProperties: { type: string }
         credentials: { type: object }
         default_readonly: { type: boolean }
+        credentials_read_only:
+          { type: boolean, description: "The administrator asserts these credentials cannot modify data (#11/#13/#59)" }
 
     Engine:
       type: object
