@@ -1855,6 +1855,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/retrievers/destinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Bindings this workspace may write to (Iceberg, active, on a federated engine) */
+        get: operations["listRetrieverDestinations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/retrievers/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explain the definition on the destination engine in a read-only session */
+        post: operations["validateRetriever"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cron/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Next runs of a cron expression, from the server's parser */
+        post: operations["previewCron"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/migrations": {
         parameters: {
             query?: never;
@@ -3331,6 +3386,12 @@ export interface components {
             dest_catalog: string;
             dest_namespace: string;
             dest_table: string;
+            /** Format: uuid */
+            dest_binding_id?: string;
+            destination?: components["schemas"]["RetrieverDestination"] | null;
+            last_refresh_status?: string | null;
+            error_code?: string | null;
+            allowed_actions?: string[];
             /** @example 0 *\/6 * * * */
             cron_schedule: string;
             /** @enum {string} */
@@ -3350,13 +3411,18 @@ export interface components {
             name: string;
             /** @description A single SELECT (or WITH ... SELECT) statement. Full refresh replaces the destination table atomically (CREATE OR REPLACE TABLE ... AS SELECT). */
             definition_sql: string;
-            /** @description Destination catalog (lowercase identifier). */
-            dest_catalog: string;
+            /**
+             * Format: uuid
+             * @description A binding from GET .../retrievers/destinations
+             */
+            dest_binding_id?: string;
+            /** @description Deprecated: the legacy catalog name; use dest_binding_id. */
+            dest_catalog?: string;
             /** @description Destination namespace/schema (identifier). */
             dest_namespace: string;
             /** @description Destination table name (identifier). */
             dest_table: string;
-            /** @description Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes. */
+            /** @description Standard five-field cron: minute hour day-of-month month day-of-week (UTC), optionally prefixed with CRON_TZ=<IANA>. The minimum interval is 5 minutes. */
             cron_schedule: string;
             /**
              * @default full
@@ -3366,12 +3432,51 @@ export interface components {
         };
         UpdateRetrieverRequest: {
             name?: string;
-            /** @description Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes. */
+            definition_sql?: string;
+            /** Format: uuid */
+            dest_binding_id?: string;
+            dest_namespace?: string;
+            dest_table?: string;
+            /** @description Standard five-field cron, optionally prefixed with CRON_TZ=<IANA>. The minimum interval is 5 minutes. */
             cron_schedule?: string;
             /** @enum {string} */
             refresh_type?: "incremental" | "full";
             /** @enum {string} */
             status?: "active" | "paused";
+        };
+        RetrieverDestination: {
+            /** Format: uuid */
+            binding_id: string;
+            engine_catalog_name: string;
+            connector: string;
+            catalog: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            };
+            engine: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                kind: string;
+            };
+        };
+        ValidateRetrieverRequest: {
+            /** Format: uuid */
+            dest_binding_id: string;
+            definition_sql: string;
+        };
+        ValidateRetrieverResult: {
+            ok: boolean;
+        };
+        CronPreviewRequest: {
+            expression: string;
+        };
+        CronPreviewResult: {
+            valid: boolean;
+            error?: string | null;
+            next: string[];
+            min_interval_ok: boolean;
         };
         RetrieverRefreshHistory: {
             /** Format: uuid */
@@ -3386,6 +3491,7 @@ export interface components {
             rows_processed?: number | null;
             duration_ms?: number | null;
             error_message?: string | null;
+            error_code?: string | null;
             /** Format: date-time */
             started_at: string;
             /** Format: date-time */
@@ -6850,6 +6956,84 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listRetrieverDestinations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destinations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetrieverDestination"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    validateRetriever: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateRetrieverRequest"];
+            };
+        };
+        responses: {
+            /** @description The definition parses and the caller can read its sources */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidateRetrieverResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    previewCron: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CronPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronPreviewResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listMigrations: {

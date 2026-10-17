@@ -33,10 +33,10 @@ func (q *Queries) AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetri
 const createRetriever = `-- name: CreateRetriever :one
 INSERT INTO retrievers (
     workspace_id, created_by, name,
-    definition_sql, dest_catalog, dest_namespace, dest_table,
+    definition_sql, dest_catalog, dest_namespace, dest_table, dest_binding_id,
     cron_schedule, refresh_type, next_refresh_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at, dest_binding_id, error_code
 `
 
 type CreateRetrieverParams struct {
@@ -47,6 +47,7 @@ type CreateRetrieverParams struct {
 	DestCatalog   string             `json:"dest_catalog"`
 	DestNamespace string             `json:"dest_namespace"`
 	DestTable     string             `json:"dest_table"`
+	DestBindingID pgtype.UUID        `json:"dest_binding_id"`
 	CronSchedule  string             `json:"cron_schedule"`
 	RefreshType   string             `json:"refresh_type"`
 	NextRefreshAt pgtype.Timestamptz `json:"next_refresh_at"`
@@ -61,6 +62,7 @@ func (q *Queries) CreateRetriever(ctx context.Context, arg CreateRetrieverParams
 		arg.DestCatalog,
 		arg.DestNamespace,
 		arg.DestTable,
+		arg.DestBindingID,
 		arg.CronSchedule,
 		arg.RefreshType,
 		arg.NextRefreshAt,
@@ -82,6 +84,8 @@ func (q *Queries) CreateRetriever(ctx context.Context, arg CreateRetrieverParams
 		&i.NextRefreshAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DestBindingID,
+		&i.ErrorCode,
 	)
 	return i, err
 }
@@ -89,7 +93,7 @@ func (q *Queries) CreateRetriever(ctx context.Context, arg CreateRetrieverParams
 const createRetrieverRefreshHistory = `-- name: CreateRetrieverRefreshHistory :one
 INSERT INTO retriever_refresh_history (retriever_id, temporal_workflow_id, refresh_type, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, retriever_id, temporal_workflow_id, refresh_type, status, rows_processed, duration_ms, error_message, started_at, finished_at
+RETURNING id, retriever_id, temporal_workflow_id, refresh_type, status, rows_processed, duration_ms, error_message, started_at, finished_at, error_code
 `
 
 type CreateRetrieverRefreshHistoryParams struct {
@@ -118,6 +122,7 @@ func (q *Queries) CreateRetrieverRefreshHistory(ctx context.Context, arg CreateR
 		&i.ErrorMessage,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.ErrorCode,
 	)
 	return i, err
 }
@@ -141,7 +146,7 @@ func (q *Queries) DeleteRetriever(ctx context.Context, arg DeleteRetrieverParams
 }
 
 const getRetrieverByID = `-- name: GetRetrieverByID :one
-SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at FROM retrievers WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at, dest_binding_id, error_code FROM retrievers WHERE id = $1 AND workspace_id = $2
 `
 
 type GetRetrieverByIDParams struct {
@@ -168,12 +173,14 @@ func (q *Queries) GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDPara
 		&i.NextRefreshAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DestBindingID,
+		&i.ErrorCode,
 	)
 	return i, err
 }
 
 const getRetrieverForRefresh = `-- name: GetRetrieverForRefresh :one
-SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at FROM retrievers WHERE id = $1
+SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at, dest_binding_id, error_code FROM retrievers WHERE id = $1
 `
 
 // Worker-only lookup: the refresh activity runs off a due list, so it does not
@@ -197,12 +204,97 @@ func (q *Queries) GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (R
 		&i.NextRefreshAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DestBindingID,
+		&i.ErrorCode,
 	)
 	return i, err
 }
 
+const latestRetrieverRefresh = `-- name: LatestRetrieverRefresh :one
+SELECT status, error_code FROM retriever_refresh_history
+WHERE retriever_id = $1
+ORDER BY started_at DESC
+LIMIT 1
+`
+
+type LatestRetrieverRefreshRow struct {
+	Status    string  `json:"status"`
+	ErrorCode *string `json:"error_code"`
+}
+
+func (q *Queries) LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UUID) (LatestRetrieverRefreshRow, error) {
+	row := q.db.QueryRow(ctx, latestRetrieverRefresh, retrieverID)
+	var i LatestRetrieverRefreshRow
+	err := row.Scan(&i.Status, &i.ErrorCode)
+	return i, err
+}
+
+const listRetrieverDestinations = `-- name: ListRetrieverDestinations :many
+SELECT b.id AS binding_id,
+       b.engine_catalog_name,
+       COALESCE(b.connector, '') AS connector,
+       c.id AS catalog_id,
+       c.name AS catalog_name,
+       e.id AS engine_id,
+       e.name AS engine_name,
+       e.kind AS engine_kind
+FROM catalog_bindings b
+JOIN catalogs c ON c.id = b.catalog_id
+JOIN engines e ON e.id = b.engine_id
+JOIN workspace_catalog_grants g ON g.catalog_id = c.id AND g.workspace_id = $1::uuid
+WHERE g.permission = 'write'
+  AND b.connector = 'iceberg'
+  AND b.lifecycle_state = 'active'
+  AND b.enabled
+  AND e.enabled
+  AND e.class = 'federated'
+ORDER BY c.name, b.engine_catalog_name
+`
+
+type ListRetrieverDestinationsRow struct {
+	BindingID         pgtype.UUID `json:"binding_id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	Connector         string      `json:"connector"`
+	CatalogID         pgtype.UUID `json:"catalog_id"`
+	CatalogName       string      `json:"catalog_name"`
+	EngineID          pgtype.UUID `json:"engine_id"`
+	EngineName        string      `json:"engine_name"`
+	EngineKind        string      `json:"engine_kind"`
+}
+
+// Bindings a workspace may write to: write grant, Iceberg connector, active
+// binding on an enabled federated engine (#118).
+func (q *Queries) ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]ListRetrieverDestinationsRow, error) {
+	rows, err := q.db.Query(ctx, listRetrieverDestinations, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRetrieverDestinationsRow
+	for rows.Next() {
+		var i ListRetrieverDestinationsRow
+		if err := rows.Scan(
+			&i.BindingID,
+			&i.EngineCatalogName,
+			&i.Connector,
+			&i.CatalogID,
+			&i.CatalogName,
+			&i.EngineID,
+			&i.EngineName,
+			&i.EngineKind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRetrieverRefreshHistory = `-- name: ListRetrieverRefreshHistory :many
-SELECT id, retriever_id, temporal_workflow_id, refresh_type, status, rows_processed, duration_ms, error_message, started_at, finished_at FROM retriever_refresh_history
+SELECT id, retriever_id, temporal_workflow_id, refresh_type, status, rows_processed, duration_ms, error_message, started_at, finished_at, error_code FROM retriever_refresh_history
 WHERE retriever_id = $1
 ORDER BY started_at DESC
 LIMIT $2
@@ -233,6 +325,7 @@ func (q *Queries) ListRetrieverRefreshHistory(ctx context.Context, arg ListRetri
 			&i.ErrorMessage,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
@@ -245,7 +338,7 @@ func (q *Queries) ListRetrieverRefreshHistory(ctx context.Context, arg ListRetri
 }
 
 const listRetrieversByWorkspace = `-- name: ListRetrieversByWorkspace :many
-SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at FROM retrievers
+SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at, dest_binding_id, error_code FROM retrievers
 WHERE workspace_id = $1
 ORDER BY name
 `
@@ -275,6 +368,8 @@ func (q *Queries) ListRetrieversByWorkspace(ctx context.Context, workspaceID pgt
 			&i.NextRefreshAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DestBindingID,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
@@ -287,7 +382,7 @@ func (q *Queries) ListRetrieversByWorkspace(ctx context.Context, workspaceID pgt
 }
 
 const listRetrieversDue = `-- name: ListRetrieversDue :many
-SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at FROM retrievers
+SELECT id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at, dest_binding_id, error_code FROM retrievers
 WHERE status = 'active' AND next_refresh_at <= now()
 ORDER BY next_refresh_at
 LIMIT 50
@@ -318,6 +413,8 @@ func (q *Queries) ListRetrieversDue(ctx context.Context) ([]Retriever, error) {
 			&i.NextRefreshAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DestBindingID,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
@@ -331,10 +428,11 @@ func (q *Queries) ListRetrieversDue(ctx context.Context) ([]Retriever, error) {
 
 const updateRetriever = `-- name: UpdateRetriever :one
 UPDATE retrievers
-SET name = $3, definition_sql = $4, cron_schedule = $5,
-    refresh_type = $6, status = $7, next_refresh_at = $8, updated_at = now()
+SET name = $3, definition_sql = $4, dest_catalog = $5, dest_namespace = $6,
+    dest_table = $7, dest_binding_id = $8, cron_schedule = $9, refresh_type = $10,
+    status = $11, error_code = $12, next_refresh_at = $13, updated_at = now()
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at
+RETURNING id, workspace_id, created_by, name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule, refresh_type, status, last_refresh_at, next_refresh_at, created_at, updated_at, dest_binding_id, error_code
 `
 
 type UpdateRetrieverParams struct {
@@ -342,9 +440,14 @@ type UpdateRetrieverParams struct {
 	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
 	Name          string             `json:"name"`
 	DefinitionSql string             `json:"definition_sql"`
+	DestCatalog   string             `json:"dest_catalog"`
+	DestNamespace string             `json:"dest_namespace"`
+	DestTable     string             `json:"dest_table"`
+	DestBindingID pgtype.UUID        `json:"dest_binding_id"`
 	CronSchedule  string             `json:"cron_schedule"`
 	RefreshType   string             `json:"refresh_type"`
 	Status        string             `json:"status"`
+	ErrorCode     *string            `json:"error_code"`
 	NextRefreshAt pgtype.Timestamptz `json:"next_refresh_at"`
 }
 
@@ -354,9 +457,14 @@ func (q *Queries) UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams
 		arg.WorkspaceID,
 		arg.Name,
 		arg.DefinitionSql,
+		arg.DestCatalog,
+		arg.DestNamespace,
+		arg.DestTable,
+		arg.DestBindingID,
 		arg.CronSchedule,
 		arg.RefreshType,
 		arg.Status,
+		arg.ErrorCode,
 		arg.NextRefreshAt,
 	)
 	var i Retriever
@@ -376,32 +484,35 @@ func (q *Queries) UpdateRetriever(ctx context.Context, arg UpdateRetrieverParams
 		&i.NextRefreshAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DestBindingID,
+		&i.ErrorCode,
 	)
 	return i, err
 }
 
 const updateRetrieverAfterRefresh = `-- name: UpdateRetrieverAfterRefresh :exec
 UPDATE retrievers
-SET status = $2, last_refresh_at = now(), updated_at = now()
+SET status = $2, error_code = $3, last_refresh_at = now(), updated_at = now()
 WHERE id = $1
 `
 
 type UpdateRetrieverAfterRefreshParams struct {
-	ID     pgtype.UUID `json:"id"`
-	Status string      `json:"status"`
+	ID        pgtype.UUID `json:"id"`
+	Status    string      `json:"status"`
+	ErrorCode *string     `json:"error_code"`
 }
 
 // Fired by the refresh activity when a run finishes: status flips to active or
 // error, last_refresh_at advances. next_refresh_at is advanced by the
 // dispatcher when the run is *started* (AdvanceRetrieverSchedule), never here.
 func (q *Queries) UpdateRetrieverAfterRefresh(ctx context.Context, arg UpdateRetrieverAfterRefreshParams) error {
-	_, err := q.db.Exec(ctx, updateRetrieverAfterRefresh, arg.ID, arg.Status)
+	_, err := q.db.Exec(ctx, updateRetrieverAfterRefresh, arg.ID, arg.Status, arg.ErrorCode)
 	return err
 }
 
 const updateRetrieverRefreshHistory = `-- name: UpdateRetrieverRefreshHistory :exec
 UPDATE retriever_refresh_history
-SET status = $2, rows_processed = $3, duration_ms = $4, error_message = $5, finished_at = now()
+SET status = $2, rows_processed = $3, duration_ms = $4, error_message = $5, error_code = $6, finished_at = now()
 WHERE id = $1
 `
 
@@ -411,6 +522,7 @@ type UpdateRetrieverRefreshHistoryParams struct {
 	RowsProcessed *int64      `json:"rows_processed"`
 	DurationMs    *int64      `json:"duration_ms"`
 	ErrorMessage  *string     `json:"error_message"`
+	ErrorCode     *string     `json:"error_code"`
 }
 
 func (q *Queries) UpdateRetrieverRefreshHistory(ctx context.Context, arg UpdateRetrieverRefreshHistoryParams) error {
@@ -420,6 +532,7 @@ func (q *Queries) UpdateRetrieverRefreshHistory(ctx context.Context, arg UpdateR
 		arg.RowsProcessed,
 		arg.DurationMs,
 		arg.ErrorMessage,
+		arg.ErrorCode,
 	)
 	return err
 }

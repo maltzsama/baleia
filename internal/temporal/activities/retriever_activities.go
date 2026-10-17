@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -67,11 +68,12 @@ func (a *Activities) advanceRetrieverSchedule(ctx context.Context, params Advanc
 		return fmt.Errorf("get retriever: %w", err)
 	}
 
-	schedule, err := cron.ParseStandard(retriever.CronSchedule)
+	loc, clean := cronLocation(retriever.CronSchedule)
+	schedule, err := cron.ParseStandard(clean)
 	if err != nil {
 		return fmt.Errorf("parse cron %q: %w", retriever.CronSchedule, err)
 	}
-	next := schedule.Next(time.Now())
+	next := schedule.Next(time.Now().In(loc))
 
 	return a.queries.AdvanceRetrieverSchedule(ctx, db.AdvanceRetrieverScheduleParams{
 		ID:            retrieverID,
@@ -115,11 +117,27 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	}
 
 	// v1 refresh: one atomic statement replaced under a new Iceberg snapshot.
-	eng, err := a.engines.DefaultTrino(ctx)
-	if err != nil {
-		return fmt.Errorf("retriever %s: %w", retriever.ID, err)
+	// The binding names the engine that runs it and the catalog to write.
+	var eng queryengine.Engine
+	destCatalog := retriever.DestCatalog
+	if retriever.DestBindingID.Valid {
+		binding, err := a.queries.GetBinding(ctx, retriever.DestBindingID)
+		if err != nil {
+			return fmt.Errorf("retriever %s: destination binding unavailable: %w", retriever.ID, err)
+		}
+		destCatalog = binding.EngineCatalogName
+		eng, err = a.engines.Get(ctx, binding.EngineID)
+		if err != nil {
+			return fmt.Errorf("retriever %s: destination engine unavailable: %w", retriever.ID, err)
+		}
+	} else {
+		var err error
+		eng, err = a.engines.DefaultTrino(ctx)
+		if err != nil {
+			return fmt.Errorf("retriever %s: %w", retriever.ID, err)
+		}
 	}
-	sql, err := buildRefreshSQL(eng.Dialect(), retriever.DestCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
+	sql, err := buildRefreshSQL(eng.Dialect(), destCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
 	if err != nil {
 		return fmt.Errorf("retriever %s has an invalid destination: %w", retriever.ID, err)
 	}
@@ -149,7 +167,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		err = fmt.Errorf("retriever owner unavailable: %w", idErr)
 	} else {
 		spec := queryengine.SessionSpec{
-			Catalog:  retriever.DestCatalog,
+			Catalog:  destCatalog,
 			Schema:   []string{retriever.DestNamespace},
 			Identity: queryengine.Identity{UserID: identity},
 			Tags:     queryengine.Tags{Source: "retriever"},
@@ -161,6 +179,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	status := "finished"
 	var rowsProcessed *int64
 	var errorMsg *string
+	var errorCode *string
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -168,6 +187,8 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		status = "failed"
 		msg := err.Error()
 		errorMsg = &msg
+		code := retrieverErrorCode(err)
+		errorCode = &code
 	} else {
 		n := rowsWritten(result)
 		rowsProcessed = &n
@@ -181,8 +202,9 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		retrieverStatus = "error"
 	}
 	if err := a.queries.UpdateRetrieverAfterRefresh(ctx, db.UpdateRetrieverAfterRefreshParams{
-		ID:     retrieverID,
-		Status: retrieverStatus,
+		ID:        retrieverID,
+		Status:    retrieverStatus,
+		ErrorCode: errorCode,
 	}); err != nil {
 		return fmt.Errorf("update retriever after refresh: %w", err)
 	}
@@ -193,6 +215,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		RowsProcessed: rowsProcessed,
 		DurationMs:    &durationMs,
 		ErrorMessage:  errorMsg,
+		ErrorCode:     errorCode,
 	}); err != nil {
 		return fmt.Errorf("update refresh history: %w", err)
 	}
@@ -229,4 +252,30 @@ func buildRefreshSQL(d queryengine.Dialect, catalog, namespace, table, definitio
 	}
 	def := strings.TrimSuffix(strings.TrimSpace(definition), ";")
 	return fmt.Sprintf("CREATE OR REPLACE TABLE %s AS %s", dest, def), nil
+}
+
+// retrieverErrorCode maps a refresh failure to the typed code stored on the
+// retriever and its history (#118).
+func retrieverErrorCode(err error) string {
+	var qe *queryengine.Error
+	if errors.As(err, &qe) && qe.Code != "" {
+		return string(qe.Code)
+	}
+	return "refresh_failed"
+}
+
+// cronLocation reads the optional CRON_TZ=<IANA> prefix (#118).
+func cronLocation(expr string) (*time.Location, string) {
+	expr = strings.TrimSpace(expr)
+	const prefix = "CRON_TZ="
+	if strings.HasPrefix(strings.ToUpper(expr), prefix) {
+		rest := strings.TrimSpace(expr[len(prefix):])
+		parts := strings.SplitN(rest, " ", 2)
+		if len(parts) == 2 {
+			if loc, locErr := time.LoadLocation(strings.TrimSpace(parts[0])); locErr == nil {
+				return loc, strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	return time.UTC, expr
 }

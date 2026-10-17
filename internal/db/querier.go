@@ -195,6 +195,7 @@ type Querier interface {
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	LatestContentVersion(ctx context.Context, arg LatestContentVersionParams) (ContentVersion, error)
+	LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UUID) (LatestRetrieverRefreshRow, error)
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
@@ -249,6 +250,9 @@ type Querier interface {
 	// Only returns statements of an execution that belongs to the given workspace.
 	ListQueryStatementsByWorkspace(ctx context.Context, arg ListQueryStatementsByWorkspaceParams) ([]QueryStatement, error)
 	ListReconcileRuns(ctx context.Context, arg ListReconcileRunsParams) ([]CatalogReconcileRun, error)
+	// Bindings a workspace may write to: write grant, Iceberg connector, active
+	// binding on an enabled federated engine (#118).
+	ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]ListRetrieverDestinationsRow, error)
 	ListRetrieverRefreshHistory(ctx context.Context, arg ListRetrieverRefreshHistoryParams) ([]RetrieverRefreshHistory, error)
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -33,6 +34,23 @@ func (f *fakeRetrieverQuerier) ListCatalogsByConnection(context.Context, pgtype.
 	}, nil
 }
 
+func (f *fakeRetrieverQuerier) ListRetrieverDestinations(context.Context, pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error) {
+	return []db.ListRetrieverDestinationsRow{{
+		BindingID:         pgtype.UUID{Bytes: [16]byte{3}, Valid: true},
+		EngineCatalogName: "tpch",
+		Connector:         "iceberg",
+		CatalogID:         pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+		CatalogName:       "tpch",
+		EngineID:          pgtype.UUID{Bytes: [16]byte{4}, Valid: true},
+		EngineName:        "trino",
+		EngineKind:        "trino",
+	}}, nil
+}
+
+func (f *fakeRetrieverQuerier) LatestRetrieverRefresh(context.Context, pgtype.UUID) (db.LatestRetrieverRefreshRow, error) {
+	return db.LatestRetrieverRefreshRow{}, pgx.ErrNoRows
+}
+
 func (f *fakeRetrieverQuerier) CreateRetriever(_ context.Context, arg db.CreateRetrieverParams) (db.Retriever, error) {
 	f.created = &arg
 	return db.Retriever{}, nil
@@ -45,7 +63,7 @@ func retrieverRequest() CreateRetrieverRequestObject {
 		Body: &CreateRetrieverJSONRequestBody{
 			Name:          "daily",
 			DefinitionSql: "SELECT 1 AS x",
-			DestCatalog:   "tpch",
+			DestCatalog:   strp("tpch"),
 			DestNamespace: "sf1",
 			DestTable:     "daily_snapshot",
 			CronSchedule:  "0 */6 * * *",
@@ -59,7 +77,7 @@ func TestCreateRetriever_RequiresDestination(t *testing.T) {
 		name string
 		set  func(*CreateRetrieverRequest)
 	}{
-		{"empty dest_catalog", func(r *CreateRetrieverRequest) { r.DestCatalog = "" }},
+		{"empty dest_catalog", func(r *CreateRetrieverRequest) { r.DestCatalog = nil }},
 		{"empty dest_namespace", func(r *CreateRetrieverRequest) { r.DestNamespace = "" }},
 		{"empty dest_table", func(r *CreateRetrieverRequest) { r.DestTable = "" }},
 		{"bad dest_identifier", func(r *CreateRetrieverRequest) { r.DestTable = "with-hyphen" }},
@@ -130,6 +148,9 @@ func TestCreateRetriever_StoresDestinationFields(t *testing.T) {
 	}
 	if fake.created.DestCatalog != "tpch" || fake.created.DestNamespace != "sf1" || fake.created.DestTable != "daily_snapshot" {
 		t.Fatalf("destination not stored: %+v", fake.created)
+	}
+	if !fake.created.DestBindingID.Valid {
+		t.Fatal("dest_binding_id was not stored")
 	}
 	if fake.created.RefreshType != "full" {
 		t.Fatalf("refresh type = %q, want full (default)", fake.created.RefreshType)

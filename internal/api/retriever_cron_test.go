@@ -12,7 +12,7 @@ import (
 // TestParseRetrieverCron_IsStandardFiveField pins #139: the expression is
 // "minute hour day-of-month month day-of-week", not "second minute hour ...".
 func TestParseRetrieverCron_IsStandardFiveField(t *testing.T) {
-	s, err := parseRetrieverCron("0 3 * * *")
+	s, _, err := parseRetrieverCron("0 3 * * *")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestParseRetrieverCron_IsStandardFiveField(t *testing.T) {
 	if got, want := s.Next(from), time.Date(2026, 10, 14, 3, 0, 0, 0, time.UTC); !got.Equal(want) {
 		t.Fatalf("next run of '0 3 * * *' after %s = %s, want %s (daily at 03:00, not hourly at :03)", from, got, want)
 	}
-	s, err = parseRetrieverCron("*/15 9-17 * * 1-5")
+	s, _, err = parseRetrieverCron("*/15 9-17 * * 1-5")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -40,12 +40,12 @@ func TestParseRetrieverCron_Rejects(t *testing.T) {
 		"empty":             "",
 		"out of range hour": "0 25 * * *",
 	} {
-		if _, err := parseRetrieverCron(expr); err == nil {
+		if _, _, err := parseRetrieverCron(expr); err == nil {
 			t.Errorf("%s: %q was accepted", name, expr)
 		}
 	}
 	for _, ok := range []string{"*/5 * * * *", "0 */6 * * *", "30 2 * * 0"} {
-		if _, err := parseRetrieverCron(ok); err != nil {
+		if _, _, err := parseRetrieverCron(ok); err != nil {
 			t.Errorf("%q rejected: %v", ok, err)
 		}
 	}
@@ -57,7 +57,7 @@ type updateRetrieverFake struct {
 }
 
 func (f *updateRetrieverFake) GetRetrieverByID(_ context.Context, p db.GetRetrieverByIDParams) (db.Retriever, error) {
-	return db.Retriever{ID: p.ID, WorkspaceID: p.WorkspaceID, Name: "daily", DefinitionSql: "SELECT 1", CronSchedule: "0 3 * * *", RefreshType: "full", Status: "active"}, nil
+	return db.Retriever{ID: p.ID, WorkspaceID: p.WorkspaceID, Name: "daily", DefinitionSql: "SELECT 1", DestCatalog: "tpch", DestNamespace: "sf1", DestTable: "daily", CronSchedule: "0 3 * * *", RefreshType: "full", Status: "active"}, nil
 }
 
 func (f *updateRetrieverFake) UpdateRetriever(_ context.Context, p db.UpdateRetrieverParams) (db.Retriever, error) {

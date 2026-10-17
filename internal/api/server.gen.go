@@ -120,6 +120,9 @@ type ServerInterface interface {
 	// Update a catalog
 	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 	UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID)
+	// Next runs of a cron expression, from the server's parser
+	// (POST /cron/preview)
+	PreviewCron(w http.ResponseWriter, r *http.Request)
 	// A SQL dialect with its keyword and function lists (for the editor)
 	// (GET /dialects/{name})
 	GetDialect(w http.ResponseWriter, r *http.Request, name string, params GetDialectParams)
@@ -321,6 +324,12 @@ type ServerInterface interface {
 	// Create a Retriever in the workspace
 	// (POST /workspaces/{id}/retrievers)
 	CreateRetriever(w http.ResponseWriter, r *http.Request, id PathId)
+	// Bindings this workspace may write to (Iceberg, active, on a federated engine)
+	// (GET /workspaces/{id}/retrievers/destinations)
+	ListRetrieverDestinations(w http.ResponseWriter, r *http.Request, id PathId)
+	// Explain the definition on the destination engine in a read-only session
+	// (POST /workspaces/{id}/retrievers/validate)
+	ValidateRetriever(w http.ResponseWriter, r *http.Request, id PathId)
 	// Remove a Retriever
 	// (DELETE /workspaces/{id}/retrievers/{retriever_id})
 	DeleteRetriever(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
@@ -624,6 +633,12 @@ func (_ Unimplemented) GetCatalog(w http.ResponseWriter, r *http.Request, connec
 // Update a catalog
 // (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 func (_ Unimplemented) UpdateCatalog(w http.ResponseWriter, r *http.Request, connectionId openapi_types.UUID, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Next runs of a cron expression, from the server's parser
+// (POST /cron/preview)
+func (_ Unimplemented) PreviewCron(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1026,6 +1041,18 @@ func (_ Unimplemented) ListRetrievers(w http.ResponseWriter, r *http.Request, id
 // Create a Retriever in the workspace
 // (POST /workspaces/{id}/retrievers)
 func (_ Unimplemented) CreateRetriever(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Bindings this workspace may write to (Iceberg, active, on a federated engine)
+// (GET /workspaces/{id}/retrievers/destinations)
+func (_ Unimplemented) ListRetrieverDestinations(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Explain the definition on the destination engine in a read-only session
+// (POST /workspaces/{id}/retrievers/validate)
+func (_ Unimplemented) ValidateRetriever(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2281,6 +2308,28 @@ func (siw *ServerInterfaceWrapper) UpdateCatalog(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCatalog(w, r, connectionId, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewCron operation middleware
+func (siw *ServerInterfaceWrapper) PreviewCron(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewCron(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4846,6 +4895,72 @@ func (siw *ServerInterfaceWrapper) CreateRetriever(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListRetrieverDestinations operation middleware
+func (siw *ServerInterfaceWrapper) ListRetrieverDestinations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRetrieverDestinations(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ValidateRetriever operation middleware
+func (siw *ServerInterfaceWrapper) ValidateRetriever(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateRetriever(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteRetriever operation middleware
 func (siw *ServerInterfaceWrapper) DeleteRetriever(w http.ResponseWriter, r *http.Request) {
 
@@ -6692,6 +6807,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/connections/{connection_id}/catalogs/{catalog_id}", wrapper.UpdateCatalog)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/cron/preview", wrapper.PreviewCron)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dialects/{name}", wrapper.GetDialect)
 	})
 	r.Group(func(r chi.Router) {
@@ -6891,6 +7009,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/retrievers", wrapper.CreateRetriever)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/retrievers/destinations", wrapper.ListRetrieverDestinations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/retrievers/validate", wrapper.ValidateRetriever)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/{id}/retrievers/{retriever_id}", wrapper.DeleteRetriever)
@@ -8392,6 +8516,43 @@ type UpdateCatalog422JSONResponse struct {
 }
 
 func (response UpdateCatalog422JSONResponse) VisitUpdateCatalogResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewCronRequestObject struct {
+	Body *PreviewCronJSONRequestBody
+}
+
+type PreviewCronResponseObject interface {
+	VisitPreviewCronResponse(w http.ResponseWriter) error
+}
+
+type PreviewCron200JSONResponse CronPreviewResult
+
+func (response PreviewCron200JSONResponse) VisitPreviewCronResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewCron401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PreviewCron401JSONResponse) VisitPreviewCronResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewCron422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PreviewCron422JSONResponse) VisitPreviewCronResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -11222,6 +11383,79 @@ func (response CreateRetriever422JSONResponse) VisitCreateRetrieverResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListRetrieverDestinationsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListRetrieverDestinationsResponseObject interface {
+	VisitListRetrieverDestinationsResponse(w http.ResponseWriter) error
+}
+
+type ListRetrieverDestinations200JSONResponse []RetrieverDestination
+
+func (response ListRetrieverDestinations200JSONResponse) VisitListRetrieverDestinationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRetrieverDestinations401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRetrieverDestinations401JSONResponse) VisitListRetrieverDestinationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateRetrieverRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *ValidateRetrieverJSONRequestBody
+}
+
+type ValidateRetrieverResponseObject interface {
+	VisitValidateRetrieverResponse(w http.ResponseWriter) error
+}
+
+type ValidateRetriever200JSONResponse ValidateRetrieverResult
+
+func (response ValidateRetriever200JSONResponse) VisitValidateRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateRetriever401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ValidateRetriever401JSONResponse) VisitValidateRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateRetriever404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ValidateRetriever404JSONResponse) VisitValidateRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateRetriever422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ValidateRetriever422JSONResponse) VisitValidateRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteRetrieverRequestObject struct {
 	Id          PathId             `json:"id"`
 	RetrieverId openapi_types.UUID `json:"retriever_id"`
@@ -12778,6 +13012,9 @@ type StrictServerInterface interface {
 	// Update a catalog
 	// (PATCH /connections/{connection_id}/catalogs/{catalog_id})
 	UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error)
+	// Next runs of a cron expression, from the server's parser
+	// (POST /cron/preview)
+	PreviewCron(ctx context.Context, request PreviewCronRequestObject) (PreviewCronResponseObject, error)
 	// A SQL dialect with its keyword and function lists (for the editor)
 	// (GET /dialects/{name})
 	GetDialect(ctx context.Context, request GetDialectRequestObject) (GetDialectResponseObject, error)
@@ -12979,6 +13216,12 @@ type StrictServerInterface interface {
 	// Create a Retriever in the workspace
 	// (POST /workspaces/{id}/retrievers)
 	CreateRetriever(ctx context.Context, request CreateRetrieverRequestObject) (CreateRetrieverResponseObject, error)
+	// Bindings this workspace may write to (Iceberg, active, on a federated engine)
+	// (GET /workspaces/{id}/retrievers/destinations)
+	ListRetrieverDestinations(ctx context.Context, request ListRetrieverDestinationsRequestObject) (ListRetrieverDestinationsResponseObject, error)
+	// Explain the definition on the destination engine in a read-only session
+	// (POST /workspaces/{id}/retrievers/validate)
+	ValidateRetriever(ctx context.Context, request ValidateRetrieverRequestObject) (ValidateRetrieverResponseObject, error)
 	// Remove a Retriever
 	// (DELETE /workspaces/{id}/retrievers/{retriever_id})
 	DeleteRetriever(ctx context.Context, request DeleteRetrieverRequestObject) (DeleteRetrieverResponseObject, error)
@@ -14053,6 +14296,37 @@ func (sh *strictHandler) UpdateCatalog(w http.ResponseWriter, r *http.Request, c
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCatalogResponseObject); ok {
 		if err := validResponse.VisitUpdateCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewCron operation middleware
+func (sh *strictHandler) PreviewCron(w http.ResponseWriter, r *http.Request) {
+	var request PreviewCronRequestObject
+
+	var body PreviewCronJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewCron(ctx, request.(PreviewCronRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewCron")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewCronResponseObject); ok {
+		if err := validResponse.VisitPreviewCronResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -15947,6 +16221,65 @@ func (sh *strictHandler) CreateRetriever(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateRetrieverResponseObject); ok {
 		if err := validResponse.VisitCreateRetrieverResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRetrieverDestinations operation middleware
+func (sh *strictHandler) ListRetrieverDestinations(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListRetrieverDestinationsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRetrieverDestinations(ctx, request.(ListRetrieverDestinationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRetrieverDestinations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRetrieverDestinationsResponseObject); ok {
+		if err := validResponse.VisitListRetrieverDestinationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ValidateRetriever operation middleware
+func (sh *strictHandler) ValidateRetriever(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ValidateRetrieverRequestObject
+
+	request.Id = id
+
+	var body ValidateRetrieverJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ValidateRetriever(ctx, request.(ValidateRetrieverRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ValidateRetriever")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ValidateRetrieverResponseObject); ok {
+		if err := validResponse.VisitValidateRetrieverResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -100,6 +100,20 @@
 				/></svg
 			>
 		</a>
+		{#if authStore.user?.features?.retrievers}
+			<a
+				href={resolve('/retrievers')}
+				title="Retrievers"
+				class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+					{isActive('/retrievers')
+					? 'bg-primary text-white'
+					: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+			>
+				<svg viewBox="0 0 24 24" class="w-4 h-4"
+					><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg
+				>
+			</a>
+		{/if}
 		<a
 			href={resolve('/history')}
 			title="Query History"
