@@ -19,7 +19,7 @@
 	];
 
 	const inputBase =
-		'w-full h-10 bg-bg-app border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-text-muted focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)] focus:bg-bg-panel';
+		'w-full h-10 bg-bg-app border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-slate-600 dark:text-slate-300 focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)] focus:bg-bg-panel';
 
 	function checkStrength(val: string) {
 		let s = 0;
@@ -130,7 +130,7 @@
 						Step 1 of 3
 					</div>
 					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">Create admin account</div>
-					<div class="text-[13px] text-text-muted leading-[1.6]">
+					<div class="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.6]">
 						This will be the first administrator of your Baleia instance.
 					</div>
 				</div>
@@ -228,7 +228,7 @@
 						Step 2 of 3 — Optional
 					</div>
 					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">Connect a datasource</div>
-					<div class="text-[13px] text-text-muted leading-[1.6]">
+					<div class="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.6]">
 						Add your first connection. You can skip this and connect later.
 					</div>
 				</div>
@@ -238,7 +238,7 @@
 				<div class="mt-4 text-center">
 					<button
 						onclick={() => (step = 3)}
-						class="bg-transparent border-none text-text-muted text-xs font-semibold cursor-pointer p-0 transition-colors duration-150 hover:text-text-main"
+						class="bg-transparent border-none text-slate-600 dark:text-slate-300 text-xs font-semibold cursor-pointer p-0 transition-colors duration-150 hover:text-text-main"
 					>
 						Skip for now
 					</button>
@@ -255,7 +255,7 @@
 						>
 					</div>
 					<div class="text-[22px] font-bold tracking-[-.4px]">Baleia is ready</div>
-					<div class="text-[13px] text-text-muted max-w-[340px] leading-[1.6]">
+					<div class="text-[13px] text-slate-600 dark:text-slate-300 max-w-[340px] leading-[1.6]">
 						Your instance is configured. Head to the editor and run your first query.
 					</div>
 					<button

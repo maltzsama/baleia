@@ -349,7 +349,7 @@
 	{:else if step === 1}
 		<header>
 			<h1 class="text-xl font-semibold tracking-[-0.3px]">New connection</h1>
-			<p class="mt-1 text-[13px] text-text-muted">
+			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
 				Choose what you are connecting. Baleia reads the rest from the provider.
 			</p>
 		</header>
@@ -357,10 +357,12 @@
 		{#each groups as group (group.family)}
 			<section class="flex flex-col gap-2">
 				<div>
-					<h2 class="text-[11px] font-bold uppercase tracking-[0.7px] text-text-muted">
+					<h2
+						class="text-[11px] font-bold uppercase tracking-[0.7px] text-slate-600 dark:text-slate-300"
+					>
 						{group.label}
 					</h2>
-					<p class="text-[11px] text-text-muted">{group.description}</p>
+					<p class="text-[11px] text-slate-600 dark:text-slate-300">{group.description}</p>
 				</div>
 				<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
 					{#each group.providers as p (p.kind)}
@@ -387,7 +389,7 @@
 								{/each}
 							</div>
 							{#if p.status.reason}
-								<p class="text-[10px] text-text-muted">{p.status.reason}</p>
+								<p class="text-[10px] text-slate-600 dark:text-slate-300">{p.status.reason}</p>
 							{/if}
 						</button>
 					{/each}
@@ -399,7 +401,9 @@
 			<KindIcon kind={provider.kind} family={provider.family} size={22} />
 			<div>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{provider.label}</h1>
-				<p class="text-[12px] text-text-muted">Step 2 of 4 — connection settings</p>
+				<p class="text-[12px] text-slate-600 dark:text-slate-300">
+					Step 2 of 4 — connection settings
+				</p>
 			</div>
 		</header>
 
@@ -415,7 +419,7 @@
 			</div>
 			<div class="mt-3 rounded-md border border-border bg-bg-toolbar px-3 py-2.5">
 				<Checkbox label="These credentials cannot modify data" bind:checked={credentialsReadOnly} />
-				<p class="mt-1 text-[10px] leading-relaxed text-text-muted">
+				<p class="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
 					Assert this when the account is read-only at the source. It unlocks read grants and agents
 					on engines that cannot enforce read-only sessions.
 				</p>
@@ -423,7 +427,9 @@
 		</div>
 
 		{#if missing.length > 0}
-			<p class="text-[11px] text-text-muted">Fill the required fields to continue.</p>
+			<p class="text-[11px] text-slate-600 dark:text-slate-300">
+				Fill the required fields to continue.
+			</p>
 		{/if}
 
 		<div class="flex justify-between">
@@ -435,7 +441,7 @@
 	{:else if step === 3 && provider}
 		<header>
 			<h1 class="text-xl font-semibold tracking-[-0.3px]">How will you use it?</h1>
-			<p class="text-[13px] text-text-muted">
+			<p class="text-[13px] text-slate-600 dark:text-slate-300">
 				Step 3 of 4 — Baleia can read metadata, run SQL directly, or expose the source through a
 				federated engine.
 			</p>
@@ -445,7 +451,7 @@
 			{#if readsMetadata(provider)}
 				<div class="flex items-start gap-2 rounded-lg border border-border bg-bg-panel p-3">
 					<Badge tone="success">Always on</Badge>
-					<p class="text-[12px] text-text-muted">
+					<p class="text-[12px] text-slate-600 dark:text-slate-300">
 						Baleia lists the catalogs, schemas and tables this connection exposes.
 					</p>
 				</div>
@@ -456,7 +462,7 @@
 					<input type="checkbox" class="mt-0.5 h-4 w-4 accent-primary" bind:checked={direct} />
 					<span>
 						<span class="block text-[13px] font-semibold">Query it directly</span>
-						<span class="block text-[11px] text-text-muted">
+						<span class="block text-[11px] text-slate-600 dark:text-slate-300">
 							Register it as a query engine and run SQL on it without Trino.
 						</span>
 					</span>
@@ -466,7 +472,7 @@
 			{#if compatibleEngines.length > 0}
 				<div class="rounded-lg border border-border bg-bg-panel p-3">
 					<p class="text-[13px] font-semibold">Expose through a federated engine</p>
-					<p class="mb-2 text-[11px] text-text-muted">
+					<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
 						Bind this source into an engine so its catalogs can be queried next to the others.
 					</p>
 					{#each compatibleEngines as engine (engine.id)}
@@ -483,7 +489,7 @@
 					{/each}
 				</div>
 			{:else}
-				<p class="text-[11px] text-text-muted">
+				<p class="text-[11px] text-slate-600 dark:text-slate-300">
 					No federated engine can bind this source right now.
 				</p>
 			{/if}
@@ -491,7 +497,7 @@
 			{#if bindEngineIds.length > 0}
 				<div class="rounded-lg border border-border bg-bg-panel p-3">
 					<p class="text-[13px] font-semibold">Catalogs to create</p>
-					<p class="mb-2 text-[11px] text-text-muted">
+					<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
 						{isDatabase
 							? 'Each database becomes one catalog.'
 							: 'Each warehouse or catalog name from the source becomes one catalog.'}
@@ -536,7 +542,7 @@
 	{:else if step === 4 && provider}
 		<header>
 			<h1 class="text-xl font-semibold tracking-[-0.3px]">Test and create</h1>
-			<p class="text-[13px] text-text-muted">
+			<p class="text-[13px] text-slate-600 dark:text-slate-300">
 				Step 4 of 4 — the connection is saved only after the checks pass.
 			</p>
 		</header>
@@ -551,7 +557,9 @@
 				{:else if testResult && !testResult.success}
 					<Badge tone="danger">Failed</Badge>
 				{:else}
-					<span class="text-[11px] text-text-muted">Editing a field invalidates the test.</span>
+					<span class="text-[11px] text-slate-600 dark:text-slate-300"
+						>Editing a field invalidates the test.</span
+					>
 				{/if}
 			</div>
 
@@ -574,9 +582,13 @@
 							</span>
 							<span class="flex-1">
 								{check.name}
-								{#if check.skipped}<span class="text-text-muted"> (skipped)</span>{/if}
+								{#if check.skipped}<span class="text-slate-600 dark:text-slate-300">
+										(skipped)</span
+									>{/if}
 								{#if check.detail}
-									<span class="block text-[10px] text-text-muted">{check.detail}</span>
+									<span class="block text-[10px] text-slate-600 dark:text-slate-300"
+										>{check.detail}</span
+									>
 								{/if}
 								{#if check.error_code}
 									<span class="block font-mono text-[10px] text-danger">{check.error_code}</span>
@@ -595,7 +607,7 @@
 			<div class="rounded-lg border border-danger/30 bg-red-50 p-3">
 				<p class="text-[12px] text-danger">{createError}</p>
 				{#if created}
-					<p class="mt-1 text-[11px] text-text-muted">
+					<p class="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
 						The connection {created.connection.name} was created. Finish the remaining steps from the
 						connections page.
 					</p>
@@ -608,7 +620,7 @@
 			<Button onclick={() => (step = 3)} disabled={creating}>Back</Button>
 			<div class="flex items-center gap-2">
 				{#if !tested && !created}
-					<span class="text-[11px] text-text-muted">Run the test first.</span>
+					<span class="text-[11px] text-slate-600 dark:text-slate-300">Run the test first.</span>
 				{/if}
 				<Button
 					variant="primary"
@@ -626,7 +638,7 @@
 				<Badge tone="success">Created</Badge>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{created?.connection.name}</h1>
 			</div>
-			<p class="text-[13px] text-text-muted">The connection is ready.</p>
+			<p class="text-[13px] text-slate-600 dark:text-slate-300">The connection is ready.</p>
 		</header>
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4 text-[13px]">
@@ -649,7 +661,7 @@
 		{#if created?.catalogs.length && grantable.length > 0}
 			<section class="rounded-lg border border-border bg-bg-panel p-4">
 				<h2 class="text-[13px] font-semibold">Grant access</h2>
-				<p class="mb-3 text-[11px] text-text-muted">
+				<p class="mb-3 text-[11px] text-slate-600 dark:text-slate-300">
 					Give a workspace permission to query these catalogs.
 				</p>
 				<div class="grid gap-2 sm:grid-cols-3">
@@ -682,7 +694,9 @@
 						Grant
 					</Button>
 					{#if grants.length > 0}
-						<span class="text-[11px] text-text-muted">{grants.length} grant(s) added</span>
+						<span class="text-[11px] text-slate-600 dark:text-slate-300"
+							>{grants.length} grant(s) added</span
+						>
 					{/if}
 				</div>
 				{#if grantError}
@@ -696,7 +710,7 @@
 					</div>
 				{/if}
 				{#if grants.length > 0}
-					<ul class="mt-3 flex flex-col gap-1 text-[11px] text-text-muted">
+					<ul class="mt-3 flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-300">
 						{#each grants as item (item)}
 							<li>{item}</li>
 						{/each}

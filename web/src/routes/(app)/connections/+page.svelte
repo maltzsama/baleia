@@ -252,7 +252,7 @@
 	<div class="mb-5 flex items-end justify-between">
 		<div>
 			<h1 class="text-xl font-semibold tracking-[-0.3px]">Connections</h1>
-			<p class="mt-1 text-[13px] text-text-muted">
+			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
 				Providers, engines, catalogs and the engines each catalog is bound to.
 			</p>
 		</div>
@@ -265,7 +265,7 @@
 		<div class="w-64">
 			<Input bind:value={search} placeholder="Search connections…" />
 		</div>
-		<span class="ml-auto font-mono text-xs text-text-muted"
+		<span class="ml-auto font-mono text-xs text-slate-600 dark:text-slate-300"
 			>{filtered.length} connection{filtered.length === 1 ? '' : 's'}</span
 		>
 	</div>
@@ -298,7 +298,7 @@
 						<KindIcon kind={connection.type} family={provider?.family} size={18} />
 						<div class="min-w-0 flex-1">
 							<div class="truncate text-[13px] font-semibold">{connection.name}</div>
-							<div class="truncate font-mono text-[10px] text-text-muted">
+							<div class="truncate font-mono text-[10px] text-slate-600 dark:text-slate-300">
 								{provider?.label ?? connection.type}{summary(connection)
 									? ` · ${summary(connection)}`
 									: ''}
@@ -317,7 +317,7 @@
 
 					{#if ownEngines.length > 0}
 						<div class="text-[11px]">
-							<span class="text-text-muted">Engine</span>
+							<span class="text-slate-600 dark:text-slate-300">Engine</span>
 							{#each ownEngines as engine (engine.id)}
 								<span class="ml-1 inline-flex items-center gap-1 font-medium">
 									<KindIcon kind={engine.kind} family="engine" size={13} />
@@ -340,12 +340,12 @@
 										/>
 									{/if}
 									{#if item.catalog.metadata_synced_at}
-										<span class="text-text-muted">
+										<span class="text-slate-600 dark:text-slate-300">
 											<RelativeTime at={item.catalog.metadata_synced_at} />
 										</span>
 									{/if}
 									{#if item.bindings.length > 0}
-										<span class="text-text-muted">
+										<span class="text-slate-600 dark:text-slate-300">
 											· {item.bindings.length} binding{item.bindings.length === 1 ? '' : 's'}
 										</span>
 									{/if}
@@ -439,7 +439,7 @@
 	>
 		<div class="flex flex-col gap-3">
 			<Input label="Catalog or warehouse name" bind:value={addName} placeholder="e.g. analytics" />
-			<p class="text-[10px] text-text-muted">
+			<p class="text-[10px] text-slate-600 dark:text-slate-300">
 				It becomes the name used in SQL on the federated engine.
 			</p>
 			{#if connectors.length > 1}
