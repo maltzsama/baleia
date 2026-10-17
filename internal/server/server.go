@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -187,8 +188,23 @@ func (s *Server) routes() {
 		})
 	})
 
-	fileServer := http.FileServer(http.Dir("web/build"))
+	static := staticHandler(s.queries, "web/build")
 	s.mux.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		static.ServeHTTP(w, r)
+	}))
+}
+
+// staticUsers tells the static handler whether the first admin exists.
+type staticUsers interface {
+	ListUsers(ctx context.Context) ([]db.User, error)
+}
+
+// staticHandler serves the SPA. The root is the app shell, never the directory
+// listing of the build, and a prerendered .html file redirects to its
+// extensionless route so the client router matches it.
+func staticHandler(users staticUsers, dir string) http.Handler {
+	fileServer := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
 		if strings.HasPrefix(path, "/api/") {
@@ -196,11 +212,11 @@ func (s *Server) routes() {
 			return
 		}
 
-		if path == "/" || path == "/setup" {
-			users, err := s.queries.ListUsers(r.Context())
-			configured := err == nil && len(users) > 0
+		if path == "/" || path == "/setup" || strings.HasSuffix(path, ".html") {
+			list, err := users.ListUsers(r.Context())
+			configured := err == nil && len(list) > 0
 
-			if !configured && path == "/" {
+			if !configured && path != "/setup" {
 				http.Redirect(w, r, "/setup", http.StatusFound)
 				return
 			}
@@ -208,16 +224,23 @@ func (s *Server) routes() {
 				http.Redirect(w, r, "/", http.StatusFound)
 				return
 			}
+			if path == "/" {
+				http.ServeFile(w, r, filepath.Join(dir, "app.html"))
+				return
+			}
+			if strings.HasSuffix(path, ".html") && path != "/app.html" {
+				http.Redirect(w, r, strings.TrimSuffix(path, ".html"), http.StatusFound)
+				return
+			}
 		}
 
-		fullPath := "web/build" + path
+		fullPath := dir + path
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			http.ServeFile(w, r, "web/build/app.html")
+			http.ServeFile(w, r, filepath.Join(dir, "app.html"))
 			return
 		}
-
 		fileServer.ServeHTTP(w, r)
-	}))
+	})
 }
 
 func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
