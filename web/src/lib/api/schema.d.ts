@@ -613,6 +613,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/semantic/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Metrics of the workspace — workspace members */
+        get: operations["listSemanticMetrics"];
+        put?: never;
+        /**
+         * Create and validate a metric — workspace members
+         * @description The definition is validated structurally (DisallowUnknownFields) and then rendered for the chosen binding and probed with a zero-row read-only statement in the caller's identity. A custom_sql metric also needs the engine to enforce read-only (or read-only credentials).
+         */
+        post: operations["createSemanticMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/metrics/{metric_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        /** Return a metric — workspace members */
+        get: operations["getSemanticMetric"];
+        put?: never;
+        post?: never;
+        /** Delete a metric — workspace members */
+        delete: operations["deleteSemanticMetric"];
+        options?: never;
+        head?: never;
+        /** Update and revalidate a metric — workspace members */
+        patch: operations["updateSemanticMetric"];
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/metrics/{metric_id}/sql": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        /** Render a metric to SQL for one binding — workspace members */
+        get: operations["getSemanticMetricSql"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/targets": {
         parameters: {
             query?: never;
@@ -2189,6 +2254,7 @@ export interface components {
             display_type?: string | null;
             nullable?: boolean | null;
             comment?: string | null;
+            doc?: components["schemas"]["SemanticDoc"];
         };
         MetadataTableDetail: {
             freshness: components["schemas"]["MetadataFreshness"];
@@ -2218,6 +2284,7 @@ export interface components {
             binding_id?: string | null;
             /** @description The table's name in SQL on that binding's engine */
             qualified_name?: string | null;
+            doc?: components["schemas"]["SemanticDoc"];
             columns: components["schemas"]["MetadataColumn"][];
         };
         MetadataSearchResult: {
@@ -2279,6 +2346,75 @@ export interface components {
             updated_at: string;
             /** Format: double */
             score: number;
+        };
+        SemanticMetric: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            slug: string;
+            label: string;
+            description?: string;
+            certified: boolean;
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            table: string;
+            /** Format: uuid */
+            binding_id?: string | null;
+            /** @description SimpleMetricV1: type, aggregation, column, filters, time_column, time_grains, format and custom_sql. Validated with DisallowUnknownFields. */
+            definition: {
+                [key: string]: unknown;
+            };
+            format_version: number;
+            /** Format: uuid */
+            owner_user_id?: string | null;
+            /** Format: uuid */
+            updated_by?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SemanticMetricCreate: {
+            slug: string;
+            label: string;
+            description?: string;
+            certified?: boolean;
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            table: string;
+            /**
+             * Format: uuid
+             * @description Engine used to validate and generate; null chooses at use time
+             */
+            binding_id?: string | null;
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            owner_user_id?: string | null;
+        };
+        SemanticMetricUpdate: {
+            slug?: string;
+            label?: string;
+            description?: string;
+            certified?: boolean;
+            /** Format: uuid */
+            catalog_id?: string;
+            namespace?: string[];
+            table?: string;
+            /** Format: uuid */
+            binding_id?: string | null;
+            definition?: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            owner_user_id?: string | null;
+        };
+        SemanticMetricSQL: {
+            sql: string;
+            /** @description False when the metric uses custom_sql */
+            portable: boolean;
         };
         MetadataSyncStarted: {
             /** Format: uuid */
@@ -3756,6 +3892,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SemanticDocSearchResult"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSemanticMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Metrics, ordered by label */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetric"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createSemanticMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticMetricCreate"];
+            };
+        };
+        responses: {
+            /** @description The metric */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetric"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getSemanticMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The metric */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetric"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSemanticMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSemanticMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticMetricUpdate"];
+            };
+        };
+        responses: {
+            /** @description The metric */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetric"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getSemanticMetricSql: {
+        parameters: {
+            query?: {
+                /** @description Defaults to the metric's binding, else the catalog's first enabled binding */
+                binding_id?: string;
+                grain?: "second" | "minute" | "hour" | "day" | "week" | "month" | "quarter" | "year";
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The generated SQL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetricSQL"];
                 };
             };
             401: components["responses"]["Unauthorized"];

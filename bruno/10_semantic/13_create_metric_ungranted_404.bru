@@ -1,0 +1,30 @@
+meta {
+  name: Create Metric on Ungranted Catalog (404)
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/metrics
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "slug": "secret_metric",
+    "label": "Secret",
+    "catalog_id": "00000000-0000-4000-8000-000000000001",
+    "namespace": ["analytics"],
+    "table": "events",
+    "definition": { "type": "simple", "aggregation": "count" }
+  }
+}
+
+assert {
+  res.status: eq 404
+}

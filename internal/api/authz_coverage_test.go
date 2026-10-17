@@ -185,6 +185,14 @@ var operationAccess = map[string]access{
 	"UpsertSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
 	"DeleteSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
 	"SearchSemanticDocs": checked("metadataWorkspace", "SearchSemanticDocs"),
+	// Metrics are validated against a real engine in a read-only session
+	// (validateSemanticMetric); the catalog must be granted.
+	"ListSemanticMetrics":  checked("metadataWorkspace"),
+	"GetSemanticMetric":    checked("metadataWorkspace", "GetSemanticMetric"),
+	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric"),
+	"DeleteSemanticMetric": checked("metadataWorkspace", "DeleteSemanticMetric"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget"),
 	// Audit trail (#45): admins see all, anyone else only their own events.
 	"ListAuditEvents":    checked("PrincipalFromContext", "IsAdmin"),
 	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below
