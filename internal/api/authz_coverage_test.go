@@ -241,6 +241,10 @@ var operationAccess = map[string]access{
 	"ListCatalogGrants":           checked("PrincipalFromContext", "Catalog"),
 	"GetCatalogBinding":           checked("PrincipalFromContext", "Catalog"),
 	"GetCatalogBindingProjection": checked("PrincipalFromContext", "Catalog"),
+	// Content browser (#113).
+	"SearchContent":           checked("PrincipalFromContext", "Workspace"),
+	"ListWorkspacePrincipals": checked("PrincipalFromContext", "Workspace"),
+	"UpdateFolder":            checked("PrincipalFromContext", "Workspace"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),

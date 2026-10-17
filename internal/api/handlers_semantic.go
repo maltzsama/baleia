@@ -834,6 +834,10 @@ func dbSemanticMetricToPublic(m db.SemanticMetric, version int32) SemanticMetric
 	if err := json.Unmarshal(m.Definition, &def); err == nil {
 		out.Definition = def
 	}
+	if m.SpaceID.Valid {
+		v := openapi_types.UUID(m.SpaceID.Bytes)
+		out.SpaceId = &v
+	}
 	if m.BindingID.Valid {
 		v := openapi_types.UUID(m.BindingID.Bytes)
 		out.BindingId = &v

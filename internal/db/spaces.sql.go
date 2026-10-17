@@ -25,6 +25,26 @@ func (q *Queries) CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (i
 	return n, err
 }
 
+const countSpaceContentKinds = `-- name: CountSpaceContentKinds :one
+SELECT
+    (SELECT count(*) FROM saved_queries WHERE space_id = $1::uuid)::bigint AS saved_queries,
+    (SELECT count(*) FROM semantic_metrics WHERE space_id = $1::uuid)::bigint AS semantic_metrics,
+    (SELECT count(*) FROM query_folders WHERE space_id = $1::uuid)::bigint AS folders
+`
+
+type CountSpaceContentKindsRow struct {
+	SavedQueries    int64 `json:"saved_queries"`
+	SemanticMetrics int64 `json:"semantic_metrics"`
+	Folders         int64 `json:"folders"`
+}
+
+func (q *Queries) CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error) {
+	row := q.db.QueryRow(ctx, countSpaceContentKinds, spaceID)
+	var i CountSpaceContentKindsRow
+	err := row.Scan(&i.SavedQueries, &i.SemanticMetrics, &i.Folders)
+	return i, err
+}
+
 const createSpace = `-- name: CreateSpace :one
 
 INSERT INTO spaces (workspace_id, name, slug, description, visibility, default_role, created_by)

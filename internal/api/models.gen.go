@@ -1132,6 +1132,31 @@ type ContentAuthor struct {
 	Name *string            `json:"name"`
 }
 
+// ContentSearchFolderPath defines model for ContentSearchFolderPath.
+type ContentSearchFolderPath struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+}
+
+// ContentSearchItem defines model for ContentSearchItem.
+type ContentSearchItem struct {
+	Certified  *bool                     `json:"certified,omitempty"`
+	FolderPath []ContentSearchFolderPath `json:"folder_path"`
+	Id         openapi_types.UUID        `json:"id"`
+	Kind       string                    `json:"kind"`
+	Slug       string                    `json:"slug"`
+	Space      ContentSearchSpace        `json:"space"`
+	Title      string                    `json:"title"`
+	UpdatedAt  time.Time                 `json:"updated_at"`
+	UpdatedBy  *ContentSearchSpace       `json:"updated_by"`
+}
+
+// ContentSearchSpace defines model for ContentSearchSpace.
+type ContentSearchSpace struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+}
+
 // ContentVersion defines model for ContentVersion.
 type ContentVersion struct {
 	Author       *ContentAuthor           `json:"author,omitempty"`
@@ -2266,6 +2291,7 @@ type SemanticMetric struct {
 	Namespace     []string               `json:"namespace"`
 	OwnerUserId   *openapi_types.UUID    `json:"owner_user_id"`
 	Slug          string                 `json:"slug"`
+	SpaceId       *openapi_types.UUID    `json:"space_id"`
 	Table         string                 `json:"table"`
 	UpdatedAt     time.Time              `json:"updated_at"`
 	UpdatedBy     *openapi_types.UUID    `json:"updated_by,omitempty"`
@@ -2330,12 +2356,14 @@ type SetupStatus struct {
 
 // Space defines model for Space.
 type Space struct {
-	CreatedAt   time.Time           `json:"created_at"`
-	CreatedBy   *openapi_types.UUID `json:"created_by"`
-	DefaultRole SpaceDefaultRole    `json:"default_role"`
-	Description *string             `json:"description"`
-	Id          openapi_types.UUID  `json:"id"`
-	IsDefault   bool                `json:"is_default"`
+	AllowedActions *[]string           `json:"allowed_actions,omitempty"`
+	Counts         *SpaceCounts        `json:"counts,omitempty"`
+	CreatedAt      time.Time           `json:"created_at"`
+	CreatedBy      *openapi_types.UUID `json:"created_by"`
+	DefaultRole    SpaceDefaultRole    `json:"default_role"`
+	Description    *string             `json:"description"`
+	Id             openapi_types.UUID  `json:"id"`
+	IsDefault      bool                `json:"is_default"`
 
 	// MyRole The caller's effective role (list and get only)
 	MyRole      *SpaceMyRole       `json:"my_role"`
@@ -2354,6 +2382,13 @@ type SpaceMyRole string
 
 // SpaceVisibility defines model for Space.Visibility.
 type SpaceVisibility string
+
+// SpaceCounts defines model for SpaceCounts.
+type SpaceCounts struct {
+	Folders         *int `json:"folders,omitempty"`
+	SavedQueries    *int `json:"saved_queries,omitempty"`
+	SemanticMetrics *int `json:"semantic_metrics,omitempty"`
+}
 
 // SpaceMember defines model for SpaceMember.
 type SpaceMember struct {
@@ -2527,6 +2562,14 @@ type UpdateEngineRequest struct {
 	Enabled *bool `json:"enabled,omitempty"`
 }
 
+// UpdateFolderRequest defines model for UpdateFolderRequest.
+type UpdateFolderRequest struct {
+	Name     *string             `json:"name,omitempty"`
+	ParentId *openapi_types.UUID `json:"parent_id"`
+	Slug     *string             `json:"slug,omitempty"`
+	SpaceId  *openapi_types.UUID `json:"space_id"`
+}
+
 // UpdatePasswordRequest defines model for UpdatePasswordRequest.
 type UpdatePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
@@ -2680,6 +2723,15 @@ type WorkspaceCatalogAccess struct {
 
 // WorkspaceCatalogAccessPermission defines model for WorkspaceCatalogAccess.Permission.
 type WorkspaceCatalogAccessPermission string
+
+// WorkspacePrincipal defines model for WorkspacePrincipal.
+type WorkspacePrincipal struct {
+	Email       *string            `json:"email"`
+	Id          openapi_types.UUID `json:"id"`
+	MemberCount *int               `json:"member_count"`
+	Name        string             `json:"name"`
+	Type        string             `json:"type"`
+}
 
 // WorkspaceTarget defines model for WorkspaceTarget.
 type WorkspaceTarget struct {
@@ -2873,6 +2925,14 @@ type ListUsersParams struct {
 	PerPage *QueryPerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
 }
 
+// SearchContentParams defines parameters for SearchContent.
+type SearchContentParams struct {
+	Q       string              `form:"q" json:"q"`
+	Kind    *string             `form:"kind,omitempty" json:"kind,omitempty"`
+	SpaceId *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
+	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListExecutionsParams defines parameters for ListExecutions.
 type ListExecutionsParams struct {
 	Status *ListExecutionsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
@@ -2945,6 +3005,13 @@ type SearchMetadataParamsKind string
 type GetMetadataTableParams struct {
 	// BindingId The binding the user browses through: types are shown (display_type) and the name qualified in its engine's dialect. Default: the catalog's first enabled binding
 	BindingId *openapi_types.UUID `form:"binding_id,omitempty" json:"binding_id,omitempty"`
+}
+
+// ListWorkspacePrincipalsParams defines parameters for ListWorkspacePrincipals.
+type ListWorkspacePrincipalsParams struct {
+	Q     *string `form:"q,omitempty" json:"q,omitempty"`
+	Type  *string `form:"type,omitempty" json:"type,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListSavedQueriesParams defines parameters for ListSavedQueries.
@@ -3170,6 +3237,9 @@ type RunQueryJSONRequestBody = ExecutionRequest
 
 // CreateFolderJSONRequestBody defines body for CreateFolder for application/json ContentType.
 type CreateFolderJSONRequestBody = CreateFolderRequest
+
+// UpdateFolderJSONRequestBody defines body for UpdateFolder for application/json ContentType.
+type UpdateFolderJSONRequestBody = UpdateFolderRequest
 
 // CreateSavedQueryJSONRequestBody defines body for CreateSavedQuery for application/json ContentType.
 type CreateSavedQueryJSONRequestBody = CreateSavedQueryRequest

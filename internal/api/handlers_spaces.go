@@ -107,7 +107,9 @@ func (h *Handlers) ListSpaces(ctx context.Context, request ListSpacesRequestObje
 	out := make(ListSpaces200JSONResponse, 0, len(rows))
 	for _, r := range rows {
 		role := r.MyRole
-		out = append(out, dbSpaceRowToPublic(r, &role))
+		sp := dbSpaceRowToPublic(r, &role)
+		h.decorateSpace(ctx, &sp, role)
+		out = append(out, sp)
 	}
 	return out, nil
 }
@@ -207,7 +209,9 @@ func (h *Handlers) GetSpace(ctx context.Context, request GetSpaceRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	return GetSpace200JSONResponse(dbSpaceToPublic(space, role.String())), nil
+	sp := dbSpaceToPublic(space, role.String())
+	h.decorateSpace(ctx, &sp, role.String())
+	return GetSpace200JSONResponse(sp), nil
 }
 
 // UpdateSpace — PATCH /workspaces/{id}/spaces/{space_id}

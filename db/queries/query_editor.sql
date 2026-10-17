@@ -218,3 +218,39 @@ SELECT position, query_handle
 FROM query_statements
 WHERE execution_id = $1 AND query_handle IS NOT NULL AND status = 'running'
 ORDER BY position;
+
+
+-- name: MoveQueryFolderSubtree :exec
+WITH RECURSIVE subtree AS (
+    SELECT id FROM query_folders WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid
+    UNION ALL
+    SELECT f.id FROM query_folders f JOIN subtree s ON f.parent_id = s.id
+)
+UPDATE query_folders SET space_id = @space_id::uuid, updated_at = now()
+WHERE id IN (SELECT id FROM subtree);
+
+-- name: MoveSavedQueriesInFolderSubtree :exec
+WITH RECURSIVE subtree AS (
+    SELECT id FROM query_folders WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid
+    UNION ALL
+    SELECT f.id FROM query_folders f JOIN subtree s ON f.parent_id = s.id
+)
+UPDATE saved_queries SET space_id = @space_id::uuid, updated_at = now()
+WHERE folder_id IN (SELECT id FROM subtree);
+
+-- name: ListAllVisibleQueryFolders :many
+-- Every visible folder of the workspace (or one space), not only the roots.
+SELECT f.* FROM query_folders f
+WHERE f.workspace_id = @workspace_id::uuid
+  AND baleia_effective_space_role(f.workspace_id, f.space_id, @user_id::uuid) IS NOT NULL
+  AND (sqlc.narg(space_id)::uuid IS NULL OR f.space_id = sqlc.narg(space_id)::uuid)
+ORDER BY f.name;
+
+-- name: SearchVisibleSavedQueries :many
+-- Every visible saved query, optionally filtered by space and text (#113).
+SELECT q.* FROM saved_queries q
+WHERE q.workspace_id = @workspace_id::uuid
+  AND baleia_effective_space_role(q.workspace_id, q.space_id, @user_id::uuid) IS NOT NULL
+  AND (sqlc.narg(space_id)::uuid IS NULL OR q.space_id = sqlc.narg(space_id)::uuid)
+  AND (sqlc.narg(q)::text IS NULL OR q.name ILIKE '%' || sqlc.narg(q)::text || '%' OR q.slug ILIKE '%' || sqlc.narg(q)::text || '%')
+ORDER BY q.name;

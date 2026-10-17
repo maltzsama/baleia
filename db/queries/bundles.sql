@@ -41,6 +41,10 @@ SELECT id FROM visible WHERE name = @name::text;
 
 -- name: UpdateQueryFolder :one
 UPDATE query_folders
-SET name = @name::text, parent_id = sqlc.narg(parent_id)::uuid
+SET name = @name::text,
+    slug = COALESCE(sqlc.narg(slug)::text, slug),
+    parent_id = sqlc.narg(parent_id)::uuid,
+    space_id = COALESCE(sqlc.narg(space_id)::uuid, space_id),
+    updated_at = now()
 WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid
 RETURNING *;

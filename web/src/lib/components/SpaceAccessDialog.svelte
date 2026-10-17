@@ -1,8 +1,8 @@
 <script lang="ts">
 	import Button from '$lib/ui/Button.svelte';
-	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
+	import { listPrincipals, type WorkspacePrincipal } from '$lib/content/client';
 	import {
 		savedQueries,
 		type PrincipalType,
@@ -20,18 +20,30 @@
 	let principalId = $state('');
 	let newRole = $state('viewer');
 	let busy = $state(false);
+	let principals = $state<WorkspacePrincipal[]>([]);
+	let principalsError = $state('');
 
 	const roleOptions = [
 		{ value: 'viewer', label: 'Viewer' },
 		{ value: 'editor', label: 'Editor' },
 		{ value: 'manager', label: 'Manager' }
 	];
-	const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 	$effect(() => {
 		if (!open || !space) return;
 		members = [];
+		principalId = '';
 		void load(space.id);
+	});
+
+	$effect(() => {
+		if (!open || !space) return;
+		const workspaceId = savedQueries.workspaceId;
+		if (!workspaceId) return;
+		principalsError = '';
+		void listPrincipals(workspaceId, '', principalType as 'user' | 'team')
+			.then((data) => (principals = data))
+			.catch((e) => (principalsError = e instanceof Error ? e.message : String(e)));
 	});
 
 	async function load(spaceId: string) {
@@ -69,8 +81,8 @@
 
 	async function add() {
 		if (!space || busy) return;
-		if (!uuidRe.test(principalId.trim())) {
-			error = 'Enter a user or team UUID';
+		if (!principalId) {
+			error = 'Choose a person or team';
 			return;
 		}
 		busy = true;
@@ -134,7 +146,17 @@
 					{ value: 'team', label: 'Team' }
 				]}
 			/>
-			<Input label="Principal id" bind:value={principalId} placeholder="User or team UUID" />
+			<Select
+				label={principalType === 'team' ? 'Team' : 'Person'}
+				bind:value={principalId}
+				options={principals.map((principal) => ({
+					value: principal.id,
+					label: principal.email ? `${principal.name} (${principal.email})` : principal.name
+				}))}
+			/>
+			{#if principalsError}
+				<p class="text-[11px] text-danger" role="alert">{principalsError}</p>
+			{/if}
 			<Select label="Role" bind:value={newRole} options={roleOptions} />
 			<div class="flex justify-end">
 				<Button variant="primary" size="sm" onclick={add} loading={busy} disabled={busy}>

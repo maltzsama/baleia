@@ -141,3 +141,14 @@ SELECT id FROM workspaces WHERE type = 'personal' AND owner_user_id = $1 ORDER B
 
 -- name: UserOwnsTeam :one
 SELECT EXISTS (SELECT 1 FROM team_members WHERE user_id = $1 AND role = 'owner') AS owns;
+
+-- name: ListWorkspacePrincipalUsers :many
+-- Users who are members of the workspace: the personal owner, or the owning
+-- team's members (#113).
+SELECT DISTINCT u.id, u.name, u.email
+FROM users u
+JOIN workspaces w ON w.id = @workspace_id::uuid
+LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
+WHERE w.owner_user_id = u.id OR tm.user_id = u.id
+ORDER BY u.name
+LIMIT @lim::int;
