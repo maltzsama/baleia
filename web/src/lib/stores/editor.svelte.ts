@@ -3,6 +3,7 @@
 import type { components } from '$lib/api/schema';
 
 export type SavedQuery = components['schemas']['SavedQuery'];
+export type ExecutionTarget = components['schemas']['ExecutionTarget'];
 export type SavedQueryRef = Pick<SavedQuery, 'id' | 'name' | 'sql'>;
 
 export type EditorTab = {
@@ -10,6 +11,12 @@ export type EditorTab = {
 	name: string;
 	sql: string;
 	savedId: string | null;
+	/** Where the tab runs (#24): a target binding and an optional schema. */
+	bindingId: string;
+	schema: string;
+	executionId: string;
+	/** The target the engine resolved for the last run, as reported by the API. */
+	runTarget: ExecutionTarget | null;
 	results: unknown[][];
 	columns: string[];
 	rowCount: number;
@@ -25,6 +32,10 @@ function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
 		name: 'Untitled',
 		sql: 'SELECT 1;',
 		savedId: null,
+		bindingId: '',
+		schema: '',
+		executionId: '',
+		runTarget: null,
 		results: [],
 		columns: [],
 		rowCount: 0,
@@ -96,6 +107,19 @@ function createEditorStore() {
 		pendingInsert = { tabId: activeId, text, seq: ++insertSeq };
 	}
 
+	/** Records the target (binding + schema) the tab runs on. */
+	function setTarget(id: string, bindingId: string, schema: string) {
+		const tab = tabs.find((item) => item.id === id);
+		if (!tab) return;
+		tab.bindingId = bindingId;
+		tab.schema = schema;
+	}
+
+	function setExecution(id: string, executionId: string) {
+		const tab = tabs.find((item) => item.id === id);
+		if (tab) tab.executionId = executionId;
+	}
+
 	return {
 		get tabs() {
 			return tabs;
@@ -115,7 +139,9 @@ function createEditorStore() {
 		openSavedQuery,
 		markSaved,
 		updateSql,
-		insert
+		insert,
+		setTarget,
+		setExecution
 	};
 }
 
