@@ -94,6 +94,9 @@ function mockWorkbench() {
 				freshness: { metadata_synced_at: null },
 				items: [{ path: ['sales'] }]
 			})
+		),
+		http.post('/ws-tickets', ({ response }) =>
+			response(201).json({ ticket: 'ticket-1', expires_at: '2030-01-01T00:00:00Z' })
 		)
 	);
 }
