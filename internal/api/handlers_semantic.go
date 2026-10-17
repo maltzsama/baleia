@@ -236,7 +236,13 @@ func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemantic
 	if nf {
 		return ListSemanticMetrics404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	metrics, err := h.queries.ListSemanticMetrics(ctx, ws)
+	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	metrics, err := h.queries.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{
+		WorkspaceID: ws, UserID: userID,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -320,8 +326,13 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 		return nil, err
 	}
 
+	space, err := h.queries.GetDefaultSpace(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
 	metric, err := h.queries.CreateSemanticMetric(ctx, db.CreateSemanticMetricParams{
 		WorkspaceID:   ws,
+		SpaceID:       space.ID,
 		Slug:          request.Body.Slug,
 		Label:         request.Body.Label,
 		Description:   description,
@@ -438,6 +449,7 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 
 	updated, err := h.queries.UpdateSemanticMetric(ctx, db.UpdateSemanticMetricParams{
 		WorkspaceID:   ws,
+		SpaceID:       current.SpaceID,
 		ID:            metricID,
 		Slug:          slug,
 		Label:         label,

@@ -13,21 +13,22 @@ import (
 
 const createSemanticMetric = `-- name: CreateSemanticMetric :one
 INSERT INTO semantic_metrics (
-    workspace_id, slug, label, description, certified,
+    workspace_id, space_id, slug, label, description, certified,
     catalog_id, namespace, table_name, binding_id, definition, format_version,
     owner_user_id, updated_by
 )
 VALUES (
-    $1::uuid, $2::text, $3::text, $4::text, $5::boolean,
-    $6::uuid, $7::text[], $8::text,
-    $9::uuid, $10::jsonb, $11::int,
-    $12::uuid, $13::uuid
+    $1::uuid, $2::uuid, $3::text, $4::text, $5::text, $6::boolean,
+    $7::uuid, $8::text[], $9::text,
+    $10::uuid, $11::jsonb, $12::int,
+    $13::uuid, $14::uuid
 )
-RETURNING id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+RETURNING id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id
 `
 
 type CreateSemanticMetricParams struct {
 	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	SpaceID       pgtype.UUID `json:"space_id"`
 	Slug          string      `json:"slug"`
 	Label         string      `json:"label"`
 	Description   string      `json:"description"`
@@ -45,6 +46,7 @@ type CreateSemanticMetricParams struct {
 func (q *Queries) CreateSemanticMetric(ctx context.Context, arg CreateSemanticMetricParams) (SemanticMetric, error) {
 	row := q.db.QueryRow(ctx, createSemanticMetric,
 		arg.WorkspaceID,
+		arg.SpaceID,
 		arg.Slug,
 		arg.Label,
 		arg.Description,
@@ -75,6 +77,7 @@ func (q *Queries) CreateSemanticMetric(ctx context.Context, arg CreateSemanticMe
 		&i.OwnerUserID,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.SpaceID,
 	)
 	return i, err
 }
@@ -171,7 +174,7 @@ func (q *Queries) GetSemanticDoc(ctx context.Context, arg GetSemanticDocParams) 
 }
 
 const getSemanticMetric = `-- name: GetSemanticMetric :one
-SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_metrics
+SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id FROM semantic_metrics
 WHERE workspace_id = $1::uuid AND id = $2::uuid
 `
 
@@ -199,12 +202,13 @@ func (q *Queries) GetSemanticMetric(ctx context.Context, arg GetSemanticMetricPa
 		&i.OwnerUserID,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.SpaceID,
 	)
 	return i, err
 }
 
 const getSemanticMetricBySlug = `-- name: GetSemanticMetricBySlug :one
-SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_metrics
+SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id FROM semantic_metrics
 WHERE workspace_id = $1::uuid AND slug = $2::text
 `
 
@@ -232,6 +236,7 @@ func (q *Queries) GetSemanticMetricBySlug(ctx context.Context, arg GetSemanticMe
 		&i.OwnerUserID,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.SpaceID,
 	)
 	return i, err
 }
@@ -300,16 +305,25 @@ func (q *Queries) ListSemanticDocsForTable(ctx context.Context, arg ListSemantic
 	return items, nil
 }
 
-const listSemanticMetrics = `-- name: ListSemanticMetrics :many
+const listVisibleSemanticMetrics = `-- name: ListVisibleSemanticMetrics :many
 
-SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_metrics
-WHERE workspace_id = $1::uuid
-ORDER BY label
+SELECT m.id, m.workspace_id, m.slug, m.label, m.description, m.certified, m.catalog_id, m.namespace, m.table_name, m.binding_id, m.definition, m.format_version, m.owner_user_id, m.updated_by, m.updated_at, m.space_id FROM semantic_metrics m
+WHERE m.workspace_id = $1::uuid
+  AND baleia_effective_space_role(m.workspace_id, m.space_id, $2::uuid) IS NOT NULL
+  AND ($3::uuid IS NULL OR m.space_id = $3::uuid)
+ORDER BY m.label
 `
 
+type ListVisibleSemanticMetricsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
+}
+
 // ── Metrics ─────────────────────────────────────────────────────────────────────
-func (q *Queries) ListSemanticMetrics(ctx context.Context, workspaceID pgtype.UUID) ([]SemanticMetric, error) {
-	rows, err := q.db.Query(ctx, listSemanticMetrics, workspaceID)
+// Only metrics of spaces the caller can see (#40); space_id narrows it.
+func (q *Queries) ListVisibleSemanticMetrics(ctx context.Context, arg ListVisibleSemanticMetricsParams) ([]SemanticMetric, error) {
+	rows, err := q.db.Query(ctx, listVisibleSemanticMetrics, arg.WorkspaceID, arg.UserID, arg.SpaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -333,6 +347,7 @@ func (q *Queries) ListSemanticMetrics(ctx context.Context, workspaceID pgtype.UU
 			&i.OwnerUserID,
 			&i.UpdatedBy,
 			&i.UpdatedAt,
+			&i.SpaceID,
 		); err != nil {
 			return nil, err
 		}
@@ -438,24 +453,26 @@ func (q *Queries) SearchSemanticDocs(ctx context.Context, arg SearchSemanticDocs
 
 const updateSemanticMetric = `-- name: UpdateSemanticMetric :one
 UPDATE semantic_metrics
-SET slug = $1::text,
-    label = $2::text,
-    description = $3::text,
-    certified = $4::boolean,
-    catalog_id = $5::uuid,
-    namespace = $6::text[],
-    table_name = $7::text,
-    binding_id = $8::uuid,
-    definition = $9::jsonb,
-    format_version = $10::int,
-    owner_user_id = $11::uuid,
-    updated_by = $12::uuid,
+SET space_id = $1::uuid,
+    slug = $2::text,
+    label = $3::text,
+    description = $4::text,
+    certified = $5::boolean,
+    catalog_id = $6::uuid,
+    namespace = $7::text[],
+    table_name = $8::text,
+    binding_id = $9::uuid,
+    definition = $10::jsonb,
+    format_version = $11::int,
+    owner_user_id = $12::uuid,
+    updated_by = $13::uuid,
     updated_at = now()
-WHERE workspace_id = $13::uuid AND id = $14::uuid
-RETURNING id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+WHERE workspace_id = $14::uuid AND id = $15::uuid
+RETURNING id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id
 `
 
 type UpdateSemanticMetricParams struct {
+	SpaceID       pgtype.UUID `json:"space_id"`
 	Slug          string      `json:"slug"`
 	Label         string      `json:"label"`
 	Description   string      `json:"description"`
@@ -474,6 +491,7 @@ type UpdateSemanticMetricParams struct {
 
 func (q *Queries) UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMetricParams) (SemanticMetric, error) {
 	row := q.db.QueryRow(ctx, updateSemanticMetric,
+		arg.SpaceID,
 		arg.Slug,
 		arg.Label,
 		arg.Description,
@@ -506,6 +524,7 @@ func (q *Queries) UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMe
 		&i.OwnerUserID,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.SpaceID,
 	)
 	return i, err
 }

@@ -82,10 +82,13 @@ LIMIT @lim::int;
 
 -- ── Metrics ─────────────────────────────────────────────────────────────────────
 
--- name: ListSemanticMetrics :many
-SELECT * FROM semantic_metrics
-WHERE workspace_id = @workspace_id::uuid
-ORDER BY label;
+-- name: ListVisibleSemanticMetrics :many
+-- Only metrics of spaces the caller can see (#40); space_id narrows it.
+SELECT m.* FROM semantic_metrics m
+WHERE m.workspace_id = @workspace_id::uuid
+  AND baleia_effective_space_role(m.workspace_id, m.space_id, @user_id::uuid) IS NOT NULL
+  AND (sqlc.narg(space_id)::uuid IS NULL OR m.space_id = sqlc.narg(space_id)::uuid)
+ORDER BY m.label;
 
 -- name: GetSemanticMetric :one
 SELECT * FROM semantic_metrics
@@ -97,12 +100,12 @@ WHERE workspace_id = @workspace_id::uuid AND slug = @slug::text;
 
 -- name: CreateSemanticMetric :one
 INSERT INTO semantic_metrics (
-    workspace_id, slug, label, description, certified,
+    workspace_id, space_id, slug, label, description, certified,
     catalog_id, namespace, table_name, binding_id, definition, format_version,
     owner_user_id, updated_by
 )
 VALUES (
-    @workspace_id::uuid, @slug::text, @label::text, @description::text, @certified::boolean,
+    @workspace_id::uuid, @space_id::uuid, @slug::text, @label::text, @description::text, @certified::boolean,
     @catalog_id::uuid, @namespace::text[], @table_name::text,
     sqlc.narg(binding_id)::uuid, @definition::jsonb, @format_version::int,
     sqlc.narg(owner_user_id)::uuid, @updated_by::uuid
@@ -111,7 +114,8 @@ RETURNING *;
 
 -- name: UpdateSemanticMetric :one
 UPDATE semantic_metrics
-SET slug = @slug::text,
+SET space_id = @space_id::uuid,
+    slug = @slug::text,
     label = @label::text,
     description = @description::text,
     certified = @certified::boolean,

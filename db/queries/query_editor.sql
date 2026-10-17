@@ -1,37 +1,74 @@
 -- name: CreateQueryFolder :one
-INSERT INTO query_folders (workspace_id, parent_id, name)
-VALUES ($1, $2, $3)
+INSERT INTO query_folders (workspace_id, space_id, parent_id, name, slug)
+VALUES (@workspace_id::uuid, @space_id::uuid, sqlc.narg(parent_id)::uuid, @name::text, @slug::text)
 RETURNING *;
 
--- name: ListQueryFolders :many
-SELECT * FROM query_folders
-WHERE workspace_id = $1 AND parent_id IS NOT DISTINCT FROM $2
-ORDER BY name;
+-- name: ListVisibleQueryFolders :many
+-- Only folders of spaces the caller can see; #16 says to filter in SQL, not in
+-- a Go loop. space_id/folder_id narrow the listing when present.
+SELECT f.* FROM query_folders f
+WHERE f.workspace_id = @workspace_id::uuid
+  AND baleia_effective_space_role(f.workspace_id, f.space_id, @user_id::uuid) IS NOT NULL
+  AND (sqlc.narg(space_id)::uuid IS NULL OR f.space_id = sqlc.narg(space_id)::uuid)
+  AND f.parent_id IS NOT DISTINCT FROM sqlc.narg(parent_id)::uuid
+ORDER BY f.name;
 
--- name: DeleteQueryFolder :exec
-DELETE FROM query_folders WHERE id = $1 AND workspace_id = $2;
+-- name: GetQueryFolderByID :one
+SELECT * FROM query_folders WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid;
+
+-- name: DeleteQueryFolder :execrows
+DELETE FROM query_folders WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid;
+
+-- name: FolderSlugExists :one
+SELECT EXISTS (
+    SELECT 1 FROM query_folders WHERE space_id = @space_id::uuid AND slug = @slug::text
+) AS exists;
 
 -- name: CreateSavedQuery :one
-INSERT INTO saved_queries (workspace_id, folder_id, created_by, name, sql)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO saved_queries (
+    workspace_id, space_id, folder_id, created_by, updated_by, name, slug, sql,
+    target_binding_id, target_schema
+)
+VALUES (
+    @workspace_id::uuid, @space_id::uuid, sqlc.narg(folder_id)::uuid, @created_by::uuid,
+    sqlc.narg(updated_by)::uuid, @name::text, @slug::text, @sql::text,
+    sqlc.narg(target_binding_id)::uuid, sqlc.narg(target_schema)::text
+)
 RETURNING *;
 
 -- name: GetSavedQueryByID :one
-SELECT * FROM saved_queries WHERE id = $1 AND workspace_id = $2;
+SELECT * FROM saved_queries WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid;
 
--- name: ListSavedQueries :many
-SELECT * FROM saved_queries
-WHERE workspace_id = $1 AND folder_id IS NOT DISTINCT FROM $2
-ORDER BY name;
+-- name: ListVisibleSavedQueries :many
+-- Only queries of spaces the caller can see; space_id/folder_id narrow it.
+SELECT q.* FROM saved_queries q
+WHERE q.workspace_id = @workspace_id::uuid
+  AND baleia_effective_space_role(q.workspace_id, q.space_id, @user_id::uuid) IS NOT NULL
+  AND (sqlc.narg(space_id)::uuid IS NULL OR q.space_id = sqlc.narg(space_id)::uuid)
+  AND q.folder_id IS NOT DISTINCT FROM sqlc.narg(folder_id)::uuid
+ORDER BY q.name;
+
+-- name: SavedQuerySlugExists :one
+SELECT EXISTS (
+    SELECT 1 FROM saved_queries WHERE workspace_id = @workspace_id::uuid AND slug = @slug::text
+) AS exists;
 
 -- name: UpdateSavedQuery :one
 UPDATE saved_queries
-SET name = $3, sql = $4, folder_id = $5, updated_at = now()
-WHERE id = $1 AND workspace_id = $2
+SET name = @name::text,
+    sql = @sql::text,
+    folder_id = sqlc.narg(folder_id)::uuid,
+    space_id = @space_id::uuid,
+    slug = @slug::text,
+    target_binding_id = sqlc.narg(target_binding_id)::uuid,
+    target_schema = sqlc.narg(target_schema)::text,
+    updated_by = sqlc.narg(updated_by)::uuid,
+    updated_at = now()
+WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid
 RETURNING *;
 
--- name: DeleteSavedQuery :exec
-DELETE FROM saved_queries WHERE id = $1 AND workspace_id = $2;
+-- name: DeleteSavedQuery :execrows
+DELETE FROM saved_queries WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid;
 
 -- name: CreateQueryExecution :one
 -- The target columns are the resolved execution target (#13); trino_catalog

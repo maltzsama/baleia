@@ -42,8 +42,13 @@ func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestOb
 		parentID.Valid = true
 	}
 
-	folders, err := h.queries.ListQueryFolders(ctx, db.ListQueryFoldersParams{
+	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	folders, err := h.queries.ListVisibleQueryFolders(ctx, db.ListVisibleQueryFoldersParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
+		UserID:      userID,
 		ParentID:    parentID,
 	})
 	if err != nil {
@@ -62,16 +67,31 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 		return CreateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
+	ws := workspaceIDFromRequest(request.Id)
+	space, err := h.queries.GetDefaultSpace(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+
 	var parentID pgtype.UUID
 	if request.Body.ParentId != nil {
 		parentID.Bytes = *request.Body.ParentId
 		parentID.Valid = true
 	}
 
+	slug, err := uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
+		return h.queries.FolderSlugExists(ctx, db.FolderSlugExistsParams{SpaceID: space.ID, Slug: s})
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	folder, err := h.queries.CreateQueryFolder(ctx, db.CreateQueryFolderParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
+		WorkspaceID: ws,
+		SpaceID:     space.ID,
 		ParentID:    parentID,
 		Name:        request.Body.Name,
+		Slug:        slug,
 	})
 	if err != nil {
 		return nil, err
@@ -89,10 +109,14 @@ func (h *Handlers) DeleteFolder(ctx context.Context, request DeleteFolderRequest
 	folderID.Bytes = request.FolderId
 	folderID.Valid = true
 
-	if err := h.queries.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{
+	deleted, err := h.queries.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 		ID:          folderID,
-	}); err != nil {
+	})
+	if err != nil {
+		return nil, err
+	}
+	if deleted == 0 {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
 	}
 
@@ -112,8 +136,13 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 		folderID.Valid = true
 	}
 
-	queries, err := h.queries.ListSavedQueries(ctx, db.ListSavedQueriesParams{
+	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	queries, err := h.queries.ListVisibleSavedQueries(ctx, db.ListVisibleSavedQueriesParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
+		UserID:      userID,
 		FolderID:    folderID,
 	})
 	if err != nil {
@@ -138,17 +167,33 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 		return nil, err
 	}
 
+	ws := workspaceIDFromRequest(request.Id)
+	space, err := h.queries.GetDefaultSpace(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+
 	var folderID pgtype.UUID
 	if request.Body.FolderId != nil {
 		folderID.Bytes = *request.Body.FolderId
 		folderID.Valid = true
 	}
 
+	slug, err := uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
+		return h.queries.SavedQuerySlugExists(ctx, db.SavedQuerySlugExistsParams{WorkspaceID: ws, Slug: s})
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	query, err := h.queries.CreateSavedQuery(ctx, db.CreateSavedQueryParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
+		WorkspaceID: ws,
+		SpaceID:     space.ID,
 		FolderID:    folderID,
 		CreatedBy:   createdBy,
+		UpdatedBy:   createdBy,
 		Name:        request.Body.Name,
+		Slug:        slug,
 		Sql:         request.Body.Sql,
 	})
 	if err != nil {
@@ -216,12 +261,21 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 		folderID.Valid = true
 	}
 
+	updatedBy, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
 	updated, err := h.queries.UpdateSavedQuery(ctx, db.UpdateSavedQueryParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		ID:          queryID,
-		Name:        name,
-		Sql:         sql,
-		FolderID:    folderID,
+		WorkspaceID:     workspaceIDFromRequest(request.Id),
+		ID:              queryID,
+		Name:            name,
+		Sql:             sql,
+		FolderID:        folderID,
+		SpaceID:         current.SpaceID,
+		Slug:            current.Slug,
+		TargetBindingID: current.TargetBindingID,
+		TargetSchema:    current.TargetSchema,
+		UpdatedBy:       updatedBy,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -242,10 +296,14 @@ func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQuer
 	queryID.Bytes = request.QueryId
 	queryID.Valid = true
 
-	if err := h.queries.DeleteSavedQuery(ctx, db.DeleteSavedQueryParams{
+	deleted, err := h.queries.DeleteSavedQuery(ctx, db.DeleteSavedQueryParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 		ID:          queryID,
-	}); err != nil {
+	})
+	if err != nil {
+		return nil, err
+	}
+	if deleted == 0 {
 		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
 	}
 
@@ -363,6 +421,14 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	if request.Body.SavedQueryId != nil {
 		savedQueryID.Bytes = *request.Body.SavedQueryId
 		savedQueryID.Valid = true
+		// A saved query from another workspace must not be attached to an
+		// execution (it would leak its id into this workspace's history).
+		if _, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{
+			ID: savedQueryID, WorkspaceID: workspaceIDFromRequest(request.Id),
+		}); err != nil {
+			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		}
 	}
 
 	// Correlate the execution with the inbound HTTP request so the row, the

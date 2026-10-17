@@ -73,6 +73,7 @@ type Store interface {
 	GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg db.EngineHostsCatalogGrantedToUserParams) (bool, error)
+	GetEffectiveSpaceRole(ctx context.Context, arg db.GetEffectiveSpaceRoleParams) (string, error)
 }
 
 // Checker evaluates the rules against a Store.
