@@ -13,7 +13,11 @@
 
 	type QueryStatement = components['schemas']['QueryStatement'];
 
-	let { executionId, enabled }: { executionId: string; enabled: boolean } = $props();
+	let {
+		executionId,
+		enabled,
+		initialPosition
+	}: { executionId: string; enabled: boolean; initialPosition?: number } = $props();
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const store = new ResultsStore();
@@ -58,7 +62,11 @@
 				if (error || !data) throw new Error(apiErrorMessage(error, 'Failed to load statements'));
 				statements = data;
 				const withResults = data.filter((statement) => (statement.result_sets?.length ?? 0) > 0);
-				activePosition = withResults[0]?.position ?? data[0]?.position ?? null;
+				activePosition =
+					withResults.find((statement) => statement.position === initialPosition)?.position ??
+					withResults[0]?.position ??
+					data[0]?.position ??
+					null;
 				activeResultIndex = 0;
 			})
 			.catch((e) => {

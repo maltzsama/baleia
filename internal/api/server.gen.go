@@ -243,7 +243,7 @@ type ServerInterface interface {
 	// Revoke a catalog grant — same rule as granting
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 	RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID)
-	// Workspace execution history
+	// Workspace execution history, newest first
 	// (GET /workspaces/{id}/executions)
 	ListExecutions(w http.ResponseWriter, r *http.Request, id PathId, params ListExecutionsParams)
 	// Submit a query on a target
@@ -870,7 +870,7 @@ func (_ Unimplemented) RevokeCatalogAccess(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Workspace execution history
+// Workspace execution history, newest first
 // (GET /workspaces/{id}/executions)
 func (_ Unimplemented) ListExecutions(w http.ResponseWriter, r *http.Request, id PathId, params ListExecutionsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -3600,19 +3600,67 @@ func (siw *ServerInterfaceWrapper) ListExecutions(w http.ResponseWriter, r *http
 		return
 	}
 
-	// ------------- Optional query parameter "page" -------------
+	// ------------- Optional query parameter "user_id" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	err = runtime.BindQueryParameter("form", true, false, "user_id", r.URL.Query(), &params.UserId)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
 		return
 	}
 
-	// ------------- Optional query parameter "per_page" -------------
+	// ------------- Optional query parameter "from" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "per_page", r.URL.Query(), &params.PerPage)
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "catalog_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "engine_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "engine_id", r.URL.Query(), &params.EngineId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engine_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
 		return
 	}
 
@@ -9966,8 +10014,10 @@ type ListExecutionsResponseObject interface {
 }
 
 type ListExecutions200JSONResponse struct {
-	Data       *[]Execution `json:"data,omitempty"`
-	Pagination *Pagination  `json:"pagination,omitempty"`
+	Data []Execution `json:"data"`
+
+	// NextCursor Pass as cursor for the next page; null on the last one
+	NextCursor *string `json:"next_cursor"`
 }
 
 func (response ListExecutions200JSONResponse) VisitListExecutionsResponse(w http.ResponseWriter) error {
@@ -9982,6 +10032,17 @@ type ListExecutions401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response ListExecutions401JSONResponse) VisitListExecutionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListExecutions422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListExecutions422JSONResponse) VisitListExecutionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -12740,7 +12801,7 @@ type StrictServerInterface interface {
 	// Revoke a catalog grant — same rule as granting
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 	RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error)
-	// Workspace execution history
+	// Workspace execution history, newest first
 	// (GET /workspaces/{id}/executions)
 	ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error)
 	// Submit a query on a target

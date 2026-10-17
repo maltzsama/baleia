@@ -515,6 +515,122 @@ func (q *Queries) GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDPa
 	return i, err
 }
 
+const listExecutionHistory = `-- name: ListExecutionHistory :many
+SELECT qe.id, qe.workspace_id, qe.user_id, u.name AS user_name,
+       qe.saved_query_id, qe.status, qe.sql, qe.engine_query_id,
+       qe.rows_returned, qe.duration_ms, qe.started_at, qe.finished_at,
+       qe.trino_catalog, qe.result_key, qe.request_id, qe.engine_id,
+       qe.target_binding_id, qe.target_catalog_id, qe.target_schema,
+       qe.target_snapshot
+FROM query_executions qe
+JOIN users u ON u.id = qe.user_id
+WHERE qe.workspace_id = $1::uuid
+  AND ($2::uuid IS NULL OR qe.user_id = $2::uuid)
+  AND ($3::text IS NULL OR qe.status = $3::text)
+  AND ($4::timestamptz IS NULL OR qe.started_at >= $4::timestamptz)
+  AND ($5::timestamptz IS NULL OR qe.started_at <= $5::timestamptz)
+  AND ($6::text IS NULL OR qe.sql ILIKE '%' || $6::text || '%')
+  AND ($7::uuid IS NULL OR qe.target_catalog_id = $7::uuid)
+  AND ($8::uuid IS NULL OR qe.engine_id = $8::uuid)
+  AND ($9::timestamptz IS NULL
+       OR (qe.started_at, qe.id) < ($9::timestamptz, $10::uuid))
+ORDER BY qe.started_at DESC, qe.id DESC
+LIMIT $11
+`
+
+type ListExecutionHistoryParams struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	Status      *string            `json:"status"`
+	FromTime    pgtype.Timestamptz `json:"from_time"`
+	ToTime      pgtype.Timestamptz `json:"to_time"`
+	Q           *string            `json:"q"`
+	CatalogID   pgtype.UUID        `json:"catalog_id"`
+	EngineID    pgtype.UUID        `json:"engine_id"`
+	CursorAt    pgtype.Timestamptz `json:"cursor_at"`
+	CursorID    pgtype.UUID        `json:"cursor_id"`
+	Lim         int32              `json:"lim"`
+}
+
+type ListExecutionHistoryRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	UserName        string             `json:"user_name"`
+	SavedQueryID    pgtype.UUID        `json:"saved_query_id"`
+	Status          string             `json:"status"`
+	Sql             string             `json:"sql"`
+	EngineQueryID   *string            `json:"engine_query_id"`
+	RowsReturned    *int64             `json:"rows_returned"`
+	DurationMs      *int64             `json:"duration_ms"`
+	StartedAt       pgtype.Timestamptz `json:"started_at"`
+	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
+	TrinoCatalog    *string            `json:"trino_catalog"`
+	ResultKey       *string            `json:"result_key"`
+	RequestID       *string            `json:"request_id"`
+	EngineID        pgtype.UUID        `json:"engine_id"`
+	TargetBindingID pgtype.UUID        `json:"target_binding_id"`
+	TargetCatalogID pgtype.UUID        `json:"target_catalog_id"`
+	TargetSchema    *string            `json:"target_schema"`
+	TargetSnapshot  []byte             `json:"target_snapshot"`
+}
+
+// Newest first, keyset-paginated on (started_at, id): the cursor is the last
+// row of the previous page. Every filter is optional; the handler narrows
+// user_id to the caller unless the caller owns the workspace or is an admin.
+func (q *Queries) ListExecutionHistory(ctx context.Context, arg ListExecutionHistoryParams) ([]ListExecutionHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listExecutionHistory,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Status,
+		arg.FromTime,
+		arg.ToTime,
+		arg.Q,
+		arg.CatalogID,
+		arg.EngineID,
+		arg.CursorAt,
+		arg.CursorID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListExecutionHistoryRow
+	for rows.Next() {
+		var i ListExecutionHistoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.UserName,
+			&i.SavedQueryID,
+			&i.Status,
+			&i.Sql,
+			&i.EngineQueryID,
+			&i.RowsReturned,
+			&i.DurationMs,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.TrinoCatalog,
+			&i.ResultKey,
+			&i.RequestID,
+			&i.EngineID,
+			&i.TargetBindingID,
+			&i.TargetCatalogID,
+			&i.TargetSchema,
+			&i.TargetSnapshot,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listQueryExecutionsByWorkspace = `-- name: ListQueryExecutionsByWorkspace :many
 SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot FROM query_executions
 WHERE workspace_id = $1

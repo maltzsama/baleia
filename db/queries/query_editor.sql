@@ -117,6 +117,31 @@ WHERE workspace_id = $1
 ORDER BY started_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: ListExecutionHistory :many
+-- Newest first, keyset-paginated on (started_at, id): the cursor is the last
+-- row of the previous page. Every filter is optional; the handler narrows
+-- user_id to the caller unless the caller owns the workspace or is an admin.
+SELECT qe.id, qe.workspace_id, qe.user_id, u.name AS user_name,
+       qe.saved_query_id, qe.status, qe.sql, qe.engine_query_id,
+       qe.rows_returned, qe.duration_ms, qe.started_at, qe.finished_at,
+       qe.trino_catalog, qe.result_key, qe.request_id, qe.engine_id,
+       qe.target_binding_id, qe.target_catalog_id, qe.target_schema,
+       qe.target_snapshot
+FROM query_executions qe
+JOIN users u ON u.id = qe.user_id
+WHERE qe.workspace_id = @workspace_id::uuid
+  AND (sqlc.narg(user_id)::uuid IS NULL OR qe.user_id = sqlc.narg(user_id)::uuid)
+  AND (sqlc.narg(status)::text IS NULL OR qe.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(from_time)::timestamptz IS NULL OR qe.started_at >= sqlc.narg(from_time)::timestamptz)
+  AND (sqlc.narg(to_time)::timestamptz IS NULL OR qe.started_at <= sqlc.narg(to_time)::timestamptz)
+  AND (sqlc.narg(q)::text IS NULL OR qe.sql ILIKE '%' || sqlc.narg(q)::text || '%')
+  AND (sqlc.narg(catalog_id)::uuid IS NULL OR qe.target_catalog_id = sqlc.narg(catalog_id)::uuid)
+  AND (sqlc.narg(engine_id)::uuid IS NULL OR qe.engine_id = sqlc.narg(engine_id)::uuid)
+  AND (sqlc.narg(cursor_at)::timestamptz IS NULL
+       OR (qe.started_at, qe.id) < (sqlc.narg(cursor_at)::timestamptz, sqlc.narg(cursor_id)::uuid))
+ORDER BY qe.started_at DESC, qe.id DESC
+LIMIT @lim;
+
 -- name: CreateQueryStatement :one
 INSERT INTO query_statements (execution_id, position, sql, status)
 VALUES ($1, $2, $3, $4)

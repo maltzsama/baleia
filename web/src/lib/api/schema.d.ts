@@ -1568,7 +1568,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Workspace execution history */
+        /**
+         * Workspace execution history, newest first
+         * @description Members see their own executions; the workspace owner and global administrators see everyone's. Keyset-paginated on `(started_at DESC, id DESC)`: pass `next_cursor` back as `cursor`.
+         */
         get: operations["listExecutions"];
         put?: never;
         /**
@@ -3149,6 +3152,13 @@ export interface components {
             id: string;
             /** Format: uuid */
             workspace_id: string;
+            /**
+             * Format: uuid
+             * @description The caller who ran it
+             */
+            user_id?: string | null;
+            /** @description The runner's name (history list) */
+            user_name?: string | null;
             /** Format: uuid */
             saved_query_id?: string | null;
             /** @enum {string} */
@@ -6250,8 +6260,19 @@ export interface operations {
         parameters: {
             query?: {
                 status?: "running" | "finished" | "failed" | "cancelled";
-                page?: components["parameters"]["QueryPage"];
-                per_page?: components["parameters"]["QueryPerPage"];
+                /** @description A user id, or `me` for the caller */
+                user_id?: string;
+                /** @description Only executions started at or after this instant */
+                from?: string;
+                /** @description Only executions started at or before this instant */
+                to?: string;
+                /** @description Substring of the SQL (trigram-indexed) */
+                q?: string;
+                catalog_id?: string;
+                engine_id?: string;
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+                limit?: number;
             };
             header?: never;
             path: {
@@ -6261,19 +6282,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Paginated executions */
+            /** @description One page of executions, newest first */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data?: components["schemas"]["Execution"][];
-                        pagination?: components["schemas"]["Pagination"];
+                        data: components["schemas"]["Execution"][];
+                        /** @description Pass as cursor for the next page; null on the last one */
+                        next_cursor?: string | null;
                     };
                 };
             };
             401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     runQuery: {

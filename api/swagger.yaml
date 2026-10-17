@@ -1493,6 +1493,8 @@ components:
       properties:
         id: { type: string, format: uuid }
         workspace_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid, nullable: true, description: "The caller who ran it" }
+        user_name: { type: string, nullable: true, description: "The runner's name (history list)" }
         saved_query_id: { type: string, format: uuid, nullable: true }
         status: { type: string, enum: [running, finished, failed, cancelled] }
         sql: { type: string }
@@ -3990,26 +3992,62 @@ paths:
     get:
       tags: [Executions]
       operationId: listExecutions
-      summary: "Workspace execution history"
+      summary: "Workspace execution history, newest first"
+      description: >
+        Members see their own executions; the workspace owner and global
+        administrators see everyone's. Keyset-paginated on
+        `(started_at DESC, id DESC)`: pass `next_cursor` back as `cursor`.
       parameters:
         - name: status
           in: query
           schema: { type: string, enum: [running, finished, failed, cancelled] }
-        - $ref: "#/components/parameters/QueryPage"
-        - $ref: "#/components/parameters/QueryPerPage"
+        - name: user_id
+          in: query
+          description: "A user id, or `me` for the caller"
+          schema: { type: string }
+        - name: from
+          in: query
+          description: "Only executions started at or after this instant"
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: "Only executions started at or before this instant"
+          schema: { type: string, format: date-time }
+        - name: q
+          in: query
+          description: "Substring of the SQL (trigram-indexed)"
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - name: catalog_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: engine_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          description: "next_cursor of the previous page"
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         "200":
-          description: "Paginated executions"
+          description: "One page of executions, newest first"
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     type: array
                     items: { $ref: "#/components/schemas/Execution" }
-                  pagination: { $ref: "#/components/schemas/Pagination" }
+                  next_cursor:
+                    type: string
+                    nullable: true
+                    description: "Pass as cursor for the next page; null on the last one"
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     post:
       tags: [Executions]
       operationId: runQuery

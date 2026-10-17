@@ -2,14 +2,15 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -467,51 +468,172 @@ func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQuer
 
 // ── Executions ────────────────────────────────────────────────────────────────
 
+const (
+	defaultExecutionPage = 20
+	maxExecutionPage     = 100
+)
+
 func (h *Handlers) ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
-	page := 1
-	perPage := 20
-	if request.Params.Page != nil {
-		page = *request.Params.Page
-	}
-	if request.Params.PerPage != nil {
-		perPage = *request.Params.PerPage
+	caller := auth.UserIDFromContext(ctx)
+	callerID, err := uuidFromString(caller)
+	if err != nil {
+		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 	}
 
-	offset := (page - 1) * perPage
+	p := request.Params
+	limit := defaultExecutionPage
+	if p.Limit != nil {
+		if *p.Limit < 1 || *p.Limit > maxExecutionPage {
+			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 100")}, nil
+		}
+		limit = *p.Limit
+	}
 
-	executions, err := h.queries.ListQueryExecutionsByWorkspace(ctx, db.ListQueryExecutionsByWorkspaceParams{
+	// Visibility (#36): the workspace owner and global admins see every
+	// execution; everyone else sees only their own.
+	seeAll := auth.RoleFromContext(ctx) == "admin"
+	if !seeAll {
+		owner, err := h.queries.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{
+			ID:     workspaceIDFromRequest(request.Id),
+			UserID: callerID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		seeAll = owner
+	}
+
+	userFilter := pgtype.UUID{}
+	if p.UserId != nil && *p.UserId != "" {
+		if *p.UserId == "me" {
+			userFilter = callerID
+		} else {
+			uid, err := uuidFromString(*p.UserId)
+			if err != nil {
+				return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "invalid user_id")}, nil
+			}
+			userFilter = uid
+		}
+	}
+	if !seeAll {
+		userFilter = callerID
+	}
+
+	params := db.ListExecutionHistoryParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
-		Limit:       int32(perPage),
-		Offset:      int32(offset),
-	})
+		UserID:      userFilter,
+		Q:           p.Q,
+		Lim:         int32(limit + 1),
+	}
+	if p.Status != nil {
+		status := string(*p.Status)
+		params.Status = &status
+	}
+	if p.From != nil {
+		params.FromTime = pgtype.Timestamptz{Time: *p.From, Valid: true}
+	}
+	if p.To != nil {
+		params.ToTime = pgtype.Timestamptz{Time: *p.To, Valid: true}
+	}
+	if p.CatalogId != nil {
+		params.CatalogID = pgtype.UUID{Bytes: *p.CatalogId, Valid: true}
+	}
+	if p.EngineId != nil {
+		params.EngineID = pgtype.UUID{Bytes: *p.EngineId, Valid: true}
+	}
+	if p.Cursor != nil && *p.Cursor != "" {
+		at, id, ok := decodeHistoryCursor(*p.Cursor)
+		if !ok {
+			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "invalid cursor")}, nil
+		}
+		params.CursorAt = pgtype.Timestamptz{Time: at, Valid: true}
+		params.CursorID = id
+	}
+
+	rows, err := h.queries.ListExecutionHistory(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-
-	total := len(executions)
-	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
-	if totalPages < 1 {
-		totalPages = 1
+	out := ListExecutions200JSONResponse{Data: make([]Execution, 0, len(rows))}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		cursor := encodeHistoryCursor(rows[limit-1].StartedAt.Time, rows[limit-1].ID)
+		out.NextCursor = &cursor
 	}
-
-	result := make([]Execution, 0, len(executions))
-	for _, e := range executions {
-		result = append(result, dbExecutionToPublic(e))
+	for _, row := range rows {
+		out.Data = append(out.Data, historyRowToPublic(row))
 	}
+	return out, nil
+}
 
-	return ListExecutions200JSONResponse{
-		Data: &result,
-		Pagination: &Pagination{
-			Page:       page,
-			PerPage:    perPage,
-			Total:      total,
-			TotalPages: totalPages,
-		},
-	}, nil
+func encodeHistoryCursor(at time.Time, id pgtype.UUID) string {
+	return base64.RawURLEncoding.EncodeToString(
+		[]byte(at.UTC().Format(time.RFC3339Nano) + "|" + uuid.UUID(id.Bytes).String()),
+	)
+}
+
+func decodeHistoryCursor(cursor string) (time.Time, pgtype.UUID, bool) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return time.Time{}, pgtype.UUID{}, false
+	}
+	ts, idStr, ok := strings.Cut(string(raw), "|")
+	if !ok {
+		return time.Time{}, pgtype.UUID{}, false
+	}
+	at, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return time.Time{}, pgtype.UUID{}, false
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return time.Time{}, pgtype.UUID{}, false
+	}
+	return at, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, true
+}
+
+// historyRowToPublic maps one joined history row, including the runner.
+func historyRowToPublic(row db.ListExecutionHistoryRow) Execution {
+	uid := openapi_types.UUID(row.UserID.Bytes)
+	name := row.UserName
+	sql := row.Sql
+	exec := Execution{
+		Id:          openapi_types.UUID(row.ID.Bytes),
+		WorkspaceId: openapi_types.UUID(row.WorkspaceID.Bytes),
+		UserId:      &uid,
+		UserName:    &name,
+		Status:      ExecutionStatus(row.Status),
+		Sql:         sql,
+		Target:      executionTargetFrom(row.TargetSnapshot, row.EngineID, row.TargetBindingID, row.TargetCatalogID),
+	}
+	if row.SavedQueryID.Valid {
+		sqid := openapi_types.UUID(row.SavedQueryID.Bytes)
+		exec.SavedQueryId = &sqid
+	}
+	if row.EngineQueryID != nil {
+		exec.EngineQueryId = row.EngineQueryID
+	}
+	if row.RowsReturned != nil {
+		rows := int(*row.RowsReturned)
+		exec.RowsReturned = &rows
+	}
+	if row.DurationMs != nil {
+		duration := int(*row.DurationMs)
+		exec.DurationMs = &duration
+	}
+	if row.StartedAt.Valid {
+		started := row.StartedAt.Time
+		exec.StartedAt = &started
+	}
+	if row.FinishedAt.Valid {
+		finished := row.FinishedAt.Time
+		exec.FinishedAt = &finished
+	}
+	return exec
 }
 
 func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) (RunQueryResponseObject, error) {
@@ -1093,18 +1215,30 @@ func dbExecutionToPublic(e db.QueryExecution) Execution {
 		dur := int(*e.DurationMs)
 		exec.DurationMs = &dur
 	}
-	exec.Target = executionTarget(e)
+	if e.StartedAt.Valid {
+		started := e.StartedAt.Time
+		exec.StartedAt = &started
+	}
+	if e.FinishedAt.Valid {
+		finished := e.FinishedAt.Time
+		exec.FinishedAt = &finished
+	}
+	exec.Target = executionTargetFrom(e.TargetSnapshot, e.EngineID, e.TargetBindingID, e.TargetCatalogID)
 	return exec
 }
 
-// executionTarget is the target an execution recorded when it started: the
-// ids (null once the binding, catalog or engine is gone) and the snapshot.
 func executionTarget(e db.QueryExecution) *ExecutionTarget {
-	if len(e.TargetSnapshot) == 0 {
+	return executionTargetFrom(e.TargetSnapshot, e.EngineID, e.TargetBindingID, e.TargetCatalogID)
+}
+
+// executionTargetFrom is the target an execution recorded when it started: the
+// ids (null once the binding, catalog or engine is gone) and the snapshot.
+func executionTargetFrom(snapshot []byte, engineID, bindingID, catalogID pgtype.UUID) *ExecutionTarget {
+	if len(snapshot) == 0 {
 		return nil
 	}
 	var t ExecutionTarget
-	if err := json.Unmarshal(e.TargetSnapshot, &t); err != nil {
+	if err := json.Unmarshal(snapshot, &t); err != nil {
 		return nil
 	}
 	uuidOrNil := func(u pgtype.UUID) *openapi_types.UUID {
@@ -1114,7 +1248,7 @@ func executionTarget(e db.QueryExecution) *ExecutionTarget {
 		v := openapi_types.UUID(u.Bytes)
 		return &v
 	}
-	t.EngineId, t.BindingId, t.CatalogId = uuidOrNil(e.EngineID), uuidOrNil(e.TargetBindingID), uuidOrNil(e.TargetCatalogID)
+	t.EngineId, t.BindingId, t.CatalogId = uuidOrNil(engineID), uuidOrNil(bindingID), uuidOrNil(catalogID)
 	return &t
 }
 

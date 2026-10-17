@@ -226,6 +226,10 @@ type Querier interface {
 	// The engines a non-admin may see: those on connections they own and those
 	// hosting a catalog granted to one of their workspaces.
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
+	// Newest first, keyset-paginated on (started_at, id): the cursor is the last
+	// row of the previous page. Every filter is optional; the handler narrows
+	// user_id to the caller unless the caller owns the workspace or is an admin.
+	ListExecutionHistory(ctx context.Context, arg ListExecutionHistoryParams) ([]ListExecutionHistoryRow, error)
 	ListExpiredEphemeralRegistryRows(ctx context.Context) ([]ListExpiredEphemeralRegistryRowsRow, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
 	// The managed bindings of an engine the reconciler checks (#37).
