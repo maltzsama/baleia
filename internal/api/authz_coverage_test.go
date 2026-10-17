@@ -178,6 +178,21 @@ var operationAccess = map[string]access{
 	"ListMetadataTables":     checked("metadataWorkspace", "grantedCatalog"),
 	"GetMetadataTable":       checked("metadataWorkspace", "GetGrantedMetadataTable"),
 	"SearchMetadata":         checked("metadataWorkspace", "SearchMetadata"),
+	// Semantic layer v1 (#33): workspace members; docs only on catalogs the
+	// workspace may use (semanticCatalog wraps grantedCatalog). Docs are not
+	// content items, so #40 does not add a space check here.
+	"ListSemanticDocs":   checked("metadataWorkspace", "semanticCatalog"),
+	"UpsertSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
+	"DeleteSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
+	"SearchSemanticDocs": checked("metadataWorkspace", "SearchSemanticDocs"),
+	// Metrics are validated against a real engine in a read-only session
+	// (validateSemanticMetric); the catalog must be granted.
+	"ListSemanticMetrics":  checked("metadataWorkspace"),
+	"GetSemanticMetric":    checked("metadataWorkspace", "GetSemanticMetric"),
+	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric"),
+	"DeleteSemanticMetric": checked("metadataWorkspace", "DeleteSemanticMetric"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget"),
 	// Audit trail (#45): admins see all, anyone else only their own events.
 	"ListAuditEvents":    checked("PrincipalFromContext", "IsAdmin"),
 	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below

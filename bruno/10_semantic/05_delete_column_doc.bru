@@ -1,0 +1,23 @@
+meta {
+  name: Delete Column Doc
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/docs?catalog_id={{explorer_catalog_id}}&ns=analytics&table=events&column=id
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  A missing doc is a 404, not a silent 204: the sqlc query is :execrows.
+}

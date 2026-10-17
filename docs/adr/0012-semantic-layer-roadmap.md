@@ -28,8 +28,11 @@ release cycle.
 ## Current compliance
 
 `internal/dialect` has the generation primitives for every v1 dialect (`Aggregate`, `TimeTrunc`,
-`Cast`, `SafeDivide`, `Literal`, `Limit`) with golden tests (#14). Simple metrics (#33) are not
-implemented yet.
+`Cast`, `SafeDivide`, `Literal`, `Limit`) with golden tests (#14). `internal/semantic` renders
+simple metrics per dialect, and the API validates them with a zero-row probe in a read-only engine
+session (#33). Docs, tags and owners live in `semantic_docs`, keyed by the table's natural key so
+they survive a metadata resync. Spaces (#40), versions and bundles (#34) and the v2 semantic layer
+(#91) are not implemented yet.
 
 ## Alternatives considered
 

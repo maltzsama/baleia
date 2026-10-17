@@ -36,7 +36,7 @@ type ServerInterface interface {
 	// Invalidate current session
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
-	// Return authenticated user
+	// Return authenticated user, feature flags and global actions
 	// (GET /auth/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
 	// List configured OIDC providers
@@ -324,6 +324,36 @@ type ServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
+	// Delete a doc — workspace members
+	// (DELETE /workspaces/{id}/semantic/docs)
+	DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams)
+	// Docs of one table or one column — workspace members
+	// (GET /workspaces/{id}/semantic/docs)
+	ListSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticDocsParams)
+	// Create or replace a doc — workspace members
+	// (PUT /workspaces/{id}/semantic/docs)
+	UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams)
+	// Search docs by text and tag — workspace members
+	// (GET /workspaces/{id}/semantic/docs/search)
+	SearchSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params SearchSemanticDocsParams)
+	// Metrics of the workspace — workspace members
+	// (GET /workspaces/{id}/semantic/metrics)
+	ListSemanticMetrics(w http.ResponseWriter, r *http.Request, id PathId)
+	// Create and validate a metric — workspace members
+	// (POST /workspaces/{id}/semantic/metrics)
+	CreateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId)
+	// Delete a metric — workspace members
+	// (DELETE /workspaces/{id}/semantic/metrics/{metric_id})
+	DeleteSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID)
+	// Return a metric — workspace members
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id})
+	GetSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID)
+	// Update and revalidate a metric — workspace members
+	// (PATCH /workspaces/{id}/semantic/metrics/{metric_id})
+	UpdateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID)
+	// Render a metric to SQL for one binding — workspace members
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
+	GetSemanticMetricSql(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params GetSemanticMetricSqlParams)
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId)
@@ -372,7 +402,7 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Return authenticated user
+// Return authenticated user, feature flags and global actions
 // (GET /auth/me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -945,6 +975,66 @@ func (_ Unimplemented) GetRetrieverHistory(w http.ResponseWriter, r *http.Reques
 // Trigger manual Retriever refresh
 // (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 func (_ Unimplemented) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a doc — workspace members
+// (DELETE /workspaces/{id}/semantic/docs)
+func (_ Unimplemented) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Docs of one table or one column — workspace members
+// (GET /workspaces/{id}/semantic/docs)
+func (_ Unimplemented) ListSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticDocsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create or replace a doc — workspace members
+// (PUT /workspaces/{id}/semantic/docs)
+func (_ Unimplemented) UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search docs by text and tag — workspace members
+// (GET /workspaces/{id}/semantic/docs/search)
+func (_ Unimplemented) SearchSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params SearchSemanticDocsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Metrics of the workspace — workspace members
+// (GET /workspaces/{id}/semantic/metrics)
+func (_ Unimplemented) ListSemanticMetrics(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create and validate a metric — workspace members
+// (POST /workspaces/{id}/semantic/metrics)
+func (_ Unimplemented) CreateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a metric — workspace members
+// (DELETE /workspaces/{id}/semantic/metrics/{metric_id})
+func (_ Unimplemented) DeleteSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Return a metric — workspace members
+// (GET /workspaces/{id}/semantic/metrics/{metric_id})
+func (_ Unimplemented) GetSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update and revalidate a metric — workspace members
+// (PATCH /workspaces/{id}/semantic/metrics/{metric_id})
+func (_ Unimplemented) UpdateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Render a metric to SQL for one binding — workspace members
+// (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
+func (_ Unimplemented) GetSemanticMetricSql(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params GetSemanticMetricSqlParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4527,6 +4617,609 @@ func (siw *ServerInterfaceWrapper) TriggerRetrieverRefresh(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteSemanticDoc operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSemanticDocParams
+
+	// ------------- Required query parameter "catalog_id" -------------
+
+	if paramValue := r.URL.Query().Get("catalog_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "ns" -------------
+
+	if paramValue := r.URL.Query().Get("ns"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ns"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	if paramValue := r.URL.Query().Get("table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "column" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "column", r.URL.Query(), &params.Column)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "column", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSemanticDoc(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSemanticDocs operation middleware
+func (siw *ServerInterfaceWrapper) ListSemanticDocs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSemanticDocsParams
+
+	// ------------- Required query parameter "catalog_id" -------------
+
+	if paramValue := r.URL.Query().Get("catalog_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "ns" -------------
+
+	if paramValue := r.URL.Query().Get("ns"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ns"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	if paramValue := r.URL.Query().Get("table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "column" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "column", r.URL.Query(), &params.Column)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "column", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSemanticDocs(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpsertSemanticDoc operation middleware
+func (siw *ServerInterfaceWrapper) UpsertSemanticDoc(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpsertSemanticDocParams
+
+	// ------------- Required query parameter "catalog_id" -------------
+
+	if paramValue := r.URL.Query().Get("catalog_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "ns" -------------
+
+	if paramValue := r.URL.Query().Get("ns"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ns"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	if paramValue := r.URL.Query().Get("table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "column" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "column", r.URL.Query(), &params.Column)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "column", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpsertSemanticDoc(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchSemanticDocs operation middleware
+func (siw *ServerInterfaceWrapper) SearchSemanticDocs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchSemanticDocsParams
+
+	// ------------- Required query parameter "q" -------------
+
+	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "tag" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "tag", r.URL.Query(), &params.Tag)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tag", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchSemanticDocs(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSemanticMetrics operation middleware
+func (siw *ServerInterfaceWrapper) ListSemanticMetrics(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSemanticMetrics(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSemanticMetric operation middleware
+func (siw *ServerInterfaceWrapper) CreateSemanticMetric(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSemanticMetric(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSemanticMetric operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSemanticMetric(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "metric_id" -------------
+	var metricId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "metric_id", chi.URLParam(r, "metric_id"), &metricId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "metric_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSemanticMetric(w, r, id, metricId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSemanticMetric operation middleware
+func (siw *ServerInterfaceWrapper) GetSemanticMetric(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "metric_id" -------------
+	var metricId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "metric_id", chi.URLParam(r, "metric_id"), &metricId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "metric_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSemanticMetric(w, r, id, metricId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSemanticMetric operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSemanticMetric(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "metric_id" -------------
+	var metricId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "metric_id", chi.URLParam(r, "metric_id"), &metricId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "metric_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSemanticMetric(w, r, id, metricId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSemanticMetricSql operation middleware
+func (siw *ServerInterfaceWrapper) GetSemanticMetricSql(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "metric_id" -------------
+	var metricId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "metric_id", chi.URLParam(r, "metric_id"), &metricId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "metric_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSemanticMetricSqlParams
+
+	// ------------- Optional query parameter "binding_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "binding_id", r.URL.Query(), &params.BindingId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "binding_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "grain" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "grain", r.URL.Query(), &params.Grain)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "grain", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSemanticMetricSql(w, r, id, metricId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspaceTargets operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspaceTargets(w http.ResponseWriter, r *http.Request) {
 
@@ -5038,6 +5731,36 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/retrievers/{retriever_id}/refresh", wrapper.TriggerRetrieverRefresh)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.DeleteSemanticDoc)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.ListSemanticDocs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.UpsertSemanticDoc)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/docs/search", wrapper.SearchSemanticDocs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/metrics", wrapper.ListSemanticMetrics)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/semantic/metrics", wrapper.CreateSemanticMetric)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}", wrapper.DeleteSemanticMetric)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}", wrapper.GetSemanticMetric)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}", wrapper.UpdateSemanticMetric)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}/sql", wrapper.GetSemanticMetricSql)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/targets", wrapper.ListWorkspaceTargets)
@@ -9129,6 +9852,437 @@ func (response TriggerRetrieverRefresh422JSONResponse) VisitTriggerRetrieverRefr
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteSemanticDocRequestObject struct {
+	Id     PathId `json:"id"`
+	Params DeleteSemanticDocParams
+}
+
+type DeleteSemanticDocResponseObject interface {
+	VisitDeleteSemanticDocResponse(w http.ResponseWriter) error
+}
+
+type DeleteSemanticDoc204Response = NoContentResponse
+
+func (response DeleteSemanticDoc204Response) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSemanticDoc401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSemanticDoc401JSONResponse) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticDoc404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSemanticDoc404JSONResponse) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticDocsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListSemanticDocsParams
+}
+
+type ListSemanticDocsResponseObject interface {
+	VisitListSemanticDocsResponse(w http.ResponseWriter) error
+}
+
+type ListSemanticDocs200JSONResponse []SemanticDoc
+
+func (response ListSemanticDocs200JSONResponse) VisitListSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticDocs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSemanticDocs401JSONResponse) VisitListSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticDocs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSemanticDocs404JSONResponse) VisitListSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDocRequestObject struct {
+	Id     PathId `json:"id"`
+	Params UpsertSemanticDocParams
+	Body   *UpsertSemanticDocJSONRequestBody
+}
+
+type UpsertSemanticDocResponseObject interface {
+	VisitUpsertSemanticDocResponse(w http.ResponseWriter) error
+}
+
+type UpsertSemanticDoc200JSONResponse SemanticDoc
+
+func (response UpsertSemanticDoc200JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDoc401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpsertSemanticDoc401JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDoc404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpsertSemanticDoc404JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDoc422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpsertSemanticDoc422JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params SearchSemanticDocsParams
+}
+
+type SearchSemanticDocsResponseObject interface {
+	VisitSearchSemanticDocsResponse(w http.ResponseWriter) error
+}
+
+type SearchSemanticDocs200JSONResponse []SemanticDocSearchResult
+
+func (response SearchSemanticDocs200JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SearchSemanticDocs401JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SearchSemanticDocs404JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocs422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SearchSemanticDocs422JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticMetricsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListSemanticMetricsResponseObject interface {
+	VisitListSemanticMetricsResponse(w http.ResponseWriter) error
+}
+
+type ListSemanticMetrics200JSONResponse []SemanticMetric
+
+func (response ListSemanticMetrics200JSONResponse) VisitListSemanticMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticMetrics401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSemanticMetrics401JSONResponse) VisitListSemanticMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticMetrics404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSemanticMetrics404JSONResponse) VisitListSemanticMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticMetricRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateSemanticMetricJSONRequestBody
+}
+
+type CreateSemanticMetricResponseObject interface {
+	VisitCreateSemanticMetricResponse(w http.ResponseWriter) error
+}
+
+type CreateSemanticMetric201JSONResponse SemanticMetric
+
+func (response CreateSemanticMetric201JSONResponse) VisitCreateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticMetric401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateSemanticMetric401JSONResponse) VisitCreateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticMetric404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateSemanticMetric404JSONResponse) VisitCreateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticMetric409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateSemanticMetric409JSONResponse) VisitCreateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticMetric422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateSemanticMetric422JSONResponse) VisitCreateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticMetricRequestObject struct {
+	Id       PathId             `json:"id"`
+	MetricId openapi_types.UUID `json:"metric_id"`
+}
+
+type DeleteSemanticMetricResponseObject interface {
+	VisitDeleteSemanticMetricResponse(w http.ResponseWriter) error
+}
+
+type DeleteSemanticMetric204Response = NoContentResponse
+
+func (response DeleteSemanticMetric204Response) VisitDeleteSemanticMetricResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSemanticMetric401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSemanticMetric401JSONResponse) VisitDeleteSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticMetric404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSemanticMetric404JSONResponse) VisitDeleteSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricRequestObject struct {
+	Id       PathId             `json:"id"`
+	MetricId openapi_types.UUID `json:"metric_id"`
+}
+
+type GetSemanticMetricResponseObject interface {
+	VisitGetSemanticMetricResponse(w http.ResponseWriter) error
+}
+
+type GetSemanticMetric200JSONResponse SemanticMetric
+
+func (response GetSemanticMetric200JSONResponse) VisitGetSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetric401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSemanticMetric401JSONResponse) VisitGetSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetric404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSemanticMetric404JSONResponse) VisitGetSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticMetricRequestObject struct {
+	Id       PathId             `json:"id"`
+	MetricId openapi_types.UUID `json:"metric_id"`
+	Body     *UpdateSemanticMetricJSONRequestBody
+}
+
+type UpdateSemanticMetricResponseObject interface {
+	VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error
+}
+
+type UpdateSemanticMetric200JSONResponse SemanticMetric
+
+func (response UpdateSemanticMetric200JSONResponse) VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticMetric401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateSemanticMetric401JSONResponse) VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticMetric404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateSemanticMetric404JSONResponse) VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticMetric409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateSemanticMetric409JSONResponse) VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticMetric422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateSemanticMetric422JSONResponse) VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricSqlRequestObject struct {
+	Id       PathId             `json:"id"`
+	MetricId openapi_types.UUID `json:"metric_id"`
+	Params   GetSemanticMetricSqlParams
+}
+
+type GetSemanticMetricSqlResponseObject interface {
+	VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error
+}
+
+type GetSemanticMetricSql200JSONResponse SemanticMetricSQL
+
+func (response GetSemanticMetricSql200JSONResponse) VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricSql401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSemanticMetricSql401JSONResponse) VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricSql404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSemanticMetricSql404JSONResponse) VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricSql422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response GetSemanticMetricSql422JSONResponse) VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspaceTargetsRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -9211,7 +10365,7 @@ type StrictServerInterface interface {
 	// Invalidate current session
 	// (POST /auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
-	// Return authenticated user
+	// Return authenticated user, feature flags and global actions
 	// (GET /auth/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
 	// List configured OIDC providers
@@ -9499,6 +10653,36 @@ type StrictServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error)
+	// Delete a doc — workspace members
+	// (DELETE /workspaces/{id}/semantic/docs)
+	DeleteSemanticDoc(ctx context.Context, request DeleteSemanticDocRequestObject) (DeleteSemanticDocResponseObject, error)
+	// Docs of one table or one column — workspace members
+	// (GET /workspaces/{id}/semantic/docs)
+	ListSemanticDocs(ctx context.Context, request ListSemanticDocsRequestObject) (ListSemanticDocsResponseObject, error)
+	// Create or replace a doc — workspace members
+	// (PUT /workspaces/{id}/semantic/docs)
+	UpsertSemanticDoc(ctx context.Context, request UpsertSemanticDocRequestObject) (UpsertSemanticDocResponseObject, error)
+	// Search docs by text and tag — workspace members
+	// (GET /workspaces/{id}/semantic/docs/search)
+	SearchSemanticDocs(ctx context.Context, request SearchSemanticDocsRequestObject) (SearchSemanticDocsResponseObject, error)
+	// Metrics of the workspace — workspace members
+	// (GET /workspaces/{id}/semantic/metrics)
+	ListSemanticMetrics(ctx context.Context, request ListSemanticMetricsRequestObject) (ListSemanticMetricsResponseObject, error)
+	// Create and validate a metric — workspace members
+	// (POST /workspaces/{id}/semantic/metrics)
+	CreateSemanticMetric(ctx context.Context, request CreateSemanticMetricRequestObject) (CreateSemanticMetricResponseObject, error)
+	// Delete a metric — workspace members
+	// (DELETE /workspaces/{id}/semantic/metrics/{metric_id})
+	DeleteSemanticMetric(ctx context.Context, request DeleteSemanticMetricRequestObject) (DeleteSemanticMetricResponseObject, error)
+	// Return a metric — workspace members
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id})
+	GetSemanticMetric(ctx context.Context, request GetSemanticMetricRequestObject) (GetSemanticMetricResponseObject, error)
+	// Update and revalidate a metric — workspace members
+	// (PATCH /workspaces/{id}/semantic/metrics/{metric_id})
+	UpdateSemanticMetric(ctx context.Context, request UpdateSemanticMetricRequestObject) (UpdateSemanticMetricResponseObject, error)
+	// Render a metric to SQL for one binding — workspace members
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
+	GetSemanticMetricSql(ctx context.Context, request GetSemanticMetricSqlRequestObject) (GetSemanticMetricSqlResponseObject, error)
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error)
@@ -12402,6 +13586,296 @@ func (sh *strictHandler) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TriggerRetrieverRefreshResponseObject); ok {
 		if err := validResponse.VisitTriggerRetrieverRefreshResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSemanticDoc operation middleware
+func (sh *strictHandler) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams) {
+	var request DeleteSemanticDocRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSemanticDoc(ctx, request.(DeleteSemanticDocRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSemanticDoc")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSemanticDocResponseObject); ok {
+		if err := validResponse.VisitDeleteSemanticDocResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSemanticDocs operation middleware
+func (sh *strictHandler) ListSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticDocsParams) {
+	var request ListSemanticDocsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSemanticDocs(ctx, request.(ListSemanticDocsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSemanticDocs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSemanticDocsResponseObject); ok {
+		if err := validResponse.VisitListSemanticDocsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpsertSemanticDoc operation middleware
+func (sh *strictHandler) UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams) {
+	var request UpsertSemanticDocRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpsertSemanticDocJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpsertSemanticDoc(ctx, request.(UpsertSemanticDocRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpsertSemanticDoc")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpsertSemanticDocResponseObject); ok {
+		if err := validResponse.VisitUpsertSemanticDocResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchSemanticDocs operation middleware
+func (sh *strictHandler) SearchSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params SearchSemanticDocsParams) {
+	var request SearchSemanticDocsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchSemanticDocs(ctx, request.(SearchSemanticDocsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchSemanticDocs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchSemanticDocsResponseObject); ok {
+		if err := validResponse.VisitSearchSemanticDocsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSemanticMetrics operation middleware
+func (sh *strictHandler) ListSemanticMetrics(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListSemanticMetricsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSemanticMetrics(ctx, request.(ListSemanticMetricsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSemanticMetrics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSemanticMetricsResponseObject); ok {
+		if err := validResponse.VisitListSemanticMetricsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSemanticMetric operation middleware
+func (sh *strictHandler) CreateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateSemanticMetricRequestObject
+
+	request.Id = id
+
+	var body CreateSemanticMetricJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSemanticMetric(ctx, request.(CreateSemanticMetricRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSemanticMetric")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSemanticMetricResponseObject); ok {
+		if err := validResponse.VisitCreateSemanticMetricResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSemanticMetric operation middleware
+func (sh *strictHandler) DeleteSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
+	var request DeleteSemanticMetricRequestObject
+
+	request.Id = id
+	request.MetricId = metricId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSemanticMetric(ctx, request.(DeleteSemanticMetricRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSemanticMetric")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSemanticMetricResponseObject); ok {
+		if err := validResponse.VisitDeleteSemanticMetricResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSemanticMetric operation middleware
+func (sh *strictHandler) GetSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
+	var request GetSemanticMetricRequestObject
+
+	request.Id = id
+	request.MetricId = metricId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSemanticMetric(ctx, request.(GetSemanticMetricRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSemanticMetric")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSemanticMetricResponseObject); ok {
+		if err := validResponse.VisitGetSemanticMetricResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateSemanticMetric operation middleware
+func (sh *strictHandler) UpdateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
+	var request UpdateSemanticMetricRequestObject
+
+	request.Id = id
+	request.MetricId = metricId
+
+	var body UpdateSemanticMetricJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateSemanticMetric(ctx, request.(UpdateSemanticMetricRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateSemanticMetric")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateSemanticMetricResponseObject); ok {
+		if err := validResponse.VisitUpdateSemanticMetricResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSemanticMetricSql operation middleware
+func (sh *strictHandler) GetSemanticMetricSql(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params GetSemanticMetricSqlParams) {
+	var request GetSemanticMetricSqlRequestObject
+
+	request.Id = id
+	request.MetricId = metricId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSemanticMetricSql(ctx, request.(GetSemanticMetricSqlRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSemanticMetricSql")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSemanticMetricSqlResponseObject); ok {
+		if err := validResponse.VisitGetSemanticMetricSqlResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

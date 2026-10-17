@@ -113,12 +113,17 @@ e2e-down:
 
 # ── Code Generation ───────────────────────────────────────────────────────────
 
+# Pin the generators so a different local binary cannot rewrite the checked-in
+# code and break the build (#208).
+OAPI_CODEGEN_VERSION ?= v2.4.1
+SQLC_VERSION ?= v1.31.1
+
 sqlc:
-	sqlc generate
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
 
 generate:
-	oapi-codegen --config=config/oapi-models.yaml api/swagger.yaml
-	oapi-codegen --config=config/oapi-server.yaml api/swagger.yaml
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) --config=config/oapi-models.yaml api/swagger.yaml
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) --config=config/oapi-server.yaml api/swagger.yaml
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 

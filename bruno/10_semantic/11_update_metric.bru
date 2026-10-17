@@ -1,0 +1,26 @@
+meta {
+  name: Update Metric
+  type: http
+  seq: 11
+}
+
+patch {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/metrics/{{metric_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "label": "Events count (updated)"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.label: eq Events count (updated)
+}

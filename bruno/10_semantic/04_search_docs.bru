@@ -1,0 +1,25 @@
+meta {
+  name: Search Docs
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/docs/search?q=event&tag=certified
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].table: eq events
+}
+
+docs {
+  Trigram search over the docs of catalogs the workspace may use. A tag
+  narrows the result. A one-character query is a 422.
+}

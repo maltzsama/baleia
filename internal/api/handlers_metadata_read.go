@@ -223,6 +223,15 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 	if err != nil {
 		return nil, err
 	}
+	// Semantic docs (#33) are keyed by the natural key, not by the metadata
+	// table id, so they survive a resync and are joined here at read time.
+	docs, err := h.queries.ListSemanticDocsForTable(ctx, db.ListSemanticDocsForTableParams{
+		WorkspaceID: ws, CatalogID: t.CatalogID, Namespace: t.Namespace, TableName: t.Name, ColumnName: nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	tableDoc, columnDocs := semanticDocsByColumn(docs)
 
 	out := GetMetadataTable200JSONResponse{
 		Freshness: freshness(t.MetadataSyncedAt),
@@ -231,6 +240,7 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 		Properties:    map[string]string{},
 		LastChangedAt: timePtr(t.LastChangedAt), RemovedAt: timePtr(t.RemovedAt),
 		Columns: make([]MetadataColumn, 0, len(cols)),
+		Doc:     tableDoc,
 	}
 	_ = json.Unmarshal(t.Properties, &out.Properties)
 	var d dialect.Dialect
@@ -248,6 +258,9 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 		col := MetadataColumn{
 			Ordinal: int(c.Ordinal), Name: c.Name, NativeType: c.NativeType, TypeSystem: c.TypeSystem,
 			Nullable: c.Nullable, Comment: c.Comment,
+		}
+		if d, ok := columnDocs[c.Name]; ok {
+			col.Doc = d
 		}
 		if d != nil {
 			if shown, ok := typemap.Display(c.TypeSystem, d.Name(), c.NativeType); ok {
@@ -275,7 +288,7 @@ func (h *Handlers) SearchMetadata(ctx context.Context, request SearchMetadataReq
 	kind := "all"
 	if p.Kind != nil {
 		switch *p.Kind {
-		case SearchMetadataParamsKindTable, SearchMetadataParamsKindColumn, SearchMetadataParamsKindAll:
+		case Table, Column, All:
 			kind = string(*p.Kind)
 		default:
 			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "kind must be table, column or all")}, nil

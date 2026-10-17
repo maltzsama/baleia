@@ -1,0 +1,19 @@
+meta {
+  name: List Metrics
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/metrics
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}

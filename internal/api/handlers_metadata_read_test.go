@@ -258,7 +258,7 @@ func TestSearch_Ranking(t *testing.T) {
 	if pos["orders.order_note"] == 0 {
 		t.Fatalf("columns are searched too: %v", pos)
 	}
-	kind := SearchMetadataParamsKindColumn
+	kind := Column
 	r, _ = f.h.SearchMetadata(f.as(f.owner), SearchMetadataRequestObject{Id: f.ws, Params: SearchMetadataParams{Q: "ord", Kind: &kind}})
 	for _, h := range r.(SearchMetadata200JSONResponse) {
 		if h.Kind != "column" {

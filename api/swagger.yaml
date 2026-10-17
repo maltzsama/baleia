@@ -53,6 +53,8 @@ tags:
     description: "Scheduled Iceberg materialized views"
   - name: Migrant
     description: "Zero-copy catalog migration (Nessie → Polaris)"
+  - name: Semantic
+    description: "Semantic layer v1: table/column docs, tags, owners and simple metrics"
 
 # ═══════════════════════════════════════════════════════════════
 # COMPONENTS
@@ -886,6 +888,7 @@ components:
         display_type: { type: string, nullable: true, description: "native_type in the binding's engine dialect, when Baleia can map it" }
         nullable: { type: boolean, nullable: true }
         comment: { type: string, nullable: true }
+        doc: { $ref: "#/components/schemas/SemanticDoc" }
 
     MetadataTableDetail:
       type: object
@@ -903,6 +906,7 @@ components:
         removed_at: { type: string, format: date-time, nullable: true, description: "Set when the source no longer has the table" }
         binding_id: { type: string, format: uuid, nullable: true, description: "The binding display_type and qualified_name are rendered for; null when the catalog has none" }
         qualified_name: { type: string, nullable: true, description: "The table's name in SQL on that binding's engine" }
+        doc: { $ref: "#/components/schemas/SemanticDoc" }
         columns:
           type: array
           items: { $ref: "#/components/schemas/MetadataColumn" }
@@ -920,6 +924,108 @@ components:
         native_type: { type: string, nullable: true }
         score: { type: number, format: double }
         metadata_synced_at: { type: string, format: date-time, nullable: true }
+
+    # ── Semantic layer (#33) ───────────────────────────────────
+    SemanticDoc:
+      type: object
+      required: [id, catalog_id, namespace, table, description, tags, updated_by, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        column: { type: string, nullable: true, description: "Null for a table-level doc" }
+        description: { type: string, description: "Markdown, at most 20 000 characters" }
+        tags: { type: array, items: { type: string } }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+
+    SemanticDocUpsert:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, maxLength: 20000 }
+        tags: { type: array, items: { type: string } }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+
+    SemanticDocSearchResult:
+      type: object
+      required: [id, catalog_id, namespace, table, description, tags, updated_by, updated_at, score]
+      properties:
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        column: { type: string, nullable: true }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+        score: { type: number, format: double }
+
+    SemanticMetric:
+      type: object
+      required: [id, workspace_id, slug, label, catalog_id, namespace, table, definition, format_version, certified, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        label: { type: string }
+        description: { type: string }
+        certified: { type: boolean }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        binding_id: { type: string, format: uuid, nullable: true }
+        definition:
+          type: object
+          additionalProperties: true
+          description: >
+            SimpleMetricV1: type, aggregation, column, filters, time_column,
+            time_grains, format and custom_sql. Validated with
+            DisallowUnknownFields.
+        format_version: { type: integer }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+
+    SemanticMetricCreate:
+      type: object
+      required: [slug, label, catalog_id, namespace, table, definition]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        label: { type: string }
+        description: { type: string }
+        certified: { type: boolean }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        binding_id: { type: string, format: uuid, nullable: true, description: "Engine used to validate and generate; null chooses at use time" }
+        definition: { type: object, additionalProperties: true }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+
+    SemanticMetricUpdate:
+      type: object
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        label: { type: string }
+        description: { type: string }
+        certified: { type: boolean }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        binding_id: { type: string, format: uuid, nullable: true }
+        definition: { type: object, additionalProperties: true }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+
+    SemanticMetricSQL:
+      type: object
+      required: [sql, portable]
+      properties:
+        sql: { type: string }
+        portable: { type: boolean, description: "False when the metric uses custom_sql" }
 
     MetadataSyncStarted:
       type: object
@@ -2085,6 +2191,224 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/MetadataSearchResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ── Semantic layer (#33) ──────────────────────────────────────
+  /workspaces/{id}/semantic/docs:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: catalog_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - name: ns
+        in: query
+        required: true
+        description: "The namespace, one value per level (ns=a&ns=b is a.b)"
+        schema: { type: array, items: { type: string } }
+        style: form
+        explode: true
+      - name: table
+        in: query
+        required: true
+        schema: { type: string }
+      - name: column
+        in: query
+        description: "Narrow to one column; omitted returns the table-level and every column doc"
+        schema: { type: string }
+    get:
+      tags: [Semantic]
+      operationId: listSemanticDocs
+      summary: "Docs of one table or one column — workspace members"
+      responses:
+        "200":
+          description: "Docs, table-level first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SemanticDoc" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Semantic]
+      operationId: upsertSemanticDoc
+      summary: "Create or replace a doc — workspace members"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticDocUpsert" }
+      responses:
+        "200":
+          description: "The doc"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticDoc" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Semantic]
+      operationId: deleteSemanticDoc
+      summary: "Delete a doc — workspace members"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/docs/search:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Semantic]
+      operationId: searchSemanticDocs
+      summary: "Search docs by text and tag — workspace members"
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 200 }
+        - name: tag
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: "Best match first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SemanticDocSearchResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/metrics:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Semantic]
+      operationId: listSemanticMetrics
+      summary: "Metrics of the workspace — workspace members"
+      responses:
+        "200":
+          description: "Metrics, ordered by label"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SemanticMetric" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Semantic]
+      operationId: createSemanticMetric
+      summary: "Create and validate a metric — workspace members"
+      description: >
+        The definition is validated structurally (DisallowUnknownFields) and
+        then rendered for the chosen binding and probed with a zero-row
+        read-only statement in the caller's identity. A custom_sql metric also
+        needs the engine to enforce read-only (or read-only credentials).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticMetricCreate" }
+      responses:
+        "201":
+          description: "The metric"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticMetric" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/metrics/{metric_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: metric_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Semantic]
+      operationId: getSemanticMetric
+      summary: "Return a metric — workspace members"
+      responses:
+        "200":
+          description: "The metric"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticMetric" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Semantic]
+      operationId: updateSemanticMetric
+      summary: "Update and revalidate a metric — workspace members"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticMetricUpdate" }
+      responses:
+        "200":
+          description: "The metric"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticMetric" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Semantic]
+      operationId: deleteSemanticMetric
+      summary: "Delete a metric — workspace members"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/metrics/{metric_id}/sql:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: metric_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Semantic]
+      operationId: getSemanticMetricSql
+      summary: "Render a metric to SQL for one binding — workspace members"
+      parameters:
+        - name: binding_id
+          in: query
+          description: "Defaults to the metric's binding, else the catalog's first enabled binding"
+          schema: { type: string, format: uuid }
+        - name: grain
+          in: query
+          schema: { type: string, enum: [second, minute, hour, day, week, month, quarter, year] }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: "The generated SQL"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticMetricSQL" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
