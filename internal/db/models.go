@@ -326,6 +326,8 @@ type Retriever struct {
 	NextRefreshAt pgtype.Timestamptz `json:"next_refresh_at"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	DestBindingID pgtype.UUID        `json:"dest_binding_id"`
+	ErrorCode     *string            `json:"error_code"`
 }
 
 type RetrieverRefreshHistory struct {
@@ -339,6 +341,7 @@ type RetrieverRefreshHistory struct {
 	ErrorMessage       *string            `json:"error_message"`
 	StartedAt          pgtype.Timestamptz `json:"started_at"`
 	FinishedAt         pgtype.Timestamptz `json:"finished_at"`
+	ErrorCode          *string            `json:"error_code"`
 }
 
 type SavedQuery struct {

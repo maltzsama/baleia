@@ -78,6 +78,7 @@ var operationAccess = map[string]access{
 	"ListConnectionProviders": {kind: kindAuthenticated, why: "static provider metadata (kinds and config schemas), no tenant data"},
 	"GetDialect":              {kind: kindAuthenticated, why: "static dialect metadata (keyword and function lists), no tenant data"},
 	"SplitStatements":         {kind: kindAuthenticated, why: "splits the caller's own text with static rules; reads no data"},
+	"PreviewCron":             {kind: kindAuthenticated, why: "parses the caller's own cron expression with static rules; reads no data"},
 	"ExplainSQL":              {kind: kindAuthenticated, why: "rewrites the caller's own text with static dialect rules; reads no data"},
 	"IssueWsTicket":           {kind: kindAuthenticated, why: "issues a single-use ticket for the caller's own session"},
 
@@ -165,6 +166,8 @@ var operationAccess = map[string]access{
 	"GetSavedQuery":           checked("requireWorkspaceAccess", "requireSpace"),
 	"UpdateSavedQuery":        checked("requireWorkspaceAccess", "requireSpace", "savedQueryTarget"),
 	"ListRetrievers":          {kind: kindChecked, calls: wsMember},
+	"ListRetrieverDestinations": {kind: kindChecked, calls: wsMember},
+	"ValidateRetriever":         {kind: kindChecked, calls: wsMember},
 	"CreateRetriever":         {kind: kindChecked, calls: wsMember},
 	"DeleteRetriever":         {kind: kindChecked, calls: wsMember},
 	"GetRetriever":            {kind: kindChecked, calls: wsMember},

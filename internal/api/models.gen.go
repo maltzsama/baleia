@@ -1060,14 +1060,17 @@ type CreateMigrationRequestSourceType string
 
 // CreateRetrieverRequest defines model for CreateRetrieverRequest.
 type CreateRetrieverRequest struct {
-	// CronSchedule Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes.
+	// CronSchedule Standard five-field cron: minute hour day-of-month month day-of-week (UTC), optionally prefixed with CRON_TZ=<IANA>. The minimum interval is 5 minutes.
 	CronSchedule string `json:"cron_schedule"`
 
 	// DefinitionSql A single SELECT (or WITH ... SELECT) statement. Full refresh replaces the destination table atomically (CREATE OR REPLACE TABLE ... AS SELECT).
 	DefinitionSql string `json:"definition_sql"`
 
-	// DestCatalog Destination catalog (lowercase identifier).
-	DestCatalog string `json:"dest_catalog"`
+	// DestBindingId A binding from GET .../retrievers/destinations
+	DestBindingId *openapi_types.UUID `json:"dest_binding_id,omitempty"`
+
+	// DestCatalog Deprecated: the legacy catalog name; use dest_binding_id.
+	DestCatalog *string `json:"dest_catalog,omitempty"`
 
 	// DestNamespace Destination namespace/schema (identifier).
 	DestNamespace string `json:"dest_namespace"`
@@ -1127,6 +1130,19 @@ type CreateWorkspaceRequest struct {
 
 // CreateWorkspaceRequestType defines model for CreateWorkspaceRequest.Type.
 type CreateWorkspaceRequestType string
+
+// CronPreviewRequest defines model for CronPreviewRequest.
+type CronPreviewRequest struct {
+	Expression string `json:"expression"`
+}
+
+// CronPreviewResult defines model for CronPreviewResult.
+type CronPreviewResult struct {
+	Error         *string     `json:"error"`
+	MinIntervalOk bool        `json:"min_interval_ok"`
+	Next          []time.Time `json:"next"`
+	Valid         bool        `json:"valid"`
+}
 
 // Dialect defines model for Dialect.
 type Dialect struct {
@@ -1777,21 +1793,26 @@ type RestoreSemanticMetricRequest struct {
 
 // Retriever defines model for Retriever.
 type Retriever struct {
-	CreatedAt     time.Time            `json:"created_at"`
-	CreatedBy     *openapi_types.UUID  `json:"created_by,omitempty"`
-	CronSchedule  string               `json:"cron_schedule"`
-	DefinitionSql string               `json:"definition_sql"`
-	DestCatalog   string               `json:"dest_catalog"`
-	DestNamespace string               `json:"dest_namespace"`
-	DestTable     string               `json:"dest_table"`
-	Id            openapi_types.UUID   `json:"id"`
-	LastRefreshAt *time.Time           `json:"last_refresh_at"`
-	Name          string               `json:"name"`
-	NextRefreshAt *time.Time           `json:"next_refresh_at"`
-	RefreshType   RetrieverRefreshType `json:"refresh_type"`
-	Status        RetrieverStatus      `json:"status"`
-	UpdatedAt     *time.Time           `json:"updated_at,omitempty"`
-	WorkspaceId   openapi_types.UUID   `json:"workspace_id"`
+	AllowedActions    *[]string             `json:"allowed_actions,omitempty"`
+	CreatedAt         time.Time             `json:"created_at"`
+	CreatedBy         *openapi_types.UUID   `json:"created_by,omitempty"`
+	CronSchedule      string                `json:"cron_schedule"`
+	DefinitionSql     string                `json:"definition_sql"`
+	DestBindingId     *openapi_types.UUID   `json:"dest_binding_id,omitempty"`
+	DestCatalog       string                `json:"dest_catalog"`
+	DestNamespace     string                `json:"dest_namespace"`
+	DestTable         string                `json:"dest_table"`
+	Destination       *RetrieverDestination `json:"destination"`
+	ErrorCode         *string               `json:"error_code"`
+	Id                openapi_types.UUID    `json:"id"`
+	LastRefreshAt     *time.Time            `json:"last_refresh_at"`
+	LastRefreshStatus *string               `json:"last_refresh_status"`
+	Name              string                `json:"name"`
+	NextRefreshAt     *time.Time            `json:"next_refresh_at"`
+	RefreshType       RetrieverRefreshType  `json:"refresh_type"`
+	Status            RetrieverStatus       `json:"status"`
+	UpdatedAt         *time.Time            `json:"updated_at,omitempty"`
+	WorkspaceId       openapi_types.UUID    `json:"workspace_id"`
 }
 
 // RetrieverRefreshType defines model for Retriever.RefreshType.
@@ -1800,9 +1821,26 @@ type RetrieverRefreshType string
 // RetrieverStatus defines model for Retriever.Status.
 type RetrieverStatus string
 
+// RetrieverDestination defines model for RetrieverDestination.
+type RetrieverDestination struct {
+	BindingId openapi_types.UUID `json:"binding_id"`
+	Catalog   struct {
+		Id   openapi_types.UUID `json:"id"`
+		Name string             `json:"name"`
+	} `json:"catalog"`
+	Connector string `json:"connector"`
+	Engine    struct {
+		Id   openapi_types.UUID `json:"id"`
+		Kind string             `json:"kind"`
+		Name string             `json:"name"`
+	} `json:"engine"`
+	EngineCatalogName string `json:"engine_catalog_name"`
+}
+
 // RetrieverRefreshHistory defines model for RetrieverRefreshHistory.
 type RetrieverRefreshHistory struct {
 	DurationMs         *int                               `json:"duration_ms"`
+	ErrorCode          *string                            `json:"error_code"`
 	ErrorMessage       *string                            `json:"error_message"`
 	FinishedAt         *time.Time                         `json:"finished_at"`
 	Id                 openapi_types.UUID                 `json:"id"`
@@ -2152,11 +2190,15 @@ type UpdateProfileRequest struct {
 
 // UpdateRetrieverRequest defines model for UpdateRetrieverRequest.
 type UpdateRetrieverRequest struct {
-	// CronSchedule Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes.
-	CronSchedule *string                            `json:"cron_schedule,omitempty"`
-	Name         *string                            `json:"name,omitempty"`
-	RefreshType  *UpdateRetrieverRequestRefreshType `json:"refresh_type,omitempty"`
-	Status       *UpdateRetrieverRequestStatus      `json:"status,omitempty"`
+	// CronSchedule Standard five-field cron, optionally prefixed with CRON_TZ=<IANA>. The minimum interval is 5 minutes.
+	CronSchedule  *string                            `json:"cron_schedule,omitempty"`
+	DefinitionSql *string                            `json:"definition_sql,omitempty"`
+	DestBindingId *openapi_types.UUID                `json:"dest_binding_id,omitempty"`
+	DestNamespace *string                            `json:"dest_namespace,omitempty"`
+	DestTable     *string                            `json:"dest_table,omitempty"`
+	Name          *string                            `json:"name,omitempty"`
+	RefreshType   *UpdateRetrieverRequestRefreshType `json:"refresh_type,omitempty"`
+	Status        *UpdateRetrieverRequestStatus      `json:"status,omitempty"`
 }
 
 // UpdateRetrieverRequestRefreshType defines model for UpdateRetrieverRequest.RefreshType.
@@ -2228,6 +2270,17 @@ type UserPublicAuthProvider string
 
 // UserPublicRole defines model for UserPublic.Role.
 type UserPublicRole string
+
+// ValidateRetrieverRequest defines model for ValidateRetrieverRequest.
+type ValidateRetrieverRequest struct {
+	DefinitionSql string             `json:"definition_sql"`
+	DestBindingId openapi_types.UUID `json:"dest_binding_id"`
+}
+
+// ValidateRetrieverResult defines model for ValidateRetrieverResult.
+type ValidateRetrieverResult struct {
+	Ok bool `json:"ok"`
+}
 
 // ValidationError defines model for ValidationError.
 type ValidationError struct {
@@ -2635,6 +2688,9 @@ type CreateCatalogJSONRequestBody = CreateCatalogRequest
 // UpdateCatalogJSONRequestBody defines body for UpdateCatalog for application/json ContentType.
 type UpdateCatalogJSONRequestBody = CreateCatalogRequest
 
+// PreviewCronJSONRequestBody defines body for PreviewCron for application/json ContentType.
+type PreviewCronJSONRequestBody = CronPreviewRequest
+
 // ExplainSQLJSONRequestBody defines body for ExplainSQL for application/json ContentType.
 type ExplainSQLJSONRequestBody = ExplainRequest
 
@@ -2697,6 +2753,9 @@ type RestoreSavedQueryVersionJSONRequestBody = RestoreSavedQueryRequest
 
 // CreateRetrieverJSONRequestBody defines body for CreateRetriever for application/json ContentType.
 type CreateRetrieverJSONRequestBody = CreateRetrieverRequest
+
+// ValidateRetrieverJSONRequestBody defines body for ValidateRetriever for application/json ContentType.
+type ValidateRetrieverJSONRequestBody = ValidateRetrieverRequest
 
 // UpdateRetrieverJSONRequestBody defines body for UpdateRetriever for application/json ContentType.
 type UpdateRetrieverJSONRequestBody = UpdateRetrieverRequest

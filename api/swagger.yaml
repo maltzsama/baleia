@@ -1678,6 +1678,15 @@ components:
         dest_catalog: { type: string }
         dest_namespace: { type: string }
         dest_table: { type: string }
+        dest_binding_id: { type: string, format: uuid }
+        destination:
+          allOf: [{ $ref: "#/components/schemas/RetrieverDestination" }]
+          nullable: true
+        last_refresh_status: { type: string, nullable: true }
+        error_code: { type: string, nullable: true }
+        allowed_actions:
+          type: array
+          items: { type: string }
         cron_schedule: { type: string, example: "0 */6 * * *" }
         refresh_type: { type: string, enum: [incremental, full] }
         status: { type: string, enum: [active, paused, error] }
@@ -1688,7 +1697,7 @@ components:
 
     CreateRetrieverRequest:
       type: object
-      required: [name, definition_sql, dest_catalog, dest_namespace, dest_table, cron_schedule]
+      required: [name, definition_sql, dest_namespace, dest_table, cron_schedule]
       properties:
         name: { type: string }
         definition_sql:
@@ -1696,10 +1705,11 @@ components:
             type: string,
             description: "A single SELECT (or WITH ... SELECT) statement. Full refresh replaces the destination table atomically (CREATE OR REPLACE TABLE ... AS SELECT).",
           }
-        dest_catalog: { type: string, description: "Destination catalog (lowercase identifier)." }
+        dest_binding_id: { type: string, format: uuid, description: "A binding from GET .../retrievers/destinations" }
+        dest_catalog: { type: string, description: "Deprecated: the legacy catalog name; use dest_binding_id." }
         dest_namespace: { type: string, description: "Destination namespace/schema (identifier)." }
         dest_table: { type: string, description: "Destination table name (identifier)." }
-        cron_schedule: { type: string, description: "Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes." }
+        cron_schedule: { type: string, description: "Standard five-field cron: minute hour day-of-month month day-of-week (UTC), optionally prefixed with CRON_TZ=<IANA>. The minimum interval is 5 minutes." }
         refresh_type:
           { type: string, enum: [incremental, full], default: full }
 
@@ -1707,9 +1717,64 @@ components:
       type: object
       properties:
         name: { type: string }
-        cron_schedule: { type: string, description: "Standard five-field cron: minute hour day-of-month month day-of-week (UTC). The minimum interval is 5 minutes." }
+        definition_sql: { type: string }
+        dest_binding_id: { type: string, format: uuid }
+        dest_namespace: { type: string }
+        dest_table: { type: string }
+        cron_schedule: { type: string, description: "Standard five-field cron, optionally prefixed with CRON_TZ=<IANA>. The minimum interval is 5 minutes." }
         refresh_type: { type: string, enum: [incremental, full] }
         status: { type: string, enum: [active, paused] }
+
+    RetrieverDestination:
+      type: object
+      required: [binding_id, engine_catalog_name, connector, catalog, engine]
+      properties:
+        binding_id: { type: string, format: uuid }
+        engine_catalog_name: { type: string }
+        connector: { type: string }
+        catalog:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        engine:
+          type: object
+          required: [id, name, kind]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            kind: { type: string }
+
+    ValidateRetrieverRequest:
+      type: object
+      required: [dest_binding_id, definition_sql]
+      properties:
+        dest_binding_id: { type: string, format: uuid }
+        definition_sql: { type: string }
+
+    ValidateRetrieverResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    CronPreviewRequest:
+      type: object
+      required: [expression]
+      properties:
+        expression: { type: string }
+
+    CronPreviewResult:
+      type: object
+      required: [valid, next, min_interval_ok]
+      properties:
+        valid: { type: boolean }
+        error: { type: string, nullable: true }
+        next:
+          type: array
+          items: { type: string, format: date-time }
+        min_interval_ok: { type: boolean }
 
     RetrieverRefreshHistory:
       type: object
@@ -1723,6 +1788,7 @@ components:
         rows_processed: { type: integer, nullable: true }
         duration_ms: { type: integer, nullable: true }
         error_message: { type: string, nullable: true }
+        error_code: { type: string, nullable: true }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
 
@@ -4539,6 +4605,64 @@ paths:
                   pagination: { $ref: "#/components/schemas/Pagination" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/retrievers/destinations:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Retrievers]
+      operationId: listRetrieverDestinations
+      summary: "Bindings this workspace may write to (Iceberg, active, on a federated engine)"
+      responses:
+        "200":
+          description: "Destinations"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RetrieverDestination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /workspaces/{id}/retrievers/validate:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Retrievers]
+      operationId: validateRetriever
+      summary: "Explain the definition on the destination engine in a read-only session"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ValidateRetrieverRequest" }
+      responses:
+        "200":
+          description: "The definition parses and the caller can read its sources"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidateRetrieverResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /cron/preview:
+    post:
+      tags: [Retrievers]
+      operationId: previewCron
+      summary: "Next runs of a cron expression, from the server's parser"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CronPreviewRequest" }
+      responses:
+        "200":
+          description: "Preview"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CronPreviewResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Migrant ───────────────────────────────────────────────────
   /migrations:

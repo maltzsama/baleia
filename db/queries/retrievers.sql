@@ -1,10 +1,39 @@
 -- name: CreateRetriever :one
 INSERT INTO retrievers (
     workspace_id, created_by, name,
-    definition_sql, dest_catalog, dest_namespace, dest_table,
+    definition_sql, dest_catalog, dest_namespace, dest_table, dest_binding_id,
     cron_schedule, refresh_type, next_refresh_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
+
+-- name: ListRetrieverDestinations :many
+-- Bindings a workspace may write to: write grant, Iceberg connector, active
+-- binding on an enabled federated engine (#118).
+SELECT b.id AS binding_id,
+       b.engine_catalog_name,
+       COALESCE(b.connector, '') AS connector,
+       c.id AS catalog_id,
+       c.name AS catalog_name,
+       e.id AS engine_id,
+       e.name AS engine_name,
+       e.kind AS engine_kind
+FROM catalog_bindings b
+JOIN catalogs c ON c.id = b.catalog_id
+JOIN engines e ON e.id = b.engine_id
+JOIN workspace_catalog_grants g ON g.catalog_id = c.id AND g.workspace_id = @workspace_id::uuid
+WHERE g.permission = 'write'
+  AND b.connector = 'iceberg'
+  AND b.lifecycle_state = 'active'
+  AND b.enabled
+  AND e.enabled
+  AND e.class = 'federated'
+ORDER BY c.name, b.engine_catalog_name;
+
+-- name: LatestRetrieverRefresh :one
+SELECT status, error_code FROM retriever_refresh_history
+WHERE retriever_id = $1
+ORDER BY started_at DESC
+LIMIT 1;
 
 -- name: GetRetrieverByID :one
 SELECT * FROM retrievers WHERE id = $1 AND workspace_id = $2;
@@ -27,8 +56,9 @@ LIMIT 50;
 
 -- name: UpdateRetriever :one
 UPDATE retrievers
-SET name = $3, definition_sql = $4, cron_schedule = $5,
-    refresh_type = $6, status = $7, next_refresh_at = $8, updated_at = now()
+SET name = $3, definition_sql = $4, dest_catalog = $5, dest_namespace = $6,
+    dest_table = $7, dest_binding_id = $8, cron_schedule = $9, refresh_type = $10,
+    status = $11, error_code = $12, next_refresh_at = $13, updated_at = now()
 WHERE id = $1 AND workspace_id = $2
 RETURNING *;
 
@@ -37,7 +67,7 @@ RETURNING *;
 -- error, last_refresh_at advances. next_refresh_at is advanced by the
 -- dispatcher when the run is *started* (AdvanceRetrieverSchedule), never here.
 UPDATE retrievers
-SET status = $2, last_refresh_at = now(), updated_at = now()
+SET status = $2, error_code = $3, last_refresh_at = now(), updated_at = now()
 WHERE id = $1;
 
 -- name: AdvanceRetrieverSchedule :exec
@@ -55,7 +85,7 @@ RETURNING *;
 
 -- name: UpdateRetrieverRefreshHistory :exec
 UPDATE retriever_refresh_history
-SET status = $2, rows_processed = $3, duration_ms = $4, error_message = $5, finished_at = now()
+SET status = $2, rows_processed = $3, duration_ms = $4, error_message = $5, error_code = $6, finished_at = now()
 WHERE id = $1;
 
 -- name: ListRetrieverRefreshHistory :many
