@@ -1,0 +1,38 @@
+meta {
+  name: Create Space
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno Space",
+    "visibility": "workspace",
+    "default_role": "editor"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.slug: eq bruno_space
+  res.body.my_role: eq manager
+}
+
+vars:post-response {
+  space_id: res.body.id
+}
+
+docs {
+  The creator is added as an explicit manager, so a restricted space would
+  still be visible to them.
+}

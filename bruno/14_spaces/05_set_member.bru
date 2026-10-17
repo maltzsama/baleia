@@ -1,0 +1,27 @@
+meta {
+  name: Set Space Member
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{space_id}}/members/user/{{outsider_user_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "role": "editor"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.principal_type: eq user
+  res.body.role: eq editor
+}

@@ -1,0 +1,19 @@
+meta {
+  name: List Space Members
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{space_id}}/members
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}

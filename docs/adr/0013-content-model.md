@@ -27,7 +27,9 @@ between instances) is built once per kind.
 
 ## Current compliance
 
-Not compliant yet: saved queries live in folders without spaces, versions or slugs (#34, #40).
+Spaces, folder/saved-query slugs and the `space_id` ownership are in place (#40); saved queries
+and semantic metrics are content items with portable slugs. Content versions, trash and bundles
+are still pending (#34).
 
 ## Alternatives considered
 

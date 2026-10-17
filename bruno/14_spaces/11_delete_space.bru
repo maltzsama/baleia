@@ -1,0 +1,24 @@
+meta {
+  name: Delete Space
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{space_id}}?force=true
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  The space still has the folder created in 07; force=true deletes it and its
+  content (the default space can never be deleted, hence the 409 in 10).
+}

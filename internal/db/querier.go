@@ -32,6 +32,7 @@ type Querier interface {
 	// still running on it. Native bindings go with the engine.
 	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (CountEngineBlockersRow, error)
 	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
+	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
 	// A source catalog's source_ref is its warehouse (or database).
@@ -53,6 +54,10 @@ type Querier interface {
 	CreateRetrieverRefreshHistory(ctx context.Context, arg CreateRetrieverRefreshHistoryParams) (RetrieverRefreshHistory, error)
 	CreateSavedQuery(ctx context.Context, arg CreateSavedQueryParams) (SavedQuery, error)
 	CreateSemanticMetric(ctx context.Context, arg CreateSemanticMetricParams) (SemanticMetric, error)
+	// Spaces (#40): named containers inside a workspace with their own access list.
+	// The effective role is computed by baleia_effective_space_role so listing and
+	// single-space checks share one rule (#16 matrix).
+	CreateSpace(ctx context.Context, arg CreateSpaceParams) (Space, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
@@ -68,12 +73,14 @@ type Querier interface {
 	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
 	// The native catalogs of an engine, deleted with it (their bindings cascade).
 	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error
-	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error
+	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) (int64, error)
 	// Its refresh history goes with it (ON DELETE CASCADE).
 	DeleteRetriever(ctx context.Context, arg DeleteRetrieverParams) (int64, error)
-	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error
+	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) (int64, error)
 	DeleteSemanticDoc(ctx context.Context, arg DeleteSemanticDocParams) (int64, error)
 	DeleteSemanticMetric(ctx context.Context, arg DeleteSemanticMetricParams) (int64, error)
+	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
+	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
@@ -93,6 +100,7 @@ type Querier interface {
 	// the same catalog starts (that pass holds the catalog sync lock).
 	FailStaleMetadataSyncRuns(ctx context.Context, catalogID pgtype.UUID) error
 	FinishMetadataSyncRun(ctx context.Context, arg FinishMetadataSyncRunParams) error
+	FolderSlugExists(ctx context.Context, arg FolderSlugExistsParams) (bool, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
@@ -113,9 +121,12 @@ type Querier interface {
 	// The freshness of a catalog snapshot: its latest pass and the end of its
 	// latest finished one.
 	GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (GetCatalogSyncStateRow, error)
+	GetDefaultSpace(ctx context.Context, workspaceID pgtype.UUID) (Space, error)
 	GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, error)
 	// The engine linked to the 'default' Trino cluster, with its connection.
 	GetDefaultTrinoEngine(ctx context.Context) (GetDefaultTrinoEngineRow, error)
+	// Empty string when the caller has no role (the space is invisible).
+	GetEffectiveSpaceRole(ctx context.Context, arg GetEffectiveSpaceRoleParams) (string, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (Engine, error)
 	// The engine and the connection it runs on (decrypted by the caller, #19).
 	GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (GetEngineWithConnectionRow, error)
@@ -133,6 +144,7 @@ type Querier interface {
 	// readable. Callers use this instead of GetQueryExecutionByID for user-facing
 	// reads so a cross-workspace id yields ErrNoRows (mapped to 404).
 	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg GetQueryExecutionByIDAndWorkspaceParams) (QueryExecution, error)
+	GetQueryFolderByID(ctx context.Context, arg GetQueryFolderByIDParams) (QueryFolder, error)
 	// Single statement of an execution that belongs to the given workspace.
 	GetQueryStatementByPosition(ctx context.Context, arg GetQueryStatementByPositionParams) (QueryStatement, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
@@ -144,6 +156,7 @@ type Querier interface {
 	GetSemanticDoc(ctx context.Context, arg GetSemanticDocParams) (SemanticDoc, error)
 	GetSemanticMetric(ctx context.Context, arg GetSemanticMetricParams) (SemanticMetric, error)
 	GetSemanticMetricBySlug(ctx context.Context, arg GetSemanticMetricBySlugParams) (SemanticMetric, error)
+	GetSpace(ctx context.Context, arg GetSpaceParams) (Space, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
 	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
@@ -212,7 +225,6 @@ type Querier interface {
 	ListMigrations(ctx context.Context) ([]Migration, error)
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQueryExecutionsByWorkspaceParams) ([]QueryExecution, error)
-	ListQueryFolders(ctx context.Context, arg ListQueryFoldersParams) ([]QueryFolder, error)
 	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error)
 	// Only returns statements of an execution that belongs to the given workspace.
 	ListQueryStatementsByWorkspace(ctx context.Context, arg ListQueryStatementsByWorkspaceParams) ([]QueryStatement, error)
@@ -221,7 +233,6 @@ type Querier interface {
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
 	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]ListRunningStatementHandlesRow, error)
-	ListSavedQueries(ctx context.Context, arg ListSavedQueriesParams) ([]SavedQuery, error)
 	// Semantic layer v1 (#33): docs keyed by natural key, simple metrics keyed by
 	// portable slug. Docs are workspace-scoped; the catalog must be granted to the
 	// workspace (#16). Metrics become content items in #40 and are versioned in #34.
@@ -229,8 +240,10 @@ type Querier interface {
 	// Every doc of one table (table-level and per-column), optionally narrowed to
 	// one column. The natural key is catalog + namespace + table [+ column].
 	ListSemanticDocsForTable(ctx context.Context, arg ListSemanticDocsForTableParams) ([]SemanticDoc, error)
-	// ── Metrics ─────────────────────────────────────────────────────────────────────
-	ListSemanticMetrics(ctx context.Context, workspaceID pgtype.UUID) ([]SemanticMetric, error)
+	ListSpaceMembers(ctx context.Context, spaceID pgtype.UUID) ([]SpaceMember, error)
+	// Every space of the workspace where the caller has at least viewer, with the
+	// role. A space with no role is invisible (absent), never 403.
+	ListSpacesForPrincipal(ctx context.Context, arg ListSpacesForPrincipalParams) ([]ListSpacesForPrincipalRow, error)
 	// The catalog enabled bindings on enabled engines, oldest first: the
 	// engine path introspects through the first one (a native catalog has only
 	// its native binding).
@@ -247,6 +260,14 @@ type Querier interface {
 	// Lens shows non-admins only the queries run under their own Trino identity.
 	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// Only folders of spaces the caller can see; #16 says to filter in SQL, not in
+	// a Go loop. space_id/folder_id narrow the listing when present.
+	ListVisibleQueryFolders(ctx context.Context, arg ListVisibleQueryFoldersParams) ([]QueryFolder, error)
+	// Only queries of spaces the caller can see; space_id/folder_id narrow it.
+	ListVisibleSavedQueries(ctx context.Context, arg ListVisibleSavedQueriesParams) ([]SavedQuery, error)
+	// ── Metrics ─────────────────────────────────────────────────────────────────────
+	// Only metrics of spaces the caller can see (#40); space_id narrows it.
+	ListVisibleSemanticMetrics(ctx context.Context, arg ListVisibleSemanticMetricsParams) ([]SemanticMetric, error)
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
@@ -276,6 +297,7 @@ type Querier interface {
 	ReleaseMetadataSyncLock(ctx context.Context, catalogID string) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
+	SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugExistsParams) (bool, error)
 	// Tables and columns of the catalogs the workspace may use whose names are
 	// trigram-similar to q (or contain a word similar to it), best first.
 	SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error)
@@ -288,6 +310,7 @@ type Querier interface {
 	// context for history and carries no secret.
 	SetExecutionTarget(ctx context.Context, arg SetExecutionTargetParams) error
 	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
+	SetSpaceMember(ctx context.Context, arg SetSpaceMemberParams) (SpaceMember, error)
 	// Persists the engine's handle of a running statement as soon as it is known,
 	// so the API can cancel it from another process.
 	SetStatementQueryHandle(ctx context.Context, arg SetStatementQueryHandleParams) error
@@ -296,6 +319,7 @@ type Querier interface {
 	// skipped.
 	SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error
 	SoftDeleteTrinoCatalogRegistry(ctx context.Context, arg SoftDeleteTrinoCatalogRegistryParams) error
+	SpaceSlugExists(ctx context.Context, arg SpaceSlugExistsParams) (bool, error)
 	StartMetadataSyncRun(ctx context.Context, arg StartMetadataSyncRunParams) (StartMetadataSyncRunRow, error)
 	// A pending statement becomes the running one. Zero rows means the
 	// statement is no longer pending (already abandoned).
@@ -341,6 +365,7 @@ type Querier interface {
 	UpdateRetrieverRefreshHistory(ctx context.Context, arg UpdateRetrieverRefreshHistoryParams) error
 	UpdateSavedQuery(ctx context.Context, arg UpdateSavedQueryParams) (SavedQuery, error)
 	UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMetricParams) (SemanticMetric, error)
+	UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)

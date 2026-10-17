@@ -148,20 +148,20 @@ var operationAccess = map[string]access{
 
 	// ── workspace members (query editor, retrievers)
 	"ListExecutions":          {kind: kindChecked, calls: wsMember},
-	"RunQuery":                {kind: kindChecked, calls: wsMember},
+	"RunQuery":                checked("requireWorkspaceAccess", "requireSpace"),
 	"GetExecution":            {kind: kindChecked, calls: wsMember},
 	"CancelExecution":         {kind: kindChecked, calls: wsMember},
 	"GetResults":              {kind: kindChecked, calls: wsMember},
 	"ListStatements":          {kind: kindChecked, calls: wsMember},
 	"GetStatementResults":     {kind: kindChecked, calls: wsMember},
 	"ListFolders":             {kind: kindChecked, calls: wsMember},
-	"CreateFolder":            {kind: kindChecked, calls: wsMember},
-	"DeleteFolder":            {kind: kindChecked, calls: wsMember},
+	"CreateFolder":            checked("requireWorkspaceAccess", "spaceForWrite"),
+	"DeleteFolder":            checked("requireWorkspaceAccess", "requireSpace"),
 	"ListSavedQueries":        {kind: kindChecked, calls: wsMember},
-	"CreateSavedQuery":        {kind: kindChecked, calls: wsMember},
-	"DeleteSavedQuery":        {kind: kindChecked, calls: wsMember},
-	"GetSavedQuery":           {kind: kindChecked, calls: wsMember},
-	"UpdateSavedQuery":        {kind: kindChecked, calls: wsMember},
+	"CreateSavedQuery":        checked("requireWorkspaceAccess", "spaceForWrite", "savedQueryTarget"),
+	"DeleteSavedQuery":        checked("requireWorkspaceAccess", "requireSpace"),
+	"GetSavedQuery":           checked("requireWorkspaceAccess", "requireSpace"),
+	"UpdateSavedQuery":        checked("requireWorkspaceAccess", "requireSpace", "savedQueryTarget"),
 	"ListRetrievers":          {kind: kindChecked, calls: wsMember},
 	"CreateRetriever":         {kind: kindChecked, calls: wsMember},
 	"DeleteRetriever":         {kind: kindChecked, calls: wsMember},
@@ -186,13 +186,24 @@ var operationAccess = map[string]access{
 	"DeleteSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
 	"SearchSemanticDocs": checked("metadataWorkspace", "SearchSemanticDocs"),
 	// Metrics are validated against a real engine in a read-only session
-	// (validateSemanticMetric); the catalog must be granted.
+	// (validateSemanticMetric); the catalog must be granted and the caller
+	// needs the space role (metricSpace wraps requireSpace).
 	"ListSemanticMetrics":  checked("metadataWorkspace"),
-	"GetSemanticMetric":    checked("metadataWorkspace", "GetSemanticMetric"),
-	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric"),
-	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric"),
-	"DeleteSemanticMetric": checked("metadataWorkspace", "DeleteSemanticMetric"),
-	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget"),
+	"GetSemanticMetric":    checked("metadataWorkspace", "GetSemanticMetric", "metricSpace"),
+	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric", "metricSpace"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric", "metricSpace"),
+	"DeleteSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "metricSpace", "DeleteSemanticMetric"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget", "metricSpace"),
+	// Spaces (#40): the effective role comes from the SQL function through
+	// internal/authz. Invisible is 404, below the required role is 403.
+	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "ListSpacesForPrincipal"),
+	"CreateSpace":       checked("PrincipalFromContext", "Workspace", "CreateSpace", "SetSpaceMember"),
+	"GetSpace":          checked("requireSpace", "GetSpace"),
+	"UpdateSpace":       checked("requireSpace", "GetSpace", "UpdateSpace"),
+	"DeleteSpace":       checked("requireSpace", "GetSpace", "CountSpaceContent", "DeleteSpace"),
+	"ListSpaceMembers":  checked("requireSpace", "ListSpaceMembers"),
+	"SetSpaceMember":    checked("PrincipalFromContext", "requireSpace", "GetUserByID", "GetTeamByID", "SetSpaceMember"),
+	"DeleteSpaceMember": checked("requireSpace", "DeleteSpaceMember"),
 	// Audit trail (#45): admins see all, anyone else only their own events.
 	"ListAuditEvents":    checked("PrincipalFromContext", "IsAdmin"),
 	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below

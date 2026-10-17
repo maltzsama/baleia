@@ -1,0 +1,21 @@
+meta {
+  name: Get Space
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{space_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq Bruno Space
+  res.body.my_role: eq manager
+}

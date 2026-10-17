@@ -13,6 +13,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
@@ -42,8 +43,18 @@ func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestOb
 		parentID.Valid = true
 	}
 
-	folders, err := h.queries.ListQueryFolders(ctx, db.ListQueryFoldersParams{
+	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	var spaceID pgtype.UUID
+	if request.Params.SpaceId != nil {
+		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+	}
+	folders, err := h.queries.ListVisibleQueryFolders(ctx, db.ListVisibleQueryFoldersParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
+		UserID:      userID,
+		SpaceID:     spaceID,
 		ParentID:    parentID,
 	})
 	if err != nil {
@@ -62,18 +73,53 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 		return CreateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
+	ws := workspaceIDFromRequest(request.Id)
+	space, se, err := h.spaceForWrite(ctx, ws, request.Body.SpaceId, authz.SpaceEditor)
+	if err != nil {
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return CreateFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+		}
+		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "space not found"}}, nil
+	}
+
 	var parentID pgtype.UUID
 	if request.Body.ParentId != nil {
-		parentID.Bytes = *request.Body.ParentId
-		parentID.Valid = true
+		parentID = pgtype.UUID{Bytes: *request.Body.ParentId, Valid: true}
+		parent, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: parentID, WorkspaceID: ws})
+		if err != nil || parent.SpaceID != space.ID {
+			return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "parent folder not found"}}, nil
+		}
+	}
+
+	slug := ""
+	if request.Body.Slug != nil {
+		slug = *request.Body.Slug
+	}
+	if slug == "" {
+		slug, err = uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
+			return h.queries.FolderSlugExists(ctx, db.FolderSlugExistsParams{SpaceID: space.ID, Slug: s})
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else if !slugRe.MatchString(slug) {
+		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
 	}
 
 	folder, err := h.queries.CreateQueryFolder(ctx, db.CreateQueryFolderParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
+		WorkspaceID: ws,
+		SpaceID:     space.ID,
 		ParentID:    parentID,
 		Name:        request.Body.Name,
+		Slug:        slug,
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("conflict", "a folder with this slug already exists in the space")}, nil
+		}
 		return nil, err
 	}
 
@@ -85,14 +131,31 @@ func (h *Handlers) DeleteFolder(ctx context.Context, request DeleteFolderRequest
 		return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
-	var folderID pgtype.UUID
-	folderID.Bytes = request.FolderId
-	folderID.Valid = true
+	ws := workspaceIDFromRequest(request.Id)
+	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
+	folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
+	if err != nil {
+		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+	}
+	_, se, err := h.requireSpace(ctx, ws, folder.SpaceID, authz.SpaceEditor)
+	if err != nil {
+		if errors.Is(err, authz.ErrUnauthenticated) {
+			return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		}
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return DeleteFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+		}
+		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+	}
 
-	if err := h.queries.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		ID:          folderID,
-	}); err != nil {
+	deleted, err := h.queries.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{WorkspaceID: ws, ID: folderID})
+	if err != nil {
+		return nil, err
+	}
+	if deleted == 0 {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
 	}
 
@@ -112,8 +175,18 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 		folderID.Valid = true
 	}
 
-	queries, err := h.queries.ListSavedQueries(ctx, db.ListSavedQueriesParams{
+	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	var spaceID pgtype.UUID
+	if request.Params.SpaceId != nil {
+		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+	}
+	queries, err := h.queries.ListVisibleSavedQueries(ctx, db.ListVisibleSavedQueriesParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
+		UserID:      userID,
+		SpaceID:     spaceID,
 		FolderID:    folderID,
 	})
 	if err != nil {
@@ -138,18 +211,62 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 		return nil, err
 	}
 
+	ws := workspaceIDFromRequest(request.Id)
+	space, se, err := h.spaceForWrite(ctx, ws, request.Body.SpaceId, authz.SpaceEditor)
+	if err != nil {
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return CreateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+		}
+		return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "space not found"}}, nil
+	}
+
 	var folderID pgtype.UUID
 	if request.Body.FolderId != nil {
-		folderID.Bytes = *request.Body.FolderId
-		folderID.Valid = true
+		folderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
+		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
+		if err != nil || folder.SpaceID != space.ID {
+			return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+		}
+	}
+
+	slug := ""
+	if request.Body.Slug != nil {
+		slug = *request.Body.Slug
+	}
+	if slug == "" {
+		slug, err = uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
+			return h.queries.SavedQuerySlugExists(ctx, db.SavedQuerySlugExistsParams{WorkspaceID: ws, Slug: s})
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else if !slugRe.MatchString(slug) {
+		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+	}
+
+	bindingID, targetSchema, te := h.savedQueryTarget(ctx, ws, request.Body.Target)
+	if te != nil {
+		code, message := "target_not_granted", "the target's catalog is not granted to this workspace"
+		if te.code != "" {
+			code, message = te.code, te.message
+		}
+		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, message)}, nil
 	}
 
 	query, err := h.queries.CreateSavedQuery(ctx, db.CreateSavedQueryParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		FolderID:    folderID,
-		CreatedBy:   createdBy,
-		Name:        request.Body.Name,
-		Sql:         request.Body.Sql,
+		WorkspaceID:     ws,
+		SpaceID:         space.ID,
+		FolderID:        folderID,
+		CreatedBy:       createdBy,
+		UpdatedBy:       createdBy,
+		Name:            request.Body.Name,
+		Slug:            slug,
+		Sql:             request.Body.Sql,
+		TargetBindingID: bindingID,
+		TargetSchema:    targetSchema,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -170,11 +287,22 @@ func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryReque
 	queryID.Bytes = request.QueryId
 	queryID.Valid = true
 
-	query, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		ID:          queryID,
-	})
+	ws := workspaceIDFromRequest(request.Id)
+	query, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
 	if err != nil {
+		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+	}
+	_, se, err := h.requireSpace(ctx, ws, query.SpaceID, authz.SpaceViewer)
+	if err != nil {
+		if errors.Is(err, authz.ErrUnauthenticated) {
+			return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		}
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return GetSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+		}
 		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
 	}
 
@@ -186,42 +314,105 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 		return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
-	var queryID pgtype.UUID
-	queryID.Bytes = request.QueryId
-	queryID.Valid = true
-
-	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		ID:          queryID,
-	})
+	ws := workspaceIDFromRequest(request.Id)
+	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
+	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
 	if err != nil {
 		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
 	}
 
-	name := current.Name
-	sql := current.Sql
-	var folderID pgtype.UUID
-	if current.FolderID.Valid {
-		folderID = current.FolderID
+	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
+	if err != nil {
+		if errors.Is(err, authz.ErrUnauthenticated) {
+			return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		}
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return UpdateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+		}
+		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
 	}
 
+	spaceID := current.SpaceID
+	if request.Body.SpaceId != nil {
+		spaceID = pgtype.UUID{Bytes: *request.Body.SpaceId, Valid: true}
+		if spaceID != current.SpaceID {
+			_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceEditor)
+			if err != nil {
+				if errors.Is(err, authz.ErrUnauthenticated) {
+					return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+				}
+				return nil, err
+			}
+			if se != nil {
+				if se.status == 403 {
+					return UpdateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit the destination space"}}, nil
+				}
+				return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "destination space not found"}}, nil
+			}
+		}
+	}
+
+	name, sql := current.Name, current.Sql
 	if request.Body.Name != nil {
 		name = *request.Body.Name
 	}
 	if request.Body.Sql != nil {
 		sql = *request.Body.Sql
 	}
+
+	folderID := current.FolderID
+	if request.Body.MoveToRoot != nil && *request.Body.MoveToRoot {
+		folderID = pgtype.UUID{}
+	}
 	if request.Body.FolderId != nil {
-		folderID.Bytes = *request.Body.FolderId
-		folderID.Valid = true
+		folderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
+	}
+	if folderID.Valid {
+		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
+		if err != nil || folder.SpaceID != spaceID {
+			return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+		}
 	}
 
+	slug := current.Slug
+	if request.Body.Slug != nil {
+		slug = *request.Body.Slug
+		if !slugRe.MatchString(slug) {
+			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+		}
+	}
+
+	bindingID, targetSchema := current.TargetBindingID, current.TargetSchema
+	if request.Body.Target != nil {
+		var te *targetError
+		bindingID, targetSchema, te = h.savedQueryTarget(ctx, ws, request.Body.Target)
+		if te != nil {
+			code, message := "target_not_granted", "the target's catalog is not granted to this workspace"
+			if te.code != "" {
+				code, message = te.code, te.message
+			}
+			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, message)}, nil
+		}
+	}
+
+	updatedBy, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
 	updated, err := h.queries.UpdateSavedQuery(ctx, db.UpdateSavedQueryParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		ID:          queryID,
-		Name:        name,
-		Sql:         sql,
-		FolderID:    folderID,
+		WorkspaceID:     ws,
+		ID:              queryID,
+		Name:            name,
+		Sql:             sql,
+		FolderID:        folderID,
+		SpaceID:         spaceID,
+		Slug:            slug,
+		TargetBindingID: bindingID,
+		TargetSchema:    targetSchema,
+		UpdatedBy:       updatedBy,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -238,14 +429,31 @@ func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQuer
 		return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
-	var queryID pgtype.UUID
-	queryID.Bytes = request.QueryId
-	queryID.Valid = true
+	ws := workspaceIDFromRequest(request.Id)
+	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
+	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
+	if err != nil {
+		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+	}
+	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
+	if err != nil {
+		if errors.Is(err, authz.ErrUnauthenticated) {
+			return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		}
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return DeleteSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+		}
+		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+	}
 
-	if err := h.queries.DeleteSavedQuery(ctx, db.DeleteSavedQueryParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		ID:          queryID,
-	}); err != nil {
+	deleted, err := h.queries.DeleteSavedQuery(ctx, db.DeleteSavedQueryParams{WorkspaceID: ws, ID: queryID})
+	if err != nil {
+		return nil, err
+	}
+	if deleted == 0 {
 		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
 	}
 
@@ -363,6 +571,25 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	if request.Body.SavedQueryId != nil {
 		savedQueryID.Bytes = *request.Body.SavedQueryId
 		savedQueryID.Valid = true
+		// A saved query from another workspace, or from a space the caller
+		// cannot see, must not be attached to an execution (it would leak its
+		// id into this workspace's history).
+		saved, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{
+			ID: savedQueryID, WorkspaceID: workspaceIDFromRequest(request.Id),
+		})
+		if err != nil {
+			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		}
+		if _, se, err := h.requireSpace(ctx, workspaceIDFromRequest(request.Id), saved.SpaceID, authz.SpaceViewer); err != nil {
+			if errors.Is(err, authz.ErrUnauthenticated) {
+				return RunQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			}
+			return nil, err
+		} else if se != nil {
+			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		}
 	}
 
 	// Correlate the execution with the inbound HTTP request so the row, the
@@ -714,12 +941,35 @@ func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UU
 	}
 }
 
+// savedQueryTarget validates the optional target of a saved query: the binding
+// must be a target of the workspace (its catalog granted, #16).
+func (h *Handlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t *SavedQueryTarget) (pgtype.UUID, *string, *targetError) {
+	if t == nil || t.BindingId == nil {
+		return pgtype.UUID{}, nil, nil
+	}
+	workspace, err := h.queries.GetWorkspaceByID(ctx, ws)
+	if err != nil {
+		return pgtype.UUID{}, nil, &targetError{code: "workspace_not_found", message: "workspace not found"}
+	}
+	target, err := h.ResolveTarget(ctx, workspace, &TargetRequest{BindingId: t.BindingId, Schema: t.Schema})
+	if err != nil {
+		if te, ok := asTargetError(err); ok {
+			if te.notFound {
+				return pgtype.UUID{}, nil, &targetError{code: "target_not_granted", message: "the target's catalog is not granted to this workspace"}
+			}
+			return pgtype.UUID{}, nil, te
+		}
+		return pgtype.UUID{}, nil, &targetError{code: "internal", message: err.Error()}
+	}
+	return target.BindingID, t.Schema, nil
+}
+
 func dbFolderToPublic(f db.QueryFolder) QueryFolder {
-	id := openapi_types.UUID(f.ID.Bytes)
-	workspaceID := openapi_types.UUID(f.WorkspaceID.Bytes)
 	qf := QueryFolder{
-		Id:          id,
-		WorkspaceId: workspaceID,
+		Id:          openapi_types.UUID(f.ID.Bytes),
+		WorkspaceId: openapi_types.UUID(f.WorkspaceID.Bytes),
+		SpaceId:     openapi_types.UUID(f.SpaceID.Bytes),
+		Slug:        f.Slug,
 		Name:        f.Name,
 		CreatedAt:   pgTimestampToTime(f.CreatedAt),
 	}
@@ -731,20 +981,31 @@ func dbFolderToPublic(f db.QueryFolder) QueryFolder {
 }
 
 func dbSavedQueryToPublic(q db.SavedQuery) SavedQuery {
-	id := openapi_types.UUID(q.ID.Bytes)
-	workspaceID := openapi_types.UUID(q.WorkspaceID.Bytes)
-	createdBy := openapi_types.UUID(q.CreatedBy.Bytes)
 	sq := SavedQuery{
-		Id:          id,
-		WorkspaceId: workspaceID,
-		CreatedBy:   createdBy,
+		Id:          openapi_types.UUID(q.ID.Bytes),
+		WorkspaceId: openapi_types.UUID(q.WorkspaceID.Bytes),
+		SpaceId:     openapi_types.UUID(q.SpaceID.Bytes),
+		Slug:        q.Slug,
+		CreatedBy:   openapi_types.UUID(q.CreatedBy.Bytes),
 		Name:        q.Name,
 		Sql:         q.Sql,
 		CreatedAt:   pgTimestampToTime(q.CreatedAt),
+		UpdatedAt:   timePtr(q.UpdatedAt),
 	}
 	if q.FolderID.Valid {
 		fid := openapi_types.UUID(q.FolderID.Bytes)
 		sq.FolderId = &fid
+	}
+	if q.UpdatedBy.Valid {
+		by := openapi_types.UUID(q.UpdatedBy.Bytes)
+		sq.UpdatedBy = &by
+	}
+	if q.TargetBindingID.Valid || q.TargetSchema != nil {
+		sq.Target = &SavedQueryTarget{Schema: q.TargetSchema}
+		if q.TargetBindingID.Valid {
+			bid := openapi_types.UUID(q.TargetBindingID.Bytes)
+			sq.Target.BindingId = &bid
+		}
 	}
 	return sq
 }

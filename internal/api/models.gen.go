@@ -22,10 +22,10 @@ const (
 
 // Defines values for AuditEventActorKind.
 const (
-	Agent     AuditEventActorKind = "agent"
-	Anonymous AuditEventActorKind = "anonymous"
-	Service   AuditEventActorKind = "service"
-	User      AuditEventActorKind = "user"
+	AuditEventActorKindAgent     AuditEventActorKind = "agent"
+	AuditEventActorKindAnonymous AuditEventActorKind = "anonymous"
+	AuditEventActorKindService   AuditEventActorKind = "service"
+	AuditEventActorKindUser      AuditEventActorKind = "user"
 )
 
 // Defines values for AuditEventOutcome.
@@ -148,6 +148,18 @@ const (
 const (
 	CreateRetrieverRequestRefreshTypeFull        CreateRetrieverRequestRefreshType = "full"
 	CreateRetrieverRequestRefreshTypeIncremental CreateRetrieverRequestRefreshType = "incremental"
+)
+
+// Defines values for CreateSpaceRequestDefaultRole.
+const (
+	CreateSpaceRequestDefaultRoleEditor CreateSpaceRequestDefaultRole = "editor"
+	CreateSpaceRequestDefaultRoleViewer CreateSpaceRequestDefaultRole = "viewer"
+)
+
+// Defines values for CreateSpaceRequestVisibility.
+const (
+	CreateSpaceRequestVisibilityRestricted CreateSpaceRequestVisibility = "restricted"
+	CreateSpaceRequestVisibilityWorkspace  CreateSpaceRequestVisibility = "workspace"
 )
 
 // Defines values for CreateWorkspaceRequestType.
@@ -383,6 +395,45 @@ const (
 	RetrieverRefreshHistoryStatusRunning  RetrieverRefreshHistoryStatus = "running"
 )
 
+// Defines values for SetSpaceMemberRequestRole.
+const (
+	SetSpaceMemberRequestRoleEditor  SetSpaceMemberRequestRole = "editor"
+	SetSpaceMemberRequestRoleManager SetSpaceMemberRequestRole = "manager"
+	SetSpaceMemberRequestRoleViewer  SetSpaceMemberRequestRole = "viewer"
+)
+
+// Defines values for SpaceDefaultRole.
+const (
+	SpaceDefaultRoleEditor SpaceDefaultRole = "editor"
+	SpaceDefaultRoleViewer SpaceDefaultRole = "viewer"
+)
+
+// Defines values for SpaceMyRole.
+const (
+	SpaceMyRoleEditor  SpaceMyRole = "editor"
+	SpaceMyRoleManager SpaceMyRole = "manager"
+	SpaceMyRoleViewer  SpaceMyRole = "viewer"
+)
+
+// Defines values for SpaceVisibility.
+const (
+	SpaceVisibilityRestricted SpaceVisibility = "restricted"
+	SpaceVisibilityWorkspace  SpaceVisibility = "workspace"
+)
+
+// Defines values for SpaceMemberPrincipalType.
+const (
+	SpaceMemberPrincipalTypeTeam SpaceMemberPrincipalType = "team"
+	SpaceMemberPrincipalTypeUser SpaceMemberPrincipalType = "user"
+)
+
+// Defines values for SpaceMemberRole.
+const (
+	SpaceMemberRoleEditor  SpaceMemberRole = "editor"
+	SpaceMemberRoleManager SpaceMemberRole = "manager"
+	SpaceMemberRoleViewer  SpaceMemberRole = "viewer"
+)
+
 // Defines values for TeamMemberRole.
 const (
 	TeamMemberRoleMember TeamMemberRole = "member"
@@ -414,6 +465,18 @@ const (
 const (
 	UpdateRetrieverRequestStatusActive UpdateRetrieverRequestStatus = "active"
 	UpdateRetrieverRequestStatusPaused UpdateRetrieverRequestStatus = "paused"
+)
+
+// Defines values for UpdateSpaceRequestDefaultRole.
+const (
+	UpdateSpaceRequestDefaultRoleEditor UpdateSpaceRequestDefaultRole = "editor"
+	UpdateSpaceRequestDefaultRoleViewer UpdateSpaceRequestDefaultRole = "viewer"
+)
+
+// Defines values for UpdateSpaceRequestVisibility.
+const (
+	UpdateSpaceRequestVisibilityRestricted UpdateSpaceRequestVisibility = "restricted"
+	UpdateSpaceRequestVisibilityWorkspace  UpdateSpaceRequestVisibility = "workspace"
 )
 
 // Defines values for UpdateUserRoleRequestRole.
@@ -837,6 +900,12 @@ type CreateEngineRequest struct {
 type CreateFolderRequest struct {
 	Name     string              `json:"name"`
 	ParentId *openapi_types.UUID `json:"parent_id"`
+
+	// Slug Omitted: derived from name
+	Slug *string `json:"slug"`
+
+	// SpaceId Omitted: the workspace's default space
+	SpaceId *openapi_types.UUID `json:"space_id"`
 }
 
 // CreateMigrationRequest defines model for CreateMigrationRequest.
@@ -878,8 +947,29 @@ type CreateRetrieverRequestRefreshType string
 type CreateSavedQueryRequest struct {
 	FolderId *openapi_types.UUID `json:"folder_id"`
 	Name     string              `json:"name"`
-	Sql      string              `json:"sql"`
+
+	// Slug Omitted: derived from name
+	Slug *string `json:"slug"`
+
+	// SpaceId Omitted: the workspace's default space
+	SpaceId *openapi_types.UUID `json:"space_id"`
+	Sql     string              `json:"sql"`
+	Target  *SavedQueryTarget   `json:"target,omitempty"`
 }
+
+// CreateSpaceRequest defines model for CreateSpaceRequest.
+type CreateSpaceRequest struct {
+	DefaultRole *CreateSpaceRequestDefaultRole `json:"default_role,omitempty"`
+	Description *string                        `json:"description"`
+	Name        string                         `json:"name"`
+	Visibility  CreateSpaceRequestVisibility   `json:"visibility"`
+}
+
+// CreateSpaceRequestDefaultRole defines model for CreateSpaceRequest.DefaultRole.
+type CreateSpaceRequestDefaultRole string
+
+// CreateSpaceRequestVisibility defines model for CreateSpaceRequest.Visibility.
+type CreateSpaceRequestVisibility string
 
 // CreateTeamRequest defines model for CreateTeamRequest.
 type CreateTeamRequest struct {
@@ -1384,6 +1474,8 @@ type QueryFolder struct {
 	Id          openapi_types.UUID  `json:"id"`
 	Name        string              `json:"name"`
 	ParentId    *openapi_types.UUID `json:"parent_id"`
+	Slug        string              `json:"slug"`
+	SpaceId     openapi_types.UUID  `json:"space_id"`
 	WorkspaceId openapi_types.UUID  `json:"workspace_id"`
 }
 
@@ -1518,9 +1610,19 @@ type SavedQuery struct {
 	FolderId    *openapi_types.UUID `json:"folder_id"`
 	Id          openapi_types.UUID  `json:"id"`
 	Name        string              `json:"name"`
+	Slug        string              `json:"slug"`
+	SpaceId     openapi_types.UUID  `json:"space_id"`
 	Sql         string              `json:"sql"`
+	Target      *SavedQueryTarget   `json:"target,omitempty"`
 	UpdatedAt   *time.Time          `json:"updated_at,omitempty"`
+	UpdatedBy   *openapi_types.UUID `json:"updated_by"`
 	WorkspaceId openapi_types.UUID  `json:"workspace_id"`
+}
+
+// SavedQueryTarget defines model for SavedQueryTarget.
+type SavedQueryTarget struct {
+	BindingId *openapi_types.UUID `json:"binding_id"`
+	Schema    *string             `json:"schema"`
 }
 
 // SemanticDoc defines model for SemanticDoc.
@@ -1620,11 +1722,61 @@ type SemanticMetricUpdate struct {
 	Table       *string                 `json:"table,omitempty"`
 }
 
+// SetSpaceMemberRequest defines model for SetSpaceMemberRequest.
+type SetSpaceMemberRequest struct {
+	Role SetSpaceMemberRequestRole `json:"role"`
+}
+
+// SetSpaceMemberRequestRole defines model for SetSpaceMemberRequest.Role.
+type SetSpaceMemberRequestRole string
+
 // SetupStatus defines model for SetupStatus.
 type SetupStatus struct {
 	IsConfigured bool   `json:"is_configured"`
 	Version      string `json:"version"`
 }
+
+// Space defines model for Space.
+type Space struct {
+	CreatedAt   time.Time           `json:"created_at"`
+	CreatedBy   *openapi_types.UUID `json:"created_by"`
+	DefaultRole SpaceDefaultRole    `json:"default_role"`
+	Description *string             `json:"description"`
+	Id          openapi_types.UUID  `json:"id"`
+	IsDefault   bool                `json:"is_default"`
+
+	// MyRole The caller's effective role (list and get only)
+	MyRole      *SpaceMyRole       `json:"my_role"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug"`
+	UpdatedAt   *time.Time         `json:"updated_at,omitempty"`
+	Visibility  SpaceVisibility    `json:"visibility"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+}
+
+// SpaceDefaultRole defines model for Space.DefaultRole.
+type SpaceDefaultRole string
+
+// SpaceMyRole The caller's effective role (list and get only)
+type SpaceMyRole string
+
+// SpaceVisibility defines model for Space.Visibility.
+type SpaceVisibility string
+
+// SpaceMember defines model for SpaceMember.
+type SpaceMember struct {
+	GrantedAt     *time.Time               `json:"granted_at,omitempty"`
+	GrantedBy     *openapi_types.UUID      `json:"granted_by"`
+	PrincipalId   openapi_types.UUID       `json:"principal_id"`
+	PrincipalType SpaceMemberPrincipalType `json:"principal_type"`
+	Role          SpaceMemberRole          `json:"role"`
+}
+
+// SpaceMemberPrincipalType defines model for SpaceMember.PrincipalType.
+type SpaceMemberPrincipalType string
+
+// SpaceMemberRole defines model for SpaceMember.Role.
+type SpaceMemberRole string
 
 // SplitStatementsRequest defines model for SplitStatementsRequest.
 type SplitStatementsRequest struct {
@@ -1770,9 +1922,29 @@ type UpdateRetrieverRequestStatus string
 // UpdateSavedQueryRequest defines model for UpdateSavedQueryRequest.
 type UpdateSavedQueryRequest struct {
 	FolderId *openapi_types.UUID `json:"folder_id"`
-	Name     *string             `json:"name,omitempty"`
-	Sql      *string             `json:"sql,omitempty"`
+
+	// MoveToRoot Explicitly move the query to the space root; folder_id wins when present
+	MoveToRoot *bool               `json:"move_to_root,omitempty"`
+	Name       *string             `json:"name,omitempty"`
+	Slug       *string             `json:"slug"`
+	SpaceId    *openapi_types.UUID `json:"space_id"`
+	Sql        *string             `json:"sql,omitempty"`
+	Target     *SavedQueryTarget   `json:"target,omitempty"`
 }
+
+// UpdateSpaceRequest defines model for UpdateSpaceRequest.
+type UpdateSpaceRequest struct {
+	DefaultRole *UpdateSpaceRequestDefaultRole `json:"default_role,omitempty"`
+	Description *string                        `json:"description"`
+	Name        *string                        `json:"name,omitempty"`
+	Visibility  *UpdateSpaceRequestVisibility  `json:"visibility,omitempty"`
+}
+
+// UpdateSpaceRequestDefaultRole defines model for UpdateSpaceRequest.DefaultRole.
+type UpdateSpaceRequestDefaultRole string
+
+// UpdateSpaceRequestVisibility defines model for UpdateSpaceRequest.Visibility.
+type UpdateSpaceRequestVisibility string
 
 // UpdateUserRoleRequest defines model for UpdateUserRoleRequest.
 type UpdateUserRoleRequest struct {
@@ -1980,6 +2152,7 @@ type ListExecutionsParamsStatus string
 
 // ListFoldersParams defines parameters for ListFolders.
 type ListFoldersParams struct {
+	SpaceId  *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
 	ParentId *openapi_types.UUID `form:"parent_id,omitempty" json:"parent_id,omitempty"`
 }
 
@@ -2018,6 +2191,7 @@ type GetMetadataTableParams struct {
 
 // ListSavedQueriesParams defines parameters for ListSavedQueries.
 type ListSavedQueriesParams struct {
+	SpaceId  *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
 	FolderId *openapi_types.UUID `form:"folder_id,omitempty" json:"folder_id,omitempty"`
 }
 
@@ -2089,6 +2263,12 @@ type GetSemanticMetricSqlParams struct {
 
 // GetSemanticMetricSqlParamsGrain defines parameters for GetSemanticMetricSql.
 type GetSemanticMetricSqlParamsGrain string
+
+// DeleteSpaceParams defines parameters for DeleteSpace.
+type DeleteSpaceParams struct {
+	// Force Delete even when the space still has content
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
 
 // StreamExecutionParams defines parameters for StreamExecution.
 type StreamExecutionParams struct {
@@ -2205,3 +2385,12 @@ type CreateSemanticMetricJSONRequestBody = SemanticMetricCreate
 
 // UpdateSemanticMetricJSONRequestBody defines body for UpdateSemanticMetric for application/json ContentType.
 type UpdateSemanticMetricJSONRequestBody = SemanticMetricUpdate
+
+// CreateSpaceJSONRequestBody defines body for CreateSpace for application/json ContentType.
+type CreateSpaceJSONRequestBody = CreateSpaceRequest
+
+// UpdateSpaceJSONRequestBody defines body for UpdateSpace for application/json ContentType.
+type UpdateSpaceJSONRequestBody = UpdateSpaceRequest
+
+// SetSpaceMemberJSONRequestBody defines body for SetSpaceMember for application/json ContentType.
+type SetSpaceMemberJSONRequestBody = SetSpaceMemberRequest

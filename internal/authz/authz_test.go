@@ -25,6 +25,12 @@ type store struct {
 	roles   map[[2][16]byte]string // {team, user} -> team role
 	engines map[[16]byte]db.Engine
 	hosted  map[[2][16]byte]bool // {engine, user} -> the engine hosts a catalog granted to the user
+	// {workspace, space, user} -> effective space role
+	spaceRoles map[[3][16]byte]string
+}
+
+func (s store) GetEffectiveSpaceRole(_ context.Context, a db.GetEffectiveSpaceRoleParams) (string, error) {
+	return s.spaceRoles[[3][16]byte{a.WorkspaceID.Bytes, a.SpaceID.Bytes, a.UserID.Bytes}], nil
 }
 
 func (s store) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {

@@ -263,6 +263,8 @@ type QueryFolder struct {
 	ParentID    pgtype.UUID        `json:"parent_id"`
 	Name        string             `json:"name"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	SpaceID     pgtype.UUID        `json:"space_id"`
+	Slug        string             `json:"slug"`
 }
 
 type QueryStatement struct {
@@ -326,14 +328,19 @@ type RetrieverRefreshHistory struct {
 }
 
 type SavedQuery struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	FolderID    pgtype.UUID        `json:"folder_id"`
-	CreatedBy   pgtype.UUID        `json:"created_by"`
-	Name        string             `json:"name"`
-	Sql         string             `json:"sql"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID              pgtype.UUID        `json:"id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	FolderID        pgtype.UUID        `json:"folder_id"`
+	CreatedBy       pgtype.UUID        `json:"created_by"`
+	Name            string             `json:"name"`
+	Sql             string             `json:"sql"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	SpaceID         pgtype.UUID        `json:"space_id"`
+	UpdatedBy       pgtype.UUID        `json:"updated_by"`
+	TargetBindingID pgtype.UUID        `json:"target_binding_id"`
+	TargetSchema    *string            `json:"target_schema"`
+	Slug            string             `json:"slug"`
 }
 
 type SemanticDoc struct {
@@ -366,6 +373,30 @@ type SemanticMetric struct {
 	OwnerUserID   pgtype.UUID        `json:"owner_user_id"`
 	UpdatedBy     pgtype.UUID        `json:"updated_by"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	SpaceID       pgtype.UUID        `json:"space_id"`
+}
+
+type Space struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Name        string             `json:"name"`
+	Description *string            `json:"description"`
+	Visibility  string             `json:"visibility"`
+	DefaultRole string             `json:"default_role"`
+	IsDefault   bool               `json:"is_default"`
+	CreatedBy   pgtype.UUID        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Slug        string             `json:"slug"`
+}
+
+type SpaceMember struct {
+	SpaceID       pgtype.UUID        `json:"space_id"`
+	PrincipalType string             `json:"principal_type"`
+	PrincipalID   pgtype.UUID        `json:"principal_id"`
+	Role          string             `json:"role"`
+	GrantedBy     pgtype.UUID        `json:"granted_by"`
+	GrantedAt     pgtype.Timestamptz `json:"granted_at"`
 }
 
 type TableHealthSnapshot struct {

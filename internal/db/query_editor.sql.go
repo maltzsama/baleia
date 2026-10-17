@@ -166,19 +166,27 @@ func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecu
 }
 
 const createQueryFolder = `-- name: CreateQueryFolder :one
-INSERT INTO query_folders (workspace_id, parent_id, name)
-VALUES ($1, $2, $3)
-RETURNING id, workspace_id, parent_id, name, created_at
+INSERT INTO query_folders (workspace_id, space_id, parent_id, name, slug)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4::text, $5::text)
+RETURNING id, workspace_id, parent_id, name, created_at, space_id, slug
 `
 
 type CreateQueryFolderParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
 	ParentID    pgtype.UUID `json:"parent_id"`
 	Name        string      `json:"name"`
+	Slug        string      `json:"slug"`
 }
 
 func (q *Queries) CreateQueryFolder(ctx context.Context, arg CreateQueryFolderParams) (QueryFolder, error) {
-	row := q.db.QueryRow(ctx, createQueryFolder, arg.WorkspaceID, arg.ParentID, arg.Name)
+	row := q.db.QueryRow(ctx, createQueryFolder,
+		arg.WorkspaceID,
+		arg.SpaceID,
+		arg.ParentID,
+		arg.Name,
+		arg.Slug,
+	)
 	var i QueryFolder
 	err := row.Scan(
 		&i.ID,
@@ -186,6 +194,8 @@ func (q *Queries) CreateQueryFolder(ctx context.Context, arg CreateQueryFolderPa
 		&i.ParentID,
 		&i.Name,
 		&i.CreatedAt,
+		&i.SpaceID,
+		&i.Slug,
 	)
 	return i, err
 }
@@ -234,26 +244,43 @@ func (q *Queries) CreateQueryStatement(ctx context.Context, arg CreateQueryState
 }
 
 const createSavedQuery = `-- name: CreateSavedQuery :one
-INSERT INTO saved_queries (workspace_id, folder_id, created_by, name, sql)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at
+INSERT INTO saved_queries (
+    workspace_id, space_id, folder_id, created_by, updated_by, name, slug, sql,
+    target_binding_id, target_schema
+)
+VALUES (
+    $1::uuid, $2::uuid, $3::uuid, $4::uuid,
+    $5::uuid, $6::text, $7::text, $8::text,
+    $9::uuid, $10::text
+)
+RETURNING id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at, space_id, updated_by, target_binding_id, target_schema, slug
 `
 
 type CreateSavedQueryParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	FolderID    pgtype.UUID `json:"folder_id"`
-	CreatedBy   pgtype.UUID `json:"created_by"`
-	Name        string      `json:"name"`
-	Sql         string      `json:"sql"`
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	SpaceID         pgtype.UUID `json:"space_id"`
+	FolderID        pgtype.UUID `json:"folder_id"`
+	CreatedBy       pgtype.UUID `json:"created_by"`
+	UpdatedBy       pgtype.UUID `json:"updated_by"`
+	Name            string      `json:"name"`
+	Slug            string      `json:"slug"`
+	Sql             string      `json:"sql"`
+	TargetBindingID pgtype.UUID `json:"target_binding_id"`
+	TargetSchema    *string     `json:"target_schema"`
 }
 
 func (q *Queries) CreateSavedQuery(ctx context.Context, arg CreateSavedQueryParams) (SavedQuery, error) {
 	row := q.db.QueryRow(ctx, createSavedQuery,
 		arg.WorkspaceID,
+		arg.SpaceID,
 		arg.FolderID,
 		arg.CreatedBy,
+		arg.UpdatedBy,
 		arg.Name,
+		arg.Slug,
 		arg.Sql,
+		arg.TargetBindingID,
+		arg.TargetSchema,
 	)
 	var i SavedQuery
 	err := row.Scan(
@@ -265,12 +292,17 @@ func (q *Queries) CreateSavedQuery(ctx context.Context, arg CreateSavedQueryPara
 		&i.Sql,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SpaceID,
+		&i.UpdatedBy,
+		&i.TargetBindingID,
+		&i.TargetSchema,
+		&i.Slug,
 	)
 	return i, err
 }
 
-const deleteQueryFolder = `-- name: DeleteQueryFolder :exec
-DELETE FROM query_folders WHERE id = $1 AND workspace_id = $2
+const deleteQueryFolder = `-- name: DeleteQueryFolder :execrows
+DELETE FROM query_folders WHERE id = $1::uuid AND workspace_id = $2::uuid
 `
 
 type DeleteQueryFolderParams struct {
@@ -278,13 +310,16 @@ type DeleteQueryFolderParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-func (q *Queries) DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) error {
-	_, err := q.db.Exec(ctx, deleteQueryFolder, arg.ID, arg.WorkspaceID)
-	return err
+func (q *Queries) DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteQueryFolder, arg.ID, arg.WorkspaceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteSavedQuery = `-- name: DeleteSavedQuery :exec
-DELETE FROM saved_queries WHERE id = $1 AND workspace_id = $2
+const deleteSavedQuery = `-- name: DeleteSavedQuery :execrows
+DELETE FROM saved_queries WHERE id = $1::uuid AND workspace_id = $2::uuid
 `
 
 type DeleteSavedQueryParams struct {
@@ -292,9 +327,30 @@ type DeleteSavedQueryParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-func (q *Queries) DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error {
-	_, err := q.db.Exec(ctx, deleteSavedQuery, arg.ID, arg.WorkspaceID)
-	return err
+func (q *Queries) DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSavedQuery, arg.ID, arg.WorkspaceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const folderSlugExists = `-- name: FolderSlugExists :one
+SELECT EXISTS (
+    SELECT 1 FROM query_folders WHERE space_id = $1::uuid AND slug = $2::text
+) AS exists
+`
+
+type FolderSlugExistsParams struct {
+	SpaceID pgtype.UUID `json:"space_id"`
+	Slug    string      `json:"slug"`
+}
+
+func (q *Queries) FolderSlugExists(ctx context.Context, arg FolderSlugExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, folderSlugExists, arg.SpaceID, arg.Slug)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const getQueryExecutionByID = `-- name: GetQueryExecutionByID :one
@@ -367,6 +423,30 @@ func (q *Queries) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg Get
 	return i, err
 }
 
+const getQueryFolderByID = `-- name: GetQueryFolderByID :one
+SELECT id, workspace_id, parent_id, name, created_at, space_id, slug FROM query_folders WHERE id = $1::uuid AND workspace_id = $2::uuid
+`
+
+type GetQueryFolderByIDParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) GetQueryFolderByID(ctx context.Context, arg GetQueryFolderByIDParams) (QueryFolder, error) {
+	row := q.db.QueryRow(ctx, getQueryFolderByID, arg.ID, arg.WorkspaceID)
+	var i QueryFolder
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ParentID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.SpaceID,
+		&i.Slug,
+	)
+	return i, err
+}
+
 const getQueryStatementByPosition = `-- name: GetQueryStatementByPosition :one
 SELECT s.id, s.execution_id, s.position, s.sql, s.status, s.engine_query_id, s.rows_returned, s.duration_ms, s.error_message, s.started_at, s.finished_at, s.result_key, s.result_bytes, s.truncated, s.query_handle, s.result_sets, s.error_code FROM query_statements s
 JOIN query_executions e ON e.id = s.execution_id
@@ -406,7 +486,7 @@ func (q *Queries) GetQueryStatementByPosition(ctx context.Context, arg GetQueryS
 }
 
 const getSavedQueryByID = `-- name: GetSavedQueryByID :one
-SELECT id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at FROM saved_queries WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at, space_id, updated_by, target_binding_id, target_schema, slug FROM saved_queries WHERE id = $1::uuid AND workspace_id = $2::uuid
 `
 
 type GetSavedQueryByIDParams struct {
@@ -426,6 +506,11 @@ func (q *Queries) GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDPa
 		&i.Sql,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SpaceID,
+		&i.UpdatedBy,
+		&i.TargetBindingID,
+		&i.TargetSchema,
+		&i.Slug,
 	)
 	return i, err
 }
@@ -472,43 +557,6 @@ func (q *Queries) ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQu
 			&i.TargetCatalogID,
 			&i.TargetSchema,
 			&i.TargetSnapshot,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listQueryFolders = `-- name: ListQueryFolders :many
-SELECT id, workspace_id, parent_id, name, created_at FROM query_folders
-WHERE workspace_id = $1 AND parent_id IS NOT DISTINCT FROM $2
-ORDER BY name
-`
-
-type ListQueryFoldersParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	ParentID    pgtype.UUID `json:"parent_id"`
-}
-
-func (q *Queries) ListQueryFolders(ctx context.Context, arg ListQueryFoldersParams) ([]QueryFolder, error) {
-	rows, err := q.db.Query(ctx, listQueryFolders, arg.WorkspaceID, arg.ParentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []QueryFolder
-	for rows.Next() {
-		var i QueryFolder
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ParentID,
-			&i.Name,
-			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -647,19 +695,81 @@ func (q *Queries) ListRunningStatementHandles(ctx context.Context, executionID p
 	return items, nil
 }
 
-const listSavedQueries = `-- name: ListSavedQueries :many
-SELECT id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at FROM saved_queries
-WHERE workspace_id = $1 AND folder_id IS NOT DISTINCT FROM $2
-ORDER BY name
+const listVisibleQueryFolders = `-- name: ListVisibleQueryFolders :many
+SELECT f.id, f.workspace_id, f.parent_id, f.name, f.created_at, f.space_id, f.slug FROM query_folders f
+WHERE f.workspace_id = $1::uuid
+  AND baleia_effective_space_role(f.workspace_id, f.space_id, $2::uuid) IS NOT NULL
+  AND ($3::uuid IS NULL OR f.space_id = $3::uuid)
+  AND f.parent_id IS NOT DISTINCT FROM $4::uuid
+ORDER BY f.name
 `
 
-type ListSavedQueriesParams struct {
+type ListVisibleQueryFoldersParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+}
+
+// Only folders of spaces the caller can see; #16 says to filter in SQL, not in
+// a Go loop. space_id/folder_id narrow the listing when present.
+func (q *Queries) ListVisibleQueryFolders(ctx context.Context, arg ListVisibleQueryFoldersParams) ([]QueryFolder, error) {
+	rows, err := q.db.Query(ctx, listVisibleQueryFolders,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.SpaceID,
+		arg.ParentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []QueryFolder
+	for rows.Next() {
+		var i QueryFolder
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ParentID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.SpaceID,
+			&i.Slug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVisibleSavedQueries = `-- name: ListVisibleSavedQueries :many
+SELECT q.id, q.workspace_id, q.folder_id, q.created_by, q.name, q.sql, q.created_at, q.updated_at, q.space_id, q.updated_by, q.target_binding_id, q.target_schema, q.slug FROM saved_queries q
+WHERE q.workspace_id = $1::uuid
+  AND baleia_effective_space_role(q.workspace_id, q.space_id, $2::uuid) IS NOT NULL
+  AND ($3::uuid IS NULL OR q.space_id = $3::uuid)
+  AND q.folder_id IS NOT DISTINCT FROM $4::uuid
+ORDER BY q.name
+`
+
+type ListVisibleSavedQueriesParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
 	FolderID    pgtype.UUID `json:"folder_id"`
 }
 
-func (q *Queries) ListSavedQueries(ctx context.Context, arg ListSavedQueriesParams) ([]SavedQuery, error) {
-	rows, err := q.db.Query(ctx, listSavedQueries, arg.WorkspaceID, arg.FolderID)
+// Only queries of spaces the caller can see; space_id/folder_id narrow it.
+func (q *Queries) ListVisibleSavedQueries(ctx context.Context, arg ListVisibleSavedQueriesParams) ([]SavedQuery, error) {
+	rows, err := q.db.Query(ctx, listVisibleSavedQueries,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.SpaceID,
+		arg.FolderID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -676,6 +786,11 @@ func (q *Queries) ListSavedQueries(ctx context.Context, arg ListSavedQueriesPara
 			&i.Sql,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SpaceID,
+			&i.UpdatedBy,
+			&i.TargetBindingID,
+			&i.TargetSchema,
+			&i.Slug,
 		); err != nil {
 			return nil, err
 		}
@@ -685,6 +800,24 @@ func (q *Queries) ListSavedQueries(ctx context.Context, arg ListSavedQueriesPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const savedQuerySlugExists = `-- name: SavedQuerySlugExists :one
+SELECT EXISTS (
+    SELECT 1 FROM saved_queries WHERE workspace_id = $1::uuid AND slug = $2::text
+) AS exists
+`
+
+type SavedQuerySlugExistsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Slug        string      `json:"slug"`
+}
+
+func (q *Queries) SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, savedQuerySlugExists, arg.WorkspaceID, arg.Slug)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const setExecutionResult = `-- name: SetExecutionResult :exec
@@ -875,26 +1008,44 @@ func (q *Queries) UpdateQueryStatement(ctx context.Context, arg UpdateQueryState
 
 const updateSavedQuery = `-- name: UpdateSavedQuery :one
 UPDATE saved_queries
-SET name = $3, sql = $4, folder_id = $5, updated_at = now()
-WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at
+SET name = $1::text,
+    sql = $2::text,
+    folder_id = $3::uuid,
+    space_id = $4::uuid,
+    slug = $5::text,
+    target_binding_id = $6::uuid,
+    target_schema = $7::text,
+    updated_by = $8::uuid,
+    updated_at = now()
+WHERE id = $9::uuid AND workspace_id = $10::uuid
+RETURNING id, workspace_id, folder_id, created_by, name, sql, created_at, updated_at, space_id, updated_by, target_binding_id, target_schema, slug
 `
 
 type UpdateSavedQueryParams struct {
-	ID          pgtype.UUID `json:"id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Name        string      `json:"name"`
-	Sql         string      `json:"sql"`
-	FolderID    pgtype.UUID `json:"folder_id"`
+	Name            string      `json:"name"`
+	Sql             string      `json:"sql"`
+	FolderID        pgtype.UUID `json:"folder_id"`
+	SpaceID         pgtype.UUID `json:"space_id"`
+	Slug            string      `json:"slug"`
+	TargetBindingID pgtype.UUID `json:"target_binding_id"`
+	TargetSchema    *string     `json:"target_schema"`
+	UpdatedBy       pgtype.UUID `json:"updated_by"`
+	ID              pgtype.UUID `json:"id"`
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
 }
 
 func (q *Queries) UpdateSavedQuery(ctx context.Context, arg UpdateSavedQueryParams) (SavedQuery, error) {
 	row := q.db.QueryRow(ctx, updateSavedQuery,
-		arg.ID,
-		arg.WorkspaceID,
 		arg.Name,
 		arg.Sql,
 		arg.FolderID,
+		arg.SpaceID,
+		arg.Slug,
+		arg.TargetBindingID,
+		arg.TargetSchema,
+		arg.UpdatedBy,
+		arg.ID,
+		arg.WorkspaceID,
 	)
 	var i SavedQuery
 	err := row.Scan(
@@ -906,6 +1057,11 @@ func (q *Queries) UpdateSavedQuery(ctx context.Context, arg UpdateSavedQueryPara
 		&i.Sql,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SpaceID,
+		&i.UpdatedBy,
+		&i.TargetBindingID,
+		&i.TargetSchema,
+		&i.Slug,
 	)
 	return i, err
 }
