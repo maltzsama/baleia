@@ -520,7 +520,7 @@
 
 	onMount(() => {
 		registerPalette();
-		window.addEventListener('keydown', onGlobalKeydown);
+		window.addEventListener('keydown', onGlobalKeydown, true);
 		window.addEventListener('beforeunload', onBeforeUnload);
 		document.addEventListener('visibilitychange', onVisibility);
 		const observer = new MutationObserver(() => {
@@ -573,7 +573,7 @@
 
 		return () => {
 			observer.disconnect();
-			window.removeEventListener('keydown', onGlobalKeydown);
+			window.removeEventListener('keydown', onGlobalKeydown, true);
 			window.removeEventListener('beforeunload', onBeforeUnload);
 			document.removeEventListener('visibilitychange', onVisibility);
 			unregisterProvider('actions');
@@ -932,6 +932,14 @@
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{activeTab.readOnly ? 'Save a copy' : 'Save'}</button
+		>
+		<button
+			onclick={() => {
+				paletteMode = 'commands';
+				paletteOpen = true;
+			}}
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			>Commands</button
 		>
 		<div class="flex-1"></div>
 

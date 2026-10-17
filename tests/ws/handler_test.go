@@ -45,12 +45,10 @@ func (m *mockQuerier) ListQueryStatementsByWorkspace(ctx context.Context, execut
 func finishedExecution() ws.QuerierQueryExecution {
 	rows := int64(100)
 	dur := int64(500)
-	resultKey := "query-results/test/result.arrow"
 	return ws.QuerierQueryExecution{
 		Status:       "finished",
 		RowsReturned: &rows,
 		DurationMs:   &dur,
-		ResultKey:    &resultKey,
 	}
 }
 
@@ -58,7 +56,7 @@ func finishedStatements() []ws.QuerierQueryStatement {
 	rows := int64(50)
 	dur := int64(250)
 	return []ws.QuerierQueryStatement{
-		{Position: 1, Status: "finished", RowsReturned: &rows, DurationMs: &dur},
+		{Position: 1, Sql: "SELECT 1", Status: "finished", RowsReturned: &rows, DurationMs: &dur},
 	}
 }
 
@@ -182,21 +180,23 @@ func TestWebSocketStreamFinished(t *testing.T) {
 			break
 		}
 		events = append(events, evt)
-		if evt.Type == "finished" || evt.Type == "failed" || evt.Type == "cancelled" {
+		if evt.Type == "snapshot" {
 			break
 		}
 	}
 
-	if len(events) == 0 {
-		t.Fatal("expected at least one event")
+	if len(events) != 1 {
+		t.Fatalf("expected only the snapshot, got %d events", len(events))
 	}
-
-	lastEvent := events[len(events)-1]
-	if lastEvent.Type != "finished" {
-		t.Errorf("expected 'finished' event, got %q", lastEvent.Type)
+	lastEvent := events[0]
+	if lastEvent.Type != "snapshot" {
+		t.Errorf("expected 'snapshot' event, got %q", lastEvent.Type)
 	}
-	if lastEvent.ResultURL == "" {
-		t.Error("expected non-empty result_url in finished event")
+	if lastEvent.Execution == nil || lastEvent.Execution.Status != "finished" {
+		t.Errorf("snapshot execution = %+v", lastEvent.Execution)
+	}
+	if lastEvent.Seq != 1 || lastEvent.TS == "" {
+		t.Errorf("snapshot seq/ts = %d/%q", lastEvent.Seq, lastEvent.TS)
 	}
 }
 
@@ -258,41 +258,44 @@ loop:
 			break
 		}
 		events = append(events, evt)
-		if evt.Type == "finished" || evt.Type == "failed" || evt.Type == "cancelled" {
+		if evt.Type == "execution_status" && evt.Status == "finished" {
 			break
 		}
 	}
 
-	foundRunning := false
-	foundProgress := false
+	foundSnapshot := false
+	foundStatement := false
 	foundFinished := false
 	for _, evt := range events {
 		switch evt.Type {
-		case "running":
-			foundRunning = true
-		case "progress":
-			foundProgress = true
-		case "finished":
-			foundFinished = true
+		case "snapshot":
+			foundSnapshot = true
+		case "statement_status":
+			foundStatement = true
+		case "execution_status":
+			if evt.Status == "finished" {
+				foundFinished = true
+			}
 		}
 	}
 
-	if !foundRunning {
-		t.Error("expected 'running' event")
+	if !foundSnapshot {
+		t.Error("expected 'snapshot' event")
 	}
-	if !foundProgress {
-		t.Error("expected 'progress' event")
+	if !foundStatement {
+		t.Error("expected 'statement_status' event")
 	}
 	if !foundFinished {
-		t.Error("expected 'finished' event")
+		t.Error("expected a terminal 'execution_status' event")
 	}
 }
 
 func TestWebSocketEventsJSON(t *testing.T) {
 	evt := ws.WSEvent{
-		Type:        "finished",
+		Type:        "execution_status",
 		ExecutionID: "test-id",
-		Timestamp:   "2024-01-01T00:00:00Z",
+		Seq:         1,
+		TS:          "2024-01-01T00:00:00Z",
 	}
 
 	data, err := json.Marshal(evt)
@@ -305,7 +308,7 @@ func TestWebSocketEventsJSON(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	if decoded.Type != evt.Type {
-		t.Errorf("expected %q, got %q", evt.Type, decoded.Type)
+	if decoded.Type != evt.Type || decoded.Seq != evt.Seq || decoded.TS != evt.TS {
+		t.Errorf("expected %+v, got %+v", evt, decoded)
 	}
 }
