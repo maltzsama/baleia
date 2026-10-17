@@ -162,6 +162,10 @@ func (q *authzFake) ListWorkspaceCatalogGrants(_ context.Context, ws pgtype.UUID
 	return out, nil
 }
 
+func (q *authzFake) ClearWorkspaceDefaultForCatalog(_ context.Context, _ db.ClearWorkspaceDefaultForCatalogParams) error {
+	return nil
+}
+
 func (q *authzFake) DeleteWorkspaceCatalogGrant(_ context.Context, p db.DeleteWorkspaceCatalogGrantParams) (int64, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()

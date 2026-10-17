@@ -2702,7 +2702,7 @@ type Workspace struct {
 
 	// PolarisCatalogName Legacy; never used to resolve an execution target
 	// Deprecated:
-	PolarisCatalogName string        `json:"polaris_catalog_name"`
+	PolarisCatalogName *string       `json:"polaris_catalog_name,omitempty"`
 	Type               WorkspaceType `json:"type"`
 	UpdatedAt          *time.Time    `json:"updated_at,omitempty"`
 }
@@ -2723,6 +2723,15 @@ type WorkspaceCatalogAccess struct {
 
 // WorkspaceCatalogAccessPermission defines model for WorkspaceCatalogAccess.Permission.
 type WorkspaceCatalogAccessPermission string
+
+// WorkspaceImpact defines model for WorkspaceImpact.
+type WorkspaceImpact struct {
+	DefaultTargetAffected bool `json:"default_target_affected"`
+	Metrics               int  `json:"metrics"`
+	RunningExecutions     int  `json:"running_executions"`
+	SavedQueries          int  `json:"saved_queries"`
+	Spaces                int  `json:"spaces"`
+}
 
 // WorkspacePrincipal defines model for WorkspacePrincipal.
 type WorkspacePrincipal struct {

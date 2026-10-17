@@ -80,6 +80,105 @@ func (q *Queries) CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAc
 	return has_access, err
 }
 
+const clearWorkspaceDefaultForCatalog = `-- name: ClearWorkspaceDefaultForCatalog :exec
+UPDATE workspaces
+SET default_binding_id = NULL, default_schema = NULL, updated_at = now()
+WHERE id = $1::uuid
+  AND default_binding_id IN (SELECT id FROM catalog_bindings WHERE catalog_id = $2::uuid)
+`
+
+type ClearWorkspaceDefaultForCatalogParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+}
+
+func (q *Queries) ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error {
+	_, err := q.db.Exec(ctx, clearWorkspaceDefaultForCatalog, arg.WorkspaceID, arg.CatalogID)
+	return err
+}
+
+const countCatalogAccessImpact = `-- name: CountCatalogAccessImpact :one
+SELECT
+    (SELECT count(*) FROM saved_queries s
+      JOIN catalog_bindings b ON b.id = s.target_binding_id
+      WHERE s.workspace_id = $1::uuid AND b.catalog_id = $2::uuid)::bigint AS saved_queries,
+    (SELECT count(*) FROM semantic_metrics m
+      WHERE m.workspace_id = $1::uuid AND m.catalog_id = $2::uuid)::bigint AS metrics,
+    (SELECT count(*) FROM query_executions e
+      JOIN catalog_bindings b ON b.id = e.target_binding_id
+      WHERE e.workspace_id = $1::uuid AND b.catalog_id = $2::uuid AND e.status = 'running')::bigint AS running_executions,
+    EXISTS (
+      SELECT 1 FROM workspaces w
+      JOIN catalog_bindings b ON b.id = w.default_binding_id
+      WHERE w.id = $1::uuid AND b.catalog_id = $2::uuid
+    ) AS default_target_affected
+`
+
+type CountCatalogAccessImpactParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+}
+
+type CountCatalogAccessImpactRow struct {
+	SavedQueries          int64 `json:"saved_queries"`
+	Metrics               int64 `json:"metrics"`
+	RunningExecutions     int64 `json:"running_executions"`
+	DefaultTargetAffected bool  `json:"default_target_affected"`
+}
+
+func (q *Queries) CountCatalogAccessImpact(ctx context.Context, arg CountCatalogAccessImpactParams) (CountCatalogAccessImpactRow, error) {
+	row := q.db.QueryRow(ctx, countCatalogAccessImpact, arg.WorkspaceID, arg.CatalogID)
+	var i CountCatalogAccessImpactRow
+	err := row.Scan(
+		&i.SavedQueries,
+		&i.Metrics,
+		&i.RunningExecutions,
+		&i.DefaultTargetAffected,
+	)
+	return i, err
+}
+
+const countWorkspaceImpact = `-- name: CountWorkspaceImpact :one
+SELECT
+    (SELECT count(*) FROM saved_queries WHERE workspace_id = $1::uuid)::bigint AS saved_queries,
+    (SELECT count(*) FROM semantic_metrics WHERE workspace_id = $1::uuid)::bigint AS metrics,
+    (SELECT count(*) FROM spaces WHERE workspace_id = $1::uuid)::bigint AS spaces,
+    (SELECT count(*) FROM query_executions WHERE workspace_id = $1::uuid AND status = 'running')::bigint AS running_executions,
+    EXISTS (SELECT 1 FROM workspaces w WHERE w.id = $1::uuid AND w.default_binding_id IS NOT NULL) AS default_target_affected
+`
+
+type CountWorkspaceImpactRow struct {
+	SavedQueries          int64 `json:"saved_queries"`
+	Metrics               int64 `json:"metrics"`
+	Spaces                int64 `json:"spaces"`
+	RunningExecutions     int64 `json:"running_executions"`
+	DefaultTargetAffected bool  `json:"default_target_affected"`
+}
+
+func (q *Queries) CountWorkspaceImpact(ctx context.Context, workspaceID pgtype.UUID) (CountWorkspaceImpactRow, error) {
+	row := q.db.QueryRow(ctx, countWorkspaceImpact, workspaceID)
+	var i CountWorkspaceImpactRow
+	err := row.Scan(
+		&i.SavedQueries,
+		&i.Metrics,
+		&i.Spaces,
+		&i.RunningExecutions,
+		&i.DefaultTargetAffected,
+	)
+	return i, err
+}
+
+const countWorkspaceRunningExecutions = `-- name: CountWorkspaceRunningExecutions :one
+SELECT count(*)::bigint FROM query_executions WHERE workspace_id = $1 AND status = 'running'
+`
+
+func (q *Queries) CountWorkspaceRunningExecutions(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countWorkspaceRunningExecutions, workspaceID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (name, description, created_by)
 VALUES ($1, $2, $3)
@@ -154,6 +253,18 @@ DELETE FROM teams WHERE id = $1
 func (q *Queries) DeleteTeam(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteTeam, id)
 	return err
+}
+
+const deleteWorkspace = `-- name: DeleteWorkspace :execrows
+DELETE FROM workspaces WHERE id = $1 AND type = 'shared'
+`
+
+func (q *Queries) DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWorkspace, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteWorkspaceCatalogGrant = `-- name: DeleteWorkspaceCatalogGrant :execrows

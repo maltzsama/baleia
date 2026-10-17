@@ -28,6 +28,8 @@ type Querier interface {
 	// True when the user is a member of a workspace that has been granted the catalog.
 	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
+	ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error
+	CountCatalogAccessImpact(ctx context.Context, arg CountCatalogAccessImpactParams) (CountCatalogAccessImpactRow, error)
 	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error)
 	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error)
 	// What stops an engine from being deleted: managed bindings and executions
@@ -40,6 +42,8 @@ type Querier interface {
 	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
 	CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error)
 	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
+	CountWorkspaceImpact(ctx context.Context, workspaceID pgtype.UUID) (CountWorkspaceImpactRow, error)
+	CountWorkspaceRunningExecutions(ctx context.Context, workspaceID pgtype.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
 	// A source catalog's source_ref is its warehouse (or database).
@@ -91,6 +95,7 @@ type Querier interface {
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
+	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
 	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error
 	// Adopted catalogs the engine no longer reports are disabled, never deleted

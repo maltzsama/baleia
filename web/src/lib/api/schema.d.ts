@@ -435,11 +435,51 @@ export interface paths {
         get: operations["getWorkspace"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a shared workspace and its content — owner or admin */
+        delete: operations["deleteWorkspace"];
         options?: never;
         head?: never;
         /** Update a workspace — workspace owners and admins */
         patch: operations["updateWorkspace"];
+        trace?: never;
+    };
+    "/workspaces/{id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** What a workspace delete would remove — owner or admin */
+        get: operations["getWorkspaceImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/catalog-access/{catalog_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** What revoking this catalog grant would affect — owner or admin */
+        get: operations["getCatalogAccessImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/audit/events": {
@@ -2632,7 +2672,7 @@ export interface components {
              * @deprecated
              * @description Legacy; never used to resolve an execution target
              */
-            polaris_catalog_name: string;
+            polaris_catalog_name?: string;
             /**
              * Format: uuid
              * @description Target used when a run names none (GET /workspaces/{id}/targets)
@@ -2647,6 +2687,13 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at?: string;
+        };
+        WorkspaceImpact: {
+            saved_queries: number;
+            metrics: number;
+            spaces: number;
+            running_executions: number;
+            default_target_affected: boolean;
         };
         CreateWorkspaceRequest: {
             name: string;
@@ -5042,6 +5089,24 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    deleteWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     updateWorkspace: {
         parameters: {
             query?: never;
@@ -5070,6 +5135,55 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getWorkspaceImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Impact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceImpact"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getCatalogAccessImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Impact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceImpact"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAuditEvents: {

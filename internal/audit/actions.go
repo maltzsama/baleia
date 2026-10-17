@@ -27,6 +27,7 @@ const (
 	GrantRevoke Action = "grant.revoke"
 
 	WorkspaceUpdate Action = "workspace.update"
+	WorkspaceDelete Action = "workspace.delete"
 
 	TeamMemberAdd    Action = "team.member_add"
 	TeamMemberRemove Action = "team.member_remove"

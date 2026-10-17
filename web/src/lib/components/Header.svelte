@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { client } from '$lib/api/client';
+	import { canGlobal } from '$lib/authz/can';
+	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import type { Workspace } from '$lib/stores/workspace.svelte';
 
@@ -13,7 +17,29 @@
 	let wsOpen = $state(false);
 	let showCreate = $state(false);
 	let createName = $state('');
+	let createDescription = $state('');
+	let createType = $state<'personal' | 'shared'>('personal');
+	let createTeamId = $state('');
+	let teams = $state<{ id: string; name: string }[]>([]);
 	let creating = $state(false);
+	let createError = $state('');
+	let search = $state('');
+
+	const canShare = $derived(canGlobal(authStore.user, 'create_shared_workspace'));
+	const showSearch = $derived(workspaceStore.workspaces.length > 8);
+	const personal = $derived(
+		workspaceStore.workspaces.filter(
+			(ws) =>
+				ws.type === 'personal' && (!search || ws.name.toLowerCase().includes(search.toLowerCase()))
+		)
+	);
+	const shared = $derived(
+		workspaceStore.workspaces.filter(
+			(ws) =>
+				ws.type === 'shared' && (!search || ws.name.toLowerCase().includes(search.toLowerCase()))
+		)
+	);
+	const canUpdateCurrent = $derived(!!workspaceStore.current?.allowed_actions?.includes('update'));
 
 	function toggleWs() {
 		wsOpen = !wsOpen;
@@ -22,27 +48,58 @@
 
 	function selectWs(ws: Workspace) {
 		workspaceStore.select(ws);
+		if (typeof window !== 'undefined') {
+			const url = new URL(window.location.href);
+			url.searchParams.set('ws', ws.id);
+			window.history.replaceState(null, '', url);
+		}
 		wsOpen = false;
 	}
 
-	function openCreate(e: Event) {
+	async function openCreate(e: Event) {
 		e.stopPropagation();
 		createName = workspaceStore.workspaces.length === 0 ? 'Personal' : '';
+		createDescription = '';
+		createType = 'personal';
+		createTeamId = '';
+		createError = '';
 		showCreate = true;
 		wsOpen = false;
+		if (canShare && teams.length === 0) {
+			const { data } = await client.GET('/teams');
+			teams = (data ?? []) as { id: string; name: string }[];
+		}
 	}
 
 	function closeCreate() {
 		showCreate = false;
 		createName = '';
+		createError = '';
 	}
 
 	async function doCreate() {
 		if (!createName.trim()) return;
+		if (createType === 'shared' && !createTeamId) {
+			createError = 'Choose the team that owns the workspace.';
+			return;
+		}
 		creating = true;
-		const ws = await workspaceStore.create(createName.trim());
+		createError = '';
+		const ws = await workspaceStore.create({
+			name: createName.trim(),
+			description: createDescription.trim() || undefined,
+			type: createType,
+			ownerTeamId: createTeamId || undefined
+		});
 		creating = false;
 		if (ws) closeCreate();
+		else createError = 'Could not create the workspace.';
+	}
+
+	function openSettings() {
+		if (!workspaceStore.current) return;
+		window.location.href = `/settings/workspaces/${workspaceStore.current.id}`;
+		wsOpen = false;
 	}
 </script>
 
@@ -76,10 +133,24 @@
 
 		{#if wsOpen}
 			<div
-				class="absolute top-full left-0 mt-1 w-64 bg-bg-panel border border-border rounded-lg shadow-lg z-50 py-1"
+				class="absolute top-full left-0 mt-1 w-72 bg-bg-panel border border-border rounded-lg shadow-lg z-50 py-1"
 			>
-				{#if workspaceStore.workspaces.length > 0}
-					{#each workspaceStore.workspaces as ws (ws.id)}
+				{#if showSearch}
+					<div class="px-2 pb-1">
+						<input
+							class="w-full h-8 rounded-md border border-border bg-bg-toolbar px-2 text-xs outline-none focus:border-primary"
+							placeholder="Search workspaces"
+							bind:value={search}
+						/>
+					</div>
+				{/if}
+				{#if personal.length > 0}
+					<p
+						class="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-wide text-text-muted"
+					>
+						Personal
+					</p>
+					{#each personal as ws (ws.id)}
 						<button
 							onclick={() => selectWs(ws)}
 							class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit"
@@ -90,13 +161,49 @@
 									: 'bg-transparent border border-border'}"
 							></span>
 							<span class="font-medium">{ws.name}</span>
-							<span class="text-text-muted ml-auto text-[10px]">{ws.type}</span>
 						</button>
 					{/each}
-				{:else}
-					<div class="px-3 py-3 text-xs text-text-muted text-center">No workspaces yet</div>
+				{/if}
+				{#if shared.length > 0}
+					<p
+						class="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-wide text-text-muted"
+					>
+						Shared
+					</p>
+					{#each shared as ws (ws.id)}
+						<button
+							onclick={() => selectWs(ws)}
+							class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit"
+						>
+							<span
+								class="w-1.5 h-1.5 rounded-full {ws.id === workspaceStore.current?.id
+									? 'bg-primary'
+									: 'bg-transparent border border-border'}"
+							></span>
+							<span class="font-medium">{ws.name}</span>
+							<span class="ml-auto text-[10px] text-text-muted">shared</span>
+						</button>
+					{/each}
+				{/if}
+				{#if personal.length === 0 && shared.length === 0}
+					<div class="px-3 py-3 text-xs text-text-muted text-center">No workspaces</div>
 				{/if}
 				<div class="border-t border-border my-1"></div>
+				{#if canUpdateCurrent}
+					<button
+						onclick={openSettings}
+						class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit"
+					>
+						Workspace settings
+					</button>
+				{/if}
+				<a
+					href={resolve('/settings')}
+					class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-inherit no-underline"
+					onclick={() => (wsOpen = false)}
+				>
+					Settings
+				</a>
 				<button
 					onclick={openCreate}
 					class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit text-primary font-medium"
@@ -144,7 +251,7 @@
 		onclick={(e) => e.target === e.currentTarget && closeCreate()}
 	>
 		<div
-			class="bg-bg-panel border border-border rounded-xl w-full max-w-[360px] shadow-[0_24px_64px_rgba(0,0,0,.2)]"
+			class="bg-bg-panel border border-border rounded-xl w-full max-w-[400px] shadow-[0_24px_64px_rgba(0,0,0,.2)]"
 			onclick={(e) => e.stopPropagation()}
 		>
 			<div class="flex items-center px-5 py-[18px] border-b border-border">
@@ -154,14 +261,41 @@
 					onclick={closeCreate}>×</button
 				>
 			</div>
-			<div class="p-5">
+			<div class="flex flex-col gap-3 p-5">
 				<input
-					class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary mb-3.5"
+					class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
 					type="text"
 					placeholder="Workspace name"
 					bind:value={createName}
 					onkeydown={(e) => e.key === 'Enter' && doCreate()}
 				/>
+				<input
+					class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
+					type="text"
+					placeholder="Description (optional)"
+					bind:value={createDescription}
+				/>
+				{#if canShare}
+					<select
+						class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
+						bind:value={createType}
+					>
+						<option value="personal">Personal</option>
+						<option value="shared">Shared</option>
+					</select>
+					{#if createType === 'shared'}
+						<select
+							class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
+							bind:value={createTeamId}
+						>
+							<option value="">Choose the owning team</option>
+							{#each teams as team (team.id)}
+								<option value={team.id}>{team.name}</option>
+							{/each}
+						</select>
+					{/if}
+				{/if}
+				{#if createError}<p class="text-[11px] text-danger" role="alert">{createError}</p>{/if}
 				<div class="flex justify-end gap-1.5">
 					<button
 						class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer hover:border-border-hover"
