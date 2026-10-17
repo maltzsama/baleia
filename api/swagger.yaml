@@ -1659,15 +1659,19 @@ components:
 
     TrashItem:
       type: object
-      required: [entity_type, entity_id, slug, deleted_at, version]
+      required: [entity_type, entity_id, slug, deleted_at, version, restore_version]
       properties:
         entity_type: { type: string, enum: [saved_query, semantic_metric] }
         entity_id: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
         space_id: { type: string, format: uuid }
+        space:
+          allOf: [{ $ref: "#/components/schemas/ContentSearchSpace" }]
+          nullable: true
         deleted_at: { type: string, format: date-time }
         version: { type: integer }
+        restore_version: { type: integer, description: "Pass this to the restore endpoint; the delete version holds the last content" }
 
     BundleSpace:
       type: object
@@ -1721,7 +1725,9 @@ components:
       properties:
         kind: { type: string }
         slug: { type: string }
+        title: { type: string }
         action: { type: string, enum: [CREATE, UPDATE, NO_CHANGES, ERROR] }
+        matched_id: { type: string, format: uuid, nullable: true, description: "Destination item for UPDATE/NO_CHANGES" }
         message: { type: string }
         warnings: { type: array, items: { type: string } }
 

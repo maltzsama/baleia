@@ -387,14 +387,18 @@ func (h *Handlers) ListTrash(ctx context.Context, request ListTrashRequestObject
 	out := make(ListTrash200JSONResponse, 0, len(rows))
 	for _, r := range rows {
 		item := TrashItem{
-			EntityType: TrashItemEntityType(r.EntityType),
-			EntityId:   openapi_types.UUID(r.EntityID.Bytes),
-			DeletedAt:  pgTimestampToTime(r.CreatedAt),
-			Version:    int(r.Version),
+			EntityType:     TrashItemEntityType(r.EntityType),
+			EntityId:       openapi_types.UUID(r.EntityID.Bytes),
+			DeletedAt:      pgTimestampToTime(r.CreatedAt),
+			Version:        int(r.Version),
+			RestoreVersion: int(r.Version),
 		}
 		if r.SpaceID.Valid {
 			id := openapi_types.UUID(r.SpaceID.Bytes)
 			item.SpaceId = &id
+			if r.SpaceName != nil {
+				item.Space = &ContentSearchSpace{Id: id, Name: *r.SpaceName}
+			}
 		}
 		switch r.EntityType {
 		case content.EntitySavedQuery:

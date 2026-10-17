@@ -3806,9 +3806,12 @@ export interface components {
             name?: string;
             /** Format: uuid */
             space_id?: string;
+            space?: components["schemas"]["ContentSearchSpace"] | null;
             /** Format: date-time */
             deleted_at: string;
             version: number;
+            /** @description Pass this to the restore endpoint; the delete version holds the last content */
+            restore_version: number;
         };
         BundleSpace: {
             slug: string;
@@ -3849,8 +3852,14 @@ export interface components {
         ImportItem: {
             kind: string;
             slug: string;
+            title?: string;
             /** @enum {string} */
             action: "CREATE" | "UPDATE" | "NO_CHANGES" | "ERROR";
+            /**
+             * Format: uuid
+             * @description Destination item for UPDATE/NO_CHANGES
+             */
+            matched_id?: string | null;
             message?: string;
             warnings?: string[];
         };
