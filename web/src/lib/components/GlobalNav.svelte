@@ -102,6 +102,22 @@
 			>
 		</a>
 		<a
+			href={resolve('/catalogs')}
+			title="Catalogs"
+			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+				{isActive('/catalogs')
+				? 'bg-primary text-white'
+				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+		>
+			<svg viewBox="0 0 24 24" class="w-4 h-4"
+				><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="3" cy="6" r=".6" /><circle
+					cx="3"
+					cy="12"
+					r=".6"
+				/><circle cx="3" cy="18" r=".6" /></svg
+			>
+		</a>
+		<a
 			href={resolve('/monitoring')}
 			title="Monitoring"
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150

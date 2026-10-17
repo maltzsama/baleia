@@ -521,6 +521,103 @@ components:
         created_at:          { type: string, format: date-time }
         updated_at:          { type: string, format: date-time }
 
+    CatalogEngineRef:
+      type: object
+      required: [id, name, kind, class]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string }
+        class: { type: string }
+
+    CatalogBindingRef:
+      type: object
+      required: [id, engine, engine_catalog_name, mode, lifecycle_state]
+      properties:
+        id: { type: string, format: uuid }
+        engine: { $ref: "#/components/schemas/CatalogEngineRef" }
+        engine_catalog_name: { type: string }
+        connector: { type: string, nullable: true }
+        mode: { type: string, description: "managed, adopted or native" }
+        lifecycle_state: { type: string }
+        sync_status: { type: string, nullable: true }
+        state_changed_at: { type: string, format: date-time, nullable: true }
+
+    CatalogSummary:
+      allOf:
+        - $ref: "#/components/schemas/Catalog"
+        - type: object
+          required: [origin, bindings, needs_attention]
+          properties:
+            origin: { type: string, description: "source or native" }
+            provider_kind: { type: string, nullable: true }
+            connection:
+              allOf: [{ $ref: "#/components/schemas/EngineConnectionRef" }]
+              nullable: true
+              description: "Null when the caller cannot view the connection"
+            source_ref: { type: string, nullable: true }
+            bindings:
+              type: array
+              items: { $ref: "#/components/schemas/CatalogBindingRef" }
+            needs_attention: { type: boolean }
+            namespace_count: { type: integer }
+            table_count: { type: integer }
+
+    CatalogImpact:
+      type: object
+      required: [bindings, grants, saved_queries_targeting, metrics, docs, running_executions]
+      properties:
+        bindings: { type: integer }
+        grants: { type: integer }
+        saved_queries_targeting: { type: integer }
+        metrics: { type: integer }
+        docs: { type: integer }
+        running_executions: { type: integer }
+
+    CatalogConnectionImpact:
+      type: object
+      required: [catalogs, bindings, running_executions]
+      properties:
+        engine:
+          allOf: [{ $ref: "#/components/schemas/EngineConnectionRef" }]
+          nullable: true
+          description: "The engine this connection backs, if any"
+        catalogs: { type: integer }
+        bindings: { type: integer }
+        running_executions: { type: integer }
+
+    CatalogGrant:
+      type: object
+      required: [workspace, permission, granted_at]
+      properties:
+        workspace:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            type: { type: string }
+        permission: { type: string, enum: [read, write] }
+        granted_by: { type: string, format: uuid, nullable: true }
+        granted_at: { type: string, format: date-time }
+
+    BindingProjection:
+      type: object
+      required: [connector, properties]
+      properties:
+        connector: { type: string }
+        version: { type: string, nullable: true }
+        properties:
+          type: object
+          additionalProperties: { type: string }
+          description: "Engine-side properties; secret keys are masked as ***"
+
+    UpdateCatalogDetailRequest:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }
+
     CreateCatalogRequest:
       type: object
       required: [name, trino_catalog_name, warehouse]
@@ -3928,6 +4025,154 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /catalogs:
+    get:
+      tags: [Catalogs]
+      operationId: listAllCatalogs
+      summary: "Logical catalogs the caller may view, with their bindings"
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: origin
+          in: query
+          schema: { type: string }
+        - name: engine_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: connection_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: provider_kind
+          in: query
+          schema: { type: string }
+        - name: attention
+          in: query
+          schema: { type: boolean }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "Catalogs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /catalogs/{catalog_id}:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Catalogs]
+      operationId: getCatalogDetail
+      summary: "One logical catalog with its bindings and counts"
+      responses:
+        "200":
+          description: "Catalog"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Catalogs]
+      operationId: updateCatalogDetail
+      summary: "Rename or re-describe a catalog (bundles and metrics reference it by name)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCatalogDetailRequest" }
+      responses:
+        "200":
+          description: "Catalog"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Catalogs]
+      operationId: deleteCatalogDetail
+      summary: "Disable a source catalog and deprovision its managed bindings"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /catalogs/{catalog_id}/impact:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Catalogs]
+      operationId: getCatalogImpact
+      summary: "What depends on this catalog before deleting it"
+      responses:
+        "200":
+          description: "Impact"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogImpact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/grants:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Catalogs]
+      operationId: listCatalogGrants
+      summary: "Workspace grants of this catalog"
+      responses:
+        "200":
+          description: "Grants"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogGrant" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalog-connections/{id}/impact:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [CatalogConnections]
+      operationId: getCatalogConnectionImpact
+      summary: "What depends on this connection before deleting it"
+      responses:
+        "200":
+          description: "Impact"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogConnectionImpact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /catalogs/{id}/bindings:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -3979,6 +4224,18 @@ paths:
   /bindings/{id}:
     parameters:
       - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: getCatalogBinding
+      summary: "One binding with its lifecycle state, error and allowed actions"
+      responses:
+        "200":
+          description: "Binding"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogBinding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Engines]
       operationId: updateCatalogBinding
@@ -4040,6 +4297,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CatalogBinding" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /bindings/{id}/projection:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: getCatalogBindingProjection
+      summary: "Engine-side properties of a binding, secret values masked"
+      responses:
+        "200":
+          description: "Projection"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BindingProjection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /engines/{id}/binding-support:

@@ -301,7 +301,12 @@
 					<div class="flex items-start gap-2">
 						<KindIcon kind={connection.type} family={provider?.family} size={18} />
 						<div class="min-w-0 flex-1">
-							<div class="truncate text-[13px] font-semibold">{connection.name}</div>
+							<button
+								type="button"
+								class="truncate text-left text-[13px] font-semibold hover:underline"
+								onclick={() => (window.location.href = `/connections/${connection.id}`)}
+								>{connection.name}</button
+							>
 							<div class="truncate font-mono text-[10px] text-slate-600 dark:text-slate-300">
 								{provider?.label ?? connection.type}{summary(connection)
 									? ` · ${summary(connection)}`
