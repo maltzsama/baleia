@@ -187,13 +187,13 @@ var operationAccess = map[string]access{
 	"SearchSemanticDocs": checked("metadataWorkspace", "SearchSemanticDocs"),
 	// Metrics are validated against a real engine in a read-only session
 	// (validateSemanticMetric); the catalog must be granted and the caller
-	// needs the space role (metricSpace wraps requireSpace).
+	// needs the space role (contentSpace wraps requireSpace).
 	"ListSemanticMetrics":  checked("metadataWorkspace"),
-	"GetSemanticMetric":    checked("metadataWorkspace", "GetSemanticMetric", "metricSpace"),
-	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric", "metricSpace"),
-	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric", "metricSpace"),
-	"DeleteSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "metricSpace", "DeleteSemanticMetric"),
-	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget", "metricSpace"),
+	"GetSemanticMetric":    checked("metadataWorkspace", "GetSemanticMetric", "contentSpace"),
+	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
+	"DeleteSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "contentSpace", "DeleteSemanticMetric"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget", "contentSpace"),
 	// Spaces (#40): the effective role comes from the SQL function through
 	// internal/authz. Invisible is 404, below the required role is 403.
 	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "ListSpacesForPrincipal"),
@@ -204,6 +204,15 @@ var operationAccess = map[string]access{
 	"ListSpaceMembers":  checked("requireSpace", "ListSpaceMembers"),
 	"SetSpaceMember":    checked("PrincipalFromContext", "requireSpace", "GetUserByID", "GetTeamByID", "SetSpaceMember"),
 	"DeleteSpaceMember": checked("requireSpace", "DeleteSpaceMember"),
+	// Content versions and trash (#34): viewer reads the history, editor
+	// restores; a deleted entity is authorized against its last version's space.
+	"ListSavedQueryVersions":       checked("savedQuerySpaceForHistory", "contentSpace", "ListContentVersions"),
+	"GetSavedQueryVersion":         checked("GetContentVersion", "contentSpace"),
+	"RestoreSavedQueryVersion":     checked("GetContentVersion", "contentSpace", "RestoreSavedQuery"),
+	"ListSemanticMetricVersions":   checked("metricSpaceForHistory", "contentSpace", "ListContentVersions"),
+	"GetSemanticMetricVersion":     checked("GetContentVersion", "contentSpace"),
+	"RestoreSemanticMetricVersion": checked("GetContentVersion", "contentSpace", "ParseMetricSnapshot", "validateSemanticMetric", "RestoreSemanticMetric"),
+	"ListTrash":                    checked("requireWorkspaceAccess", "ListDeletedContent"),
 	// Audit trail (#45): admins see all, anyone else only their own events.
 	"ListAuditEvents":    checked("PrincipalFromContext", "IsAdmin"),
 	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below

@@ -136,6 +136,20 @@ type ClusterSnapshot struct {
 	RawPayload       []byte             `json:"raw_payload"`
 }
 
+type ContentVersion struct {
+	ID           int64              `json:"id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	SpaceID      pgtype.UUID        `json:"space_id"`
+	EntityType   string             `json:"entity_type"`
+	EntityID     pgtype.UUID        `json:"entity_id"`
+	Version      int32              `json:"version"`
+	ChangeKind   string             `json:"change_kind"`
+	Snapshot     []byte             `json:"snapshot"`
+	AuthorID     pgtype.UUID        `json:"author_id"`
+	RestoredFrom *int32             `json:"restored_from"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type Engine struct {
 	ID           pgtype.UUID        `json:"id"`
 	Name         string             `json:"name"`

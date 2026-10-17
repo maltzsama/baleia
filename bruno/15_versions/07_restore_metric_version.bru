@@ -1,0 +1,30 @@
+meta {
+  name: Restore Metric Version
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/metrics/{{metric_id}}/versions/1/restore
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{metric_id}}
+  res.body.label: eq Events count
+}
+
+docs {
+  A metric restore re-runs #33's LIMIT 0 validation before writing; a broken
+  column is a 422 and nothing changes.
+}

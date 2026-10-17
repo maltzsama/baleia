@@ -1,0 +1,26 @@
+meta {
+  name: Get Saved Query Version
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/queries/{{query_id}}/versions/1
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.version: eq 1
+  res.body.change_kind: eq create
+  res.body.snapshot.name: eq My Query
+}
+
+docs {
+  The snapshot is the full state at that version; diffing is client-side.
+}

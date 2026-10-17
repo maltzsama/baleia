@@ -1,0 +1,25 @@
+meta {
+  name: List Trash
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/trash
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  The query from 08_query_editor and the metric from 10_semantic were deleted
+  earlier, so both appear here until restored. Omitted items are never
+  deleted by an import.
+}

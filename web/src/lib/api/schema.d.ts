@@ -678,6 +678,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/queries/{query_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        /** Version history of a saved query — viewer */
+        get: operations["listSavedQueryVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/queries/{query_id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        /** One saved-query version with its snapshot — viewer */
+        get: operations["getSavedQueryVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/queries/{query_id}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a saved query to a version — editor */
+        post: operations["restoreSavedQueryVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/metrics/{metric_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        /** Version history of a metric — viewer */
+        get: operations["listSemanticMetricVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        /** One metric version with its snapshot — viewer */
+        get: operations["getSemanticMetricVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a metric to a version — editor */
+        post: operations["restoreSemanticMetricVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Deleted content that has not been restored — workspace members */
+        get: operations["listTrash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/spaces": {
         parameters: {
             query?: never;
@@ -2750,6 +2893,60 @@ export interface components {
             binding_id?: string | null;
             schema?: string | null;
         };
+        ContentAuthor: {
+            /** Format: uuid */
+            id: string;
+            name?: string | null;
+        };
+        ContentVersion: {
+            version: number;
+            /** @enum {string} */
+            change_kind: "create" | "update" | "delete" | "restore" | "import";
+            author?: components["schemas"]["ContentAuthor"];
+            /** Format: date-time */
+            created_at: string;
+            restored_from?: number | null;
+        };
+        ContentVersionDetail: {
+            version: number;
+            /** @enum {string} */
+            change_kind: "create" | "update" | "delete" | "restore" | "import";
+            author?: components["schemas"]["ContentAuthor"];
+            /** Format: date-time */
+            created_at: string;
+            restored_from?: number | null;
+            snapshot: {
+                [key: string]: unknown;
+            };
+        };
+        RestoreSavedQueryRequest: {
+            /** @description Retry a restorable name conflict with this name */
+            new_name?: string | null;
+            /**
+             * Format: uuid
+             * @description Pick a live space when the snapshot's space is gone
+             */
+            space_id?: string | null;
+        };
+        RestoreSemanticMetricRequest: {
+            /** @description Retry a slug conflict with this slug */
+            new_slug?: string | null;
+            /** Format: uuid */
+            space_id?: string | null;
+        };
+        TrashItem: {
+            /** @enum {string} */
+            entity_type: "saved_query" | "semantic_metric";
+            /** Format: uuid */
+            entity_id: string;
+            slug: string;
+            name?: string;
+            /** Format: uuid */
+            space_id?: string;
+            /** Format: date-time */
+            deleted_at: string;
+            version: number;
+        };
         SavedQuery: {
             /** Format: uuid */
             id: string;
@@ -4241,6 +4438,212 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSavedQueryVersions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentVersion"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSavedQueryVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentVersionDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreSavedQueryVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreSavedQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description The restored query */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedQuery"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSemanticMetricVersions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentVersion"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSemanticMetricVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentVersionDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreSemanticMetricVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                metric_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreSemanticMetricRequest"];
+            };
+        };
+        responses: {
+            /** @description The restored metric */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticMetric"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listTrash: {
+        parameters: {
+            query?: {
+                entity_type?: "saved_query" | "semantic_metric";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted entities, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listSpaces: {

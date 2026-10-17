@@ -139,6 +139,24 @@ const (
 	Url      ConnectionProviderFieldType = "url"
 )
 
+// Defines values for ContentVersionChangeKind.
+const (
+	ContentVersionChangeKindCreate  ContentVersionChangeKind = "create"
+	ContentVersionChangeKindDelete  ContentVersionChangeKind = "delete"
+	ContentVersionChangeKindImport  ContentVersionChangeKind = "import"
+	ContentVersionChangeKindRestore ContentVersionChangeKind = "restore"
+	ContentVersionChangeKindUpdate  ContentVersionChangeKind = "update"
+)
+
+// Defines values for ContentVersionDetailChangeKind.
+const (
+	ContentVersionDetailChangeKindCreate  ContentVersionDetailChangeKind = "create"
+	ContentVersionDetailChangeKindDelete  ContentVersionDetailChangeKind = "delete"
+	ContentVersionDetailChangeKindImport  ContentVersionDetailChangeKind = "import"
+	ContentVersionDetailChangeKindRestore ContentVersionDetailChangeKind = "restore"
+	ContentVersionDetailChangeKindUpdate  ContentVersionDetailChangeKind = "update"
+)
+
 // Defines values for CreateMigrationRequestSourceType.
 const (
 	CreateMigrationRequestSourceTypeNessie CreateMigrationRequestSourceType = "nessie"
@@ -455,6 +473,12 @@ const (
 	TestCatalogConnectionResultErrorCodeUnreachable             TestCatalogConnectionResultErrorCode = "unreachable"
 )
 
+// Defines values for TrashItemEntityType.
+const (
+	TrashItemEntityTypeSavedQuery     TrashItemEntityType = "saved_query"
+	TrashItemEntityTypeSemanticMetric TrashItemEntityType = "semantic_metric"
+)
+
 // Defines values for UpdateRetrieverRequestRefreshType.
 const (
 	UpdateRetrieverRequestRefreshTypeFull        UpdateRetrieverRequestRefreshType = "full"
@@ -580,6 +604,12 @@ const (
 	Second  GetSemanticMetricSqlParamsGrain = "second"
 	Week    GetSemanticMetricSqlParamsGrain = "week"
 	Year    GetSemanticMetricSqlParamsGrain = "year"
+)
+
+// Defines values for ListTrashParamsEntityType.
+const (
+	ListTrashParamsEntityTypeSavedQuery     ListTrashParamsEntityType = "saved_query"
+	ListTrashParamsEntityTypeSemanticMetric ListTrashParamsEntityType = "semantic_metric"
 )
 
 // AddTeamMemberRequest defines model for AddTeamMemberRequest.
@@ -828,6 +858,37 @@ type ConnectionProviderField struct {
 
 // ConnectionProviderFieldType defines model for ConnectionProviderField.Type.
 type ConnectionProviderFieldType string
+
+// ContentAuthor defines model for ContentAuthor.
+type ContentAuthor struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name *string            `json:"name"`
+}
+
+// ContentVersion defines model for ContentVersion.
+type ContentVersion struct {
+	Author       *ContentAuthor           `json:"author,omitempty"`
+	ChangeKind   ContentVersionChangeKind `json:"change_kind"`
+	CreatedAt    time.Time                `json:"created_at"`
+	RestoredFrom *int                     `json:"restored_from"`
+	Version      int                      `json:"version"`
+}
+
+// ContentVersionChangeKind defines model for ContentVersion.ChangeKind.
+type ContentVersionChangeKind string
+
+// ContentVersionDetail defines model for ContentVersionDetail.
+type ContentVersionDetail struct {
+	Author       *ContentAuthor                 `json:"author,omitempty"`
+	ChangeKind   ContentVersionDetailChangeKind `json:"change_kind"`
+	CreatedAt    time.Time                      `json:"created_at"`
+	RestoredFrom *int                           `json:"restored_from"`
+	Snapshot     map[string]interface{}         `json:"snapshot"`
+	Version      int                            `json:"version"`
+}
+
+// ContentVersionDetailChangeKind defines model for ContentVersionDetail.ChangeKind.
+type ContentVersionDetailChangeKind string
 
 // CreateAdminRequest defines model for CreateAdminRequest.
 type CreateAdminRequest struct {
@@ -1558,6 +1619,22 @@ type RefreshResponse struct {
 	Token        string    `json:"token"`
 }
 
+// RestoreSavedQueryRequest defines model for RestoreSavedQueryRequest.
+type RestoreSavedQueryRequest struct {
+	// NewName Retry a restorable name conflict with this name
+	NewName *string `json:"new_name"`
+
+	// SpaceId Pick a live space when the snapshot's space is gone
+	SpaceId *openapi_types.UUID `json:"space_id"`
+}
+
+// RestoreSemanticMetricRequest defines model for RestoreSemanticMetricRequest.
+type RestoreSemanticMetricRequest struct {
+	// NewSlug Retry a slug conflict with this slug
+	NewSlug *string             `json:"new_slug"`
+	SpaceId *openapi_types.UUID `json:"space_id"`
+}
+
 // Retriever defines model for Retriever.
 type Retriever struct {
 	CreatedAt     time.Time            `json:"created_at"`
@@ -1866,6 +1943,20 @@ type TestConnectionRequest struct {
 	// Url Older shape: the endpoint URL (a JDBC URL for databases). Prefer config
 	Url *string `json:"url,omitempty"`
 }
+
+// TrashItem defines model for TrashItem.
+type TrashItem struct {
+	DeletedAt  time.Time           `json:"deleted_at"`
+	EntityId   openapi_types.UUID  `json:"entity_id"`
+	EntityType TrashItemEntityType `json:"entity_type"`
+	Name       *string             `json:"name,omitempty"`
+	Slug       string              `json:"slug"`
+	SpaceId    *openapi_types.UUID `json:"space_id,omitempty"`
+	Version    int                 `json:"version"`
+}
+
+// TrashItemEntityType defines model for TrashItem.EntityType.
+type TrashItemEntityType string
 
 // UpdateBindingRequest defines model for UpdateBindingRequest.
 type UpdateBindingRequest struct {
@@ -2195,6 +2286,12 @@ type ListSavedQueriesParams struct {
 	FolderId *openapi_types.UUID `form:"folder_id,omitempty" json:"folder_id,omitempty"`
 }
 
+// ListSavedQueryVersionsParams defines parameters for ListSavedQueryVersions.
+type ListSavedQueryVersionsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // GetRetrieverHistoryParams defines parameters for GetRetrieverHistory.
 type GetRetrieverHistoryParams struct {
 	Page    *QueryPage    `form:"page,omitempty" json:"page,omitempty"`
@@ -2264,11 +2361,27 @@ type GetSemanticMetricSqlParams struct {
 // GetSemanticMetricSqlParamsGrain defines parameters for GetSemanticMetricSql.
 type GetSemanticMetricSqlParamsGrain string
 
+// ListSemanticMetricVersionsParams defines parameters for ListSemanticMetricVersions.
+type ListSemanticMetricVersionsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // DeleteSpaceParams defines parameters for DeleteSpace.
 type DeleteSpaceParams struct {
 	// Force Delete even when the space still has content
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
 }
+
+// ListTrashParams defines parameters for ListTrash.
+type ListTrashParams struct {
+	EntityType *ListTrashParamsEntityType `form:"entity_type,omitempty" json:"entity_type,omitempty"`
+	Limit      *int                       `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset     *int                       `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListTrashParamsEntityType defines parameters for ListTrash.
+type ListTrashParamsEntityType string
 
 // StreamExecutionParams defines parameters for StreamExecution.
 type StreamExecutionParams struct {
@@ -2368,6 +2481,9 @@ type CreateSavedQueryJSONRequestBody = CreateSavedQueryRequest
 // UpdateSavedQueryJSONRequestBody defines body for UpdateSavedQuery for application/json ContentType.
 type UpdateSavedQueryJSONRequestBody = UpdateSavedQueryRequest
 
+// RestoreSavedQueryVersionJSONRequestBody defines body for RestoreSavedQueryVersion for application/json ContentType.
+type RestoreSavedQueryVersionJSONRequestBody = RestoreSavedQueryRequest
+
 // CreateRetrieverJSONRequestBody defines body for CreateRetriever for application/json ContentType.
 type CreateRetrieverJSONRequestBody = CreateRetrieverRequest
 
@@ -2385,6 +2501,9 @@ type CreateSemanticMetricJSONRequestBody = SemanticMetricCreate
 
 // UpdateSemanticMetricJSONRequestBody defines body for UpdateSemanticMetric for application/json ContentType.
 type UpdateSemanticMetricJSONRequestBody = SemanticMetricUpdate
+
+// RestoreSemanticMetricVersionJSONRequestBody defines body for RestoreSemanticMetricVersion for application/json ContentType.
+type RestoreSemanticMetricVersionJSONRequestBody = RestoreSemanticMetricRequest
 
 // CreateSpaceJSONRequestBody defines body for CreateSpace for application/json ContentType.
 type CreateSpaceJSONRequestBody = CreateSpaceRequest

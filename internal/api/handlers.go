@@ -11,6 +11,7 @@ import (
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metrics"
@@ -44,6 +45,17 @@ type Handlers struct {
 	audit audit.Recorder
 	// dialer is the SSRF-safe dialer for transient engines (#12).
 	dialer *connections.Dialer
+	// content is the only writer of saved content and its versions (#34).
+	content *content.Service
+}
+
+// contentService returns the content writer, constructing one for handlers
+// built by tests without NewHandlers.
+func (h *Handlers) contentService() *content.Service {
+	if h.content != nil {
+		return h.content
+	}
+	return content.New(h.pool, h.queries)
 }
 
 // apiMetrics are the API's producers (#87); all nil-safe, zero without
@@ -94,6 +106,7 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 		versionCache:   NewTTLStore[*string](engineVersionTTL),
 		audit:          audit.Nop{},
+		content:        content.New(pool, queries),
 	}
 }
 

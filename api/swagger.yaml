@@ -1304,6 +1304,58 @@ components:
         binding_id: { type: string, format: uuid, nullable: true }
         schema: { type: string, nullable: true }
 
+    ContentAuthor:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+
+    ContentVersion:
+      type: object
+      required: [version, change_kind, created_at]
+      properties:
+        version: { type: integer }
+        change_kind: { type: string, enum: [create, update, delete, restore, import] }
+        author: { $ref: "#/components/schemas/ContentAuthor" }
+        created_at: { type: string, format: date-time }
+        restored_from: { type: integer, nullable: true }
+
+    ContentVersionDetail:
+      type: object
+      required: [version, change_kind, created_at, snapshot]
+      properties:
+        version: { type: integer }
+        change_kind: { type: string, enum: [create, update, delete, restore, import] }
+        author: { $ref: "#/components/schemas/ContentAuthor" }
+        created_at: { type: string, format: date-time }
+        restored_from: { type: integer, nullable: true }
+        snapshot: { type: object, additionalProperties: true }
+
+    RestoreSavedQueryRequest:
+      type: object
+      properties:
+        new_name: { type: string, nullable: true, description: "Retry a restorable name conflict with this name" }
+        space_id: { type: string, format: uuid, nullable: true, description: "Pick a live space when the snapshot's space is gone" }
+
+    RestoreSemanticMetricRequest:
+      type: object
+      properties:
+        new_slug: { type: string, nullable: true, description: "Retry a slug conflict with this slug" }
+        space_id: { type: string, format: uuid, nullable: true }
+
+    TrashItem:
+      type: object
+      required: [entity_type, entity_id, slug, deleted_at, version]
+      properties:
+        entity_type: { type: string, enum: [saved_query, semantic_metric] }
+        entity_id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        space_id: { type: string, format: uuid }
+        deleted_at: { type: string, format: date-time }
+        version: { type: integer }
+
     SavedQuery:
       type: object
       required: [id, name, workspace_id, space_id, slug, created_by, sql, created_at]
@@ -2494,6 +2546,209 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ── Content versions and trash (#34) ───────────────────────────
+  /workspaces/{id}/queries/{query_id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: query_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [QueryEditor]
+      operationId: listSavedQueryVersions
+      summary: "Version history of a saved query — viewer"
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "Newest first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContentVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/queries/{query_id}/versions/{version}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: query_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [QueryEditor]
+      operationId: getSavedQueryVersion
+      summary: "One saved-query version with its snapshot — viewer"
+      responses:
+        "200":
+          description: "The version"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContentVersionDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/queries/{query_id}/versions/{version}/restore:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: query_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [QueryEditor]
+      operationId: restoreSavedQueryVersion
+      summary: "Restore a saved query to a version — editor"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestoreSavedQueryRequest" }
+      responses:
+        "200":
+          description: "The restored query"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedQuery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/metrics/{metric_id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: metric_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Semantic]
+      operationId: listSemanticMetricVersions
+      summary: "Version history of a metric — viewer"
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "Newest first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContentVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: metric_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Semantic]
+      operationId: getSemanticMetricVersion
+      summary: "One metric version with its snapshot — viewer"
+      responses:
+        "200":
+          description: "The version"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContentVersionDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: metric_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [Semantic]
+      operationId: restoreSemanticMetricVersion
+      summary: "Restore a metric to a version — editor"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestoreSemanticMetricRequest" }
+      responses:
+        "200":
+          description: "The restored metric"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticMetric" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/trash:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [QueryEditor]
+      operationId: listTrash
+      summary: "Deleted content that has not been restored — workspace members"
+      parameters:
+        - name: entity_type
+          in: query
+          schema: { type: string, enum: [saved_query, semantic_metric] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "Deleted entities, newest first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TrashItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Spaces (#40) ───────────────────────────────────────────────
   /workspaces/{id}/spaces:

@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/policy"
@@ -272,7 +273,7 @@ func (h *Handlers) GetSemanticMetric(ctx context.Context, request GetSemanticMet
 	if err != nil {
 		return nil, err
 	}
-	se, err := h.metricSpace(ctx, ws, metric.SpaceID, authz.SpaceViewer)
+	se, err := h.contentSpace(ctx, ws, metric.SpaceID, authz.SpaceViewer)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
 			return GetSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
@@ -344,7 +345,7 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 	if err != nil {
 		return nil, err
 	}
-	if se, err := h.metricSpace(ctx, ws, space.ID, authz.SpaceEditor); err != nil {
+	if se, err := h.contentSpace(ctx, ws, space.ID, authz.SpaceEditor); err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
 			return CreateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 		}
@@ -355,7 +356,7 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 		}
 		return CreateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
-	metric, err := h.queries.CreateSemanticMetric(ctx, db.CreateSemanticMetricParams{
+	metric, err := h.contentService().CreateSemanticMetric(ctx, userID, db.CreateSemanticMetricParams{
 		WorkspaceID:   ws,
 		SpaceID:       space.ID,
 		Slug:          request.Body.Slug,
@@ -400,7 +401,7 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 	if err != nil {
 		return nil, err
 	}
-	if se, err := h.metricSpace(ctx, ws, current.SpaceID, authz.SpaceEditor); err != nil {
+	if se, err := h.contentSpace(ctx, ws, current.SpaceID, authz.SpaceEditor); err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
 			return UpdateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 		}
@@ -483,7 +484,7 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 		return nil, err
 	}
 
-	updated, err := h.queries.UpdateSemanticMetric(ctx, db.UpdateSemanticMetricParams{
+	updated, _, err := h.contentService().UpdateSemanticMetric(ctx, userID, db.UpdateSemanticMetricParams{
 		WorkspaceID:   ws,
 		SpaceID:       current.SpaceID,
 		ID:            metricID,
@@ -526,7 +527,7 @@ func (h *Handlers) DeleteSemanticMetric(ctx context.Context, request DeleteSeman
 	if err != nil {
 		return nil, err
 	}
-	if se, err := h.metricSpace(ctx, ws, current.SpaceID, authz.SpaceEditor); err != nil {
+	if se, err := h.contentSpace(ctx, ws, current.SpaceID, authz.SpaceEditor); err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
 			return DeleteSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 		}
@@ -537,12 +538,15 @@ func (h *Handlers) DeleteSemanticMetric(ctx context.Context, request DeleteSeman
 		}
 		return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
-	deleted, err := h.queries.DeleteSemanticMetric(ctx, db.DeleteSemanticMetricParams{WorkspaceID: ws, ID: metricID})
+	actor, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	if deleted == 0 {
-		return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
+	if err := h.contentService().DeleteSemanticMetric(ctx, actor, ws, metricID); err != nil {
+		if errors.Is(err, content.ErrNotFound) {
+			return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
+		}
+		return nil, err
 	}
 	return DeleteSemanticMetric204Response{}, nil
 }
@@ -572,7 +576,7 @@ func (h *Handlers) GetSemanticMetricSql(ctx context.Context, request GetSemantic
 	if nf {
 		return GetSemanticMetricSql404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
-	if se, err := h.metricSpace(ctx, ws, metric.SpaceID, authz.SpaceViewer); err != nil {
+	if se, err := h.contentSpace(ctx, ws, metric.SpaceID, authz.SpaceViewer); err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
 			return GetSemanticMetricSql401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
 		}
