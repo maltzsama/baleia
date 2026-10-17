@@ -188,7 +188,10 @@ func (s *Server) routes() {
 		})
 	})
 
-	s.mux.Handle("/*", staticHandler(s.queries, "web/build"))
+	static := staticHandler(s.queries, "web/build")
+	s.mux.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		static.ServeHTTP(w, r)
+	}))
 }
 
 // staticUsers tells the static handler whether the first admin exists.
