@@ -199,6 +199,7 @@ func main() {
 	w.RegisterWorkflow(workflows.LensClusterPollWorkflow)
 	w.RegisterWorkflow(workflows.LensTableHealthWorkflow)
 	w.RegisterWorkflow(workflows.LensMaintenanceWorkflow)
+	w.RegisterWorkflow(workflows.MaintenanceRunWorkflow)
 	w.RegisterWorkflow(workflows.RetrieverDispatchWorkflow)
 	w.RegisterWorkflow(workflows.RetrieverRefreshWorkflow)
 	w.RegisterWorkflow(workflows.MetadataSyncWorkflow)

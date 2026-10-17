@@ -1824,6 +1824,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/monitoring/engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Engines with runtime monitoring the caller can view */
+        get: operations["listMonitoringEngines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/monitoring/cluster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Cluster snapshots of an engine */
+        get: operations["getEngineCluster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/monitoring/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Query snapshots of an engine — own queries or, for admins, everyone's */
+        get: operations["listMonitoringQueries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/monitoring/queries/{query_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        /** Full SQL, timings and error of one query */
+        get: operations["getMonitoringQuery"];
+        put?: never;
+        /** Cancel a running query */
+        post: operations["killMonitoringQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/table-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** Iceberg table health of a logical catalog */
+        get: operations["listTableHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run optimize/expire/orphan cleanup on one Iceberg table */
+        post: operations["createMaintenanceRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/maintenance-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** Maintenance runs of a catalog, newest first */
+        get: operations["listMaintenanceRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/retrievers": {
         parameters: {
             query?: never;
@@ -3451,6 +3584,99 @@ export interface components {
             ts: string;
             position: number;
             rows_so_far: number;
+        };
+        MonitoringEngine: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: string;
+            class: string;
+        };
+        ClusterPoint: {
+            /** Format: date-time */
+            captured_at: string;
+            active_workers: number;
+            running_queries: number;
+            queued_queries: number;
+            blocked_queries: number;
+            total_memory_bytes?: number | null;
+            free_memory_bytes?: number | null;
+        };
+        ClusterSeries: {
+            latest?: components["schemas"]["ClusterPoint"] | null;
+            series: components["schemas"]["ClusterPoint"][];
+        };
+        MonitoringQuery: {
+            trino_query_id: string;
+            /** Format: uuid */
+            execution_id?: string | null;
+            state: string;
+            user: string;
+            sql_first_line?: string;
+            catalog: string;
+            schema?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            elapsed_ms?: number | null;
+            cpu_ms?: number | null;
+            physical_input_bytes?: number | null;
+            output_rows?: number | null;
+            origin?: string;
+        };
+        MonitoringQueryDetail: components["schemas"]["MonitoringQuery"] & {
+            sql?: string;
+            error_message?: string | null;
+        };
+        MonitoringQueryPage: {
+            items: components["schemas"]["MonitoringQuery"][];
+            next_offset?: number | null;
+        };
+        TableHealth: {
+            /** Format: uuid */
+            catalog_id: string;
+            catalog_name: string;
+            namespace: string;
+            table_name: string;
+            snapshot_count?: number;
+            file_count?: number | null;
+            total_size_bytes?: number | null;
+            oldest_snapshot_age_hours?: number | null;
+            /** Format: date-time */
+            last_maintenance_at?: string | null;
+            health_score: number;
+            needs_compaction: boolean;
+            needs_snapshot_expiry: boolean;
+            needs_orphan_cleanup: boolean;
+        };
+        MaintenanceRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            catalog_id: string;
+            /** Format: uuid */
+            binding_id?: string | null;
+            namespace: string;
+            table_name: string;
+            operations: string[];
+            retention?: string | null;
+            status: string;
+            error_code?: string | null;
+            error_message?: string | null;
+            /** Format: uuid */
+            started_by?: string | null;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at?: string | null;
+            workflow_id: string;
+        };
+        CreateMaintenanceRequest: {
+            namespace: string;
+            table: string;
+            operations: string[];
+            retention?: string | null;
+            /** Format: uuid */
+            binding_id?: string | null;
         };
         Retriever: {
             /** Format: uuid */
@@ -6917,6 +7143,221 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listMonitoringEngines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Engines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringEngine"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getEngineCluster: {
+        parameters: {
+            query?: {
+                window?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cluster series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterSeries"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listMonitoringQueries: {
+        parameters: {
+            query?: {
+                state?: string;
+                scope?: string;
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of queries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringQueryPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getMonitoringQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Query */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringQueryDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    killMonitoringQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancel requested */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listTableHealth: {
+        parameters: {
+            query?: {
+                ns?: string;
+                needs?: string;
+                max_score?: number;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Table health rows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableHealth"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createMaintenanceRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Maintenance started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRun"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listMaintenanceRuns: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRun"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listRetrievers: {

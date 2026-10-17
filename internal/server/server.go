@@ -176,11 +176,10 @@ func (s *Server) routes() {
 		r.Use(OptionalJSONBody)
 		baleiaapi.HandlerFromMux(strictHandler, r)
 
-		// Non-oapi routes (Lens and dynamic catalog browsing) share the chi auth
+		// Non-oapi routes (dynamic catalog browsing) share the chi auth
 		// middleware; handlers read the caller from the request context.
 		r.Group(func(r chi.Router) {
 			r.Use(chiAuthMiddleware(s.cfg.JWTSecret))
-			baleiaapi.RegisterLensRoutes(r, s.queries, s.cfg, temporalClient, engines, auditRec)
 			r.Get("/workspaces/{id}/catalogs", h.ListWorkspaceCatalogs)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", h.HandleListNamespaces)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", h.HandleListTables)

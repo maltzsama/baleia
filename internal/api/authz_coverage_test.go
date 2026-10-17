@@ -221,17 +221,26 @@ var operationAccess = map[string]access{
 	"ExportSpaceBundle":            checked("contentSpace", "Export"),
 	"ImportSpaceBundle":            checked("contentSpace", "Import"),
 	// Audit trail (#45): admins see all, anyone else only their own events.
-	"ListAuditEvents":    checked("PrincipalFromContext", "IsAdmin"),
-	"ListAuditActions":   {kind: kindAuthenticated, why: "static action vocabulary, no tenant data"},
-	"ResolveAudit":       checked("PrincipalFromContext", "Workspace", "Connection"),
-	"ExportAuditCSV":     checked("PrincipalFromContext", "IsAdmin"),
-	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below
-	"ListMigrations":     {kind: kindStub},
-	"CreateMigration":    {kind: kindStub},
-	"GetMigration":       {kind: kindStub},
-	"CancelMigration":    {kind: kindStub},
-	"ListMigrationItems": {kind: kindStub},
-	"StartMigration":     {kind: kindStub},
+	"ListAuditEvents":  checked("PrincipalFromContext", "IsAdmin"),
+	"ListAuditActions": {kind: kindAuthenticated, why: "static action vocabulary, no tenant data"},
+	"ResolveAudit":     checked("PrincipalFromContext", "Workspace", "Connection"),
+	"ExportAuditCSV":   checked("PrincipalFromContext", "IsAdmin"),
+	// Engine-aware monitoring (#117).
+	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
+	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),
+	"ListMonitoringQueries": checked("PrincipalFromContext", "engineForMonitoring"),
+	"GetMonitoringQuery":    checked("PrincipalFromContext", "engineForMonitoring"),
+	"KillMonitoringQuery":   checked("PrincipalFromContext", "engineForMonitoring"),
+	"ListTableHealth":       checked("PrincipalFromContext", "catalogForMonitoring"),
+	"CreateMaintenanceRun":  checked("PrincipalFromContext", "catalogForMonitoring"),
+	"ListMaintenanceRuns":   checked("PrincipalFromContext", "catalogForMonitoring"),
+	"StreamExecution":       {kind: kindStub}, // the real one is the ws route below
+	"ListMigrations":        {kind: kindStub},
+	"CreateMigration":       {kind: kindStub},
+	"GetMigration":          {kind: kindStub},
+	"CancelMigration":       {kind: kindStub},
+	"ListMigrationItems":    {kind: kindStub},
+	"StartMigration":        {kind: kindStub},
 }
 
 // routeAccess covers the routes registered by hand with chi (everything that is

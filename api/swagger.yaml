@@ -1690,6 +1690,122 @@ components:
         rows_so_far: { type: integer }
 
     # ── Retrievers ─────────────────────────────────────────────
+    MonitoringEngine:
+      type: object
+      required: [id, name, kind, class]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string }
+        class: { type: string }
+
+    ClusterPoint:
+      type: object
+      required: [captured_at, active_workers, running_queries, queued_queries, blocked_queries]
+      properties:
+        captured_at: { type: string, format: date-time }
+        active_workers: { type: integer }
+        running_queries: { type: integer }
+        queued_queries: { type: integer }
+        blocked_queries: { type: integer }
+        total_memory_bytes: { type: integer, nullable: true }
+        free_memory_bytes: { type: integer, nullable: true }
+
+    ClusterSeries:
+      type: object
+      required: [series]
+      properties:
+        latest:
+          allOf: [{ $ref: "#/components/schemas/ClusterPoint" }]
+          nullable: true
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/ClusterPoint" }
+
+    MonitoringQuery:
+      type: object
+      required: [trino_query_id, state, user, catalog, created_at]
+      properties:
+        trino_query_id: { type: string }
+        execution_id: { type: string, format: uuid, nullable: true }
+        state: { type: string }
+        user: { type: string }
+        sql_first_line: { type: string }
+        catalog: { type: string }
+        schema: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        elapsed_ms: { type: integer, nullable: true }
+        cpu_ms: { type: integer, nullable: true }
+        physical_input_bytes: { type: integer, nullable: true }
+        output_rows: { type: integer, nullable: true }
+        origin: { type: string }
+
+    MonitoringQueryDetail:
+      allOf:
+        - $ref: "#/components/schemas/MonitoringQuery"
+        - type: object
+          properties:
+            sql: { type: string }
+            error_message: { type: string, nullable: true }
+
+    MonitoringQueryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MonitoringQuery" }
+        next_offset: { type: integer, nullable: true }
+
+    TableHealth:
+      type: object
+      required: [catalog_id, catalog_name, namespace, table_name, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup]
+      properties:
+        catalog_id: { type: string, format: uuid }
+        catalog_name: { type: string }
+        namespace: { type: string }
+        table_name: { type: string }
+        snapshot_count: { type: integer }
+        file_count: { type: integer, nullable: true }
+        total_size_bytes: { type: integer, nullable: true }
+        oldest_snapshot_age_hours: { type: integer, nullable: true }
+        last_maintenance_at: { type: string, format: date-time, nullable: true }
+        health_score: { type: integer }
+        needs_compaction: { type: boolean }
+        needs_snapshot_expiry: { type: boolean }
+        needs_orphan_cleanup: { type: boolean }
+
+    MaintenanceRun:
+      type: object
+      required: [id, catalog_id, namespace, table_name, operations, status, started_at, workflow_id]
+      properties:
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        binding_id: { type: string, format: uuid, nullable: true }
+        namespace: { type: string }
+        table_name: { type: string }
+        operations: { type: array, items: { type: string } }
+        retention: { type: string, nullable: true }
+        status: { type: string }
+        error_code: { type: string, nullable: true }
+        error_message: { type: string, nullable: true }
+        started_by: { type: string, format: uuid, nullable: true }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        workflow_id: { type: string }
+
+    CreateMaintenanceRequest:
+      type: object
+      required: [namespace, table, operations]
+      properties:
+        namespace: { type: string }
+        table: { type: string }
+        operations:
+          type: array
+          items: { type: string }
+        retention: { type: string, nullable: true }
+        binding_id: { type: string, format: uuid, nullable: true }
+
     Retriever:
       type: object
       required:
@@ -4554,6 +4670,196 @@ paths:
         "101":
           description: "WebSocket established"
         "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /monitoring/engines:
+    get:
+      tags: [Monitoring]
+      operationId: listMonitoringEngines
+      summary: "Engines with runtime monitoring the caller can view"
+      responses:
+        "200":
+          description: "Engines"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MonitoringEngine" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /engines/{id}/monitoring/cluster:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Monitoring]
+      operationId: getEngineCluster
+      summary: "Cluster snapshots of an engine"
+      parameters:
+        - name: window
+          in: query
+          schema: { type: string, default: 1h }
+      responses:
+        "200":
+          description: "Cluster series"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClusterSeries" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /engines/{id}/monitoring/queries:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Monitoring]
+      operationId: listMonitoringQueries
+      summary: "Query snapshots of an engine — own queries or, for admins, everyone's"
+      parameters:
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: scope
+          in: query
+          schema: { type: string, default: mine }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "One page of queries"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonitoringQueryPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /engines/{id}/monitoring/queries/{query_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: query_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Monitoring]
+      operationId: getMonitoringQuery
+      summary: "Full SQL, timings and error of one query"
+      responses:
+        "200":
+          description: "Query"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonitoringQueryDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Monitoring]
+      operationId: killMonitoringQuery
+      summary: "Cancel a running query"
+      responses:
+        "202":
+          description: "Cancel requested"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /catalogs/{catalog_id}/table-health:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Monitoring]
+      operationId: listTableHealth
+      summary: "Iceberg table health of a logical catalog"
+      parameters:
+        - name: ns
+          in: query
+          schema: { type: string }
+        - name: needs
+          in: query
+          schema: { type: string }
+        - name: max_score
+          in: query
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "Table health rows"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TableHealth" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/maintenance:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Monitoring]
+      operationId: createMaintenanceRun
+      summary: "Run optimize/expire/orphan cleanup on one Iceberg table"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMaintenanceRequest" }
+      responses:
+        "202":
+          description: "Maintenance started"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /catalogs/{catalog_id}/maintenance-runs:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Monitoring]
+      operationId: listMaintenanceRuns
+      summary: "Maintenance runs of a catalog, newest first"
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "Runs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MaintenanceRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Retrievers ────────────────────────────────────────────────
   /workspaces/{id}/retrievers:

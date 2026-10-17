@@ -73,6 +73,7 @@ func LensTableHealthWorkflow(ctx workflow.Context) error {
 
 			actCtx := workflow.WithActivityOptions(ctx, ao)
 			if err := workflow.ExecuteActivity(actCtx, activities.LensAnalyzeTableHealth, activities.LensAnalyzeTableHealthParams{
+				CatalogID:           cat.ID,
 				CatalogConnectionID: cat.CatalogConnectionID,
 				Catalog:             cat.Catalog,
 			}).Get(actCtx, nil); err != nil {

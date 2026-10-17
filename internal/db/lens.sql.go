@@ -11,8 +11,57 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createMaintenanceRun = `-- name: CreateMaintenanceRun :one
+INSERT INTO maintenance_runs (catalog_id, binding_id, namespace, table_name, operations, retention, status, started_by, workflow_id)
+VALUES ($1::uuid, $2::uuid, $3::text, $4::text,
+        $5::text[], $6::text, 'running', $7::uuid, $8::text)
+RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id
+`
+
+type CreateMaintenanceRunParams struct {
+	CatalogID  pgtype.UUID `json:"catalog_id"`
+	BindingID  pgtype.UUID `json:"binding_id"`
+	Namespace  string      `json:"namespace"`
+	TableName  string      `json:"table_name"`
+	Operations []string    `json:"operations"`
+	Retention  *string     `json:"retention"`
+	StartedBy  pgtype.UUID `json:"started_by"`
+	WorkflowID string      `json:"workflow_id"`
+}
+
+func (q *Queries) CreateMaintenanceRun(ctx context.Context, arg CreateMaintenanceRunParams) (MaintenanceRun, error) {
+	row := q.db.QueryRow(ctx, createMaintenanceRun,
+		arg.CatalogID,
+		arg.BindingID,
+		arg.Namespace,
+		arg.TableName,
+		arg.Operations,
+		arg.Retention,
+		arg.StartedBy,
+		arg.WorkflowID,
+	)
+	var i MaintenanceRun
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Namespace,
+		&i.TableName,
+		&i.Operations,
+		&i.Retention,
+		&i.Status,
+		&i.ErrorCode,
+		&i.ErrorMessage,
+		&i.StartedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.WorkflowID,
+	)
+	return i, err
+}
+
 const getLatestClusterSnapshot = `-- name: GetLatestClusterSnapshot :one
-SELECT id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload FROM cluster_snapshots ORDER BY captured_at DESC LIMIT 1
+SELECT id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload, engine_id FROM cluster_snapshots ORDER BY captured_at DESC LIMIT 1
 `
 
 func (q *Queries) GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error) {
@@ -28,12 +77,61 @@ func (q *Queries) GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot
 		&i.TotalMemoryBytes,
 		&i.FreeMemoryBytes,
 		&i.RawPayload,
+		&i.EngineID,
+	)
+	return i, err
+}
+
+const getLatestClusterSnapshotByEngine = `-- name: GetLatestClusterSnapshotByEngine :one
+SELECT id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload, engine_id FROM cluster_snapshots WHERE engine_id = $1 ORDER BY captured_at DESC LIMIT 1
+`
+
+func (q *Queries) GetLatestClusterSnapshotByEngine(ctx context.Context, engineID pgtype.UUID) (ClusterSnapshot, error) {
+	row := q.db.QueryRow(ctx, getLatestClusterSnapshotByEngine, engineID)
+	var i ClusterSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.CapturedAt,
+		&i.ActiveWorkers,
+		&i.RunningQueries,
+		&i.QueuedQueries,
+		&i.BlockedQueries,
+		&i.TotalMemoryBytes,
+		&i.FreeMemoryBytes,
+		&i.RawPayload,
+		&i.EngineID,
+	)
+	return i, err
+}
+
+const getMaintenanceRun = `-- name: GetMaintenanceRun :one
+SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id FROM maintenance_runs WHERE id = $1::uuid
+`
+
+func (q *Queries) GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (MaintenanceRun, error) {
+	row := q.db.QueryRow(ctx, getMaintenanceRun, id)
+	var i MaintenanceRun
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Namespace,
+		&i.TableName,
+		&i.Operations,
+		&i.Retention,
+		&i.Status,
+		&i.ErrorCode,
+		&i.ErrorMessage,
+		&i.StartedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.WorkflowID,
 	)
 	return i, err
 }
 
 const getTableHealthSnapshot = `-- name: GetTableHealthSnapshot :one
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
 WHERE catalog_connection_id = $1 AND catalog = $2 AND namespace = $3 AND table_name = $4
 `
 
@@ -68,12 +166,13 @@ func (q *Queries) GetTableHealthSnapshot(ctx context.Context, arg GetTableHealth
 		&i.NeedsCompaction,
 		&i.NeedsSnapshotExpiry,
 		&i.NeedsOrphanCleanup,
+		&i.CatalogID,
 	)
 	return i, err
 }
 
 const getTrinoQuerySnapshot = `-- name: GetTrinoQuerySnapshot :one
-SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at FROM trino_query_snapshots WHERE trino_query_id = $1
+SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id FROM trino_query_snapshots WHERE trino_query_id = $1
 `
 
 func (q *Queries) GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (TrinoQuerySnapshot, error) {
@@ -98,30 +197,68 @@ func (q *Queries) GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string
 		&i.RawTrinoPayload,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
+		&i.EngineID,
+	)
+	return i, err
+}
+
+const getTrinoQuerySnapshotByEngine = `-- name: GetTrinoQuerySnapshotByEngine :one
+SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id FROM trino_query_snapshots
+WHERE engine_id = $1::uuid AND trino_query_id = $2::text
+`
+
+type GetTrinoQuerySnapshotByEngineParams struct {
+	EngineID     pgtype.UUID `json:"engine_id"`
+	TrinoQueryID string      `json:"trino_query_id"`
+}
+
+func (q *Queries) GetTrinoQuerySnapshotByEngine(ctx context.Context, arg GetTrinoQuerySnapshotByEngineParams) (TrinoQuerySnapshot, error) {
+	row := q.db.QueryRow(ctx, getTrinoQuerySnapshotByEngine, arg.EngineID, arg.TrinoQueryID)
+	var i TrinoQuerySnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.TrinoQueryID,
+		&i.ExecutionID,
+		&i.Origin,
+		&i.User,
+		&i.State,
+		&i.Sql,
+		&i.Catalog,
+		&i.Schema,
+		&i.CreatedAt,
+		&i.ElapsedMs,
+		&i.CpuMs,
+		&i.PhysicalInputBytes,
+		&i.OutputRows,
+		&i.ErrorMessage,
+		&i.RawTrinoPayload,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+		&i.EngineID,
 	)
 	return i, err
 }
 
 const insertClusterSnapshot = `-- name: InsertClusterSnapshot :one
-
-INSERT INTO cluster_snapshots (active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload
+INSERT INTO cluster_snapshots (engine_id, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload, engine_id
 `
 
 type InsertClusterSnapshotParams struct {
-	ActiveWorkers    int32  `json:"active_workers"`
-	RunningQueries   int32  `json:"running_queries"`
-	QueuedQueries    int32  `json:"queued_queries"`
-	BlockedQueries   int32  `json:"blocked_queries"`
-	TotalMemoryBytes *int64 `json:"total_memory_bytes"`
-	FreeMemoryBytes  *int64 `json:"free_memory_bytes"`
-	RawPayload       []byte `json:"raw_payload"`
+	EngineID         pgtype.UUID `json:"engine_id"`
+	ActiveWorkers    int32       `json:"active_workers"`
+	RunningQueries   int32       `json:"running_queries"`
+	QueuedQueries    int32       `json:"queued_queries"`
+	BlockedQueries   int32       `json:"blocked_queries"`
+	TotalMemoryBytes *int64      `json:"total_memory_bytes"`
+	FreeMemoryBytes  *int64      `json:"free_memory_bytes"`
+	RawPayload       []byte      `json:"raw_payload"`
 }
 
-// Cluster Snapshots
 func (q *Queries) InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error) {
 	row := q.db.QueryRow(ctx, insertClusterSnapshot,
+		arg.EngineID,
 		arg.ActiveWorkers,
 		arg.RunningQueries,
 		arg.QueuedQueries,
@@ -141,12 +278,13 @@ func (q *Queries) InsertClusterSnapshot(ctx context.Context, arg InsertClusterSn
 		&i.TotalMemoryBytes,
 		&i.FreeMemoryBytes,
 		&i.RawPayload,
+		&i.EngineID,
 	)
 	return i, err
 }
 
 const listActiveTrinoQueries = `-- name: ListActiveTrinoQueries :many
-SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at FROM trino_query_snapshots
+SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id FROM trino_query_snapshots
 WHERE state = 'running'
 ORDER BY created_at DESC
 `
@@ -179,6 +317,7 @@ func (q *Queries) ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnaps
 			&i.RawTrinoPayload,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.EngineID,
 		); err != nil {
 			return nil, err
 		}
@@ -191,7 +330,7 @@ func (q *Queries) ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnaps
 }
 
 const listClusterSnapshots = `-- name: ListClusterSnapshots :many
-SELECT id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload FROM cluster_snapshots
+SELECT id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload, engine_id FROM cluster_snapshots
 ORDER BY captured_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -220,6 +359,165 @@ func (q *Queries) ListClusterSnapshots(ctx context.Context, arg ListClusterSnaps
 			&i.TotalMemoryBytes,
 			&i.FreeMemoryBytes,
 			&i.RawPayload,
+			&i.EngineID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listClusterSnapshotsByEngine = `-- name: ListClusterSnapshotsByEngine :many
+SELECT id, captured_at, active_workers, running_queries, queued_queries, blocked_queries, total_memory_bytes, free_memory_bytes, raw_payload, engine_id FROM cluster_snapshots
+WHERE engine_id = $1::uuid AND captured_at >= $2::timestamptz
+ORDER BY captured_at ASC
+LIMIT $3::int
+`
+
+type ListClusterSnapshotsByEngineParams struct {
+	EngineID pgtype.UUID        `json:"engine_id"`
+	FromTime pgtype.Timestamptz `json:"from_time"`
+	Lim      int32              `json:"lim"`
+}
+
+func (q *Queries) ListClusterSnapshotsByEngine(ctx context.Context, arg ListClusterSnapshotsByEngineParams) ([]ClusterSnapshot, error) {
+	rows, err := q.db.Query(ctx, listClusterSnapshotsByEngine, arg.EngineID, arg.FromTime, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClusterSnapshot
+	for rows.Next() {
+		var i ClusterSnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.CapturedAt,
+			&i.ActiveWorkers,
+			&i.RunningQueries,
+			&i.QueuedQueries,
+			&i.BlockedQueries,
+			&i.TotalMemoryBytes,
+			&i.FreeMemoryBytes,
+			&i.RawPayload,
+			&i.EngineID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMaintenanceRuns = `-- name: ListMaintenanceRuns :many
+SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id FROM maintenance_runs
+WHERE catalog_id = $1::uuid
+ORDER BY started_at DESC
+LIMIT $3::int OFFSET $2::int
+`
+
+type ListMaintenanceRunsParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	Off       int32       `json:"off"`
+	Lim       int32       `json:"lim"`
+}
+
+func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRunsParams) ([]MaintenanceRun, error) {
+	rows, err := q.db.Query(ctx, listMaintenanceRuns, arg.CatalogID, arg.Off, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MaintenanceRun
+	for rows.Next() {
+		var i MaintenanceRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.CatalogID,
+			&i.BindingID,
+			&i.Namespace,
+			&i.TableName,
+			&i.Operations,
+			&i.Retention,
+			&i.Status,
+			&i.ErrorCode,
+			&i.ErrorMessage,
+			&i.StartedBy,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.WorkflowID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTableHealthByCatalog = `-- name: ListTableHealthByCatalog :many
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
+WHERE catalog_id = $1::uuid
+  AND ($2::text IS NULL OR namespace = $2::text)
+  AND ($3::text IS NULL
+       OR ($3::text = 'compaction' AND needs_compaction)
+       OR ($3::text = 'snapshot_expiry' AND needs_snapshot_expiry)
+       OR ($3::text = 'orphan_cleanup' AND needs_orphan_cleanup))
+  AND ($4::int IS NULL OR health_score <= $4::int)
+ORDER BY health_score ASC, namespace, table_name
+LIMIT $6::int OFFSET $5::int
+`
+
+type ListTableHealthByCatalogParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	Ns        *string     `json:"ns"`
+	Needs     *string     `json:"needs"`
+	MaxScore  *int32      `json:"max_score"`
+	Off       int32       `json:"off"`
+	Lim       int32       `json:"lim"`
+}
+
+func (q *Queries) ListTableHealthByCatalog(ctx context.Context, arg ListTableHealthByCatalogParams) ([]TableHealthSnapshot, error) {
+	rows, err := q.db.Query(ctx, listTableHealthByCatalog,
+		arg.CatalogID,
+		arg.Ns,
+		arg.Needs,
+		arg.MaxScore,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TableHealthSnapshot
+	for rows.Next() {
+		var i TableHealthSnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.CatalogConnectionID,
+			&i.Catalog,
+			&i.Namespace,
+			&i.TableName,
+			&i.CapturedAt,
+			&i.SnapshotCount,
+			&i.FileCount,
+			&i.TotalSizeBytes,
+			&i.OldestSnapshotAgeHours,
+			&i.LastMaintenanceAt,
+			&i.HealthScore,
+			&i.NeedsCompaction,
+			&i.NeedsSnapshotExpiry,
+			&i.NeedsOrphanCleanup,
+			&i.CatalogID,
 		); err != nil {
 			return nil, err
 		}
@@ -232,7 +530,7 @@ func (q *Queries) ListClusterSnapshots(ctx context.Context, arg ListClusterSnaps
 }
 
 const listTableHealthByConnection = `-- name: ListTableHealthByConnection :many
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
 WHERE catalog_connection_id = $1
 ORDER BY health_score ASC
 LIMIT $2 OFFSET $3
@@ -269,6 +567,7 @@ func (q *Queries) ListTableHealthByConnection(ctx context.Context, arg ListTable
 			&i.NeedsCompaction,
 			&i.NeedsSnapshotExpiry,
 			&i.NeedsOrphanCleanup,
+			&i.CatalogID,
 		); err != nil {
 			return nil, err
 		}
@@ -281,7 +580,7 @@ func (q *Queries) ListTableHealthByConnection(ctx context.Context, arg ListTable
 }
 
 const listTableHealthSnapshots = `-- name: ListTableHealthSnapshots :many
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
 ORDER BY health_score ASC
 LIMIT $1 OFFSET $2
 `
@@ -316,6 +615,7 @@ func (q *Queries) ListTableHealthSnapshots(ctx context.Context, arg ListTableHea
 			&i.NeedsCompaction,
 			&i.NeedsSnapshotExpiry,
 			&i.NeedsOrphanCleanup,
+			&i.CatalogID,
 		); err != nil {
 			return nil, err
 		}
@@ -328,7 +628,7 @@ func (q *Queries) ListTableHealthSnapshots(ctx context.Context, arg ListTableHea
 }
 
 const listTrinoQuerySnapshots = `-- name: ListTrinoQuerySnapshots :many
-SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at FROM trino_query_snapshots
+SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id FROM trino_query_snapshots
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -366,6 +666,73 @@ func (q *Queries) ListTrinoQuerySnapshots(ctx context.Context, arg ListTrinoQuer
 			&i.RawTrinoPayload,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.EngineID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrinoQuerySnapshotsByEngine = `-- name: ListTrinoQuerySnapshotsByEngine :many
+SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id FROM trino_query_snapshots
+WHERE engine_id = $1::uuid
+  AND ($2::text IS NULL OR state = $2::text)
+  AND ($3::text IS NULL OR "user" = $3::text)
+  AND ($4::text IS NULL OR sql ILIKE '%' || $4::text || '%')
+ORDER BY created_at DESC
+LIMIT $6::int OFFSET $5::int
+`
+
+type ListTrinoQuerySnapshotsByEngineParams struct {
+	EngineID pgtype.UUID `json:"engine_id"`
+	State    *string     `json:"state"`
+	UserName *string     `json:"user_name"`
+	Q        *string     `json:"q"`
+	Off      int32       `json:"off"`
+	Lim      int32       `json:"lim"`
+}
+
+func (q *Queries) ListTrinoQuerySnapshotsByEngine(ctx context.Context, arg ListTrinoQuerySnapshotsByEngineParams) ([]TrinoQuerySnapshot, error) {
+	rows, err := q.db.Query(ctx, listTrinoQuerySnapshotsByEngine,
+		arg.EngineID,
+		arg.State,
+		arg.UserName,
+		arg.Q,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrinoQuerySnapshot
+	for rows.Next() {
+		var i TrinoQuerySnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.TrinoQueryID,
+			&i.ExecutionID,
+			&i.Origin,
+			&i.User,
+			&i.State,
+			&i.Sql,
+			&i.Catalog,
+			&i.Schema,
+			&i.CreatedAt,
+			&i.ElapsedMs,
+			&i.CpuMs,
+			&i.PhysicalInputBytes,
+			&i.OutputRows,
+			&i.ErrorMessage,
+			&i.RawTrinoPayload,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.EngineID,
 		); err != nil {
 			return nil, err
 		}
@@ -378,7 +745,7 @@ func (q *Queries) ListTrinoQuerySnapshots(ctx context.Context, arg ListTrinoQuer
 }
 
 const listTrinoQuerySnapshotsByUser = `-- name: ListTrinoQuerySnapshotsByUser :many
-SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at FROM trino_query_snapshots
+SELECT id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id FROM trino_query_snapshots
 WHERE "user" = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -390,7 +757,6 @@ type ListTrinoQuerySnapshotsByUserParams struct {
 	Offset int32  `json:"offset"`
 }
 
-// Lens shows non-admins only the queries run under their own Trino identity.
 func (q *Queries) ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error) {
 	rows, err := q.db.Query(ctx, listTrinoQuerySnapshotsByUser, arg.User, arg.Limit, arg.Offset)
 	if err != nil {
@@ -419,6 +785,7 @@ func (q *Queries) ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTri
 			&i.RawTrinoPayload,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.EngineID,
 		); err != nil {
 			return nil, err
 		}
@@ -430,12 +797,55 @@ func (q *Queries) ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTri
 	return items, nil
 }
 
-const upsertTableHealthSnapshot = `-- name: UpsertTableHealthSnapshot :one
+const updateMaintenanceRun = `-- name: UpdateMaintenanceRun :one
+UPDATE maintenance_runs
+SET status = $1::text, error_code = $2::text,
+    error_message = $3::text, finished_at = now()
+WHERE id = $4::uuid
+RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id
+`
 
-INSERT INTO table_health_snapshots (catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-ON CONFLICT (catalog_connection_id, catalog, namespace, table_name) DO UPDATE
+type UpdateMaintenanceRunParams struct {
+	Status       string      `json:"status"`
+	ErrorCode    *string     `json:"error_code"`
+	ErrorMessage *string     `json:"error_message"`
+	ID           pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateMaintenanceRun(ctx context.Context, arg UpdateMaintenanceRunParams) (MaintenanceRun, error) {
+	row := q.db.QueryRow(ctx, updateMaintenanceRun,
+		arg.Status,
+		arg.ErrorCode,
+		arg.ErrorMessage,
+		arg.ID,
+	)
+	var i MaintenanceRun
+	err := row.Scan(
+		&i.ID,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Namespace,
+		&i.TableName,
+		&i.Operations,
+		&i.Retention,
+		&i.Status,
+		&i.ErrorCode,
+		&i.ErrorMessage,
+		&i.StartedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.WorkflowID,
+	)
+	return i, err
+}
+
+const upsertTableHealthSnapshot = `-- name: UpsertTableHealthSnapshot :one
+INSERT INTO table_health_snapshots (catalog_id, catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+ON CONFLICT (catalog_id, namespace, table_name) DO UPDATE
 SET captured_at               = now(),
+    catalog_connection_id     = EXCLUDED.catalog_connection_id,
+    catalog                   = EXCLUDED.catalog,
     snapshot_count            = EXCLUDED.snapshot_count,
     file_count                = EXCLUDED.file_count,
     total_size_bytes          = EXCLUDED.total_size_bytes,
@@ -445,10 +855,11 @@ SET captured_at               = now(),
     needs_compaction          = EXCLUDED.needs_compaction,
     needs_snapshot_expiry     = EXCLUDED.needs_snapshot_expiry,
     needs_orphan_cleanup      = EXCLUDED.needs_orphan_cleanup
-RETURNING id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup
+RETURNING id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id
 `
 
 type UpsertTableHealthSnapshotParams struct {
+	CatalogID              pgtype.UUID        `json:"catalog_id"`
 	CatalogConnectionID    pgtype.UUID        `json:"catalog_connection_id"`
 	Catalog                string             `json:"catalog"`
 	Namespace              string             `json:"namespace"`
@@ -464,9 +875,9 @@ type UpsertTableHealthSnapshotParams struct {
 	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
 }
 
-// Table Health Snapshots
 func (q *Queries) UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTableHealthSnapshotParams) (TableHealthSnapshot, error) {
 	row := q.db.QueryRow(ctx, upsertTableHealthSnapshot,
+		arg.CatalogID,
 		arg.CatalogConnectionID,
 		arg.Catalog,
 		arg.Namespace,
@@ -498,14 +909,15 @@ func (q *Queries) UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTable
 		&i.NeedsCompaction,
 		&i.NeedsSnapshotExpiry,
 		&i.NeedsOrphanCleanup,
+		&i.CatalogID,
 	)
 	return i, err
 }
 
 const upsertTrinoQuerySnapshot = `-- name: UpsertTrinoQuerySnapshot :one
 
-INSERT INTO trino_query_snapshots (trino_query_id, execution_id, origin, "user", state, sql, catalog, "schema", created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+INSERT INTO trino_query_snapshots (trino_query_id, engine_id, execution_id, origin, "user", state, sql, catalog, "schema", created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (trino_query_id) DO UPDATE
 SET state = EXCLUDED.state,
     elapsed_ms = EXCLUDED.elapsed_ms,
@@ -514,11 +926,12 @@ SET state = EXCLUDED.state,
     output_rows = EXCLUDED.output_rows,
     error_message = EXCLUDED.error_message,
     last_seen_at = now()
-RETURNING id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at
+RETURNING id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id
 `
 
 type UpsertTrinoQuerySnapshotParams struct {
 	TrinoQueryID       string             `json:"trino_query_id"`
+	EngineID           pgtype.UUID        `json:"engine_id"`
 	ExecutionID        pgtype.UUID        `json:"execution_id"`
 	Origin             string             `json:"origin"`
 	User               string             `json:"user"`
@@ -535,10 +948,12 @@ type UpsertTrinoQuerySnapshotParams struct {
 	RawTrinoPayload    []byte             `json:"raw_trino_payload"`
 }
 
-// Trino Query Snapshots
+// Monitoring snapshots (#117): every row is tagged with its engine or logical
+// catalog, so two engines never mix.
 func (q *Queries) UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error) {
 	row := q.db.QueryRow(ctx, upsertTrinoQuerySnapshot,
 		arg.TrinoQueryID,
+		arg.EngineID,
 		arg.ExecutionID,
 		arg.Origin,
 		arg.User,
@@ -574,6 +989,7 @@ func (q *Queries) UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQ
 		&i.RawTrinoPayload,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
+		&i.EngineID,
 	)
 	return i, err
 }
