@@ -336,6 +336,38 @@ type SavedQuery struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type SemanticDoc struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CatalogID   pgtype.UUID        `json:"catalog_id"`
+	Namespace   []string           `json:"namespace"`
+	TableName   string             `json:"table_name"`
+	ColumnName  *string            `json:"column_name"`
+	Description string             `json:"description"`
+	Tags        []string           `json:"tags"`
+	OwnerUserID pgtype.UUID        `json:"owner_user_id"`
+	UpdatedBy   pgtype.UUID        `json:"updated_by"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SemanticMetric struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	Slug          string             `json:"slug"`
+	Label         string             `json:"label"`
+	Description   string             `json:"description"`
+	Certified     bool               `json:"certified"`
+	CatalogID     pgtype.UUID        `json:"catalog_id"`
+	Namespace     []string           `json:"namespace"`
+	TableName     string             `json:"table_name"`
+	BindingID     pgtype.UUID        `json:"binding_id"`
+	Definition    []byte             `json:"definition"`
+	FormatVersion int32              `json:"format_version"`
+	OwnerUserID   pgtype.UUID        `json:"owner_user_id"`
+	UpdatedBy     pgtype.UUID        `json:"updated_by"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type TableHealthSnapshot struct {
 	ID                     pgtype.UUID        `json:"id"`
 	CatalogConnectionID    pgtype.UUID        `json:"catalog_connection_id"`

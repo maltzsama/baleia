@@ -566,6 +566,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/semantic/docs": {
+        parameters: {
+            query: {
+                catalog_id: string;
+                /** @description The namespace, one value per level (ns=a&ns=b is a.b) */
+                ns: string[];
+                table: string;
+                /** @description Narrow to one column; omitted returns the table-level and every column doc */
+                column?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Docs of one table or one column — workspace members */
+        get: operations["listSemanticDocs"];
+        /** Create or replace a doc — workspace members */
+        put: operations["upsertSemanticDoc"];
+        post?: never;
+        /** Delete a doc — workspace members */
+        delete: operations["deleteSemanticDoc"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/docs/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Search docs by text and tag — workspace members */
+        get: operations["searchSemanticDocs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/targets": {
         parameters: {
             query?: never;
@@ -2189,6 +2236,50 @@ export interface components {
             /** Format: date-time */
             metadata_synced_at?: string | null;
         };
+        SemanticDoc: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            table: string;
+            /** @description Null for a table-level doc */
+            column?: string | null;
+            /** @description Markdown, at most 20 000 characters */
+            description: string;
+            tags: string[];
+            /** Format: uuid */
+            owner_user_id?: string | null;
+            /** Format: uuid */
+            updated_by: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SemanticDocUpsert: {
+            description: string;
+            tags?: string[];
+            /** Format: uuid */
+            owner_user_id?: string | null;
+        };
+        SemanticDocSearchResult: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            table: string;
+            column?: string | null;
+            description: string;
+            tags: string[];
+            /** Format: uuid */
+            owner_user_id?: string | null;
+            /** Format: uuid */
+            updated_by: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: double */
+            score: number;
+        };
         MetadataSyncStarted: {
             /** Format: uuid */
             catalog_id: string;
@@ -3546,6 +3637,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetadataSearchResult"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSemanticDocs: {
+        parameters: {
+            query: {
+                catalog_id: string;
+                /** @description The namespace, one value per level (ns=a&ns=b is a.b) */
+                ns: string[];
+                table: string;
+                /** @description Narrow to one column; omitted returns the table-level and every column doc */
+                column?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Docs, table-level first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticDoc"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    upsertSemanticDoc: {
+        parameters: {
+            query: {
+                catalog_id: string;
+                /** @description The namespace, one value per level (ns=a&ns=b is a.b) */
+                ns: string[];
+                table: string;
+                /** @description Narrow to one column; omitted returns the table-level and every column doc */
+                column?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticDocUpsert"];
+            };
+        };
+        responses: {
+            /** @description The doc */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticDoc"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteSemanticDoc: {
+        parameters: {
+            query: {
+                catalog_id: string;
+                /** @description The namespace, one value per level (ns=a&ns=b is a.b) */
+                ns: string[];
+                table: string;
+                /** @description Narrow to one column; omitted returns the table-level and every column doc */
+                column?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    searchSemanticDocs: {
+        parameters: {
+            query: {
+                q: string;
+                tag?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Best match first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticDocSearchResult"][];
                 };
             };
             401: components["responses"]["Unauthorized"];

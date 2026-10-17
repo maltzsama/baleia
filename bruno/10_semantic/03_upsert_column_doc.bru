@@ -1,0 +1,28 @@
+meta {
+  name: Upsert Column Doc
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/docs?catalog_id={{explorer_catalog_id}}&ns=analytics&table=events&column=id
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "description": "Stable event identifier.",
+    "tags": ["key"]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.column: eq id
+  res.body.description: eq Stable event identifier.
+}

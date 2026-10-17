@@ -1,0 +1,33 @@
+meta {
+  name: Upsert Table Doc
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/docs?catalog_id={{explorer_catalog_id}}&ns=analytics&table=events
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "description": "One row per tracked event. **Certified** by the data team.",
+    "tags": ["certified", "analytics"]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.table: eq events
+  res.body.tags[0]: eq certified
+}
+
+docs {
+  Docs use the natural key (catalog + namespace + table [+ column]), so the
+  table does not have to exist in the metadata snapshot.
+}

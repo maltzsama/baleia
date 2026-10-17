@@ -1,0 +1,25 @@
+meta {
+  name: List Docs
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/docs?catalog_id={{explorer_catalog_id}}&ns=analytics&table=events
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].table: eq events
+}
+
+docs {
+  Without `column`, returns the table-level doc first and then every column
+  doc; with `column`, returns only that one (404 when it does not exist).
+}

@@ -53,6 +53,8 @@ tags:
     description: "Scheduled Iceberg materialized views"
   - name: Migrant
     description: "Zero-copy catalog migration (Nessie → Polaris)"
+  - name: Semantic
+    description: "Semantic layer v1: table/column docs, tags, owners and simple metrics"
 
 # ═══════════════════════════════════════════════════════════════
 # COMPONENTS
@@ -920,6 +922,46 @@ components:
         native_type: { type: string, nullable: true }
         score: { type: number, format: double }
         metadata_synced_at: { type: string, format: date-time, nullable: true }
+
+    # ── Semantic layer (#33) ───────────────────────────────────
+    SemanticDoc:
+      type: object
+      required: [id, catalog_id, namespace, table, description, tags, updated_by, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        column: { type: string, nullable: true, description: "Null for a table-level doc" }
+        description: { type: string, description: "Markdown, at most 20 000 characters" }
+        tags: { type: array, items: { type: string } }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+
+    SemanticDocUpsert:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, maxLength: 20000 }
+        tags: { type: array, items: { type: string } }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+
+    SemanticDocSearchResult:
+      type: object
+      required: [id, catalog_id, namespace, table, description, tags, updated_by, updated_at, score]
+      properties:
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        column: { type: string, nullable: true }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+        score: { type: number, format: double }
 
     MetadataSyncStarted:
       type: object
@@ -2085,6 +2127,100 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/MetadataSearchResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ── Semantic layer (#33) ──────────────────────────────────────
+  /workspaces/{id}/semantic/docs:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: catalog_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - name: ns
+        in: query
+        required: true
+        description: "The namespace, one value per level (ns=a&ns=b is a.b)"
+        schema: { type: array, items: { type: string } }
+        style: form
+        explode: true
+      - name: table
+        in: query
+        required: true
+        schema: { type: string }
+      - name: column
+        in: query
+        description: "Narrow to one column; omitted returns the table-level and every column doc"
+        schema: { type: string }
+    get:
+      tags: [Semantic]
+      operationId: listSemanticDocs
+      summary: "Docs of one table or one column — workspace members"
+      responses:
+        "200":
+          description: "Docs, table-level first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SemanticDoc" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Semantic]
+      operationId: upsertSemanticDoc
+      summary: "Create or replace a doc — workspace members"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticDocUpsert" }
+      responses:
+        "200":
+          description: "The doc"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticDoc" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Semantic]
+      operationId: deleteSemanticDoc
+      summary: "Delete a doc — workspace members"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/docs/search:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Semantic]
+      operationId: searchSemanticDocs
+      summary: "Search docs by text and tag — workspace members"
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 200 }
+        - name: tag
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: "Best match first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SemanticDocSearchResult" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }

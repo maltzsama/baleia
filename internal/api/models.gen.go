@@ -52,6 +52,17 @@ const (
 	CatalogSyncStatusSynced   CatalogSyncStatus = "synced"
 )
 
+// Defines values for CatalogAllowedAction.
+const (
+	CatalogAllowedActionBrowse        CatalogAllowedAction = "browse"
+	CatalogAllowedActionCreateBinding CatalogAllowedAction = "create_binding"
+	CatalogAllowedActionDelete        CatalogAllowedAction = "delete"
+	CatalogAllowedActionGrant         CatalogAllowedAction = "grant"
+	CatalogAllowedActionSyncMetadata  CatalogAllowedAction = "sync_metadata"
+	CatalogAllowedActionUpdate        CatalogAllowedAction = "update"
+	CatalogAllowedActionView          CatalogAllowedAction = "view"
+)
+
 // Defines values for CatalogBindingLifecycleState.
 const (
 	CatalogBindingLifecycleStateActive         CatalogBindingLifecycleState = "active"
@@ -75,6 +86,24 @@ const (
 	CatalogBindingSyncStatusError    CatalogBindingSyncStatus = "error"
 	CatalogBindingSyncStatusPending  CatalogBindingSyncStatus = "pending"
 	CatalogBindingSyncStatusSynced   CatalogBindingSyncStatus = "synced"
+)
+
+// Defines values for CatalogBindingAllowedAction.
+const (
+	CatalogBindingAllowedActionDelete CatalogBindingAllowedAction = "delete"
+	CatalogBindingAllowedActionSync   CatalogBindingAllowedAction = "sync"
+	CatalogBindingAllowedActionUpdate CatalogBindingAllowedAction = "update"
+	CatalogBindingAllowedActionView   CatalogBindingAllowedAction = "view"
+)
+
+// Defines values for CatalogConnectionAllowedAction.
+const (
+	CatalogConnectionAllowedActionCreateCatalog  CatalogConnectionAllowedAction = "create_catalog"
+	CatalogConnectionAllowedActionDelete         CatalogConnectionAllowedAction = "delete"
+	CatalogConnectionAllowedActionRegisterEngine CatalogConnectionAllowedAction = "register_engine"
+	CatalogConnectionAllowedActionTest           CatalogConnectionAllowedAction = "test"
+	CatalogConnectionAllowedActionUpdate         CatalogConnectionAllowedAction = "update"
+	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
 )
 
 // Defines values for ConnectionProviderFamily.
@@ -140,6 +169,16 @@ const (
 	EngineIdentityModePerUser       EngineIdentityMode = "per_user"
 )
 
+// Defines values for EngineAllowedAction.
+const (
+	EngineAllowedActionBindInto  EngineAllowedAction = "bind_into"
+	EngineAllowedActionDelete    EngineAllowedAction = "delete"
+	EngineAllowedActionReconcile EngineAllowedAction = "reconcile"
+	EngineAllowedActionTest      EngineAllowedAction = "test"
+	EngineAllowedActionUpdate    EngineAllowedAction = "update"
+	EngineAllowedActionView      EngineAllowedAction = "view"
+)
+
 // Defines values for EngineCapabilitiesCancelScope.
 const (
 	AnyProcess EngineCapabilitiesCancelScope = "any_process"
@@ -174,6 +213,18 @@ const (
 	ExecutionStatusRunning   ExecutionStatus = "running"
 )
 
+// Defines values for GlobalAction.
+const (
+	CreateConnection      GlobalAction = "create_connection"
+	CreateSharedWorkspace GlobalAction = "create_shared_workspace"
+	CreateWorkspace       GlobalAction = "create_workspace"
+	ManageAssistant       GlobalAction = "manage_assistant"
+	ManageIdentity        GlobalAction = "manage_identity"
+	ManageUsers           GlobalAction = "manage_users"
+	ViewAllAudit          GlobalAction = "view_all_audit"
+	ViewSystem            GlobalAction = "view_system"
+)
+
 // Defines values for GrantCatalogAccessRequestPermission.
 const (
 	GrantCatalogAccessRequestPermissionRead  GrantCatalogAccessRequestPermission = "read"
@@ -184,6 +235,18 @@ const (
 const (
 	InviteUserRequestRoleAdmin  InviteUserRequestRole = "admin"
 	InviteUserRequestRoleMember InviteUserRequestRole = "member"
+)
+
+// Defines values for MeAuthProvider.
+const (
+	MeAuthProviderLocal MeAuthProvider = "local"
+	MeAuthProviderOidc  MeAuthProvider = "oidc"
+)
+
+// Defines values for MeRole.
+const (
+	MeRoleAdmin  MeRole = "admin"
+	MeRoleMember MeRole = "member"
 )
 
 // Defines values for MetadataCatalogMetadataSyncStatus.
@@ -361,20 +424,31 @@ const (
 
 // Defines values for UserPublicAuthProvider.
 const (
-	UserPublicAuthProviderLocal UserPublicAuthProvider = "local"
-	UserPublicAuthProviderOidc  UserPublicAuthProvider = "oidc"
+	Local UserPublicAuthProvider = "local"
+	Oidc  UserPublicAuthProvider = "oidc"
 )
 
 // Defines values for UserPublicRole.
 const (
-	Admin  UserPublicRole = "admin"
-	Member UserPublicRole = "member"
+	UserPublicRoleAdmin  UserPublicRole = "admin"
+	UserPublicRoleMember UserPublicRole = "member"
 )
 
 // Defines values for WorkspaceType.
 const (
 	WorkspaceTypePersonal WorkspaceType = "personal"
 	WorkspaceTypeShared   WorkspaceType = "shared"
+)
+
+// Defines values for WorkspaceAllowedAction.
+const (
+	WorkspaceAllowedActionCreateSpace  WorkspaceAllowedAction = "create_space"
+	WorkspaceAllowedActionDelete       WorkspaceAllowedAction = "delete"
+	WorkspaceAllowedActionManageGrants WorkspaceAllowedAction = "manage_grants"
+	WorkspaceAllowedActionRun          WorkspaceAllowedAction = "run"
+	WorkspaceAllowedActionSetDefaults  WorkspaceAllowedAction = "set_defaults"
+	WorkspaceAllowedActionUpdate       WorkspaceAllowedAction = "update"
+	WorkspaceAllowedActionView         WorkspaceAllowedAction = "view"
 )
 
 // Defines values for WorkspaceCatalogAccessPermission.
@@ -422,9 +496,9 @@ const (
 
 // Defines values for SearchMetadataParamsKind.
 const (
-	SearchMetadataParamsKindAll    SearchMetadataParamsKind = "all"
-	SearchMetadataParamsKindColumn SearchMetadataParamsKind = "column"
-	SearchMetadataParamsKindTable  SearchMetadataParamsKind = "table"
+	All    SearchMetadataParamsKind = "all"
+	Column SearchMetadataParamsKind = "column"
+	Table  SearchMetadataParamsKind = "table"
 )
 
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
@@ -515,116 +589,6 @@ type BindingSupport struct {
 }
 
 // Catalog defines model for Catalog.
-// Defines values for CatalogAllowedAction.
-const (
-	CatalogAllowedActionBrowse        CatalogAllowedAction = "browse"
-	CatalogAllowedActionCreateBinding CatalogAllowedAction = "create_binding"
-	CatalogAllowedActionDelete        CatalogAllowedAction = "delete"
-	CatalogAllowedActionGrant         CatalogAllowedAction = "grant"
-	CatalogAllowedActionSyncMetadata  CatalogAllowedAction = "sync_metadata"
-	CatalogAllowedActionUpdate        CatalogAllowedAction = "update"
-	CatalogAllowedActionView          CatalogAllowedAction = "view"
-)
-
-type CatalogAllowedAction string
-
-// Defines values for CatalogBindingAllowedAction.
-const (
-	CatalogBindingAllowedActionDelete CatalogBindingAllowedAction = "delete"
-	CatalogBindingAllowedActionSync   CatalogBindingAllowedAction = "sync"
-	CatalogBindingAllowedActionUpdate CatalogBindingAllowedAction = "update"
-	CatalogBindingAllowedActionView   CatalogBindingAllowedAction = "view"
-)
-
-type CatalogBindingAllowedAction string
-
-// Defines values for CatalogConnectionAllowedAction.
-const (
-	CatalogConnectionAllowedActionCreateCatalog  CatalogConnectionAllowedAction = "create_catalog"
-	CatalogConnectionAllowedActionDelete         CatalogConnectionAllowedAction = "delete"
-	CatalogConnectionAllowedActionRegisterEngine CatalogConnectionAllowedAction = "register_engine"
-	CatalogConnectionAllowedActionTest           CatalogConnectionAllowedAction = "test"
-	CatalogConnectionAllowedActionUpdate         CatalogConnectionAllowedAction = "update"
-	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
-)
-
-type CatalogConnectionAllowedAction string
-
-// Defines values for EngineAllowedAction.
-const (
-	EngineAllowedActionBindInto  EngineAllowedAction = "bind_into"
-	EngineAllowedActionDelete    EngineAllowedAction = "delete"
-	EngineAllowedActionReconcile EngineAllowedAction = "reconcile"
-	EngineAllowedActionTest      EngineAllowedAction = "test"
-	EngineAllowedActionUpdate    EngineAllowedAction = "update"
-	EngineAllowedActionView      EngineAllowedAction = "view"
-)
-
-type EngineAllowedAction string
-
-// Defines values for WorkspaceAllowedAction.
-const (
-	WorkspaceAllowedActionCreateSpace  WorkspaceAllowedAction = "create_space"
-	WorkspaceAllowedActionDelete       WorkspaceAllowedAction = "delete"
-	WorkspaceAllowedActionManageGrants WorkspaceAllowedAction = "manage_grants"
-	WorkspaceAllowedActionRun          WorkspaceAllowedAction = "run"
-	WorkspaceAllowedActionSetDefaults  WorkspaceAllowedAction = "set_defaults"
-	WorkspaceAllowedActionUpdate       WorkspaceAllowedAction = "update"
-	WorkspaceAllowedActionView         WorkspaceAllowedAction = "view"
-)
-
-type WorkspaceAllowedAction string
-
-// Defines values for GlobalAction.
-const (
-	CreateConnection      GlobalAction = "create_connection"
-	CreateSharedWorkspace GlobalAction = "create_shared_workspace"
-	CreateWorkspace       GlobalAction = "create_workspace"
-	ManageAssistant       GlobalAction = "manage_assistant"
-	ManageIdentity        GlobalAction = "manage_identity"
-	ManageUsers           GlobalAction = "manage_users"
-	ViewAllAudit          GlobalAction = "view_all_audit"
-	ViewSystem            GlobalAction = "view_system"
-)
-
-type GlobalAction string
-
-// Features defines model for Features.
-type Features struct {
-	Agents     bool `json:"agents"`
-	Assistant  bool `json:"assistant"`
-	Retrievers bool `json:"retrievers"`
-}
-
-// Me defines model for Me.
-type Me struct {
-	AuthProvider        MeAuthProvider      `json:"auth_provider"`
-	CreatedAt           time.Time           `json:"created_at"`
-	Email               openapi_types.Email `json:"email"`
-	Features            Features            `json:"features"`
-	GlobalActions       []GlobalAction      `json:"global_actions"`
-	Id                  openapi_types.UUID  `json:"id"`
-	Name                string              `json:"name"`
-	PersonalWorkspaceId *openapi_types.UUID `json:"personal_workspace_id,omitempty"`
-	Role                MeRole              `json:"role"`
-}
-
-// Defines values for MeAuthProvider.
-const (
-	MeAuthProviderLocal MeAuthProvider = "local"
-	MeAuthProviderOidc  MeAuthProvider = "oidc"
-)
-
-type MeAuthProvider string
-
-// Defines values for MeRole.
-const (
-	MeRoleAdmin  MeRole = "admin"
-	MeRoleMember MeRole = "member"
-)
-
-type MeRole string
-
 type Catalog struct {
 	AllowedActions *[]CatalogAllowedAction `json:"allowed_actions,omitempty"`
 
@@ -665,13 +629,15 @@ type CatalogMetadataSyncStatus string
 // CatalogSyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
 type CatalogSyncStatus string
 
+// CatalogAllowedAction defines model for CatalogAllowedAction.
+type CatalogAllowedAction string
+
 // CatalogBinding defines model for CatalogBinding.
 type CatalogBinding struct {
 	AllowedActions *[]CatalogBindingAllowedAction `json:"allowed_actions,omitempty"`
-
-	CatalogId openapi_types.UUID `json:"catalog_id"`
-	Connector *string            `json:"connector"`
-	Enabled   bool               `json:"enabled"`
+	CatalogId      openapi_types.UUID             `json:"catalog_id"`
+	Connector      *string                        `json:"connector"`
+	Enabled        bool                           `json:"enabled"`
 
 	// EngineCatalogName The catalog's name in SQL on that engine
 	EngineCatalogName string             `json:"engine_catalog_name"`
@@ -703,6 +669,9 @@ type CatalogBindingMode string
 // CatalogBindingSyncStatus Derived: synced when the binding is active, the engine confirmed the desired version (Trino: the plugin rewrote the registry row) and the engine does not report it missing; pending while provisioning or updating or not yet confirmed; error (also when the engine could not load the active binding's catalog at boot, last_error_code engine_load_failed); disabled while deprovisioning or disabled.
 type CatalogBindingSyncStatus string
 
+// CatalogBindingAllowedAction defines model for CatalogBindingAllowedAction.
+type CatalogBindingAllowedAction string
+
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
 	AllowedActions *[]CatalogConnectionAllowedAction `json:"allowed_actions,omitempty"`
@@ -726,6 +695,9 @@ type CatalogConnection struct {
 	// Url Deprecated: read config. Kept while the Trino projection still reads it (#80)
 	Url string `json:"url"`
 }
+
+// CatalogConnectionAllowedAction defines model for CatalogConnectionAllowedAction.
+type CatalogConnectionAllowedAction string
 
 // ConnectionCheck defines model for ConnectionCheck.
 type ConnectionCheck struct {
@@ -959,6 +931,9 @@ type EngineClass string
 // EngineIdentityMode defines model for Engine.IdentityMode.
 type EngineIdentityMode string
 
+// EngineAllowedAction defines model for EngineAllowedAction.
+type EngineAllowedAction string
+
 // EngineCapabilities What an engine can do. Capabilities never authorize anything: what a user may run is decided by policy (catalog DDL is never allowed in the editor, whatever supports_catalog_ddl says).
 type EngineCapabilities struct {
 	ArrowNative        bool                              `json:"arrow_native"`
@@ -1062,6 +1037,16 @@ type ExecutionTarget struct {
 	Schema        *string             `json:"schema"`
 }
 
+// Features defines model for Features.
+type Features struct {
+	Agents     bool `json:"agents"`
+	Assistant  bool `json:"assistant"`
+	Retrievers bool `json:"retrievers"`
+}
+
+// GlobalAction defines model for GlobalAction.
+type GlobalAction string
+
 // GlueCredentials defines model for GlueCredentials.
 type GlueCredentials struct {
 	AccessKeyId     string `json:"access_key_id"`
@@ -1126,6 +1111,25 @@ type LoginResponse struct {
 type LogoutRequest struct {
 	RefreshToken *string `json:"refresh_token,omitempty"`
 }
+
+// Me defines model for Me.
+type Me struct {
+	AuthProvider        MeAuthProvider      `json:"auth_provider"`
+	CreatedAt           time.Time           `json:"created_at"`
+	Email               openapi_types.Email `json:"email"`
+	Features            Features            `json:"features"`
+	GlobalActions       []GlobalAction      `json:"global_actions"`
+	Id                  openapi_types.UUID  `json:"id"`
+	Name                string              `json:"name"`
+	PersonalWorkspaceId *openapi_types.UUID `json:"personal_workspace_id"`
+	Role                MeRole              `json:"role"`
+}
+
+// MeAuthProvider defines model for Me.AuthProvider.
+type MeAuthProvider string
+
+// MeRole defines model for Me.Role.
+type MeRole string
 
 // MetadataCatalog defines model for MetadataCatalog.
 type MetadataCatalog struct {
@@ -1505,6 +1509,46 @@ type SavedQuery struct {
 	WorkspaceId openapi_types.UUID  `json:"workspace_id"`
 }
 
+// SemanticDoc defines model for SemanticDoc.
+type SemanticDoc struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+
+	// Column Null for a table-level doc
+	Column *string `json:"column"`
+
+	// Description Markdown, at most 20 000 characters
+	Description string              `json:"description"`
+	Id          openapi_types.UUID  `json:"id"`
+	Namespace   []string            `json:"namespace"`
+	OwnerUserId *openapi_types.UUID `json:"owner_user_id"`
+	Table       string              `json:"table"`
+	Tags        []string            `json:"tags"`
+	UpdatedAt   time.Time           `json:"updated_at"`
+	UpdatedBy   openapi_types.UUID  `json:"updated_by"`
+}
+
+// SemanticDocSearchResult defines model for SemanticDocSearchResult.
+type SemanticDocSearchResult struct {
+	CatalogId   openapi_types.UUID  `json:"catalog_id"`
+	Column      *string             `json:"column"`
+	Description string              `json:"description"`
+	Id          openapi_types.UUID  `json:"id"`
+	Namespace   []string            `json:"namespace"`
+	OwnerUserId *openapi_types.UUID `json:"owner_user_id"`
+	Score       float64             `json:"score"`
+	Table       string              `json:"table"`
+	Tags        []string            `json:"tags"`
+	UpdatedAt   time.Time           `json:"updated_at"`
+	UpdatedBy   openapi_types.UUID  `json:"updated_by"`
+}
+
+// SemanticDocUpsert defines model for SemanticDocUpsert.
+type SemanticDocUpsert struct {
+	Description string              `json:"description"`
+	OwnerUserId *openapi_types.UUID `json:"owner_user_id"`
+	Tags        *[]string           `json:"tags,omitempty"`
+}
+
 // SetupStatus defines model for SetupStatus.
 type SetupStatus struct {
 	IsConfigured bool   `json:"is_configured"`
@@ -1707,8 +1751,7 @@ type ValidationError struct {
 // Workspace defines model for Workspace.
 type Workspace struct {
 	AllowedActions *[]WorkspaceAllowedAction `json:"allowed_actions,omitempty"`
-
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt      time.Time                 `json:"created_at"`
 
 	// DefaultBindingId Target used when a run names none (GET /workspaces/{id}/targets)
 	DefaultBindingId *openapi_types.UUID `json:"default_binding_id"`
@@ -1728,6 +1771,9 @@ type Workspace struct {
 
 // WorkspaceType defines model for Workspace.Type.
 type WorkspaceType string
+
+// WorkspaceAllowedAction defines model for WorkspaceAllowedAction.
+type WorkspaceAllowedAction string
 
 // WorkspaceCatalogAccess defines model for WorkspaceCatalogAccess.
 type WorkspaceCatalogAccess struct {
@@ -1918,6 +1964,49 @@ type TriggerRetrieverRefreshJSONBody struct {
 // TriggerRetrieverRefreshJSONBodyRefreshType defines parameters for TriggerRetrieverRefresh.
 type TriggerRetrieverRefreshJSONBodyRefreshType string
 
+// DeleteSemanticDocParams defines parameters for DeleteSemanticDoc.
+type DeleteSemanticDocParams struct {
+	CatalogId openapi_types.UUID `form:"catalog_id" json:"catalog_id"`
+
+	// Ns The namespace, one value per level (ns=a&ns=b is a.b)
+	Ns    []string `form:"ns" json:"ns"`
+	Table string   `form:"table" json:"table"`
+
+	// Column Narrow to one column; omitted returns the table-level and every column doc
+	Column *string `form:"column,omitempty" json:"column,omitempty"`
+}
+
+// ListSemanticDocsParams defines parameters for ListSemanticDocs.
+type ListSemanticDocsParams struct {
+	CatalogId openapi_types.UUID `form:"catalog_id" json:"catalog_id"`
+
+	// Ns The namespace, one value per level (ns=a&ns=b is a.b)
+	Ns    []string `form:"ns" json:"ns"`
+	Table string   `form:"table" json:"table"`
+
+	// Column Narrow to one column; omitted returns the table-level and every column doc
+	Column *string `form:"column,omitempty" json:"column,omitempty"`
+}
+
+// UpsertSemanticDocParams defines parameters for UpsertSemanticDoc.
+type UpsertSemanticDocParams struct {
+	CatalogId openapi_types.UUID `form:"catalog_id" json:"catalog_id"`
+
+	// Ns The namespace, one value per level (ns=a&ns=b is a.b)
+	Ns    []string `form:"ns" json:"ns"`
+	Table string   `form:"table" json:"table"`
+
+	// Column Narrow to one column; omitted returns the table-level and every column doc
+	Column *string `form:"column,omitempty" json:"column,omitempty"`
+}
+
+// SearchSemanticDocsParams defines parameters for SearchSemanticDocs.
+type SearchSemanticDocsParams struct {
+	Q     string  `form:"q" json:"q"`
+	Tag   *string `form:"tag,omitempty" json:"tag,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // StreamExecutionParams defines parameters for StreamExecution.
 type StreamExecutionParams struct {
 	Token string `form:"token" json:"token"`
@@ -2024,3 +2113,6 @@ type UpdateRetrieverJSONRequestBody = UpdateRetrieverRequest
 
 // TriggerRetrieverRefreshJSONRequestBody defines body for TriggerRetrieverRefresh for application/json ContentType.
 type TriggerRetrieverRefreshJSONRequestBody TriggerRetrieverRefreshJSONBody
+
+// UpsertSemanticDocJSONRequestBody defines body for UpsertSemanticDoc for application/json ContentType.
+type UpsertSemanticDocJSONRequestBody = SemanticDocUpsert

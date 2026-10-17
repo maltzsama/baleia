@@ -36,7 +36,7 @@ type ServerInterface interface {
 	// Invalidate current session
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
-	// Return authenticated user
+	// Return authenticated user, feature flags and global actions
 	// (GET /auth/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
 	// List configured OIDC providers
@@ -324,6 +324,18 @@ type ServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
+	// Delete a doc — workspace members
+	// (DELETE /workspaces/{id}/semantic/docs)
+	DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams)
+	// Docs of one table or one column — workspace members
+	// (GET /workspaces/{id}/semantic/docs)
+	ListSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticDocsParams)
+	// Create or replace a doc — workspace members
+	// (PUT /workspaces/{id}/semantic/docs)
+	UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams)
+	// Search docs by text and tag — workspace members
+	// (GET /workspaces/{id}/semantic/docs/search)
+	SearchSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params SearchSemanticDocsParams)
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId)
@@ -372,7 +384,7 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Return authenticated user
+// Return authenticated user, feature flags and global actions
 // (GET /auth/me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -945,6 +957,30 @@ func (_ Unimplemented) GetRetrieverHistory(w http.ResponseWriter, r *http.Reques
 // Trigger manual Retriever refresh
 // (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 func (_ Unimplemented) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a doc — workspace members
+// (DELETE /workspaces/{id}/semantic/docs)
+func (_ Unimplemented) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Docs of one table or one column — workspace members
+// (GET /workspaces/{id}/semantic/docs)
+func (_ Unimplemented) ListSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticDocsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create or replace a doc — workspace members
+// (PUT /workspaces/{id}/semantic/docs)
+func (_ Unimplemented) UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search docs by text and tag — workspace members
+// (GET /workspaces/{id}/semantic/docs/search)
+func (_ Unimplemented) SearchSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params SearchSemanticDocsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4527,6 +4563,340 @@ func (siw *ServerInterfaceWrapper) TriggerRetrieverRefresh(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteSemanticDoc operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSemanticDocParams
+
+	// ------------- Required query parameter "catalog_id" -------------
+
+	if paramValue := r.URL.Query().Get("catalog_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "ns" -------------
+
+	if paramValue := r.URL.Query().Get("ns"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ns"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	if paramValue := r.URL.Query().Get("table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "column" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "column", r.URL.Query(), &params.Column)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "column", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSemanticDoc(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSemanticDocs operation middleware
+func (siw *ServerInterfaceWrapper) ListSemanticDocs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSemanticDocsParams
+
+	// ------------- Required query parameter "catalog_id" -------------
+
+	if paramValue := r.URL.Query().Get("catalog_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "ns" -------------
+
+	if paramValue := r.URL.Query().Get("ns"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ns"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	if paramValue := r.URL.Query().Get("table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "column" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "column", r.URL.Query(), &params.Column)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "column", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSemanticDocs(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpsertSemanticDoc operation middleware
+func (siw *ServerInterfaceWrapper) UpsertSemanticDoc(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpsertSemanticDocParams
+
+	// ------------- Required query parameter "catalog_id" -------------
+
+	if paramValue := r.URL.Query().Get("catalog_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "ns" -------------
+
+	if paramValue := r.URL.Query().Get("ns"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ns"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	if paramValue := r.URL.Query().Get("table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "column" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "column", r.URL.Query(), &params.Column)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "column", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpsertSemanticDoc(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchSemanticDocs operation middleware
+func (siw *ServerInterfaceWrapper) SearchSemanticDocs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchSemanticDocsParams
+
+	// ------------- Required query parameter "q" -------------
+
+	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "tag" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "tag", r.URL.Query(), &params.Tag)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tag", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchSemanticDocs(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspaceTargets operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspaceTargets(w http.ResponseWriter, r *http.Request) {
 
@@ -5038,6 +5408,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/retrievers/{retriever_id}/refresh", wrapper.TriggerRetrieverRefresh)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.DeleteSemanticDoc)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.ListSemanticDocs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.UpsertSemanticDoc)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/docs/search", wrapper.SearchSemanticDocs)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/targets", wrapper.ListWorkspaceTargets)
@@ -9129,6 +9511,171 @@ func (response TriggerRetrieverRefresh422JSONResponse) VisitTriggerRetrieverRefr
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteSemanticDocRequestObject struct {
+	Id     PathId `json:"id"`
+	Params DeleteSemanticDocParams
+}
+
+type DeleteSemanticDocResponseObject interface {
+	VisitDeleteSemanticDocResponse(w http.ResponseWriter) error
+}
+
+type DeleteSemanticDoc204Response = NoContentResponse
+
+func (response DeleteSemanticDoc204Response) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSemanticDoc401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSemanticDoc401JSONResponse) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticDoc404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSemanticDoc404JSONResponse) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticDocsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListSemanticDocsParams
+}
+
+type ListSemanticDocsResponseObject interface {
+	VisitListSemanticDocsResponse(w http.ResponseWriter) error
+}
+
+type ListSemanticDocs200JSONResponse []SemanticDoc
+
+func (response ListSemanticDocs200JSONResponse) VisitListSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticDocs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSemanticDocs401JSONResponse) VisitListSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticDocs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSemanticDocs404JSONResponse) VisitListSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDocRequestObject struct {
+	Id     PathId `json:"id"`
+	Params UpsertSemanticDocParams
+	Body   *UpsertSemanticDocJSONRequestBody
+}
+
+type UpsertSemanticDocResponseObject interface {
+	VisitUpsertSemanticDocResponse(w http.ResponseWriter) error
+}
+
+type UpsertSemanticDoc200JSONResponse SemanticDoc
+
+func (response UpsertSemanticDoc200JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDoc401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpsertSemanticDoc401JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDoc404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpsertSemanticDoc404JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpsertSemanticDoc422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpsertSemanticDoc422JSONResponse) VisitUpsertSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params SearchSemanticDocsParams
+}
+
+type SearchSemanticDocsResponseObject interface {
+	VisitSearchSemanticDocsResponse(w http.ResponseWriter) error
+}
+
+type SearchSemanticDocs200JSONResponse []SemanticDocSearchResult
+
+func (response SearchSemanticDocs200JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SearchSemanticDocs401JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SearchSemanticDocs404JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSemanticDocs422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SearchSemanticDocs422JSONResponse) VisitSearchSemanticDocsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspaceTargetsRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -9211,7 +9758,7 @@ type StrictServerInterface interface {
 	// Invalidate current session
 	// (POST /auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
-	// Return authenticated user
+	// Return authenticated user, feature flags and global actions
 	// (GET /auth/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
 	// List configured OIDC providers
@@ -9499,6 +10046,18 @@ type StrictServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error)
+	// Delete a doc — workspace members
+	// (DELETE /workspaces/{id}/semantic/docs)
+	DeleteSemanticDoc(ctx context.Context, request DeleteSemanticDocRequestObject) (DeleteSemanticDocResponseObject, error)
+	// Docs of one table or one column — workspace members
+	// (GET /workspaces/{id}/semantic/docs)
+	ListSemanticDocs(ctx context.Context, request ListSemanticDocsRequestObject) (ListSemanticDocsResponseObject, error)
+	// Create or replace a doc — workspace members
+	// (PUT /workspaces/{id}/semantic/docs)
+	UpsertSemanticDoc(ctx context.Context, request UpsertSemanticDocRequestObject) (UpsertSemanticDocResponseObject, error)
+	// Search docs by text and tag — workspace members
+	// (GET /workspaces/{id}/semantic/docs/search)
+	SearchSemanticDocs(ctx context.Context, request SearchSemanticDocsRequestObject) (SearchSemanticDocsResponseObject, error)
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error)
@@ -12402,6 +12961,121 @@ func (sh *strictHandler) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TriggerRetrieverRefreshResponseObject); ok {
 		if err := validResponse.VisitTriggerRetrieverRefreshResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSemanticDoc operation middleware
+func (sh *strictHandler) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams) {
+	var request DeleteSemanticDocRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSemanticDoc(ctx, request.(DeleteSemanticDocRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSemanticDoc")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSemanticDocResponseObject); ok {
+		if err := validResponse.VisitDeleteSemanticDocResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSemanticDocs operation middleware
+func (sh *strictHandler) ListSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticDocsParams) {
+	var request ListSemanticDocsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSemanticDocs(ctx, request.(ListSemanticDocsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSemanticDocs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSemanticDocsResponseObject); ok {
+		if err := validResponse.VisitListSemanticDocsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpsertSemanticDoc operation middleware
+func (sh *strictHandler) UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams) {
+	var request UpsertSemanticDocRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpsertSemanticDocJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpsertSemanticDoc(ctx, request.(UpsertSemanticDocRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpsertSemanticDoc")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpsertSemanticDocResponseObject); ok {
+		if err := validResponse.VisitUpsertSemanticDocResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchSemanticDocs operation middleware
+func (sh *strictHandler) SearchSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params SearchSemanticDocsParams) {
+	var request SearchSemanticDocsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchSemanticDocs(ctx, request.(SearchSemanticDocsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchSemanticDocs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchSemanticDocsResponseObject); ok {
+		if err := validResponse.VisitSearchSemanticDocsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

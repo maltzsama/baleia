@@ -52,6 +52,7 @@ type Querier interface {
 	CreateRetriever(ctx context.Context, arg CreateRetrieverParams) (Retriever, error)
 	CreateRetrieverRefreshHistory(ctx context.Context, arg CreateRetrieverRefreshHistoryParams) (RetrieverRefreshHistory, error)
 	CreateSavedQuery(ctx context.Context, arg CreateSavedQueryParams) (SavedQuery, error)
+	CreateSemanticMetric(ctx context.Context, arg CreateSemanticMetricParams) (SemanticMetric, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
@@ -71,6 +72,8 @@ type Querier interface {
 	// Its refresh history goes with it (ON DELETE CASCADE).
 	DeleteRetriever(ctx context.Context, arg DeleteRetrieverParams) (int64, error)
 	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) error
+	DeleteSemanticDoc(ctx context.Context, arg DeleteSemanticDocParams) (int64, error)
+	DeleteSemanticMetric(ctx context.Context, arg DeleteSemanticMetricParams) (int64, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
@@ -138,6 +141,9 @@ type Querier interface {
 	// have (and must not trust) a caller-supplied workspace id.
 	GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
+	GetSemanticDoc(ctx context.Context, arg GetSemanticDocParams) (SemanticDoc, error)
+	GetSemanticMetric(ctx context.Context, arg GetSemanticMetricParams) (SemanticMetric, error)
+	GetSemanticMetricBySlug(ctx context.Context, arg GetSemanticMetricBySlugParams) (SemanticMetric, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
 	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
@@ -216,6 +222,15 @@ type Querier interface {
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
 	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]ListRunningStatementHandlesRow, error)
 	ListSavedQueries(ctx context.Context, arg ListSavedQueriesParams) ([]SavedQuery, error)
+	// Semantic layer v1 (#33): docs keyed by natural key, simple metrics keyed by
+	// portable slug. Docs are workspace-scoped; the catalog must be granted to the
+	// workspace (#16). Metrics become content items in #40 and are versioned in #34.
+	// ── Docs ────────────────────────────────────────────────────────────────────────
+	// Every doc of one table (table-level and per-column), optionally narrowed to
+	// one column. The natural key is catalog + namespace + table [+ column].
+	ListSemanticDocsForTable(ctx context.Context, arg ListSemanticDocsForTableParams) ([]SemanticDoc, error)
+	// ── Metrics ─────────────────────────────────────────────────────────────────────
+	ListSemanticMetrics(ctx context.Context, workspaceID pgtype.UUID) ([]SemanticMetric, error)
 	// The catalog enabled bindings on enabled engines, oldest first: the
 	// engine path introspects through the first one (a native catalog has only
 	// its native binding).
@@ -264,6 +279,9 @@ type Querier interface {
 	// Tables and columns of the catalogs the workspace may use whose names are
 	// trigram-similar to q (or contain a word similar to it), best first.
 	SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error)
+	// Trigram search over docs of catalogs the workspace may use. A tag narrows
+	// the result to docs carrying it.
+	SearchSemanticDocs(ctx context.Context, arg SearchSemanticDocsParams) ([]SearchSemanticDocsRow, error)
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	// Stores the resolved target of an execution. target_snapshot is immutable
@@ -322,6 +340,7 @@ type Querier interface {
 	UpdateRetrieverAfterRefresh(ctx context.Context, arg UpdateRetrieverAfterRefreshParams) error
 	UpdateRetrieverRefreshHistory(ctx context.Context, arg UpdateRetrieverRefreshHistoryParams) error
 	UpdateSavedQuery(ctx context.Context, arg UpdateSavedQueryParams) (SavedQuery, error)
+	UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMetricParams) (SemanticMetric, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
@@ -347,6 +366,7 @@ type Querier interface {
 	UpsertNativeBinding(ctx context.Context, arg UpsertNativeBindingParams) (CatalogBinding, error)
 	// A catalog found inside an engine, owned by the engine's connection.
 	UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatalogParams) (Catalog, error)
+	UpsertSemanticDoc(ctx context.Context, arg UpsertSemanticDocParams) (SemanticDoc, error)
 	// Table Health Snapshots
 	UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	UpsertTrinoCatalogRegistry(ctx context.Context, arg UpsertTrinoCatalogRegistryParams) error

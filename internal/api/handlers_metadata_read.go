@@ -275,7 +275,7 @@ func (h *Handlers) SearchMetadata(ctx context.Context, request SearchMetadataReq
 	kind := "all"
 	if p.Kind != nil {
 		switch *p.Kind {
-		case SearchMetadataParamsKindTable, SearchMetadataParamsKindColumn, SearchMetadataParamsKindAll:
+		case Table, Column, All:
 			kind = string(*p.Kind)
 		default:
 			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "kind must be table, column or all")}, nil
