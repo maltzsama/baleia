@@ -1,7 +1,10 @@
 package server
 
 import (
+	"bufio"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -39,6 +42,29 @@ func (r *responseRecorder) Write(b []byte) (int, error) {
 	n, err := r.ResponseWriter.Write(b)
 	r.bytes += n
 	return n, err
+}
+
+// Hijack lets protocol upgrades (the execution WebSocket) reach the underlying
+// connection. Without it the upgrade fails with "response does not implement
+// http.Hijacker" because the logger wraps the ResponseWriter.
+func (r *responseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
+}
+
+// Flush lets streaming handlers (results, audit CSV) flush through the logger.
+func (r *responseRecorder) Flush() {
+	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// Unwrap exposes the underlying writer to http.ResponseController.
+func (r *responseRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
 }
 
 // StructuredLogger emits one JSON log line per request with the fields operators

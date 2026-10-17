@@ -106,6 +106,13 @@ func TestStructuredLoggerRecordsFinalStatusAfterInformational(t *testing.T) {
 	}
 }
 
+// TestResponseRecorderAllowsUpgrades: the logger wrapper must let a WebSocket
+// upgrade hijack the connection (the execution event channel).
+func TestResponseRecorderAllowsUpgrades(t *testing.T) {
+	var _ http.Hijacker = &responseRecorder{}
+	var _ http.Flusher = &responseRecorder{}
+}
+
 func TestStructuredLoggerRecordsActorFromHandler(t *testing.T) {
 	logger, buf := newTestLogger()
 
