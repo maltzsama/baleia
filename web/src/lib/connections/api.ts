@@ -13,6 +13,7 @@ export type BindingSupport = components['schemas']['BindingSupport'];
 export type TestResult = components['schemas']['TestCatalogConnectionResult'];
 export type ConnectionCheck = components['schemas']['ConnectionCheck'];
 export type Workspace = components['schemas']['Workspace'];
+export type CatalogConnectionImpact = components['schemas']['CatalogConnectionImpact'];
 
 /**
  * The create request, with `credentials` typed as the string map the API
@@ -135,6 +136,25 @@ export async function testDraft(draft: ConnectionDraft): Promise<TestResult> {
 		body: draft as unknown as components['schemas']['TestConnectionRequest']
 	});
 	if (error || !data) throw toError(error, response?.status, 'The connection test failed');
+	return data;
+}
+
+/** One connection with its non-secret config and allowed actions. */
+export async function getConnection(id: string): Promise<CatalogConnection> {
+	const { data, error, response } = await client.GET('/catalog-connections/{id}', {
+		params: { path: { id } }
+	});
+	if (error || !data) throw toError(error, response?.status, 'Could not load the connection');
+	return data;
+}
+
+/** What depends on a connection before deleting it (#109). */
+export async function getConnectionImpact(id: string) {
+	const { data, error, response } = await client.GET('/catalog-connections/{id}/impact', {
+		params: { path: { id } }
+	});
+	if (error || !data)
+		throw toError(error, response?.status, 'Could not load the connection impact');
 	return data;
 }
 

@@ -69,9 +69,15 @@ type ServerInterface interface {
 	// Remove a managed binding from its engine
 	// (DELETE /bindings/{id})
 	DeleteCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
+	// One binding with its lifecycle state, error and allowed actions
+	// (GET /bindings/{id})
+	GetCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
 	// Rename, reconfigure, enable or disable a managed binding
 	// (PATCH /bindings/{id})
 	UpdateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
+	// Engine-side properties of a binding, secret values masked
+	// (GET /bindings/{id}/projection)
+	GetCatalogBindingProjection(w http.ResponseWriter, r *http.Request, id PathId)
 	// Re-apply a managed binding's current projection to its engine
 	// (POST /bindings/{id}/sync)
 	SyncCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
@@ -93,9 +99,30 @@ type ServerInterface interface {
 	// Update a connection — admin only
 	// (PATCH /catalog-connections/{id})
 	UpdateCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
+	// What depends on this connection before deleting it
+	// (GET /catalog-connections/{id}/impact)
+	GetCatalogConnectionImpact(w http.ResponseWriter, r *http.Request, id PathId)
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
+	// Logical catalogs the caller may view, with their bindings
+	// (GET /catalogs)
+	ListAllCatalogs(w http.ResponseWriter, r *http.Request, params ListAllCatalogsParams)
+	// Disable a source catalog and deprovision its managed bindings
+	// (DELETE /catalogs/{catalog_id})
+	DeleteCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// One logical catalog with its bindings and counts
+	// (GET /catalogs/{catalog_id})
+	GetCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Rename or re-describe a catalog (bundles and metrics reference it by name)
+	// (PATCH /catalogs/{catalog_id})
+	UpdateCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Workspace grants of this catalog
+	// (GET /catalogs/{catalog_id}/grants)
+	ListCatalogGrants(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// What depends on this catalog before deleting it
+	// (GET /catalogs/{catalog_id}/impact)
+	GetCatalogImpact(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
 	// Run optimize/expire/orphan cleanup on one Iceberg table
 	// (POST /catalogs/{catalog_id}/maintenance)
 	CreateMaintenanceRun(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
@@ -582,9 +609,21 @@ func (_ Unimplemented) DeleteCatalogBinding(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// One binding with its lifecycle state, error and allowed actions
+// (GET /bindings/{id})
+func (_ Unimplemented) GetCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Rename, reconfigure, enable or disable a managed binding
 // (PATCH /bindings/{id})
 func (_ Unimplemented) UpdateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Engine-side properties of a binding, secret values masked
+// (GET /bindings/{id}/projection)
+func (_ Unimplemented) GetCatalogBindingProjection(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -630,9 +669,51 @@ func (_ Unimplemented) UpdateCatalogConnection(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// What depends on this connection before deleting it
+// (GET /catalog-connections/{id}/impact)
+func (_ Unimplemented) GetCatalogConnectionImpact(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Test catalog connectivity
 // (POST /catalog-connections/{id}/test)
 func (_ Unimplemented) TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Logical catalogs the caller may view, with their bindings
+// (GET /catalogs)
+func (_ Unimplemented) ListAllCatalogs(w http.ResponseWriter, r *http.Request, params ListAllCatalogsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Disable a source catalog and deprovision its managed bindings
+// (DELETE /catalogs/{catalog_id})
+func (_ Unimplemented) DeleteCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One logical catalog with its bindings and counts
+// (GET /catalogs/{catalog_id})
+func (_ Unimplemented) GetCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename or re-describe a catalog (bundles and metrics reference it by name)
+// (PATCH /catalogs/{catalog_id})
+func (_ Unimplemented) UpdateCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Workspace grants of this catalog
+// (GET /catalogs/{catalog_id}/grants)
+func (_ Unimplemented) ListCatalogGrants(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What depends on this catalog before deleting it
+// (GET /catalogs/{catalog_id}/impact)
+func (_ Unimplemented) GetCatalogImpact(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1966,6 +2047,39 @@ func (siw *ServerInterfaceWrapper) DeleteCatalogBinding(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GetCatalogBinding operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalogBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalogBinding(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpdateCatalogBinding operation middleware
 func (siw *ServerInterfaceWrapper) UpdateCatalogBinding(w http.ResponseWriter, r *http.Request) {
 
@@ -1990,6 +2104,39 @@ func (siw *ServerInterfaceWrapper) UpdateCatalogBinding(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCatalogBinding(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCatalogBindingProjection operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalogBindingProjection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalogBindingProjection(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2218,6 +2365,39 @@ func (siw *ServerInterfaceWrapper) UpdateCatalogConnection(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// GetCatalogConnectionImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalogConnectionImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalogConnectionImpact(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // TestCatalogConnection operation middleware
 func (siw *ServerInterfaceWrapper) TestCatalogConnection(w http.ResponseWriter, r *http.Request) {
 
@@ -2242,6 +2422,270 @@ func (siw *ServerInterfaceWrapper) TestCatalogConnection(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestCatalogConnection(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAllCatalogs operation middleware
+func (siw *ServerInterfaceWrapper) ListAllCatalogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAllCatalogsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "origin" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "origin", r.URL.Query(), &params.Origin)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "origin", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "engine_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "engine_id", r.URL.Query(), &params.EngineId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engine_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "connection_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "connection_id", r.URL.Query(), &params.ConnectionId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "provider_kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "provider_kind", r.URL.Query(), &params.ProviderKind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider_kind", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "attention" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "attention", r.URL.Query(), &params.Attention)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attention", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "action", r.URL.Query(), &params.Action)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAllCatalogs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCatalogDetail operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCatalogDetail(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCatalogDetail(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCatalogDetail operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalogDetail(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalogDetail(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCatalogDetail operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCatalogDetail(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCatalogDetail(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCatalogGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCatalogGrants(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCatalogImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalogImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalogImpact(w, r, catalogId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7641,7 +8085,13 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/bindings/{id}", wrapper.DeleteCatalogBinding)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/bindings/{id}", wrapper.GetCatalogBinding)
+	})
+	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/bindings/{id}", wrapper.UpdateCatalogBinding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/bindings/{id}/projection", wrapper.GetCatalogBindingProjection)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/bindings/{id}/sync", wrapper.SyncCatalogBinding)
@@ -7665,7 +8115,28 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/catalog-connections/{id}", wrapper.UpdateCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalog-connections/{id}/impact", wrapper.GetCatalogConnectionImpact)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/catalog-connections/{id}/test", wrapper.TestCatalogConnection)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs", wrapper.ListAllCatalogs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/catalogs/{catalog_id}", wrapper.DeleteCatalogDetail)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}", wrapper.GetCatalogDetail)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/catalogs/{catalog_id}", wrapper.UpdateCatalogDetail)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/grants", wrapper.ListCatalogGrants)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/impact", wrapper.GetCatalogImpact)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/catalogs/{catalog_id}/maintenance", wrapper.CreateMaintenanceRun)
@@ -8578,6 +9049,41 @@ func (response DeleteCatalogBinding422JSONResponse) VisitDeleteCatalogBindingRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetCatalogBindingRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetCatalogBindingResponseObject interface {
+	VisitGetCatalogBindingResponse(w http.ResponseWriter) error
+}
+
+type GetCatalogBinding200JSONResponse CatalogBinding
+
+func (response GetCatalogBinding200JSONResponse) VisitGetCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogBinding401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalogBinding401JSONResponse) VisitGetCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogBinding404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalogBinding404JSONResponse) VisitGetCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type UpdateCatalogBindingRequestObject struct {
 	Id   PathId `json:"id"`
 	Body *UpdateCatalogBindingJSONRequestBody
@@ -8637,6 +9143,61 @@ type UpdateCatalogBinding422JSONResponse struct {
 }
 
 func (response UpdateCatalogBinding422JSONResponse) VisitUpdateCatalogBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogBindingProjectionRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetCatalogBindingProjectionResponseObject interface {
+	VisitGetCatalogBindingProjectionResponse(w http.ResponseWriter) error
+}
+
+type GetCatalogBindingProjection200JSONResponse BindingProjection
+
+func (response GetCatalogBindingProjection200JSONResponse) VisitGetCatalogBindingProjectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogBindingProjection401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalogBindingProjection401JSONResponse) VisitGetCatalogBindingProjectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogBindingProjection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetCatalogBindingProjection403JSONResponse) VisitGetCatalogBindingProjectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogBindingProjection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalogBindingProjection404JSONResponse) VisitGetCatalogBindingProjectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogBindingProjection422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response GetCatalogBindingProjection422JSONResponse) VisitGetCatalogBindingProjectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -8985,6 +9546,41 @@ func (response UpdateCatalogConnection422JSONResponse) VisitUpdateCatalogConnect
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetCatalogConnectionImpactRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetCatalogConnectionImpactResponseObject interface {
+	VisitGetCatalogConnectionImpactResponse(w http.ResponseWriter) error
+}
+
+type GetCatalogConnectionImpact200JSONResponse CatalogConnectionImpact
+
+func (response GetCatalogConnectionImpact200JSONResponse) VisitGetCatalogConnectionImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogConnectionImpact401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalogConnectionImpact401JSONResponse) VisitGetCatalogConnectionImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogConnectionImpact404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalogConnectionImpact404JSONResponse) VisitGetCatalogConnectionImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type TestCatalogConnectionRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -9014,6 +9610,255 @@ func (response TestCatalogConnection401JSONResponse) VisitTestCatalogConnectionR
 type TestCatalogConnection404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response TestCatalogConnection404JSONResponse) VisitTestCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAllCatalogsRequestObject struct {
+	Params ListAllCatalogsParams
+}
+
+type ListAllCatalogsResponseObject interface {
+	VisitListAllCatalogsResponse(w http.ResponseWriter) error
+}
+
+type ListAllCatalogs200JSONResponse []CatalogSummary
+
+func (response ListAllCatalogs200JSONResponse) VisitListAllCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAllCatalogs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAllCatalogs401JSONResponse) VisitListAllCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogDetailRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type DeleteCatalogDetailResponseObject interface {
+	VisitDeleteCatalogDetailResponse(w http.ResponseWriter) error
+}
+
+type DeleteCatalogDetail204Response = NoContentResponse
+
+func (response DeleteCatalogDetail204Response) VisitDeleteCatalogDetailResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCatalogDetail401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteCatalogDetail401JSONResponse) VisitDeleteCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogDetail403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteCatalogDetail403JSONResponse) VisitDeleteCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogDetail404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteCatalogDetail404JSONResponse) VisitDeleteCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogDetail409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteCatalogDetail409JSONResponse) VisitDeleteCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogDetail422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DeleteCatalogDetail422JSONResponse) VisitDeleteCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogDetailRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type GetCatalogDetailResponseObject interface {
+	VisitGetCatalogDetailResponse(w http.ResponseWriter) error
+}
+
+type GetCatalogDetail200JSONResponse CatalogSummary
+
+func (response GetCatalogDetail200JSONResponse) VisitGetCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogDetail401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalogDetail401JSONResponse) VisitGetCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogDetail404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalogDetail404JSONResponse) VisitGetCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogDetailRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Body      *UpdateCatalogDetailJSONRequestBody
+}
+
+type UpdateCatalogDetailResponseObject interface {
+	VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error
+}
+
+type UpdateCatalogDetail200JSONResponse Catalog
+
+func (response UpdateCatalogDetail200JSONResponse) VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogDetail401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateCatalogDetail401JSONResponse) VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogDetail403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateCatalogDetail403JSONResponse) VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogDetail404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateCatalogDetail404JSONResponse) VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogDetail422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateCatalogDetail422JSONResponse) VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogGrantsRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type ListCatalogGrantsResponseObject interface {
+	VisitListCatalogGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogGrants200JSONResponse []CatalogGrant
+
+func (response ListCatalogGrants200JSONResponse) VisitListCatalogGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogGrants401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogGrants401JSONResponse) VisitListCatalogGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogGrants404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogGrants404JSONResponse) VisitListCatalogGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogImpactRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type GetCatalogImpactResponseObject interface {
+	VisitGetCatalogImpactResponse(w http.ResponseWriter) error
+}
+
+type GetCatalogImpact200JSONResponse CatalogImpact
+
+func (response GetCatalogImpact200JSONResponse) VisitGetCatalogImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogImpact401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalogImpact401JSONResponse) VisitGetCatalogImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogImpact404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalogImpact404JSONResponse) VisitGetCatalogImpactResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -14539,9 +15384,15 @@ type StrictServerInterface interface {
 	// Remove a managed binding from its engine
 	// (DELETE /bindings/{id})
 	DeleteCatalogBinding(ctx context.Context, request DeleteCatalogBindingRequestObject) (DeleteCatalogBindingResponseObject, error)
+	// One binding with its lifecycle state, error and allowed actions
+	// (GET /bindings/{id})
+	GetCatalogBinding(ctx context.Context, request GetCatalogBindingRequestObject) (GetCatalogBindingResponseObject, error)
 	// Rename, reconfigure, enable or disable a managed binding
 	// (PATCH /bindings/{id})
 	UpdateCatalogBinding(ctx context.Context, request UpdateCatalogBindingRequestObject) (UpdateCatalogBindingResponseObject, error)
+	// Engine-side properties of a binding, secret values masked
+	// (GET /bindings/{id}/projection)
+	GetCatalogBindingProjection(ctx context.Context, request GetCatalogBindingProjectionRequestObject) (GetCatalogBindingProjectionResponseObject, error)
 	// Re-apply a managed binding's current projection to its engine
 	// (POST /bindings/{id}/sync)
 	SyncCatalogBinding(ctx context.Context, request SyncCatalogBindingRequestObject) (SyncCatalogBindingResponseObject, error)
@@ -14563,9 +15414,30 @@ type StrictServerInterface interface {
 	// Update a connection — admin only
 	// (PATCH /catalog-connections/{id})
 	UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error)
+	// What depends on this connection before deleting it
+	// (GET /catalog-connections/{id}/impact)
+	GetCatalogConnectionImpact(ctx context.Context, request GetCatalogConnectionImpactRequestObject) (GetCatalogConnectionImpactResponseObject, error)
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error)
+	// Logical catalogs the caller may view, with their bindings
+	// (GET /catalogs)
+	ListAllCatalogs(ctx context.Context, request ListAllCatalogsRequestObject) (ListAllCatalogsResponseObject, error)
+	// Disable a source catalog and deprovision its managed bindings
+	// (DELETE /catalogs/{catalog_id})
+	DeleteCatalogDetail(ctx context.Context, request DeleteCatalogDetailRequestObject) (DeleteCatalogDetailResponseObject, error)
+	// One logical catalog with its bindings and counts
+	// (GET /catalogs/{catalog_id})
+	GetCatalogDetail(ctx context.Context, request GetCatalogDetailRequestObject) (GetCatalogDetailResponseObject, error)
+	// Rename or re-describe a catalog (bundles and metrics reference it by name)
+	// (PATCH /catalogs/{catalog_id})
+	UpdateCatalogDetail(ctx context.Context, request UpdateCatalogDetailRequestObject) (UpdateCatalogDetailResponseObject, error)
+	// Workspace grants of this catalog
+	// (GET /catalogs/{catalog_id}/grants)
+	ListCatalogGrants(ctx context.Context, request ListCatalogGrantsRequestObject) (ListCatalogGrantsResponseObject, error)
+	// What depends on this catalog before deleting it
+	// (GET /catalogs/{catalog_id}/impact)
+	GetCatalogImpact(ctx context.Context, request GetCatalogImpactRequestObject) (GetCatalogImpactResponseObject, error)
 	// Run optimize/expire/orphan cleanup on one Iceberg table
 	// (POST /catalogs/{catalog_id}/maintenance)
 	CreateMaintenanceRun(ctx context.Context, request CreateMaintenanceRunRequestObject) (CreateMaintenanceRunResponseObject, error)
@@ -15445,6 +16317,32 @@ func (sh *strictHandler) DeleteCatalogBinding(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// GetCatalogBinding operation middleware
+func (sh *strictHandler) GetCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetCatalogBindingRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalogBinding(ctx, request.(GetCatalogBindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalogBinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogBindingResponseObject); ok {
+		if err := validResponse.VisitGetCatalogBindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // UpdateCatalogBinding operation middleware
 func (sh *strictHandler) UpdateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
 	var request UpdateCatalogBindingRequestObject
@@ -15471,6 +16369,32 @@ func (sh *strictHandler) UpdateCatalogBinding(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCatalogBindingResponseObject); ok {
 		if err := validResponse.VisitUpdateCatalogBindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCatalogBindingProjection operation middleware
+func (sh *strictHandler) GetCatalogBindingProjection(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetCatalogBindingProjectionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalogBindingProjection(ctx, request.(GetCatalogBindingProjectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalogBindingProjection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogBindingProjectionResponseObject); ok {
+		if err := validResponse.VisitGetCatalogBindingProjectionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -15677,6 +16601,32 @@ func (sh *strictHandler) UpdateCatalogConnection(w http.ResponseWriter, r *http.
 	}
 }
 
+// GetCatalogConnectionImpact operation middleware
+func (sh *strictHandler) GetCatalogConnectionImpact(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetCatalogConnectionImpactRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalogConnectionImpact(ctx, request.(GetCatalogConnectionImpactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalogConnectionImpact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogConnectionImpactResponseObject); ok {
+		if err := validResponse.VisitGetCatalogConnectionImpactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // TestCatalogConnection operation middleware
 func (sh *strictHandler) TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId) {
 	var request TestCatalogConnectionRequestObject
@@ -15696,6 +16646,169 @@ func (sh *strictHandler) TestCatalogConnection(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestCatalogConnectionResponseObject); ok {
 		if err := validResponse.VisitTestCatalogConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAllCatalogs operation middleware
+func (sh *strictHandler) ListAllCatalogs(w http.ResponseWriter, r *http.Request, params ListAllCatalogsParams) {
+	var request ListAllCatalogsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAllCatalogs(ctx, request.(ListAllCatalogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAllCatalogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAllCatalogsResponseObject); ok {
+		if err := validResponse.VisitListAllCatalogsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCatalogDetail operation middleware
+func (sh *strictHandler) DeleteCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request DeleteCatalogDetailRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCatalogDetail(ctx, request.(DeleteCatalogDetailRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCatalogDetail")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCatalogDetailResponseObject); ok {
+		if err := validResponse.VisitDeleteCatalogDetailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCatalogDetail operation middleware
+func (sh *strictHandler) GetCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request GetCatalogDetailRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalogDetail(ctx, request.(GetCatalogDetailRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalogDetail")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogDetailResponseObject); ok {
+		if err := validResponse.VisitGetCatalogDetailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCatalogDetail operation middleware
+func (sh *strictHandler) UpdateCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request UpdateCatalogDetailRequestObject
+
+	request.CatalogId = catalogId
+
+	var body UpdateCatalogDetailJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCatalogDetail(ctx, request.(UpdateCatalogDetailRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCatalogDetail")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCatalogDetailResponseObject); ok {
+		if err := validResponse.VisitUpdateCatalogDetailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCatalogGrants operation middleware
+func (sh *strictHandler) ListCatalogGrants(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request ListCatalogGrantsRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogGrants(ctx, request.(ListCatalogGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogGrantsResponseObject); ok {
+		if err := validResponse.VisitListCatalogGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCatalogImpact operation middleware
+func (sh *strictHandler) GetCatalogImpact(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request GetCatalogImpactRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalogImpact(ctx, request.(GetCatalogImpactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalogImpact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogImpactResponseObject); ok {
+		if err := validResponse.VisitGetCatalogImpactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

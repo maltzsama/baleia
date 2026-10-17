@@ -1290,6 +1290,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Logical catalogs the caller may view, with their bindings */
+        get: operations["listAllCatalogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** One logical catalog with its bindings and counts */
+        get: operations["getCatalogDetail"];
+        put?: never;
+        post?: never;
+        /** Disable a source catalog and deprovision its managed bindings */
+        delete: operations["deleteCatalogDetail"];
+        options?: never;
+        head?: never;
+        /** Rename or re-describe a catalog (bundles and metrics reference it by name) */
+        patch: operations["updateCatalogDetail"];
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** What depends on this catalog before deleting it */
+        get: operations["getCatalogImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** Workspace grants of this catalog */
+        get: operations["listCatalogGrants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog-connections/{id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** What depends on this connection before deleting it */
+        get: operations["getCatalogConnectionImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalogs/{id}/bindings": {
         parameters: {
             query?: never;
@@ -1322,7 +1417,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** One binding with its lifecycle state, error and allowed actions */
+        get: operations["getCatalogBinding"];
         put?: never;
         post?: never;
         /**
@@ -1352,6 +1448,25 @@ export interface paths {
         put?: never;
         /** Re-apply a managed binding's current projection to its engine */
         post: operations["syncCatalogBinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bindings/{id}/projection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Engine-side properties of a binding, secret values masked */
+        get: operations["getCatalogBindingProjection"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2612,6 +2727,79 @@ export interface components {
             created_at?: string;
             /** Format: date-time */
             updated_at?: string;
+        };
+        CatalogEngineRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: string;
+            class: string;
+        };
+        CatalogBindingRef: {
+            /** Format: uuid */
+            id: string;
+            engine: components["schemas"]["CatalogEngineRef"];
+            engine_catalog_name: string;
+            connector?: string | null;
+            /** @description managed, adopted or native */
+            mode: string;
+            lifecycle_state: string;
+            sync_status?: string | null;
+            /** Format: date-time */
+            state_changed_at?: string | null;
+        };
+        CatalogSummary: components["schemas"]["Catalog"] & {
+            /** @description source or native */
+            origin: string;
+            provider_kind?: string | null;
+            /** @description Null when the caller cannot view the connection */
+            connection?: components["schemas"]["EngineConnectionRef"] | null;
+            source_ref?: string | null;
+            bindings: components["schemas"]["CatalogBindingRef"][];
+            needs_attention: boolean;
+            namespace_count?: number;
+            table_count?: number;
+        };
+        CatalogImpact: {
+            bindings: number;
+            grants: number;
+            saved_queries_targeting: number;
+            metrics: number;
+            docs: number;
+            running_executions: number;
+        };
+        CatalogConnectionImpact: {
+            /** @description The engine this connection backs, if any */
+            engine?: components["schemas"]["EngineConnectionRef"] | null;
+            catalogs: number;
+            bindings: number;
+            running_executions: number;
+        };
+        CatalogGrant: {
+            workspace: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                type?: string;
+            };
+            /** @enum {string} */
+            permission: "read" | "write";
+            /** Format: uuid */
+            granted_by?: string | null;
+            /** Format: date-time */
+            granted_at: string;
+        };
+        BindingProjection: {
+            connector: string;
+            version?: string | null;
+            /** @description Engine-side properties; secret keys are masked as *** */
+            properties: {
+                [key: string]: string;
+            };
+        };
+        UpdateCatalogDetailRequest: {
+            name?: string;
+            description?: string | null;
         };
         CreateCatalogRequest: {
             name: string;
@@ -6355,6 +6543,182 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listAllCatalogs: {
+        parameters: {
+            query?: {
+                q?: string;
+                origin?: string;
+                engine_id?: string;
+                connection_id?: string;
+                provider_kind?: string;
+                attention?: boolean;
+                action?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catalogs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogSummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getCatalogDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCatalogDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    updateCatalogDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCatalogDetailRequest"];
+            };
+        };
+        responses: {
+            /** @description Catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Catalog"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getCatalogImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Impact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogImpact"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listCatalogGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGrant"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getCatalogConnectionImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Impact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConnectionImpact"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listCatalogBindings: {
         parameters: {
             query?: never;
@@ -6408,6 +6772,30 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getCatalogBinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Binding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogBinding"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     deleteCatalogBinding: {
@@ -6492,6 +6880,32 @@ export interface operations {
                     "application/json": components["schemas"]["CatalogBinding"];
                 };
             };
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getCatalogBindingProjection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BindingProjection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };

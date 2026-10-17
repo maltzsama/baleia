@@ -28,13 +28,17 @@ type Querier interface {
 	// True when the user is a member of a workspace that has been granted the catalog.
 	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
+	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error)
+	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error)
 	// What stops an engine from being deleted: managed bindings and executions
 	// still running on it. Native bindings go with the engine.
 	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (CountEngineBlockersRow, error)
 	// What depends on an engine before disabling or deleting it (#110).
 	CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (CountEngineImpactRow, error)
 	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
+	CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
 	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
+	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
 	// A source catalog's source_ref is its warehouse (or database).
@@ -214,6 +218,7 @@ type Querier interface {
 	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]CatalogBinding, error)
 	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
 	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error)
+	ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogGrantsRow, error)
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
 	// The catalogs of one connection that a user reaches through workspace grants.
 	ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error)
@@ -305,6 +310,9 @@ type Querier interface {
 	ListTrinoQuerySnapshotsByEngine(ctx context.Context, arg ListTrinoQuerySnapshotsByEngineParams) ([]TrinoQuerySnapshot, error)
 	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// Every logical catalog the caller may view: all for an admin, the caller's
+	// connections, and catalogs granted to a workspace the caller belongs to (#109).
+	ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalogsParams) ([]Catalog, error)
 	// Only folders of spaces the caller can see; #16 says to filter in SQL, not in
 	// a Go loop. space_id/folder_id narrow the listing when present.
 	ListVisibleQueryFolders(ctx context.Context, arg ListVisibleQueryFoldersParams) ([]QueryFolder, error)
@@ -395,6 +403,7 @@ type Querier interface {
 	// a NULL narg leaves omitted columns untouched, so concurrent PATCH requests to
 	// different fields no longer overwrite each other.
 	UpdateCatalogConnection(ctx context.Context, arg UpdateCatalogConnectionParams) (CatalogConnection, error)
+	UpdateCatalogMeta(ctx context.Context, arg UpdateCatalogMetaParams) (Catalog, error)
 	UpdateEngine(ctx context.Context, arg UpdateEngineParams) (Engine, error)
 	UpdateMaintenanceRun(ctx context.Context, arg UpdateMaintenanceRunParams) (MaintenanceRun, error)
 	UpdateMigrationItem(ctx context.Context, arg UpdateMigrationItemParams) error

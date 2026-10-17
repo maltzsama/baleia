@@ -113,6 +113,29 @@ const (
 	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
 )
 
+// Defines values for CatalogGrantPermission.
+const (
+	CatalogGrantPermissionRead  CatalogGrantPermission = "read"
+	CatalogGrantPermissionWrite CatalogGrantPermission = "write"
+)
+
+// Defines values for CatalogSummaryMetadataSyncStatus.
+const (
+	CatalogSummaryMetadataSyncStatusFailed   CatalogSummaryMetadataSyncStatus = "failed"
+	CatalogSummaryMetadataSyncStatusFinished CatalogSummaryMetadataSyncStatus = "finished"
+	CatalogSummaryMetadataSyncStatusNever    CatalogSummaryMetadataSyncStatus = "never"
+	CatalogSummaryMetadataSyncStatusRunning  CatalogSummaryMetadataSyncStatus = "running"
+)
+
+// Defines values for CatalogSummarySyncStatus.
+const (
+	CatalogSummarySyncStatusDisabled CatalogSummarySyncStatus = "disabled"
+	CatalogSummarySyncStatusDraining CatalogSummarySyncStatus = "draining"
+	CatalogSummarySyncStatusError    CatalogSummarySyncStatus = "error"
+	CatalogSummarySyncStatusPending  CatalogSummarySyncStatus = "pending"
+	CatalogSummarySyncStatusSynced   CatalogSummarySyncStatus = "synced"
+)
+
 // Defines values for ConnectionProviderFamily.
 const (
 	ConnectionProviderFamilyDatabase  ConnectionProviderFamily = "database"
@@ -574,8 +597,8 @@ const (
 
 // Defines values for WorkspaceTargetPermission.
 const (
-	Read  WorkspaceTargetPermission = "read"
-	Write WorkspaceTargetPermission = "write"
+	WorkspaceTargetPermissionRead  WorkspaceTargetPermission = "read"
+	WorkspaceTargetPermissionWrite WorkspaceTargetPermission = "write"
 )
 
 // Defines values for ListAuditEventsParamsOutcome.
@@ -741,6 +764,15 @@ type AuditResolvedUser struct {
 	Name  string  `json:"name"`
 }
 
+// BindingProjection defines model for BindingProjection.
+type BindingProjection struct {
+	Connector string `json:"connector"`
+
+	// Properties Engine-side properties; secret keys are masked as ***
+	Properties map[string]string `json:"properties"`
+	Version    *string           `json:"version"`
+}
+
 // BindingSupport defines model for BindingSupport.
 type BindingSupport struct {
 	// Connectors The first is the default
@@ -882,6 +914,20 @@ type CatalogBindingSyncStatus string
 // CatalogBindingAllowedAction defines model for CatalogBindingAllowedAction.
 type CatalogBindingAllowedAction string
 
+// CatalogBindingRef defines model for CatalogBindingRef.
+type CatalogBindingRef struct {
+	Connector         *string            `json:"connector"`
+	Engine            CatalogEngineRef   `json:"engine"`
+	EngineCatalogName string             `json:"engine_catalog_name"`
+	Id                openapi_types.UUID `json:"id"`
+	LifecycleState    string             `json:"lifecycle_state"`
+
+	// Mode managed, adopted or native
+	Mode           string     `json:"mode"`
+	StateChangedAt *time.Time `json:"state_changed_at"`
+	SyncStatus     *string    `json:"sync_status"`
+}
+
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
 	AllowedActions *[]CatalogConnectionAllowedAction `json:"allowed_actions,omitempty"`
@@ -911,6 +957,102 @@ type CatalogConnection struct {
 
 // CatalogConnectionAllowedAction defines model for CatalogConnectionAllowedAction.
 type CatalogConnectionAllowedAction string
+
+// CatalogConnectionImpact defines model for CatalogConnectionImpact.
+type CatalogConnectionImpact struct {
+	Bindings int `json:"bindings"`
+	Catalogs int `json:"catalogs"`
+
+	// Engine The engine this connection backs, if any
+	Engine            *EngineConnectionRef `json:"engine"`
+	RunningExecutions int                  `json:"running_executions"`
+}
+
+// CatalogEngineRef defines model for CatalogEngineRef.
+type CatalogEngineRef struct {
+	Class string             `json:"class"`
+	Id    openapi_types.UUID `json:"id"`
+	Kind  string             `json:"kind"`
+	Name  string             `json:"name"`
+}
+
+// CatalogGrant defines model for CatalogGrant.
+type CatalogGrant struct {
+	GrantedAt  time.Time              `json:"granted_at"`
+	GrantedBy  *openapi_types.UUID    `json:"granted_by"`
+	Permission CatalogGrantPermission `json:"permission"`
+	Workspace  struct {
+		Id   openapi_types.UUID `json:"id"`
+		Name string             `json:"name"`
+		Type *string            `json:"type,omitempty"`
+	} `json:"workspace"`
+}
+
+// CatalogGrantPermission defines model for CatalogGrant.Permission.
+type CatalogGrantPermission string
+
+// CatalogImpact defines model for CatalogImpact.
+type CatalogImpact struct {
+	Bindings              int `json:"bindings"`
+	Docs                  int `json:"docs"`
+	Grants                int `json:"grants"`
+	Metrics               int `json:"metrics"`
+	RunningExecutions     int `json:"running_executions"`
+	SavedQueriesTargeting int `json:"saved_queries_targeting"`
+}
+
+// CatalogSummary defines model for CatalogSummary.
+type CatalogSummary struct {
+	AllowedActions *[]CatalogAllowedAction `json:"allowed_actions,omitempty"`
+	Bindings       []CatalogBindingRef     `json:"bindings"`
+
+	// CatalogVersion SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion)
+	CatalogVersion *string `json:"catalog_version"`
+
+	// Connection Null when the caller cannot view the connection
+	Connection   *EngineConnectionRef `json:"connection"`
+	ConnectionId *openapi_types.UUID  `json:"connection_id,omitempty"`
+	Connector    *string              `json:"connector,omitempty"`
+	CreatedAt    *time.Time           `json:"created_at,omitempty"`
+	Description  *string              `json:"description"`
+	Enabled      *bool                `json:"enabled,omitempty"`
+	Id           *openapi_types.UUID  `json:"id,omitempty"`
+
+	// MetadataSyncErrorCode The latest pass's error code when it failed (see MetadataSyncRun.error_code).
+	MetadataSyncErrorCode *string `json:"metadata_sync_error_code"`
+
+	// MetadataSyncStatus Status of the latest metadata pass. Every catalog is refreshed every BALEIA_METADATA_SYNC_INTERVAL (15m) and right after it is created or changed.
+	MetadataSyncStatus *CatalogSummaryMetadataSyncStatus `json:"metadata_sync_status,omitempty"`
+
+	// MetadataSyncedAt End of the latest finished metadata pass of the catalog (#17); null before the first one.
+	MetadataSyncedAt *time.Time `json:"metadata_synced_at"`
+	Name             *string    `json:"name,omitempty"`
+	NamespaceCount   *int       `json:"namespace_count,omitempty"`
+	NeedsAttention   bool       `json:"needs_attention"`
+
+	// Origin source or native
+	Origin       string  `json:"origin"`
+	ProviderKind *string `json:"provider_kind"`
+	SourceRef    *string `json:"source_ref"`
+	SyncError    *string `json:"sync_error"`
+
+	// SyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
+	SyncStatus *CatalogSummarySyncStatus `json:"sync_status,omitempty"`
+	TableCount *int                      `json:"table_count,omitempty"`
+
+	// TrinoCatalogName Trino catalog identifier (lowercase, letters/digits/underscore).
+	TrinoCatalogName *string    `json:"trino_catalog_name,omitempty"`
+	UpdatedAt        *time.Time `json:"updated_at,omitempty"`
+
+	// Warehouse Iceberg warehouse identifier
+	Warehouse *string `json:"warehouse,omitempty"`
+}
+
+// CatalogSummaryMetadataSyncStatus Status of the latest metadata pass. Every catalog is refreshed every BALEIA_METADATA_SYNC_INTERVAL (15m) and right after it is created or changed.
+type CatalogSummaryMetadataSyncStatus string
+
+// CatalogSummarySyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
+type CatalogSummarySyncStatus string
 
 // ClusterPoint defines model for ClusterPoint.
 type ClusterPoint struct {
@@ -2374,6 +2516,12 @@ type UpdateCatalogConnectionRequest struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// UpdateCatalogDetailRequest defines model for UpdateCatalogDetailRequest.
+type UpdateCatalogDetailRequest struct {
+	Description *string `json:"description"`
+	Name        *string `json:"name,omitempty"`
+}
+
 // UpdateEngineRequest defines model for UpdateEngineRequest.
 type UpdateEngineRequest struct {
 	Enabled *bool `json:"enabled,omitempty"`
@@ -2640,6 +2788,19 @@ type ListCatalogConnectionsParams struct {
 
 	// WithoutEngine Only connections that do not back an engine yet
 	WithoutEngine *bool `form:"without_engine,omitempty" json:"without_engine,omitempty"`
+}
+
+// ListAllCatalogsParams defines parameters for ListAllCatalogs.
+type ListAllCatalogsParams struct {
+	Q            *string             `form:"q,omitempty" json:"q,omitempty"`
+	Origin       *string             `form:"origin,omitempty" json:"origin,omitempty"`
+	EngineId     *openapi_types.UUID `form:"engine_id,omitempty" json:"engine_id,omitempty"`
+	ConnectionId *openapi_types.UUID `form:"connection_id,omitempty" json:"connection_id,omitempty"`
+	ProviderKind *string             `form:"provider_kind,omitempty" json:"provider_kind,omitempty"`
+	Attention    *bool               `form:"attention,omitempty" json:"attention,omitempty"`
+	Action       *string             `form:"action,omitempty" json:"action,omitempty"`
+	Limit        *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset       *int                `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListMaintenanceRunsParams defines parameters for ListMaintenanceRuns.
@@ -2940,6 +3101,9 @@ type TestConnectionDraftJSONRequestBody = TestConnectionRequest
 
 // UpdateCatalogConnectionJSONRequestBody defines body for UpdateCatalogConnection for application/json ContentType.
 type UpdateCatalogConnectionJSONRequestBody = UpdateCatalogConnectionRequest
+
+// UpdateCatalogDetailJSONRequestBody defines body for UpdateCatalogDetail for application/json ContentType.
+type UpdateCatalogDetailJSONRequestBody = UpdateCatalogDetailRequest
 
 // CreateMaintenanceRunJSONRequestBody defines body for CreateMaintenanceRun for application/json ContentType.
 type CreateMaintenanceRunJSONRequestBody = CreateMaintenanceRequest

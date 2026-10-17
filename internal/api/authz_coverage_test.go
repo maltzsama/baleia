@@ -231,6 +231,16 @@ var operationAccess = map[string]access{
 	"GetEngineImpact":        checked("PrincipalFromContext", "Engine"),
 	"DiscoverEngineCatalogs": checked("PrincipalFromContext", "Engine"),
 	"GetReconcileRun":        checked("PrincipalFromContext", "RequireAdmin"),
+	// Sources pages (#109).
+	"ListAllCatalogs":             checked("PrincipalFromContext", "ListVisibleCatalogs"),
+	"GetCatalogDetail":            checked("PrincipalFromContext", "Catalog"),
+	"UpdateCatalogDetail":         checked("PrincipalFromContext", "Catalog"),
+	"DeleteCatalogDetail":         checked("PrincipalFromContext", "Catalog"),
+	"GetCatalogImpact":            checked("PrincipalFromContext", "Catalog"),
+	"GetCatalogConnectionImpact":  checked("PrincipalFromContext", "Connection"),
+	"ListCatalogGrants":           checked("PrincipalFromContext", "Catalog"),
+	"GetCatalogBinding":           checked("PrincipalFromContext", "Catalog"),
+	"GetCatalogBindingProjection": checked("PrincipalFromContext", "Catalog"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),

@@ -11,6 +11,88 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countCatalogImpact = `-- name: CountCatalogImpact :one
+SELECT
+    (SELECT count(*) FROM catalog_bindings b WHERE b.catalog_id = $1)::bigint AS bindings,
+    (SELECT count(*) FROM workspace_catalog_grants g WHERE g.catalog_id = $1)::bigint AS grants,
+    (SELECT count(*) FROM saved_queries s
+      JOIN catalog_bindings b ON b.id = s.target_binding_id WHERE b.catalog_id = $1)::bigint AS saved_queries_targeting,
+    (SELECT count(*) FROM semantic_metrics m WHERE m.catalog_id = $1)::bigint AS metrics,
+    0::bigint AS docs,
+    (SELECT count(*) FROM query_executions e
+      JOIN catalog_bindings b ON b.id = e.target_binding_id
+      WHERE b.catalog_id = $1 AND e.status = 'running')::bigint AS running_executions
+`
+
+type CountCatalogImpactRow struct {
+	Bindings              int64 `json:"bindings"`
+	Grants                int64 `json:"grants"`
+	SavedQueriesTargeting int64 `json:"saved_queries_targeting"`
+	Metrics               int64 `json:"metrics"`
+	Docs                  int64 `json:"docs"`
+	RunningExecutions     int64 `json:"running_executions"`
+}
+
+func (q *Queries) CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error) {
+	row := q.db.QueryRow(ctx, countCatalogImpact, catalogID)
+	var i CountCatalogImpactRow
+	err := row.Scan(
+		&i.Bindings,
+		&i.Grants,
+		&i.SavedQueriesTargeting,
+		&i.Metrics,
+		&i.Docs,
+		&i.RunningExecutions,
+	)
+	return i, err
+}
+
+const countConnectionImpact = `-- name: CountConnectionImpact :one
+SELECT
+    (SELECT count(*) FROM catalogs c WHERE c.connection_id = $1)::bigint AS catalogs,
+    (SELECT count(*) FROM catalog_bindings b
+      JOIN catalogs c ON c.id = b.catalog_id WHERE c.connection_id = $1)::bigint AS bindings,
+    (SELECT count(*) FROM query_executions e
+      JOIN catalog_bindings b ON b.id = e.target_binding_id
+      JOIN catalogs c ON c.id = b.catalog_id
+      WHERE c.connection_id = $1 AND e.status = 'running')::bigint AS running_executions
+`
+
+type CountConnectionImpactRow struct {
+	Catalogs          int64 `json:"catalogs"`
+	Bindings          int64 `json:"bindings"`
+	RunningExecutions int64 `json:"running_executions"`
+}
+
+func (q *Queries) CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error) {
+	row := q.db.QueryRow(ctx, countConnectionImpact, connectionID)
+	var i CountConnectionImpactRow
+	err := row.Scan(&i.Catalogs, &i.Bindings, &i.RunningExecutions)
+	return i, err
+}
+
+const countNamespacesByCatalog = `-- name: CountNamespacesByCatalog :one
+SELECT count(*)::bigint FROM metadata_namespaces WHERE catalog_id = $1 AND removed_at IS NULL
+`
+
+func (q *Queries) CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countNamespacesByCatalog, catalogID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countTablesByCatalog = `-- name: CountTablesByCatalog :one
+SELECT count(*)::bigint FROM metadata_tables WHERE catalog_id = $1 AND removed_at IS NULL
+`
+
+func (q *Queries) CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countTablesByCatalog, catalogID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createCatalog = `-- name: CreateCatalog :one
 INSERT INTO catalogs (
     connection_id, name, description, trino_catalog_name,
@@ -242,6 +324,51 @@ func (q *Queries) InsertEphemeralRegistryRow(ctx context.Context, arg InsertEphe
 	return err
 }
 
+const listCatalogGrants = `-- name: ListCatalogGrants :many
+SELECT g.workspace_id, w.name AS workspace_name, w.type AS workspace_type,
+       g.permission, g.granted_by, g.granted_at
+FROM workspace_catalog_grants g
+JOIN workspaces w ON w.id = g.workspace_id
+WHERE g.catalog_id = $1
+ORDER BY w.name
+`
+
+type ListCatalogGrantsRow struct {
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	WorkspaceName string             `json:"workspace_name"`
+	WorkspaceType string             `json:"workspace_type"`
+	Permission    string             `json:"permission"`
+	GrantedBy     pgtype.UUID        `json:"granted_by"`
+	GrantedAt     pgtype.Timestamptz `json:"granted_at"`
+}
+
+func (q *Queries) ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogGrantsRow, error) {
+	rows, err := q.db.Query(ctx, listCatalogGrants, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCatalogGrantsRow
+	for rows.Next() {
+		var i ListCatalogGrantsRow
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.WorkspaceName,
+			&i.WorkspaceType,
+			&i.Permission,
+			&i.GrantedBy,
+			&i.GrantedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCatalogsByConnection = `-- name: ListCatalogsByConnection :many
 SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE connection_id = $1 ORDER BY name
 `
@@ -392,6 +519,62 @@ func (q *Queries) ListExpiredEphemeralRegistryRows(ctx context.Context) ([]ListE
 	return items, nil
 }
 
+const listVisibleCatalogs = `-- name: ListVisibleCatalogs :many
+SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref FROM catalogs c
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE $1::bool
+   OR cc.created_by = $2
+   OR EXISTS (
+        SELECT 1 FROM workspace_catalog_grants g
+        JOIN workspaces w ON w.id = g.workspace_id
+        LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+        WHERE g.catalog_id = c.id
+          AND (w.owner_user_id = $2 OR tm.user_id = $2))
+ORDER BY c.name
+`
+
+type ListVisibleCatalogsParams struct {
+	IsAdmin bool        `json:"is_admin"`
+	UserID  pgtype.UUID `json:"user_id"`
+}
+
+// Every logical catalog the caller may view: all for an admin, the caller's
+// connections, and catalogs granted to a workspace the caller belongs to (#109).
+func (q *Queries) ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalogsParams) ([]Catalog, error) {
+	rows, err := q.db.Query(ctx, listVisibleCatalogs, arg.IsAdmin, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Catalog
+	for rows.Next() {
+		var i Catalog
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConnectionID,
+			&i.Name,
+			&i.Description,
+			&i.TrinoCatalogName,
+			&i.ClusterID,
+			&i.Warehouse,
+			&i.Connector,
+			&i.ExtraProps,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Origin,
+			&i.SourceRef,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setCatalogEnabled = `-- name: SetCatalogEnabled :exec
 UPDATE catalogs SET enabled = $2, updated_at = now() WHERE id = $1
 `
@@ -456,6 +639,41 @@ func (q *Queries) UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (C
 		arg.ExtraProps,
 		arg.TrinoCatalogName,
 	)
+	var i Catalog
+	err := row.Scan(
+		&i.ID,
+		&i.ConnectionID,
+		&i.Name,
+		&i.Description,
+		&i.TrinoCatalogName,
+		&i.ClusterID,
+		&i.Warehouse,
+		&i.Connector,
+		&i.ExtraProps,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Origin,
+		&i.SourceRef,
+	)
+	return i, err
+}
+
+const updateCatalogMeta = `-- name: UpdateCatalogMeta :one
+UPDATE catalogs
+SET name = $2, description = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
+`
+
+type UpdateCatalogMetaParams struct {
+	ID          pgtype.UUID `json:"id"`
+	Name        string      `json:"name"`
+	Description *string     `json:"description"`
+}
+
+func (q *Queries) UpdateCatalogMeta(ctx context.Context, arg UpdateCatalogMetaParams) (Catalog, error) {
+	row := q.db.QueryRow(ctx, updateCatalogMeta, arg.ID, arg.Name, arg.Description)
 	var i Catalog
 	err := row.Scan(
 		&i.ID,
