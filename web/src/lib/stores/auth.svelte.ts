@@ -1,5 +1,6 @@
 // src/lib/stores/auth.svelte.ts
 import { clearSession, client, getRefreshToken } from '$lib/api/client';
+import { clearDrafts } from '$lib/workbench/drafts';
 
 export type Features = {
 	agents: boolean;
@@ -59,6 +60,7 @@ function createAuthStore() {
 
 	async function logout() {
 		const refreshToken = getRefreshToken();
+		const uid = user?.id;
 		try {
 			await client.POST('/auth/logout', {
 				body: refreshToken ? { refresh_token: refreshToken } : {}
@@ -66,6 +68,8 @@ function createAuthStore() {
 		} catch {
 			/* best effort: log out locally even if the API is unreachable */
 		}
+		// Shared computers: explicit logout removes the workbench drafts (#112).
+		if (uid) await clearDrafts(uid);
 		clearSession();
 		clear();
 		window.location.href = '/login';

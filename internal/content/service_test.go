@@ -63,7 +63,7 @@ func (f *fixture) update(t *testing.T, q db.SavedQuery, sql string) (db.SavedQue
 		WorkspaceID: f.ws, ID: q.ID, Name: q.Name, Sql: sql, FolderID: q.FolderID,
 		SpaceID: q.SpaceID, Slug: q.Slug, TargetBindingID: q.TargetBindingID,
 		TargetSchema: q.TargetSchema, UpdatedBy: f.user,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestConcurrentUpdates_NoDuplicateVersion(t *testing.T) {
 			_, _, err := f.s.UpdateSavedQuery(ctx, f.user, db.UpdateSavedQueryParams{
 				WorkspaceID: f.ws, ID: q.ID, Name: q.Name, Sql: fmt.Sprintf("SELECT %d", i),
 				SpaceID: q.SpaceID, Slug: q.Slug, UpdatedBy: f.user,
-			})
+			}, nil)
 			if err != nil {
 				errs <- err
 			}
@@ -229,3 +229,37 @@ func TestConcurrentUpdates_NoDuplicateVersion(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestUpdate_VersionConflict(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	q := f.create(t, "conflict", "conflict")
+
+	next, changed, err := f.s.UpdateSavedQuery(ctx, f.user, db.UpdateSavedQueryParams{
+		WorkspaceID: f.ws, ID: q.ID, Name: q.Name, Sql: "SELECT 2",
+		SpaceID: q.SpaceID, Slug: q.Slug, UpdatedBy: f.user,
+	}, int32Ptr(1))
+	if err != nil || !changed {
+		t.Fatalf("matching expected_version: changed=%v err=%v", changed, err)
+	}
+	if next.Sql != "SELECT 2" {
+		t.Fatalf("update = %+v", next)
+	}
+
+	_, _, err = f.s.UpdateSavedQuery(ctx, f.user, db.UpdateSavedQueryParams{
+		WorkspaceID: f.ws, ID: q.ID, Name: q.Name, Sql: "SELECT 3",
+		SpaceID: q.SpaceID, Slug: q.Slug, UpdatedBy: f.user,
+	}, int32Ptr(1))
+	var vc *VersionConflict
+	if !errors.As(err, &vc) {
+		t.Fatalf("stale expected_version: err = %v, want VersionConflict", err)
+	}
+	if vc.Current != 2 {
+		t.Fatalf("current version = %d, want 2", vc.Current)
+	}
+	if !errors.Is(err, ErrVersionConflict) {
+		t.Fatal("VersionConflict must wrap ErrVersionConflict")
+	}
+}
+
+func int32Ptr(v int32) *int32 { return &v }

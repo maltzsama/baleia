@@ -40,7 +40,7 @@
 	}
 
 	function openQuery(q: SavedQuery) {
-		editor.openSavedQuery(q);
+		editor.openSavedQuery(q, !savedQueries.canEdit(q.space_id));
 	}
 
 	async function renameQuery(q: SavedQuery) {

@@ -90,6 +90,13 @@ WHERE m.workspace_id = @workspace_id::uuid
   AND (sqlc.narg(space_id)::uuid IS NULL OR m.space_id = sqlc.narg(space_id)::uuid)
 ORDER BY m.label;
 
+-- name: ListSemanticMetricVersions :many
+-- Latest content version of every metric in the workspace, in one query.
+SELECT entity_id, max(version)::int AS version
+FROM content_versions
+WHERE workspace_id = @workspace_id::uuid AND entity_type = 'semantic_metric'
+GROUP BY entity_id;
+
 -- name: GetSemanticMetric :one
 SELECT * FROM semantic_metrics
 WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid;

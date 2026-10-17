@@ -191,14 +191,24 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 		UserID:      userID,
 		SpaceID:     spaceID,
 		FolderID:    folderID,
+		Q:           request.Params.Q,
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	versions, err := h.queries.ListSavedQueryVersions(ctx, workspaceIDFromRequest(request.Id))
+	if err != nil {
+		return nil, err
+	}
+	versionByID := make(map[string]int32, len(versions))
+	for _, v := range versions {
+		versionByID[uuidStr(v.EntityID)] = v.Version
+	}
+
 	result := make([]SavedQuery, 0, len(queries))
 	for _, q := range queries {
-		result = append(result, dbSavedQueryToPublic(q))
+		result = append(result, dbSavedQueryToPublic(q, versionByID[uuidStr(q.ID)]))
 	}
 	return ListSavedQueries200JSONResponse(result), nil
 }
@@ -278,7 +288,7 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 		return nil, err
 	}
 
-	return CreateSavedQuery201JSONResponse(dbSavedQueryToPublic(query)), nil
+	return CreateSavedQuery201JSONResponse(dbSavedQueryToPublic(query, 1)), nil
 }
 
 func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryRequestObject) (GetSavedQueryResponseObject, error) {
@@ -309,7 +319,7 @@ func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryReque
 		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
 	}
 
-	return GetSavedQuery200JSONResponse(dbSavedQueryToPublic(query)), nil
+	return GetSavedQuery200JSONResponse(dbSavedQueryToPublic(query, h.savedQueryVersion(ctx, ws, query.ID))), nil
 }
 
 func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQueryRequestObject) (UpdateSavedQueryResponseObject, error) {
@@ -405,6 +415,11 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 	if err != nil {
 		return nil, err
 	}
+	var expected *int32
+	if request.Body.ExpectedVersion != nil {
+		v := int32(*request.Body.ExpectedVersion)
+		expected = &v
+	}
 	updated, _, err := h.contentService().UpdateSavedQuery(ctx, updatedBy, db.UpdateSavedQueryParams{
 		WorkspaceID:     ws,
 		ID:              queryID,
@@ -416,15 +431,18 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 		TargetBindingID: bindingID,
 		TargetSchema:    targetSchema,
 		UpdatedBy:       updatedBy,
-	})
+	}, expected)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return savedQueryUpdateConflict("a saved query with this name already exists in this workspace"), nil
 		}
+		if c, ok := h.versionConflictResponse(ctx, err); ok {
+			return UpdateSavedQuery409JSONResponse{ConflictJSONResponse: c}, nil
+		}
 		return nil, err
 	}
 
-	return UpdateSavedQuery200JSONResponse(dbSavedQueryToPublic(updated)), nil
+	return UpdateSavedQuery200JSONResponse(dbSavedQueryToPublic(updated, h.savedQueryVersion(ctx, ws, queryID))), nil
 }
 
 func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQueryRequestObject) (DeleteSavedQueryResponseObject, error) {
@@ -1159,7 +1177,7 @@ func dbFolderToPublic(f db.QueryFolder) QueryFolder {
 	return qf
 }
 
-func dbSavedQueryToPublic(q db.SavedQuery) SavedQuery {
+func dbSavedQueryToPublic(q db.SavedQuery, version int32) SavedQuery {
 	sq := SavedQuery{
 		Id:          openapi_types.UUID(q.ID.Bytes),
 		WorkspaceId: openapi_types.UUID(q.WorkspaceID.Bytes),
@@ -1168,6 +1186,7 @@ func dbSavedQueryToPublic(q db.SavedQuery) SavedQuery {
 		CreatedBy:   openapi_types.UUID(q.CreatedBy.Bytes),
 		Name:        q.Name,
 		Sql:         q.Sql,
+		Version:     int(version),
 		CreatedAt:   pgTimestampToTime(q.CreatedAt),
 		UpdatedAt:   timePtr(q.UpdatedAt),
 	}
@@ -1187,6 +1206,42 @@ func dbSavedQueryToPublic(q db.SavedQuery) SavedQuery {
 		}
 	}
 	return sq
+}
+
+// savedQueryVersion returns the latest content version, or 0 when none.
+func (h *Handlers) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
+		WorkspaceID: ws, EntityType: content.EntitySavedQuery, EntityID: id,
+	})
+	if err != nil {
+		return 0
+	}
+	return v.Version
+}
+
+// versionConflictResponse maps content.ErrVersionConflict to the 409 body with
+// the current version and who wrote it.
+func (h *Handlers) versionConflictResponse(ctx context.Context, err error) (ConflictJSONResponse, bool) {
+	var vc *content.VersionConflict
+	if !errors.As(err, &vc) {
+		return ConflictJSONResponse{}, false
+	}
+	params := map[string]interface{}{
+		"current_version": vc.Current,
+		"updated_at":      vc.UpdatedAt,
+	}
+	if vc.UpdatedBy.Valid {
+		by := map[string]interface{}{"id": uuidStr(vc.UpdatedBy)}
+		if user, uerr := h.queries.GetUserByID(ctx, vc.UpdatedBy); uerr == nil {
+			by["name"] = user.Name
+		}
+		params["updated_by"] = by
+	}
+	return ConflictJSONResponse{
+		Code:    "version_conflict",
+		Message: "the content changed since you loaded it",
+		Params:  &params,
+	}, true
 }
 
 func dbExecutionToPublic(e db.QueryExecution) Execution {

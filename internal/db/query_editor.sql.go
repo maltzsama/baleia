@@ -811,6 +811,39 @@ func (q *Queries) ListRunningStatementHandles(ctx context.Context, executionID p
 	return items, nil
 }
 
+const listSavedQueryVersions = `-- name: ListSavedQueryVersions :many
+SELECT entity_id, max(version)::int AS version
+FROM content_versions
+WHERE workspace_id = $1::uuid AND entity_type = 'saved_query'
+GROUP BY entity_id
+`
+
+type ListSavedQueryVersionsRow struct {
+	EntityID pgtype.UUID `json:"entity_id"`
+	Version  int32       `json:"version"`
+}
+
+// Latest content version of every saved query in the workspace, in one query.
+func (q *Queries) ListSavedQueryVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSavedQueryVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listSavedQueryVersions, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSavedQueryVersionsRow
+	for rows.Next() {
+		var i ListSavedQueryVersionsRow
+		if err := rows.Scan(&i.EntityID, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVisibleQueryFolders = `-- name: ListVisibleQueryFolders :many
 SELECT f.id, f.workspace_id, f.parent_id, f.name, f.created_at, f.space_id, f.slug FROM query_folders f
 WHERE f.workspace_id = $1::uuid
@@ -868,6 +901,7 @@ WHERE q.workspace_id = $1::uuid
   AND baleia_effective_space_role(q.workspace_id, q.space_id, $2::uuid) IS NOT NULL
   AND ($3::uuid IS NULL OR q.space_id = $3::uuid)
   AND q.folder_id IS NOT DISTINCT FROM $4::uuid
+  AND ($5::text IS NULL OR q.name ILIKE '%' || $5::text || '%' OR q.slug ILIKE '%' || $5::text || '%')
 ORDER BY q.name
 `
 
@@ -876,15 +910,17 @@ type ListVisibleSavedQueriesParams struct {
 	UserID      pgtype.UUID `json:"user_id"`
 	SpaceID     pgtype.UUID `json:"space_id"`
 	FolderID    pgtype.UUID `json:"folder_id"`
+	Q           *string     `json:"q"`
 }
 
-// Only queries of spaces the caller can see; space_id/folder_id narrow it.
+// Only queries of spaces the caller can see; space_id/folder_id/q narrow it.
 func (q *Queries) ListVisibleSavedQueries(ctx context.Context, arg ListVisibleSavedQueriesParams) ([]SavedQuery, error) {
 	rows, err := q.db.Query(ctx, listVisibleSavedQueries,
 		arg.WorkspaceID,
 		arg.UserID,
 		arg.SpaceID,
 		arg.FolderID,
+		arg.Q,
 	)
 	if err != nil {
 		return nil, err

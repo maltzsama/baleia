@@ -16,8 +16,15 @@
 	import { format as formatSQLFormatter } from 'sql-formatter';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { editor } from '$lib/stores/editor.svelte';
-	import { savedQueries } from '$lib/stores/savedQueries.svelte';
+	import { authStore } from '$lib/stores/auth.svelte';
+	import { savedQueries, type SavedQuery } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import { registerProvider, unregisterProvider } from '$lib/palette/registry';
+	import { MAX_DRAFT_SQL } from '$lib/workbench/drafts';
+	import type { Conflict } from '$lib/workbench/conflict';
+	import CommandPalette from '$lib/workbench/CommandPalette.svelte';
+	import SaveConflictDialog from '$lib/workbench/SaveConflictDialog.svelte';
+	import SaveQueryDialog from '$lib/workbench/SaveQueryDialog.svelte';
 	import {
 		codemirrorDialect,
 		formatterLanguage,
@@ -30,6 +37,7 @@
 	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
 	import { resolveAliasColumns } from '$lib/engines/completion';
 	import Badge from '$lib/ui/Badge.svelte';
+	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import ResultsPanel from './ResultsPanel.svelte';
 	import {
@@ -47,6 +55,7 @@
 	let editorReady = $state(false);
 	const themeCompartment = new Compartment();
 	const dialectCompartment = new Compartment();
+	const readOnlyCompartment = new Compartment();
 
 	const tabs = $derived(editor.tabs);
 	const activeIdx = $derived(
@@ -70,8 +79,19 @@
 	let namespaces = $state<string[][]>([]);
 	let namespacesError = $state('');
 
-	let saveModalOpen = $state(false);
-	let saveName = $state('');
+	let saveOpen = $state(false);
+	let saveMode = $state<'save' | 'copy'>('save');
+	let savePrefill = $state('');
+	let conflict = $state<Conflict | null>(null);
+	let conflictOpen = $state(false);
+	let closingIdx = $state<number | null>(null);
+	let closeOpen = $state(false);
+	let paletteOpen = $state(false);
+	let paletteMode = $state<'commands' | 'quick'>('commands');
+	let shortcutsOpen = $state(false);
+	let targetFallback = $state('');
+	let hydratedFor = $state('');
+	const userId = $derived(authStore.user?.id ?? '');
 
 	// ── Target resolution ────────────────────────────────────────────────
 	const selectedTarget = $derived(targets.find((t) => t.binding_id === activeTab.bindingId));
@@ -118,11 +138,48 @@
 		void loadTargets(workspaceId);
 	});
 
+	// Drafts are per user × workspace (#112).
+	$effect(() => {
+		const uid = userId;
+		const wid = workspaceId;
+		if (!uid || !wid) return;
+		const key = `${uid}.${wid}`;
+		if (hydratedFor === key) return;
+		hydratedFor = key;
+		void editor.hydrate(uid, wid);
+	});
+
+	// Debounced persistence. Reading the fields makes edits reschedule it.
+	$effect(() => {
+		const uid = userId;
+		const wid = workspaceId;
+		const snapshot = editor.tabs
+			.map((tab) => `${tab.id}:${tab.sql}:${tab.bindingId}:${tab.schema}:${tab.dirty}`)
+			.join('|');
+		void snapshot;
+		if (!uid || !wid) return;
+		const timer = setTimeout(() => {
+			void editor.persist(uid, wid);
+		}, 500);
+		return () => clearTimeout(timer);
+	});
+
+	// A read-only tab still runs queries but cannot edit the SQL.
+	$effect(() => {
+		if (!editorView) return;
+		editorView.dispatch({
+			effects: readOnlyCompartment.reconfigure(EditorState.readOnly.of(activeTab.readOnly))
+		});
+	});
+
 	// A tab without a target starts on the workspace default, else the first.
 	$effect(() => {
 		const tab = activeTab;
 		if (!tab || targets.length === 0) return;
 		if (tab.bindingId && targets.some((t) => t.binding_id === tab.bindingId)) return;
+		if (tab.savedBindingId && !targets.some((t) => t.binding_id === tab.savedBindingId)) {
+			targetFallback = 'Saved target is not available in this workspace — using the default.';
+		}
 		const ws = workspaceStore.current;
 		const pick = targets.find((t) => t.binding_id === ws?.default_binding_id) ?? targets[0];
 		editor.setTarget(tab.id, pick.binding_id, tab.schema || ws?.default_schema || '');
@@ -174,15 +231,22 @@
 		const candidates = targets.filter((t) => t.engine_id === engineId);
 		const pick =
 			candidates.find((t) => t.catalog_name === selectedTarget?.catalog_name) ?? candidates[0];
-		if (pick) editor.setTarget(editor.activeId, pick.binding_id, '');
+		if (pick) editor.setTarget(editor.activeId, pick.binding_id, '', true);
+		targetFallback = '';
 	}
 
 	function selectCatalog(bindingId: string) {
-		editor.setTarget(editor.activeId, bindingId, workspaceStore.current?.default_schema ?? '');
+		editor.setTarget(
+			editor.activeId,
+			bindingId,
+			workspaceStore.current?.default_schema ?? '',
+			true
+		);
+		targetFallback = '';
 	}
 
 	function selectSchema(schema: string) {
-		editor.setTarget(editor.activeId, activeTab.bindingId, schema);
+		editor.setTarget(editor.activeId, activeTab.bindingId, schema, true);
 	}
 
 	function switchTab(idx: number) {
@@ -194,7 +258,140 @@
 	}
 
 	function closeTab(idx: number) {
-		editor.closeTab(tabs[idx].id);
+		const tab = tabs[idx];
+		if (!tab) return;
+		if (tab.dirty) {
+			closingIdx = idx;
+			closeOpen = true;
+			return;
+		}
+		editor.closeTab(tab.id);
+	}
+
+	function discardAndClose() {
+		if (closingIdx === null) return;
+		const id = tabs[closingIdx]?.id;
+		if (id) editor.closeTab(id);
+		closingIdx = null;
+		closeOpen = false;
+	}
+
+	function saveAndClose() {
+		discardAndClose();
+		openSave('save');
+	}
+
+	function isTextTarget(target: EventTarget | null): boolean {
+		const el = target as HTMLElement | null;
+		if (!el) return false;
+		return !!el.closest('input, textarea, select, [contenteditable="true"], .cm-editor');
+	}
+
+	function onGlobalKeydown(event: KeyboardEvent) {
+		const mod = event.metaKey || event.ctrlKey;
+		if (mod && event.key.toLowerCase() === 's') {
+			event.preventDefault();
+			openSave(event.shiftKey ? 'copy' : 'save');
+		} else if (mod && event.key.toLowerCase() === 'p') {
+			event.preventDefault();
+			paletteMode = 'quick';
+			paletteOpen = true;
+		} else if (mod && event.key.toLowerCase() === 'k') {
+			event.preventDefault();
+			paletteMode = 'commands';
+			paletteOpen = true;
+		} else if (mod && event.key.toLowerCase() === 'e') {
+			event.preventDefault();
+			void explainQuery();
+		} else if (event.shiftKey && event.altKey && event.key.toLowerCase() === 'f') {
+			event.preventDefault();
+			formatSQL();
+		} else if (event.altKey && event.key.toLowerCase() === 'n') {
+			event.preventDefault();
+			newTab();
+		} else if (event.altKey && event.key.toLowerCase() === 'w') {
+			event.preventDefault();
+			closeTab(activeIdx);
+		} else if (event.key === '?' && !isTextTarget(event.target)) {
+			shortcutsOpen = true;
+		}
+	}
+
+	function onBeforeUnload(event: BeforeUnloadEvent) {
+		if (editor.dirty) {
+			event.preventDefault();
+			event.returnValue = '';
+		}
+	}
+
+	function registerPalette() {
+		registerProvider({
+			id: 'actions',
+			label: 'Actions',
+			search: (query) => {
+				const q = query.toLowerCase();
+				return [
+					{ id: 'run-all', label: 'Run', run: () => void runAll() },
+					{ id: 'run-current', label: 'Run current statement', run: () => void runCurrent() },
+					{ id: 'format', label: 'Format SQL', run: formatSQL },
+					{ id: 'explain', label: 'Explain current query', run: () => void explainQuery() },
+					{ id: 'new-tab', label: 'New tab', run: newTab },
+					{ id: 'save', label: 'Save', run: () => openSave('save') },
+					{ id: 'save-copy', label: 'Save as a copy', run: () => openSave('copy') },
+					{
+						id: 'quick-open',
+						label: 'Quick open a saved query',
+						run: () => {
+							paletteMode = 'quick';
+							paletteOpen = true;
+						}
+					},
+					{ id: 'shortcuts', label: 'Keyboard shortcuts', run: () => (shortcutsOpen = true) }
+				]
+					.filter((action) => action.label.toLowerCase().includes(q))
+					.map((action) => ({ ...action, group: 'Actions' }));
+			}
+		});
+		registerProvider({
+			id: 'queries',
+			label: 'Saved queries',
+			search: async (query) => {
+				if (workspaceId && savedQueries.spaces.length === 0) await savedQueries.reload(workspaceId);
+				const { data } = await client.GET('/workspaces/{id}/queries', {
+					params: {
+						path: { id: workspaceId },
+						query: query.trim() ? { q: query.trim() } : {}
+					}
+				});
+				return (data ?? []).slice(0, 20).map((item) => ({
+					id: `query-${item.id}`,
+					label: item.name,
+					detail: item.slug,
+					group: 'Saved queries',
+					run: () => {
+						editor.openSavedQuery(item, !savedQueries.canEdit(item.space_id));
+					}
+				}));
+			}
+		});
+		registerProvider({
+			id: 'tables',
+			label: 'Tables',
+			search: async (query) => {
+				const q = query.trim();
+				if (q.length < 2) return [];
+				const results = await searchMetadata(workspaceId, q, { kind: 'all', limit: 10 });
+				return results
+					.filter((result) => result.kind === 'table')
+					.map((result) => ({
+						id: `table-${result.table_id}`,
+						label: result.table,
+						detail: result.namespace.join('.'),
+						group: 'Tables',
+						run: () => editor.insert(`${result.namespace.join('.')}.${result.table}`)
+					}));
+			}
+		});
 	}
 
 	// Mirrors the store's active tab into CodeMirror when another component
@@ -318,6 +515,9 @@
 	}
 
 	onMount(() => {
+		registerPalette();
+		window.addEventListener('keydown', onGlobalKeydown);
+		window.addEventListener('beforeunload', onBeforeUnload);
 		const observer = new MutationObserver(() => {
 			dark = document.body.classList.contains('dark');
 		});
@@ -345,6 +545,7 @@
 			dialectCompartment.of(
 				sqlLanguage({ dialect: codemirrorDialect(undefined), upperCaseKeywords: true })
 			),
+			readOnlyCompartment.of(EditorState.readOnly.of(false)),
 			autocompletion({ override: [complete] }),
 			EditorView.contentAttributes.of({ 'aria-label': 'SQL editor' }),
 			themeCompartment.of(dark ? oneDark : []),
@@ -367,6 +568,11 @@
 
 		return () => {
 			observer.disconnect();
+			window.removeEventListener('keydown', onGlobalKeydown);
+			window.removeEventListener('beforeunload', onBeforeUnload);
+			unregisterProvider('actions');
+			unregisterProvider('queries');
+			unregisterProvider('tables');
 			stream?.close();
 		};
 	});
@@ -556,42 +762,46 @@
 		}
 	}
 
-	function explainQuery() {
+	async function explainQuery() {
 		if (!editorView) return;
+		const name = selectedEngine?.dialect?.name;
+		if (!name) return;
 		const sqlText = editorView.state.doc.toString().trim();
-		if (!sqlText.toUpperCase().startsWith('EXPLAIN')) {
-			editorView.dispatch({
-				changes: { from: 0, to: editorView.state.doc.length, insert: 'EXPLAIN ' + sqlText }
-			});
-		}
-		void runAll();
-	}
-
-	async function saveQuery() {
-		if (!saveName.trim() || !workspaceId) return;
+		if (!sqlText) return;
 		try {
-			const sql = editorView.state.doc.toString();
-			const savedId = tabs[activeIdx].savedId;
-			const { data: saved, error } = savedId
-				? await client.PATCH('/workspaces/{id}/queries/{query_id}', {
-						params: { path: { id: workspaceId, query_id: savedId } },
-						body: { name: saveName.trim(), sql }
-					})
-				: await client.POST('/workspaces/{id}/queries', {
-						params: { path: { id: workspaceId } },
-						body: { name: saveName.trim(), sql }
-					});
-			if (error || !saved) {
-				tabs[activeIdx].errorMsg = apiErrorMessage(error, 'Save failed');
+			const { data, error } = await client.POST('/dialects/{name}/explain', {
+				params: { path: { name } },
+				body: { sql: sqlText }
+			});
+			if (error || !data) {
+				activeTab.errorMsg = apiErrorMessage(error, 'Could not explain the query');
 				return;
 			}
-			editor.markSaved(editor.activeId, saved);
-			savedQueries.onSaved(saved);
-			saveModalOpen = false;
-			saveName = '';
+			if (!data.supported || !data.sql) {
+				activeTab.errorMsg = 'This engine does not support EXPLAIN.';
+				return;
+			}
+			await submit(data.sql);
 		} catch (e) {
-			tabs[activeIdx].errorMsg = 'Save failed: ' + errorMessage(e);
+			activeTab.errorMsg = errorMessage(e);
 		}
+	}
+
+	function openSave(mode: 'save' | 'copy', prefill = '') {
+		if (workspaceId && savedQueries.spaces.length === 0) void savedQueries.reload(workspaceId);
+		saveMode = mode;
+		savePrefill = prefill;
+		saveOpen = true;
+	}
+
+	function onSaved(query: SavedQuery) {
+		editor.markSaved(editor.activeId, query);
+		savedQueries.onSaved(query);
+	}
+
+	function onConflict(details: Conflict) {
+		conflict = details;
+		conflictOpen = true;
 	}
 </script>
 
@@ -673,9 +883,9 @@
 			>Format</button
 		>
 		<button
-			onclick={() => (saveModalOpen = true)}
+			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
-			>Save</button
+			>{activeTab.readOnly ? 'Save a copy' : 'Save'}</button
 		>
 		<div class="flex-1"></div>
 
@@ -742,6 +952,27 @@
 		<p class="px-3 py-1 text-[11px] text-red-600" role="alert">{namespacesError}</p>
 	{/if}
 
+	{#if activeTab.readOnly}
+		<div
+			class="flex items-center gap-2 border-b border-border bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800 dark:bg-[#241a06] dark:text-amber-300"
+		>
+			<span>View only — you can run this query or save a copy.</span>
+			<button class="font-semibold underline" onclick={() => openSave('copy')}>Save a copy</button>
+		</div>
+	{/if}
+	{#if targetFallback}
+		<p
+			class="border-b border-border bg-bg-toolbar px-3 py-1 text-[11px] text-slate-600 dark:text-slate-300"
+		>
+			{targetFallback}
+		</p>
+	{/if}
+	{#if activeTab.sql.length > MAX_DRAFT_SQL}
+		<p class="border-b border-border bg-bg-toolbar px-3 py-1 text-[11px] text-amber-700">
+			Too large to keep as a draft.
+		</p>
+	{/if}
+
 	<div bind:this={editorEl} class="flex-1 overflow-auto min-h-0"></div>
 
 	<div
@@ -788,25 +1019,52 @@
 		</div>
 	{/if}
 
-	<Modal bind:open={saveModalOpen} title="Save Query">
+	<SaveQueryDialog
+		bind:open={saveOpen}
+		tab={activeTab}
+		{workspaceId}
+		spaces={savedQueries.spaces}
+		folders={savedQueries.folders}
+		mode={saveMode}
+		prefillName={savePrefill}
+		onconflict={onConflict}
+		onsaved={onSaved}
+	/>
+
+	{#if conflict}
+		<SaveConflictDialog
+			bind:open={conflictOpen}
+			tab={activeTab}
+			{workspaceId}
+			{conflict}
+			onsaved={onSaved}
+			oncopy={() => openSave('copy', `${activeTab.name} (copy)`)}
+		/>
+	{/if}
+
+	<CommandPalette bind:open={paletteOpen} mode={paletteMode} />
+
+	<Modal bind:open={closeOpen} title="Close this tab?">
+		<p class="text-[13px] text-slate-600 dark:text-slate-300">
+			This tab has unsaved changes. Save them before closing?
+		</p>
 		{#snippet footer()}
-			<div class="flex justify-end gap-1.5">
-				<button
-					class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer hover:border-border-hover"
-					onclick={() => (saveModalOpen = false)}>Cancel</button
-				>
-				<button
-					class="h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer hover:bg-primary-hover"
-					onclick={saveQuery}>Save</button
-				>
+			<div class="flex justify-end gap-2">
+				<Button onclick={() => (closeOpen = false)}>Cancel</Button>
+				<Button onclick={discardAndClose}>Discard</Button>
+				<Button variant="primary" onclick={saveAndClose}>Save</Button>
 			</div>
 		{/snippet}
-		<input
-			class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
-			type="text"
-			placeholder="Query name"
-			bind:value={saveName}
-			onkeydown={(e) => e.key === 'Enter' && saveQuery()}
-		/>
+	</Modal>
+
+	<Modal bind:open={shortcutsOpen} title="Keyboard shortcuts">
+		<ul class="grid gap-1 text-[12px] text-slate-600 dark:text-slate-300">
+			{#each [['Run current statement', 'Mod-Enter'], ['Run all', 'Shift-Mod-Enter'], ['Save', 'Mod-S'], ['Save as a copy', 'Shift-Mod-S'], ['Quick open', 'Mod-P'], ['Command palette', 'Mod-K'], ['Format', 'Shift-Alt-F'], ['Explain', 'Mod-E'], ['New tab', 'Alt-N'], ['Close tab', 'Alt-W']] as [label, keys] (label)}
+				<li class="flex justify-between gap-4">
+					<span>{label}</span>
+					<kbd class="font-mono text-[11px]">{keys}</kbd>
+				</li>
+			{/each}
+		</ul>
 	</Modal>
 </div>

@@ -214,7 +214,7 @@ func (h *Handlers) RestoreSavedQueryVersion(ctx context.Context, request Restore
 	case err != nil:
 		return nil, err
 	}
-	return RestoreSavedQueryVersion200JSONResponse(dbSavedQueryToPublic(q)), nil
+	return RestoreSavedQueryVersion200JSONResponse(dbSavedQueryToPublic(q, h.savedQueryVersion(ctx, ws, q.ID))), nil
 }
 
 // ── semantic metric versions ───────────────────────────────────────────────────
@@ -362,7 +362,7 @@ func (h *Handlers) RestoreSemanticMetricVersion(ctx context.Context, request Res
 	case err != nil:
 		return nil, err
 	}
-	return RestoreSemanticMetricVersion200JSONResponse(dbSemanticMetricToPublic(m)), nil
+	return RestoreSemanticMetricVersion200JSONResponse(dbSemanticMetricToPublic(m, h.semanticMetricVersion(ctx, ws, m.ID))), nil
 }
 
 // ── trash ───────────────────────────────────────────────────────────────────────

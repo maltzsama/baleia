@@ -158,3 +158,42 @@ func TestDescribeEngines_ParallelInOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestExplainSQL(t *testing.T) {
+	h := &Handlers{}
+	resp, err := h.ExplainSQL(testContext(), ExplainSQLRequestObject{Name: "sqlite", Body: &ExplainRequest{Sql: "SELECT 1;"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, isOK := resp.(ExplainSQL200JSONResponse)
+	if !isOK || !ok.Supported || ok.Sql == nil || *ok.Sql != "EXPLAIN QUERY PLAN SELECT 1" {
+		t.Fatalf("response = %#v", resp)
+	}
+
+	if resp, _ := h.ExplainSQL(testContext(), ExplainSQLRequestObject{Name: "tsql", Body: &ExplainRequest{Sql: "SELECT 1"}}); func() bool {
+		r, ok := resp.(ExplainSQL200JSONResponse)
+		return !ok || r.Supported
+	}() {
+		t.Errorf("tsql has no explain: %#v", resp)
+	}
+	if _, ok := mustExplain(t, h, ExplainSQLRequestObject{Name: "cobol", Body: &ExplainRequest{Sql: "x"}}).(ExplainSQL404JSONResponse); !ok {
+		t.Error("unknown dialect must be 404")
+	}
+	if _, ok := mustExplain(t, h, ExplainSQLRequestObject{Name: "sqlite", Body: &ExplainRequest{Sql: "  "}}).(ExplainSQL422JSONResponse); !ok {
+		t.Error("empty sql must be 422")
+	}
+	if resp, err := h.ExplainSQL(context.Background(), ExplainSQLRequestObject{Name: "sqlite", Body: &ExplainRequest{Sql: "SELECT 1"}}); err != nil {
+		t.Fatal(err)
+	} else if _, ok := resp.(ExplainSQL401JSONResponse); !ok {
+		t.Error("anonymous must be 401")
+	}
+}
+
+func mustExplain(t *testing.T, h *Handlers, req ExplainSQLRequestObject) ExplainSQLResponseObject {
+	t.Helper()
+	resp, err := h.ExplainSQL(testContext(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
