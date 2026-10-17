@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { client } from '$lib/api/client';
 
-	const apiBase = '/api/v1';
 	const MIN_LENGTH = 8;
 
 	// Held in memory only: read once from the query string, then removed from the address bar.
@@ -41,22 +42,20 @@
 		busy = true;
 		error = '';
 		try {
-			const res = await fetch(`${apiBase}/auth/password-reset/confirm`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ token, new_password: newPassword })
+			const { response } = await client.POST('/auth/password-reset/confirm', {
+				body: { token, new_password: newPassword }
 			});
-			if (res.status === 204) {
+			if (response.status === 204) {
 				window.location.href = '/login?reset=1';
 				return;
 			}
 			// The backend answers 401 for an unknown, expired or used token; 400/404/410 are treated the same.
-			if ([400, 401, 404, 410].includes(res.status)) {
+			if ([400, 401, 404, 410].includes(response.status)) {
 				invalidLink = true;
-			} else if (res.status === 422) {
+			} else if (response.status === 422) {
 				error = `Password must be at least ${MIN_LENGTH} characters.`;
 			} else {
-				error = `Could not change the password (HTTP ${res.status}). Try again.`;
+				error = `Could not change the password (HTTP ${response.status}). Try again.`;
 			}
 		} catch {
 			error = 'Connection error. Is the server running?';
@@ -65,15 +64,18 @@
 		}
 	}
 
-	const inputBase = "w-full h-10 bg-bg-app dark:bg-[#1c2128] border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-text-muted focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.1)] focus:bg-bg-panel";
+	const inputBase =
+		'w-full h-10 bg-bg-app dark:bg-[#1c2128] border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-text-muted focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.1)] focus:bg-bg-panel';
 </script>
 
 <svelte:head>
 	<title>Reset password · Baleia</title>
-	<meta name="referrer" content="no-referrer">
+	<meta name="referrer" content="no-referrer" />
 </svelte:head>
 
-<div class="bg-bg-app text-text-main min-h-screen flex items-center justify-center p-8 transition-colors duration-200">
+<div
+	class="bg-bg-app text-text-main min-h-screen flex items-center justify-center p-8 transition-colors duration-200"
+>
 	<div class="w-full max-w-[360px]">
 		{#if ready}
 			{#if !token || invalidLink}
@@ -86,29 +88,51 @@
 							This reset link is invalid or has expired.
 						{/if}
 					</div>
-					<a href="/login" class="w-full h-10 rounded-[7px] text-[13px] font-semibold flex items-center justify-center bg-primary text-white no-underline hover:bg-primary-hover">
+					<a
+						href={resolve('/login')}
+						class="w-full h-10 rounded-[7px] text-[13px] font-semibold flex items-center justify-center bg-primary text-white no-underline hover:bg-primary-hover"
+					>
 						Request a new link
 					</a>
 				</div>
 			{:else}
 				<div class="flex flex-col animate-[fadeIn_.2s_ease]">
 					<div class="text-xl font-bold tracking-[-.4px] mb-1">Set new password</div>
-					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">Choose a strong password for your account.</div>
+					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
+						Choose a strong password for your account.
+					</div>
 					{#if error}
-						<div class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5">{error}</div>
+						<div
+							class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5"
+						>
+							{error}
+						</div>
 					{/if}
 					<div class="flex flex-col gap-[5px] mb-3.5">
 						<label class="text-[11px] font-semibold" for="new-pw">New password</label>
-						<input id="new-pw" class={inputBase} type="password" autocomplete="new-password" bind:value={newPassword} placeholder="••••••••"
+						<input
+							id="new-pw"
+							class={inputBase}
+							type="password"
+							autocomplete="new-password"
+							bind:value={newPassword}
+							placeholder="••••••••"
 							oninput={(e) => checkStrength((e.target as HTMLInputElement).value)}
-							onkeydown={(e) => e.key === 'Enter' && submit()}>
+							onkeydown={(e) => e.key === 'Enter' && submit()}
+						/>
 						<div class="flex gap-1 mt-1.5">
-							<div class="flex-1 h-[3px] rounded-sm transition-colors duration-300
-								{strengthScore >= 3 ? 'bg-green-500' : (strengthScore >= 1 ? 'bg-red-500' : 'bg-border')}"></div>
-							<div class="flex-1 h-[3px] rounded-sm transition-colors duration-300
-								{strengthScore >= 3 ? 'bg-green-500' : (strengthScore >= 2 ? 'bg-amber-500' : 'bg-border')}"></div>
-							<div class="flex-1 h-[3px] rounded-sm transition-colors duration-300
-								{strengthScore >= 3 ? 'bg-green-500' : 'bg-border'}"></div>
+							<div
+								class="flex-1 h-[3px] rounded-sm transition-colors duration-300
+								{strengthScore >= 3 ? 'bg-green-500' : strengthScore >= 1 ? 'bg-red-500' : 'bg-border'}"
+							></div>
+							<div
+								class="flex-1 h-[3px] rounded-sm transition-colors duration-300
+								{strengthScore >= 3 ? 'bg-green-500' : strengthScore >= 2 ? 'bg-amber-500' : 'bg-border'}"
+							></div>
+							<div
+								class="flex-1 h-[3px] rounded-sm transition-colors duration-300
+								{strengthScore >= 3 ? 'bg-green-500' : 'bg-border'}"
+							></div>
 						</div>
 						<div class="text-[10px] mt-1">
 							{#if strengthScore === 1}<span class="text-red-500">Weak</span>
@@ -119,12 +143,22 @@
 					</div>
 					<div class="flex flex-col gap-[5px] mb-3.5">
 						<label class="text-[11px] font-semibold" for="confirm-pw">Confirm password</label>
-						<input id="confirm-pw" class={inputBase} type="password" autocomplete="new-password" bind:value={confirmPassword} placeholder="••••••••"
-							onkeydown={(e) => e.key === 'Enter' && submit()}>
+						<input
+							id="confirm-pw"
+							class={inputBase}
+							type="password"
+							autocomplete="new-password"
+							bind:value={confirmPassword}
+							placeholder="••••••••"
+							onkeydown={(e) => e.key === 'Enter' && submit()}
+						/>
 					</div>
-					<button onclick={submit} disabled={busy}
+					<button
+						onclick={submit}
+						disabled={busy}
 						class="w-full h-10 border-none rounded-[7px] text-[13px] font-semibold cursor-pointer transition-colors duration-150 flex items-center justify-center gap-[7px] bg-primary text-white mb-2.5
-							hover:enabled:bg-primary-hover disabled:bg-blue-300 disabled:cursor-not-allowed">
+							hover:enabled:bg-primary-hover disabled:bg-blue-300 disabled:cursor-not-allowed"
+					>
 						{busy ? 'Updating…' : 'Update password'}
 					</button>
 				</div>
@@ -134,5 +168,14 @@
 </div>
 
 <style>
-	@keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
 </style>

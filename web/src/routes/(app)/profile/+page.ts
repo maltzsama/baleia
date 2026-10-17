@@ -1,8 +1,9 @@
 // src/routes/(app)/profile/+page.ts
-import type { PageLoad } from "./$types";
+import { client } from '$lib/api/client';
+import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ fetch }) => {
-  const res = await fetch("/api/v1/me");
-  if (!res.ok) return { user: null };
-  return { user: await res.json() };
+export const load: PageLoad = async () => {
+	if (typeof localStorage === 'undefined') return { user: null };
+	const { data } = await client.GET('/auth/me');
+	return { user: data ?? null };
 };

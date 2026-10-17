@@ -1,6 +1,7 @@
 <script lang="ts">
 	import GlobalNav from '$lib/components/GlobalNav.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import Toaster from '$lib/ui/Toaster.svelte';
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
@@ -22,9 +23,11 @@
 </script>
 
 <div class="h-screen flex overflow-hidden">
-	<GlobalNav {dark} onToggleDark={() => dark = !dark} />
+	<GlobalNav />
 	<div class="flex-1 flex flex-col overflow-hidden">
-		<Header onToggleDark={() => dark = !dark} {dark} />
+		<Header onToggleDark={() => (dark = !dark)} {dark} />
 		{@render children()}
 	</div>
 </div>
+
+<Toaster />
