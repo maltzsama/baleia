@@ -694,6 +694,71 @@ components:
           allOf: [{ $ref: "#/components/schemas/EngineDialect" }]
           nullable: true
           description: "How to write SQL for it; keyword and function lists are at GET /dialects/{name}"
+        health:
+          allOf: [{ $ref: "#/components/schemas/EngineHealth" }]
+          nullable: true
+          description: "Result of the latest reachability probe; unknown before the first probe"
+        connection:
+          allOf: [{ $ref: "#/components/schemas/EngineConnectionRef" }]
+          nullable: true
+        catalog_count:
+          type: integer
+          description: "Distinct logical catalogs bound to this engine"
+        credentials_read_only:
+          type: boolean
+          description: "Copied from the connection: its credentials only allow reads"
+
+    EngineHealth:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, description: "ok, unreachable or unknown" }
+        checked_at: { type: string, format: date-time, nullable: true }
+        error_code: { type: string, nullable: true }
+
+    EngineConnectionRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    EngineObservation:
+      type: object
+      required: [catalog_name, present, mode, first_seen_at, observed_at]
+      properties:
+        catalog_name: { type: string }
+        connector: { type: string, nullable: true }
+        present: { type: boolean }
+        mode: { type: string, description: "managed or adopted" }
+        first_seen_at: { type: string, format: date-time }
+        observed_at: { type: string, format: date-time }
+
+    EngineImpact:
+      type: object
+      required: [managed_bindings, native_catalogs, grants, metrics, docs, saved_queries_targeting, running_executions]
+      properties:
+        managed_bindings: { type: integer }
+        native_catalogs: { type: integer }
+        grants: { type: integer }
+        metrics: { type: integer }
+        docs: { type: integer }
+        saved_queries_targeting: { type: integer }
+        running_executions: { type: integer }
+
+    DiscoverResult:
+      type: object
+      required: [added, disabled, unchanged]
+      properties:
+        added:
+          type: array
+          items: { type: string }
+        disabled:
+          type: array
+          items: { type: string }
+        unchanged:
+          type: array
+          items: { type: string }
 
     EngineCapabilities:
       type: object
@@ -884,6 +949,7 @@ components:
           items: { type: string }
           description: "Catalogs the engine has that Baleia does not manage: reported, never dropped"
         error: { type: string, nullable: true }
+        max_actions: { type: integer, nullable: true, description: "BALEIA_RECONCILE_MAX_ACTIONS of the run" }
 
     MetadataFreshness:
       type: object
@@ -3530,7 +3596,16 @@ paths:
     get:
       tags: [CatalogConnections]
       operationId: listCatalogConnections
-      summary: "List all catalog connections — admin only"
+      summary: "List the catalog connections the caller can see"
+      parameters:
+        - name: action
+          in: query
+          schema: { type: string }
+          description: "Only connections whose allowed_actions include this action, e.g. register_engine"
+        - name: without_engine
+          in: query
+          schema: { type: boolean, default: false }
+          description: "Only connections that do not back an engine yet"
       responses:
         "200":
           description: "Connections"
@@ -4240,6 +4315,100 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /engines/{id}/reconcile-runs/{run_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: run_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Engines]
+      operationId: getReconcileRun
+      summary: "One reconcile run with its stored actions — admins"
+      responses:
+        "200":
+          description: "Run"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconcileRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /engines/{id}/observations:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: listEngineObservations
+      summary: "Catalogs the federated engine reported, with managed/adopted mode"
+      responses:
+        "200":
+          description: "Observations"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/EngineObservation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /engines/{id}/impact:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: getEngineImpact
+      summary: "What depends on this engine before disabling or deleting it"
+      responses:
+        "200":
+          description: "Impact"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EngineImpact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /engines/{id}/test:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Engines]
+      operationId: testEngine
+      summary: "Reach, authenticate and version the registered engine"
+      responses:
+        "200":
+          description: "Checks"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCatalogConnectionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429":
+          description: "Too many tests"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /engines/{id}/discover:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Engines]
+      operationId: discoverEngineCatalogs
+      summary: "Run native-catalog discovery now (direct engines)"
+      responses:
+        "200":
+          description: "What discovery changed"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoverResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/folders:
     parameters:

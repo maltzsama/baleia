@@ -264,3 +264,6 @@ SELECT * FROM catalog_reconcile_runs
 WHERE engine_id = $1
 ORDER BY started_at DESC
 LIMIT $2;
+
+-- name: GetReconcileRun :one
+SELECT * FROM catalog_reconcile_runs WHERE engine_id = $1 AND id = $2;

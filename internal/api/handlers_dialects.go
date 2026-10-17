@@ -17,6 +17,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
@@ -85,8 +86,16 @@ func capabilitiesToPublic(c queryengine.Capabilities) *EngineCapabilities {
 	return out
 }
 
-// describeEngine is an engine row with its dialect and, when its adapter is
-// available and the engine enabled, its capabilities and version.
+// engineProbe is the cached result of reaching an engine: its reported
+// version (nil when unknown) and the health recorded by that probe (#110).
+type engineProbe struct {
+	Version *string
+	Health  EngineHealth
+}
+
+// describeEngine is an engine row with its dialect, connection, catalog count
+// and, when its adapter is available and the engine enabled, its capabilities,
+// version and health.
 func (h *Handlers) describeEngine(ctx context.Context, e db.Engine) Engine {
 	out := engineToPublic(e)
 	if acts := h.engineActions(ctx, e.ID); acts != nil {
@@ -95,32 +104,63 @@ func (h *Handlers) describeEngine(ctx context.Context, e db.Engine) Engine {
 	if d, ok := dialect.ForEngineKind(e.Kind); ok {
 		out.Dialect = dialectToPublic(d)
 	}
+	if h.queries != nil && h.pool != nil {
+		if conn, err := h.queries.GetCatalogConnectionByID(ctx, e.ConnectionID); err == nil {
+			out.Connection = &EngineConnectionRef{Id: openapi_types.UUID(conn.ID.Bytes), Name: conn.Name}
+			readOnly := conn.CredentialsReadOnly
+			out.CredentialsReadOnly = &readOnly
+		}
+		if bindings, err := h.queries.ListBindingsByEngine(ctx, e.ID); err == nil {
+			seen := make(map[[16]byte]struct{}, len(bindings))
+			for _, b := range bindings {
+				seen[b.CatalogID.Bytes] = struct{}{}
+			}
+			n := len(seen)
+			out.CatalogCount = &n
+		}
+	}
+	now := time.Now()
 	if h.engines == nil {
+		out.Health = &EngineHealth{Status: "unknown", CheckedAt: &now}
 		return out
 	}
 	eng, err := h.engines.Get(ctx, e.ID)
 	if err != nil {
-		return out // disabled, or no adapter for the kind yet
+		out.Health = &EngineHealth{Status: "unknown", CheckedAt: &now}
+		return out
 	}
+	probe := h.engineProbeFor(ctx, e, eng)
 	out.Capabilities = capabilitiesToPublic(eng.Capabilities())
-	out.Version = h.engineVersion(ctx, e, eng)
+	out.Version = probe.Version
+	out.Health = &probe.Health
 	return out
 }
 
-func (h *Handlers) engineVersion(ctx context.Context, e db.Engine, eng queryengine.Engine) *string {
+// engineProbeFor probes the engine once per cache window. A failed version
+// probe records the classified error code instead of a version, so the list
+// can show health without another round trip.
+func (h *Handlers) engineProbeFor(ctx context.Context, e db.Engine, eng queryengine.Engine) engineProbe {
 	key := hex.EncodeToString(e.ID.Bytes[:]) + "@" + e.UpdatedAt.Time.String()
 	if h.versionCache != nil {
 		if v, ok := h.versionCache.Get(key); ok {
 			return v
 		}
 	}
-	var out *string
+	now := time.Now()
+	out := engineProbe{Health: EngineHealth{Status: "unknown", CheckedAt: &now}}
 	if v, ok := queryengine.As[queryengine.Versioner](eng); ok {
 		vctx, cancel := context.WithTimeout(ctx, engineVersionTimeout)
 		version, err := v.Version(vctx)
 		cancel()
 		if err == nil && version != "" {
-			out = &version
+			out.Version = &version
+			out.Health.Status = "ok"
+		} else if err != nil {
+			code := classifyTestError(err)
+			out.Health.Status = "unreachable"
+			out.Health.ErrorCode = &code
+		} else {
+			out.Health.Status = "ok"
 		}
 	}
 	if h.versionCache != nil {

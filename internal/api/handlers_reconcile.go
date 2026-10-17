@@ -38,6 +38,9 @@ func (h *Handlers) ReconcileEngine(ctx context.Context, request ReconcileEngineR
 	if unsupported != nil {
 		return ReconcileEngine422JSONResponse{UnprocessableEntityJSONResponse: *unsupported}, nil
 	}
+	if n := h.reconcileMaxActions(); n > 0 {
+		run.MaxActions = &n
+	}
 	return ReconcileEngine200JSONResponse(run), nil
 }
 

@@ -31,6 +31,8 @@ type Querier interface {
 	// What stops an engine from being deleted: managed bindings and executions
 	// still running on it. Native bindings go with the engine.
 	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (CountEngineBlockersRow, error)
+	// What depends on an engine before disabling or deleting it (#110).
+	CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (CountEngineImpactRow, error)
 	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
 	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
@@ -156,6 +158,7 @@ type Querier interface {
 	GetQueryFolderByID(ctx context.Context, arg GetQueryFolderByIDParams) (QueryFolder, error)
 	// Single statement of an execution that belongs to the given workspace.
 	GetQueryStatementByPosition(ctx context.Context, arg GetQueryStatementByPositionParams) (QueryStatement, error)
+	GetReconcileRun(ctx context.Context, arg GetReconcileRunParams) (CatalogReconcileRun, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)
 	// Worker-only lookup: the refresh activity runs off a due list, so it does not
@@ -228,6 +231,8 @@ type Querier interface {
 	// Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
 	// Iceberg REST, Nessie), used by the Lens table-health fan-out.
 	ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error)
+	// Catalogs the engine reported, with the managed/adopted mode (#38).
+	ListEngineObservations(ctx context.Context, engineID pgtype.UUID) ([]EngineCatalogObservation, error)
 	ListEngines(ctx context.Context) ([]Engine, error)
 	// The engines a non-admin may see: those on connections they own and those
 	// hosting a catalog granted to one of their workspaces.

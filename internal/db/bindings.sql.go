@@ -286,6 +286,31 @@ func (q *Queries) GetManagedBindingOfCatalog(ctx context.Context, arg GetManaged
 	return i, err
 }
 
+const getReconcileRun = `-- name: GetReconcileRun :one
+SELECT id, engine_id, started_at, finished_at, dry_run, actions, adopted, error FROM catalog_reconcile_runs WHERE engine_id = $1 AND id = $2
+`
+
+type GetReconcileRunParams struct {
+	EngineID pgtype.UUID `json:"engine_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) GetReconcileRun(ctx context.Context, arg GetReconcileRunParams) (CatalogReconcileRun, error) {
+	row := q.db.QueryRow(ctx, getReconcileRun, arg.EngineID, arg.ID)
+	var i CatalogReconcileRun
+	err := row.Scan(
+		&i.ID,
+		&i.EngineID,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.DryRun,
+		&i.Actions,
+		&i.Adopted,
+		&i.Error,
+	)
+	return i, err
+}
+
 const getTrinoClusterByEngine = `-- name: GetTrinoClusterByEngine :one
 SELECT id, name, coordinator_url, node_version, created_at, updated_at, engine_id FROM trino_clusters WHERE engine_id = $1
 `
