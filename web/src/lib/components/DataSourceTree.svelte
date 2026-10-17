@@ -363,14 +363,14 @@
 		<div class="flex gap-1 px-1.5 py-2" role="group" aria-label="Group catalogs">
 			<button
 				class="flex-1 rounded border px-2 py-1 text-[11px] font-medium {view === 'catalog'
-					? 'border-primary bg-primary/10 text-primary'
+					? 'border-primary bg-bg-panel text-primary'
 					: 'border-border bg-transparent text-text-muted hover:text-text-main'}"
 				aria-pressed={view === 'catalog'}
 				onclick={() => (view = 'catalog')}>By catalog</button
 			>
 			<button
 				class="flex-1 rounded border px-2 py-1 text-[11px] font-medium {view === 'engine'
-					? 'border-primary bg-primary/10 text-primary'
+					? 'border-primary bg-bg-panel text-primary'
 					: 'border-border bg-transparent text-text-muted hover:text-text-main'}"
 				aria-pressed={view === 'engine'}
 				onclick={() => (view = 'engine')}>By engine</button
