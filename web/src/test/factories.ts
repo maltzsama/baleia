@@ -4,6 +4,9 @@ import type { components } from '$lib/api/schema';
 
 type Workspace = components['schemas']['Workspace'];
 type SavedQuery = components['schemas']['SavedQuery'];
+type Space = components['schemas']['Space'];
+type SpaceMember = components['schemas']['SpaceMember'];
+type QueryFolder = components['schemas']['QueryFolder'];
 type Engine = components['schemas']['Engine'];
 type Me = components['schemas']['Me'];
 
@@ -37,6 +40,48 @@ export function makeSavedQuery(overrides: Partial<SavedQuery> = {}): SavedQuery 
 		created_by: '00000000-0000-0000-0000-000000000003',
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
+		...overrides
+	};
+}
+
+export function makeSpace(overrides: Partial<Space> = {}): Space {
+	return {
+		id: '00000000-0000-0000-0000-000000000006',
+		workspace_id: '00000000-0000-0000-0000-000000000001',
+		name: 'General',
+		slug: 'general',
+		description: null,
+		visibility: 'workspace',
+		default_role: 'editor',
+		is_default: true,
+		my_role: 'manager',
+		created_by: null,
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+		...overrides
+	};
+}
+
+export function makeFolder(overrides: Partial<QueryFolder> = {}): QueryFolder {
+	return {
+		id: '00000000-0000-0000-0000-000000000007',
+		name: 'Monthly',
+		workspace_id: '00000000-0000-0000-0000-000000000001',
+		space_id: '00000000-0000-0000-0000-000000000006',
+		slug: 'monthly',
+		parent_id: null,
+		created_at: '2026-01-01T00:00:00Z',
+		...overrides
+	};
+}
+
+export function makeSpaceMember(overrides: Partial<SpaceMember> = {}): SpaceMember {
+	return {
+		principal_type: 'user',
+		principal_id: '00000000-0000-0000-0000-000000000003',
+		role: 'viewer',
+		granted_by: null,
+		granted_at: '2026-01-01T00:00:00Z',
 		...overrides
 	};
 }
