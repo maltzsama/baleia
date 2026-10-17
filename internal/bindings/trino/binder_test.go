@@ -521,3 +521,36 @@ func TestSupports(t *testing.T) {
 		}
 	}
 }
+
+// TestProject_SecretReference: a secret field holding an external reference is
+// projected verbatim (the plugin persists the reference, not the value), needs
+// no placeholder, and the version hashes the value Baleia resolved so it matches
+// the plugin's catalog_version (#31).
+func TestProject_SecretReference(t *testing.T) {
+	t.Setenv("BALEIA_TEST_PASSWORD", "s3cret")
+	b := New(nil, nil)
+	ref := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "@baleia-secret[env:BALEIA_TEST_PASSWORD]"})
+	lit := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "s3cret"})
+
+	pRef, err := b.Project(bindings.BindingSpec{EngineCatalog: "c"}, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pLit, err := b.Project(bindings.BindingSpec{EngineCatalog: "c"}, lit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if pRef.Properties["connection-password"] != "@baleia-secret[env:BALEIA_TEST_PASSWORD]" {
+		t.Errorf("reference not projected verbatim: %v", pRef.Properties)
+	}
+	if len(pRef.SecretKeys) != 0 {
+		t.Errorf("a reference needs no placeholder, got secrets %v", pRef.SecretKeys)
+	}
+	if pRef.Version != pLit.Version {
+		t.Errorf("version hashes the reference, not the resolved value: %s vs %s", pRef.Version, pLit.Version)
+	}
+	if pLit.Properties["connection-password"] != "s3cret" || len(pLit.SecretKeys) != 1 {
+		t.Errorf("literal secret not projected: %v %v", pLit.Properties, pLit.SecretKeys)
+	}
+}

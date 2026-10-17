@@ -94,12 +94,25 @@ func (b *Binder) Project(spec bindings.BindingSpec, src connections.Config) (bin
 	if err := mergeExtra(&p, spec.ExtraProps); err != nil {
 		return bindings.Projection{}, err
 	}
+	// The version hashes the values Baleia resolved, not the external
+	// references the properties carry: the plugin resolves them the same way and
+	// hashes the resolved map (#31, ADR 0003).
+	versionProps := p.props
+	if len(p.refs) > 0 {
+		versionProps = make(map[string]string, len(p.props))
+		for k, v := range p.props {
+			versionProps[k] = v
+		}
+		for k, v := range p.refs {
+			versionProps[k] = v
+		}
+	}
 	return bindings.Projection{
 		EngineCatalog: spec.EngineCatalog,
 		Connector:     connector,
 		Properties:    p.props,
 		SecretKeys:    p.secrets,
-		Version:       Version(spec.EngineCatalog, connector, p.props),
+		Version:       Version(spec.EngineCatalog, connector, versionProps),
 	}, nil
 }
 

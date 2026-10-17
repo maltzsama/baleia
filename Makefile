@@ -2,7 +2,7 @@ BALEIA_DIR ?= $(CURDIR)
 
 # The baleia-trino-catalog-store release Baleia runs and tests its contract
 # against (#88, #39): the single pin for compose, the dev cluster and CI.
-BALEIA_PLUGIN_VERSION ?= 0.9.1
+BALEIA_PLUGIN_VERSION ?= 0.9.2
 TRINO_VERSION         ?= 483
 BALEIA_PLUGIN_TARBALL  = baleia-catalog-store-$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION).tar.gz
 BALEIA_PLUGIN_URL     ?= https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v$(BALEIA_PLUGIN_VERSION)/$(BALEIA_PLUGIN_TARBALL)
