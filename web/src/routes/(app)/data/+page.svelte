@@ -1,13 +1,43 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import DataSourceTree from '$lib/components/DataSourceTree.svelte';
 	import TableDetail from '$lib/components/TableDetail.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import { selection } from '$lib/stores/selection.svelte';
-	import type { TableRef } from '$lib/metadata/client';
+	import { searchMetadata, type TableRef } from '$lib/metadata/client';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	let selectedTable = $state<TableRef | null>(null);
 	let search = $state('');
 	let tree = $state<{ handleSearchKey: (event: KeyboardEvent) => void } | null>(null);
+
+	onMount(async () => {
+		if (selectedTable || !selection.table) return;
+		await workspaceStore.load();
+		const ws = workspaceStore.current?.id;
+		if (!ws) return;
+		try {
+			const results = await searchMetadata(ws, selection.table, { kind: 'table', limit: 50 });
+			const match = results.find(
+				(result) =>
+					result.kind === 'table' &&
+					result.table === selection.table &&
+					result.namespace.join('.') === selection.ns.join('.')
+			);
+			if (match) {
+				selectedTable = {
+					tableId: match.table_id,
+					catalogId: match.catalog_id,
+					catalogName: selection.catalog,
+					namespace: match.namespace,
+					tableName: match.table,
+					bindings: []
+				};
+			}
+		} catch {
+			// The tree is still usable; a bad deep link just opens nothing.
+		}
+	});
 
 	function select(table: TableRef | null) {
 		selectedTable = table;

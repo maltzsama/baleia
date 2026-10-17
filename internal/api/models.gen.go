@@ -2245,7 +2245,11 @@ type SavedQueryTarget struct {
 
 // SemanticDoc defines model for SemanticDoc.
 type SemanticDoc struct {
-	CatalogId openapi_types.UUID `json:"catalog_id"`
+	AllowedActions *[]string           `json:"allowed_actions,omitempty"`
+	CatalogId      openapi_types.UUID  `json:"catalog_id"`
+	Certified      *bool               `json:"certified,omitempty"`
+	CertifiedAt    *time.Time          `json:"certified_at"`
+	CertifiedBy    *openapi_types.UUID `json:"certified_by"`
 
 	// Column Null for a table-level doc
 	Column *string `json:"column"`
@@ -2263,24 +2267,33 @@ type SemanticDoc struct {
 
 // SemanticDocSearchResult defines model for SemanticDocSearchResult.
 type SemanticDocSearchResult struct {
-	CatalogId   openapi_types.UUID  `json:"catalog_id"`
-	Column      *string             `json:"column"`
-	Description string              `json:"description"`
-	Id          openapi_types.UUID  `json:"id"`
-	Namespace   []string            `json:"namespace"`
-	OwnerUserId *openapi_types.UUID `json:"owner_user_id"`
-	Score       float64             `json:"score"`
-	Table       string              `json:"table"`
-	Tags        []string            `json:"tags"`
-	UpdatedAt   time.Time           `json:"updated_at"`
-	UpdatedBy   openapi_types.UUID  `json:"updated_by"`
+	AllowedActions *[]string           `json:"allowed_actions,omitempty"`
+	CatalogId      openapi_types.UUID  `json:"catalog_id"`
+	Certified      *bool               `json:"certified,omitempty"`
+	CertifiedAt    *time.Time          `json:"certified_at"`
+	CertifiedBy    *openapi_types.UUID `json:"certified_by"`
+	Column         *string             `json:"column"`
+	Description    string              `json:"description"`
+	Id             openapi_types.UUID  `json:"id"`
+	Namespace      []string            `json:"namespace"`
+	OwnerUserId    *openapi_types.UUID `json:"owner_user_id"`
+	Score          float64             `json:"score"`
+	Table          string              `json:"table"`
+	Tags           []string            `json:"tags"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+	UpdatedBy      openapi_types.UUID  `json:"updated_by"`
 }
 
 // SemanticDocUpsert defines model for SemanticDocUpsert.
 type SemanticDocUpsert struct {
-	Description string              `json:"description"`
-	OwnerUserId *openapi_types.UUID `json:"owner_user_id"`
-	Tags        *[]string           `json:"tags,omitempty"`
+	// Certified Only a workspace owner or admin may set true
+	Certified   *bool  `json:"certified,omitempty"`
+	Description string `json:"description"`
+
+	// ExpectedUpdatedAt Optimistic concurrency; stale → 409 version_conflict
+	ExpectedUpdatedAt *time.Time          `json:"expected_updated_at"`
+	OwnerUserId       *openapi_types.UUID `json:"owner_user_id"`
+	Tags              *[]string           `json:"tags,omitempty"`
 }
 
 // SemanticMetric defines model for SemanticMetric.
@@ -2371,6 +2384,12 @@ type SemanticMetricUpdate struct {
 // SemanticMetricValidateResult defines model for SemanticMetricValidateResult.
 type SemanticMetricValidateResult struct {
 	Ok bool `json:"ok"`
+}
+
+// SemanticTag defines model for SemanticTag.
+type SemanticTag struct {
+	Count int    `json:"count"`
+	Tag   string `json:"tag"`
 }
 
 // SetSpaceMemberRequest defines model for SetSpaceMemberRequest.
@@ -3127,9 +3146,11 @@ type UpsertSemanticDocParams struct {
 
 // SearchSemanticDocsParams defines parameters for SearchSemanticDocs.
 type SearchSemanticDocsParams struct {
-	Q     string  `form:"q" json:"q"`
-	Tag   *string `form:"tag,omitempty" json:"tag,omitempty"`
-	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Q         string              `form:"q" json:"q"`
+	Tag       *string             `form:"tag,omitempty" json:"tag,omitempty"`
+	Certified *bool               `form:"certified,omitempty" json:"certified,omitempty"`
+	OwnerId   *openapi_types.UUID `form:"owner_id,omitempty" json:"owner_id,omitempty"`
+	Limit     *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListSemanticMetricsParams defines parameters for ListSemanticMetrics.
@@ -3157,6 +3178,12 @@ type GetSemanticMetricSqlParamsGrain string
 type ListSemanticMetricVersionsParams struct {
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListSemanticTagsParams defines parameters for ListSemanticTags.
+type ListSemanticTagsParams struct {
+	Q     *string `form:"q,omitempty" json:"q,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // DeleteSpaceParams defines parameters for DeleteSpace.

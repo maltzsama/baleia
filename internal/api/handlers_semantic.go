@@ -7,8 +7,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
@@ -30,6 +32,8 @@ import (
 // into spaces and #34 versions them.
 
 const maxDocDescription = 20000
+
+var semanticTagRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
 
 var slugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
@@ -86,7 +90,10 @@ func (h *Handlers) ListSemanticDocs(ctx context.Context, request ListSemanticDoc
 		if err != nil {
 			return nil, err
 		}
-		return ListSemanticDocs200JSONResponse{dbSemanticDocToPublic(doc)}, nil
+		out := dbSemanticDocToPublic(doc)
+		acts := h.docActions(ctx, ws)
+		out.AllowedActions = &acts
+		return ListSemanticDocs200JSONResponse{out}, nil
 	}
 
 	docs, err := h.queries.ListSemanticDocsForTable(ctx, db.ListSemanticDocsForTableParams{
@@ -97,8 +104,11 @@ func (h *Handlers) ListSemanticDocs(ctx context.Context, request ListSemanticDoc
 		return nil, err
 	}
 	out := make(ListSemanticDocs200JSONResponse, 0, len(docs))
+	acts := h.docActions(ctx, ws)
 	for _, d := range docs {
-		out = append(out, dbSemanticDocToPublic(d))
+		doc := dbSemanticDocToPublic(d)
+		doc.AllowedActions = &acts
+		out = append(out, doc)
 	}
 	return out, nil
 }
@@ -134,9 +144,42 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 	if request.Body.OwnerUserId != nil {
 		owner = pgtype.UUID{Bytes: *request.Body.OwnerUserId, Valid: true}
 	}
-	tags := []string{}
-	if request.Body.Tags != nil {
-		tags = *request.Body.Tags
+	tags, tagErr := normalizeSemanticTags(request.Body.Tags)
+	if tagErr != "" {
+		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", tagErr)}, nil
+	}
+
+	params := db.GetSemanticDocParams{
+		WorkspaceID: ws,
+		CatalogID:   pgtype.UUID{Bytes: request.Params.CatalogId, Valid: true},
+		Namespace:   request.Params.Ns,
+		TableName:   request.Params.Table,
+		ColumnName:  normalizeColumn(request.Params.Column),
+	}
+	current, cerr := h.queries.GetSemanticDoc(ctx, params)
+	exists := cerr == nil
+	if cerr != nil && !errors.Is(cerr, pgx.ErrNoRows) {
+		return nil, cerr
+	}
+	if exists && request.Body.ExpectedUpdatedAt != nil && current.UpdatedAt.Valid &&
+		!request.Body.ExpectedUpdatedAt.Equal(current.UpdatedAt.Time) {
+		by := openapi_types.UUID(current.UpdatedBy.Bytes)
+		at := current.UpdatedAt.Time.Format(time.RFC3339Nano)
+		fields := map[string]interface{}{"updated_by": by, "updated_at": at}
+		return UpsertSemanticDoc409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
+			Code: "version_conflict", Message: "the doc changed since you loaded it", Params: &fields,
+		}}, nil
+	}
+
+	canCertify := h.canCertifyDocs(ctx, ws)
+	certified := exists && current.Certified
+	if request.Body.Certified != nil {
+		if *request.Body.Certified && !canCertify {
+			return UpsertSemanticDoc403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a workspace owner or admin may certify docs"}}, nil
+		}
+		certified = *request.Body.Certified
+	} else if exists && current.Certified && current.Description != request.Body.Description && !canCertify {
+		certified = false
 	}
 
 	doc, err := h.queries.UpsertSemanticDoc(ctx, db.UpsertSemanticDocParams{
@@ -149,11 +192,63 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 		Tags:        tags,
 		OwnerUserID: owner,
 		UpdatedBy:   updatedBy,
+		Certified:   certified,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return UpsertSemanticDoc200JSONResponse(dbSemanticDocToPublic(doc)), nil
+	if certified != (exists && current.Certified) {
+		action := audit.SemanticDocCertify
+		if !certified {
+			action = audit.SemanticDocUncertify
+		}
+		h.audited(ctx, audit.Event{Action: action, ResourceType: "semantic_doc", ResourceID: idString(doc.ID), WorkspaceID: idString(ws)}.Allowed())
+	}
+	out := dbSemanticDocToPublic(doc)
+	acts := h.docActions(ctx, ws)
+	out.AllowedActions = &acts
+	return UpsertSemanticDoc200JSONResponse(out), nil
+}
+
+// normalizeSemanticTags lowercases, dedupes and validates the tag list (#116).
+func normalizeSemanticTags(tags *[]string) ([]string, string) {
+	if tags == nil {
+		return []string{}, ""
+	}
+	if len(*tags) > 20 {
+		return nil, "at most 20 tags are allowed"
+	}
+	out := make([]string, 0, len(*tags))
+	seen := map[string]bool{}
+	for _, tag := range *tags {
+		t := strings.ToLower(strings.TrimSpace(tag))
+		if !semanticTagRe.MatchString(t) {
+			return nil, "tags must match " + semanticTagRe.String()
+		}
+		if !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return out, ""
+}
+
+// canCertifyDocs is true for a workspace owner or a global admin (#116).
+func (h *Handlers) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return false
+	}
+	_, err = h.authz().Workspace(ctx, p, ws, authz.ActAdmin)
+	return err == nil
+}
+
+func (h *Handlers) docActions(ctx context.Context, ws pgtype.UUID) []string {
+	acts := []string{"view", "update"}
+	if h.canCertifyDocs(ctx, ws) {
+		acts = append(acts, "certify")
+	}
+	return acts
 }
 
 // DeleteSemanticDoc — DELETE /workspaces/{id}/semantic/docs
@@ -214,15 +309,22 @@ func (h *Handlers) SearchSemanticDocs(ctx context.Context, request SearchSemanti
 	if tag != nil && strings.TrimSpace(*tag) == "" {
 		tag = nil
 	}
-	rows, err := h.queries.SearchSemanticDocs(ctx, db.SearchSemanticDocsParams{
-		Q: p.Q, WorkspaceID: ws, Tag: tag, Lim: int32(limit),
-	})
+	params := db.SearchSemanticDocsParams{
+		Q: p.Q, WorkspaceID: ws, Tag: tag, Certified: p.Certified, Lim: int32(limit),
+	}
+	if p.OwnerId != nil {
+		params.OwnerID = pgtype.UUID{Bytes: *p.OwnerId, Valid: true}
+	}
+	rows, err := h.queries.SearchSemanticDocs(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	out := make(SearchSemanticDocs200JSONResponse, 0, len(rows))
+	acts := h.docActions(ctx, ws)
 	for _, r := range rows {
-		out = append(out, dbSemanticSearchRowToPublic(r))
+		item := dbSemanticSearchRowToPublic(r)
+		item.AllowedActions = &acts
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -879,6 +981,15 @@ func dbSemanticDocToPublic(d db.SemanticDoc) SemanticDoc {
 		owner := openapi_types.UUID(d.OwnerUserID.Bytes)
 		out.OwnerUserId = &owner
 	}
+	out.Certified = &d.Certified
+	if d.CertifiedBy.Valid {
+		by := openapi_types.UUID(d.CertifiedBy.Bytes)
+		out.CertifiedBy = &by
+	}
+	if d.CertifiedAt.Valid {
+		at := pgTimestampToTime(d.CertifiedAt)
+		out.CertifiedAt = &at
+	}
 	return out
 }
 
@@ -898,6 +1009,15 @@ func dbSemanticSearchRowToPublic(r db.SearchSemanticDocsRow) SemanticDocSearchRe
 	if r.OwnerUserID.Valid {
 		owner := openapi_types.UUID(r.OwnerUserID.Bytes)
 		out.OwnerUserId = &owner
+	}
+	out.Certified = &r.Certified
+	if r.CertifiedBy.Valid {
+		by := openapi_types.UUID(r.CertifiedBy.Bytes)
+		out.CertifiedBy = &by
+	}
+	if r.CertifiedAt.Valid {
+		at := pgTimestampToTime(r.CertifiedAt)
+		out.CertifiedAt = &at
 	}
 	return out
 }
@@ -1058,4 +1178,34 @@ func (h *Handlers) ValidateSemanticMetricDefinition(ctx context.Context, request
 		return nil, err
 	}
 	return ValidateSemanticMetricDefinition200JSONResponse{Ok: true}, nil
+}
+
+// ListSemanticTags — GET /workspaces/{id}/semantic/tags (#116).
+func (h *Handlers) ListSemanticTags(ctx context.Context, request ListSemanticTagsRequestObject) (ListSemanticTagsResponseObject, error) {
+	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	if nf {
+		return ListSemanticTags404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
+	}
+	q := ""
+	if request.Params.Q != nil {
+		q = strings.ToLower(strings.TrimSpace(*request.Params.Q))
+	}
+	limit := 20
+	if request.Params.Limit != nil && *request.Params.Limit >= 1 && *request.Params.Limit <= 100 {
+		limit = *request.Params.Limit
+	}
+	rows, err := h.queries.ListSemanticTags(ctx, db.ListSemanticTagsParams{
+		WorkspaceID: ws, Q: q, Lim: int32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(ListSemanticTags200JSONResponse, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, SemanticTag{Tag: r.Tag, Count: int(r.Count)})
+	}
+	return out, nil
 }

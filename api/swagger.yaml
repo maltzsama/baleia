@@ -1193,6 +1193,10 @@ components:
         owner_user_id: { type: string, format: uuid, nullable: true }
         updated_by: { type: string, format: uuid }
         updated_at: { type: string, format: date-time }
+        certified: { type: boolean }
+        certified_by: { type: string, format: uuid, nullable: true }
+        certified_at: { type: string, format: date-time, nullable: true }
+        allowed_actions: { type: array, items: { type: string }, readOnly: true }
 
     SemanticDocUpsert:
       type: object
@@ -1201,6 +1205,15 @@ components:
         description: { type: string, maxLength: 20000 }
         tags: { type: array, items: { type: string } }
         owner_user_id: { type: string, format: uuid, nullable: true }
+        certified: { type: boolean, description: "Only a workspace owner or admin may set true" }
+        expected_updated_at: { type: string, format: date-time, nullable: true, description: "Optimistic concurrency; stale → 409 version_conflict" }
+
+    SemanticTag:
+      type: object
+      required: [tag, count]
+      properties:
+        tag: { type: string }
+        count: { type: integer }
 
     SemanticDocSearchResult:
       type: object
@@ -1216,6 +1229,10 @@ components:
         owner_user_id: { type: string, format: uuid, nullable: true }
         updated_by: { type: string, format: uuid }
         updated_at: { type: string, format: date-time }
+        certified: { type: boolean }
+        certified_by: { type: string, format: uuid, nullable: true }
+        certified_at: { type: string, format: date-time, nullable: true }
+        allowed_actions: { type: array, items: { type: string }, readOnly: true }
         score: { type: number, format: double }
 
     SemanticMetric:
@@ -3108,6 +3125,31 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Semantic layer (#33) ──────────────────────────────────────
+  /workspaces/{id}/semantic/tags:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Semantic]
+      operationId: listSemanticTags
+      summary: "Tags used by docs on catalogs the workspace may use"
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: "Tags"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SemanticTag" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /workspaces/{id}/semantic/docs:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -3160,7 +3202,9 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SemanticDoc" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [Semantic]
@@ -3186,6 +3230,12 @@ paths:
         - name: tag
           in: query
           schema: { type: string }
+        - name: certified
+          in: query
+          schema: { type: boolean }
+        - name: owner_id
+          in: query
+          schema: { type: string, format: uuid }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }

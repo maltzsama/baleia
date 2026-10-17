@@ -108,6 +108,18 @@
 			>
 		</a>
 		<a
+			href={resolve('/data/docs')}
+			title="Docs"
+			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+				{isActive('/data/docs')
+				? 'bg-primary text-white'
+				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+		>
+			<svg viewBox="0 0 24 24" class="w-4 h-4"
+				><path d="M5 4h11l3 3v13H5z" /><path d="M8 10h8M8 14h6" /></svg
+			>
+		</a>
+		<a
 			href={resolve('/engines')}
 			title="Engines"
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150

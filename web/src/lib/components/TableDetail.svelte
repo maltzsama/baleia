@@ -14,6 +14,9 @@
 	import MarkdownView from '$lib/ui/patterns/MarkdownView.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import CopyButton from '$lib/ui/patterns/CopyButton.svelte';
+	import DocEditor from '$lib/semantic/DocEditor.svelte';
+	import DocumentColumns from '$lib/semantic/DocumentColumns.svelte';
+	import type { SemanticDoc } from '$lib/semantic/docs';
 
 	let { table }: { table: TableRef | null } = $props();
 
@@ -27,6 +30,10 @@
 	let expandedCol = $state<string | null>(null);
 	let lastTableId = '';
 	let retryTick = $state(0);
+	let docEditorOpen = $state(false);
+	let docColumn = $state<string | null>(null);
+	let docForEdit = $state<SemanticDoc | null>(null);
+	let columnsOpen = $state(false);
 
 	// A new table selects its first binding; picking an engine keeps the table
 	// and only changes the rendering binding (types, qualified name, preview).
@@ -246,19 +253,36 @@
 		</div>
 
 		<div class="flex-1 overflow-y-auto">
-			{#if detail.doc?.description}
-				<div class="border-b border-border px-4 py-3">
+			<div class="border-b border-border px-4 py-3">
+				<div class="mb-2 flex items-center justify-between gap-2">
+					<div class="flex items-center gap-1.5">
+						<p class="text-[10px] font-bold uppercase tracking-wide text-text-muted">About</p>
+						{#if detail.doc?.certified}<Badge tone="success">Certified</Badge>{/if}
+					</div>
+					<Button
+						size="sm"
+						onclick={() => {
+							docColumn = null;
+							docForEdit = detail?.doc ?? null;
+							docEditorOpen = true;
+						}}
+					>
+						Edit
+					</Button>
+				</div>
+				{#if detail.doc?.description}
 					<MarkdownView source={detail.doc.description} />
-				</div>
-			{/if}
-
-			{#if detail.doc?.tags?.length}
-				<div class="flex flex-wrap gap-1 border-b border-border px-4 py-2">
-					{#each detail.doc.tags as tag (tag)}
-						<Badge tone="info">{tag}</Badge>
-					{/each}
-				</div>
-			{/if}
+				{:else}
+					<p class="text-[11px] text-text-muted">No description yet.</p>
+				{/if}
+				{#if detail.doc?.tags?.length}
+					<div class="mt-2 flex flex-wrap gap-1">
+						{#each detail.doc.tags as tag (tag)}
+							<Badge tone="info">{tag}</Badge>
+						{/each}
+					</div>
+				{/if}
+			</div>
 
 			{#if Object.keys(detail.properties).length > 0}
 				<div class="border-b border-border px-4 py-3">
@@ -286,47 +310,87 @@
 						bind:value={colSearch}
 						class="ml-auto w-40 rounded border border-border bg-bg-panel px-2 py-1 text-[11px] outline-none focus:border-primary"
 					/>
+					<Button size="sm" onclick={() => (columnsOpen = true)}>Document columns</Button>
 				</div>
 
 				{#if filteredColumns.length === 0}
 					<EmptyState title="No columns" description="This table has no columns in the snapshot." />
 				{:else}
 					{#each filteredColumns as column (column.ordinal)}
-						<button
-							class="flex w-full flex-col gap-1 border-b border-border px-1 py-2 text-left last:border-b-0 hover:bg-slate-50 dark:hover:bg-[#1c2128]"
-							onclick={() => (expandedCol = expandedCol === column.name ? null : column.name)}
-						>
-							<div class="flex items-center gap-1.5">
-								<span
-									class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs font-semibold"
-									>{column.name}</span
-								>
-								{#if column.nullable === false}
-									<Badge tone="neutral">not null</Badge>
+						<div class="border-b border-border last:border-b-0">
+							<button
+								class="flex w-full flex-col gap-1 px-1 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#1c2128]"
+								onclick={() => (expandedCol = expandedCol === column.name ? null : column.name)}
+							>
+								<div class="flex items-center gap-1.5">
+									<span
+										class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs font-semibold"
+										>{column.name}</span
+									>
+									{#if column.nullable === false}
+										<Badge tone="neutral">not null</Badge>
+									{/if}
+									<span
+										class="type-chip inline-flex shrink-0 items-center rounded border border-transparent px-1.5 py-px font-mono text-[10px] font-semibold {typeClass(
+											column.display_type || column.native_type
+										)}"
+									>
+										{column.display_type || column.native_type}
+									</span>
+								</div>
+								{#if column.comment}
+									<span class="text-[11px] text-text-muted">{column.comment}</span>
 								{/if}
-								<span
-									class="type-chip inline-flex shrink-0 items-center rounded border border-transparent px-1.5 py-px font-mono text-[10px] font-semibold {typeClass(
-										column.display_type || column.native_type
-									)}"
-								>
-									{column.display_type || column.native_type}
-								</span>
-							</div>
-							{#if column.comment}
-								<span class="text-[11px] text-text-muted">{column.comment}</span>
-							{/if}
-							{#if expandedCol === column.name && column.doc?.description}
-								<div class="pt-1">
-									<MarkdownView source={column.doc.description} />
+							</button>
+							{#if expandedCol === column.name}
+								<div class="px-1 pb-2">
+									{#if column.doc?.description}
+										<MarkdownView source={column.doc.description} />
+									{:else}
+										<p class="text-[11px] text-text-muted">No description yet.</p>
+									{/if}
+									<div class="mt-1 flex items-center gap-2">
+										{#if column.doc?.certified}<Badge tone="success">Certified</Badge>{/if}
+										<Button
+											size="sm"
+											onclick={() => {
+												docColumn = column.name;
+												docForEdit = column.doc ?? null;
+												docEditorOpen = true;
+											}}
+										>
+											Edit doc
+										</Button>
+									</div>
 								</div>
 							{/if}
-						</button>
+						</div>
 					{/each}
 				{/if}
 			</div>
 		</div>
 	{/if}
 </div>
+
+{#if detail}
+	<DocEditor
+		bind:open={docEditorOpen}
+		catalogId={detail.catalog_id}
+		namespace={detail.namespace}
+		table={detail.name}
+		column={docColumn}
+		doc={docForEdit}
+		onSaved={() => (retryTick += 1)}
+	/>
+	<DocumentColumns
+		bind:open={columnsOpen}
+		catalogId={detail.catalog_id}
+		namespace={detail.namespace}
+		table={detail.name}
+		columns={detail.columns}
+		onSaved={() => (retryTick += 1)}
+	/>
+{/if}
 
 {#if previewOpen}
 	<div

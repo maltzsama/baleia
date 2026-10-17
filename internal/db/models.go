@@ -390,6 +390,9 @@ type SemanticDoc struct {
 	OwnerUserID pgtype.UUID        `json:"owner_user_id"`
 	UpdatedBy   pgtype.UUID        `json:"updated_by"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Certified   bool               `json:"certified"`
+	CertifiedBy pgtype.UUID        `json:"certified_by"`
+	CertifiedAt pgtype.Timestamptz `json:"certified_at"`
 }
 
 type SemanticMetric struct {

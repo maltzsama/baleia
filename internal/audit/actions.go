@@ -28,6 +28,8 @@ const (
 
 	WorkspaceUpdate Action = "workspace.update"
 	WorkspaceDelete Action = "workspace.delete"
+	SemanticDocCertify Action = "semantic_doc.certify"
+	SemanticDocUncertify Action = "semantic_doc.uncertify"
 
 	TeamMemberAdd    Action = "team.member_add"
 	TeamMemberRemove Action = "team.member_remove"

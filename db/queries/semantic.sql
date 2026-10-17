@@ -26,18 +26,25 @@ WHERE workspace_id = @workspace_id::uuid
 -- name: UpsertSemanticDoc :one
 INSERT INTO semantic_docs (
     workspace_id, catalog_id, namespace, table_name, column_name,
-    description, tags, owner_user_id, updated_by
+    description, tags, owner_user_id, updated_by, certified, certified_by, certified_at
 )
 VALUES (
     @workspace_id::uuid, @catalog_id::uuid, @namespace::text[], @table_name::text,
     sqlc.narg(column_name)::text, @description::text, @tags::text[],
-    sqlc.narg(owner_user_id)::uuid, @updated_by::uuid
+    sqlc.narg(owner_user_id)::uuid, @updated_by::uuid, @certified::boolean,
+    CASE WHEN @certified::boolean THEN @updated_by::uuid ELSE NULL END,
+    CASE WHEN @certified::boolean THEN now() ELSE NULL END
 )
 ON CONFLICT (workspace_id, catalog_id, namespace, table_name, column_name) DO UPDATE
 SET description = EXCLUDED.description,
     tags = EXCLUDED.tags,
     owner_user_id = EXCLUDED.owner_user_id,
     updated_by = EXCLUDED.updated_by,
+    certified = EXCLUDED.certified,
+    certified_by = CASE WHEN EXCLUDED.certified
+        THEN COALESCE(semantic_docs.certified_by, EXCLUDED.certified_by) ELSE NULL END,
+    certified_at = CASE WHEN EXCLUDED.certified
+        THEN COALESCE(semantic_docs.certified_at, EXCLUDED.certified_at) ELSE NULL END,
     updated_at = now()
 RETURNING *;
 
@@ -71,6 +78,8 @@ FROM semantic_docs d
 JOIN visible v ON v.id = d.catalog_id
 WHERE d.workspace_id = @workspace_id::uuid
   AND (sqlc.narg(tag)::text IS NULL OR sqlc.narg(tag)::text = ANY(d.tags))
+  AND (sqlc.narg(certified)::boolean IS NULL OR d.certified = sqlc.narg(certified)::boolean)
+  AND (sqlc.narg(owner_id)::uuid IS NULL OR d.owner_user_id = sqlc.narg(owner_id)::uuid)
   AND (
     d.description ILIKE '%' || @q::text || '%'
     OR d.table_name ILIKE '%' || @q::text || '%'
@@ -149,3 +158,25 @@ SET certified = @certified::boolean,
     certified_at = CASE WHEN @certified::boolean THEN now() ELSE NULL END
 WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid
 RETURNING *;
+
+-- name: ListSemanticTags :many
+-- Distinct tags of docs on catalogs the workspace may use (#116). Prefix
+-- matches rank first.
+WITH visible AS (
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = @workspace_id::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+)
+SELECT tag::text AS tag, count(*)::bigint AS count
+FROM semantic_docs d, unnest(d.tags) AS tag
+WHERE d.workspace_id = @workspace_id::uuid
+  AND d.catalog_id IN (SELECT id FROM visible)
+  AND (@q::text = '' OR tag ILIKE @q::text || '%' OR tag ILIKE '%' || @q::text || '%')
+GROUP BY tag
+ORDER BY (tag ILIKE @q::text || '%') DESC, count DESC, tag
+LIMIT @lim::int;
