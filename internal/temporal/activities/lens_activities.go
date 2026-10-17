@@ -38,6 +38,12 @@ func LensPollTrinoQueries(ctx context.Context, params LensPollTrinoQueriesParams
 func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 	logger := activity.GetLogger(ctx)
 
+	eng, err := a.engines.DefaultTrino(ctx)
+	if err != nil {
+		return err
+	}
+	engineID := engineUUID(eng.ID())
+
 	queries, err := a.monitor.ListQueries(ctx)
 	if err != nil {
 		logger.Error("failed to list trino queries", "err", err)
@@ -87,6 +93,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 
 		_, err := a.queries.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
 			TrinoQueryID:       q.QueryID,
+			EngineID:           engineID,
 			Origin:             origin,
 			User:               q.User(),
 			State:              state,
@@ -118,6 +125,10 @@ func LensPollTrinoCluster(ctx context.Context, params LensPollTrinoClusterParams
 }
 
 func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
+	eng, err := a.engines.DefaultTrino(ctx)
+	if err != nil {
+		return err
+	}
 	stats, err := a.monitor.ClusterStats(ctx)
 	if err != nil {
 		return err
@@ -129,6 +140,7 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 	rawPayload, _ := json.Marshal(stats)
 
 	_, err = a.queries.InsertClusterSnapshot(ctx, db.InsertClusterSnapshotParams{
+		EngineID:         engineUUID(eng.ID()),
 		ActiveWorkers:    int32(stats.ActiveWorkers),
 		RunningQueries:   int32(stats.RunningQueries),
 		QueuedQueries:    int32(stats.QueuedQueries),
@@ -141,6 +153,7 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 }
 
 type LensAnalyzeTableHealthParams struct {
+	CatalogID           string
 	CatalogConnectionID string
 	Catalog             string
 }
@@ -149,6 +162,7 @@ type ListEnabledIcebergCatalogsParams struct{}
 
 // EnabledIcebergCatalog is one target for the table-health fan-out.
 type EnabledIcebergCatalog struct {
+	ID                  string
 	CatalogConnectionID string
 	Catalog             string
 	TrinoCatalogName    string
@@ -167,6 +181,7 @@ func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledI
 	out := make([]EnabledIcebergCatalog, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, EnabledIcebergCatalog{
+			ID:                  r.ID.String(),
 			CatalogConnectionID: r.ConnectionID.String(),
 			Catalog:             r.Name,
 			TrinoCatalogName:    r.TrinoCatalogName,
@@ -182,6 +197,10 @@ func LensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthPa
 func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthParams) error {
 	var connID pgtype.UUID
 	if err := connID.Scan(params.CatalogConnectionID); err != nil {
+		return err
+	}
+	var catalogID pgtype.UUID
+	if err := catalogID.Scan(params.CatalogID); err != nil {
 		return err
 	}
 
@@ -294,6 +313,7 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 				}
 
 				_, err = a.queries.UpsertTableHealthSnapshot(ctx, db.UpsertTableHealthSnapshotParams{
+					CatalogID:              catalogID,
 					CatalogConnectionID:    connID,
 					Catalog:                cat.Name,
 					Namespace:              nsName,
@@ -360,6 +380,12 @@ func allTables(ctx context.Context, r connections.MetadataReader, catalog string
 	}
 }
 
+func engineUUID(id string) pgtype.UUID {
+	var out pgtype.UUID
+	_ = out.Scan(id)
+	return out
+}
+
 func mapTrinoState(s string) string {
 	switch s {
 	case "RUNNING", "QUEUED", "PLANNING", "STARTING":
@@ -386,6 +412,11 @@ type LensRunMaintenanceParams struct {
 	Namespace   string
 	Table       string
 	Retention   string
+	// RunID and EngineID are set by the engine-aware /maintenance endpoint;
+	// empty for the legacy Lens route, which records no maintenance_runs row.
+	RunID      string
+	EngineID   string
+	Operations []string
 }
 
 func LensRunMaintenance(ctx context.Context, params LensRunMaintenanceParams) error {
@@ -410,6 +441,7 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 	if err != nil {
 		return err
 	}
+	engineID := engineUUID(params.EngineID)
 
 	// Heartbeats make the run cancellable: without them a long OPTIMIZE is
 	// declared dead after the heartbeat timeout and re-executed.
@@ -423,28 +455,61 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 	}}
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "maintenance", ExecutionID: params.ExecutionID}}
 
-	for _, cmd := range commands {
+	selected := map[string]bool{}
+	for _, op := range params.Operations {
+		selected[op] = true
+	}
+	names := []string{"optimize", "expire_snapshots", "remove_orphan_files"}
+
+	for i, cmd := range commands {
+		if len(selected) > 0 && i < len(names) && !selected[names[i]] {
+			continue
+		}
 		logger.Info("running maintenance", "sql", cmd)
 
 		result, err := queryengine.CollectStringsWith(ctx, eng, spec, cmd, maintenanceMaxResultRows, cb)
 		if err != nil {
-			recordMaintenanceSnapshot(a.queries, ctx, params.ExecutionID, cmd, "failed", 0, 0, err.Error())
+			recordMaintenanceSnapshot(a.queries, ctx, engineID, params.ExecutionID, cmd, "failed", 0, 0, err.Error())
+			finishMaintenanceRun(a.queries, ctx, params.RunID, "failed", "maintenance_failed", err.Error())
 			return fmt.Errorf("maintenance %q: %w", cmd, err)
 		}
 		if ctx.Err() != nil {
+			finishMaintenanceRun(a.queries, ctx, params.RunID, "failed", "cancelled", "the run was cancelled")
 			return ctx.Err()
 		}
 
-		recordMaintenanceSnapshot(a.queries, ctx, params.ExecutionID, cmd, "finished", int64(len(result)), 0, "")
+		recordMaintenanceSnapshot(a.queries, ctx, engineID, params.ExecutionID, cmd, "finished", int64(len(result)), 0, "")
 	}
 
+	finishMaintenanceRun(a.queries, ctx, params.RunID, "finished", "", "")
 	return nil
+}
+
+// finishMaintenanceRun records the terminal state of an engine-aware run.
+func finishMaintenanceRun(queries db.Querier, ctx context.Context, runID, status, code, message string) {
+	if runID == "" {
+		return
+	}
+	var id pgtype.UUID
+	if err := id.Scan(runID); err != nil {
+		return
+	}
+	var codePtr, messagePtr *string
+	if code != "" {
+		codePtr = &code
+	}
+	if message != "" {
+		messagePtr = &message
+	}
+	_, _ = queries.UpdateMaintenanceRun(context.WithoutCancel(ctx), db.UpdateMaintenanceRunParams{
+		ID: id, Status: status, ErrorCode: codePtr, ErrorMessage: messagePtr,
+	})
 }
 
 // maintenanceMaxResultRows bounds what a maintenance statement may return.
 const maintenanceMaxResultRows = 10000
 
-func recordMaintenanceSnapshot(queries db.Querier, ctx context.Context, executionID, sql, state string, rows int64, elapsedMs int32, errMsg string) {
+func recordMaintenanceSnapshot(queries db.Querier, ctx context.Context, engineID pgtype.UUID, executionID, sql, state string, rows int64, elapsedMs int32, errMsg string) {
 	var execID pgtype.UUID
 	execID.Scan(executionID)
 
@@ -469,6 +534,7 @@ func recordMaintenanceSnapshot(queries db.Querier, ctx context.Context, executio
 
 	queries.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
 		TrinoQueryID:    trinoQueryID,
+		EngineID:        engineID,
 		ExecutionID:     execID,
 		Origin:          "lens_maintenance",
 		User:            "lens",

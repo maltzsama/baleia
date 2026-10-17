@@ -11,7 +11,7 @@ import (
 func TestUpsertTableHealthSnapshotUpdatesOnConflict(t *testing.T) {
 	q := upsertTableHealthSnapshot
 	for _, want := range []string{
-		"ON CONFLICT (catalog_connection_id, catalog, namespace, table_name) DO UPDATE",
+		"ON CONFLICT (catalog_id, namespace, table_name) DO UPDATE",
 		"captured_at",
 		"health_score              = EXCLUDED.health_score",
 	} {

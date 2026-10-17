@@ -96,6 +96,12 @@ type ServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
+	// Run optimize/expire/orphan cleanup on one Iceberg table
+	// (POST /catalogs/{catalog_id}/maintenance)
+	CreateMaintenanceRun(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Maintenance runs of a catalog, newest first
+	// (GET /catalogs/{catalog_id}/maintenance-runs)
+	ListMaintenanceRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListMaintenanceRunsParams)
 	// Refresh the catalog's metadata snapshot now
 	// (POST /catalogs/{catalog_id}/metadata/sync)
 	SyncCatalogMetadata(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
@@ -105,6 +111,9 @@ type ServerInterface interface {
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Iceberg table health of a logical catalog
+	// (GET /catalogs/{catalog_id}/table-health)
+	ListTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListTableHealthParams)
 	// Engines a catalog is bound to (anyone who may read the catalog)
 	// (GET /catalogs/{id}/bindings)
 	ListCatalogBindings(w http.ResponseWriter, r *http.Request, id PathId)
@@ -162,6 +171,18 @@ type ServerInterface interface {
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(w http.ResponseWriter, r *http.Request, id PathId)
+	// Cluster snapshots of an engine
+	// (GET /engines/{id}/monitoring/cluster)
+	GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams)
+	// Query snapshots of an engine — own queries or, for admins, everyone's
+	// (GET /engines/{id}/monitoring/queries)
+	ListMonitoringQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListMonitoringQueriesParams)
+	// Full SQL, timings and error of one query
+	// (GET /engines/{id}/monitoring/queries/{query_id})
+	GetMonitoringQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId string)
+	// Cancel a running query
+	// (POST /engines/{id}/monitoring/queries/{query_id})
+	KillMonitoringQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId string)
 	// Repair the engine's managed catalog drift and report the rest — admins
 	// (POST /engines/{id}/reconcile)
 	ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams)
@@ -195,6 +216,9 @@ type ServerInterface interface {
 	// Start migration execution — admin only
 	// (POST /migrations/{id}/start)
 	StartMigration(w http.ResponseWriter, r *http.Request, id PathId)
+	// Engines with runtime monitoring the caller can view
+	// (GET /monitoring/engines)
+	ListMonitoringEngines(w http.ResponseWriter, r *http.Request)
 	// Create first admin user
 	// (POST /setup/admin)
 	CreateFirstAdmin(w http.ResponseWriter, r *http.Request)
@@ -597,6 +621,18 @@ func (_ Unimplemented) TestCatalogConnection(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Run optimize/expire/orphan cleanup on one Iceberg table
+// (POST /catalogs/{catalog_id}/maintenance)
+func (_ Unimplemented) CreateMaintenanceRun(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Maintenance runs of a catalog, newest first
+// (GET /catalogs/{catalog_id}/maintenance-runs)
+func (_ Unimplemented) ListMaintenanceRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListMaintenanceRunsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Refresh the catalog's metadata snapshot now
 // (POST /catalogs/{catalog_id}/metadata/sync)
 func (_ Unimplemented) SyncCatalogMetadata(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
@@ -612,6 +648,12 @@ func (_ Unimplemented) ListCatalogMetadataSyncRuns(w http.ResponseWriter, r *htt
 // Force re-sync of a catalog against the Trino cluster
 // (POST /catalogs/{catalog_id}/sync)
 func (_ Unimplemented) SyncCatalog(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Iceberg table health of a logical catalog
+// (GET /catalogs/{catalog_id}/table-health)
+func (_ Unimplemented) ListTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListTableHealthParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -729,6 +771,30 @@ func (_ Unimplemented) ListEngineBindings(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Cluster snapshots of an engine
+// (GET /engines/{id}/monitoring/cluster)
+func (_ Unimplemented) GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Query snapshots of an engine — own queries or, for admins, everyone's
+// (GET /engines/{id}/monitoring/queries)
+func (_ Unimplemented) ListMonitoringQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListMonitoringQueriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Full SQL, timings and error of one query
+// (GET /engines/{id}/monitoring/queries/{query_id})
+func (_ Unimplemented) GetMonitoringQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Cancel a running query
+// (POST /engines/{id}/monitoring/queries/{query_id})
+func (_ Unimplemented) KillMonitoringQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Repair the engine's managed catalog drift and report the rest — admins
 // (POST /engines/{id}/reconcile)
 func (_ Unimplemented) ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams) {
@@ -792,6 +858,12 @@ func (_ Unimplemented) ListMigrationItems(w http.ResponseWriter, r *http.Request
 // Start migration execution — admin only
 // (POST /migrations/{id}/start)
 func (_ Unimplemented) StartMigration(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Engines with runtime monitoring the caller can view
+// (GET /monitoring/engines)
+func (_ Unimplemented) ListMonitoringEngines(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2113,6 +2185,91 @@ func (siw *ServerInterfaceWrapper) TestCatalogConnection(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// CreateMaintenanceRun operation middleware
+func (siw *ServerInterfaceWrapper) CreateMaintenanceRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMaintenanceRun(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMaintenanceRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListMaintenanceRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMaintenanceRunsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMaintenanceRuns(w, r, catalogId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SyncCatalogMetadata operation middleware
 func (siw *ServerInterfaceWrapper) SyncCatalogMetadata(w http.ResponseWriter, r *http.Request) {
 
@@ -2214,6 +2371,82 @@ func (siw *ServerInterfaceWrapper) SyncCatalog(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SyncCatalog(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTableHealth operation middleware
+func (siw *ServerInterfaceWrapper) ListTableHealth(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTableHealthParams
+
+	// ------------- Optional query parameter "ns" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "needs" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "needs", r.URL.Query(), &params.Needs)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "needs", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "max_score" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "max_score", r.URL.Query(), &params.MaxScore)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "max_score", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTableHealth(w, r, catalogId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2857,6 +3090,210 @@ func (siw *ServerInterfaceWrapper) ListEngineBindings(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// GetEngineCluster operation middleware
+func (siw *ServerInterfaceWrapper) GetEngineCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetEngineClusterParams
+
+	// ------------- Optional query parameter "window" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "window", r.URL.Query(), &params.Window)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "window", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEngineCluster(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMonitoringQueries operation middleware
+func (siw *ServerInterfaceWrapper) ListMonitoringQueries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMonitoringQueriesParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "scope", r.URL.Query(), &params.Scope)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMonitoringQueries(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMonitoringQuery operation middleware
+func (siw *ServerInterfaceWrapper) GetMonitoringQuery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "query_id" -------------
+	var queryId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "query_id", chi.URLParam(r, "query_id"), &queryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMonitoringQuery(w, r, id, queryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// KillMonitoringQuery operation middleware
+func (siw *ServerInterfaceWrapper) KillMonitoringQuery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "query_id" -------------
+	var queryId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "query_id", chi.URLParam(r, "query_id"), &queryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.KillMonitoringQuery(w, r, id, queryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReconcileEngine operation middleware
 func (siw *ServerInterfaceWrapper) ReconcileEngine(w http.ResponseWriter, r *http.Request) {
 
@@ -3205,6 +3642,28 @@ func (siw *ServerInterfaceWrapper) StartMigration(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartMigration(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMonitoringEngines operation middleware
+func (siw *ServerInterfaceWrapper) ListMonitoringEngines(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMonitoringEngines(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6969,6 +7428,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalog-connections/{id}/test", wrapper.TestCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{catalog_id}/maintenance", wrapper.CreateMaintenanceRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/maintenance-runs", wrapper.ListMaintenanceRuns)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/catalogs/{catalog_id}/metadata/sync", wrapper.SyncCatalogMetadata)
 	})
 	r.Group(func(r chi.Router) {
@@ -6976,6 +7441,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/catalogs/{catalog_id}/sync", wrapper.SyncCatalog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/table-health", wrapper.ListTableHealth)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{id}/bindings", wrapper.ListCatalogBindings)
@@ -7035,6 +7503,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/engines/{id}/bindings", wrapper.ListEngineBindings)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/monitoring/cluster", wrapper.GetEngineCluster)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/monitoring/queries", wrapper.ListMonitoringQueries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/monitoring/queries/{query_id}", wrapper.GetMonitoringQuery)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engines/{id}/monitoring/queries/{query_id}", wrapper.KillMonitoringQuery)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/engines/{id}/reconcile", wrapper.ReconcileEngine)
 	})
 	r.Group(func(r chi.Router) {
@@ -7066,6 +7546,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/migrations/{id}/start", wrapper.StartMigration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/monitoring/engines", wrapper.ListMonitoringEngines)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/setup/admin", wrapper.CreateFirstAdmin)
@@ -8281,6 +8764,98 @@ func (response TestCatalogConnection404JSONResponse) VisitTestCatalogConnectionR
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateMaintenanceRunRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Body      *CreateMaintenanceRunJSONRequestBody
+}
+
+type CreateMaintenanceRunResponseObject interface {
+	VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error
+}
+
+type CreateMaintenanceRun202JSONResponse MaintenanceRun
+
+func (response CreateMaintenanceRun202JSONResponse) VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMaintenanceRun401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateMaintenanceRun401JSONResponse) VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMaintenanceRun403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateMaintenanceRun403JSONResponse) VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMaintenanceRun404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateMaintenanceRun404JSONResponse) VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMaintenanceRun422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateMaintenanceRun422JSONResponse) VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMaintenanceRunsRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Params    ListMaintenanceRunsParams
+}
+
+type ListMaintenanceRunsResponseObject interface {
+	VisitListMaintenanceRunsResponse(w http.ResponseWriter) error
+}
+
+type ListMaintenanceRuns200JSONResponse []MaintenanceRun
+
+func (response ListMaintenanceRuns200JSONResponse) VisitListMaintenanceRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMaintenanceRuns401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMaintenanceRuns401JSONResponse) VisitListMaintenanceRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMaintenanceRuns404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMaintenanceRuns404JSONResponse) VisitListMaintenanceRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type SyncCatalogMetadataRequestObject struct {
 	CatalogId openapi_types.UUID `json:"catalog_id"`
 }
@@ -8430,6 +9005,42 @@ type SyncCatalog422JSONResponse struct {
 func (response SyncCatalog422JSONResponse) VisitSyncCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTableHealthRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Params    ListTableHealthParams
+}
+
+type ListTableHealthResponseObject interface {
+	VisitListTableHealthResponse(w http.ResponseWriter) error
+}
+
+type ListTableHealth200JSONResponse []TableHealth
+
+func (response ListTableHealth200JSONResponse) VisitListTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTableHealth401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTableHealth401JSONResponse) VisitListTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTableHealth404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListTableHealth404JSONResponse) VisitListTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9296,6 +9907,176 @@ func (response ListEngineBindings404JSONResponse) VisitListEngineBindingsRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetEngineClusterRequestObject struct {
+	Id     PathId `json:"id"`
+	Params GetEngineClusterParams
+}
+
+type GetEngineClusterResponseObject interface {
+	VisitGetEngineClusterResponse(w http.ResponseWriter) error
+}
+
+type GetEngineCluster200JSONResponse ClusterSeries
+
+func (response GetEngineCluster200JSONResponse) VisitGetEngineClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineCluster401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetEngineCluster401JSONResponse) VisitGetEngineClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineCluster404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetEngineCluster404JSONResponse) VisitGetEngineClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMonitoringQueriesRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListMonitoringQueriesParams
+}
+
+type ListMonitoringQueriesResponseObject interface {
+	VisitListMonitoringQueriesResponse(w http.ResponseWriter) error
+}
+
+type ListMonitoringQueries200JSONResponse MonitoringQueryPage
+
+func (response ListMonitoringQueries200JSONResponse) VisitListMonitoringQueriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMonitoringQueries401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMonitoringQueries401JSONResponse) VisitListMonitoringQueriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMonitoringQueries403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMonitoringQueries403JSONResponse) VisitListMonitoringQueriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMonitoringQueries404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMonitoringQueries404JSONResponse) VisitListMonitoringQueriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMonitoringQueryRequestObject struct {
+	Id      PathId `json:"id"`
+	QueryId string `json:"query_id"`
+}
+
+type GetMonitoringQueryResponseObject interface {
+	VisitGetMonitoringQueryResponse(w http.ResponseWriter) error
+}
+
+type GetMonitoringQuery200JSONResponse MonitoringQueryDetail
+
+func (response GetMonitoringQuery200JSONResponse) VisitGetMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMonitoringQuery401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetMonitoringQuery401JSONResponse) VisitGetMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMonitoringQuery404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetMonitoringQuery404JSONResponse) VisitGetMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type KillMonitoringQueryRequestObject struct {
+	Id      PathId `json:"id"`
+	QueryId string `json:"query_id"`
+}
+
+type KillMonitoringQueryResponseObject interface {
+	VisitKillMonitoringQueryResponse(w http.ResponseWriter) error
+}
+
+type KillMonitoringQuery202Response struct {
+}
+
+func (response KillMonitoringQuery202Response) VisitKillMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type KillMonitoringQuery401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response KillMonitoringQuery401JSONResponse) VisitKillMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type KillMonitoringQuery403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response KillMonitoringQuery403JSONResponse) VisitKillMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type KillMonitoringQuery404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response KillMonitoringQuery404JSONResponse) VisitKillMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type KillMonitoringQuery409JSONResponse struct{ ConflictJSONResponse }
+
+func (response KillMonitoringQuery409JSONResponse) VisitKillMonitoringQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ReconcileEngineRequestObject struct {
 	Id     PathId `json:"id"`
 	Params ReconcileEngineParams
@@ -9721,6 +10502,31 @@ type StartMigration404JSONResponse struct{ NotFoundJSONResponse }
 func (response StartMigration404JSONResponse) VisitStartMigrationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMonitoringEnginesRequestObject struct {
+}
+
+type ListMonitoringEnginesResponseObject interface {
+	VisitListMonitoringEnginesResponse(w http.ResponseWriter) error
+}
+
+type ListMonitoringEngines200JSONResponse []MonitoringEngine
+
+func (response ListMonitoringEngines200JSONResponse) VisitListMonitoringEnginesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMonitoringEngines401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMonitoringEngines401JSONResponse) VisitListMonitoringEnginesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -13290,6 +14096,12 @@ type StrictServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error)
+	// Run optimize/expire/orphan cleanup on one Iceberg table
+	// (POST /catalogs/{catalog_id}/maintenance)
+	CreateMaintenanceRun(ctx context.Context, request CreateMaintenanceRunRequestObject) (CreateMaintenanceRunResponseObject, error)
+	// Maintenance runs of a catalog, newest first
+	// (GET /catalogs/{catalog_id}/maintenance-runs)
+	ListMaintenanceRuns(ctx context.Context, request ListMaintenanceRunsRequestObject) (ListMaintenanceRunsResponseObject, error)
 	// Refresh the catalog's metadata snapshot now
 	// (POST /catalogs/{catalog_id}/metadata/sync)
 	SyncCatalogMetadata(ctx context.Context, request SyncCatalogMetadataRequestObject) (SyncCatalogMetadataResponseObject, error)
@@ -13299,6 +14111,9 @@ type StrictServerInterface interface {
 	// Force re-sync of a catalog against the Trino cluster
 	// (POST /catalogs/{catalog_id}/sync)
 	SyncCatalog(ctx context.Context, request SyncCatalogRequestObject) (SyncCatalogResponseObject, error)
+	// Iceberg table health of a logical catalog
+	// (GET /catalogs/{catalog_id}/table-health)
+	ListTableHealth(ctx context.Context, request ListTableHealthRequestObject) (ListTableHealthResponseObject, error)
 	// Engines a catalog is bound to (anyone who may read the catalog)
 	// (GET /catalogs/{id}/bindings)
 	ListCatalogBindings(ctx context.Context, request ListCatalogBindingsRequestObject) (ListCatalogBindingsResponseObject, error)
@@ -13356,6 +14171,18 @@ type StrictServerInterface interface {
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error)
+	// Cluster snapshots of an engine
+	// (GET /engines/{id}/monitoring/cluster)
+	GetEngineCluster(ctx context.Context, request GetEngineClusterRequestObject) (GetEngineClusterResponseObject, error)
+	// Query snapshots of an engine — own queries or, for admins, everyone's
+	// (GET /engines/{id}/monitoring/queries)
+	ListMonitoringQueries(ctx context.Context, request ListMonitoringQueriesRequestObject) (ListMonitoringQueriesResponseObject, error)
+	// Full SQL, timings and error of one query
+	// (GET /engines/{id}/monitoring/queries/{query_id})
+	GetMonitoringQuery(ctx context.Context, request GetMonitoringQueryRequestObject) (GetMonitoringQueryResponseObject, error)
+	// Cancel a running query
+	// (POST /engines/{id}/monitoring/queries/{query_id})
+	KillMonitoringQuery(ctx context.Context, request KillMonitoringQueryRequestObject) (KillMonitoringQueryResponseObject, error)
 	// Repair the engine's managed catalog drift and report the rest — admins
 	// (POST /engines/{id}/reconcile)
 	ReconcileEngine(ctx context.Context, request ReconcileEngineRequestObject) (ReconcileEngineResponseObject, error)
@@ -13389,6 +14216,9 @@ type StrictServerInterface interface {
 	// Start migration execution — admin only
 	// (POST /migrations/{id}/start)
 	StartMigration(ctx context.Context, request StartMigrationRequestObject) (StartMigrationResponseObject, error)
+	// Engines with runtime monitoring the caller can view
+	// (GET /monitoring/engines)
+	ListMonitoringEngines(ctx context.Context, request ListMonitoringEnginesRequestObject) (ListMonitoringEnginesResponseObject, error)
 	// Create first admin user
 	// (POST /setup/admin)
 	CreateFirstAdmin(ctx context.Context, request CreateFirstAdminRequestObject) (CreateFirstAdminResponseObject, error)
@@ -14386,6 +15216,66 @@ func (sh *strictHandler) TestCatalogConnection(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// CreateMaintenanceRun operation middleware
+func (sh *strictHandler) CreateMaintenanceRun(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request CreateMaintenanceRunRequestObject
+
+	request.CatalogId = catalogId
+
+	var body CreateMaintenanceRunJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMaintenanceRun(ctx, request.(CreateMaintenanceRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMaintenanceRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMaintenanceRunResponseObject); ok {
+		if err := validResponse.VisitCreateMaintenanceRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMaintenanceRuns operation middleware
+func (sh *strictHandler) ListMaintenanceRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListMaintenanceRunsParams) {
+	var request ListMaintenanceRunsRequestObject
+
+	request.CatalogId = catalogId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMaintenanceRuns(ctx, request.(ListMaintenanceRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMaintenanceRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMaintenanceRunsResponseObject); ok {
+		if err := validResponse.VisitListMaintenanceRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SyncCatalogMetadata operation middleware
 func (sh *strictHandler) SyncCatalogMetadata(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
 	var request SyncCatalogMetadataRequestObject
@@ -14458,6 +15348,33 @@ func (sh *strictHandler) SyncCatalog(w http.ResponseWriter, r *http.Request, cat
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SyncCatalogResponseObject); ok {
 		if err := validResponse.VisitSyncCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTableHealth operation middleware
+func (sh *strictHandler) ListTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListTableHealthParams) {
+	var request ListTableHealthRequestObject
+
+	request.CatalogId = catalogId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTableHealth(ctx, request.(ListTableHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTableHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTableHealthResponseObject); ok {
+		if err := validResponse.VisitListTableHealthResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -15011,6 +15928,114 @@ func (sh *strictHandler) ListEngineBindings(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// GetEngineCluster operation middleware
+func (sh *strictHandler) GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams) {
+	var request GetEngineClusterRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEngineCluster(ctx, request.(GetEngineClusterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEngineCluster")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEngineClusterResponseObject); ok {
+		if err := validResponse.VisitGetEngineClusterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMonitoringQueries operation middleware
+func (sh *strictHandler) ListMonitoringQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListMonitoringQueriesParams) {
+	var request ListMonitoringQueriesRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMonitoringQueries(ctx, request.(ListMonitoringQueriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMonitoringQueries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMonitoringQueriesResponseObject); ok {
+		if err := validResponse.VisitListMonitoringQueriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMonitoringQuery operation middleware
+func (sh *strictHandler) GetMonitoringQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId string) {
+	var request GetMonitoringQueryRequestObject
+
+	request.Id = id
+	request.QueryId = queryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMonitoringQuery(ctx, request.(GetMonitoringQueryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMonitoringQuery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMonitoringQueryResponseObject); ok {
+		if err := validResponse.VisitGetMonitoringQueryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// KillMonitoringQuery operation middleware
+func (sh *strictHandler) KillMonitoringQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId string) {
+	var request KillMonitoringQueryRequestObject
+
+	request.Id = id
+	request.QueryId = queryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.KillMonitoringQuery(ctx, request.(KillMonitoringQueryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "KillMonitoringQuery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(KillMonitoringQueryResponseObject); ok {
+		if err := validResponse.VisitKillMonitoringQueryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ReconcileEngine operation middleware
 func (sh *strictHandler) ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams) {
 	var request ReconcileEngineRequestObject
@@ -15304,6 +16329,30 @@ func (sh *strictHandler) StartMigration(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartMigrationResponseObject); ok {
 		if err := validResponse.VisitStartMigrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMonitoringEngines operation middleware
+func (sh *strictHandler) ListMonitoringEngines(w http.ResponseWriter, r *http.Request) {
+	var request ListMonitoringEnginesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMonitoringEngines(ctx, request.(ListMonitoringEnginesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMonitoringEngines")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMonitoringEnginesResponseObject); ok {
+		if err := validResponse.VisitListMonitoringEnginesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

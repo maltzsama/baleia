@@ -912,6 +912,23 @@ type CatalogConnection struct {
 // CatalogConnectionAllowedAction defines model for CatalogConnectionAllowedAction.
 type CatalogConnectionAllowedAction string
 
+// ClusterPoint defines model for ClusterPoint.
+type ClusterPoint struct {
+	ActiveWorkers    int       `json:"active_workers"`
+	BlockedQueries   int       `json:"blocked_queries"`
+	CapturedAt       time.Time `json:"captured_at"`
+	FreeMemoryBytes  *int      `json:"free_memory_bytes"`
+	QueuedQueries    int       `json:"queued_queries"`
+	RunningQueries   int       `json:"running_queries"`
+	TotalMemoryBytes *int      `json:"total_memory_bytes"`
+}
+
+// ClusterSeries defines model for ClusterSeries.
+type ClusterSeries struct {
+	Latest *ClusterPoint  `json:"latest"`
+	Series []ClusterPoint `json:"series"`
+}
+
 // ConnectionCheck defines model for ConnectionCheck.
 type ConnectionCheck struct {
 	Detail    *string `json:"detail"`
@@ -1078,6 +1095,15 @@ type CreateFolderRequest struct {
 
 	// SpaceId Omitted: the workspace's default space
 	SpaceId *openapi_types.UUID `json:"space_id"`
+}
+
+// CreateMaintenanceRequest defines model for CreateMaintenanceRequest.
+type CreateMaintenanceRequest struct {
+	BindingId  *openapi_types.UUID `json:"binding_id"`
+	Namespace  string              `json:"namespace"`
+	Operations []string            `json:"operations"`
+	Retention  *string             `json:"retention"`
+	Table      string              `json:"table"`
 }
 
 // CreateMigrationRequest defines model for CreateMigrationRequest.
@@ -1453,6 +1479,24 @@ type LogoutRequest struct {
 	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
+// MaintenanceRun defines model for MaintenanceRun.
+type MaintenanceRun struct {
+	BindingId    *openapi_types.UUID `json:"binding_id"`
+	CatalogId    openapi_types.UUID  `json:"catalog_id"`
+	ErrorCode    *string             `json:"error_code"`
+	ErrorMessage *string             `json:"error_message"`
+	FinishedAt   *time.Time          `json:"finished_at"`
+	Id           openapi_types.UUID  `json:"id"`
+	Namespace    string              `json:"namespace"`
+	Operations   []string            `json:"operations"`
+	Retention    *string             `json:"retention"`
+	StartedAt    time.Time           `json:"started_at"`
+	StartedBy    *openapi_types.UUID `json:"started_by"`
+	Status       string              `json:"status"`
+	TableName    string              `json:"table_name"`
+	WorkflowId   string              `json:"workflow_id"`
+}
+
 // Me defines model for Me.
 type Me struct {
 	AuthProvider        MeAuthProvider      `json:"auth_provider"`
@@ -1674,6 +1718,56 @@ type MigrationItem struct {
 
 // MigrationItemStatus defines model for MigrationItem.Status.
 type MigrationItemStatus string
+
+// MonitoringEngine defines model for MonitoringEngine.
+type MonitoringEngine struct {
+	Class string             `json:"class"`
+	Id    openapi_types.UUID `json:"id"`
+	Kind  string             `json:"kind"`
+	Name  string             `json:"name"`
+}
+
+// MonitoringQuery defines model for MonitoringQuery.
+type MonitoringQuery struct {
+	Catalog            string              `json:"catalog"`
+	CpuMs              *int                `json:"cpu_ms"`
+	CreatedAt          time.Time           `json:"created_at"`
+	ElapsedMs          *int                `json:"elapsed_ms"`
+	ExecutionId        *openapi_types.UUID `json:"execution_id"`
+	Origin             *string             `json:"origin,omitempty"`
+	OutputRows         *int                `json:"output_rows"`
+	PhysicalInputBytes *int                `json:"physical_input_bytes"`
+	Schema             *string             `json:"schema"`
+	SqlFirstLine       *string             `json:"sql_first_line,omitempty"`
+	State              string              `json:"state"`
+	TrinoQueryId       string              `json:"trino_query_id"`
+	User               string              `json:"user"`
+}
+
+// MonitoringQueryDetail defines model for MonitoringQueryDetail.
+type MonitoringQueryDetail struct {
+	Catalog            string              `json:"catalog"`
+	CpuMs              *int                `json:"cpu_ms"`
+	CreatedAt          time.Time           `json:"created_at"`
+	ElapsedMs          *int                `json:"elapsed_ms"`
+	ErrorMessage       *string             `json:"error_message"`
+	ExecutionId        *openapi_types.UUID `json:"execution_id"`
+	Origin             *string             `json:"origin,omitempty"`
+	OutputRows         *int                `json:"output_rows"`
+	PhysicalInputBytes *int                `json:"physical_input_bytes"`
+	Schema             *string             `json:"schema"`
+	Sql                *string             `json:"sql,omitempty"`
+	SqlFirstLine       *string             `json:"sql_first_line,omitempty"`
+	State              string              `json:"state"`
+	TrinoQueryId       string              `json:"trino_query_id"`
+	User               string              `json:"user"`
+}
+
+// MonitoringQueryPage defines model for MonitoringQueryPage.
+type MonitoringQueryPage struct {
+	Items      []MonitoringQuery `json:"items"`
+	NextOffset *int              `json:"next_offset"`
+}
 
 // NessieCredentials defines model for NessieCredentials.
 type NessieCredentials struct {
@@ -2093,6 +2187,23 @@ type StatementSpan struct {
 	Start int `json:"start"`
 }
 
+// TableHealth defines model for TableHealth.
+type TableHealth struct {
+	CatalogId              openapi_types.UUID `json:"catalog_id"`
+	CatalogName            string             `json:"catalog_name"`
+	FileCount              *int               `json:"file_count"`
+	HealthScore            int                `json:"health_score"`
+	LastMaintenanceAt      *time.Time         `json:"last_maintenance_at"`
+	Namespace              string             `json:"namespace"`
+	NeedsCompaction        bool               `json:"needs_compaction"`
+	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
+	NeedsSnapshotExpiry    bool               `json:"needs_snapshot_expiry"`
+	OldestSnapshotAgeHours *int               `json:"oldest_snapshot_age_hours"`
+	SnapshotCount          *int               `json:"snapshot_count,omitempty"`
+	TableName              string             `json:"table_name"`
+	TotalSizeBytes         *int               `json:"total_size_bytes"`
+}
+
 // TargetRequest Where to run. binding_id names a target; catalog_id picks the catalog's only enabled binding, or the one on engine_id when it has several. Omitted, the workspace default applies, else the workspace's only target; otherwise 422 target_required.
 type TargetRequest struct {
 	BindingId *openapi_types.UUID `json:"binding_id,omitempty"`
@@ -2464,14 +2575,43 @@ type OidcCallbackParams struct {
 	State string `form:"state" json:"state"`
 }
 
+// ListMaintenanceRunsParams defines parameters for ListMaintenanceRuns.
+type ListMaintenanceRunsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListCatalogMetadataSyncRunsParams defines parameters for ListCatalogMetadataSyncRuns.
 type ListCatalogMetadataSyncRunsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListTableHealthParams defines parameters for ListTableHealth.
+type ListTableHealthParams struct {
+	Ns       *string `form:"ns,omitempty" json:"ns,omitempty"`
+	Needs    *string `form:"needs,omitempty" json:"needs,omitempty"`
+	MaxScore *int    `form:"max_score,omitempty" json:"max_score,omitempty"`
+	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset   *int    `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // GetDialectParams defines parameters for GetDialect.
 type GetDialectParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
+// GetEngineClusterParams defines parameters for GetEngineCluster.
+type GetEngineClusterParams struct {
+	Window *string `form:"window,omitempty" json:"window,omitempty"`
+}
+
+// ListMonitoringQueriesParams defines parameters for ListMonitoringQueries.
+type ListMonitoringQueriesParams struct {
+	State  *string `form:"state,omitempty" json:"state,omitempty"`
+	Scope  *string `form:"scope,omitempty" json:"scope,omitempty"`
+	Q      *string `form:"q,omitempty" json:"q,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int    `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ReconcileEngineParams defines parameters for ReconcileEngine.
@@ -2733,6 +2873,9 @@ type TestConnectionDraftJSONRequestBody = TestConnectionRequest
 
 // UpdateCatalogConnectionJSONRequestBody defines body for UpdateCatalogConnection for application/json ContentType.
 type UpdateCatalogConnectionJSONRequestBody = UpdateCatalogConnectionRequest
+
+// CreateMaintenanceRunJSONRequestBody defines body for CreateMaintenanceRun for application/json ContentType.
+type CreateMaintenanceRunJSONRequestBody = CreateMaintenanceRequest
 
 // CreateCatalogBindingJSONRequestBody defines body for CreateCatalogBinding for application/json ContentType.
 type CreateCatalogBindingJSONRequestBody = CreateBindingRequest

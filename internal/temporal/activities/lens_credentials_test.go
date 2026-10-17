@@ -52,7 +52,7 @@ func TestTableHealthOpensCredentialsThroughKeyring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	params := LensAnalyzeTableHealthParams{CatalogConnectionID: "07000000-0000-0000-0000-000000000000"}
+	params := LensAnalyzeTableHealthParams{CatalogID: "08000000-0000-0000-0000-000000000000", CatalogConnectionID: "07000000-0000-0000-0000-000000000000"}
 	dialer, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true}) // the stub server is on loopback
 	if err != nil {
 		t.Fatal(err)

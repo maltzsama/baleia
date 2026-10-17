@@ -41,6 +41,7 @@ type Querier interface {
 	// additional authenticated data, so it must be known before the insert.
 	CreateCatalogConnection(ctx context.Context, arg CreateCatalogConnectionParams) (CatalogConnection, error)
 	CreateEngine(ctx context.Context, arg CreateEngineParams) (Engine, error)
+	CreateMaintenanceRun(ctx context.Context, arg CreateMaintenanceRunParams) (MaintenanceRun, error)
 	CreateManagedBinding(ctx context.Context, arg CreateManagedBindingParams) (CatalogBinding, error)
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) (Migration, error)
 	CreateMigrationItem(ctx context.Context, arg CreateMigrationItemParams) (MigrationItem, error)
@@ -143,6 +144,8 @@ type Querier interface {
 	// removed_at), with its catalog freshness.
 	GetGrantedMetadataTable(ctx context.Context, arg GetGrantedMetadataTableParams) (GetGrantedMetadataTableRow, error)
 	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
+	GetLatestClusterSnapshotByEngine(ctx context.Context, engineID pgtype.UUID) (ClusterSnapshot, error)
+	GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (MaintenanceRun, error)
 	GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
 	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
@@ -175,6 +178,7 @@ type Querier interface {
 	GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.UUID) (TrinoCluster, error)
 	GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (TrinoCluster, error)
 	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (TrinoQuerySnapshot, error)
+	GetTrinoQuerySnapshotByEngine(ctx context.Context, arg GetTrinoQuerySnapshotByEngineParams) (TrinoQuerySnapshot, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
@@ -182,7 +186,6 @@ type Querier interface {
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
-	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
 	// Content versions (#34): append-only snapshots of saved queries and metrics.
 	// The service writes the entity and its version in one transaction.
@@ -214,6 +217,7 @@ type Querier interface {
 	// The namespaces one level below parent ('{}' = the top level).
 	ListChildNamespaces(ctx context.Context, arg ListChildNamespacesParams) ([][]string, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
+	ListClusterSnapshotsByEngine(ctx context.Context, arg ListClusterSnapshotsByEngineParams) ([]ClusterSnapshot, error)
 	ListContentVersions(ctx context.Context, arg ListContentVersionsParams) ([]ListContentVersionsRow, error)
 	// Entities whose latest delete/restore version is a delete (not restored yet).
 	ListDeletedContent(ctx context.Context, arg ListDeletedContentParams) ([]ListDeletedContentRow, error)
@@ -234,6 +238,7 @@ type Querier interface {
 	ListExecutionHistory(ctx context.Context, arg ListExecutionHistoryParams) ([]ListExecutionHistoryRow, error)
 	ListExpiredEphemeralRegistryRows(ctx context.Context) ([]ListExpiredEphemeralRegistryRowsRow, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
+	ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRunsParams) ([]MaintenanceRun, error)
 	// The managed bindings of an engine the reconciler checks (#37).
 	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
 	// The catalogs a workspace may use with their freshness and their enabled
@@ -285,13 +290,14 @@ type Querier interface {
 	// Every catalog the scheduled sync refreshes: enabled, and readable from its
 	// source or through at least one enabled binding.
 	ListSyncableCatalogs(ctx context.Context) ([]pgtype.UUID, error)
+	ListTableHealthByCatalog(ctx context.Context, arg ListTableHealthByCatalogParams) ([]TableHealthSnapshot, error)
 	ListTableHealthByConnection(ctx context.Context, arg ListTableHealthByConnectionParams) ([]TableHealthSnapshot, error)
 	ListTableHealthSnapshots(ctx context.Context, arg ListTableHealthSnapshotsParams) ([]TableHealthSnapshot, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
 	ListTeams(ctx context.Context) ([]Team, error)
 	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Team, error)
 	ListTrinoQuerySnapshots(ctx context.Context, arg ListTrinoQuerySnapshotsParams) ([]TrinoQuerySnapshot, error)
-	// Lens shows non-admins only the queries run under their own Trino identity.
+	ListTrinoQuerySnapshotsByEngine(ctx context.Context, arg ListTrinoQuerySnapshotsByEngineParams) ([]TrinoQuerySnapshot, error)
 	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Only folders of spaces the caller can see; #16 says to filter in SQL, not in
@@ -385,6 +391,7 @@ type Querier interface {
 	// different fields no longer overwrite each other.
 	UpdateCatalogConnection(ctx context.Context, arg UpdateCatalogConnectionParams) (CatalogConnection, error)
 	UpdateEngine(ctx context.Context, arg UpdateEngineParams) (Engine, error)
+	UpdateMaintenanceRun(ctx context.Context, arg UpdateMaintenanceRunParams) (MaintenanceRun, error)
 	UpdateMigrationItem(ctx context.Context, arg UpdateMigrationItemParams) error
 	UpdateMigrationProgress(ctx context.Context, arg UpdateMigrationProgressParams) error
 	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error
@@ -432,10 +439,10 @@ type Querier interface {
 	// A catalog found inside an engine, owned by the engine's connection.
 	UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatalogParams) (Catalog, error)
 	UpsertSemanticDoc(ctx context.Context, arg UpsertSemanticDocParams) (SemanticDoc, error)
-	// Table Health Snapshots
 	UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	UpsertTrinoCatalogRegistry(ctx context.Context, arg UpsertTrinoCatalogRegistryParams) error
-	// Trino Query Snapshots
+	// Monitoring snapshots (#117): every row is tagged with its engine or logical
+	// catalog, so two engines never mix.
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)

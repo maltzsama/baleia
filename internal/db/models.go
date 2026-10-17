@@ -134,6 +134,7 @@ type ClusterSnapshot struct {
 	TotalMemoryBytes *int64             `json:"total_memory_bytes"`
 	FreeMemoryBytes  *int64             `json:"free_memory_bytes"`
 	RawPayload       []byte             `json:"raw_payload"`
+	EngineID         pgtype.UUID        `json:"engine_id"`
 }
 
 type ContentVersion struct {
@@ -171,6 +172,23 @@ type EngineCatalogObservation struct {
 	Connector   *string            `json:"connector"`
 	FirstSeenAt pgtype.Timestamptz `json:"first_seen_at"`
 	ObservedAt  pgtype.Timestamptz `json:"observed_at"`
+}
+
+type MaintenanceRun struct {
+	ID           pgtype.UUID        `json:"id"`
+	CatalogID    pgtype.UUID        `json:"catalog_id"`
+	BindingID    pgtype.UUID        `json:"binding_id"`
+	Namespace    string             `json:"namespace"`
+	TableName    string             `json:"table_name"`
+	Operations   []string           `json:"operations"`
+	Retention    *string            `json:"retention"`
+	Status       string             `json:"status"`
+	ErrorCode    *string            `json:"error_code"`
+	ErrorMessage *string            `json:"error_message"`
+	StartedBy    pgtype.UUID        `json:"started_by"`
+	StartedAt    pgtype.Timestamptz `json:"started_at"`
+	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
+	WorkflowID   string             `json:"workflow_id"`
 }
 
 type MetadataColumn struct {
@@ -432,6 +450,7 @@ type TableHealthSnapshot struct {
 	NeedsCompaction        bool               `json:"needs_compaction"`
 	NeedsSnapshotExpiry    bool               `json:"needs_snapshot_expiry"`
 	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
+	CatalogID              pgtype.UUID        `json:"catalog_id"`
 }
 
 type Team struct {
@@ -495,6 +514,7 @@ type TrinoQuerySnapshot struct {
 	RawTrinoPayload    []byte             `json:"raw_trino_payload"`
 	FirstSeenAt        pgtype.Timestamptz `json:"first_seen_at"`
 	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
+	EngineID           pgtype.UUID        `json:"engine_id"`
 }
 
 type User struct {
