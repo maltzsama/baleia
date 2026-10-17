@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { authStore, type AuthUser } from '$lib/stores/auth.svelte';
+	import Button from '$lib/ui/Button.svelte';
+	import Input from '$lib/ui/Input.svelte';
 
 	let saving = $state(false);
 	let changingPassword = $state(false);
@@ -56,9 +58,6 @@
 			error = apiErrorMessage(err, 'Failed to change password.');
 		}
 	}
-
-	const inputBase =
-		'w-full h-9 bg-white border border-border rounded-md px-3 text-[13px] text-text-main outline-none transition-all duration-150 focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)] disabled:opacity-60 disabled:cursor-not-allowed';
 </script>
 
 <div class="max-w-[560px] py-8 px-6">
@@ -97,27 +96,21 @@
 		<h2 class="text-[13px] font-semibold text-text-muted uppercase tracking-[0.04em] mb-4">
 			Personal info
 		</h2>
-		<div class="flex flex-col gap-1 mb-3">
-			<label class="text-xs font-medium text-text-muted">Name</label>
-			<input class={inputBase} bind:value={name} type="text" />
+		<div class="mb-3">
+			<Input label="Name" bind:value={name} />
 		</div>
-		<div class="flex flex-col gap-1 mb-3">
-			<label class="text-xs font-medium text-text-muted">Email</label>
-			<input
-				class={inputBase}
-				bind:value={email}
+		<div class="mb-3">
+			<Input
+				label="Email"
 				type="email"
+				bind:value={email}
 				disabled={authStore.user?.auth_provider !== 'password'}
 			/>
 		</div>
 		<div class="flex justify-end mt-2">
-			<button
-				onclick={saveProfile}
-				disabled={saving}
-				class="h-9 px-4 rounded-md text-[13px] font-semibold cursor-pointer transition-colors duration-150 border-none bg-primary text-white hover:enabled:bg-primary-hover disabled:opacity-60 disabled:cursor-not-allowed"
-			>
+			<Button variant="primary" onclick={saveProfile} disabled={saving} loading={saving}>
 				{saving ? 'Saving...' : 'Save'}
-			</button>
+			</Button>
 		</div>
 	</section>
 
@@ -126,26 +119,24 @@
 			<h2 class="text-[13px] font-semibold text-text-muted uppercase tracking-[0.04em] mb-4">
 				Change password
 			</h2>
-			<div class="flex flex-col gap-1 mb-3">
-				<label class="text-xs font-medium text-text-muted">Current password</label>
-				<input class={inputBase} bind:value={currentPassword} type="password" />
+			<div class="mb-3">
+				<Input label="Current password" type="password" bind:value={currentPassword} />
 			</div>
-			<div class="flex flex-col gap-1 mb-3">
-				<label class="text-xs font-medium text-text-muted">New password</label>
-				<input class={inputBase} bind:value={newPassword} type="password" />
+			<div class="mb-3">
+				<Input label="New password" type="password" bind:value={newPassword} />
 			</div>
-			<div class="flex flex-col gap-1 mb-3">
-				<label class="text-xs font-medium text-text-muted">Confirm new password</label>
-				<input class={inputBase} bind:value={confirmPassword} type="password" />
+			<div class="mb-3">
+				<Input label="Confirm new password" type="password" bind:value={confirmPassword} />
 			</div>
 			<div class="flex justify-end mt-2">
-				<button
+				<Button
+					variant="primary"
 					onclick={changePassword}
 					disabled={changingPassword}
-					class="h-9 px-4 rounded-md text-[13px] font-semibold cursor-pointer transition-colors duration-150 border-none bg-primary text-white hover:enabled:bg-primary-hover disabled:opacity-60 disabled:cursor-not-allowed"
+					loading={changingPassword}
 				>
 					{changingPassword ? 'Changing...' : 'Change password'}
-				</button>
+				</Button>
 			</div>
 		</section>
 	{/if}

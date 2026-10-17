@@ -1,6 +1,7 @@
 <script lang="ts">
 	import GlobalNav from '$lib/components/GlobalNav.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import Toaster from '$lib/ui/Toaster.svelte';
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
@@ -28,3 +29,5 @@
 		{@render children()}
 	</div>
 </div>
+
+<Toaster />
