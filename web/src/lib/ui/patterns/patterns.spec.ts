@@ -54,6 +54,25 @@ describe('KeyValueEditor', () => {
 		const key = screen.getByPlaceholderText('key') as HTMLInputElement;
 		expect(key.readOnly).toBe(true);
 	});
+
+	it('flags duplicate keys', async () => {
+		render(KeyValueEditor, { props: { value: { a: '1' } } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Add row' }));
+		const keys = screen.getAllByPlaceholderText('key') as HTMLInputElement[];
+		await fireEvent.input(keys[1], { target: { value: 'a' } });
+		await fireEvent.blur(keys[1]);
+		expect(screen.getByText('Duplicate key "a"')).toBeTruthy();
+	});
+
+	it('splits pasted key=value lines into rows', async () => {
+		render(KeyValueEditor, { props: { value: {} } });
+		const container = screen.getByRole('button', { name: 'Add row' }).parentElement?.parentElement;
+		if (!container) throw new Error('container not found');
+		await fireEvent.paste(container, {
+			clipboardData: { getData: () => 'a=1\nb=2' }
+		});
+		expect(screen.getAllByPlaceholderText('key')).toHaveLength(2);
+	});
 });
 
 describe('DataTable', () => {
@@ -103,5 +122,27 @@ describe('ConfirmDialog', () => {
 		expect(onconfirm).toHaveBeenCalledOnce();
 		expect(await screen.findByText('Server rejected the delete')).toBeTruthy();
 		expect(screen.getByLabelText('Type "orders" to confirm')).toBeTruthy();
+	});
+
+	it('returns focus to the trigger after closing', async () => {
+		const trigger = document.createElement('button');
+		trigger.textContent = 'Open';
+		document.body.appendChild(trigger);
+		trigger.focus();
+		expect(document.activeElement).toBe(trigger);
+
+		render(ConfirmDialog, {
+			props: {
+				open: true,
+				title: 'Delete table',
+				resourceName: 'orders',
+				confirmLabel: 'Delete',
+				onconfirm: async () => {}
+			}
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		expect(document.activeElement).toBe(trigger);
+		trigger.remove();
 	});
 });

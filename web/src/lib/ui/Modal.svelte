@@ -16,13 +16,18 @@
 	} = $props();
 
 	let dialogEl: HTMLDialogElement | undefined = $state();
+	let previouslyFocused: HTMLElement | null = null;
 
 	// The native <dialog> owns the focus trap and Esc handling; this effect only
 	// mirrors the `open` prop onto showModal()/close().
 	$effect(() => {
 		if (!dialogEl) return;
-		if (open && !dialogEl.open) dialogEl.showModal();
-		else if (!open && dialogEl.open) dialogEl.close();
+		if (open && !dialogEl.open) {
+			previouslyFocused = document.activeElement as HTMLElement | null;
+			dialogEl.showModal();
+		} else if (!open && dialogEl.open) {
+			dialogEl.close();
+		}
 	});
 
 	function close() {
@@ -31,6 +36,8 @@
 
 	function handleClose() {
 		open = false;
+		previouslyFocused?.focus();
+		previouslyFocused = null;
 		onclose?.();
 	}
 </script>

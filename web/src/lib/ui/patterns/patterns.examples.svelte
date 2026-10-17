@@ -1,5 +1,9 @@
 <script lang="ts">
+	import CodeBlock from './CodeBlock.svelte';
+	import ConfirmDialog from './ConfirmDialog.svelte';
+	import CopyButton from './CopyButton.svelte';
 	import DataTable from './DataTable.svelte';
+	import DiffView from './DiffView.svelte';
 	import Duration from './Duration.svelte';
 	import EngineBadge from './EngineBadge.svelte';
 	import ErrorPanel from './ErrorPanel.svelte';
@@ -16,6 +20,7 @@
 	let markdown = $state('# Orders\n\nThe table stores **one row per order**.');
 	let filters = $state<Record<string, string | string[] | boolean>>({ status: 'active' });
 	let secretOpen = $state(false);
+	let confirmOpen = $state(false);
 </script>
 
 <div class="space-y-8 p-6">
@@ -77,6 +82,45 @@
 	<section class="space-y-2">
 		<h2 class="text-sm font-semibold">Key/value editor</h2>
 		<KeyValueEditor bind:value={kv} protectedKeys={['region']} />
+	</section>
+
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold">Code / copy / diff</h2>
+		<div class="grid gap-4 lg:grid-cols-2">
+			<CodeBlock code="SELECT * FROM tpch.orders LIMIT 10" language="sql" />
+			<DiffView
+				language="sql"
+				before="SELECT id, total FROM orders"
+				after="SELECT id, total, status FROM orders"
+			/>
+		</div>
+		<div class="flex items-center gap-2 text-xs text-text-muted">
+			<span>bal_example_secret</span>
+			<CopyButton value="bal_example_secret" label="API key" />
+		</div>
+	</section>
+
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold">Confirm dialog</h2>
+		<button
+			type="button"
+			class="text-xs font-semibold text-primary"
+			onclick={() => (confirmOpen = true)}
+		>
+			Delete table…
+		</button>
+		<ConfirmDialog
+			bind:open={confirmOpen}
+			title="Delete table"
+			resourceName="orders"
+			confirmLabel="Delete"
+			typeToConfirm
+			consequences={[
+				'The table is dropped from the engine.',
+				'Saved queries that use it stop working.'
+			]}
+			onconfirm={async () => {}}
+		/>
 	</section>
 
 	<section class="space-y-2">
