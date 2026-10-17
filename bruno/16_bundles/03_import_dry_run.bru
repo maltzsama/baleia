@@ -1,0 +1,38 @@
+meta {
+  name: Import Dry Run
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{bundle_space_id}}/import?mode=dry_run
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "format": "baleia.bundle",
+    "format_version": 1,
+    "baleia_version": "dev",
+    "space": { "slug": "source", "name": "Source" },
+    "items": [
+      { "kind": "folder", "slug": "monthly", "name": "Monthly" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.mode: eq dry_run
+  res.body.ok: eq true
+  res.body.items[0].action: eq CREATE
+}
+
+docs {
+  A dry run reports CREATE/UPDATE/NO_CHANGES/ERROR per item and writes nothing.
+}

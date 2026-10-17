@@ -906,6 +906,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/spaces/{space_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Export a space as a deterministic bundle — viewer
+         * @description Repeated exports of unchanged content are byte-identical: items are ordered by dependency then (kind, slug), and the payload carries no ids, timestamps or secrets.
+         */
+        get: operations["exportSpaceBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/spaces/{space_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a bundle, dry-run or apply — editor
+         * @description Upserts by (kind, slug): CREATE, UPDATE, NO_CHANGES or ERROR per item. Items absent from the bundle are never deleted. apply is all-or-nothing: any ERROR rolls everything back and answers 422.
+         */
+        post: operations["importSpaceBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/targets": {
         parameters: {
             query?: never;
@@ -2947,6 +2993,56 @@ export interface components {
             deleted_at: string;
             version: number;
         };
+        BundleSpace: {
+            slug: string;
+            name: string;
+        };
+        BundleTarget: {
+            engine?: string;
+            catalog?: string;
+            schema?: string | null;
+        };
+        BundleItem: {
+            /** @enum {string} */
+            kind: "folder" | "saved_query" | "semantic_metric";
+            slug: string;
+            parent?: string | null;
+            name?: string;
+            folder?: string | null;
+            sql?: string;
+            target?: components["schemas"]["BundleTarget"];
+            format_version?: number;
+            label?: string;
+            description?: string;
+            certified?: boolean;
+            catalog?: string;
+            namespace?: string[];
+            table?: string;
+            definition?: {
+                [key: string]: unknown;
+            };
+        };
+        Bundle: {
+            format: string;
+            format_version: number;
+            baleia_version?: string;
+            space: components["schemas"]["BundleSpace"];
+            items: components["schemas"]["BundleItem"][];
+        };
+        ImportItem: {
+            kind: string;
+            slug: string;
+            /** @enum {string} */
+            action: "CREATE" | "UPDATE" | "NO_CHANGES" | "ERROR";
+            message?: string;
+            warnings?: string[];
+        };
+        ImportReport: {
+            /** @enum {string} */
+            mode: "dry_run" | "apply";
+            ok: boolean;
+            items: components["schemas"]["ImportItem"][];
+        };
         SavedQuery: {
             /** Format: uuid */
             id: string;
@@ -4855,6 +4951,67 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    exportSpaceBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bundle */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bundle"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    importSpaceBundle: {
+        parameters: {
+            query?: {
+                mode?: "dry_run" | "apply";
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description The per-item report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReport"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listWorkspaceTargets: {

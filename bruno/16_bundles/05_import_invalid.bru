@@ -1,0 +1,38 @@
+meta {
+  name: Import With an Error (422)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{bundle_space_id}}/import?mode=apply
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "format": "baleia.bundle",
+    "format_version": 1,
+    "baleia_version": "dev",
+    "space": { "slug": "source", "name": "Source" },
+    "items": [
+      { "kind": "model", "slug": "nope" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.ok: eq false
+  res.body.items[0].action: eq ERROR
+}
+
+docs {
+  apply is all-or-nothing: any ERROR rolls everything back and answers 422
+  with the same per-item report.
+}

@@ -213,6 +213,8 @@ var operationAccess = map[string]access{
 	"GetSemanticMetricVersion":     checked("GetContentVersion", "contentSpace"),
 	"RestoreSemanticMetricVersion": checked("GetContentVersion", "contentSpace", "ParseMetricSnapshot", "validateSemanticMetric", "RestoreSemanticMetric"),
 	"ListTrash":                    checked("requireWorkspaceAccess", "ListDeletedContent"),
+	"ExportSpaceBundle":            checked("contentSpace", "Export"),
+	"ImportSpaceBundle":            checked("contentSpace", "Import"),
 	// Audit trail (#45): admins see all, anyone else only their own events.
 	"ListAuditEvents":    checked("PrincipalFromContext", "IsAdmin"),
 	"StreamExecution":    {kind: kindStub}, // the real one is the ws route below

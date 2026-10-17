@@ -1356,6 +1356,72 @@ components:
         deleted_at: { type: string, format: date-time }
         version: { type: integer }
 
+    BundleSpace:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+
+    BundleTarget:
+      type: object
+      properties:
+        engine: { type: string }
+        catalog: { type: string }
+        schema: { type: string, nullable: true }
+
+    BundleItem:
+      type: object
+      required: [kind, slug]
+      properties:
+        kind: { type: string, enum: [folder, saved_query, semantic_metric] }
+        slug: { type: string }
+        parent: { type: string, nullable: true }
+        name: { type: string }
+        folder: { type: string, nullable: true }
+        sql: { type: string }
+        target: { $ref: "#/components/schemas/BundleTarget" }
+        format_version: { type: integer }
+        label: { type: string }
+        description: { type: string }
+        certified: { type: boolean }
+        catalog: { type: string }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        definition: { type: object, additionalProperties: true }
+
+    Bundle:
+      type: object
+      required: [format, format_version, space, items]
+      properties:
+        format: { type: string }
+        format_version: { type: integer }
+        baleia_version: { type: string }
+        space: { $ref: "#/components/schemas/BundleSpace" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BundleItem" }
+
+    ImportItem:
+      type: object
+      required: [kind, slug, action]
+      properties:
+        kind: { type: string }
+        slug: { type: string }
+        action: { type: string, enum: [CREATE, UPDATE, NO_CHANGES, ERROR] }
+        message: { type: string }
+        warnings: { type: array, items: { type: string } }
+
+    ImportReport:
+      type: object
+      required: [mode, ok, items]
+      properties:
+        mode: { type: string, enum: [dry_run, apply] }
+        ok: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ImportItem" }
+
     SavedQuery:
       type: object
       required: [id, name, workspace_id, space_id, slug, created_by, sql, created_at]
@@ -2908,6 +2974,69 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/spaces/{space_id}/export:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: space_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Spaces]
+      operationId: exportSpaceBundle
+      summary: "Export a space as a deterministic bundle — viewer"
+      description: >
+        Repeated exports of unchanged content are byte-identical: items are
+        ordered by dependency then (kind, slug), and the payload carries no
+        ids, timestamps or secrets.
+      responses:
+        "200":
+          description: "The bundle"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bundle" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/spaces/{space_id}/import:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: space_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Spaces]
+      operationId: importSpaceBundle
+      summary: "Import a bundle, dry-run or apply — editor"
+      description: >
+        Upserts by (kind, slug): CREATE, UPDATE, NO_CHANGES or ERROR per item.
+        Items absent from the bundle are never deleted. apply is all-or-nothing:
+        any ERROR rolls everything back and answers 422.
+      parameters:
+        - name: mode
+          in: query
+          schema: { type: string, enum: [dry_run, apply], default: dry_run }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: "A baleia.bundle document, decoded with DisallowUnknownFields"
+      responses:
+        "200":
+          description: "The per-item report"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportReport" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/targets:
     parameters:
