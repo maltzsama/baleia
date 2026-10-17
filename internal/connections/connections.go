@@ -100,8 +100,30 @@ type Config struct {
 // Value returns a non-secret value, or "" when unset.
 func (c Config) Value(key string) string { return c.Values[key] }
 
-// Secret returns a secret value, or "" when unset.
-func (c Config) Secret(key string) string { return c.Secrets[key] }
+// Secret returns a secret value resolved for Baleia's own use: an external
+// reference (@baleia-secret[env:…] or @baleia-secret[file:…]) is resolved with
+// Baleia's environment; empty when it cannot be resolved.
+func (c Config) Secret(key string) string {
+	v := c.Secrets[key]
+	if !IsSecretReference(v) {
+		return v
+	}
+	resolved, err := ResolveSecretReference(v)
+	if err != nil {
+		return ""
+	}
+	return resolved
+}
+
+// Reference returns a secret field's raw external reference, or "" when the
+// field holds a literal secret. Binders project it verbatim, so the plugin
+// persists the reference instead of the resolved value (#31).
+func (c Config) Reference(key string) string {
+	if v := c.Secrets[key]; IsSecretReference(v) {
+		return v
+	}
+	return ""
+}
 
 // State is a provider's support level.
 type State string

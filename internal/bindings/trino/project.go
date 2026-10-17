@@ -47,6 +47,28 @@ var protectedPatterns = []string{
 type projection struct {
 	props   map[string]string
 	secrets []string
+	// refs maps a property to the value Baleia resolved for an external secret
+	// reference. The property carries the reference (so the plugin persists it),
+	// while the version hashes the resolved value, matching the plugin's
+	// contract (#31).
+	refs map[string]string
+}
+
+// secretProp sets a secret property from src's secret field. An external
+// reference is emitted verbatim; the resolved value feeds the version only.
+func secretProp(p *projection, prop, field string, src connections.Config) {
+	if ref := src.Reference(field); ref != "" {
+		if p.refs == nil {
+			p.refs = map[string]string{}
+		}
+		p.props[prop] = ref
+		p.refs[prop] = src.Secret(field)
+		return
+	}
+	if v := src.Secret(field); v != "" {
+		p.props[prop] = v
+		p.secrets = append(p.secrets, prop)
+	}
 }
 
 func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, connector string) (projection, error) {
@@ -117,10 +139,9 @@ func icebergREST(uri, warehouse string, src connections.Config) projection {
 			p.props["iceberg.rest-catalog.oauth2.server-uri"] = s
 		}
 		p.secrets = []string{"iceberg.rest-catalog.oauth2.credential"}
-	case src.Secret("token") != "":
+	case src.Reference("token") != "" || src.Secret("token") != "":
 		p.props["iceberg.rest-catalog.security"] = "OAUTH2"
-		p.props["iceberg.rest-catalog.oauth2.token"] = src.Secret("token")
-		p.secrets = []string{"iceberg.rest-catalog.oauth2.token"}
+		secretProp(&p, "iceberg.rest-catalog.oauth2.token", "token", src)
 	default:
 		p.props["iceberg.rest-catalog.security"] = "NONE"
 	}
@@ -201,10 +222,9 @@ func unityProjection(spec bindings.BindingSpec, src connections.Config) (project
 		"iceberg.rest-catalog.vended-credentials-enabled": "true",
 		"fs.s3.enabled":                                   "true",
 	}}
-	if tok := src.Secret("token"); tok != "" {
+	if src.Reference("token") != "" || src.Secret("token") != "" {
 		p.props["iceberg.rest-catalog.security"] = "OAUTH2"
-		p.props["iceberg.rest-catalog.oauth2.token"] = tok
-		p.secrets = append(p.secrets, "iceberg.rest-catalog.oauth2.token")
+		secretProp(&p, "iceberg.rest-catalog.oauth2.token", "token", src)
 	}
 	return p, nil
 }
@@ -252,10 +272,7 @@ func s3Storage(p *projection, src connections.Config) {
 	if k := src.Value("storage.access_key"); k != "" {
 		p.props["s3.aws-access-key"] = k
 	}
-	if s := src.Secret("storage.secret_key"); s != "" {
-		p.props["s3.aws-secret-key"] = s
-		p.secrets = append(p.secrets, "s3.aws-secret-key")
-	}
+	secretProp(p, "s3.aws-secret-key", "storage.secret_key", src)
 }
 
 // glueProjection binds an AWS Glue Data Catalog connection as an Iceberg,
@@ -280,10 +297,7 @@ func glueProjection(connector string, src connections.Config) (projection, error
 	if ak := src.Value("access_key"); ak != "" {
 		p.props["hive.metastore.glue.aws-access-key"] = ak
 	}
-	if sk := src.Secret("secret_key"); sk != "" {
-		p.props["hive.metastore.glue.aws-secret-key"] = sk
-		p.secrets = append(p.secrets, "hive.metastore.glue.aws-secret-key")
-	}
+	secretProp(&p, "hive.metastore.glue.aws-secret-key", "secret_key", src)
 	if ep := src.Value("endpoint"); ep != "" {
 		p.props["hive.metastore.glue.endpoint"] = ep
 	}
@@ -314,10 +328,7 @@ func sqlCredentials(p *projection, src connections.Config) {
 	if u := src.Value("username"); u != "" {
 		p.props["connection-user"] = u
 	}
-	if pw := src.Secret("password"); pw != "" {
-		p.props["connection-password"] = pw
-		p.secrets = append(p.secrets, "connection-password")
-	}
+	secretProp(p, "connection-password", "password", src)
 }
 
 // postgresProjection builds the JDBC URL from validated fields; users never
