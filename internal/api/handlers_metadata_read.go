@@ -251,6 +251,10 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 			d = dd
 			if q, err := d.Qualify(b.EngineCatalogName, t.Namespace, t.Name); err == nil {
 				out.QualifiedName = &q
+				// The preview is rendered by the binding's dialect so the UI
+				// never has to hard-code LIMIT/TOP/FETCH FIRST.
+				preview := d.PreviewSQL(q, 100)
+				out.PreviewSql = &preview
 			}
 		}
 	}

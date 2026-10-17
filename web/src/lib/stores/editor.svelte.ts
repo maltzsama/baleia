@@ -36,10 +36,16 @@ function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
 	};
 }
 
+export type EditorInsert = { tabId: string; text: string; seq: number };
+
 function createEditorStore() {
 	const tabs = $state<EditorTab[]>([emptyTab('1')]);
 	let activeId = $state('1');
 	let counter = 1;
+	// A pending insert is a typed store channel, never a window event: the
+	// editor applies it at the cursor and bumps `seq` (FD rule).
+	let insertSeq = 0;
+	let pendingInsert = $state<EditorInsert | null>(null);
 
 	const activeTab = $derived(tabs.find((tab) => tab.id === activeId) ?? tabs[0]);
 
@@ -84,6 +90,12 @@ function createEditorStore() {
 		if (tab) tab.sql = sql;
 	}
 
+	/** Asks the active tab's editor to insert text at the cursor. */
+	function insert(text: string) {
+		if (!text) return;
+		pendingInsert = { tabId: activeId, text, seq: ++insertSeq };
+	}
+
 	return {
 		get tabs() {
 			return tabs;
@@ -94,12 +106,16 @@ function createEditorStore() {
 		get activeTab() {
 			return activeTab;
 		},
+		get pendingInsert() {
+			return pendingInsert;
+		},
 		activate,
 		addTab,
 		closeTab,
 		openSavedQuery,
 		markSaved,
-		updateSql
+		updateSql,
+		insert
 	};
 }
 

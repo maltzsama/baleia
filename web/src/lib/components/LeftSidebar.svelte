@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DataSourceTree from './DataSourceTree.svelte';
 	import SavedQueriesList from './SavedQueriesList.svelte';
+	import type { TableRef } from '$lib/metadata/client';
 
 	let {
 		collapsed = $bindable(false),
@@ -9,11 +10,10 @@
 	}: {
 		collapsed?: boolean;
 		activeTab?: 'datasources' | 'queries';
-		onSelectTable?: (
-			t: { connectionId: string; catalog: string; namespace: string; table: string } | null
-		) => void;
+		onSelectTable?: (t: TableRef | null) => void;
 	} = $props();
 	let search = $state('');
+	let tree = $state<{ handleSearchKey: (event: KeyboardEvent) => void } | null>(null);
 </script>
 
 <aside
@@ -88,15 +88,17 @@
 					>
 					<input
 						type="text"
-						placeholder="Search..."
+						placeholder="Search tables and columns..."
 						bind:value={search}
+						onkeydown={(event) => tree?.handleSearchKey(event)}
+						aria-label="Search tables and columns"
 						class="border-none bg-transparent outline-none text-xs text-text-main w-full placeholder:text-text-muted"
 					/>
 				</div>
 			</div>
 
 			{#if activeTab === 'datasources'}
-				<DataSourceTree {onSelectTable} />
+				<DataSourceTree bind:this={tree} bind:search {onSelectTable} />
 			{:else}
 				<SavedQueriesList />
 			{/if}

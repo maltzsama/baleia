@@ -163,6 +163,22 @@
 		}
 	});
 
+	// "Insert name in editor" (#23) writes through the typed store, never a
+	// window event: apply the pending insert at the cursor of the active tab.
+	let appliedInsertSeq = 0;
+	$effect(() => {
+		const pending = editor.pendingInsert;
+		if (!editorView || !pending || pending.seq === appliedInsertSeq) return;
+		appliedInsertSeq = pending.seq;
+		if (pending.tabId !== editor.activeId) return;
+		const { from, to } = editorView.state.selection.main;
+		editorView.dispatch({
+			changes: { from, to, insert: pending.text },
+			selection: { anchor: from + pending.text.length }
+		});
+		editorView.focus();
+	});
+
 	async function runQuery() {
 		const sql = editorView.state.doc.toString().trim();
 		if (!sql) return;

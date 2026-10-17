@@ -9,6 +9,10 @@ type SpaceMember = components['schemas']['SpaceMember'];
 type QueryFolder = components['schemas']['QueryFolder'];
 type Engine = components['schemas']['Engine'];
 type Me = components['schemas']['Me'];
+type MetadataCatalog = components['schemas']['MetadataCatalog'];
+type MetadataCatalogBinding = components['schemas']['MetadataCatalogBinding'];
+type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
+type MetadataSearchResult = components['schemas']['MetadataSearchResult'];
 
 export function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 	return {
@@ -120,6 +124,88 @@ export function makeMe(overrides: Partial<Me> = {}): Me {
 		],
 		...overrides
 	} as Me;
+}
+
+export function makeMetadataBinding(
+	overrides: Partial<MetadataCatalogBinding> = {}
+): MetadataCatalogBinding {
+	return {
+		binding_id: '00000000-0000-0000-0000-0000000000b1',
+		engine_id: '00000000-0000-0000-0000-000000000004',
+		engine_name: 'trino',
+		engine_kind: 'trino',
+		engine_catalog_name: 'lake_t',
+		mode: 'adopted',
+		status: 'active',
+		...overrides
+	};
+}
+
+export function makeMetadataCatalog(overrides: Partial<MetadataCatalog> = {}): MetadataCatalog {
+	return {
+		id: '00000000-0000-0000-0000-0000000000c1',
+		name: 'lake',
+		origin: 'native',
+		provider_kind: 'polaris',
+		metadata_synced_at: '2026-01-01T00:00:00Z',
+		metadata_sync_status: 'finished',
+		bindings: [makeMetadataBinding()],
+		...overrides
+	};
+}
+
+export function makeTableDetail(overrides: Partial<MetadataTableDetail> = {}): MetadataTableDetail {
+	return {
+		freshness: { metadata_synced_at: '2026-01-01T00:00:00Z' },
+		id: '00000000-0000-0000-0000-0000000000d1',
+		catalog_id: '00000000-0000-0000-0000-0000000000c1',
+		namespace: ['sales'],
+		name: 'orders',
+		kind: 'table',
+		properties: { format: 'iceberg', location: 's3://lake/orders' },
+		last_changed_at: '2026-01-01T00:00:00Z',
+		removed_at: null,
+		binding_id: '00000000-0000-0000-0000-0000000000b1',
+		qualified_name: '"lake_t"."sales"."orders"',
+		preview_sql: 'SELECT * FROM "lake_t"."sales"."orders" LIMIT 100',
+		columns: [
+			{
+				ordinal: 1,
+				name: 'id',
+				native_type: 'long',
+				type_system: 'iceberg',
+				display_type: 'bigint',
+				nullable: false
+			},
+			{
+				ordinal: 2,
+				name: 'order_note',
+				native_type: 'string',
+				type_system: 'iceberg',
+				display_type: 'varchar',
+				nullable: true,
+				comment: 'Free text'
+			}
+		],
+		...overrides
+	};
+}
+
+export function makeSearchResult(
+	overrides: Partial<MetadataSearchResult> = {}
+): MetadataSearchResult {
+	return {
+		kind: 'table',
+		table_id: '00000000-0000-0000-0000-0000000000d1',
+		catalog_id: '00000000-0000-0000-0000-0000000000c1',
+		namespace: ['sales'],
+		table: 'orders',
+		column: null,
+		native_type: null,
+		score: 0.9,
+		metadata_synced_at: '2026-01-01T00:00:00Z',
+		...overrides
+	};
 }
 
 /** asViewer narrows a resource's allowed_actions to read-only. */

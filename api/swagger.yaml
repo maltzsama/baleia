@@ -908,6 +908,7 @@ components:
         removed_at: { type: string, format: date-time, nullable: true, description: "Set when the source no longer has the table" }
         binding_id: { type: string, format: uuid, nullable: true, description: "The binding display_type and qualified_name are rendered for; null when the catalog has none" }
         qualified_name: { type: string, nullable: true, description: "The table's name in SQL on that binding's engine" }
+        preview_sql: { type: string, nullable: true, description: "A SELECT that previews the table on that binding's engine (the dialect's PreviewSQL, 100 rows); null without a binding or dialect" }
         doc: { $ref: "#/components/schemas/SemanticDoc" }
         columns:
           type: array
