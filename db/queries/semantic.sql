@@ -141,3 +141,11 @@ RETURNING *;
 -- name: DeleteSemanticMetric :execrows
 DELETE FROM semantic_metrics
 WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid;
+
+-- name: SetSemanticMetricCertification :one
+UPDATE semantic_metrics
+SET certified = @certified::boolean,
+    certified_by = CASE WHEN @certified::boolean THEN @actor::uuid ELSE NULL END,
+    certified_at = CASE WHEN @certified::boolean THEN now() ELSE NULL END
+WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid
+RETURNING *;

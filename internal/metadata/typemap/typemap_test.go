@@ -51,3 +51,27 @@ func TestDisplay(t *testing.T) {
 		t.Error("no mapping must not pretend")
 	}
 }
+
+func TestLogical(t *testing.T) {
+	cases := []struct {
+		system, native, want string
+	}{
+		{"postgresql", "numeric(10,2)", "decimal"},
+		{"postgresql", "timestamp with time zone", "timestamptz"},
+		{"postgresql", "bigint", "int64"},
+		{"iceberg", "timestamptz", "timestamptz"},
+		{"iceberg", "varchar(20)", "string"},
+		{"mysql", "tinyint(1)", "boolean"},
+		{"mysql", "tinyint", "int64"},
+		{"tsql", "nvarchar(max)", "string"},
+		{"sqlite", "BLOB", "binary"},
+		{"trino", "json", "json"},
+		{"trino", "double", "float64"},
+		{"trino", "weird_type", "other"},
+	}
+	for _, tc := range cases {
+		if got := Logical(tc.system, tc.native); got != tc.want {
+			t.Errorf("Logical(%q, %q) = %q, want %q", tc.system, tc.native, got, tc.want)
+		}
+	}
+}

@@ -1135,6 +1135,9 @@ components:
         native_type: { type: string, description: "The type as the source reports it" }
         type_system: { type: string, description: "iceberg, postgresql, mysql, tsql, oracle, sqlite, clickhouse, trino, …" }
         display_type: { type: string, nullable: true, description: "native_type in the binding's engine dialect, when Baleia can map it" }
+        logical_type:
+          type: string
+          description: "Portable semantic type (#115): boolean, int64, decimal, float64, string, date, timestamp, timestamptz, binary, json or other"
         nullable: { type: boolean, nullable: true }
         comment: { type: string, nullable: true }
         doc: { $ref: "#/components/schemas/SemanticDoc" }
@@ -1241,7 +1244,33 @@ components:
         owner_user_id: { type: string, format: uuid, nullable: true }
         updated_by: { type: string, format: uuid }
         updated_at: { type: string, format: date-time }
+        certified_by: { type: string, format: uuid, nullable: true }
+        certified_at: { type: string, format: date-time, nullable: true }
+        allowed_actions: { type: array, items: { type: string }, readOnly: true }
         version: { type: integer, description: "Latest content version (#34); send it as expected_version on PATCH" }
+
+    SemanticMetricRenderRequest:
+      type: object
+      required: [catalog_id, namespace, table, definition]
+      properties:
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        definition: { type: object, additionalProperties: true }
+        binding_id: { type: string, format: uuid, nullable: true }
+        grain: { type: string, nullable: true }
+
+    SemanticMetricRenderResult:
+      type: object
+      required: [sql]
+      properties:
+        sql: { type: string }
+
+    SemanticMetricValidateResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
 
     SemanticMetricCreate:
       type: object
@@ -1251,6 +1280,7 @@ components:
         label: { type: string }
         description: { type: string }
         certified: { type: boolean }
+        space_id: { type: string, format: uuid, nullable: true, description: "Omitted: the workspace's default space" }
         catalog_id: { type: string, format: uuid }
         namespace: { type: array, items: { type: string } }
         table: { type: string }
@@ -3178,6 +3208,22 @@ paths:
       tags: [Semantic]
       operationId: listSemanticMetrics
       summary: "Metrics of the workspace — workspace members"
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: space_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: catalog_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: certified
+          in: query
+          schema: { type: boolean }
+        - name: owner_id
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         "200":
           description: "Metrics, ordered by label"
@@ -3212,6 +3258,52 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/metrics/render:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Semantic]
+      operationId: renderSemanticMetric
+      summary: "Render a metric definition to SQL — no engine call"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticMetricRenderRequest" }
+      responses:
+        "200":
+          description: "SQL"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticMetricRenderResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/metrics/validate:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Semantic]
+      operationId: validateSemanticMetricDefinition
+      summary: "Probe a metric definition against its engine — caller identity, read-only"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticMetricRenderRequest" }
+      responses:
+        "200":
+          description: "Valid"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticMetricValidateResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/semantic/metrics/{metric_id}:

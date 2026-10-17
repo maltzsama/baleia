@@ -99,7 +99,7 @@ func (q *Queries) GetSavedQueryForUpdate(ctx context.Context, arg GetSavedQueryF
 }
 
 const getSemanticMetricForUpdate = `-- name: GetSemanticMetricForUpdate :one
-SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id FROM semantic_metrics WHERE id = $1::uuid AND workspace_id = $2::uuid FOR UPDATE
+SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id, certified_by, certified_at FROM semantic_metrics WHERE id = $1::uuid AND workspace_id = $2::uuid FOR UPDATE
 `
 
 type GetSemanticMetricForUpdateParams struct {
@@ -127,6 +127,8 @@ func (q *Queries) GetSemanticMetricForUpdate(ctx context.Context, arg GetSemanti
 		&i.UpdatedBy,
 		&i.UpdatedAt,
 		&i.SpaceID,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
 	)
 	return i, err
 }
@@ -467,7 +469,7 @@ VALUES (
     $10::text, $11::uuid, $12::jsonb,
     $13::int, $14::uuid, $15::uuid, now()
 )
-RETURNING id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id
+RETURNING id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id, certified_by, certified_at
 `
 
 type RestoreSemanticMetricParams struct {
@@ -524,6 +526,8 @@ func (q *Queries) RestoreSemanticMetric(ctx context.Context, arg RestoreSemantic
 		&i.UpdatedBy,
 		&i.UpdatedAt,
 		&i.SpaceID,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
 	)
 	return i, err
 }

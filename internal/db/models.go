@@ -409,6 +409,8 @@ type SemanticMetric struct {
 	UpdatedBy     pgtype.UUID        `json:"updated_by"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	SpaceID       pgtype.UUID        `json:"space_id"`
+	CertifiedBy   pgtype.UUID        `json:"certified_by"`
+	CertifiedAt   pgtype.Timestamptz `json:"certified_at"`
 }
 
 type Space struct {

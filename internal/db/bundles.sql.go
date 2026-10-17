@@ -158,7 +158,7 @@ func (q *Queries) ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]
 }
 
 const listSpaceMetrics = `-- name: ListSpaceMetrics :many
-SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id FROM semantic_metrics WHERE space_id = $1::uuid ORDER BY slug
+SELECT id, workspace_id, slug, label, description, certified, catalog_id, namespace, table_name, binding_id, definition, format_version, owner_user_id, updated_by, updated_at, space_id, certified_by, certified_at FROM semantic_metrics WHERE space_id = $1::uuid ORDER BY slug
 `
 
 func (q *Queries) ListSpaceMetrics(ctx context.Context, spaceID pgtype.UUID) ([]SemanticMetric, error) {
@@ -187,6 +187,8 @@ func (q *Queries) ListSpaceMetrics(ctx context.Context, spaceID pgtype.UUID) ([]
 			&i.UpdatedBy,
 			&i.UpdatedAt,
 			&i.SpaceID,
+			&i.CertifiedBy,
+			&i.CertifiedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -383,6 +383,7 @@ type Querier interface {
 	// context for history and carries no secret.
 	SetExecutionTarget(ctx context.Context, arg SetExecutionTargetParams) error
 	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
+	SetSemanticMetricCertification(ctx context.Context, arg SetSemanticMetricCertificationParams) (SemanticMetric, error)
 	SetSpaceMember(ctx context.Context, arg SetSpaceMemberParams) (SpaceMember, error)
 	// Persists the engine's handle of a running statement as soon as it is known,
 	// so the API can cancel it from another process.

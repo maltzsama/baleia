@@ -1784,7 +1784,10 @@ type MetadataColumn struct {
 	// DisplayType native_type in the binding's engine dialect, when Baleia can map it
 	DisplayType *string      `json:"display_type"`
 	Doc         *SemanticDoc `json:"doc,omitempty"`
-	Name        string       `json:"name"`
+
+	// LogicalType Portable semantic type (#115): boolean, int64, decimal, float64, string, date, timestamp, timestamptz, binary, json or other
+	LogicalType *string `json:"logical_type,omitempty"`
+	Name        string  `json:"name"`
 
 	// NativeType The type as the source reports it
 	NativeType string `json:"native_type"`
@@ -2282,9 +2285,12 @@ type SemanticDocUpsert struct {
 
 // SemanticMetric defines model for SemanticMetric.
 type SemanticMetric struct {
-	BindingId *openapi_types.UUID `json:"binding_id"`
-	CatalogId openapi_types.UUID  `json:"catalog_id"`
-	Certified bool                `json:"certified"`
+	AllowedActions *[]string           `json:"allowed_actions,omitempty"`
+	BindingId      *openapi_types.UUID `json:"binding_id"`
+	CatalogId      openapi_types.UUID  `json:"catalog_id"`
+	Certified      bool                `json:"certified"`
+	CertifiedAt    *time.Time          `json:"certified_at"`
+	CertifiedBy    *openapi_types.UUID `json:"certified_by"`
 
 	// Definition SimpleMetricV1: type, aggregation, column, filters, time_column, time_grains, format and custom_sql. Validated with DisallowUnknownFields.
 	Definition    map[string]interface{} `json:"definition"`
@@ -2317,7 +2323,25 @@ type SemanticMetricCreate struct {
 	Namespace   []string               `json:"namespace"`
 	OwnerUserId *openapi_types.UUID    `json:"owner_user_id"`
 	Slug        string                 `json:"slug"`
-	Table       string                 `json:"table"`
+
+	// SpaceId Omitted: the workspace's default space
+	SpaceId *openapi_types.UUID `json:"space_id"`
+	Table   string              `json:"table"`
+}
+
+// SemanticMetricRenderRequest defines model for SemanticMetricRenderRequest.
+type SemanticMetricRenderRequest struct {
+	BindingId  *openapi_types.UUID    `json:"binding_id"`
+	CatalogId  openapi_types.UUID     `json:"catalog_id"`
+	Definition map[string]interface{} `json:"definition"`
+	Grain      *string                `json:"grain"`
+	Namespace  []string               `json:"namespace"`
+	Table      string                 `json:"table"`
+}
+
+// SemanticMetricRenderResult defines model for SemanticMetricRenderResult.
+type SemanticMetricRenderResult struct {
+	Sql string `json:"sql"`
 }
 
 // SemanticMetricSQL defines model for SemanticMetricSQL.
@@ -2342,6 +2366,11 @@ type SemanticMetricUpdate struct {
 	OwnerUserId     *openapi_types.UUID `json:"owner_user_id"`
 	Slug            *string             `json:"slug,omitempty"`
 	Table           *string             `json:"table,omitempty"`
+}
+
+// SemanticMetricValidateResult defines model for SemanticMetricValidateResult.
+type SemanticMetricValidateResult struct {
+	Ok bool `json:"ok"`
 }
 
 // SetSpaceMemberRequest defines model for SetSpaceMemberRequest.
@@ -3103,6 +3132,15 @@ type SearchSemanticDocsParams struct {
 	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListSemanticMetricsParams defines parameters for ListSemanticMetrics.
+type ListSemanticMetricsParams struct {
+	Q         *string             `form:"q,omitempty" json:"q,omitempty"`
+	SpaceId   *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
+	CatalogId *openapi_types.UUID `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
+	Certified *bool               `form:"certified,omitempty" json:"certified,omitempty"`
+	OwnerId   *openapi_types.UUID `form:"owner_id,omitempty" json:"owner_id,omitempty"`
+}
+
 // GetSemanticMetricSqlParams defines parameters for GetSemanticMetricSql.
 type GetSemanticMetricSqlParams struct {
 	// BindingId Defaults to the metric's binding, else the catalog's first enabled binding
@@ -3284,6 +3322,12 @@ type UpsertSemanticDocJSONRequestBody = SemanticDocUpsert
 
 // CreateSemanticMetricJSONRequestBody defines body for CreateSemanticMetric for application/json ContentType.
 type CreateSemanticMetricJSONRequestBody = SemanticMetricCreate
+
+// RenderSemanticMetricJSONRequestBody defines body for RenderSemanticMetric for application/json ContentType.
+type RenderSemanticMetricJSONRequestBody = SemanticMetricRenderRequest
+
+// ValidateSemanticMetricDefinitionJSONRequestBody defines body for ValidateSemanticMetricDefinition for application/json ContentType.
+type ValidateSemanticMetricDefinitionJSONRequestBody = SemanticMetricRenderRequest
 
 // UpdateSemanticMetricJSONRequestBody defines body for UpdateSemanticMetric for application/json ContentType.
 type UpdateSemanticMetricJSONRequestBody = SemanticMetricUpdate
