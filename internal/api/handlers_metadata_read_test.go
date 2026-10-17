@@ -299,6 +299,9 @@ func TestMetadataTable_DisplayForBinding(t *testing.T) {
 	if tb.QualifiedName == nil || *tb.QualifiedName != `"lake_t"."sales"."orders"` || tb.BindingId == nil || *tb.BindingId != f.binding {
 		t.Fatalf("qualified name %v binding %v", tb.QualifiedName, tb.BindingId)
 	}
+	if tb.PreviewSql == nil || *tb.PreviewSql != `SELECT * FROM "lake_t"."sales"."orders" LIMIT 100` {
+		t.Fatalf("preview sql %v", tb.PreviewSql)
+	}
 	if len(tb.Columns) != 3 || *tb.Columns[0].DisplayType != "bigint" || *tb.Columns[1].DisplayType != "array(varchar)" || tb.Columns[1].NativeType != "list<string>" {
 		t.Fatalf("columns = %+v", tb.Columns)
 	}

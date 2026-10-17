@@ -1,272 +1,549 @@
 <script lang="ts">
-	/* eslint-disable no-restricted-syntax -- #23 rewrites this legacy file */
-	import { onMount } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
-	import { apiFetch } from '$lib/api/client';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
-
-	type CatalogAccess = {
-		connection_id: string;
-		connection_name: string;
-		connection_type: string;
-		catalog_name: string;
-	};
+	import {
+		loadCatalogs,
+		loadNamespaces,
+		loadTables,
+		searchMetadata,
+		type MetadataCatalog,
+		type MetadataFreshness,
+		type MetadataSearchResult,
+		type MetadataTablePage,
+		type MetadataTableSummary,
+		type TableRef
+	} from '$lib/metadata/client';
+	import EmptyState from '$lib/ui/EmptyState.svelte';
+	import ErrorState from '$lib/ui/ErrorState.svelte';
+	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
 
 	let {
-		onSelectTable
+		onSelectTable,
+		search = $bindable('')
 	}: {
-		onSelectTable?: (
-			t: { connectionId: string; catalog: string; namespace: string; table: string } | null
-		) => void;
+		onSelectTable?: (t: TableRef | null) => void;
+		search?: string;
 	} = $props();
 
-	let catalogs = $state<CatalogAccess[]>([]);
+	const workspaceId = $derived(workspaceStore.current?.id ?? '');
+
+	type View = 'catalog' | 'engine';
+	let view = $state<View>('catalog');
+
+	type NamespaceNode = {
+		status: 'loading' | 'ready' | 'error';
+		error: string;
+		children: { path: string[] }[];
+		tables: MetadataTableSummary[];
+		nextCursor: string | null;
+		tablesLoading: boolean;
+		tablesError: string;
+		freshness: MetadataFreshness | null;
+	};
+
+	function emptyNode(): NamespaceNode {
+		return {
+			status: 'loading',
+			error: '',
+			children: [],
+			tables: [],
+			nextCursor: null,
+			tablesLoading: false,
+			tablesError: '',
+			freshness: null
+		};
+	}
+
+	let catalogs = $state<MetadataCatalog[]>([]);
 	let loading = $state(true);
-	let error = $state('');
+	let loadError = $state('');
 
-	let expandedCatalogs = new SvelteSet<string>();
-	let expandedNamespaces = new SvelteSet<string>();
-	let namespaceData = $state<Record<string, string[]>>({});
-	let tableData = $state<Record<string, string[]>>({});
-	let tableLoading = $state<Record<string, boolean>>({});
+	// Every loaded node keyed by rendered ref + namespace path. The ref is the
+	// catalog id in "by catalog" and `<engine>:<catalog>` in "by engine", so the
+	// same catalog under two engines expands independently.
+	let nodes = $state<Record<string, NamespaceNode>>({});
+	const expanded = new SvelteSet<string>();
+	const inflight = new SvelteMap<string, Promise<void>>();
 
-	let selectedTable = $state<{
-		connectionId: string;
-		catalog: string;
-		namespace: string;
-		table: string;
-	} | null>(null);
+	let selectedTableId = $state('');
 
-	function catalogKey(cat: CatalogAccess): string {
-		return `${cat.connection_id}:${cat.catalog_name}`;
+	function nodeKey(refKey: string, path: string[]): string {
+		return `${refKey}|${path.join('\u0000')}`;
 	}
 
-	function namespaceKey(cat: CatalogAccess, ns: string): string {
-		return `${catalogKey(cat)}:${ns}`;
+	function resetTree() {
+		catalogs = [];
+		nodes = {};
+		expanded.clear();
+		inflight.clear();
+		selectedTableId = '';
+		searchResults = [];
+		searchError = '';
+		searchLoading = false;
+		activeResult = 0;
 	}
 
-	function nsApiPath(cat: CatalogAccess): string {
-		return `/connections/${cat.connection_id}/catalogs/${cat.catalog_name}/namespaces`;
+	async function loadRoots(wid: string) {
+		resetTree();
+		if (!wid) {
+			loading = false;
+			return;
+		}
+		loading = true;
+		loadError = '';
+		try {
+			catalogs = await loadCatalogs(wid);
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	}
-
-	function tablesApiPath(cat: CatalogAccess, ns: string): string {
-		return `${nsApiPath(cat)}/${ns}/tables`;
-	}
-
-	onMount(() => {
-		loadWorkspaceCatalogs();
-	});
 
 	$effect(() => {
-		if (workspaceStore.current) loadWorkspaceCatalogs();
+		void loadRoots(workspaceId);
 	});
 
-	async function loadWorkspaceCatalogs() {
-		if (!workspaceStore.current) return;
-		loading = true;
-		error = '';
+	function loadNode(node: NamespaceNode, catalog: MetadataCatalog, path: string[]): Promise<void> {
+		const wid = workspaceId;
+		node.status = 'loading';
+		node.error = '';
+		return loadNamespaces(wid, catalog.id, path).then(async (list) => {
+			// Only deeper paths are children: a self-referential row would make
+			// the recursive tree loop forever.
+			node.children = list.items
+				.map((item) => ({ path: item.path }))
+				.filter((item) => item.path.length > path.length);
+			node.freshness = list.freshness;
+			// A root with namespaces has no tables of its own; an empty root
+			// (SQLite) lists its tables without a namespace.
+			if (path.length > 0 || node.children.length === 0) {
+				const page = await loadTables(wid, catalog.id, path);
+				node.tables = page.items;
+				node.nextCursor = page.next_cursor ?? null;
+				node.freshness = page.freshness;
+			}
+			node.status = 'ready';
+		});
+	}
+
+	function ensureLoaded(refKey: string, catalog: MetadataCatalog, path: string[]): Promise<void> {
+		const key = nodeKey(refKey, path);
+		const running = inflight.get(key);
+		if (running) return running;
+		if (!nodes[key]) nodes[key] = emptyNode();
+		// Read through the state proxy: the assignment expression returns the
+		// raw object, whose mutations would not be reactive.
+		const node = nodes[key];
+		if (node.status === 'ready') return Promise.resolve();
+		const pending = loadNode(node, catalog, path)
+			.catch((e) => {
+				node.status = 'error';
+				node.error = e instanceof Error ? e.message : String(e);
+			})
+			.finally(() => inflight.delete(key));
+		inflight.set(key, pending);
+		return pending;
+	}
+
+	function toggleNode(refKey: string, catalog: MetadataCatalog, path: string[]) {
+		const key = nodeKey(refKey, path);
+		if (expanded.has(key)) {
+			expanded.delete(key);
+			return;
+		}
+		expanded.add(key);
+		void ensureLoaded(refKey, catalog, path);
+	}
+
+	async function loadMoreTables(refKey: string, catalog: MetadataCatalog, path: string[]) {
+		const node = nodes[nodeKey(refKey, path)];
+		if (!node || !node.nextCursor || node.tablesLoading) return;
+		node.tablesLoading = true;
+		node.tablesError = '';
 		try {
-			const res = await apiFetch(`/workspaces/${workspaceStore.current.id}/catalogs`);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			catalogs = await res.json();
+			const page: MetadataTablePage = await loadTables(
+				workspaceId,
+				catalog.id,
+				path,
+				node.nextCursor
+			);
+			node.tables = [...node.tables, ...page.items];
+			node.nextCursor = page.next_cursor ?? null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			node.tablesError = e instanceof Error ? e.message : String(e);
+		} finally {
+			node.tablesLoading = false;
 		}
-		loading = false;
 	}
 
-	async function toggleNamespaces(cat: CatalogAccess, ns: string) {
-		const key = namespaceKey(cat, ns);
-		if (expandedNamespaces.has(key)) {
-			expandedNamespaces.delete(key);
-		} else {
-			expandedNamespaces.add(key);
-			if (!tableData[key]) {
-				tableLoading[key] = true;
-				try {
-					const res = await apiFetch(tablesApiPath(cat, ns));
-					if (res.ok) {
-						const tables = await res.json();
-						tableData[key] = (tables as { name?: string }[]).map((t) => t.name || '?');
-					}
-				} catch {
-					tableData[key] = [];
-				}
-				tableLoading[key] = false;
+	function selectTable(catalog: MetadataCatalog, path: string[], table: MetadataTableSummary) {
+		selectedTableId = table.id;
+		onSelectTable?.({
+			tableId: table.id,
+			catalogId: catalog.id,
+			catalogName: catalog.name,
+			namespace: path,
+			tableName: table.name,
+			bindings: catalog.bindings
+		});
+	}
+
+	// ── Search ───────────────────────────────────────────────────────────
+	let searchResults = $state<MetadataSearchResult[]>([]);
+	let searchLoading = $state(false);
+	let searchError = $state('');
+	let activeResult = $state(0);
+	let retryTick = $state(0);
+	let searchSeq = 0;
+	const searchActive = $derived(search.trim().length >= 2);
+
+	$effect(() => {
+		const q = search.trim();
+		const wid = workspaceId;
+		// Retry is driven by a tick so re-submitting the same query re-runs it.
+		void retryTick;
+
+		if (q.length < 2 || !wid) {
+			searchResults = [];
+			searchError = '';
+			searchLoading = false;
+			return;
+		}
+
+		const controller = new AbortController();
+		searchLoading = true;
+		searchError = '';
+		activeResult = 0;
+		const timer = setTimeout(async () => {
+			const seq = ++searchSeq;
+			try {
+				const results = await searchMetadata(wid, q, {
+					kind: 'all',
+					limit: 50,
+					signal: controller.signal
+				});
+				if (seq !== searchSeq) return;
+				searchResults = results;
+			} catch (e) {
+				if (seq !== searchSeq || controller.signal.aborted) return;
+				searchResults = [];
+				searchError = e instanceof Error ? e.message : String(e);
+			} finally {
+				if (seq === searchSeq) searchLoading = false;
 			}
-		}
-	}
+		}, 250);
 
-	async function toggleNamespaceList(cat: CatalogAccess) {
-		const key = catalogKey(cat);
-		if (expandedCatalogs.has(`ns-${key}`)) {
-			expandedCatalogs.delete(`ns-${key}`);
-		} else {
-			expandedCatalogs.add(`ns-${key}`);
-			if (!namespaceData[key]) {
-				try {
-					const res = await apiFetch(nsApiPath(cat));
-					if (res.ok) {
-						const nss = (await res.json()) as string[][];
-						namespaceData[key] = nss.map((ns) => ns.join('.'));
-					}
-				} catch {
-					namespaceData[key] = [];
-				}
-			}
-		}
-	}
-
-	function selectTable(cat: CatalogAccess, ns: string, table: string) {
-		selectedTable = {
-			connectionId: cat.connection_id,
-			catalog: cat.catalog_name,
-			namespace: ns,
-			table
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
 		};
-		onSelectTable?.(selectedTable);
-	}
+	});
 
-	function connColor(type: string) {
-		switch (type) {
-			case 'postgresql':
-				return '#3b82f6';
-			case 'mysql':
-				return '#f59e0b';
-			case 'polaris':
-			case 'nessie':
-			case 'iceberg':
-				return '#7e22ce';
-			default:
-				return '#94a3b8';
+	const tableResults = $derived(searchResults.filter((r) => r.kind === 'table'));
+	const columnResults = $derived(searchResults.filter((r) => r.kind === 'column'));
+	const flatResults = $derived([...tableResults, ...columnResults]);
+
+	/** Keyboard navigation from the sidebar search input (FD11). */
+	export function handleSearchKey(event: KeyboardEvent) {
+		if (!searchActive) return;
+		if (event.key === 'ArrowDown') {
+			event.preventDefault();
+			activeResult = Math.min(activeResult + 1, flatResults.length - 1);
+		} else if (event.key === 'ArrowUp') {
+			event.preventDefault();
+			activeResult = Math.max(activeResult - 1, 0);
+		} else if (event.key === 'Enter') {
+			event.preventDefault();
+			const hit = flatResults[activeResult];
+			if (hit) void reveal(hit);
 		}
 	}
+
+	/** Expands the tree to a search hit and selects it. */
+	async function reveal(hit: MetadataSearchResult) {
+		view = 'catalog';
+		const catalog = catalogs.find((c) => c.id === hit.catalog_id);
+		if (!catalog) return;
+		const refKey = catalog.id;
+		expanded.add(nodeKey(refKey, []));
+		await ensureLoaded(refKey, catalog, []);
+		for (let depth = 1; depth <= hit.namespace.length; depth++) {
+			const path = hit.namespace.slice(0, depth);
+			expanded.add(nodeKey(refKey, path));
+			await ensureLoaded(refKey, catalog, path);
+		}
+		selectTable(catalog, hit.namespace, {
+			id: hit.table_id,
+			name: hit.table,
+			kind: 'table'
+		});
+		search = '';
+	}
+
+	// ── Engine grouping ──────────────────────────────────────────────────
+	type EngineGroup = { key: string; name: string; kind: string; catalogs: MetadataCatalog[] };
+	const engineGroups = $derived.by(() => {
+		const groups: Record<string, EngineGroup> = {};
+		for (const catalog of catalogs) {
+			for (const binding of catalog.bindings) {
+				let group = groups[binding.engine_id];
+				if (!group) {
+					group = {
+						key: binding.engine_id,
+						name: binding.engine_name,
+						kind: binding.engine_kind,
+						catalogs: []
+					};
+					groups[binding.engine_id] = group;
+				}
+				if (!group.catalogs.includes(catalog)) group.catalogs.push(catalog);
+			}
+		}
+		return Object.values(groups);
+	});
 </script>
 
-<div class="overflow-y-auto flex-1 px-1.5 pb-2 text-[13px]">
+<div class="overflow-y-auto flex-1 px-1.5 pb-2 text-[13px]" data-testid="metadata-tree">
 	{#if !workspaceStore.current}
 		<p class="text-text-muted text-xs px-2 py-4">Select a workspace to browse catalogs.</p>
 	{:else if loading}
-		<p class="text-text-muted text-xs px-2 py-4">Loading...</p>
-	{:else if error}
-		<p class="text-red-500 text-xs px-2 py-4">{error}</p>
+		<div class="space-y-2 px-2 py-3" aria-label="Loading catalogs">
+			<Skeleton class="h-4 w-3/4" />
+			<Skeleton class="h-4 w-2/3" />
+			<Skeleton class="h-4 w-4/5" />
+		</div>
+	{:else if loadError}
+		<ErrorState
+			title="Could not load catalogs"
+			message={loadError}
+			onretry={() => loadRoots(workspaceId)}
+		/>
+	{:else if searchActive}
+		{#if searchLoading}
+			<div class="space-y-2 px-2 py-3" aria-label="Searching">
+				<Skeleton class="h-4 w-3/4" />
+				<Skeleton class="h-4 w-2/3" />
+			</div>
+		{:else if searchError}
+			<ErrorState title="Search failed" message={searchError} onretry={() => retryTick++} />
+		{:else}
+			<div role="listbox" aria-label="Search results">
+				{#if tableResults.length > 0}
+					<p class="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+						Tables
+					</p>
+					{#each tableResults as result (result.table_id + result.table)}
+						{@render searchRow(result, flatResults.indexOf(result))}
+					{/each}
+				{/if}
+				{#if columnResults.length > 0}
+					<p class="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+						Columns
+					</p>
+					{#each columnResults as result (result.table_id + result.column)}
+						{@render searchRow(result, flatResults.indexOf(result))}
+					{/each}
+				{/if}
+				{#if tableResults.length === 0 && columnResults.length === 0}
+					<EmptyState
+						title="No matches"
+						description="No table or column matches that search in the catalogs you can see."
+					/>
+				{/if}
+			</div>
+		{/if}
 	{:else if catalogs.length === 0}
-		<p class="text-text-muted text-xs px-2 py-4">No catalogs in this workspace.</p>
+		<EmptyState
+			title="No catalogs"
+			description="This workspace has no granted catalogs. Ask an owner to bind one."
+		/>
 	{:else}
-		{#each catalogs as cat (catalogKey(cat))}
-			{@const ckey = catalogKey(cat)}
+		<div class="flex gap-1 px-1.5 py-2" role="group" aria-label="Group catalogs">
 			<button
-				class="flex items-center w-full text-left py-[5px] px-1.5 rounded-[5px] cursor-pointer gap-1.5 hover:bg-slate-100 dark:hover:bg-[#1c2128] bg-none border-none text-inherit text-[13px]"
-				onclick={() => toggleNamespaceList(cat)}
+				class="flex-1 rounded border px-2 py-1 text-[11px] font-medium {view === 'catalog'
+					? 'border-primary bg-bg-panel text-primary'
+					: 'border-border bg-transparent text-text-muted hover:text-text-main'}"
+				aria-pressed={view === 'catalog'}
+				onclick={() => (view = 'catalog')}>By catalog</button
 			>
-				<svg
-					viewBox="0 0 24 24"
-					class="shrink-0 w-3.5 h-3.5 text-text-muted transition-transform duration-150 {expandedCatalogs.has(
-						`ns-${ckey}`
-					)
-						? 'rotate-90'
-						: ''}"><path d="M9 18l6-6-6-6" /></svg
-				>
-				<span
-					class="shrink-0 w-3.5 h-3.5 rounded-sm flex items-center justify-center"
-					style="color:{connColor(cat.connection_type)}"
-				>
-					{#if cat.connection_type === 'polaris' || cat.connection_type === 'iceberg'}
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-							><polygon
-								points="12 2 15 9 22 9 16.5 14 18.5 21 12 16.5 5.5 21 7.5 14 2 9 9 9 12 2"
-							/></svg
-						>
-					{:else if cat.connection_type === 'nessie'}
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-							><path d="M12 2a10 10 0 0 1 7 17.5" /><path d="M12 2a10 10 0 0 0-7 17.5" /><path
-								d="M12 22v-8"
-							/><path d="M8 8c0 2 2 4 4 4s4-2 4-4" /></svg
-						>
-					{:else if cat.connection_type === 'postgresql'}
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-							><path d="M12 3a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" /><path
-								d="M12 12v7"
-							/><path d="M9 19h6" /></svg
-						>
-					{:else if cat.connection_type === 'mysql'}
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-							><ellipse cx="12" cy="5" rx="8" ry="3" /><path
-								d="M4 5v5c0 1.66 3.58 3 8 3s8-1.34 8-3V5"
-							/><path d="M4 13v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" /></svg
-						>
-					{:else}
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-							><circle cx="12" cy="12" r="3" /><path d="M19 9a7 7 0 0 1 0 6" /><path
-								d="M5 15a7 7 0 0 1 0-6"
-							/><path d="M12 2v2" /><path d="M12 20v2" /></svg
-						>
-					{/if}
-				</span>
-				<span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium"
-					>{cat.catalog_name}</span
-				>
-				<span class="text-[10px] text-text-muted">({cat.connection_name})</span>
-			</button>
-			{#if expandedCatalogs.has(`ns-${ckey}`)}
-				{#each namespaceData[ckey] || [] as ns (ns)}
-					{@const nkey = namespaceKey(cat, ns)}
-					<button
-						class="flex items-center w-full text-left py-[5px] px-1.5 pl-4 rounded-[5px] cursor-pointer gap-1.5 hover:bg-slate-100 dark:hover:bg-[#1c2128] bg-none border-none text-inherit text-[13px]"
-						onclick={() => toggleNamespaces(cat, ns)}
-					>
-						<svg
-							viewBox="0 0 24 24"
-							class="shrink-0 w-3.5 h-3.5 text-text-muted transition-transform duration-150 {expandedNamespaces.has(
-								nkey
-							)
-								? 'rotate-90'
-								: ''}"><path d="M9 18l6-6-6-6" /></svg
-						>
-						<svg viewBox="0 0 24 24" class="shrink-0 w-3.5 h-3.5 stroke-slate-400"
-							><path
-								d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-							/></svg
-						>
-						<span
-							class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text-muted"
-							>{ns}</span
-						>
-					</button>
-					{#if expandedNamespaces.has(nkey)}
-						{#if tableLoading[nkey]}
-							<p class="text-[11px] text-text-muted pl-8 py-1">Loading...</p>
-						{:else}
-							{#each tableData[nkey] || [] as table (table)}
-								<button
-									class="flex items-center w-full text-left py-[5px] px-1.5 pl-8 rounded-[5px] cursor-pointer gap-1.5 hover:bg-slate-100 dark:hover:bg-[#1c2128] bg-none border-none text-inherit text-[13px]
-									{selectedTable?.table === table && selectedTable?.namespace === ns
-										? 'bg-blue-50 dark:bg-[#152236] text-primary font-medium'
-										: ''}"
-									onclick={() => selectTable(cat, ns, table)}
-								>
-									<svg
-										viewBox="0 0 24 24"
-										class="shrink-0 w-3.5 h-3.5 {selectedTable?.table === table &&
-										selectedTable?.namespace === ns
-											? 'stroke-primary'
-											: 'stroke-text-muted'}"
-										><rect x="3" y="3" width="18" height="18" rx="2" /><line
-											x1="3"
-											y1="9"
-											x2="21"
-											y2="9"
-										/><line x1="9" y1="21" x2="9" y2="9" /></svg
-									>
-									<span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-										>{table}</span
-									>
-								</button>
-							{/each}
-						{/if}
-					{/if}
+			<button
+				class="flex-1 rounded border px-2 py-1 text-[11px] font-medium {view === 'engine'
+					? 'border-primary bg-bg-panel text-primary'
+					: 'border-border bg-transparent text-text-muted hover:text-text-main'}"
+				aria-pressed={view === 'engine'}
+				onclick={() => (view = 'engine')}>By engine</button
+			>
+		</div>
+
+		{#if view === 'catalog'}
+			{#each catalogs as catalog (catalog.id)}
+				{@render catalogNode(catalog.id, catalog)}
+			{/each}
+		{:else}
+			{#each engineGroups as group (group.key)}
+				<div class="flex items-center gap-1.5 px-2 pt-2 pb-1">
+					<EngineBadge engine={{ name: group.name, kind: group.kind }} />
+				</div>
+				{#each group.catalogs as catalog (group.key + ':' + catalog.id)}
+					{@render catalogNode(group.key + ':' + catalog.id, catalog)}
 				{/each}
-			{/if}
-		{/each}
+			{/each}
+		{/if}
 	{/if}
 </div>
+
+{#snippet searchRow(result: MetadataSearchResult, flatIndex: number)}
+	<button
+		role="option"
+		aria-selected={activeResult === flatIndex}
+		class="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-[#1c2128] {activeResult ===
+		flatIndex
+			? 'bg-blue-50 text-primary dark:bg-[#152236]'
+			: ''}"
+		onclick={() => reveal(result)}
+	>
+		<span class="font-mono text-xs">
+			{result.kind === 'column' ? `${result.table}.${result.column}` : result.table}
+		</span>
+		<span class="text-[10px] text-text-muted">
+			{[result.namespace.join('.'), result.native_type].filter(Boolean).join(' · ')}
+		</span>
+	</button>
+{/snippet}
+
+{#snippet catalogNode(refKey: string, catalog: MetadataCatalog)}
+	{@const key = nodeKey(refKey, [])}
+	{@const open = expanded.has(key)}
+	<button
+		class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128]"
+		onclick={() => toggleNode(refKey, catalog, [])}
+		aria-expanded={open}
+	>
+		<svg
+			viewBox="0 0 24 24"
+			class="h-3.5 w-3.5 shrink-0 text-text-muted transition-transform duration-150 {open
+				? 'rotate-90'
+				: ''}"><path d="M9 18l6-6-6-6" /></svg
+		>
+		<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 stroke-text-muted"
+			><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path
+				d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"
+			/></svg
+		>
+		<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium"
+			>{catalog.name}</span
+		>
+		<span class="flex shrink-0 items-center gap-1">
+			{#each catalog.bindings as binding (binding.binding_id)}
+				<span
+					class="rounded border border-border px-1 py-px text-[9px] uppercase text-text-muted"
+					title={`${binding.engine_name} (${binding.mode})`}>{binding.engine_name}</span
+				>
+			{/each}
+		</span>
+	</button>
+	{#if open}
+		{@render namespaceNode(refKey, catalog, [])}
+	{/if}
+{/snippet}
+
+{#snippet namespaceNode(refKey: string, catalog: MetadataCatalog, path: string[])}
+	{@const node = nodes[nodeKey(refKey, path)]}
+	<div class="pl-4">
+		{#if !node || node.status === 'loading'}
+			<p class="py-1 pl-2 text-[11px] text-text-muted">Loading…</p>
+		{:else if node.status === 'error'}
+			<ErrorState
+				title="Could not load this level"
+				message={node.error}
+				onretry={() => {
+					expanded.add(nodeKey(refKey, path));
+					void ensureLoaded(refKey, catalog, path);
+				}}
+			/>
+		{:else}
+			{#each node.children as child (child.path.join('\u0000'))}
+				{@const childKey = nodeKey(refKey, child.path)}
+				{@const childOpen = expanded.has(childKey)}
+				<button
+					class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128]"
+					onclick={() => toggleNode(refKey, catalog, child.path)}
+					aria-expanded={childOpen}
+				>
+					<svg
+						viewBox="0 0 24 24"
+						class="h-3.5 w-3.5 shrink-0 text-text-muted transition-transform duration-150 {childOpen
+							? 'rotate-90'
+							: ''}"><path d="M9 18l6-6-6-6" /></svg
+					>
+					<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 stroke-slate-400"
+						><path
+							d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+						/></svg
+					>
+					<span
+						class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-text-muted"
+						>{child.path[child.path.length - 1]}</span
+					>
+				</button>
+				{#if childOpen}
+					{@render namespaceNode(refKey, catalog, child.path)}
+				{/if}
+			{/each}
+
+			{#each node.tables as table (table.id)}
+				<button
+					class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128] {selectedTableId ===
+					table.id
+						? 'bg-blue-50 font-medium text-primary dark:bg-[#152236]'
+						: ''}"
+					onclick={() => selectTable(catalog, path, table)}
+					aria-current={selectedTableId === table.id}
+				>
+					<svg
+						viewBox="0 0 24 24"
+						class="h-3.5 w-3.5 shrink-0 {selectedTableId === table.id
+							? 'stroke-primary'
+							: 'stroke-text-muted'}"
+						><rect x="3" y="3" width="18" height="18" rx="2" /><line
+							x1="3"
+							y1="9"
+							x2="21"
+							y2="9"
+						/><line x1="9" y1="21" x2="9" y2="9" /></svg
+					>
+					<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+						>{table.name}</span
+					>
+					{#if table.kind !== 'table'}
+						<span class="rounded border border-border px-1 text-[9px] uppercase text-text-muted"
+							>{table.kind}</span
+						>
+					{/if}
+				</button>
+			{/each}
+
+			{#if node.tablesError}
+				<ErrorState
+					title="Could not load tables"
+					message={node.tablesError}
+					onretry={() => loadMoreTables(refKey, catalog, path)}
+				/>
+			{:else if node.nextCursor}
+				<button
+					class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] pl-2 text-left text-[11px] font-medium text-primary hover:bg-slate-100 dark:hover:bg-[#1c2128] disabled:opacity-50"
+					disabled={node.tablesLoading}
+					onclick={() => loadMoreTables(refKey, catalog, path)}
+				>
+					{node.tablesLoading ? 'Loading…' : 'Load more'}
+				</button>
+			{/if}
+
+			{#if node.children.length === 0 && node.tables.length === 0 && !node.nextCursor}
+				<p class="py-1 pl-2 text-[11px] text-text-muted">No tables or namespaces.</p>
+			{/if}
+		{/if}
+	</div>
+{/snippet}

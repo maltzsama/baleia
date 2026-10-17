@@ -2558,6 +2558,8 @@ export interface components {
             binding_id?: string | null;
             /** @description The table's name in SQL on that binding's engine */
             qualified_name?: string | null;
+            /** @description A SELECT that previews the table on that binding's engine (the dialect's PreviewSQL, 100 rows); null without a binding or dialect */
+            preview_sql?: string | null;
             doc?: components["schemas"]["SemanticDoc"];
             columns: components["schemas"]["MetadataColumn"][];
         };

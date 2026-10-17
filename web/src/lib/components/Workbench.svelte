@@ -2,18 +2,12 @@
 	import LeftSidebar from './LeftSidebar.svelte';
 	import RightSidebar from './RightSidebar.svelte';
 	import QueryEditor from './QueryEditor.svelte';
-
-	type SelectedTable = {
-		connectionId: string;
-		catalog: string;
-		namespace: string;
-		table: string;
-	};
+	import type { TableRef } from '$lib/metadata/client';
 
 	let leftCollapsed = $state(false);
 	let rightCollapsed = $state(true);
 	let sidebarTab = $state<'datasources' | 'queries'>('datasources');
-	let selectedTable = $state<SelectedTable | null>(null);
+	let selectedTable = $state<TableRef | null>(null);
 </script>
 
 <div class="flex flex-1 gap-2.5 overflow-hidden p-2.5">

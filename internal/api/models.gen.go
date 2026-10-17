@@ -1514,7 +1514,10 @@ type MetadataTableDetail struct {
 	LastChangedAt *time.Time              `json:"last_changed_at"`
 	Name          string                  `json:"name"`
 	Namespace     []string                `json:"namespace"`
-	Properties    map[string]string       `json:"properties"`
+
+	// PreviewSql A SELECT that previews the table on that binding's engine (the dialect's PreviewSQL, 100 rows); null without a binding or dialect
+	PreviewSql *string           `json:"preview_sql"`
+	Properties map[string]string `json:"properties"`
 
 	// QualifiedName The table's name in SQL on that binding's engine
 	QualifiedName *string `json:"qualified_name"`
