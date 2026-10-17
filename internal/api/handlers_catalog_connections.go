@@ -78,16 +78,21 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	if request.Body.DefaultReadonly != nil {
 		defaultReadonly = *request.Body.DefaultReadonly
 	}
+	credentialsReadOnly := false
+	if request.Body.CredentialsReadOnly != nil {
+		credentialsReadOnly = *request.Body.CredentialsReadOnly
+	}
 
 	conn, err := h.queries.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
-		ID:              connID,
-		Name:            request.Body.Name,
-		Type:            string(cfg.Kind),
-		Url:             connURL,
-		Config:          config,
-		CredentialsEnc:  credsEnc,
-		DefaultReadonly: defaultReadonly,
-		CreatedBy:       uid,
+		ID:                  connID,
+		Name:                request.Body.Name,
+		Type:                string(cfg.Kind),
+		Url:                 connURL,
+		Config:              config,
+		CredentialsEnc:      credsEnc,
+		DefaultReadonly:     defaultReadonly,
+		CredentialsReadOnly: credentialsReadOnly,
+		CreatedBy:           uid,
 	})
 	if err != nil {
 		slog.Error("CreateCatalogConnection failed", "err", err)
@@ -146,7 +151,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	// the others untouched, so concurrent PATCHes to different fields do not
 	// overwrite each other.
 	body := *request.Body
-	params := db.UpdateCatalogConnectionParams{ID: connID, Name: body.Name, DefaultReadonly: body.DefaultReadonly}
+	params := db.UpdateCatalogConnectionParams{ID: connID, Name: body.Name, DefaultReadonly: body.DefaultReadonly, CredentialsReadOnly: body.CredentialsReadOnly}
 	if body.Url != nil || body.Config != nil || body.Credentials != nil {
 		cfg, err := h.updateConfig(stored, body)
 		var ce *configError
@@ -313,15 +318,16 @@ func (h *Handlers) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UU
 func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
 	id := openapi_types.UUID(c.ID.Bytes)
 	return CatalogConnection{
-		Id:              id,
-		Name:            c.Name,
-		Type:            c.Type,
-		Url:             redactURLSecrets(c.Url),
-		Config:          publicConfig(c.Config),
-		HasCredentials:  c.CredentialsEnc != nil && *c.CredentialsEnc != "",
-		DefaultReadonly: c.DefaultReadonly,
-		CreatedAt:       pgTimestampToTime(c.CreatedAt),
-		UpdatedAt:       func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),
+		Id:                  id,
+		Name:                c.Name,
+		Type:                c.Type,
+		Url:                 redactURLSecrets(c.Url),
+		Config:              publicConfig(c.Config),
+		HasCredentials:      c.CredentialsEnc != nil && *c.CredentialsEnc != "",
+		DefaultReadonly:     c.DefaultReadonly,
+		CredentialsReadOnly: c.CredentialsReadOnly,
+		CreatedAt:           pgTimestampToTime(c.CreatedAt),
+		UpdatedAt:           func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),
 	}
 }
 

@@ -16,6 +16,11 @@ auth:bearer {
 
 body:json {
   {
-    "name": "Local Polaris Updated"
+    "name": "Local Polaris Updated",
+    "credentials_read_only": false
   }
+}
+
+assert {
+  res.body.credentials_read_only: eq false
 }

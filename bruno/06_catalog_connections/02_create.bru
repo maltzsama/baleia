@@ -19,6 +19,7 @@ body:json {
     "name": "Local Polaris",
     "type": "polaris",
     "default_readonly": false,
+    "credentials_read_only": true,
     "config": {
       "url": "{{polaris_url}}",
       "client_id": "admin"
@@ -34,6 +35,7 @@ assert {
   res.body.config.client_id: eq admin
   res.body.config.realm: eq POLARIS
   res.body.has_credentials: eq true
+  res.body.credentials_read_only: eq true
 }
 
 vars:post-response {

@@ -361,6 +361,41 @@ func TestUpdateConnection_EncryptionFailureIs500(t *testing.T) {
 	}
 }
 
+func TestCreateConnection_CredentialsReadOnly(t *testing.T) {
+	kr := testKeyring(t)
+	q := &recordingConnQuerier{}
+	readOnly := true
+	body := &CreateCatalogConnectionRequest{
+		Name: "pg", Type: "postgresql",
+		Config:              strMap("host", "db", "username", "u"),
+		Credentials:         anyMap("password", "p"),
+		CredentialsReadOnly: &readOnly,
+	}
+	resp, err := createHandlers(t, q, kr).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := visitCreate(t, resp); rec.Code != 201 {
+		t.Fatalf("response = %d %s", rec.Code, rec.Body)
+	}
+	if !q.created[0].CredentialsReadOnly {
+		t.Fatal("credentials_read_only was not stored")
+	}
+}
+
+func TestUpdateConnection_CredentialsReadOnly(t *testing.T) {
+	kr := testKeyring(t)
+	q := &updateConnQuerier{conn: storedPolaris(t, kr)}
+	readOnly := true
+	if rec := runUpdate(t, createHandlers(t, q, kr), UpdateCatalogConnectionRequest{CredentialsReadOnly: &readOnly}); rec.Code != 200 {
+		t.Fatalf("response = %d %s", rec.Code, rec.Body)
+	}
+	got := q.updates[0].CredentialsReadOnly
+	if got == nil || !*got {
+		t.Fatalf("update params = %+v", q.updates[0])
+	}
+}
+
 func TestListConnectionProviders(t *testing.T) {
 	h := createHandlers(t, nil, nil)
 	resp, err := h.ListConnectionProviders(testContext(), ListConnectionProvidersRequestObject{})

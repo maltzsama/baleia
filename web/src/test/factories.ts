@@ -13,6 +13,12 @@ type MetadataCatalog = components['schemas']['MetadataCatalog'];
 type MetadataCatalogBinding = components['schemas']['MetadataCatalogBinding'];
 type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
 type MetadataSearchResult = components['schemas']['MetadataSearchResult'];
+type ConnectionProvider = components['schemas']['ConnectionProvider'];
+type CatalogConnection = components['schemas']['CatalogConnection'];
+type Catalog = components['schemas']['Catalog'];
+type CatalogBinding = components['schemas']['CatalogBinding'];
+type BindingSupport = components['schemas']['BindingSupport'];
+type TestCatalogConnectionResult = components['schemas']['TestCatalogConnectionResult'];
 
 export function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 	return {
@@ -216,4 +222,94 @@ export function asViewer<T extends { allowed_actions?: string[] }>(resource: T):
 /** asOwner grants the full action list a resource supports. */
 export function asOwner<T extends { allowed_actions?: string[] }>(resource: T): T {
 	return resource;
+}
+
+export function makeProvider(overrides: Partial<ConnectionProvider> = {}): ConnectionProvider {
+	return {
+		kind: 'testdb',
+		label: 'Test Database',
+		family: 'database',
+		roles: ['metadata', 'direct_engine'],
+		status: { state: 'supported' },
+		config_schema: [
+			{ key: 'host', label: 'Host', type: 'text', required: true, secret: false },
+			{ key: 'port', label: 'Port', type: 'int', required: false, secret: false, default: '5432' },
+			{ key: 'database', label: 'Database', type: 'text', required: true, secret: false },
+			{ key: 'password', label: 'Password', type: 'secret', required: true, secret: true }
+		],
+		...overrides
+	};
+}
+
+export function makeConnection(overrides: Partial<CatalogConnection> = {}): CatalogConnection {
+	return {
+		id: '00000000-0000-0000-0000-0000000000e1',
+		name: 'analytics',
+		type: 'testdb',
+		url: 'jdbc:testdb://db:5432/analytics',
+		config: { host: 'db', port: '5432', database: 'analytics' },
+		has_credentials: true,
+		default_readonly: true,
+		credentials_read_only: false,
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+		allowed_actions: ['view', 'update', 'delete'],
+		...overrides
+	};
+}
+
+export function makeCatalog(overrides: Partial<Catalog> = {}): Catalog {
+	return {
+		id: '00000000-0000-0000-0000-0000000000e2',
+		connection_id: '00000000-0000-0000-0000-0000000000e1',
+		name: 'analytics',
+		trino_catalog_name: 'analytics',
+		warehouse: 'analytics',
+		connector: 'testdb',
+		enabled: true,
+		metadata_sync_status: 'finished',
+		metadata_synced_at: '2026-01-01T00:00:00Z',
+		allowed_actions: ['view', 'update', 'delete'],
+		...overrides
+	};
+}
+
+export function makeCatalogBinding(overrides: Partial<CatalogBinding> = {}): CatalogBinding {
+	return {
+		id: '00000000-0000-0000-0000-0000000000e3',
+		catalog_id: '00000000-0000-0000-0000-0000000000e2',
+		engine_id: '00000000-0000-0000-0000-000000000004',
+		engine_catalog_name: 'analytics',
+		connector: 'testdb',
+		mode: 'managed',
+		enabled: true,
+		lifecycle_state: 'active',
+		sync_status: 'synced',
+		allowed_actions: ['view', 'update', 'delete'],
+		...overrides
+	};
+}
+
+export function makeBindingSupport(overrides: Partial<BindingSupport> = {}): BindingSupport {
+	return {
+		connectors: ['testdb'],
+		protected_key_patterns: [],
+		reserved_names: [],
+		writes_supported: true,
+		...overrides
+	};
+}
+
+export function makeTestResult(
+	overrides: Partial<TestCatalogConnectionResult> = {}
+): TestCatalogConnectionResult {
+	return {
+		success: true,
+		latency_ms: 12,
+		checks: [
+			{ name: 'metadata', ok: true, detail: '1 catalogs' },
+			{ name: 'direct_engine', ok: true }
+		],
+		...overrides
+	};
 }

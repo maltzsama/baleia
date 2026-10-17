@@ -853,9 +853,12 @@ type CatalogConnection struct {
 	AllowedActions *[]CatalogConnectionAllowedAction `json:"allowed_actions,omitempty"`
 
 	// Config Non-secret values of the provider's config schema. Secret fields are never returned
-	Config          map[string]string `json:"config"`
-	CreatedAt       time.Time         `json:"created_at"`
-	DefaultReadonly bool              `json:"default_readonly"`
+	Config    map[string]string `json:"config"`
+	CreatedAt time.Time         `json:"created_at"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	CredentialsReadOnly bool `json:"credentials_read_only"`
+	DefaultReadonly     bool `json:"default_readonly"`
 
 	// HasCredentials Whether stored credentials exist; the secret itself is never returned
 	HasCredentials bool               `json:"has_credentials"`
@@ -991,15 +994,18 @@ type CreateCatalogConnectionRequest struct {
 	Config *map[string]string `json:"config,omitempty"`
 
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
-	Credentials           *map[string]interface{} `json:"credentials,omitempty"`
-	DefaultReadonly       *bool                   `json:"default_readonly,omitempty"`
-	GlueCredentials       *GlueCredentials        `json:"glue_credentials,omitempty"`
-	HiveCredentials       *HiveCredentials        `json:"hive_credentials,omitempty"`
-	IcebergCredentials    *IcebergCredentials     `json:"iceberg_credentials,omitempty"`
-	MysqlCredentials      *SqlCredentials         `json:"mysql_credentials,omitempty"`
-	Name                  string                  `json:"name"`
-	NessieCredentials     *NessieCredentials      `json:"nessie_credentials,omitempty"`
-	PostgresqlCredentials *SqlCredentials         `json:"postgresql_credentials,omitempty"`
+	Credentials *map[string]interface{} `json:"credentials,omitempty"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	CredentialsReadOnly   *bool               `json:"credentials_read_only,omitempty"`
+	DefaultReadonly       *bool               `json:"default_readonly,omitempty"`
+	GlueCredentials       *GlueCredentials    `json:"glue_credentials,omitempty"`
+	HiveCredentials       *HiveCredentials    `json:"hive_credentials,omitempty"`
+	IcebergCredentials    *IcebergCredentials `json:"iceberg_credentials,omitempty"`
+	MysqlCredentials      *SqlCredentials     `json:"mysql_credentials,omitempty"`
+	Name                  string              `json:"name"`
+	NessieCredentials     *NessieCredentials  `json:"nessie_credentials,omitempty"`
+	PostgresqlCredentials *SqlCredentials     `json:"postgresql_credentials,omitempty"`
 
 	// Type A kind listed by GET /connection-providers
 	Type string `json:"type"`
@@ -2026,11 +2032,14 @@ type TestConnectionRequest struct {
 	Config *map[string]string `json:"config,omitempty"`
 
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
-	Credentials        *map[string]interface{} `json:"credentials,omitempty"`
-	DefaultReadonly    *bool                   `json:"default_readonly,omitempty"`
-	GlueCredentials    *GlueCredentials        `json:"glue_credentials,omitempty"`
-	HiveCredentials    *HiveCredentials        `json:"hive_credentials,omitempty"`
-	IcebergCredentials *IcebergCredentials     `json:"iceberg_credentials,omitempty"`
+	Credentials *map[string]interface{} `json:"credentials,omitempty"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	CredentialsReadOnly *bool               `json:"credentials_read_only,omitempty"`
+	DefaultReadonly     *bool               `json:"default_readonly,omitempty"`
+	GlueCredentials     *GlueCredentials    `json:"glue_credentials,omitempty"`
+	HiveCredentials     *HiveCredentials    `json:"hive_credentials,omitempty"`
+	IcebergCredentials  *IcebergCredentials `json:"iceberg_credentials,omitempty"`
 
 	// Intents Checks to run: metadata, direct_engine, bind:<engine_id>. Default: every role the provider declares (a bind check on the default Trino engine for databases it can bind).
 	Intents               *[]string          `json:"intents,omitempty"`
@@ -2071,10 +2080,13 @@ type UpdateBindingRequest struct {
 
 // UpdateCatalogConnectionRequest Partial update. `config` keys are merged into the stored values (an empty string clears an optional field). `credentials` keys replace the stored secrets they name; secrets that are absent are kept. The result is validated like a create.
 type UpdateCatalogConnectionRequest struct {
-	Config          *map[string]string      `json:"config,omitempty"`
-	Credentials     *map[string]interface{} `json:"credentials,omitempty"`
-	DefaultReadonly *bool                   `json:"default_readonly,omitempty"`
-	Name            *string                 `json:"name,omitempty"`
+	Config      *map[string]string      `json:"config,omitempty"`
+	Credentials *map[string]interface{} `json:"credentials,omitempty"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data (#11/#13/#59)
+	CredentialsReadOnly *bool   `json:"credentials_read_only,omitempty"`
+	DefaultReadonly     *bool   `json:"default_readonly,omitempty"`
+	Name                *string `json:"name,omitempty"`
 
 	// Url Older shape: the endpoint URL. Prefer config
 	Url *string `json:"url,omitempty"`
