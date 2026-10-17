@@ -594,6 +594,17 @@ func (q *Queries) ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.U
 	return items, nil
 }
 
+const personalWorkspaceID = `-- name: PersonalWorkspaceID :one
+SELECT id FROM workspaces WHERE type = 'personal' AND owner_user_id = $1 ORDER BY created_at LIMIT 1
+`
+
+func (q *Queries) PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, personalWorkspaceID, ownerUserID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const removeTeamMember = `-- name: RemoveTeamMember :exec
 DELETE FROM team_members WHERE team_id = $1 AND user_id = $2
 `
@@ -714,4 +725,15 @@ func (q *Queries) UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWor
 		&i.GrantedAt,
 	)
 	return i, err
+}
+
+const userOwnsTeam = `-- name: UserOwnsTeam :one
+SELECT EXISTS (SELECT 1 FROM team_members WHERE user_id = $1 AND role = 'owner') AS owns
+`
+
+func (q *Queries) UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, userOwnsTeam, userID)
+	var owns bool
+	err := row.Scan(&owns)
+	return owns, err
 }

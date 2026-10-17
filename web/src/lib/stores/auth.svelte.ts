@@ -1,5 +1,11 @@
 // src/lib/stores/auth.svelte.ts
 
+export type Features = {
+  agents: boolean;
+  assistant: boolean;
+  retrievers: boolean;
+};
+
 export type AuthUser = {
   id: string;
   name: string;
@@ -7,6 +13,11 @@ export type AuthUser = {
   role: string;
   auth_provider: string;
   created_at: string;
+  // Feature flags and actions outside any resource (#104). Optional because
+  // login responses carry only the user; /auth/me fills them.
+  personal_workspace_id?: string | null;
+  features?: Features;
+  global_actions?: string[];
 };
 
 function createAuthStore() {

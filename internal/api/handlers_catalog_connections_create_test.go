@@ -39,6 +39,15 @@ func (f *recordingConnQuerier) CreateCatalogConnection(_ context.Context, p db.C
 	return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
 }
 
+func (f *recordingConnQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+	for _, p := range f.created {
+		if p.ID == id {
+			return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
+		}
+	}
+	return db.CatalogConnection{ID: id}, nil
+}
+
 func strMap(kv ...string) *map[string]string {
 	m := map[string]string{}
 	for i := 0; i+1 < len(kv); i += 2 {

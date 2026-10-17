@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/galileostudio/baleia/internal/metrics"
@@ -167,7 +168,49 @@ func (h *Handlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMe
 		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"}}, nil
 	}
 
-	return GetMe200JSONResponse(dbUserToPublic(user)), nil
+	principal, _ := authz.PrincipalFromContext(ctx)
+	me := Me{
+		Id:            openapi_types.UUID(user.ID.Bytes),
+		Name:          user.Name,
+		Email:         openapi_types.Email(user.Email),
+		Role:          MeRole(user.Role),
+		AuthProvider:  MeAuthProvider(user.AuthProvider),
+		CreatedAt:     pgTimestampToTime(user.CreatedAt),
+		Features:      h.features(ctx),
+		GlobalActions: h.globalActions(ctx, principal),
+	}
+	if ws, err := h.queries.PersonalWorkspaceID(ctx, user.ID); err == nil {
+		id := openapi_types.UUID(ws.Bytes)
+		me.PersonalWorkspaceId = &id
+	}
+	return GetMe200JSONResponse(me), nil
+}
+
+// features are the navigation flags of /auth/me (#104). Agents (#59) and the
+// assistant (#62) do not exist yet; retrievers exist when a Trino engine can
+// host their destination (an enabled Iceberg catalog).
+func (h *Handlers) features(ctx context.Context) Features {
+	f := Features{}
+	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
+	if err != nil || !cluster.EngineID.Valid {
+		return f
+	}
+	if cats, err := h.queries.ListEnabledIcebergCatalogs(ctx); err == nil && len(cats) > 0 {
+		f.Retrievers = true
+	}
+	return f
+}
+
+// globalActions are the actions outside any resource (#104).
+func (h *Handlers) globalActions(ctx context.Context, p authz.Principal) []GlobalAction {
+	acts := []GlobalAction{CreateConnection, CreateWorkspace}
+	if p.IsAdmin() {
+		return append(acts, CreateSharedWorkspace, ManageUsers, ManageIdentity, ViewAllAudit, ViewSystem, ManageAssistant)
+	}
+	if owns, err := h.queries.UserOwnsTeam(ctx, p.UserID); err == nil && owns {
+		acts = append(acts, CreateSharedWorkspace)
+	}
+	return acts
 }
 
 // ── OIDC ──────────────────────────────────────────────────────────────────────

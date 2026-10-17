@@ -135,3 +135,9 @@ JOIN catalogs c ON c.id = g.catalog_id
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE g.workspace_id = $1 AND c.enabled
 ORDER BY c.trino_catalog_name;
+
+-- name: PersonalWorkspaceID :one
+SELECT id FROM workspaces WHERE type = 'personal' AND owner_user_id = $1 ORDER BY created_at LIMIT 1;
+
+-- name: UserOwnsTeam :one
+SELECT EXISTS (SELECT 1 FROM team_members WHERE user_id = $1 AND role = 'owner') AS owns;

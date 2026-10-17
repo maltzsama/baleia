@@ -38,6 +38,13 @@ type AuditEvent struct {
 	Changes      []byte             `json:"changes"`
 }
 
+type AuditExportCursor struct {
+	Sink       string             `json:"sink"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+	ID         int64              `json:"id"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AuthProvider struct {
 	ID        pgtype.UUID        `json:"id"`
 	Name      string             `json:"name"`

@@ -88,6 +88,9 @@ const engineLoadFailed = "engine_load_failed"
 // catalogResponse is a catalog with its primary binding's status.
 func (h *Handlers) catalogResponse(ctx context.Context, cat db.Catalog, b db.CatalogBinding, version string) Catalog {
 	c := dbCatalogToPublic(cat)
+	if acts := h.catalogActions(ctx, cat.ID); acts != nil {
+		c.AllowedActions = &acts
+	}
 	st, engineErr := h.bindingSyncStatus(ctx, b)
 	status := CatalogSyncStatus(st)
 	c.SyncStatus = &status
@@ -129,6 +132,9 @@ func (h *Handlers) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Cat
 // bindingResponse is a binding with its derived status and lifecycle.
 func (h *Handlers) bindingResponse(ctx context.Context, b db.CatalogBinding, version string) CatalogBinding {
 	out := bindingToPublic(b)
+	if acts := h.catalogBindingActions(ctx, dbCatalogBindingRef{catalogID: b.CatalogID}); acts != nil {
+		out.AllowedActions = &acts
+	}
 	st, engineErr := h.bindingSyncStatus(ctx, b)
 	status := CatalogBindingSyncStatus(st)
 	out.SyncStatus = &status
@@ -147,6 +153,9 @@ func (h *Handlers) bindingResponse(ctx context.Context, b db.CatalogBinding, ver
 func (h *Handlers) catalogWithStatus(ctx context.Context, cat db.Catalog) Catalog {
 	bare := func() Catalog {
 		c := dbCatalogToPublic(cat)
+		if acts := h.catalogActions(ctx, cat.ID); acts != nil {
+			c.AllowedActions = &acts
+		}
 		h.metadataFreshness(ctx, cat.ID, &c)
 		return c
 	}

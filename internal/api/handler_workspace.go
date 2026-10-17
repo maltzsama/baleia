@@ -1,93 +1,96 @@
 package api
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "strings"
-    "time"
-    "unicode"
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+	"unicode"
 
-    "github.com/galileostudio/baleia/internal/auth"
-    "github.com/galileostudio/baleia/internal/audit"
-    "github.com/galileostudio/baleia/internal/authz"
-    "github.com/galileostudio/baleia/internal/db"
-    openapi_types "github.com/oapi-codegen/runtime/types"
-    "github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func (h *Handlers) ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error) {
-    userID := auth.UserIDFromContext(ctx)
-    uid, err := uuidFromString(userID)
-    if err != nil {
-        return ListWorkspaces401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
-    }
+	userID := auth.UserIDFromContext(ctx)
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return ListWorkspaces401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
 
-    workspaces, err := h.queries.ListWorkspacesByUser(ctx, uid)
-    if err != nil {
-        return nil, err
-    }
+	workspaces, err := h.queries.ListWorkspacesByUser(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
 
-    result := make([]Workspace, 0, len(workspaces))
-    for _, w := range workspaces {
-        result = append(result, dbWorkspaceToPublic(w))
-    }
-    return ListWorkspaces200JSONResponse(result), nil
+	result := make([]Workspace, 0, len(workspaces))
+	for _, w := range workspaces {
+		result = append(result, h.withWorkspaceActions(ctx, w))
+	}
+	return ListWorkspaces200JSONResponse(result), nil
 }
 
 func (h *Handlers) CreateWorkspace(ctx context.Context, request CreateWorkspaceRequestObject) (CreateWorkspaceResponseObject, error) {
-    userID := auth.UserIDFromContext(ctx)
-    uid, err := uuidFromString(userID)
-    if err != nil {
-        return CreateWorkspace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
-    }
+	userID := auth.UserIDFromContext(ctx)
+	uid, err := uuidFromString(userID)
+	if err != nil {
+		return CreateWorkspace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
 
-    role := auth.RoleFromContext(ctx)
+	role := auth.RoleFromContext(ctx)
 
-    var ownerUserID pgtype.UUID
-    var ownerTeamID pgtype.UUID
+	var ownerUserID pgtype.UUID
+	var ownerTeamID pgtype.UUID
 
-    wsType := string(request.Body.Type)
+	wsType := string(request.Body.Type)
 
-    if wsType == "shared" {
-        if role != "admin" {
-            return CreateWorkspace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only for shared workspaces"}}, nil
-        }
-        if request.Body.OwnerTeamId == nil {
-            return CreateWorkspace422JSONResponse{
-                UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-                    Code:    "validation_error",
-                    Message: "owner_team_id is required for shared workspaces",
-                    Errors:  []struct{ Field *string `json:"field,omitempty"`; Message *string `json:"message,omitempty"` }{{fieldPtr("owner_team_id"), msgPtr("required")}},
-                },
-            }, nil
-        }
-        ownerTeamID.Bytes = *request.Body.OwnerTeamId
-        ownerTeamID.Valid = true
-    } else {
-        ownerUserID = uid
-    }
+	if wsType == "shared" {
+		if role != "admin" {
+			return CreateWorkspace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only for shared workspaces"}}, nil
+		}
+		if request.Body.OwnerTeamId == nil {
+			return CreateWorkspace422JSONResponse{
+				UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+					Code:    "validation_error",
+					Message: "owner_team_id is required for shared workspaces",
+					Errors: []struct {
+						Field   *string `json:"field,omitempty"`
+						Message *string `json:"message,omitempty"`
+					}{{fieldPtr("owner_team_id"), msgPtr("required")}},
+				},
+			}, nil
+		}
+		ownerTeamID.Bytes = *request.Body.OwnerTeamId
+		ownerTeamID.Valid = true
+	} else {
+		ownerUserID = uid
+	}
 
-    polarisCatalogName := toPolarisName(request.Body.Name)
+	polarisCatalogName := toPolarisName(request.Body.Name)
 
-    var desc *string
-    if request.Body.Description != nil {
-        desc = request.Body.Description
-    }
+	var desc *string
+	if request.Body.Description != nil {
+		desc = request.Body.Description
+	}
 
-    workspace, err := h.queries.CreateWorkspace(ctx, db.CreateWorkspaceParams{
-        Name:               request.Body.Name,
-        Description:        desc,
-        Type:               wsType,
-        PolarisCatalogName: polarisCatalogName,
-        OwnerUserID:        ownerUserID,
-        OwnerTeamID:        ownerTeamID,
-    })
-    if err != nil {
-        return nil, err
-    }
+	workspace, err := h.queries.CreateWorkspace(ctx, db.CreateWorkspaceParams{
+		Name:               request.Body.Name,
+		Description:        desc,
+		Type:               wsType,
+		PolarisCatalogName: polarisCatalogName,
+		OwnerUserID:        ownerUserID,
+		OwnerTeamID:        ownerTeamID,
+	})
+	if err != nil {
+		return nil, err
+	}
 
-    return CreateWorkspace201JSONResponse(dbWorkspaceToPublic(workspace)), nil
+	return CreateWorkspace201JSONResponse(h.withWorkspaceActions(ctx, workspace)), nil
 }
 
 func (h *Handlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
@@ -104,7 +107,7 @@ func (h *Handlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequest
 		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
 	}
 
-	return GetWorkspace200JSONResponse(dbWorkspaceToPublic(workspace)), nil
+	return GetWorkspace200JSONResponse(h.withWorkspaceActions(ctx, workspace)), nil
 }
 
 func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error) {
@@ -184,7 +187,7 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 
 	ev.Changes = workspaceChanges(current, workspace, newDefault || clearDefault)
 	h.audited(ctx, ev.Allowed())
-	return UpdateWorkspace200JSONResponse(dbWorkspaceToPublic(workspace)), nil
+	return UpdateWorkspace200JSONResponse(h.withWorkspaceActions(ctx, workspace)), nil
 }
 
 // ListWorkspaceCatalogAccess lists the catalogs granted to a workspace. Any
@@ -243,7 +246,10 @@ func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogA
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "validation_error",
 				Message: "permission must be read or write",
-				Errors:  []struct{ Field *string `json:"field,omitempty"`; Message *string `json:"message,omitempty"` }{{fieldPtr("permission"), msgPtr("must be read or write")}},
+				Errors: []struct {
+					Field   *string `json:"field,omitempty"`
+					Message *string `json:"message,omitempty"`
+				}{{fieldPtr("permission"), msgPtr("must be read or write")}},
 			},
 		}, nil
 	}
@@ -326,47 +332,47 @@ func revokeAccessError(err error) (RevokeCatalogAccessResponseObject, error) {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func dbWorkspaceToPublic(w db.Workspace) Workspace {
-    id := openapi_types.UUID(w.ID.Bytes)
-    ws := Workspace{
-        Id:                 id,
-        Name:               w.Name,
-        Type:               WorkspaceType(w.Type),
-        PolarisCatalogName: w.PolarisCatalogName,
-        CreatedAt:          pgTimestampToTime(w.CreatedAt),
-        UpdatedAt:          func() *time.Time { t := pgTimestampToTime(w.UpdatedAt); return &t }(),
-    }
-    if w.Description != nil {
-        ws.Description = w.Description
-    }
-    if w.OwnerUserID.Valid {
-        uid := openapi_types.UUID(w.OwnerUserID.Bytes)
-        ws.OwnerUserId = &uid
-    }
-    if w.OwnerTeamID.Valid {
-        tid := openapi_types.UUID(w.OwnerTeamID.Bytes)
-        ws.OwnerTeamId = &tid
-    }
-    if w.DefaultBindingID.Valid {
-        bid := openapi_types.UUID(w.DefaultBindingID.Bytes)
-        ws.DefaultBindingId = &bid
-        ws.DefaultSchema = w.DefaultSchema
-    }
-    return ws
+	id := openapi_types.UUID(w.ID.Bytes)
+	ws := Workspace{
+		Id:                 id,
+		Name:               w.Name,
+		Type:               WorkspaceType(w.Type),
+		PolarisCatalogName: w.PolarisCatalogName,
+		CreatedAt:          pgTimestampToTime(w.CreatedAt),
+		UpdatedAt:          func() *time.Time { t := pgTimestampToTime(w.UpdatedAt); return &t }(),
+	}
+	if w.Description != nil {
+		ws.Description = w.Description
+	}
+	if w.OwnerUserID.Valid {
+		uid := openapi_types.UUID(w.OwnerUserID.Bytes)
+		ws.OwnerUserId = &uid
+	}
+	if w.OwnerTeamID.Valid {
+		tid := openapi_types.UUID(w.OwnerTeamID.Bytes)
+		ws.OwnerTeamId = &tid
+	}
+	if w.DefaultBindingID.Valid {
+		bid := openapi_types.UUID(w.DefaultBindingID.Bytes)
+		ws.DefaultBindingId = &bid
+		ws.DefaultSchema = w.DefaultSchema
+	}
+	return ws
 }
 
-// toPolarisName 
+// toPolarisName
 // Ex: "My Workspace" → "my_workspace_1234"
 func toPolarisName(name string) string {
-    var b strings.Builder
-    for _, r := range strings.ToLower(name) {
-        if unicode.IsLetter(r) || unicode.IsDigit(r) {
-            b.WriteRune(r)
-        } else {
-            b.WriteRune('_')
-        }
-    }
-    suffix := fmt.Sprintf("_%d", time.Now().UnixMilli()%10000)
-    return b.String() + suffix
+	var b strings.Builder
+	for _, r := range strings.ToLower(name) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	suffix := fmt.Sprintf("_%d", time.Now().UnixMilli()%10000)
+	return b.String() + suffix
 }
 
 func fieldPtr(s string) *string { return &s }

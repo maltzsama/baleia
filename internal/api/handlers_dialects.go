@@ -89,6 +89,9 @@ func capabilitiesToPublic(c queryengine.Capabilities) *EngineCapabilities {
 // available and the engine enabled, its capabilities and version.
 func (h *Handlers) describeEngine(ctx context.Context, e db.Engine) Engine {
 	out := engineToPublic(e)
+	if acts := h.engineActions(ctx, e.ID); acts != nil {
+		out.AllowedActions = &acts
+	}
 	if d, ok := dialect.ForEngineKind(e.Kind); ok {
 		out.Dialect = dialectToPublic(d)
 	}

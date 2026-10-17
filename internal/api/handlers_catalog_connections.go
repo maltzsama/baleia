@@ -43,7 +43,7 @@ func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatal
 
 	result := make([]CatalogConnection, 0, len(conns))
 	for _, c := range conns {
-		result = append(result, dbCatalogConnectionToPublic(c))
+		result = append(result, h.withConnectionActions(ctx, c))
 	}
 	return ListCatalogConnections200JSONResponse(result), nil
 }
@@ -102,7 +102,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	h.catalogCache.Clear()
 	ev.Changes = map[string]audit.Change{"name": {To: conn.Name}, "type": {To: conn.Type}, "url": {To: conn.Url}}
 	h.audited(ctx, ev.Allowed())
-	return CreateCatalogConnection201JSONResponse(dbCatalogConnectionToPublic(conn)), nil
+	return CreateCatalogConnection201JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
 
 func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
@@ -122,7 +122,7 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 	}
 
 	// Never return the stored secret. Callers see only has_credentials.
-	return GetCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
+	return GetCatalogConnection200JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
 
 func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
@@ -176,7 +176,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	h.catalogCache.Clear()
 	ev.Changes = connectionChanges(stored, conn, body.Credentials)
 	h.audited(ctx, ev.Allowed())
-	return UpdateCatalogConnection200JSONResponse(dbCatalogConnectionToPublic(conn)), nil
+	return UpdateCatalogConnection200JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
 
 func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {
@@ -246,7 +246,6 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 	h.audited(ctx, testOutcome(ev, res.Success))
 	return TestCatalogConnection200JSONResponse(res), nil
 }
-
 
 // connectionConfig returns the provider of a stored connection and its
 // decrypted config.
