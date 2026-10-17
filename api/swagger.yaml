@@ -55,6 +55,8 @@ tags:
     description: "Zero-copy catalog migration (Nessie → Polaris)"
   - name: Semantic
     description: "Semantic layer v1: table/column docs, tags, owners and simple metrics"
+  - name: Spaces
+    description: "Space containers, their access lists and the content they own"
 
 # ═══════════════════════════════════════════════════════════════
 # COMPONENTS
@@ -1221,13 +1223,69 @@ components:
         permission: { type: string, enum: [read, write] }
 
     # ── Query Editor ───────────────────────────────────────────
+    Space:
+      type: object
+      required: [id, workspace_id, name, slug, visibility, default_role, is_default, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        description: { type: string, nullable: true }
+        visibility: { type: string, enum: [workspace, restricted] }
+        default_role: { type: string, enum: [viewer, editor] }
+        is_default: { type: boolean }
+        my_role:
+          type: string
+          enum: [viewer, editor, manager]
+          nullable: true
+          description: "The caller's effective role (list and get only)"
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateSpaceRequest:
+      type: object
+      required: [name, visibility]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, nullable: true }
+        visibility: { type: string, enum: [workspace, restricted] }
+        default_role: { type: string, enum: [viewer, editor], default: viewer }
+
+    UpdateSpaceRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, nullable: true }
+        visibility: { type: string, enum: [workspace, restricted] }
+        default_role: { type: string, enum: [viewer, editor] }
+
+    SpaceMember:
+      type: object
+      required: [principal_type, principal_id, role]
+      properties:
+        principal_type: { type: string, enum: [user, team] }
+        principal_id: { type: string, format: uuid }
+        role: { type: string, enum: [viewer, editor, manager] }
+        granted_by: { type: string, format: uuid, nullable: true }
+        granted_at: { type: string, format: date-time }
+
+    SetSpaceMemberRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [viewer, editor, manager] }
+
     QueryFolder:
       type: object
-      required: [id, name, workspace_id, created_at]
+      required: [id, name, workspace_id, space_id, slug, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         workspace_id: { type: string, format: uuid }
+        space_id: { type: string, format: uuid }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
         parent_id: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
 
@@ -1236,18 +1294,30 @@ components:
       required: [name]
       properties:
         name: { type: string }
+        space_id: { type: string, format: uuid, nullable: true, description: "Omitted: the workspace's default space" }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$", nullable: true, description: "Omitted: derived from name" }
         parent_id: { type: string, format: uuid, nullable: true }
+
+    SavedQueryTarget:
+      type: object
+      properties:
+        binding_id: { type: string, format: uuid, nullable: true }
+        schema: { type: string, nullable: true }
 
     SavedQuery:
       type: object
-      required: [id, name, workspace_id, created_by, sql, created_at]
+      required: [id, name, workspace_id, space_id, slug, created_by, sql, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         workspace_id: { type: string, format: uuid }
+        space_id: { type: string, format: uuid }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
         folder_id: { type: string, format: uuid, nullable: true }
         created_by: { type: string, format: uuid }
+        updated_by: { type: string, format: uuid, nullable: true }
         sql: { type: string }
+        target: { $ref: "#/components/schemas/SavedQueryTarget" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1256,15 +1326,22 @@ components:
       required: [name, sql]
       properties:
         name: { type: string }
+        space_id: { type: string, format: uuid, nullable: true, description: "Omitted: the workspace's default space" }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$", nullable: true, description: "Omitted: derived from name" }
         folder_id: { type: string, format: uuid, nullable: true }
         sql: { type: string }
+        target: { $ref: "#/components/schemas/SavedQueryTarget" }
 
     UpdateSavedQueryRequest:
       type: object
       properties:
         name: { type: string }
+        space_id: { type: string, format: uuid, nullable: true }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$", nullable: true }
         folder_id: { type: string, format: uuid, nullable: true }
+        move_to_root: { type: boolean, description: "Explicitly move the query to the space root; folder_id wins when present" }
         sql: { type: string }
+        target: { $ref: "#/components/schemas/SavedQueryTarget" }
 
     # ── Executions ─────────────────────────────────────────────
     ExecutionRequest:
@@ -2309,7 +2386,7 @@ paths:
     post:
       tags: [Semantic]
       operationId: createSemanticMetric
-      summary: "Create and validate a metric — workspace members"
+      summary: "Create and validate a metric — space editor"
       description: >
         The definition is validated structurally (DisallowUnknownFields) and
         then rendered for the chosen binding and probed with a zero-row
@@ -2327,6 +2404,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SemanticMetric" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -2341,7 +2419,7 @@ paths:
     get:
       tags: [Semantic]
       operationId: getSemanticMetric
-      summary: "Return a metric — workspace members"
+      summary: "Return a metric — space viewer"
       responses:
         "200":
           description: "The metric"
@@ -2349,11 +2427,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SemanticMetric" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Semantic]
       operationId: updateSemanticMetric
-      summary: "Update and revalidate a metric — workspace members"
+      summary: "Update and revalidate a metric — space editor"
       requestBody:
         required: true
         content:
@@ -2366,16 +2445,18 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SemanticMetric" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [Semantic]
       operationId: deleteSemanticMetric
-      summary: "Delete a metric — workspace members"
+      summary: "Delete a metric — space editor"
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/semantic/metrics/{metric_id}/sql:
@@ -2388,7 +2469,7 @@ paths:
     get:
       tags: [Semantic]
       operationId: getSemanticMetricSql
-      summary: "Render a metric to SQL for one binding — workspace members"
+      summary: "Render a metric to SQL for one binding — space viewer"
       parameters:
         - name: binding_id
           in: query
@@ -2410,8 +2491,168 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SemanticMetricSQL" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ── Spaces (#40) ───────────────────────────────────────────────
+  /workspaces/{id}/spaces:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Spaces]
+      operationId: listSpaces
+      summary: "Spaces the caller can see, with their role — workspace members"
+      responses:
+        "200":
+          description: "Visible spaces, default first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Space" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Spaces]
+      operationId: createSpace
+      summary: "Create a space; the creator becomes its manager — workspace members"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSpaceRequest" }
+      responses:
+        "201":
+          description: "The space"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Space" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/spaces/{space_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: space_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Spaces]
+      operationId: getSpace
+      summary: "One space the caller can see"
+      responses:
+        "200":
+          description: "The space"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Space" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Spaces]
+      operationId: updateSpace
+      summary: "Rename or re-scope a space — manager"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSpaceRequest" }
+      responses:
+        "200":
+          description: "The space"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Space" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Spaces]
+      operationId: deleteSpace
+      summary: "Delete a space, its content, and its access list — manager"
+      parameters:
+        - name: force
+          in: query
+          description: "Delete even when the space still has content"
+          schema: { type: boolean, default: false }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /workspaces/{id}/spaces/{space_id}/members:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: space_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Spaces]
+      operationId: listSpaceMembers
+      summary: "The space's access list — viewer"
+      responses:
+        "200":
+          description: "Entries"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SpaceMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: space_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: principal_type
+        in: path
+        required: true
+        schema: { type: string, enum: [user, team] }
+      - name: principal_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [Spaces]
+      operationId: setSpaceMember
+      summary: "Grant or raise a user/team role — manager"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetSpaceMemberRequest" }
+      responses:
+        "200":
+          description: "The entry"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpaceMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Spaces]
+      operationId: deleteSpaceMember
+      summary: "Remove a user/team entry — manager"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/targets:
     parameters:
@@ -3194,8 +3435,11 @@ paths:
     get:
       tags: [QueryEditor]
       operationId: listFolders
-      summary: "List workspace folders"
+      summary: "List folders of the spaces the caller can see"
       parameters:
+        - name: space_id
+          in: query
+          schema: { type: string, format: uuid }
         - name: parent_id
           in: query
           schema: { type: string, format: uuid }
@@ -3211,7 +3455,7 @@ paths:
     post:
       tags: [QueryEditor]
       operationId: createFolder
-      summary: "Create a folder in the workspace"
+      summary: "Create a folder in a space the caller may edit"
       requestBody:
         required: true
         content:
@@ -3224,6 +3468,9 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/QueryFolder" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/folders/{folder_id}:
     parameters:
@@ -3239,6 +3486,7 @@ paths:
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/queries:
@@ -3247,8 +3495,11 @@ paths:
     get:
       tags: [QueryEditor]
       operationId: listSavedQueries
-      summary: "List workspace saved queries"
+      summary: "List saved queries of the spaces the caller can see"
       parameters:
+        - name: space_id
+          in: query
+          schema: { type: string, format: uuid }
         - name: folder_id
           in: query
           schema: { type: string, format: uuid }
@@ -3264,7 +3515,7 @@ paths:
     post:
       tags: [QueryEditor]
       operationId: createSavedQuery
-      summary: "Save a query in the workspace"
+      summary: "Save a query in a space the caller may edit"
       requestBody:
         required: true
         content:
@@ -3277,6 +3528,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SavedQuery" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/queries/{query_id}:
     parameters:
@@ -3296,6 +3551,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SavedQuery" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [QueryEditor]
@@ -3313,7 +3569,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SavedQuery" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [QueryEditor]
       operationId: deleteSavedQuery
@@ -3321,6 +3580,7 @@ paths:
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Executions ────────────────────────────────────────────────

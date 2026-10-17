@@ -1,0 +1,28 @@
+meta {
+  name: Update Space
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{space_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno Space Updated",
+    "default_role": "viewer"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq Bruno Space Updated
+  res.body.default_role: eq viewer
+}

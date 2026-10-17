@@ -29,6 +29,8 @@ export function makeSavedQuery(overrides: Partial<SavedQuery> = {}): SavedQuery 
 	return {
 		id: '00000000-0000-0000-0000-000000000002',
 		workspace_id: '00000000-0000-0000-0000-000000000001',
+		space_id: '00000000-0000-0000-0000-000000000006',
+		slug: 'revenue',
 		name: 'Revenue',
 		sql: 'SELECT 1',
 		folder_id: null,

@@ -264,10 +264,10 @@ type ServerInterface interface {
 	// Single-statement result as Arrow IPC stream
 	// (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
 	GetStatementResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, position int)
-	// List workspace folders
+	// List folders of the spaces the caller can see
 	// (GET /workspaces/{id}/folders)
 	ListFolders(w http.ResponseWriter, r *http.Request, id PathId, params ListFoldersParams)
-	// Create a folder in the workspace
+	// Create a folder in a space the caller may edit
 	// (POST /workspaces/{id}/folders)
 	CreateFolder(w http.ResponseWriter, r *http.Request, id PathId)
 	// Remove a folder and its contents
@@ -288,10 +288,10 @@ type ServerInterface interface {
 	// A table with its columns, typed and named for one of its catalog's bindings
 	// (GET /workspaces/{id}/metadata/tables/{table_id})
 	GetMetadataTable(w http.ResponseWriter, r *http.Request, id PathId, tableId openapi_types.UUID, params GetMetadataTableParams)
-	// List workspace saved queries
+	// List saved queries of the spaces the caller can see
 	// (GET /workspaces/{id}/queries)
 	ListSavedQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListSavedQueriesParams)
-	// Save a query in the workspace
+	// Save a query in a space the caller may edit
 	// (POST /workspaces/{id}/queries)
 	CreateSavedQuery(w http.ResponseWriter, r *http.Request, id PathId)
 	// Remove a saved query
@@ -339,21 +339,45 @@ type ServerInterface interface {
 	// Metrics of the workspace — workspace members
 	// (GET /workspaces/{id}/semantic/metrics)
 	ListSemanticMetrics(w http.ResponseWriter, r *http.Request, id PathId)
-	// Create and validate a metric — workspace members
+	// Create and validate a metric — space editor
 	// (POST /workspaces/{id}/semantic/metrics)
 	CreateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId)
-	// Delete a metric — workspace members
+	// Delete a metric — space editor
 	// (DELETE /workspaces/{id}/semantic/metrics/{metric_id})
 	DeleteSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID)
-	// Return a metric — workspace members
+	// Return a metric — space viewer
 	// (GET /workspaces/{id}/semantic/metrics/{metric_id})
 	GetSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID)
-	// Update and revalidate a metric — workspace members
+	// Update and revalidate a metric — space editor
 	// (PATCH /workspaces/{id}/semantic/metrics/{metric_id})
 	UpdateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID)
-	// Render a metric to SQL for one binding — workspace members
+	// Render a metric to SQL for one binding — space viewer
 	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
 	GetSemanticMetricSql(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params GetSemanticMetricSqlParams)
+	// Spaces the caller can see, with their role — workspace members
+	// (GET /workspaces/{id}/spaces)
+	ListSpaces(w http.ResponseWriter, r *http.Request, id PathId)
+	// Create a space; the creator becomes its manager — workspace members
+	// (POST /workspaces/{id}/spaces)
+	CreateSpace(w http.ResponseWriter, r *http.Request, id PathId)
+	// Delete a space, its content, and its access list — manager
+	// (DELETE /workspaces/{id}/spaces/{space_id})
+	DeleteSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, params DeleteSpaceParams)
+	// One space the caller can see
+	// (GET /workspaces/{id}/spaces/{space_id})
+	GetSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID)
+	// Rename or re-scope a space — manager
+	// (PATCH /workspaces/{id}/spaces/{space_id})
+	UpdateSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID)
+	// The space's access list — viewer
+	// (GET /workspaces/{id}/spaces/{space_id}/members)
+	ListSpaceMembers(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID)
+	// Remove a user/team entry — manager
+	// (DELETE /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id})
+	DeleteSpaceMember(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, principalType string, principalId openapi_types.UUID)
+	// Grant or raise a user/team role — manager
+	// (PUT /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id})
+	SetSpaceMember(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, principalType string, principalId openapi_types.UUID)
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId)
@@ -858,13 +882,13 @@ func (_ Unimplemented) GetStatementResults(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List workspace folders
+// List folders of the spaces the caller can see
 // (GET /workspaces/{id}/folders)
 func (_ Unimplemented) ListFolders(w http.ResponseWriter, r *http.Request, id PathId, params ListFoldersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Create a folder in the workspace
+// Create a folder in a space the caller may edit
 // (POST /workspaces/{id}/folders)
 func (_ Unimplemented) CreateFolder(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -906,13 +930,13 @@ func (_ Unimplemented) GetMetadataTable(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List workspace saved queries
+// List saved queries of the spaces the caller can see
 // (GET /workspaces/{id}/queries)
 func (_ Unimplemented) ListSavedQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListSavedQueriesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Save a query in the workspace
+// Save a query in a space the caller may edit
 // (POST /workspaces/{id}/queries)
 func (_ Unimplemented) CreateSavedQuery(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1008,33 +1032,81 @@ func (_ Unimplemented) ListSemanticMetrics(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Create and validate a metric — workspace members
+// Create and validate a metric — space editor
 // (POST /workspaces/{id}/semantic/metrics)
 func (_ Unimplemented) CreateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Delete a metric — workspace members
+// Delete a metric — space editor
 // (DELETE /workspaces/{id}/semantic/metrics/{metric_id})
 func (_ Unimplemented) DeleteSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Return a metric — workspace members
+// Return a metric — space viewer
 // (GET /workspaces/{id}/semantic/metrics/{metric_id})
 func (_ Unimplemented) GetSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Update and revalidate a metric — workspace members
+// Update and revalidate a metric — space editor
 // (PATCH /workspaces/{id}/semantic/metrics/{metric_id})
 func (_ Unimplemented) UpdateSemanticMetric(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Render a metric to SQL for one binding — workspace members
+// Render a metric to SQL for one binding — space viewer
 // (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
 func (_ Unimplemented) GetSemanticMetricSql(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params GetSemanticMetricSqlParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Spaces the caller can see, with their role — workspace members
+// (GET /workspaces/{id}/spaces)
+func (_ Unimplemented) ListSpaces(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a space; the creator becomes its manager — workspace members
+// (POST /workspaces/{id}/spaces)
+func (_ Unimplemented) CreateSpace(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a space, its content, and its access list — manager
+// (DELETE /workspaces/{id}/spaces/{space_id})
+func (_ Unimplemented) DeleteSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, params DeleteSpaceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One space the caller can see
+// (GET /workspaces/{id}/spaces/{space_id})
+func (_ Unimplemented) GetSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename or re-scope a space — manager
+// (PATCH /workspaces/{id}/spaces/{space_id})
+func (_ Unimplemented) UpdateSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The space's access list — viewer
+// (GET /workspaces/{id}/spaces/{space_id}/members)
+func (_ Unimplemented) ListSpaceMembers(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a user/team entry — manager
+// (DELETE /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id})
+func (_ Unimplemented) DeleteSpaceMember(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, principalType string, principalId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Grant or raise a user/team role — manager
+// (PUT /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id})
+func (_ Unimplemented) SetSpaceMember(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, principalType string, principalId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3742,6 +3814,14 @@ func (siw *ServerInterfaceWrapper) ListFolders(w http.ResponseWriter, r *http.Re
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListFoldersParams
 
+	// ------------- Optional query parameter "space_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "space_id", r.URL.Query(), &params.SpaceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "parent_id" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "parent_id", r.URL.Query(), &params.ParentId)
@@ -4143,6 +4223,14 @@ func (siw *ServerInterfaceWrapper) ListSavedQueries(w http.ResponseWriter, r *ht
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListSavedQueriesParams
+
+	// ------------- Optional query parameter "space_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "space_id", r.URL.Query(), &params.SpaceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "folder_id" -------------
 
@@ -5220,6 +5308,371 @@ func (siw *ServerInterfaceWrapper) GetSemanticMetricSql(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListSpaces operation middleware
+func (siw *ServerInterfaceWrapper) ListSpaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSpaces(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSpace operation middleware
+func (siw *ServerInterfaceWrapper) CreateSpace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSpace(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSpace operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSpace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSpaceParams
+
+	// ------------- Optional query parameter "force" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "force", r.URL.Query(), &params.Force)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "force", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSpace(w, r, id, spaceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSpace operation middleware
+func (siw *ServerInterfaceWrapper) GetSpace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSpace(w, r, id, spaceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSpace operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSpace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSpace(w, r, id, spaceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSpaceMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListSpaceMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSpaceMembers(w, r, id, spaceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSpaceMember operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSpaceMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal_type" -------------
+	var principalType string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal_type", chi.URLParam(r, "principal_type"), &principalType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal_type", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal_id" -------------
+	var principalId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal_id", chi.URLParam(r, "principal_id"), &principalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSpaceMember(w, r, id, spaceId, principalType, principalId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSpaceMember operation middleware
+func (siw *ServerInterfaceWrapper) SetSpaceMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal_type" -------------
+	var principalType string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal_type", chi.URLParam(r, "principal_type"), &principalType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal_type", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal_id" -------------
+	var principalId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal_id", chi.URLParam(r, "principal_id"), &principalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSpaceMember(w, r, id, spaceId, principalType, principalId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspaceTargets operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspaceTargets(w http.ResponseWriter, r *http.Request) {
 
@@ -5761,6 +6214,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}/sql", wrapper.GetSemanticMetricSql)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/spaces", wrapper.ListSpaces)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/spaces", wrapper.CreateSpace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/spaces/{space_id}", wrapper.DeleteSpace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/spaces/{space_id}", wrapper.GetSpace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/workspaces/{id}/spaces/{space_id}", wrapper.UpdateSpace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/spaces/{space_id}/members", wrapper.ListSpaceMembers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id}", wrapper.DeleteSpaceMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id}", wrapper.SetSpaceMember)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/targets", wrapper.ListWorkspaceTargets)
@@ -9185,6 +9662,35 @@ func (response CreateFolder401JSONResponse) VisitCreateFolderResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateFolder403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateFolder403JSONResponse) VisitCreateFolderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateFolder404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateFolder404JSONResponse) VisitCreateFolderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateFolder422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateFolder422JSONResponse) VisitCreateFolderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteFolderRequestObject struct {
 	Id       PathId             `json:"id"`
 	FolderId openapi_types.UUID `json:"folder_id"`
@@ -9206,6 +9712,15 @@ type DeleteFolder401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response DeleteFolder401JSONResponse) VisitDeleteFolderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteFolder403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteFolder403JSONResponse) VisitDeleteFolderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9477,6 +9992,44 @@ func (response CreateSavedQuery401JSONResponse) VisitCreateSavedQueryResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateSavedQuery403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSavedQuery403JSONResponse) VisitCreateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSavedQuery404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateSavedQuery404JSONResponse) VisitCreateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSavedQuery409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateSavedQuery409JSONResponse) VisitCreateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSavedQuery422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateSavedQuery422JSONResponse) VisitCreateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteSavedQueryRequestObject struct {
 	Id      PathId             `json:"id"`
 	QueryId openapi_types.UUID `json:"query_id"`
@@ -9498,6 +10051,15 @@ type DeleteSavedQuery401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response DeleteSavedQuery401JSONResponse) VisitDeleteSavedQueryResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSavedQuery403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSavedQuery403JSONResponse) VisitDeleteSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9534,6 +10096,15 @@ type GetSavedQuery401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response GetSavedQuery401JSONResponse) VisitGetSavedQueryResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSavedQuery403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSavedQuery403JSONResponse) VisitGetSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9575,11 +10146,40 @@ func (response UpdateSavedQuery401JSONResponse) VisitUpdateSavedQueryResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateSavedQuery403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateSavedQuery403JSONResponse) VisitUpdateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type UpdateSavedQuery404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateSavedQuery404JSONResponse) VisitUpdateSavedQueryResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSavedQuery409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateSavedQuery409JSONResponse) VisitUpdateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSavedQuery422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateSavedQuery422JSONResponse) VisitUpdateSavedQueryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -10079,6 +10679,15 @@ func (response CreateSemanticMetric401JSONResponse) VisitCreateSemanticMetricRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateSemanticMetric403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSemanticMetric403JSONResponse) VisitCreateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateSemanticMetric404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateSemanticMetric404JSONResponse) VisitCreateSemanticMetricResponse(w http.ResponseWriter) error {
@@ -10133,6 +10742,15 @@ func (response DeleteSemanticMetric401JSONResponse) VisitDeleteSemanticMetricRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteSemanticMetric403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSemanticMetric403JSONResponse) VisitDeleteSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteSemanticMetric404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteSemanticMetric404JSONResponse) VisitDeleteSemanticMetricResponse(w http.ResponseWriter) error {
@@ -10165,6 +10783,15 @@ type GetSemanticMetric401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response GetSemanticMetric401JSONResponse) VisitGetSemanticMetricResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetric403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSemanticMetric403JSONResponse) VisitGetSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -10202,6 +10829,15 @@ type UpdateSemanticMetric401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response UpdateSemanticMetric401JSONResponse) VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticMetric403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateSemanticMetric403JSONResponse) VisitUpdateSemanticMetricResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -10263,6 +10899,15 @@ func (response GetSemanticMetricSql401JSONResponse) VisitGetSemanticMetricSqlRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetSemanticMetricSql403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSemanticMetricSql403JSONResponse) VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetSemanticMetricSql404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetSemanticMetricSql404JSONResponse) VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error {
@@ -10277,6 +10922,392 @@ type GetSemanticMetricSql422JSONResponse struct {
 }
 
 func (response GetSemanticMetricSql422JSONResponse) VisitGetSemanticMetricSqlResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSpacesRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListSpacesResponseObject interface {
+	VisitListSpacesResponse(w http.ResponseWriter) error
+}
+
+type ListSpaces200JSONResponse []Space
+
+func (response ListSpaces200JSONResponse) VisitListSpacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSpaces401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSpaces401JSONResponse) VisitListSpacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSpaces404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSpaces404JSONResponse) VisitListSpacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSpaceRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateSpaceJSONRequestBody
+}
+
+type CreateSpaceResponseObject interface {
+	VisitCreateSpaceResponse(w http.ResponseWriter) error
+}
+
+type CreateSpace201JSONResponse Space
+
+func (response CreateSpace201JSONResponse) VisitCreateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSpace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateSpace401JSONResponse) VisitCreateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSpace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateSpace404JSONResponse) VisitCreateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSpace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateSpace409JSONResponse) VisitCreateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSpace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateSpace422JSONResponse) VisitCreateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSpaceRequestObject struct {
+	Id      PathId             `json:"id"`
+	SpaceId openapi_types.UUID `json:"space_id"`
+	Params  DeleteSpaceParams
+}
+
+type DeleteSpaceResponseObject interface {
+	VisitDeleteSpaceResponse(w http.ResponseWriter) error
+}
+
+type DeleteSpace204Response = NoContentResponse
+
+func (response DeleteSpace204Response) VisitDeleteSpaceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSpace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSpace401JSONResponse) VisitDeleteSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSpace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSpace403JSONResponse) VisitDeleteSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSpace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSpace404JSONResponse) VisitDeleteSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSpace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteSpace409JSONResponse) VisitDeleteSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSpaceRequestObject struct {
+	Id      PathId             `json:"id"`
+	SpaceId openapi_types.UUID `json:"space_id"`
+}
+
+type GetSpaceResponseObject interface {
+	VisitGetSpaceResponse(w http.ResponseWriter) error
+}
+
+type GetSpace200JSONResponse Space
+
+func (response GetSpace200JSONResponse) VisitGetSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSpace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSpace401JSONResponse) VisitGetSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSpace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSpace404JSONResponse) VisitGetSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSpaceRequestObject struct {
+	Id      PathId             `json:"id"`
+	SpaceId openapi_types.UUID `json:"space_id"`
+	Body    *UpdateSpaceJSONRequestBody
+}
+
+type UpdateSpaceResponseObject interface {
+	VisitUpdateSpaceResponse(w http.ResponseWriter) error
+}
+
+type UpdateSpace200JSONResponse Space
+
+func (response UpdateSpace200JSONResponse) VisitUpdateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSpace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateSpace401JSONResponse) VisitUpdateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSpace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateSpace403JSONResponse) VisitUpdateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSpace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateSpace404JSONResponse) VisitUpdateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSpace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateSpace422JSONResponse) VisitUpdateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSpaceMembersRequestObject struct {
+	Id      PathId             `json:"id"`
+	SpaceId openapi_types.UUID `json:"space_id"`
+}
+
+type ListSpaceMembersResponseObject interface {
+	VisitListSpaceMembersResponse(w http.ResponseWriter) error
+}
+
+type ListSpaceMembers200JSONResponse []SpaceMember
+
+func (response ListSpaceMembers200JSONResponse) VisitListSpaceMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSpaceMembers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSpaceMembers401JSONResponse) VisitListSpaceMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSpaceMembers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListSpaceMembers403JSONResponse) VisitListSpaceMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSpaceMembers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSpaceMembers404JSONResponse) VisitListSpaceMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSpaceMemberRequestObject struct {
+	Id            PathId             `json:"id"`
+	SpaceId       openapi_types.UUID `json:"space_id"`
+	PrincipalType string             `json:"principal_type"`
+	PrincipalId   openapi_types.UUID `json:"principal_id"`
+}
+
+type DeleteSpaceMemberResponseObject interface {
+	VisitDeleteSpaceMemberResponse(w http.ResponseWriter) error
+}
+
+type DeleteSpaceMember204Response = NoContentResponse
+
+func (response DeleteSpaceMember204Response) VisitDeleteSpaceMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSpaceMember401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSpaceMember401JSONResponse) VisitDeleteSpaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSpaceMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSpaceMember403JSONResponse) VisitDeleteSpaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSpaceMember404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSpaceMember404JSONResponse) VisitDeleteSpaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetSpaceMemberRequestObject struct {
+	Id            PathId             `json:"id"`
+	SpaceId       openapi_types.UUID `json:"space_id"`
+	PrincipalType string             `json:"principal_type"`
+	PrincipalId   openapi_types.UUID `json:"principal_id"`
+	Body          *SetSpaceMemberJSONRequestBody
+}
+
+type SetSpaceMemberResponseObject interface {
+	VisitSetSpaceMemberResponse(w http.ResponseWriter) error
+}
+
+type SetSpaceMember200JSONResponse SpaceMember
+
+func (response SetSpaceMember200JSONResponse) VisitSetSpaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetSpaceMember401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetSpaceMember401JSONResponse) VisitSetSpaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetSpaceMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetSpaceMember403JSONResponse) VisitSetSpaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetSpaceMember404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetSpaceMember404JSONResponse) VisitSetSpaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetSpaceMember422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SetSpaceMember422JSONResponse) VisitSetSpaceMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -10593,10 +11624,10 @@ type StrictServerInterface interface {
 	// Single-statement result as Arrow IPC stream
 	// (GET /workspaces/{id}/executions/{execution_id}/statements/{position}/results)
 	GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error)
-	// List workspace folders
+	// List folders of the spaces the caller can see
 	// (GET /workspaces/{id}/folders)
 	ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error)
-	// Create a folder in the workspace
+	// Create a folder in a space the caller may edit
 	// (POST /workspaces/{id}/folders)
 	CreateFolder(ctx context.Context, request CreateFolderRequestObject) (CreateFolderResponseObject, error)
 	// Remove a folder and its contents
@@ -10617,10 +11648,10 @@ type StrictServerInterface interface {
 	// A table with its columns, typed and named for one of its catalog's bindings
 	// (GET /workspaces/{id}/metadata/tables/{table_id})
 	GetMetadataTable(ctx context.Context, request GetMetadataTableRequestObject) (GetMetadataTableResponseObject, error)
-	// List workspace saved queries
+	// List saved queries of the spaces the caller can see
 	// (GET /workspaces/{id}/queries)
 	ListSavedQueries(ctx context.Context, request ListSavedQueriesRequestObject) (ListSavedQueriesResponseObject, error)
-	// Save a query in the workspace
+	// Save a query in a space the caller may edit
 	// (POST /workspaces/{id}/queries)
 	CreateSavedQuery(ctx context.Context, request CreateSavedQueryRequestObject) (CreateSavedQueryResponseObject, error)
 	// Remove a saved query
@@ -10668,21 +11699,45 @@ type StrictServerInterface interface {
 	// Metrics of the workspace — workspace members
 	// (GET /workspaces/{id}/semantic/metrics)
 	ListSemanticMetrics(ctx context.Context, request ListSemanticMetricsRequestObject) (ListSemanticMetricsResponseObject, error)
-	// Create and validate a metric — workspace members
+	// Create and validate a metric — space editor
 	// (POST /workspaces/{id}/semantic/metrics)
 	CreateSemanticMetric(ctx context.Context, request CreateSemanticMetricRequestObject) (CreateSemanticMetricResponseObject, error)
-	// Delete a metric — workspace members
+	// Delete a metric — space editor
 	// (DELETE /workspaces/{id}/semantic/metrics/{metric_id})
 	DeleteSemanticMetric(ctx context.Context, request DeleteSemanticMetricRequestObject) (DeleteSemanticMetricResponseObject, error)
-	// Return a metric — workspace members
+	// Return a metric — space viewer
 	// (GET /workspaces/{id}/semantic/metrics/{metric_id})
 	GetSemanticMetric(ctx context.Context, request GetSemanticMetricRequestObject) (GetSemanticMetricResponseObject, error)
-	// Update and revalidate a metric — workspace members
+	// Update and revalidate a metric — space editor
 	// (PATCH /workspaces/{id}/semantic/metrics/{metric_id})
 	UpdateSemanticMetric(ctx context.Context, request UpdateSemanticMetricRequestObject) (UpdateSemanticMetricResponseObject, error)
-	// Render a metric to SQL for one binding — workspace members
+	// Render a metric to SQL for one binding — space viewer
 	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
 	GetSemanticMetricSql(ctx context.Context, request GetSemanticMetricSqlRequestObject) (GetSemanticMetricSqlResponseObject, error)
+	// Spaces the caller can see, with their role — workspace members
+	// (GET /workspaces/{id}/spaces)
+	ListSpaces(ctx context.Context, request ListSpacesRequestObject) (ListSpacesResponseObject, error)
+	// Create a space; the creator becomes its manager — workspace members
+	// (POST /workspaces/{id}/spaces)
+	CreateSpace(ctx context.Context, request CreateSpaceRequestObject) (CreateSpaceResponseObject, error)
+	// Delete a space, its content, and its access list — manager
+	// (DELETE /workspaces/{id}/spaces/{space_id})
+	DeleteSpace(ctx context.Context, request DeleteSpaceRequestObject) (DeleteSpaceResponseObject, error)
+	// One space the caller can see
+	// (GET /workspaces/{id}/spaces/{space_id})
+	GetSpace(ctx context.Context, request GetSpaceRequestObject) (GetSpaceResponseObject, error)
+	// Rename or re-scope a space — manager
+	// (PATCH /workspaces/{id}/spaces/{space_id})
+	UpdateSpace(ctx context.Context, request UpdateSpaceRequestObject) (UpdateSpaceResponseObject, error)
+	// The space's access list — viewer
+	// (GET /workspaces/{id}/spaces/{space_id}/members)
+	ListSpaceMembers(ctx context.Context, request ListSpaceMembersRequestObject) (ListSpaceMembersResponseObject, error)
+	// Remove a user/team entry — manager
+	// (DELETE /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id})
+	DeleteSpaceMember(ctx context.Context, request DeleteSpaceMemberRequestObject) (DeleteSpaceMemberResponseObject, error)
+	// Grant or raise a user/team role — manager
+	// (PUT /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id})
+	SetSpaceMember(ctx context.Context, request SetSpaceMemberRequestObject) (SetSpaceMemberResponseObject, error)
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error)
@@ -13876,6 +14931,246 @@ func (sh *strictHandler) GetSemanticMetricSql(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSemanticMetricSqlResponseObject); ok {
 		if err := validResponse.VisitGetSemanticMetricSqlResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSpaces operation middleware
+func (sh *strictHandler) ListSpaces(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListSpacesRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSpaces(ctx, request.(ListSpacesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSpaces")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSpacesResponseObject); ok {
+		if err := validResponse.VisitListSpacesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSpace operation middleware
+func (sh *strictHandler) CreateSpace(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateSpaceRequestObject
+
+	request.Id = id
+
+	var body CreateSpaceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSpace(ctx, request.(CreateSpaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSpace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSpaceResponseObject); ok {
+		if err := validResponse.VisitCreateSpaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSpace operation middleware
+func (sh *strictHandler) DeleteSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, params DeleteSpaceParams) {
+	var request DeleteSpaceRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSpace(ctx, request.(DeleteSpaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSpace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSpaceResponseObject); ok {
+		if err := validResponse.VisitDeleteSpaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSpace operation middleware
+func (sh *strictHandler) GetSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	var request GetSpaceRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSpace(ctx, request.(GetSpaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSpace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSpaceResponseObject); ok {
+		if err := validResponse.VisitGetSpaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateSpace operation middleware
+func (sh *strictHandler) UpdateSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	var request UpdateSpaceRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+
+	var body UpdateSpaceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateSpace(ctx, request.(UpdateSpaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateSpace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateSpaceResponseObject); ok {
+		if err := validResponse.VisitUpdateSpaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSpaceMembers operation middleware
+func (sh *strictHandler) ListSpaceMembers(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	var request ListSpaceMembersRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSpaceMembers(ctx, request.(ListSpaceMembersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSpaceMembers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSpaceMembersResponseObject); ok {
+		if err := validResponse.VisitListSpaceMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSpaceMember operation middleware
+func (sh *strictHandler) DeleteSpaceMember(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, principalType string, principalId openapi_types.UUID) {
+	var request DeleteSpaceMemberRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+	request.PrincipalType = principalType
+	request.PrincipalId = principalId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSpaceMember(ctx, request.(DeleteSpaceMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSpaceMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSpaceMemberResponseObject); ok {
+		if err := validResponse.VisitDeleteSpaceMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetSpaceMember operation middleware
+func (sh *strictHandler) SetSpaceMember(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, principalType string, principalId openapi_types.UUID) {
+	var request SetSpaceMemberRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+	request.PrincipalType = principalType
+	request.PrincipalId = principalId
+
+	var body SetSpaceMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetSpaceMember(ctx, request.(SetSpaceMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetSpaceMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetSpaceMemberResponseObject); ok {
+		if err := validResponse.VisitSetSpaceMemberResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

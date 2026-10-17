@@ -1,0 +1,20 @@
+meta {
+  name: Delete Default Space (409)
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{default_space_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq conflict
+}

@@ -1,0 +1,30 @@
+meta {
+  name: List Spaces
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].is_default: eq true
+  res.body[0].slug: eq general
+}
+
+script:post-response {
+  const def = res.body.find(s => s.is_default);
+  if (def) bru.setVar("default_space_id", def.id);
+}
+
+docs {
+  Only the spaces the caller can see, default first, with my_role.
+}

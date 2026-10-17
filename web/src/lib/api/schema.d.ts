@@ -626,7 +626,7 @@ export interface paths {
         get: operations["listSemanticMetrics"];
         put?: never;
         /**
-         * Create and validate a metric — workspace members
+         * Create and validate a metric — space editor
          * @description The definition is validated structurally (DisallowUnknownFields) and then rendered for the chosen binding and probed with a zero-row read-only statement in the caller's identity. A custom_sql metric also needs the engine to enforce read-only (or read-only credentials).
          */
         post: operations["createSemanticMetric"];
@@ -646,15 +646,15 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Return a metric — workspace members */
+        /** Return a metric — space viewer */
         get: operations["getSemanticMetric"];
         put?: never;
         post?: never;
-        /** Delete a metric — workspace members */
+        /** Delete a metric — space editor */
         delete: operations["deleteSemanticMetric"];
         options?: never;
         head?: never;
-        /** Update and revalidate a metric — workspace members */
+        /** Update and revalidate a metric — space editor */
         patch: operations["updateSemanticMetric"];
         trace?: never;
     };
@@ -668,11 +668,96 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Render a metric to SQL for one binding — workspace members */
+        /** Render a metric to SQL for one binding — space viewer */
         get: operations["getSemanticMetricSql"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/spaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Spaces the caller can see, with their role — workspace members */
+        get: operations["listSpaces"];
+        put?: never;
+        /** Create a space; the creator becomes its manager — workspace members */
+        post: operations["createSpace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/spaces/{space_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        /** One space the caller can see */
+        get: operations["getSpace"];
+        put?: never;
+        post?: never;
+        /** Delete a space, its content, and its access list — manager */
+        delete: operations["deleteSpace"];
+        options?: never;
+        head?: never;
+        /** Rename or re-scope a space — manager */
+        patch: operations["updateSpace"];
+        trace?: never;
+    };
+    "/workspaces/{id}/spaces/{space_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        /** The space's access list — viewer */
+        get: operations["listSpaceMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+                principal_type: "user" | "team";
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Grant or raise a user/team role — manager */
+        put: operations["setSpaceMember"];
+        post?: never;
+        /** Remove a user/team entry — manager */
+        delete: operations["deleteSpaceMember"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1212,10 +1297,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List workspace folders */
+        /** List folders of the spaces the caller can see */
         get: operations["listFolders"];
         put?: never;
-        /** Create a folder in the workspace */
+        /** Create a folder in a space the caller may edit */
         post: operations["createFolder"];
         delete?: never;
         options?: never;
@@ -1252,10 +1337,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List workspace saved queries */
+        /** List saved queries of the spaces the caller can see */
         get: operations["listSavedQueries"];
         put?: never;
-        /** Save a query in the workspace */
+        /** Save a query in a space the caller may edit */
         post: operations["createSavedQuery"];
         delete?: never;
         options?: never;
@@ -2574,6 +2659,66 @@ export interface components {
             /** @enum {string} */
             permission: "read" | "write";
         };
+        Space: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            name: string;
+            slug: string;
+            description?: string | null;
+            /** @enum {string} */
+            visibility: "workspace" | "restricted";
+            /** @enum {string} */
+            default_role: "viewer" | "editor";
+            is_default: boolean;
+            /**
+             * @description The caller's effective role (list and get only)
+             * @enum {string|null}
+             */
+            my_role?: "viewer" | "editor" | "manager" | null;
+            /** Format: uuid */
+            created_by?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        CreateSpaceRequest: {
+            name: string;
+            description?: string | null;
+            /** @enum {string} */
+            visibility: "workspace" | "restricted";
+            /**
+             * @default viewer
+             * @enum {string}
+             */
+            default_role: "viewer" | "editor";
+        };
+        UpdateSpaceRequest: {
+            name?: string;
+            description?: string | null;
+            /** @enum {string} */
+            visibility?: "workspace" | "restricted";
+            /** @enum {string} */
+            default_role?: "viewer" | "editor";
+        };
+        SpaceMember: {
+            /** @enum {string} */
+            principal_type: "user" | "team";
+            /** Format: uuid */
+            principal_id: string;
+            /** @enum {string} */
+            role: "viewer" | "editor" | "manager";
+            /** Format: uuid */
+            granted_by?: string | null;
+            /** Format: date-time */
+            granted_at?: string;
+        };
+        SetSpaceMemberRequest: {
+            /** @enum {string} */
+            role: "viewer" | "editor" | "manager";
+        };
         QueryFolder: {
             /** Format: uuid */
             id: string;
@@ -2581,14 +2726,29 @@ export interface components {
             /** Format: uuid */
             workspace_id: string;
             /** Format: uuid */
+            space_id: string;
+            slug: string;
+            /** Format: uuid */
             parent_id?: string | null;
             /** Format: date-time */
             created_at: string;
         };
         CreateFolderRequest: {
             name: string;
+            /**
+             * Format: uuid
+             * @description Omitted: the workspace's default space
+             */
+            space_id?: string | null;
+            /** @description Omitted: derived from name */
+            slug?: string | null;
             /** Format: uuid */
             parent_id?: string | null;
+        };
+        SavedQueryTarget: {
+            /** Format: uuid */
+            binding_id?: string | null;
+            schema?: string | null;
         };
         SavedQuery: {
             /** Format: uuid */
@@ -2597,10 +2757,16 @@ export interface components {
             /** Format: uuid */
             workspace_id: string;
             /** Format: uuid */
+            space_id: string;
+            slug: string;
+            /** Format: uuid */
             folder_id?: string | null;
             /** Format: uuid */
             created_by: string;
+            /** Format: uuid */
+            updated_by?: string | null;
             sql: string;
+            target?: components["schemas"]["SavedQueryTarget"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2608,15 +2774,29 @@ export interface components {
         };
         CreateSavedQueryRequest: {
             name: string;
+            /**
+             * Format: uuid
+             * @description Omitted: the workspace's default space
+             */
+            space_id?: string | null;
+            /** @description Omitted: derived from name */
+            slug?: string | null;
             /** Format: uuid */
             folder_id?: string | null;
             sql: string;
+            target?: components["schemas"]["SavedQueryTarget"];
         };
         UpdateSavedQueryRequest: {
             name?: string;
             /** Format: uuid */
+            space_id?: string | null;
+            slug?: string | null;
+            /** Format: uuid */
             folder_id?: string | null;
+            /** @description Explicitly move the query to the space root; folder_id wins when present */
+            move_to_root?: boolean;
             sql?: string;
+            target?: components["schemas"]["SavedQueryTarget"];
         };
         ExecutionRequest: {
             /** Format: uuid */
@@ -3948,6 +4128,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
@@ -3975,6 +4156,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -3992,6 +4174,7 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -4021,6 +4204,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
@@ -4054,8 +4238,220 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible spaces, default first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Space"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSpaceRequest"];
+            };
+        };
+        responses: {
+            /** @description The space */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Space"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The space */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Space"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSpace: {
+        parameters: {
+            query?: {
+                /** @description Delete even when the space still has content */
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updateSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSpaceRequest"];
+            };
+        };
+        responses: {
+            /** @description The space */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Space"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSpaceMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceMember"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setSpaceMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+                principal_type: "user" | "team";
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSpaceMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description The entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceMember"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteSpaceMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                space_id: string;
+                principal_type: "user" | "team";
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listWorkspaceTargets: {
@@ -5041,6 +5437,7 @@ export interface operations {
     listFolders: {
         parameters: {
             query?: {
+                space_id?: string;
                 parent_id?: string;
             };
             header?: never;
@@ -5088,6 +5485,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     deleteFolder: {
@@ -5104,12 +5504,14 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
     listSavedQueries: {
         parameters: {
             query?: {
+                space_id?: string;
                 folder_id?: string;
             };
             header?: never;
@@ -5157,6 +5559,10 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getSavedQuery: {
@@ -5181,6 +5587,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -5198,6 +5605,7 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -5227,7 +5635,10 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listExecutions: {

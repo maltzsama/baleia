@@ -58,6 +58,18 @@ const (
 	RetrieverRefresh Action = "retriever.refresh"
 
 	MetadataSync Action = "metadata.sync"
+
+	SpaceCreate       Action = "space.create"
+	SpaceUpdate       Action = "space.update"
+	SpaceDelete       Action = "space.delete"
+	SpaceMemberSet    Action = "space.member_set"
+	SpaceMemberRemove Action = "space.member_remove"
+
+	SavedQueryCreate Action = "saved_query.create"
+	SavedQueryUpdate Action = "saved_query.update"
+	SavedQueryDelete Action = "saved_query.delete"
+	FolderCreate     Action = "folder.create"
+	FolderDelete     Action = "folder.delete"
 )
 
 // allActions is the whole vocabulary.
@@ -76,6 +88,8 @@ var allActions = []Action{
 	MaintenanceTrigger,
 	RetrieverCreate, RetrieverUpdate, RetrieverDelete, RetrieverRefresh,
 	MetadataSync,
+	SpaceCreate, SpaceUpdate, SpaceDelete, SpaceMemberSet, SpaceMemberRemove,
+	SavedQueryCreate, SavedQueryUpdate, SavedQueryDelete, FolderCreate, FolderDelete,
 }
 
 // Actions returns the vocabulary.
