@@ -1089,7 +1089,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all catalog connections — admin only */
+        /** List the catalog connections the caller can see */
         get: operations["listCatalogConnections"];
         put?: never;
         /** Create a catalog connection — admin only */
@@ -1544,6 +1544,102 @@ export interface paths {
         get: operations["listReconcileRuns"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/reconcile-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        /** One reconcile run with its stored actions — admins */
+        get: operations["getReconcileRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Catalogs the federated engine reported, with managed/adopted mode */
+        get: operations["listEngineObservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** What depends on this engine before disabling or deleting it */
+        get: operations["getEngineImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reach, authenticate and version the registered engine */
+        post: operations["testEngine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engines/{id}/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run native-catalog discovery now (direct engines) */
+        post: operations["discoverEngineCatalogs"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2653,6 +2749,50 @@ export interface components {
             capabilities?: components["schemas"]["EngineCapabilities"] | null;
             /** @description How to write SQL for it; keyword and function lists are at GET /dialects/{name} */
             dialect?: components["schemas"]["EngineDialect"] | null;
+            /** @description Result of the latest reachability probe; unknown before the first probe */
+            health?: components["schemas"]["EngineHealth"] | null;
+            connection?: components["schemas"]["EngineConnectionRef"] | null;
+            /** @description Distinct logical catalogs bound to this engine */
+            catalog_count?: number;
+            /** @description Copied from the connection: its credentials only allow reads */
+            credentials_read_only?: boolean;
+        };
+        EngineHealth: {
+            /** @description ok, unreachable or unknown */
+            status: string;
+            /** Format: date-time */
+            checked_at?: string | null;
+            error_code?: string | null;
+        };
+        EngineConnectionRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        EngineObservation: {
+            catalog_name: string;
+            connector?: string | null;
+            present: boolean;
+            /** @description managed or adopted */
+            mode: string;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            observed_at: string;
+        };
+        EngineImpact: {
+            managed_bindings: number;
+            native_catalogs: number;
+            grants: number;
+            metrics: number;
+            docs: number;
+            saved_queries_targeting: number;
+            running_executions: number;
+        };
+        DiscoverResult: {
+            added: string[];
+            disabled: string[];
+            unchanged: string[];
         };
         /** @description What an engine can do. Capabilities never authorize anything: what a user may run is decided by policy (catalog DDL is never allowed in the editor, whatever supports_catalog_ddl says). */
         EngineCapabilities: {
@@ -2807,6 +2947,8 @@ export interface components {
             /** @description Catalogs the engine has that Baleia does not manage: reported, never dropped */
             adopted: string[];
             error?: string | null;
+            /** @description BALEIA_RECONCILE_MAX_ACTIONS of the run */
+            max_actions?: number | null;
         };
         MetadataFreshness: {
             /**
@@ -5791,7 +5933,12 @@ export interface operations {
     };
     listCatalogConnections: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only connections whose allowed_actions include this action, e.g. register_engine */
+                action?: string;
+                /** @description Only connections that do not back an engine yet */
+                without_engine?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6679,6 +6826,139 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getReconcileRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileRun"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listEngineObservations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Observations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineObservation"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getEngineImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Impact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineImpact"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testEngine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCatalogConnectionResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Too many tests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    discoverEngineCatalogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What discovery changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listFolders: {

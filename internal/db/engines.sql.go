@@ -31,6 +31,48 @@ func (q *Queries) CountEngineBlockers(ctx context.Context, engineID pgtype.UUID)
 	return i, err
 }
 
+const countEngineImpact = `-- name: CountEngineImpact :one
+SELECT
+    (SELECT count(*) FROM catalog_bindings b WHERE b.engine_id = $1 AND b.mode = 'managed')::bigint AS managed_bindings,
+    (SELECT count(*) FROM catalog_bindings b JOIN catalogs c ON c.id = b.catalog_id
+      WHERE b.engine_id = $1 AND b.mode = 'native' AND c.origin = 'native')::bigint AS native_catalogs,
+    (SELECT count(*) FROM workspace_catalog_grants g
+      JOIN catalog_bindings b ON b.catalog_id = g.catalog_id WHERE b.engine_id = $1)::bigint AS grants,
+    (SELECT count(*) FROM semantic_metrics m
+      JOIN catalog_bindings b ON (b.catalog_id = m.catalog_id OR b.id = m.binding_id)
+      WHERE b.engine_id = $1)::bigint AS metrics,
+    0::bigint AS docs,
+    (SELECT count(*) FROM saved_queries s
+      JOIN catalog_bindings b ON b.id = s.target_binding_id WHERE b.engine_id = $1)::bigint AS saved_queries_targeting,
+    (SELECT count(*) FROM query_executions e WHERE e.engine_id = $1 AND e.status = 'running')::bigint AS running_executions
+`
+
+type CountEngineImpactRow struct {
+	ManagedBindings       int64 `json:"managed_bindings"`
+	NativeCatalogs        int64 `json:"native_catalogs"`
+	Grants                int64 `json:"grants"`
+	Metrics               int64 `json:"metrics"`
+	Docs                  int64 `json:"docs"`
+	SavedQueriesTargeting int64 `json:"saved_queries_targeting"`
+	RunningExecutions     int64 `json:"running_executions"`
+}
+
+// What depends on an engine before disabling or deleting it (#110).
+func (q *Queries) CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (CountEngineImpactRow, error) {
+	row := q.db.QueryRow(ctx, countEngineImpact, engineID)
+	var i CountEngineImpactRow
+	err := row.Scan(
+		&i.ManagedBindings,
+		&i.NativeCatalogs,
+		&i.Grants,
+		&i.Metrics,
+		&i.Docs,
+		&i.SavedQueriesTargeting,
+		&i.RunningExecutions,
+	)
+	return i, err
+}
+
 const createEngine = `-- name: CreateEngine :one
 INSERT INTO engines (name, kind, class, connection_id, identity_mode, created_by)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -281,6 +323,41 @@ func (q *Queries) ListEnabledEnginesWithConnection(ctx context.Context) ([]ListE
 			&i.CatalogConnection.Config,
 			&i.CatalogConnection.CredentialsReadOnly,
 			&i.ClusterID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEngineObservations = `-- name: ListEngineObservations :many
+SELECT engine_id, catalog_name, present, mode, connector, first_seen_at, observed_at FROM engine_catalog_observations
+WHERE engine_id = $1
+ORDER BY catalog_name
+`
+
+// Catalogs the engine reported, with the managed/adopted mode (#38).
+func (q *Queries) ListEngineObservations(ctx context.Context, engineID pgtype.UUID) ([]EngineCatalogObservation, error) {
+	rows, err := q.db.Query(ctx, listEngineObservations, engineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EngineCatalogObservation
+	for rows.Next() {
+		var i EngineCatalogObservation
+		if err := rows.Scan(
+			&i.EngineID,
+			&i.CatalogName,
+			&i.Present,
+			&i.Mode,
+			&i.Connector,
+			&i.FirstSeenAt,
+			&i.ObservedAt,
 		); err != nil {
 			return nil, err
 		}

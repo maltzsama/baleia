@@ -84,6 +84,24 @@
 			>
 		</a>
 		<a
+			href={resolve('/engines')}
+			title="Engines"
+			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+				{isActive('/engines')
+				? 'bg-primary text-white'
+				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+		>
+			<svg viewBox="0 0 24 24" class="w-4 h-4"
+				><rect x="3" y="4" width="18" height="6" rx="1.5" /><rect
+					x="3"
+					y="14"
+					width="18"
+					height="6"
+					rx="1.5"
+				/><circle cx="7" cy="7" r=".8" /><circle cx="7" cy="17" r=".8" /></svg
+			>
+		</a>
+		<a
 			href={resolve('/monitoring')}
 			title="Monitoring"
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150

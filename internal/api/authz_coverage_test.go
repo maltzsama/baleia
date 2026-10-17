@@ -225,6 +225,12 @@ var operationAccess = map[string]access{
 	"ListAuditActions": {kind: kindAuthenticated, why: "static action vocabulary, no tenant data"},
 	"ResolveAudit":     checked("PrincipalFromContext", "Workspace", "Connection"),
 	"ExportAuditCSV":   checked("PrincipalFromContext", "IsAdmin"),
+	// Engine pages (#110).
+	"TestEngine":             checked("PrincipalFromContext", "Engine"),
+	"ListEngineObservations": checked("PrincipalFromContext", "Engine"),
+	"GetEngineImpact":        checked("PrincipalFromContext", "Engine"),
+	"DiscoverEngineCatalogs": checked("PrincipalFromContext", "Engine"),
+	"GetReconcileRun":        checked("PrincipalFromContext", "RequireAdmin"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),

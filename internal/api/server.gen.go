@@ -75,9 +75,9 @@ type ServerInterface interface {
 	// Re-apply a managed binding's current projection to its engine
 	// (POST /bindings/{id}/sync)
 	SyncCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
-	// List all catalog connections — admin only
+	// List the catalog connections the caller can see
 	// (GET /catalog-connections)
-	ListCatalogConnections(w http.ResponseWriter, r *http.Request)
+	ListCatalogConnections(w http.ResponseWriter, r *http.Request, params ListCatalogConnectionsParams)
 	// Create a catalog connection — admin only
 	// (POST /catalog-connections)
 	CreateCatalogConnection(w http.ResponseWriter, r *http.Request)
@@ -171,6 +171,12 @@ type ServerInterface interface {
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(w http.ResponseWriter, r *http.Request, id PathId)
+	// Run native-catalog discovery now (direct engines)
+	// (POST /engines/{id}/discover)
+	DiscoverEngineCatalogs(w http.ResponseWriter, r *http.Request, id PathId)
+	// What depends on this engine before disabling or deleting it
+	// (GET /engines/{id}/impact)
+	GetEngineImpact(w http.ResponseWriter, r *http.Request, id PathId)
 	// Cluster snapshots of an engine
 	// (GET /engines/{id}/monitoring/cluster)
 	GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams)
@@ -183,12 +189,21 @@ type ServerInterface interface {
 	// Cancel a running query
 	// (POST /engines/{id}/monitoring/queries/{query_id})
 	KillMonitoringQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId string)
+	// Catalogs the federated engine reported, with managed/adopted mode
+	// (GET /engines/{id}/observations)
+	ListEngineObservations(w http.ResponseWriter, r *http.Request, id PathId)
 	// Repair the engine's managed catalog drift and report the rest — admins
 	// (POST /engines/{id}/reconcile)
 	ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams)
 	// Latest reconcile runs of the engine, newest first — admins
 	// (GET /engines/{id}/reconcile-runs)
 	ListReconcileRuns(w http.ResponseWriter, r *http.Request, id PathId, params ListReconcileRunsParams)
+	// One reconcile run with its stored actions — admins
+	// (GET /engines/{id}/reconcile-runs/{run_id})
+	GetReconcileRun(w http.ResponseWriter, r *http.Request, id PathId, runId openapi_types.UUID)
+	// Reach, authenticate and version the registered engine
+	// (POST /engines/{id}/test)
+	TestEngine(w http.ResponseWriter, r *http.Request, id PathId)
 	// Current user profile
 	// (GET /me)
 	GetProfile(w http.ResponseWriter, r *http.Request)
@@ -579,9 +594,9 @@ func (_ Unimplemented) SyncCatalogBinding(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List all catalog connections — admin only
+// List the catalog connections the caller can see
 // (GET /catalog-connections)
-func (_ Unimplemented) ListCatalogConnections(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) ListCatalogConnections(w http.ResponseWriter, r *http.Request, params ListCatalogConnectionsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -771,6 +786,18 @@ func (_ Unimplemented) ListEngineBindings(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Run native-catalog discovery now (direct engines)
+// (POST /engines/{id}/discover)
+func (_ Unimplemented) DiscoverEngineCatalogs(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What depends on this engine before disabling or deleting it
+// (GET /engines/{id}/impact)
+func (_ Unimplemented) GetEngineImpact(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Cluster snapshots of an engine
 // (GET /engines/{id}/monitoring/cluster)
 func (_ Unimplemented) GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams) {
@@ -795,6 +822,12 @@ func (_ Unimplemented) KillMonitoringQuery(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Catalogs the federated engine reported, with managed/adopted mode
+// (GET /engines/{id}/observations)
+func (_ Unimplemented) ListEngineObservations(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Repair the engine's managed catalog drift and report the rest — admins
 // (POST /engines/{id}/reconcile)
 func (_ Unimplemented) ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams) {
@@ -804,6 +837,18 @@ func (_ Unimplemented) ReconcileEngine(w http.ResponseWriter, r *http.Request, i
 // Latest reconcile runs of the engine, newest first — admins
 // (GET /engines/{id}/reconcile-runs)
 func (_ Unimplemented) ListReconcileRuns(w http.ResponseWriter, r *http.Request, id PathId, params ListReconcileRunsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One reconcile run with its stored actions — admins
+// (GET /engines/{id}/reconcile-runs/{run_id})
+func (_ Unimplemented) GetReconcileRun(w http.ResponseWriter, r *http.Request, id PathId, runId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Reach, authenticate and version the registered engine
+// (POST /engines/{id}/test)
+func (_ Unimplemented) TestEngine(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1990,6 +2035,8 @@ func (siw *ServerInterfaceWrapper) SyncCatalogBinding(w http.ResponseWriter, r *
 // ListCatalogConnections operation middleware
 func (siw *ServerInterfaceWrapper) ListCatalogConnections(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -1998,8 +2045,27 @@ func (siw *ServerInterfaceWrapper) ListCatalogConnections(w http.ResponseWriter,
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCatalogConnectionsParams
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "action", r.URL.Query(), &params.Action)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "without_engine" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "without_engine", r.URL.Query(), &params.WithoutEngine)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "without_engine", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListCatalogConnections(w, r)
+		siw.Handler.ListCatalogConnections(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3090,6 +3156,72 @@ func (siw *ServerInterfaceWrapper) ListEngineBindings(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// DiscoverEngineCatalogs operation middleware
+func (siw *ServerInterfaceWrapper) DiscoverEngineCatalogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscoverEngineCatalogs(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEngineImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetEngineImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEngineImpact(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEngineCluster operation middleware
 func (siw *ServerInterfaceWrapper) GetEngineCluster(w http.ResponseWriter, r *http.Request) {
 
@@ -3294,6 +3426,39 @@ func (siw *ServerInterfaceWrapper) KillMonitoringQuery(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListEngineObservations operation middleware
+func (siw *ServerInterfaceWrapper) ListEngineObservations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEngineObservations(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReconcileEngine operation middleware
 func (siw *ServerInterfaceWrapper) ReconcileEngine(w http.ResponseWriter, r *http.Request) {
 
@@ -3373,6 +3538,81 @@ func (siw *ServerInterfaceWrapper) ListReconcileRuns(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListReconcileRuns(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReconcileRun operation middleware
+func (siw *ServerInterfaceWrapper) GetReconcileRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "run_id" -------------
+	var runId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "run_id", chi.URLParam(r, "run_id"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "run_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReconcileRun(w, r, id, runId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestEngine operation middleware
+func (siw *ServerInterfaceWrapper) TestEngine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestEngine(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7503,6 +7743,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/engines/{id}/bindings", wrapper.ListEngineBindings)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engines/{id}/discover", wrapper.DiscoverEngineCatalogs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/impact", wrapper.GetEngineImpact)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engines/{id}/monitoring/cluster", wrapper.GetEngineCluster)
 	})
 	r.Group(func(r chi.Router) {
@@ -7515,10 +7761,19 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/engines/{id}/monitoring/queries/{query_id}", wrapper.KillMonitoringQuery)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/observations", wrapper.ListEngineObservations)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/engines/{id}/reconcile", wrapper.ReconcileEngine)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engines/{id}/reconcile-runs", wrapper.ListReconcileRuns)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/reconcile-runs/{run_id}", wrapper.GetReconcileRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engines/{id}/test", wrapper.TestEngine)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetProfile)
@@ -8453,6 +8708,7 @@ func (response SyncCatalogBinding422JSONResponse) VisitSyncCatalogBindingRespons
 }
 
 type ListCatalogConnectionsRequestObject struct {
+	Params ListCatalogConnectionsParams
 }
 
 type ListCatalogConnectionsResponseObject interface {
@@ -9907,6 +10163,96 @@ func (response ListEngineBindings404JSONResponse) VisitListEngineBindingsRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DiscoverEngineCatalogsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DiscoverEngineCatalogsResponseObject interface {
+	VisitDiscoverEngineCatalogsResponse(w http.ResponseWriter) error
+}
+
+type DiscoverEngineCatalogs200JSONResponse DiscoverResult
+
+func (response DiscoverEngineCatalogs200JSONResponse) VisitDiscoverEngineCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DiscoverEngineCatalogs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DiscoverEngineCatalogs401JSONResponse) VisitDiscoverEngineCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DiscoverEngineCatalogs403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DiscoverEngineCatalogs403JSONResponse) VisitDiscoverEngineCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DiscoverEngineCatalogs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DiscoverEngineCatalogs404JSONResponse) VisitDiscoverEngineCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DiscoverEngineCatalogs422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DiscoverEngineCatalogs422JSONResponse) VisitDiscoverEngineCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineImpactRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetEngineImpactResponseObject interface {
+	VisitGetEngineImpactResponse(w http.ResponseWriter) error
+}
+
+type GetEngineImpact200JSONResponse EngineImpact
+
+func (response GetEngineImpact200JSONResponse) VisitGetEngineImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineImpact401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetEngineImpact401JSONResponse) VisitGetEngineImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineImpact404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetEngineImpact404JSONResponse) VisitGetEngineImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetEngineClusterRequestObject struct {
 	Id     PathId `json:"id"`
 	Params GetEngineClusterParams
@@ -10077,6 +10423,41 @@ func (response KillMonitoringQuery409JSONResponse) VisitKillMonitoringQueryRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListEngineObservationsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListEngineObservationsResponseObject interface {
+	VisitListEngineObservationsResponse(w http.ResponseWriter) error
+}
+
+type ListEngineObservations200JSONResponse []EngineObservation
+
+func (response ListEngineObservations200JSONResponse) VisitListEngineObservationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEngineObservations401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListEngineObservations401JSONResponse) VisitListEngineObservationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEngineObservations404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListEngineObservations404JSONResponse) VisitListEngineObservationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ReconcileEngineRequestObject struct {
 	Id     PathId `json:"id"`
 	Params ReconcileEngineParams
@@ -10174,6 +10555,95 @@ type ListReconcileRuns404JSONResponse struct{ NotFoundJSONResponse }
 func (response ListReconcileRuns404JSONResponse) VisitListReconcileRunsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetReconcileRunRequestObject struct {
+	Id    PathId             `json:"id"`
+	RunId openapi_types.UUID `json:"run_id"`
+}
+
+type GetReconcileRunResponseObject interface {
+	VisitGetReconcileRunResponse(w http.ResponseWriter) error
+}
+
+type GetReconcileRun200JSONResponse ReconcileRun
+
+func (response GetReconcileRun200JSONResponse) VisitGetReconcileRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetReconcileRun401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetReconcileRun401JSONResponse) VisitGetReconcileRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetReconcileRun403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetReconcileRun403JSONResponse) VisitGetReconcileRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetReconcileRun404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetReconcileRun404JSONResponse) VisitGetReconcileRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestEngineRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type TestEngineResponseObject interface {
+	VisitTestEngineResponse(w http.ResponseWriter) error
+}
+
+type TestEngine200JSONResponse TestCatalogConnectionResult
+
+func (response TestEngine200JSONResponse) VisitTestEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestEngine401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TestEngine401JSONResponse) VisitTestEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestEngine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response TestEngine404JSONResponse) VisitTestEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestEngine429JSONResponse Error
+
+func (response TestEngine429JSONResponse) VisitTestEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -14075,7 +14545,7 @@ type StrictServerInterface interface {
 	// Re-apply a managed binding's current projection to its engine
 	// (POST /bindings/{id}/sync)
 	SyncCatalogBinding(ctx context.Context, request SyncCatalogBindingRequestObject) (SyncCatalogBindingResponseObject, error)
-	// List all catalog connections — admin only
+	// List the catalog connections the caller can see
 	// (GET /catalog-connections)
 	ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error)
 	// Create a catalog connection — admin only
@@ -14171,6 +14641,12 @@ type StrictServerInterface interface {
 	// Catalogs bound to an engine
 	// (GET /engines/{id}/bindings)
 	ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error)
+	// Run native-catalog discovery now (direct engines)
+	// (POST /engines/{id}/discover)
+	DiscoverEngineCatalogs(ctx context.Context, request DiscoverEngineCatalogsRequestObject) (DiscoverEngineCatalogsResponseObject, error)
+	// What depends on this engine before disabling or deleting it
+	// (GET /engines/{id}/impact)
+	GetEngineImpact(ctx context.Context, request GetEngineImpactRequestObject) (GetEngineImpactResponseObject, error)
 	// Cluster snapshots of an engine
 	// (GET /engines/{id}/monitoring/cluster)
 	GetEngineCluster(ctx context.Context, request GetEngineClusterRequestObject) (GetEngineClusterResponseObject, error)
@@ -14183,12 +14659,21 @@ type StrictServerInterface interface {
 	// Cancel a running query
 	// (POST /engines/{id}/monitoring/queries/{query_id})
 	KillMonitoringQuery(ctx context.Context, request KillMonitoringQueryRequestObject) (KillMonitoringQueryResponseObject, error)
+	// Catalogs the federated engine reported, with managed/adopted mode
+	// (GET /engines/{id}/observations)
+	ListEngineObservations(ctx context.Context, request ListEngineObservationsRequestObject) (ListEngineObservationsResponseObject, error)
 	// Repair the engine's managed catalog drift and report the rest — admins
 	// (POST /engines/{id}/reconcile)
 	ReconcileEngine(ctx context.Context, request ReconcileEngineRequestObject) (ReconcileEngineResponseObject, error)
 	// Latest reconcile runs of the engine, newest first — admins
 	// (GET /engines/{id}/reconcile-runs)
 	ListReconcileRuns(ctx context.Context, request ListReconcileRunsRequestObject) (ListReconcileRunsResponseObject, error)
+	// One reconcile run with its stored actions — admins
+	// (GET /engines/{id}/reconcile-runs/{run_id})
+	GetReconcileRun(ctx context.Context, request GetReconcileRunRequestObject) (GetReconcileRunResponseObject, error)
+	// Reach, authenticate and version the registered engine
+	// (POST /engines/{id}/test)
+	TestEngine(ctx context.Context, request TestEngineRequestObject) (TestEngineResponseObject, error)
 	// Current user profile
 	// (GET /me)
 	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
@@ -15020,8 +15505,10 @@ func (sh *strictHandler) SyncCatalogBinding(w http.ResponseWriter, r *http.Reque
 }
 
 // ListCatalogConnections operation middleware
-func (sh *strictHandler) ListCatalogConnections(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListCatalogConnections(w http.ResponseWriter, r *http.Request, params ListCatalogConnectionsParams) {
 	var request ListCatalogConnectionsRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListCatalogConnections(ctx, request.(ListCatalogConnectionsRequestObject))
@@ -15928,6 +16415,58 @@ func (sh *strictHandler) ListEngineBindings(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// DiscoverEngineCatalogs operation middleware
+func (sh *strictHandler) DiscoverEngineCatalogs(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DiscoverEngineCatalogsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DiscoverEngineCatalogs(ctx, request.(DiscoverEngineCatalogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DiscoverEngineCatalogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DiscoverEngineCatalogsResponseObject); ok {
+		if err := validResponse.VisitDiscoverEngineCatalogsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEngineImpact operation middleware
+func (sh *strictHandler) GetEngineImpact(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetEngineImpactRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEngineImpact(ctx, request.(GetEngineImpactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEngineImpact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEngineImpactResponseObject); ok {
+		if err := validResponse.VisitGetEngineImpactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetEngineCluster operation middleware
 func (sh *strictHandler) GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams) {
 	var request GetEngineClusterRequestObject
@@ -16036,6 +16575,32 @@ func (sh *strictHandler) KillMonitoringQuery(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// ListEngineObservations operation middleware
+func (sh *strictHandler) ListEngineObservations(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListEngineObservationsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEngineObservations(ctx, request.(ListEngineObservationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEngineObservations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEngineObservationsResponseObject); ok {
+		if err := validResponse.VisitListEngineObservationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ReconcileEngine operation middleware
 func (sh *strictHandler) ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams) {
 	var request ReconcileEngineRequestObject
@@ -16083,6 +16648,59 @@ func (sh *strictHandler) ListReconcileRuns(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListReconcileRunsResponseObject); ok {
 		if err := validResponse.VisitListReconcileRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReconcileRun operation middleware
+func (sh *strictHandler) GetReconcileRun(w http.ResponseWriter, r *http.Request, id PathId, runId openapi_types.UUID) {
+	var request GetReconcileRunRequestObject
+
+	request.Id = id
+	request.RunId = runId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReconcileRun(ctx, request.(GetReconcileRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReconcileRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReconcileRunResponseObject); ok {
+		if err := validResponse.VisitGetReconcileRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestEngine operation middleware
+func (sh *strictHandler) TestEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request TestEngineRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestEngine(ctx, request.(TestEngineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestEngine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestEngineResponseObject); ok {
+		if err := validResponse.VisitTestEngineResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

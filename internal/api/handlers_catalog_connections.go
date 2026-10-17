@@ -41,11 +41,51 @@ func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatal
 		return nil, err
 	}
 
+	action := ""
+	if request.Params.Action != nil {
+		action = *request.Params.Action
+	}
+	withoutEngine := request.Params.WithoutEngine != nil && *request.Params.WithoutEngine
+	var engineConnections map[[16]byte]struct{}
+	if withoutEngine {
+		engines, err := h.queries.ListEngines(ctx)
+		if err != nil {
+			return nil, err
+		}
+		engineConnections = make(map[[16]byte]struct{}, len(engines))
+		for _, e := range engines {
+			engineConnections[e.ConnectionID.Bytes] = struct{}{}
+		}
+	}
+
 	result := make([]CatalogConnection, 0, len(conns))
 	for _, c := range conns {
-		result = append(result, h.withConnectionActions(ctx, c))
+		conn := h.withConnectionActions(ctx, c)
+		if action != "" && !connectionAllows(conn, action) {
+			continue
+		}
+		if withoutEngine {
+			if _, used := engineConnections[c.ID.Bytes]; used {
+				continue
+			}
+		}
+		result = append(result, conn)
 	}
 	return ListCatalogConnections200JSONResponse(result), nil
+}
+
+// connectionAllows reports whether the computed allowed_actions include the
+// requested action (#110).
+func connectionAllows(conn CatalogConnection, action string) bool {
+	if conn.AllowedActions == nil {
+		return false
+	}
+	for _, allowed := range *conn.AllowedActions {
+		if string(allowed) == action {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error) {

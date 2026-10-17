@@ -1216,19 +1216,36 @@ type Dialect struct {
 	Name              string   `json:"name"`
 }
 
+// DiscoverResult defines model for DiscoverResult.
+type DiscoverResult struct {
+	Added     []string `json:"added"`
+	Disabled  []string `json:"disabled"`
+	Unchanged []string `json:"unchanged"`
+}
+
 // Engine defines model for Engine.
 type Engine struct {
 	AllowedActions *[]EngineAllowedAction `json:"allowed_actions,omitempty"`
 
 	// Capabilities What the engine can do; null when the engine is disabled or no adapter for its kind is available yet
 	Capabilities *EngineCapabilities `json:"capabilities"`
-	Class        EngineClass         `json:"class"`
-	ConnectionId openapi_types.UUID  `json:"connection_id"`
-	CreatedAt    time.Time           `json:"created_at"`
+
+	// CatalogCount Distinct logical catalogs bound to this engine
+	CatalogCount *int                 `json:"catalog_count,omitempty"`
+	Class        EngineClass          `json:"class"`
+	Connection   *EngineConnectionRef `json:"connection"`
+	ConnectionId openapi_types.UUID   `json:"connection_id"`
+	CreatedAt    time.Time            `json:"created_at"`
+
+	// CredentialsReadOnly Copied from the connection: its credentials only allow reads
+	CredentialsReadOnly *bool `json:"credentials_read_only,omitempty"`
 
 	// Dialect How to write SQL for it; keyword and function lists are at GET /dialects/{name}
-	Dialect      *EngineDialect     `json:"dialect"`
-	Enabled      bool               `json:"enabled"`
+	Dialect *EngineDialect `json:"dialect"`
+	Enabled bool           `json:"enabled"`
+
+	// Health Result of the latest reachability probe; unknown before the first probe
+	Health       *EngineHealth      `json:"health"`
 	Id           openapi_types.UUID `json:"id"`
 	IdentityMode EngineIdentityMode `json:"identity_mode"`
 
@@ -1292,6 +1309,12 @@ type EngineCapabilitiesIdentityModes string
 // EngineCapabilitiesReadOnly enforced: the engine guarantees read-only sessions; none: only a read-only database role can
 type EngineCapabilitiesReadOnly string
 
+// EngineConnectionRef defines model for EngineConnectionRef.
+type EngineConnectionRef struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+}
+
 // EngineDialect defines model for EngineDialect.
 type EngineDialect struct {
 	// CodemirrorBase @codemirror/lang-sql base dialect
@@ -1300,6 +1323,38 @@ type EngineDialect struct {
 	// FormatterLanguage sql-formatter language id
 	FormatterLanguage string `json:"formatter_language"`
 	Name              string `json:"name"`
+}
+
+// EngineHealth defines model for EngineHealth.
+type EngineHealth struct {
+	CheckedAt *time.Time `json:"checked_at"`
+	ErrorCode *string    `json:"error_code"`
+
+	// Status ok, unreachable or unknown
+	Status string `json:"status"`
+}
+
+// EngineImpact defines model for EngineImpact.
+type EngineImpact struct {
+	Docs                  int `json:"docs"`
+	Grants                int `json:"grants"`
+	ManagedBindings       int `json:"managed_bindings"`
+	Metrics               int `json:"metrics"`
+	NativeCatalogs        int `json:"native_catalogs"`
+	RunningExecutions     int `json:"running_executions"`
+	SavedQueriesTargeting int `json:"saved_queries_targeting"`
+}
+
+// EngineObservation defines model for EngineObservation.
+type EngineObservation struct {
+	CatalogName string    `json:"catalog_name"`
+	Connector   *string   `json:"connector"`
+	FirstSeenAt time.Time `json:"first_seen_at"`
+
+	// Mode managed or adopted
+	Mode       string    `json:"mode"`
+	ObservedAt time.Time `json:"observed_at"`
+	Present    bool      `json:"present"`
 }
 
 // Error defines model for Error.
@@ -1888,7 +1943,10 @@ type ReconcileRun struct {
 	Error      *string            `json:"error"`
 	FinishedAt time.Time          `json:"finished_at"`
 	Id         openapi_types.UUID `json:"id"`
-	StartedAt  time.Time          `json:"started_at"`
+
+	// MaxActions BALEIA_RECONCILE_MAX_ACTIONS of the run
+	MaxActions *int      `json:"max_actions"`
+	StartedAt  time.Time `json:"started_at"`
 }
 
 // RefreshRequest defines model for RefreshRequest.
@@ -2573,6 +2631,15 @@ type ExportAuditCSVParamsOutcome string
 type OidcCallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
+}
+
+// ListCatalogConnectionsParams defines parameters for ListCatalogConnections.
+type ListCatalogConnectionsParams struct {
+	// Action Only connections whose allowed_actions include this action, e.g. register_engine
+	Action *string `form:"action,omitempty" json:"action,omitempty"`
+
+	// WithoutEngine Only connections that do not back an engine yet
+	WithoutEngine *bool `form:"without_engine,omitempty" json:"without_engine,omitempty"`
 }
 
 // ListMaintenanceRunsParams defines parameters for ListMaintenanceRuns.

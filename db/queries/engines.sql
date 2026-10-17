@@ -81,3 +81,25 @@ WHERE c.created_by = sqlc.arg('user_id')
         WHERE b.engine_id = e.id
           AND (w.owner_user_id = sqlc.arg('user_id') OR tm.user_id = sqlc.arg('user_id')))
 ORDER BY e.name;
+
+-- name: ListEngineObservations :many
+-- Catalogs the engine reported, with the managed/adopted mode (#38).
+SELECT * FROM engine_catalog_observations
+WHERE engine_id = $1
+ORDER BY catalog_name;
+
+-- name: CountEngineImpact :one
+-- What depends on an engine before disabling or deleting it (#110).
+SELECT
+    (SELECT count(*) FROM catalog_bindings b WHERE b.engine_id = $1 AND b.mode = 'managed')::bigint AS managed_bindings,
+    (SELECT count(*) FROM catalog_bindings b JOIN catalogs c ON c.id = b.catalog_id
+      WHERE b.engine_id = $1 AND b.mode = 'native' AND c.origin = 'native')::bigint AS native_catalogs,
+    (SELECT count(*) FROM workspace_catalog_grants g
+      JOIN catalog_bindings b ON b.catalog_id = g.catalog_id WHERE b.engine_id = $1)::bigint AS grants,
+    (SELECT count(*) FROM semantic_metrics m
+      JOIN catalog_bindings b ON (b.catalog_id = m.catalog_id OR b.id = m.binding_id)
+      WHERE b.engine_id = $1)::bigint AS metrics,
+    0::bigint AS docs,
+    (SELECT count(*) FROM saved_queries s
+      JOIN catalog_bindings b ON b.id = s.target_binding_id WHERE b.engine_id = $1)::bigint AS saved_queries_targeting,
+    (SELECT count(*) FROM query_executions e WHERE e.engine_id = $1 AND e.status = 'running')::bigint AS running_executions;

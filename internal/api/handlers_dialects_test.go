@@ -101,7 +101,7 @@ func TestDescribeEngine(t *testing.T) {
 	}))
 	defer srv.Close()
 	engines, _ := trinoBackends(srv.URL)
-	h := &Handlers{engines: engines, versionCache: NewTTLStore[*string](engineVersionTTL)}
+	h := &Handlers{engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)}
 	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
 		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(10, 0), Valid: true}}
 
@@ -196,4 +196,46 @@ func mustExplain(t *testing.T, h *Handlers, req ExplainSQLRequestObject) Explain
 		t.Fatal(err)
 	}
 	return resp
+}
+
+// TestEngineHealth_FromProbe guards #110: a failed version probe is cached as
+// unreachable with its error code instead of leaving health unknown.
+func TestEngineHealth_FromProbe(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "down", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	engines, _ := trinoBackends(srv.URL)
+	h := &Handlers{engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)}
+	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
+		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(20, 0), Valid: true}}
+
+	e := h.describeEngine(context.Background(), row)
+	if e.Health == nil {
+		t.Fatal("health is nil")
+	}
+	if e.Health.Status != "unreachable" {
+		t.Fatalf("health.status = %q, want unreachable", e.Health.Status)
+	}
+	if e.Health.ErrorCode == nil || *e.Health.ErrorCode == "" {
+		t.Fatalf("error_code = %v", e.Health.ErrorCode)
+	}
+	if e.Health.CheckedAt == nil {
+		t.Fatal("checked_at is nil")
+	}
+}
+
+func TestConnectionAllows_ChecksComputedActions(t *testing.T) {
+	actions := []CatalogConnectionAllowedAction{CatalogConnectionAllowedActionRegisterEngine}
+	conn := CatalogConnection{AllowedActions: &actions}
+	if !connectionAllows(conn, "register_engine") {
+		t.Fatal("register_engine should be allowed")
+	}
+	if connectionAllows(conn, "delete") {
+		t.Fatal("delete should not be allowed")
+	}
+	if connectionAllows(CatalogConnection{}, "register_engine") {
+		t.Fatal("nil actions should allow nothing")
+	}
 }
