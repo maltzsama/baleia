@@ -152,3 +152,39 @@ LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
 WHERE w.owner_user_id = u.id OR tm.user_id = u.id
 ORDER BY u.name
 LIMIT @lim::int;
+
+-- name: DeleteWorkspace :execrows
+DELETE FROM workspaces WHERE id = $1 AND type = 'shared';
+
+-- name: CountWorkspaceRunningExecutions :one
+SELECT count(*)::bigint FROM query_executions WHERE workspace_id = $1 AND status = 'running';
+
+-- name: CountWorkspaceImpact :one
+SELECT
+    (SELECT count(*) FROM saved_queries WHERE workspace_id = @workspace_id::uuid)::bigint AS saved_queries,
+    (SELECT count(*) FROM semantic_metrics WHERE workspace_id = @workspace_id::uuid)::bigint AS metrics,
+    (SELECT count(*) FROM spaces WHERE workspace_id = @workspace_id::uuid)::bigint AS spaces,
+    (SELECT count(*) FROM query_executions WHERE workspace_id = @workspace_id::uuid AND status = 'running')::bigint AS running_executions,
+    EXISTS (SELECT 1 FROM workspaces w WHERE w.id = @workspace_id::uuid AND w.default_binding_id IS NOT NULL) AS default_target_affected;
+
+-- name: CountCatalogAccessImpact :one
+SELECT
+    (SELECT count(*) FROM saved_queries s
+      JOIN catalog_bindings b ON b.id = s.target_binding_id
+      WHERE s.workspace_id = @workspace_id::uuid AND b.catalog_id = @catalog_id::uuid)::bigint AS saved_queries,
+    (SELECT count(*) FROM semantic_metrics m
+      WHERE m.workspace_id = @workspace_id::uuid AND m.catalog_id = @catalog_id::uuid)::bigint AS metrics,
+    (SELECT count(*) FROM query_executions e
+      JOIN catalog_bindings b ON b.id = e.target_binding_id
+      WHERE e.workspace_id = @workspace_id::uuid AND b.catalog_id = @catalog_id::uuid AND e.status = 'running')::bigint AS running_executions,
+    EXISTS (
+      SELECT 1 FROM workspaces w
+      JOIN catalog_bindings b ON b.id = w.default_binding_id
+      WHERE w.id = @workspace_id::uuid AND b.catalog_id = @catalog_id::uuid
+    ) AS default_target_affected;
+
+-- name: ClearWorkspaceDefaultForCatalog :exec
+UPDATE workspaces
+SET default_binding_id = NULL, default_schema = NULL, updated_at = now()
+WHERE id = @workspace_id::uuid
+  AND default_binding_id IN (SELECT id FROM catalog_bindings WHERE catalog_id = @catalog_id::uuid);

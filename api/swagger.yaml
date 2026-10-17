@@ -367,7 +367,7 @@ components:
     # ── Workspaces ─────────────────────────────────────────────
     Workspace:
       type: object
-      required: [id, name, type, polaris_catalog_name, created_at, allowed_actions]
+      required: [id, name, type, created_at, allowed_actions]
       properties:
         allowed_actions:
           type: array
@@ -384,6 +384,16 @@ components:
         owner_team_id: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    WorkspaceImpact:
+      type: object
+      required: [saved_queries, metrics, spaces, running_executions, default_target_affected]
+      properties:
+        saved_queries: { type: integer }
+        metrics: { type: integer }
+        spaces: { type: integer }
+        running_executions: { type: integer }
+        default_target_affected: { type: boolean }
 
     CreateWorkspaceRequest:
       type: object
@@ -2781,6 +2791,52 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Workspaces]
+      operationId: deleteWorkspace
+      summary: "Delete a shared workspace and its content — owner or admin"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /workspaces/{id}/impact:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Workspaces]
+      operationId: getWorkspaceImpact
+      summary: "What a workspace delete would remove — owner or admin"
+      responses:
+        "200":
+          description: "Impact"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceImpact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/catalog-access/{catalog_id}/impact:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Workspaces]
+      operationId: getCatalogAccessImpact
+      summary: "What revoking this catalog grant would affect — owner or admin"
+      responses:
+        "200":
+          description: "Impact"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceImpact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /audit/events:
     get:

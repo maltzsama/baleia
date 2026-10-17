@@ -314,6 +314,11 @@ func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalo
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "grant not found"}}, nil
 	}
+	if err := h.queries.ClearWorkspaceDefaultForCatalog(ctx, db.ClearWorkspaceDefaultForCatalogParams{
+		WorkspaceID: wsID, CatalogID: catalogID,
+	}); err != nil {
+		return nil, err
+	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
 	return RevokeCatalogAccess204Response{}, nil
@@ -337,7 +342,7 @@ func dbWorkspaceToPublic(w db.Workspace) Workspace {
 		Id:                 id,
 		Name:               w.Name,
 		Type:               WorkspaceType(w.Type),
-		PolarisCatalogName: w.PolarisCatalogName,
+		PolarisCatalogName: &w.PolarisCatalogName,
 		CreatedAt:          pgTimestampToTime(w.CreatedAt),
 		UpdatedAt:          func() *time.Time { t := pgTimestampToTime(w.UpdatedAt); return &t }(),
 	}
@@ -377,3 +382,97 @@ func toPolarisName(name string) string {
 
 func fieldPtr(s string) *string { return &s }
 func msgPtr(s string) *string   { return &s }
+
+// DeleteWorkspace — DELETE /workspaces/{id} (#108). Shared workspaces only,
+// owner or admin, and never while an execution is running.
+func (h *Handlers) DeleteWorkspace(ctx context.Context, request DeleteWorkspaceRequestObject) (DeleteWorkspaceResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return DeleteWorkspace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	wsID := workspaceIDFromRequest(request.Id)
+	ev := audit.Event{Action: audit.WorkspaceDelete, ResourceType: "workspace", ResourceID: idString(wsID), WorkspaceID: idString(wsID)}
+	ctx = audit.WithAction(ctx, ev.Action)
+	ws, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin)
+	switch {
+	case errors.Is(err, authz.ErrNotFound):
+		return DeleteWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	case errors.Is(err, authz.ErrForbidden):
+		return DeleteWorkspace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a workspace owner may delete it"}}, nil
+	case err != nil:
+		return nil, err
+	}
+	if ws.Type == "personal" {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return DeleteWorkspace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "workspace_personal", Message: "personal workspaces cannot be deleted"}}, nil
+	}
+	running, err := h.queries.CountWorkspaceRunningExecutions(ctx, wsID)
+	if err != nil {
+		return nil, err
+	}
+	if running > 0 {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return DeleteWorkspace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "executions_running", Message: "wait for the workspace's running executions to finish"}}, nil
+	}
+	n, err := h.queries.DeleteWorkspace(ctx, wsID)
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return DeleteWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	}
+	h.catalogCache.Clear()
+	h.audited(ctx, ev.Allowed())
+	return DeleteWorkspace204Response{}, nil
+}
+
+// GetWorkspaceImpact — GET /workspaces/{id}/impact (#108).
+func (h *Handlers) GetWorkspaceImpact(ctx context.Context, request GetWorkspaceImpactRequestObject) (GetWorkspaceImpactResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return GetWorkspaceImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	wsID := workspaceIDFromRequest(request.Id)
+	if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin); errors.Is(err, authz.ErrNotFound) {
+		return GetWorkspaceImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	row, err := h.queries.CountWorkspaceImpact(ctx, wsID)
+	if err != nil {
+		return nil, err
+	}
+	return GetWorkspaceImpact200JSONResponse(WorkspaceImpact{
+		SavedQueries: int(row.SavedQueries), Metrics: int(row.Metrics), Spaces: int(row.Spaces),
+		RunningExecutions: int(row.RunningExecutions), DefaultTargetAffected: row.DefaultTargetAffected,
+	}), nil
+}
+
+// GetCatalogAccessImpact — GET /workspaces/{id}/catalog-access/{catalog_id}/impact (#108).
+func (h *Handlers) GetCatalogAccessImpact(ctx context.Context, request GetCatalogAccessImpactRequestObject) (GetCatalogAccessImpactResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return GetCatalogAccessImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	wsID := workspaceIDFromRequest(request.Id)
+	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin); errors.Is(err, authz.ErrNotFound) {
+		return GetCatalogAccessImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	if _, _, err := h.authz().Catalog(ctx, p, catalogID, authz.ActAdmin); errors.Is(err, authz.ErrNotFound) {
+		return GetCatalogAccessImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	row, err := h.queries.CountCatalogAccessImpact(ctx, db.CountCatalogAccessImpactParams{WorkspaceID: wsID, CatalogID: catalogID})
+	if err != nil {
+		return nil, err
+	}
+	return GetCatalogAccessImpact200JSONResponse(WorkspaceImpact{
+		SavedQueries: int(row.SavedQueries), Metrics: int(row.Metrics),
+		RunningExecutions: int(row.RunningExecutions), DefaultTargetAffected: row.DefaultTargetAffected,
+	}), nil
+}

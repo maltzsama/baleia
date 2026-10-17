@@ -245,6 +245,10 @@ var operationAccess = map[string]access{
 	"SearchContent":           checked("PrincipalFromContext", "Workspace"),
 	"ListWorkspacePrincipals": checked("PrincipalFromContext", "Workspace"),
 	"UpdateFolder":            checked("PrincipalFromContext", "Workspace"),
+	// Workspace settings (#108).
+	"DeleteWorkspace":        checked("PrincipalFromContext", "Workspace"),
+	"GetWorkspaceImpact":     checked("PrincipalFromContext", "Workspace"),
+	"GetCatalogAccessImpact": checked("PrincipalFromContext", "Workspace"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),

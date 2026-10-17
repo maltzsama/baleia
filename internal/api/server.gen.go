@@ -309,6 +309,9 @@ type ServerInterface interface {
 	// Create a workspace — admin only for shared
 	// (POST /workspaces)
 	CreateWorkspace(w http.ResponseWriter, r *http.Request)
+	// Delete a shared workspace and its content — owner or admin
+	// (DELETE /workspaces/{id})
+	DeleteWorkspace(w http.ResponseWriter, r *http.Request, id PathId)
 	// Workspace details
 	// (GET /workspaces/{id})
 	GetWorkspace(w http.ResponseWriter, r *http.Request, id PathId)
@@ -324,6 +327,9 @@ type ServerInterface interface {
 	// Revoke a catalog grant — same rule as granting
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 	RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID)
+	// What revoking this catalog grant would affect — owner or admin
+	// (GET /workspaces/{id}/catalog-access/{catalog_id}/impact)
+	GetCatalogAccessImpact(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID)
 	// Search saved queries, metrics and folders in the visible spaces
 	// (GET /workspaces/{id}/content/search)
 	SearchContent(w http.ResponseWriter, r *http.Request, id PathId, params SearchContentParams)
@@ -360,6 +366,9 @@ type ServerInterface interface {
 	// Rename a folder or move it (and its subtree) within or across spaces
 	// (PATCH /workspaces/{id}/folders/{folder_id})
 	UpdateFolder(w http.ResponseWriter, r *http.Request, id PathId, folderId openapi_types.UUID)
+	// What a workspace delete would remove — owner or admin
+	// (GET /workspaces/{id}/impact)
+	GetWorkspaceImpact(w http.ResponseWriter, r *http.Request, id PathId)
 	// Catalogs the workspace may browse, with freshness and bindings — workspace members
 	// (GET /workspaces/{id}/metadata/catalogs)
 	ListMetadataCatalogs(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1098,6 +1107,12 @@ func (_ Unimplemented) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Delete a shared workspace and its content — owner or admin
+// (DELETE /workspaces/{id})
+func (_ Unimplemented) DeleteWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Workspace details
 // (GET /workspaces/{id})
 func (_ Unimplemented) GetWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
@@ -1125,6 +1140,12 @@ func (_ Unimplemented) GrantCatalogAccess(w http.ResponseWriter, r *http.Request
 // Revoke a catalog grant — same rule as granting
 // (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 func (_ Unimplemented) RevokeCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What revoking this catalog grant would affect — owner or admin
+// (GET /workspaces/{id}/catalog-access/{catalog_id}/impact)
+func (_ Unimplemented) GetCatalogAccessImpact(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1197,6 +1218,12 @@ func (_ Unimplemented) DeleteFolder(w http.ResponseWriter, r *http.Request, id P
 // Rename a folder or move it (and its subtree) within or across spaces
 // (PATCH /workspaces/{id}/folders/{folder_id})
 func (_ Unimplemented) UpdateFolder(w http.ResponseWriter, r *http.Request, id PathId, folderId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What a workspace delete would remove — owner or admin
+// (GET /workspaces/{id}/impact)
+func (_ Unimplemented) GetWorkspaceImpact(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4840,6 +4867,39 @@ func (siw *ServerInterfaceWrapper) CreateWorkspace(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteWorkspace operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWorkspace(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkspace operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkspace(w http.ResponseWriter, r *http.Request) {
 
@@ -5005,6 +5065,48 @@ func (siw *ServerInterfaceWrapper) RevokeCatalogAccess(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeCatalogAccess(w, r, id, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCatalogAccessImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalogAccessImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalogAccessImpact(w, r, id, catalogId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5628,6 +5730,39 @@ func (siw *ServerInterfaceWrapper) UpdateFolder(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateFolder(w, r, id, folderId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWorkspaceImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkspaceImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkspaceImpact(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8529,6 +8664,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/workspaces", wrapper.CreateWorkspace)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}", wrapper.DeleteWorkspace)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}", wrapper.GetWorkspace)
 	})
 	r.Group(func(r chi.Router) {
@@ -8542,6 +8680,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/{id}/catalog-access/{catalog_id}", wrapper.RevokeCatalogAccess)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/catalog-access/{catalog_id}/impact", wrapper.GetCatalogAccessImpact)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/content/search", wrapper.SearchContent)
@@ -8578,6 +8719,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/workspaces/{id}/folders/{folder_id}", wrapper.UpdateFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/impact", wrapper.GetWorkspaceImpact)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs", wrapper.ListMetadataCatalogs)
@@ -12676,6 +12820,57 @@ func (response CreateWorkspace422JSONResponse) VisitCreateWorkspaceResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteWorkspaceRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DeleteWorkspaceResponseObject interface {
+	VisitDeleteWorkspaceResponse(w http.ResponseWriter) error
+}
+
+type DeleteWorkspace204Response = NoContentResponse
+
+func (response DeleteWorkspace204Response) VisitDeleteWorkspaceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWorkspace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteWorkspace401JSONResponse) VisitDeleteWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteWorkspace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWorkspace403JSONResponse) VisitDeleteWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteWorkspace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWorkspace404JSONResponse) VisitDeleteWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteWorkspace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteWorkspace409JSONResponse) VisitDeleteWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetWorkspaceRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -12895,6 +13090,42 @@ func (response RevokeCatalogAccess403JSONResponse) VisitRevokeCatalogAccessRespo
 type RevokeCatalogAccess404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response RevokeCatalogAccess404JSONResponse) VisitRevokeCatalogAccessResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogAccessImpactRequestObject struct {
+	Id        PathId             `json:"id"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type GetCatalogAccessImpactResponseObject interface {
+	VisitGetCatalogAccessImpactResponse(w http.ResponseWriter) error
+}
+
+type GetCatalogAccessImpact200JSONResponse WorkspaceImpact
+
+func (response GetCatalogAccessImpact200JSONResponse) VisitGetCatalogAccessImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogAccessImpact401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalogAccessImpact401JSONResponse) VisitGetCatalogAccessImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogAccessImpact404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalogAccessImpact404JSONResponse) VisitGetCatalogAccessImpactResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -13435,6 +13666,41 @@ type UpdateFolder422JSONResponse struct {
 func (response UpdateFolder422JSONResponse) VisitUpdateFolderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceImpactRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetWorkspaceImpactResponseObject interface {
+	VisitGetWorkspaceImpactResponse(w http.ResponseWriter) error
+}
+
+type GetWorkspaceImpact200JSONResponse WorkspaceImpact
+
+func (response GetWorkspaceImpact200JSONResponse) VisitGetWorkspaceImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceImpact401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetWorkspaceImpact401JSONResponse) VisitGetWorkspaceImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceImpact404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWorkspaceImpact404JSONResponse) VisitGetWorkspaceImpactResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -15966,6 +16232,9 @@ type StrictServerInterface interface {
 	// Create a workspace — admin only for shared
 	// (POST /workspaces)
 	CreateWorkspace(ctx context.Context, request CreateWorkspaceRequestObject) (CreateWorkspaceResponseObject, error)
+	// Delete a shared workspace and its content — owner or admin
+	// (DELETE /workspaces/{id})
+	DeleteWorkspace(ctx context.Context, request DeleteWorkspaceRequestObject) (DeleteWorkspaceResponseObject, error)
 	// Workspace details
 	// (GET /workspaces/{id})
 	GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error)
@@ -15981,6 +16250,9 @@ type StrictServerInterface interface {
 	// Revoke a catalog grant — same rule as granting
 	// (DELETE /workspaces/{id}/catalog-access/{catalog_id})
 	RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error)
+	// What revoking this catalog grant would affect — owner or admin
+	// (GET /workspaces/{id}/catalog-access/{catalog_id}/impact)
+	GetCatalogAccessImpact(ctx context.Context, request GetCatalogAccessImpactRequestObject) (GetCatalogAccessImpactResponseObject, error)
 	// Search saved queries, metrics and folders in the visible spaces
 	// (GET /workspaces/{id}/content/search)
 	SearchContent(ctx context.Context, request SearchContentRequestObject) (SearchContentResponseObject, error)
@@ -16017,6 +16289,9 @@ type StrictServerInterface interface {
 	// Rename a folder or move it (and its subtree) within or across spaces
 	// (PATCH /workspaces/{id}/folders/{folder_id})
 	UpdateFolder(ctx context.Context, request UpdateFolderRequestObject) (UpdateFolderResponseObject, error)
+	// What a workspace delete would remove — owner or admin
+	// (GET /workspaces/{id}/impact)
+	GetWorkspaceImpact(ctx context.Context, request GetWorkspaceImpactRequestObject) (GetWorkspaceImpactResponseObject, error)
 	// Catalogs the workspace may browse, with freshness and bindings — workspace members
 	// (GET /workspaces/{id}/metadata/catalogs)
 	ListMetadataCatalogs(ctx context.Context, request ListMetadataCatalogsRequestObject) (ListMetadataCatalogsResponseObject, error)
@@ -18887,6 +19162,32 @@ func (sh *strictHandler) CreateWorkspace(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// DeleteWorkspace operation middleware
+func (sh *strictHandler) DeleteWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DeleteWorkspaceRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWorkspace(ctx, request.(DeleteWorkspaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWorkspace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWorkspaceResponseObject); ok {
+		if err := validResponse.VisitDeleteWorkspaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetWorkspace operation middleware
 func (sh *strictHandler) GetWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
 	var request GetWorkspaceRequestObject
@@ -19025,6 +19326,33 @@ func (sh *strictHandler) RevokeCatalogAccess(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeCatalogAccessResponseObject); ok {
 		if err := validResponse.VisitRevokeCatalogAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCatalogAccessImpact operation middleware
+func (sh *strictHandler) GetCatalogAccessImpact(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID) {
+	var request GetCatalogAccessImpactRequestObject
+
+	request.Id = id
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalogAccessImpact(ctx, request.(GetCatalogAccessImpactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalogAccessImpact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogAccessImpactResponseObject); ok {
+		if err := validResponse.VisitGetCatalogAccessImpactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -19370,6 +19698,32 @@ func (sh *strictHandler) UpdateFolder(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateFolderResponseObject); ok {
 		if err := validResponse.VisitUpdateFolderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWorkspaceImpact operation middleware
+func (sh *strictHandler) GetWorkspaceImpact(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetWorkspaceImpactRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWorkspaceImpact(ctx, request.(GetWorkspaceImpactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWorkspaceImpact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWorkspaceImpactResponseObject); ok {
+		if err := validResponse.VisitGetWorkspaceImpactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
