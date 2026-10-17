@@ -27,9 +27,9 @@ between instances) is built once per kind.
 
 ## Current compliance
 
-Spaces, folder/saved-query slugs and the `space_id` ownership are in place (#40); saved queries
-and semantic metrics are content items with portable slugs. Content versions, trash and restore
-are in place (#34); the `baleia.bundle` export/import (content-as-code) is still pending (#34).
+Spaces, slugs and `space_id` ownership are in place (#40); saved queries and semantic metrics are
+content items with portable slugs. Content versions, trash/restore and the `baleia.bundle`
+export/import (content-as-code) are in place (#34); the v2 semantic layer is still pending (#91).
 
 ## Alternatives considered
 

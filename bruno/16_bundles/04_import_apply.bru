@@ -1,0 +1,39 @@
+meta {
+  name: Import Apply
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{bundle_space_id}}/import?mode=apply
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "format": "baleia.bundle",
+    "format_version": 1,
+    "baleia_version": "dev",
+    "space": { "slug": "source", "name": "Source" },
+    "items": [
+      { "kind": "folder", "slug": "monthly", "name": "Monthly" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.mode: eq apply
+  res.body.ok: eq true
+  res.body.items[0].action: eq CREATE
+}
+
+docs {
+  Re-running the same bundle answers NO_CHANGES: matching is by (kind, slug),
+  not by id or name.
+}

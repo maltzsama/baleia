@@ -35,6 +35,13 @@ const (
 	AuditEventOutcomeError   AuditEventOutcome = "error"
 )
 
+// Defines values for BundleItemKind.
+const (
+	BundleItemKindFolder         BundleItemKind = "folder"
+	BundleItemKindSavedQuery     BundleItemKind = "saved_query"
+	BundleItemKindSemanticMetric BundleItemKind = "semantic_metric"
+)
+
 // Defines values for CatalogMetadataSyncStatus.
 const (
 	CatalogMetadataSyncStatusFailed   CatalogMetadataSyncStatus = "failed"
@@ -259,6 +266,20 @@ const (
 const (
 	GrantCatalogAccessRequestPermissionRead  GrantCatalogAccessRequestPermission = "read"
 	GrantCatalogAccessRequestPermissionWrite GrantCatalogAccessRequestPermission = "write"
+)
+
+// Defines values for ImportItemAction.
+const (
+	CREATE    ImportItemAction = "CREATE"
+	ERROR     ImportItemAction = "ERROR"
+	NOCHANGES ImportItemAction = "NO_CHANGES"
+	UPDATE    ImportItemAction = "UPDATE"
+)
+
+// Defines values for ImportReportMode.
+const (
+	ImportReportModeApply  ImportReportMode = "apply"
+	ImportReportModeDryRun ImportReportMode = "dry_run"
 )
 
 // Defines values for InviteUserRequestRole.
@@ -606,6 +627,12 @@ const (
 	Year    GetSemanticMetricSqlParamsGrain = "year"
 )
 
+// Defines values for ImportSpaceBundleParamsMode.
+const (
+	ImportSpaceBundleParamsModeApply  ImportSpaceBundleParamsMode = "apply"
+	ImportSpaceBundleParamsModeDryRun ImportSpaceBundleParamsMode = "dry_run"
+)
+
 // Defines values for ListTrashParamsEntityType.
 const (
 	ListTrashParamsEntityTypeSavedQuery     ListTrashParamsEntityType = "saved_query"
@@ -691,6 +718,50 @@ type BindingSupport struct {
 
 	// WritesSupported Whether Baleia supports writing through a binding of this kind; false for read-oriented sources (Unity Catalog)
 	WritesSupported bool `json:"writes_supported"`
+}
+
+// Bundle defines model for Bundle.
+type Bundle struct {
+	BaleiaVersion *string      `json:"baleia_version,omitempty"`
+	Format        string       `json:"format"`
+	FormatVersion int          `json:"format_version"`
+	Items         []BundleItem `json:"items"`
+	Space         BundleSpace  `json:"space"`
+}
+
+// BundleItem defines model for BundleItem.
+type BundleItem struct {
+	Catalog       *string                 `json:"catalog,omitempty"`
+	Certified     *bool                   `json:"certified,omitempty"`
+	Definition    *map[string]interface{} `json:"definition,omitempty"`
+	Description   *string                 `json:"description,omitempty"`
+	Folder        *string                 `json:"folder"`
+	FormatVersion *int                    `json:"format_version,omitempty"`
+	Kind          BundleItemKind          `json:"kind"`
+	Label         *string                 `json:"label,omitempty"`
+	Name          *string                 `json:"name,omitempty"`
+	Namespace     *[]string               `json:"namespace,omitempty"`
+	Parent        *string                 `json:"parent"`
+	Slug          string                  `json:"slug"`
+	Sql           *string                 `json:"sql,omitempty"`
+	Table         *string                 `json:"table,omitempty"`
+	Target        *BundleTarget           `json:"target,omitempty"`
+}
+
+// BundleItemKind defines model for BundleItem.Kind.
+type BundleItemKind string
+
+// BundleSpace defines model for BundleSpace.
+type BundleSpace struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// BundleTarget defines model for BundleTarget.
+type BundleTarget struct {
+	Catalog *string `json:"catalog,omitempty"`
+	Engine  *string `json:"engine,omitempty"`
+	Schema  *string `json:"schema"`
 }
 
 // Catalog defines model for Catalog.
@@ -1246,6 +1317,28 @@ type IcebergCredentials struct {
 	// Token Bearer token
 	Token *string `json:"token,omitempty"`
 }
+
+// ImportItem defines model for ImportItem.
+type ImportItem struct {
+	Action   ImportItemAction `json:"action"`
+	Kind     string           `json:"kind"`
+	Message  *string          `json:"message,omitempty"`
+	Slug     string           `json:"slug"`
+	Warnings *[]string        `json:"warnings,omitempty"`
+}
+
+// ImportItemAction defines model for ImportItem.Action.
+type ImportItemAction string
+
+// ImportReport defines model for ImportReport.
+type ImportReport struct {
+	Items []ImportItem     `json:"items"`
+	Mode  ImportReportMode `json:"mode"`
+	Ok    bool             `json:"ok"`
+}
+
+// ImportReportMode defines model for ImportReport.Mode.
+type ImportReportMode string
 
 // InviteUserRequest defines model for InviteUserRequest.
 type InviteUserRequest struct {
@@ -2373,6 +2466,17 @@ type DeleteSpaceParams struct {
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
 }
 
+// ImportSpaceBundleJSONBody defines parameters for ImportSpaceBundle.
+type ImportSpaceBundleJSONBody map[string]interface{}
+
+// ImportSpaceBundleParams defines parameters for ImportSpaceBundle.
+type ImportSpaceBundleParams struct {
+	Mode *ImportSpaceBundleParamsMode `form:"mode,omitempty" json:"mode,omitempty"`
+}
+
+// ImportSpaceBundleParamsMode defines parameters for ImportSpaceBundle.
+type ImportSpaceBundleParamsMode string
+
 // ListTrashParams defines parameters for ListTrash.
 type ListTrashParams struct {
 	EntityType *ListTrashParamsEntityType `form:"entity_type,omitempty" json:"entity_type,omitempty"`
@@ -2510,6 +2614,9 @@ type CreateSpaceJSONRequestBody = CreateSpaceRequest
 
 // UpdateSpaceJSONRequestBody defines body for UpdateSpace for application/json ContentType.
 type UpdateSpaceJSONRequestBody = UpdateSpaceRequest
+
+// ImportSpaceBundleJSONRequestBody defines body for ImportSpaceBundle for application/json ContentType.
+type ImportSpaceBundleJSONRequestBody ImportSpaceBundleJSONBody
 
 // SetSpaceMemberJSONRequestBody defines body for SetSpaceMember for application/json ContentType.
 type SetSpaceMemberJSONRequestBody = SetSpaceMemberRequest

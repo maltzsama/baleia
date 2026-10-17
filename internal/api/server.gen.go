@@ -387,6 +387,12 @@ type ServerInterface interface {
 	// Rename or re-scope a space — manager
 	// (PATCH /workspaces/{id}/spaces/{space_id})
 	UpdateSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID)
+	// Export a space as a deterministic bundle — viewer
+	// (GET /workspaces/{id}/spaces/{space_id}/export)
+	ExportSpaceBundle(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID)
+	// Import a bundle, dry-run or apply — editor
+	// (POST /workspaces/{id}/spaces/{space_id}/import)
+	ImportSpaceBundle(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, params ImportSpaceBundleParams)
 	// The space's access list — viewer
 	// (GET /workspaces/{id}/spaces/{space_id}/members)
 	ListSpaceMembers(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID)
@@ -1146,6 +1152,18 @@ func (_ Unimplemented) GetSpace(w http.ResponseWriter, r *http.Request, id PathI
 // Rename or re-scope a space — manager
 // (PATCH /workspaces/{id}/spaces/{space_id})
 func (_ Unimplemented) UpdateSpace(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Export a space as a deterministic bundle — viewer
+// (GET /workspaces/{id}/spaces/{space_id}/export)
+func (_ Unimplemented) ExportSpaceBundle(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Import a bundle, dry-run or apply — editor
+// (POST /workspaces/{id}/spaces/{space_id}/import)
+func (_ Unimplemented) ImportSpaceBundle(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, params ImportSpaceBundleParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5900,6 +5918,101 @@ func (siw *ServerInterfaceWrapper) UpdateSpace(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ExportSpaceBundle operation middleware
+func (siw *ServerInterfaceWrapper) ExportSpaceBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportSpaceBundle(w, r, id, spaceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportSpaceBundle operation middleware
+func (siw *ServerInterfaceWrapper) ImportSpaceBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "space_id" -------------
+	var spaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "space_id", chi.URLParam(r, "space_id"), &spaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ImportSpaceBundleParams
+
+	// ------------- Optional query parameter "mode" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "mode", r.URL.Query(), &params.Mode)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mode", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportSpaceBundle(w, r, id, spaceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSpaceMembers operation middleware
 func (siw *ServerInterfaceWrapper) ListSpaceMembers(w http.ResponseWriter, r *http.Request) {
 
@@ -6696,6 +6809,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/workspaces/{id}/spaces/{space_id}", wrapper.UpdateSpace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/spaces/{space_id}/export", wrapper.ExportSpaceBundle)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/spaces/{space_id}/import", wrapper.ImportSpaceBundle)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/spaces/{space_id}/members", wrapper.ListSpaceMembers)
@@ -11953,6 +12072,109 @@ func (response UpdateSpace422JSONResponse) VisitUpdateSpaceResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ExportSpaceBundleRequestObject struct {
+	Id      PathId             `json:"id"`
+	SpaceId openapi_types.UUID `json:"space_id"`
+}
+
+type ExportSpaceBundleResponseObject interface {
+	VisitExportSpaceBundleResponse(w http.ResponseWriter) error
+}
+
+type ExportSpaceBundle200JSONResponse Bundle
+
+func (response ExportSpaceBundle200JSONResponse) VisitExportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportSpaceBundle401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ExportSpaceBundle401JSONResponse) VisitExportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportSpaceBundle403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ExportSpaceBundle403JSONResponse) VisitExportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportSpaceBundle404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ExportSpaceBundle404JSONResponse) VisitExportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ImportSpaceBundleRequestObject struct {
+	Id      PathId             `json:"id"`
+	SpaceId openapi_types.UUID `json:"space_id"`
+	Params  ImportSpaceBundleParams
+	Body    *ImportSpaceBundleJSONRequestBody
+}
+
+type ImportSpaceBundleResponseObject interface {
+	VisitImportSpaceBundleResponse(w http.ResponseWriter) error
+}
+
+type ImportSpaceBundle200JSONResponse ImportReport
+
+func (response ImportSpaceBundle200JSONResponse) VisitImportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ImportSpaceBundle401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ImportSpaceBundle401JSONResponse) VisitImportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ImportSpaceBundle403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ImportSpaceBundle403JSONResponse) VisitImportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ImportSpaceBundle404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ImportSpaceBundle404JSONResponse) VisitImportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ImportSpaceBundle422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ImportSpaceBundle422JSONResponse) VisitImportSpaceBundleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListSpaceMembersRequestObject struct {
 	Id      PathId             `json:"id"`
 	SpaceId openapi_types.UUID `json:"space_id"`
@@ -12571,6 +12793,12 @@ type StrictServerInterface interface {
 	// Rename or re-scope a space — manager
 	// (PATCH /workspaces/{id}/spaces/{space_id})
 	UpdateSpace(ctx context.Context, request UpdateSpaceRequestObject) (UpdateSpaceResponseObject, error)
+	// Export a space as a deterministic bundle — viewer
+	// (GET /workspaces/{id}/spaces/{space_id}/export)
+	ExportSpaceBundle(ctx context.Context, request ExportSpaceBundleRequestObject) (ExportSpaceBundleResponseObject, error)
+	// Import a bundle, dry-run or apply — editor
+	// (POST /workspaces/{id}/spaces/{space_id}/import)
+	ImportSpaceBundle(ctx context.Context, request ImportSpaceBundleRequestObject) (ImportSpaceBundleResponseObject, error)
 	// The space's access list — viewer
 	// (GET /workspaces/{id}/spaces/{space_id}/members)
 	ListSpaceMembers(ctx context.Context, request ListSpaceMembersRequestObject) (ListSpaceMembersResponseObject, error)
@@ -16106,6 +16334,68 @@ func (sh *strictHandler) UpdateSpace(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateSpaceResponseObject); ok {
 		if err := validResponse.VisitUpdateSpaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportSpaceBundle operation middleware
+func (sh *strictHandler) ExportSpaceBundle(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID) {
+	var request ExportSpaceBundleRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportSpaceBundle(ctx, request.(ExportSpaceBundleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportSpaceBundle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportSpaceBundleResponseObject); ok {
+		if err := validResponse.VisitExportSpaceBundleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportSpaceBundle operation middleware
+func (sh *strictHandler) ImportSpaceBundle(w http.ResponseWriter, r *http.Request, id PathId, spaceId openapi_types.UUID, params ImportSpaceBundleParams) {
+	var request ImportSpaceBundleRequestObject
+
+	request.Id = id
+	request.SpaceId = spaceId
+	request.Params = params
+
+	var body ImportSpaceBundleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportSpaceBundle(ctx, request.(ImportSpaceBundleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportSpaceBundle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportSpaceBundleResponseObject); ok {
+		if err := validResponse.VisitImportSpaceBundleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

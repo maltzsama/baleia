@@ -1,0 +1,19 @@
+meta {
+  name: Delete Bundle Space
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/spaces/{{bundle_space_id}}?force=true
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}

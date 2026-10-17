@@ -109,6 +109,7 @@ type Querier interface {
 	// logical catalog.
 	GetBindingForTarget(ctx context.Context, id pgtype.UUID) (GetBindingForTargetRow, error)
 	GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (BindingStatusV, error)
+	GetBindingTargetNames(ctx context.Context, id pgtype.UUID) (GetBindingTargetNamesRow, error)
 	// An enabled binding of the catalog (the given one, else the first) and its
 	// engine kind, to render types and names in that engine's dialect.
 	GetCatalogBindingForDisplay(ctx context.Context, arg GetCatalogBindingForDisplayParams) (GetCatalogBindingForDisplayRow, error)
@@ -118,6 +119,7 @@ type Querier interface {
 	// A catalog with what the sync needs to pick its source: the connection
 	// kind and the reference inside it (warehouse, database).
 	GetCatalogForSync(ctx context.Context, id pgtype.UUID) (GetCatalogForSyncRow, error)
+	GetCatalogNameByID(ctx context.Context, id pgtype.UUID) (string, error)
 	// The freshness of a catalog snapshot: its latest pass and the end of its
 	// latest finished one.
 	GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (GetCatalogSyncStateRow, error)
@@ -131,6 +133,9 @@ type Querier interface {
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (Engine, error)
 	// The engine and the connection it runs on (decrypted by the caller, #19).
 	GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (GetEngineWithConnectionRow, error)
+	GetFolderBySlug(ctx context.Context, arg GetFolderBySlugParams) (QueryFolder, error)
+	// A catalog the workspace may use, by its logical name.
+	GetGrantedCatalogByName(ctx context.Context, arg GetGrantedCatalogByNameParams) (pgtype.UUID, error)
 	// A catalog the workspace may use, with its freshness; no row: not visible
 	// from this workspace.
 	GetGrantedMetadataCatalog(ctx context.Context, arg GetGrantedMetadataCatalogParams) (GetGrantedMetadataCatalogRow, error)
@@ -154,6 +159,7 @@ type Querier interface {
 	// have (and must not trust) a caller-supplied workspace id.
 	GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
+	GetSavedQueryBySlug(ctx context.Context, arg GetSavedQueryBySlugParams) (SavedQuery, error)
 	GetSavedQueryForUpdate(ctx context.Context, arg GetSavedQueryForUpdateParams) (SavedQuery, error)
 	GetSemanticDoc(ctx context.Context, arg GetSemanticDocParams) (SemanticDoc, error)
 	GetSemanticMetric(ctx context.Context, arg GetSemanticMetricParams) (SemanticMetric, error)
@@ -250,7 +256,12 @@ type Querier interface {
 	// Every doc of one table (table-level and per-column), optionally narrowed to
 	// one column. The natural key is catalog + namespace + table [+ column].
 	ListSemanticDocsForTable(ctx context.Context, arg ListSemanticDocsForTableParams) ([]SemanticDoc, error)
+	// Bundles (#34): deterministic, portable content-as-code. Items are matched by
+	// (kind, slug), never by id; omitted items are never deleted.
+	ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]QueryFolder, error)
 	ListSpaceMembers(ctx context.Context, spaceID pgtype.UUID) ([]SpaceMember, error)
+	ListSpaceMetrics(ctx context.Context, spaceID pgtype.UUID) ([]SemanticMetric, error)
+	ListSpaceSavedQueries(ctx context.Context, spaceID pgtype.UUID) ([]SavedQuery, error)
 	// Every space of the workspace where the caller has at least viewer, with the
 	// role. A space with no role is invisible (absent), never 403.
 	ListSpacesForPrincipal(ctx context.Context, arg ListSpacesForPrincipalParams) ([]ListSpacesForPrincipalRow, error)
@@ -368,6 +379,7 @@ type Querier interface {
 	// never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
 	// execution was already terminal; callers treat that as a no-op.
 	UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecutionParams) (QueryExecution, error)
+	UpdateQueryFolder(ctx context.Context, arg UpdateQueryFolderParams) (QueryFolder, error)
 	// Conditional update: only a running statement transitions, so a late
 	// completion can never overwrite a cancellation. Zero matched rows means the
 	// statement was already terminal; callers treat that as a no-op.

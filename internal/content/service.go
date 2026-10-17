@@ -50,6 +50,10 @@ type Service struct {
 // New returns a Service over a pool and its queries.
 func New(pool *pgxpool.Pool, q db.Querier) *Service { return &Service{pool: pool, q: q} }
 
+// WithQuerier returns a Service that writes through q and never opens its own
+// transaction; the bundle importer uses it to make the whole import atomic.
+func (s *Service) WithQuerier(q db.Querier) *Service { return &Service{q: q} }
+
 func (s *Service) inTx(ctx context.Context, fn func(db.Querier) error) error {
 	if s.pool == nil {
 		return fn(s.q)
@@ -310,6 +314,23 @@ func (s *Service) RestoreSavedQuery(ctx context.Context, actor pgtype.UUID, work
 	return out, err
 }
 
+// ImportSavedQuery updates an existing query from a bundle and records an
+// 'import' version.
+func (s *Service) ImportSavedQuery(ctx context.Context, actor pgtype.UUID, in db.UpdateSavedQueryParams) (db.SavedQuery, error) {
+	var out db.SavedQuery
+	err := s.inTx(ctx, func(q db.Querier) error {
+		var err error
+		out, err = q.UpdateSavedQuery(ctx, in)
+		if err != nil {
+			return err
+		}
+		return s.writeVersion(ctx, q, out.WorkspaceID, out.SpaceID, EntitySavedQuery, out.ID, "import", actor, nil, func() ([]byte, error) {
+			return savedQuerySnapshot(out)
+		})
+	})
+	return out, err
+}
+
 // ── semantic metrics ───────────────────────────────────────────────────────────
 
 // CreateSemanticMetric creates a metric and its version 1.
@@ -368,6 +389,23 @@ func (s *Service) UpdateSemanticMetric(ctx context.Context, actor pgtype.UUID, i
 		return err
 	})
 	return out, changed, err
+}
+
+// ImportSemanticMetric updates an existing metric from a bundle and records an
+// 'import' version.
+func (s *Service) ImportSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticMetricParams) (db.SemanticMetric, error) {
+	var out db.SemanticMetric
+	err := s.inTx(ctx, func(q db.Querier) error {
+		var err error
+		out, err = q.UpdateSemanticMetric(ctx, in)
+		if err != nil {
+			return err
+		}
+		return s.writeVersion(ctx, q, out.WorkspaceID, out.SpaceID, EntitySemanticMetric, out.ID, "import", actor, nil, func() ([]byte, error) {
+			return metricSnapshot(out)
+		})
+	})
+	return out, err
 }
 
 // DeleteSemanticMetric records the last state and deletes the row.
