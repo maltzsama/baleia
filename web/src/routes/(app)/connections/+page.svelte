@@ -5,6 +5,7 @@
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Input from '$lib/ui/Input.svelte';
+	import Drawer from '$lib/ui/Drawer.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -32,6 +33,7 @@
 		type Engine
 	} from '$lib/connections/api';
 	import EditConnectionDialog from '$lib/connections/EditConnectionDialog.svelte';
+	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import {
 		canQueryDirectly,
 		normalizeCatalogName,
@@ -60,6 +62,8 @@
 	let addingBusy = $state(false);
 	let registeringId = $state('');
 	let testingId = $state('');
+	let activity = $state<CatalogConnection | null>(null);
+	let activityOpen = $state(false);
 
 	const filtered = $derived(
 		connections.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
@@ -381,6 +385,15 @@
 						{#if compatibleEngines(connection.type).length > 0}
 							<Button size="sm" onclick={() => openAdd(connection)}>Add catalog</Button>
 						{/if}
+						<Button
+							size="sm"
+							onclick={() => {
+								activity = connection;
+								activityOpen = true;
+							}}
+						>
+							Activity
+						</Button>
 						<span
 							title={ownEngines.length > 0 ? 'Delete the engine first' : ''}
 							class="inline-flex"
@@ -464,4 +477,16 @@
 			</div>
 		{/snippet}
 	</Modal>
+{/if}
+
+{#if activity}
+	<Drawer
+		bind:open={activityOpen}
+		title={`Activity — ${activity.name}`}
+		onclose={() => {
+			activity = null;
+		}}
+	>
+		<ActivityPanel resourceType="connection" resourceId={activity.id} />
+	</Drawer>
 {/if}

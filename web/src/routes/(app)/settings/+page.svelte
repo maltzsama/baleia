@@ -1,16 +1,42 @@
 <script lang="ts">
-	// Placeholder until the settings area lands (#53). Keeping the route here
-	// resolves the global navigation link (#29) without a dead link.
+	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
+
+	onMount(() => {
+		void workspaceStore.load();
+	});
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
-	<div class="max-w-2xl">
+	<div class="max-w-3xl">
 		<h1 class="text-xl font-semibold tracking-[-0.3px]">Settings</h1>
-		<p class="text-[13px] text-text-muted mt-1">
-			Workspace, identity and administration settings will live here.
+		<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
+			Administration, identity and the audit trail live here.
 		</p>
-		<div class="mt-6 rounded-lg border border-border bg-bg-panel p-5 text-[13px] text-text-muted">
-			This area is under construction. Use the workspace menu in the header for now.
-		</div>
+
+		<a
+			class="mt-4 flex items-center justify-between rounded-lg border border-border bg-bg-panel px-4 py-3 text-[13px] transition-colors hover:border-primary"
+			href={resolve('/settings/audit')}
+		>
+			<span>
+				<span class="block font-semibold">Audit trail</span>
+				<span class="block text-[11px] text-slate-600 dark:text-slate-300">
+					Who changed what, when, and which requests were denied.
+				</span>
+			</span>
+			<span class="text-primary">Open →</span>
+		</a>
+
+		{#if workspaceStore.current}
+			<div class="mt-6">
+				<ActivityPanel
+					resourceType="workspace"
+					resourceId={workspaceStore.current.id}
+					title="Workspace activity"
+				/>
+			</div>
+		{/if}
 	</div>
 </div>

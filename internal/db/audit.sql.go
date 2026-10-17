@@ -74,12 +74,27 @@ WHERE ($1::text IS NULL OR resource_type = $1::text)
   AND ($3::text IS NULL OR actor_id = $3::text)
   AND ($4::text IS NULL OR action = $4::text)
   AND ($5::text IS NULL OR outcome = $5::text)
-  AND ($6::timestamptz IS NULL OR occurred_at >= $6::timestamptz)
-  AND ($7::timestamptz IS NULL OR occurred_at < $7::timestamptz)
-  AND ($8::timestamptz IS NULL
-       OR (occurred_at, id) < ($8::timestamptz, $9::bigint))
+  AND ($6::text IS NULL OR request_id = $6::text)
+  AND ($7::text IS NULL OR trace_id = $7::text)
+  AND (
+       ($8::text IS NULL AND $9::uuid IS NULL)
+       OR actor_id = $8::text
+       OR ($9::uuid IS NOT NULL
+           AND workspace_id IN (
+             SELECT w.id FROM workspaces w
+             WHERE w.owner_user_id = $9::uuid
+                OR w.owner_team_id IN (
+                  SELECT tm.team_id FROM team_members tm
+                  WHERE tm.user_id = $9::uuid AND tm.role = 'owner'
+                )
+           ))
+      )
+  AND ($10::timestamptz IS NULL OR occurred_at >= $10::timestamptz)
+  AND ($11::timestamptz IS NULL OR occurred_at < $11::timestamptz)
+  AND ($12::timestamptz IS NULL
+       OR (occurred_at, id) < ($12::timestamptz, $13::bigint))
 ORDER BY occurred_at DESC, id DESC
-LIMIT $10
+LIMIT $14
 `
 
 type ListAuditEventsParams struct {
@@ -88,6 +103,10 @@ type ListAuditEventsParams struct {
 	ActorID      *string            `json:"actor_id"`
 	Action       *string            `json:"action"`
 	Outcome      *string            `json:"outcome"`
+	RequestID    *string            `json:"request_id"`
+	TraceID      *string            `json:"trace_id"`
+	ScopeActor   *string            `json:"scope_actor"`
+	ScopeOwner   pgtype.UUID        `json:"scope_owner"`
 	FromTime     pgtype.Timestamptz `json:"from_time"`
 	ToTime       pgtype.Timestamptz `json:"to_time"`
 	CursorAt     pgtype.Timestamptz `json:"cursor_at"`
@@ -96,7 +115,8 @@ type ListAuditEventsParams struct {
 }
 
 // Newest first, keyset-paginated on (occurred_at, id): the cursor is the
-// last row of the previous page. Every filter is optional.
+// last row of the previous page. Every filter is optional. A non-admin is
+// scoped to their own events and to events of workspaces they own (#49).
 func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
 	rows, err := q.db.Query(ctx, listAuditEvents,
 		arg.ResourceType,
@@ -104,6 +124,10 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 		arg.ActorID,
 		arg.Action,
 		arg.Outcome,
+		arg.RequestID,
+		arg.TraceID,
+		arg.ScopeActor,
+		arg.ScopeOwner,
 		arg.FromTime,
 		arg.ToTime,
 		arg.CursorAt,

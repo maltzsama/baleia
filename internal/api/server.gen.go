@@ -27,9 +27,18 @@ type ServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId)
+	// The bounded audit action vocabulary
+	// (GET /audit/actions)
+	ListAuditActions(w http.ResponseWriter, r *http.Request)
 	// Audit trail, newest first — admins see every event, others their own
 	// (GET /audit/events)
 	ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams)
+	// Export the current audit filter as CSV — admins
+	// (GET /audit/events.csv)
+	ExportAuditCSV(w http.ResponseWriter, r *http.Request, params ExportAuditCSVParams)
+	// Resolve audit ids to names, only entities the caller can see
+	// (POST /audit/resolve)
+	ResolveAudit(w http.ResponseWriter, r *http.Request)
 	// Authenticate and receive JWT
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -450,9 +459,27 @@ func (_ Unimplemented) DeleteApiKey(w http.ResponseWriter, r *http.Request, id P
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// The bounded audit action vocabulary
+// (GET /audit/actions)
+func (_ Unimplemented) ListAuditActions(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Audit trail, newest first — admins see every event, others their own
 // (GET /audit/events)
 func (_ Unimplemented) ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Export the current audit filter as CSV — admins
+// (GET /audit/events.csv)
+func (_ Unimplemented) ExportAuditCSV(w http.ResponseWriter, r *http.Request, params ExportAuditCSVParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Resolve audit ids to names, only entities the caller can see
+// (POST /audit/resolve)
+func (_ Unimplemented) ResolveAudit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1334,6 +1361,28 @@ func (siw *ServerInterfaceWrapper) DeleteApiKey(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListAuditActions operation middleware
+func (siw *ServerInterfaceWrapper) ListAuditActions(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuditActions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListAuditEvents operation middleware
 func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 
@@ -1390,6 +1439,22 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// ------------- Optional query parameter "request_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "request_id", r.URL.Query(), &params.RequestId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "request_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "trace_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "trace_id", r.URL.Query(), &params.TraceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trace_id", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "from" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
@@ -1424,6 +1489,127 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAuditEvents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportAuditCSV operation middleware
+func (siw *ServerInterfaceWrapper) ExportAuditCSV(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExportAuditCSVParams
+
+	// ------------- Optional query parameter "resource_type" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "resource_type", r.URL.Query(), &params.ResourceType)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resource_type", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "resource_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "resource_id", r.URL.Query(), &params.ResourceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resource_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "actor_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "actor_id", r.URL.Query(), &params.ActorId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "action", r.URL.Query(), &params.Action)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "outcome" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "outcome", r.URL.Query(), &params.Outcome)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "outcome", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "request_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "request_id", r.URL.Query(), &params.RequestId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "request_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "trace_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "trace_id", r.URL.Query(), &params.TraceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trace_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportAuditCSV(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveAudit operation middleware
+func (siw *ServerInterfaceWrapper) ResolveAudit(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveAudit(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6714,7 +6900,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/api-keys/{id}", wrapper.DeleteApiKey)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/audit/actions", wrapper.ListAuditActions)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/audit/events", wrapper.ListAuditEvents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/audit/events.csv", wrapper.ExportAuditCSV)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/audit/resolve", wrapper.ResolveAudit)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
@@ -7219,6 +7414,31 @@ func (response DeleteApiKey404JSONResponse) VisitDeleteApiKeyResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListAuditActionsRequestObject struct {
+}
+
+type ListAuditActionsResponseObject interface {
+	VisitListAuditActionsResponse(w http.ResponseWriter) error
+}
+
+type ListAuditActions200JSONResponse []string
+
+func (response ListAuditActions200JSONResponse) VisitListAuditActionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAuditActions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAuditActions401JSONResponse) VisitListAuditActionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListAuditEventsRequestObject struct {
 	Params ListAuditEventsParams
 }
@@ -7252,6 +7472,88 @@ type ListAuditEvents422JSONResponse struct {
 func (response ListAuditEvents422JSONResponse) VisitListAuditEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportAuditCSVRequestObject struct {
+	Params ExportAuditCSVParams
+}
+
+type ExportAuditCSVResponseObject interface {
+	VisitExportAuditCSVResponse(w http.ResponseWriter) error
+}
+
+type ExportAuditCSV200TextcsvResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportAuditCSV200TextcsvResponse) VisitExportAuditCSVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportAuditCSV401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ExportAuditCSV401JSONResponse) VisitExportAuditCSVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportAuditCSV403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ExportAuditCSV403JSONResponse) VisitExportAuditCSVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportAuditCSV422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ExportAuditCSV422JSONResponse) VisitExportAuditCSVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ResolveAuditRequestObject struct {
+	Body *ResolveAuditJSONRequestBody
+}
+
+type ResolveAuditResponseObject interface {
+	VisitResolveAuditResponse(w http.ResponseWriter) error
+}
+
+type ResolveAudit200JSONResponse AuditResolveResult
+
+func (response ResolveAudit200JSONResponse) VisitResolveAuditResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ResolveAudit401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ResolveAudit401JSONResponse) VisitResolveAuditResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -12919,9 +13221,18 @@ type StrictServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error)
+	// The bounded audit action vocabulary
+	// (GET /audit/actions)
+	ListAuditActions(ctx context.Context, request ListAuditActionsRequestObject) (ListAuditActionsResponseObject, error)
 	// Audit trail, newest first — admins see every event, others their own
 	// (GET /audit/events)
 	ListAuditEvents(ctx context.Context, request ListAuditEventsRequestObject) (ListAuditEventsResponseObject, error)
+	// Export the current audit filter as CSV — admins
+	// (GET /audit/events.csv)
+	ExportAuditCSV(ctx context.Context, request ExportAuditCSVRequestObject) (ExportAuditCSVResponseObject, error)
+	// Resolve audit ids to names, only entities the caller can see
+	// (POST /audit/resolve)
+	ResolveAudit(ctx context.Context, request ResolveAuditRequestObject) (ResolveAuditResponseObject, error)
 	// Authenticate and receive JWT
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
@@ -13430,6 +13741,30 @@ func (sh *strictHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request, id
 	}
 }
 
+// ListAuditActions operation middleware
+func (sh *strictHandler) ListAuditActions(w http.ResponseWriter, r *http.Request) {
+	var request ListAuditActionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAuditActions(ctx, request.(ListAuditActionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAuditActions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuditActionsResponseObject); ok {
+		if err := validResponse.VisitListAuditActionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListAuditEvents operation middleware
 func (sh *strictHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams) {
 	var request ListAuditEventsRequestObject
@@ -13449,6 +13784,63 @@ func (sh *strictHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListAuditEventsResponseObject); ok {
 		if err := validResponse.VisitListAuditEventsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportAuditCSV operation middleware
+func (sh *strictHandler) ExportAuditCSV(w http.ResponseWriter, r *http.Request, params ExportAuditCSVParams) {
+	var request ExportAuditCSVRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportAuditCSV(ctx, request.(ExportAuditCSVRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportAuditCSV")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportAuditCSVResponseObject); ok {
+		if err := validResponse.VisitExportAuditCSVResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveAudit operation middleware
+func (sh *strictHandler) ResolveAudit(w http.ResponseWriter, r *http.Request) {
+	var request ResolveAuditRequestObject
+
+	var body ResolveAuditJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveAudit(ctx, request.(ResolveAuditRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveAudit")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveAuditResponseObject); ok {
+		if err := validResponse.VisitResolveAuditResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
