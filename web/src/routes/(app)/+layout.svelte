@@ -22,9 +22,9 @@
 </script>
 
 <div class="h-screen flex overflow-hidden">
-	<GlobalNav {dark} onToggleDark={() => dark = !dark} />
+	<GlobalNav />
 	<div class="flex-1 flex flex-col overflow-hidden">
-		<Header onToggleDark={() => dark = !dark} {dark} />
+		<Header onToggleDark={() => (dark = !dark)} {dark} />
 		{@render children()}
 	</div>
 </div>

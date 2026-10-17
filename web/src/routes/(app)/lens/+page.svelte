@@ -1,30 +1,48 @@
 <script lang="ts">
+	type LensQuery = { user?: string; sql?: string; state?: string; elapsed_ms?: number };
+	type LensCluster = { active_workers?: number; running_queries?: number; queued_queries?: number };
+	type TableHealth = {
+		catalog: string;
+		namespace: string;
+		table_name: string;
+		health_score: number;
+		snapshot_count: number;
+		needs_compaction?: boolean;
+		needs_snapshot_expiry?: boolean;
+	};
+	type Analytics = { error_count?: number; avg_duration_ms?: number; users_active?: number };
+
 	const apiBase = '/api/v1';
 	const token = localStorage.getItem('token') || '';
 
-	let queries = $state<any[]>([]);
-	let cluster = $state<any>(null);
-	let tableHealth = $state<any[]>([]);
+	let queries = $state<LensQuery[]>([]);
+	let cluster = $state<LensCluster | null>(null);
+	let tableHealth = $state<TableHealth[]>([]);
 	let tab = $state<'queries' | 'cluster' | 'tables'>('queries');
 	let loading = $state(true);
 	let error = $state('');
-	let analytics = $state<any>(null);
+	let analytics = $state<Analytics | null>(null);
 
 	async function load() {
-		loading = true; error = '';
+		loading = true;
+		error = '';
 		const headers = { Authorization: `Bearer ${token}` };
 		try {
 			const [q, c, h, a] = await Promise.all([
-				fetch(`${apiBase}/lens/queries`, { headers }).then(r => r.json()),
-				fetch(`${apiBase}/lens/cluster`, { headers }).then(r => r.json()),
-				fetch(`${apiBase}/lens/tables/health`, { headers }).then(r => r.json()),
-				fetch(`${apiBase}/lens/analytics/queries`, { headers }).then(r => r.json()).catch(() => null),
+				fetch(`${apiBase}/lens/queries`, { headers }).then((r) => r.json()),
+				fetch(`${apiBase}/lens/cluster`, { headers }).then((r) => r.json()),
+				fetch(`${apiBase}/lens/tables/health`, { headers }).then((r) => r.json()),
+				fetch(`${apiBase}/lens/analytics/queries`, { headers })
+					.then((r) => r.json())
+					.catch(() => null)
 			]);
 			queries = q.data || q || [];
 			cluster = c;
-			tableHealth = Array.isArray(h) ? h : (h.data || []);
+			tableHealth = Array.isArray(h) ? h : h.data || [];
 			analytics = a;
-		} catch (e: any) { error = e.message; }
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		}
 		loading = false;
 	}
 
@@ -37,24 +55,38 @@
 		<div class="flex items-end justify-between mb-5">
 			<div>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">Lens Monitoring</h1>
-				<p class="text-[13px] text-text-muted mt-1">Cluster status, query history, and table health.</p>
+				<p class="text-[13px] text-text-muted mt-1">
+					Cluster status, query history, and table health.
+				</p>
 			</div>
 		</div>
 
 		<div class="flex border-b border-border mb-5">
-			<button class="py-2.5 px-4 text-[13px] font-semibold cursor-pointer border-b-2 -mb-px transition-colors duration-150 bg-none border-t-0 border-l-0 border-r-0
-				{tab === 'queries' ? 'text-primary border-b-primary' : 'text-text-muted border-b-transparent hover:text-text-main'}"
-				onclick={() => tab = 'queries'}>
+			<button
+				class="py-2.5 px-4 text-[13px] font-semibold cursor-pointer border-b-2 -mb-px transition-colors duration-150 bg-none border-t-0 border-l-0 border-r-0
+				{tab === 'queries'
+					? 'text-primary border-b-primary'
+					: 'text-text-muted border-b-transparent hover:text-text-main'}"
+				onclick={() => (tab = 'queries')}
+			>
 				Queries
 			</button>
-			<button class="py-2.5 px-4 text-[13px] font-semibold cursor-pointer border-b-2 -mb-px transition-colors duration-150 bg-none border-t-0 border-l-0 border-r-0
-				{tab === 'cluster' ? 'text-primary border-b-primary' : 'text-text-muted border-b-transparent hover:text-text-main'}"
-				onclick={() => tab = 'cluster'}>
+			<button
+				class="py-2.5 px-4 text-[13px] font-semibold cursor-pointer border-b-2 -mb-px transition-colors duration-150 bg-none border-t-0 border-l-0 border-r-0
+				{tab === 'cluster'
+					? 'text-primary border-b-primary'
+					: 'text-text-muted border-b-transparent hover:text-text-main'}"
+				onclick={() => (tab = 'cluster')}
+			>
 				Cluster
 			</button>
-			<button class="py-2.5 px-4 text-[13px] font-semibold cursor-pointer border-b-2 -mb-px transition-colors duration-150 bg-none border-t-0 border-l-0 border-r-0
-				{tab === 'tables' ? 'text-primary border-b-primary' : 'text-text-muted border-b-transparent hover:text-text-main'}"
-				onclick={() => tab = 'tables'}>
+			<button
+				class="py-2.5 px-4 text-[13px] font-semibold cursor-pointer border-b-2 -mb-px transition-colors duration-150 bg-none border-t-0 border-l-0 border-r-0
+				{tab === 'tables'
+					? 'text-primary border-b-primary'
+					: 'text-text-muted border-b-transparent hover:text-text-main'}"
+				onclick={() => (tab = 'tables')}
+			>
 				Table Health
 			</button>
 		</div>
@@ -87,24 +119,45 @@
 				<table class="w-full text-xs">
 					<thead>
 						<tr>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">User</th>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">Query</th>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">State</th>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">Duration</th>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>User</th
+							>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>Query</th
+							>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>State</th
+							>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>Duration</th
+							>
 						</tr>
 					</thead>
 					<tbody>
-						{#each queries.slice(0, 20) as q}
+						{#each queries.slice(0, 20) as q, i (i)}
 							<tr class="hover:bg-bg-toolbar">
 								<td class="py-2 px-3.5 border-b border-border">{q.user || '-'}</td>
-								<td class="py-2 px-3.5 border-b border-border font-mono truncate max-w-[300px]">{q.sql || '-'}</td>
+								<td class="py-2 px-3.5 border-b border-border font-mono truncate max-w-[300px]"
+									>{q.sql || '-'}</td
+								>
 								<td class="py-2 px-3.5 border-b border-border">
-									<span class="inline-flex items-center gap-1 text-[10px] font-semibold font-mono rounded-full px-2 py-0.5
-										{q.state === 'finished' ? 'bg-green-100 text-green-700' : q.state === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}">
+									<span
+										class="inline-flex items-center gap-1 text-[10px] font-semibold font-mono rounded-full px-2 py-0.5
+										{q.state === 'finished'
+											? 'bg-green-100 text-green-700'
+											: q.state === 'failed'
+												? 'bg-red-100 text-red-700'
+												: 'bg-blue-100 text-blue-700'}"
+									>
 										{q.state || 'running'}
 									</span>
 								</td>
-								<td class="py-2 px-3.5 border-b border-border font-mono">{q.elapsed_ms ?? '-'}ms</td>
+								<td class="py-2 px-3.5 border-b border-border font-mono">{q.elapsed_ms ?? '-'}ms</td
+								>
 							</tr>
 						{/each}
 					</tbody>
@@ -132,27 +185,52 @@
 				<table class="w-full text-xs">
 					<thead>
 						<tr>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">Table</th>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">Score</th>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">Snapshots</th>
-							<th class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left">Needs</th>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>Table</th
+							>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>Score</th
+							>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>Snapshots</th
+							>
+							<th
+								class="bg-bg-toolbar py-2 px-3.5 font-semibold text-text-muted border-b border-border text-[11px] uppercase text-left"
+								>Needs</th
+							>
 						</tr>
 					</thead>
 					<tbody>
-						{#each tableHealth as t}
+						{#each tableHealth as t (t.catalog + '.' + t.namespace + '.' + t.table_name)}
 							<tr class="hover:bg-bg-toolbar">
-								<td class="py-2 px-3.5 border-b border-border font-mono">{t.catalog}.{t.namespace}.{t.table_name}</td>
+								<td class="py-2 px-3.5 border-b border-border font-mono"
+									>{t.catalog}.{t.namespace}.{t.table_name}</td
+								>
 								<td class="py-2 px-3.5 border-b border-border">
 									<div class="w-full bg-border rounded-full h-2">
-										<div class="h-2 rounded-full transition-all {t.health_score >= 70 ? 'bg-green-500' : t.health_score >= 40 ? 'bg-amber-500' : 'bg-red-500'}"
-											style="width: {t.health_score}%"></div>
+										<div
+											class="h-2 rounded-full transition-all {t.health_score >= 70
+												? 'bg-green-500'
+												: t.health_score >= 40
+													? 'bg-amber-500'
+													: 'bg-red-500'}"
+											style="width: {t.health_score}%"
+										></div>
 									</div>
 									<span class="text-[10px] text-text-muted">{t.health_score}/100</span>
 								</td>
 								<td class="py-2 px-3.5 border-b border-border font-mono">{t.snapshot_count}</td>
 								<td class="py-2 px-3.5 border-b border-border">
-									{#if t.needs_compaction}<span class="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded mr-1">compact</span>{/if}
-									{#if t.needs_snapshot_expiry}<span class="bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded">expire</span>{/if}
+									{#if t.needs_compaction}<span
+											class="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded mr-1"
+											>compact</span
+										>{/if}
+									{#if t.needs_snapshot_expiry}<span
+											class="bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded">expire</span
+										>{/if}
 								</td>
 							</tr>
 						{/each}
