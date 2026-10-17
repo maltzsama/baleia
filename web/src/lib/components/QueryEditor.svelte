@@ -142,6 +142,7 @@
 			keymap.of([indentWithTab]),
 			trinoSQL,
 			autocompletion({ override: [catalogAutocomplete] }),
+			EditorView.contentAttributes.of({ 'aria-label': 'SQL editor' }),
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of((update) => {
 				if (update.docChanged) {
@@ -432,6 +433,7 @@
 		<label class="flex items-center gap-1.5 text-[11px] text-text-muted">
 			<span>Target</span>
 			<select
+				data-testid="target-select"
 				value={targetId}
 				onchange={(e) => selectTarget((e.currentTarget as HTMLSelectElement).value)}
 				title="Where the query runs: a catalog on an engine"

@@ -16,12 +16,12 @@
 	--color-text-main: #1e293b;
 	--color-text-muted: #64748b;
 
-	--color-primary: #3b82f6;
-	--color-primary-hover: #2563eb;
+	--color-primary: #2563eb;
+	--color-primary-hover: #1d4ed8;
 	--color-brand-dark: #0f172a;
 
-	--color-success: #10b981;
-	--color-success-hover: #059669;
+	--color-success: #047857;
+	--color-success-hover: #065f46;
 	--color-danger: #ef4444;
 
 	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);

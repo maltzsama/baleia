@@ -13,9 +13,14 @@ test('@harness login — a member signs in and lands on the workbench', async ({
 test('@harness run — a member runs SELECT 1', async ({ page, loginAs }) => {
 	await loginAs('member');
 
-	const target = page.locator('select').first();
+	const target = page.getByTestId('target-select');
+	await target
+		.locator('option')
+		.nth(1)
+		.waitFor({ state: 'attached', timeout: 15_000 })
+		.catch(() => {});
 	if ((await target.locator('option').count()) <= 1) {
-		test.skip(true, 'No execution target seeded; run make seed-tpch or add a binding');
+		test.skip(true, 'No execution target seeded; run make k8s-seed-tpch or add a binding');
 	}
 	await target.selectOption({ index: 1 });
 	await page.getByRole('button', { name: /run/i }).click();

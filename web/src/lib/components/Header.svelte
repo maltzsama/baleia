@@ -116,7 +116,16 @@
 		>
 		<div
 			role="switch"
+			aria-label="Dark mode"
+			aria-checked={dark}
+			tabindex="0"
 			onclick={onToggleDark}
+			onkeydown={(event) => {
+				if (event.key === 'Enter' || event.key === ' ') {
+					event.preventDefault();
+					onToggleDark();
+				}
+			}}
 			class="w-8 h-[18px] rounded-full cursor-pointer relative transition-colors duration-200 shrink-0
 				{dark ? 'bg-primary' : 'bg-border'}"
 		>

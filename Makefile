@@ -107,7 +107,6 @@ e2e:
 e2e-forward:
 	kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080 &
 	kubectl -n $(K8S_NS) port-forward svc/postgres 5433:5432 &
-	kubectl -n $(K8S_NS) port-forward svc/trino 8088:8080 &
 
 e2e-down:
 	K8S_PURGE=1 $(MAKE) k8s-down

@@ -93,6 +93,10 @@ func main() {
 		log.Fatalf("e2e-seed: shared workspace: %v", err)
 	}
 
+	if err := ensureTarget(ctx, q, admin, member); err != nil {
+		log.Fatalf("e2e-seed: target: %v", err)
+	}
+
 	log.Printf("e2e-seed: ready (admin/member/viewer @e2e.test)")
 }
 
@@ -159,6 +163,45 @@ func ensureTeamMember(ctx context.Context, q *db.Queries, teamID, userID pgtype.
 	if err != nil && strings.Contains(err.Error(), "duplicate key") {
 		return nil
 	}
+	return err
+}
+
+// ensureTarget exposes the built-in `tpch` catalog on the default Trino engine
+// and grants it to the member's personal workspace, so the workbench has a
+// runnable target for the `@harness run` smoke.
+func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) error {
+	row, err := q.GetDefaultTrinoEngine(ctx)
+	if err != nil {
+		return err
+	}
+
+	catalog, err := q.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{
+		ConnectionID: row.Engine.ConnectionID,
+		Name:         "tpch",
+	})
+	if err != nil {
+		return err
+	}
+
+	if _, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{
+		CatalogID:         catalog.ID,
+		EngineID:          row.Engine.ID,
+		EngineCatalogName: "tpch",
+	}); err != nil {
+		return err
+	}
+
+	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
+	if err != nil {
+		return err
+	}
+
+	_, err = q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
+		WorkspaceID: workspaceID,
+		CatalogID:   catalog.ID,
+		Permission:  "read",
+		GrantedBy:   admin.ID,
+	})
 	return err
 }
 

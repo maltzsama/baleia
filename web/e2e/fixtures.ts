@@ -18,9 +18,9 @@ export const test = base.extend<Fixtures>({
 			await page.waitForURL('**/sql');
 		});
 	},
-	expectNoA11yViolations: async (_fixtures, use) => {
+	expectNoA11yViolations: async ({ page }, use) => {
 		await use(async (target) => {
-			const results = await new AxeBuilder({ page: target }).analyze();
+			const results = await new AxeBuilder({ page: target ?? page }).analyze();
 			const serious = results.violations.filter(
 				(violation) => violation.impact === 'serious' || violation.impact === 'critical'
 			);
