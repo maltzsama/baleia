@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.0](https://github.com/maltzsama/baleia/compare/v0.1.0...v0.2.0) (2026-10-17)
+
+
+### Features
+
+* **audit:** export audit events to OpenSearch-compatible stores ([#50](https://github.com/maltzsama/baleia/issues/50)) ([f4c4e3a](https://github.com/maltzsama/baleia/commit/f4c4e3a4aca15bb3e1f7a54e8f722dcf3bc3f5cc))
+* **audit:** export audit events to OpenSearch-compatible stores ([#50](https://github.com/maltzsama/baleia/issues/50)) ([3d89d4d](https://github.com/maltzsama/baleia/commit/3d89d4dc0e1eaa44d0f914e3864abc483fec6120))
+* **connections:** external secret references and the plugin 0.9.2 pin ([#31](https://github.com/maltzsama/baleia/issues/31)) ([96bed46](https://github.com/maltzsama/baleia/commit/96bed46f6ecb543109b622a3a763a8f82c6e6b01))
+* **connections:** external secret references and the plugin 0.9.2 pin ([#31](https://github.com/maltzsama/baleia/issues/31)) ([31701d4](https://github.com/maltzsama/baleia/commit/31701d4d105ad196c645948ab66edb146cb4dfcd))
+* **observability:** distributed tracing across API, Temporal, engine and storage ([#47](https://github.com/maltzsama/baleia/issues/47)) ([ebc85c8](https://github.com/maltzsama/baleia/commit/ebc85c890318c6103ddbab3c00c94be978af9b7f))
+* **observability:** distributed tracing across API, Temporal, engine and storage ([#47](https://github.com/maltzsama/baleia/issues/47)) ([bd4cc6e](https://github.com/maltzsama/baleia/commit/bd4cc6e90fb98a1e904528d095659940b093eee4))
+
+
+### Bug Fixes
+
+* **metrics:** keep the instance label on BaleiaAuditExportLagging ([7dbc966](https://github.com/maltzsama/baleia/commit/7dbc9666855d4bb508cb59551fe92723275b1baa))
+
 ## 0.1.0 (2026-10-16)
 
 ### Features
