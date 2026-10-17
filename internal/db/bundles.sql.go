@@ -238,14 +238,20 @@ func (q *Queries) ListSpaceSavedQueries(ctx context.Context, spaceID pgtype.UUID
 
 const updateQueryFolder = `-- name: UpdateQueryFolder :one
 UPDATE query_folders
-SET name = $1::text, parent_id = $2::uuid
-WHERE id = $3::uuid AND workspace_id = $4::uuid
+SET name = $1::text,
+    slug = COALESCE($2::text, slug),
+    parent_id = $3::uuid,
+    space_id = COALESCE($4::uuid, space_id),
+    updated_at = now()
+WHERE id = $5::uuid AND workspace_id = $6::uuid
 RETURNING id, workspace_id, parent_id, name, created_at, space_id, slug
 `
 
 type UpdateQueryFolderParams struct {
 	Name        string      `json:"name"`
+	Slug        *string     `json:"slug"`
 	ParentID    pgtype.UUID `json:"parent_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
 	ID          pgtype.UUID `json:"id"`
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
@@ -253,7 +259,9 @@ type UpdateQueryFolderParams struct {
 func (q *Queries) UpdateQueryFolder(ctx context.Context, arg UpdateQueryFolderParams) (QueryFolder, error) {
 	row := q.db.QueryRow(ctx, updateQueryFolder,
 		arg.Name,
+		arg.Slug,
 		arg.ParentID,
+		arg.SpaceID,
 		arg.ID,
 		arg.WorkspaceID,
 	)

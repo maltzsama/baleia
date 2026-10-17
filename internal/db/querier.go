@@ -38,6 +38,7 @@ type Querier interface {
 	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
 	CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
 	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
+	CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error)
 	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
@@ -209,6 +210,8 @@ type Querier interface {
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
+	// Every visible folder of the workspace (or one space), not only the roots.
+	ListAllVisibleQueryFolders(ctx context.Context, arg ListAllVisibleQueryFoldersParams) ([]QueryFolder, error)
 	// Newest first, keyset-paginated on (occurred_at, id): the cursor is the
 	// last row of the previous page. Every filter is optional. A non-admin is
 	// scoped to their own events and to events of workspaces they own (#49).
@@ -324,6 +327,9 @@ type Querier interface {
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
+	// Users who are members of the workspace: the personal owner, or the owning
+	// team's members (#113).
+	ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error)
 	// Every binding of a catalog the workspace may use, with the strongest
 	// permission it holds on that catalog: 'write' for the catalogs of the owner
 	// of a personal workspace (their own connections), else the grant (#16).
@@ -338,6 +344,8 @@ type Querier interface {
 	// since it was created). One number, no catalog label (#87). Same
 	// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
 	MaxMetadataStalenessSeconds(ctx context.Context) (float64, error)
+	MoveQueryFolderSubtree(ctx context.Context, arg MoveQueryFolderSubtreeParams) error
+	MoveSavedQueriesInFolderSubtree(ctx context.Context, arg MoveSavedQueriesInFolderSubtreeParams) error
 	NextContentVersion(ctx context.Context, arg NextContentVersionParams) (int32, error)
 	// Catalogs Baleia managed and still sees in the engine, though no managed
 	// binding owns them any more (an old name that failed to drop): they stay
@@ -362,6 +370,8 @@ type Querier interface {
 	// Trigram search over docs of catalogs the workspace may use. A tag narrows
 	// the result to docs carrying it.
 	SearchSemanticDocs(ctx context.Context, arg SearchSemanticDocsParams) ([]SearchSemanticDocsRow, error)
+	// Every visible saved query, optionally filtered by space and text (#113).
+	SearchVisibleSavedQueries(ctx context.Context, arg SearchVisibleSavedQueriesParams) ([]SavedQuery, error)
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	// Stores the resolved target of an execution. target_snapshot is immutable

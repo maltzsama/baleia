@@ -553,6 +553,49 @@ func (q *Queries) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pg
 	return items, nil
 }
 
+const listWorkspacePrincipalUsers = `-- name: ListWorkspacePrincipalUsers :many
+SELECT DISTINCT u.id, u.name, u.email
+FROM users u
+JOIN workspaces w ON w.id = $1::uuid
+LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
+WHERE w.owner_user_id = u.id OR tm.user_id = u.id
+ORDER BY u.name
+LIMIT $2::int
+`
+
+type ListWorkspacePrincipalUsersParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Lim         int32       `json:"lim"`
+}
+
+type ListWorkspacePrincipalUsersRow struct {
+	ID    pgtype.UUID `json:"id"`
+	Name  string      `json:"name"`
+	Email string      `json:"email"`
+}
+
+// Users who are members of the workspace: the personal owner, or the owning
+// team's members (#113).
+func (q *Queries) ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspacePrincipalUsers, arg.WorkspaceID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWorkspacePrincipalUsersRow
+	for rows.Next() {
+		var i ListWorkspacePrincipalUsersRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspacesByUser = `-- name: ListWorkspacesByUser :many
 SELECT DISTINCT w.id, w.name, w.description, w.type, w.polaris_catalog_name, w.owner_user_id, w.owner_team_id, w.created_at, w.updated_at, w.default_binding_id, w.default_schema
 FROM workspaces w

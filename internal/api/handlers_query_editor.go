@@ -54,12 +54,21 @@ func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestOb
 	if request.Params.SpaceId != nil {
 		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
-	folders, err := h.queries.ListVisibleQueryFolders(ctx, db.ListVisibleQueryFoldersParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		UserID:      userID,
-		SpaceID:     spaceID,
-		ParentID:    parentID,
-	})
+	var folders []db.QueryFolder
+	if request.Params.ParentId != nil {
+		folders, err = h.queries.ListVisibleQueryFolders(ctx, db.ListVisibleQueryFoldersParams{
+			WorkspaceID: workspaceIDFromRequest(request.Id),
+			UserID:      userID,
+			SpaceID:     spaceID,
+			ParentID:    parentID,
+		})
+	} else {
+		folders, err = h.queries.ListAllVisibleQueryFolders(ctx, db.ListAllVisibleQueryFoldersParams{
+			WorkspaceID: workspaceIDFromRequest(request.Id),
+			UserID:      userID,
+			SpaceID:     spaceID,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -186,13 +195,23 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 	if request.Params.SpaceId != nil {
 		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
-	queries, err := h.queries.ListVisibleSavedQueries(ctx, db.ListVisibleSavedQueriesParams{
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		UserID:      userID,
-		SpaceID:     spaceID,
-		FolderID:    folderID,
-		Q:           request.Params.Q,
-	})
+	var queries []db.SavedQuery
+	if folderID.Valid {
+		queries, err = h.queries.ListVisibleSavedQueries(ctx, db.ListVisibleSavedQueriesParams{
+			WorkspaceID: workspaceIDFromRequest(request.Id),
+			UserID:      userID,
+			SpaceID:     spaceID,
+			FolderID:    folderID,
+			Q:           request.Params.Q,
+		})
+	} else {
+		queries, err = h.queries.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{
+			WorkspaceID: workspaceIDFromRequest(request.Id),
+			UserID:      userID,
+			SpaceID:     spaceID,
+			Q:           request.Params.Q,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}

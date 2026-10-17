@@ -1211,6 +1211,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         workspace_id: { type: string, format: uuid }
+        space_id: { type: string, format: uuid, nullable: true }
         slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
         label: { type: string }
         description: { type: string }
@@ -1483,6 +1484,68 @@ components:
         created_by: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        counts:
+          allOf: [{ $ref: "#/components/schemas/SpaceCounts" }]
+        allowed_actions:
+          type: array
+          items: { type: string }
+
+    SpaceCounts:
+      type: object
+      properties:
+        saved_queries: { type: integer }
+        semantic_metrics: { type: integer }
+        folders: { type: integer }
+
+    ContentSearchSpace:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    ContentSearchFolderPath:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    ContentSearchItem:
+      type: object
+      required: [kind, id, slug, title, space, folder_path, updated_at]
+      properties:
+        kind: { type: string }
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        space: { $ref: "#/components/schemas/ContentSearchSpace" }
+        folder_path:
+          type: array
+          items: { $ref: "#/components/schemas/ContentSearchFolderPath" }
+        updated_at: { type: string, format: date-time }
+        updated_by:
+          allOf: [{ $ref: "#/components/schemas/ContentSearchSpace" }]
+          nullable: true
+        certified: { type: boolean }
+
+    WorkspacePrincipal:
+      type: object
+      required: [type, id, name]
+      properties:
+        type: { type: string }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, nullable: true }
+        member_count: { type: integer, nullable: true }
+
+    UpdateFolderRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        parent_id: { type: string, format: uuid, nullable: true }
+        space_id: { type: string, format: uuid, nullable: true }
 
     CreateSpaceRequest:
       type: object
@@ -3379,6 +3442,66 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Spaces (#40) ───────────────────────────────────────────────
+  /workspaces/{id}/content/search:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Spaces]
+      operationId: searchContent
+      summary: "Search saved queries, metrics and folders in the visible spaces"
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 200 }
+        - name: kind
+          in: query
+          schema: { type: string }
+        - name: space_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: "Results"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContentSearchItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/principals:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Spaces]
+      operationId: listWorkspacePrincipals
+      summary: "Users and teams a non-admin manager may add to a space"
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: "Principals"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkspacePrincipal" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /workspaces/{id}/spaces:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -4735,6 +4858,25 @@ paths:
         in: path
         required: true
         schema: { type: string, format: uuid }
+    patch:
+      tags: [QueryEditor]
+      operationId: updateFolder
+      summary: "Rename a folder or move it (and its subtree) within or across spaces"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateFolderRequest" }
+      responses:
+        "200":
+          description: "Folder"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryFolder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [QueryEditor]
       operationId: deleteFolder

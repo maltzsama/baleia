@@ -71,3 +71,9 @@ WHERE space_id = @space_id::uuid
 
 -- name: ListSpaceMembers :many
 SELECT * FROM space_members WHERE space_id = @space_id::uuid ORDER BY principal_type, principal_id;
+
+-- name: CountSpaceContentKinds :one
+SELECT
+    (SELECT count(*) FROM saved_queries WHERE space_id = @space_id::uuid)::bigint AS saved_queries,
+    (SELECT count(*) FROM semantic_metrics WHERE space_id = @space_id::uuid)::bigint AS semantic_metrics,
+    (SELECT count(*) FROM query_folders WHERE space_id = @space_id::uuid)::bigint AS folders;

@@ -872,6 +872,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/content/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Search saved queries, metrics and folders in the visible spaces */
+        get: operations["searchContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/principals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Users and teams a non-admin manager may add to a space */
+        get: operations["listWorkspacePrincipals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/spaces": {
         parameters: {
             query?: never;
@@ -1798,7 +1836,8 @@ export interface paths {
         delete: operations["deleteFolder"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename a folder or move it (and its subtree) within or across spaces */
+        patch: operations["updateFolder"];
         trace?: never;
     };
     "/workspaces/{id}/queries": {
@@ -3305,6 +3344,8 @@ export interface components {
             id: string;
             /** Format: uuid */
             workspace_id: string;
+            /** Format: uuid */
+            space_id?: string | null;
             slug: string;
             label: string;
             description?: string;
@@ -3555,6 +3596,52 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at?: string;
+            counts?: components["schemas"]["SpaceCounts"];
+            allowed_actions?: string[];
+        };
+        SpaceCounts: {
+            saved_queries?: number;
+            semantic_metrics?: number;
+            folders?: number;
+        };
+        ContentSearchSpace: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        ContentSearchFolderPath: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        ContentSearchItem: {
+            kind: string;
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            space: components["schemas"]["ContentSearchSpace"];
+            folder_path: components["schemas"]["ContentSearchFolderPath"][];
+            /** Format: date-time */
+            updated_at: string;
+            updated_by?: components["schemas"]["ContentSearchSpace"] | null;
+            certified?: boolean;
+        };
+        WorkspacePrincipal: {
+            type: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email?: string | null;
+            member_count?: number | null;
+        };
+        UpdateFolderRequest: {
+            name?: string;
+            slug?: string;
+            /** Format: uuid */
+            parent_id?: string | null;
+            /** Format: uuid */
+            space_id?: string | null;
         };
         CreateSpaceRequest: {
             name: string;
@@ -5730,6 +5817,63 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    searchContent: {
+        parameters: {
+            query: {
+                q: string;
+                kind?: string;
+                space_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSearchItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listWorkspacePrincipals: {
+        parameters: {
+            query?: {
+                q?: string;
+                type?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Principals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspacePrincipal"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listSpaces: {
         parameters: {
             query?: never;
@@ -7447,6 +7591,37 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    updateFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFolderRequest"];
+            };
+        };
+        responses: {
+            /** @description Folder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryFolder"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listSavedQueries: {

@@ -515,6 +515,49 @@ func (q *Queries) GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDPa
 	return i, err
 }
 
+const listAllVisibleQueryFolders = `-- name: ListAllVisibleQueryFolders :many
+SELECT f.id, f.workspace_id, f.parent_id, f.name, f.created_at, f.space_id, f.slug FROM query_folders f
+WHERE f.workspace_id = $1::uuid
+  AND baleia_effective_space_role(f.workspace_id, f.space_id, $2::uuid) IS NOT NULL
+  AND ($3::uuid IS NULL OR f.space_id = $3::uuid)
+ORDER BY f.name
+`
+
+type ListAllVisibleQueryFoldersParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
+}
+
+// Every visible folder of the workspace (or one space), not only the roots.
+func (q *Queries) ListAllVisibleQueryFolders(ctx context.Context, arg ListAllVisibleQueryFoldersParams) ([]QueryFolder, error) {
+	rows, err := q.db.Query(ctx, listAllVisibleQueryFolders, arg.WorkspaceID, arg.UserID, arg.SpaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []QueryFolder
+	for rows.Next() {
+		var i QueryFolder
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ParentID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.SpaceID,
+			&i.Slug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExecutionHistory = `-- name: ListExecutionHistory :many
 SELECT qe.id, qe.workspace_id, qe.user_id, u.name AS user_name,
        qe.saved_query_id, qe.status, qe.sql, qe.engine_query_id,
@@ -954,6 +997,48 @@ func (q *Queries) ListVisibleSavedQueries(ctx context.Context, arg ListVisibleSa
 	return items, nil
 }
 
+const moveQueryFolderSubtree = `-- name: MoveQueryFolderSubtree :exec
+WITH RECURSIVE subtree AS (
+    SELECT id FROM query_folders WHERE id = $2::uuid AND workspace_id = $3::uuid
+    UNION ALL
+    SELECT f.id FROM query_folders f JOIN subtree s ON f.parent_id = s.id
+)
+UPDATE query_folders SET space_id = $1::uuid, updated_at = now()
+WHERE id IN (SELECT id FROM subtree)
+`
+
+type MoveQueryFolderSubtreeParams struct {
+	SpaceID     pgtype.UUID `json:"space_id"`
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) MoveQueryFolderSubtree(ctx context.Context, arg MoveQueryFolderSubtreeParams) error {
+	_, err := q.db.Exec(ctx, moveQueryFolderSubtree, arg.SpaceID, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const moveSavedQueriesInFolderSubtree = `-- name: MoveSavedQueriesInFolderSubtree :exec
+WITH RECURSIVE subtree AS (
+    SELECT id FROM query_folders WHERE id = $2::uuid AND workspace_id = $3::uuid
+    UNION ALL
+    SELECT f.id FROM query_folders f JOIN subtree s ON f.parent_id = s.id
+)
+UPDATE saved_queries SET space_id = $1::uuid, updated_at = now()
+WHERE folder_id IN (SELECT id FROM subtree)
+`
+
+type MoveSavedQueriesInFolderSubtreeParams struct {
+	SpaceID     pgtype.UUID `json:"space_id"`
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) MoveSavedQueriesInFolderSubtree(ctx context.Context, arg MoveSavedQueriesInFolderSubtreeParams) error {
+	_, err := q.db.Exec(ctx, moveSavedQueriesInFolderSubtree, arg.SpaceID, arg.ID, arg.WorkspaceID)
+	return err
+}
+
 const savedQuerySlugExists = `-- name: SavedQuerySlugExists :one
 SELECT EXISTS (
     SELECT 1 FROM saved_queries WHERE workspace_id = $1::uuid AND slug = $2::text
@@ -970,6 +1055,62 @@ func (q *Queries) SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugEx
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const searchVisibleSavedQueries = `-- name: SearchVisibleSavedQueries :many
+SELECT q.id, q.workspace_id, q.folder_id, q.created_by, q.name, q.sql, q.created_at, q.updated_at, q.space_id, q.updated_by, q.target_binding_id, q.target_schema, q.slug FROM saved_queries q
+WHERE q.workspace_id = $1::uuid
+  AND baleia_effective_space_role(q.workspace_id, q.space_id, $2::uuid) IS NOT NULL
+  AND ($3::uuid IS NULL OR q.space_id = $3::uuid)
+  AND ($4::text IS NULL OR q.name ILIKE '%' || $4::text || '%' OR q.slug ILIKE '%' || $4::text || '%')
+ORDER BY q.name
+`
+
+type SearchVisibleSavedQueriesParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
+	Q           *string     `json:"q"`
+}
+
+// Every visible saved query, optionally filtered by space and text (#113).
+func (q *Queries) SearchVisibleSavedQueries(ctx context.Context, arg SearchVisibleSavedQueriesParams) ([]SavedQuery, error) {
+	rows, err := q.db.Query(ctx, searchVisibleSavedQueries,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.SpaceID,
+		arg.Q,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SavedQuery
+	for rows.Next() {
+		var i SavedQuery
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.FolderID,
+			&i.CreatedBy,
+			&i.Name,
+			&i.Sql,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SpaceID,
+			&i.UpdatedBy,
+			&i.TargetBindingID,
+			&i.TargetSchema,
+			&i.Slug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setExecutionResult = `-- name: SetExecutionResult :exec
