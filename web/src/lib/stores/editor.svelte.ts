@@ -48,6 +48,7 @@ function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
 }
 
 export type EditorInsert = { tabId: string; text: string; seq: number };
+export type EditorRun = { tabId: string; seq: number };
 
 function createEditorStore() {
 	const tabs = $state<EditorTab[]>([emptyTab('1')]);
@@ -57,6 +58,9 @@ function createEditorStore() {
 	// editor applies it at the cursor and bumps `seq` (FD rule).
 	let insertSeq = 0;
 	let pendingInsert = $state<EditorInsert | null>(null);
+	// "Re-run" from history (#36) opens a tab and asks the editor to run it.
+	let runSeq = 0;
+	let pendingRun = $state<EditorRun | null>(null);
 
 	const activeTab = $derived(tabs.find((tab) => tab.id === activeId) ?? tabs[0]);
 
@@ -120,6 +124,26 @@ function createEditorStore() {
 		if (tab) tab.executionId = executionId;
 	}
 
+	/**
+	 * Opens the workbench on a new tab with this SQL and target and asks the
+	 * editor to run it (#36 "Re-run").
+	 */
+	function openExecution(query: {
+		name?: string;
+		sql: string;
+		bindingId: string;
+		schema: string;
+	}): EditorTab {
+		const tab = addTab({
+			name: query.name ?? 'History',
+			sql: query.sql,
+			bindingId: query.bindingId,
+			schema: query.schema
+		});
+		pendingRun = { tabId: tab.id, seq: ++runSeq };
+		return tab;
+	}
+
 	return {
 		get tabs() {
 			return tabs;
@@ -133,6 +157,9 @@ function createEditorStore() {
 		get pendingInsert() {
 			return pendingInsert;
 		},
+		get pendingRun() {
+			return pendingRun;
+		},
 		activate,
 		addTab,
 		closeTab,
@@ -141,7 +168,8 @@ function createEditorStore() {
 		updateSql,
 		insert,
 		setTarget,
-		setExecution
+		setExecution,
+		openExecution
 	};
 }
 

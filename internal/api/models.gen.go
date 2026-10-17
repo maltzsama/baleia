@@ -1241,7 +1241,13 @@ type Execution struct {
 	Status        ExecutionStatus     `json:"status"`
 
 	// Target The target an execution ran on, as recorded when it started
-	Target      *ExecutionTarget   `json:"target,omitempty"`
+	Target *ExecutionTarget `json:"target,omitempty"`
+
+	// UserId The caller who ran it
+	UserId *openapi_types.UUID `json:"user_id"`
+
+	// UserName The runner's name (history list)
+	UserName    *string            `json:"user_name"`
 	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
@@ -2341,9 +2347,25 @@ type ListUsersParams struct {
 
 // ListExecutionsParams defines parameters for ListExecutions.
 type ListExecutionsParams struct {
-	Status  *ListExecutionsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
-	Page    *QueryPage                  `form:"page,omitempty" json:"page,omitempty"`
-	PerPage *QueryPerPage               `form:"per_page,omitempty" json:"per_page,omitempty"`
+	Status *ListExecutionsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// UserId A user id, or `me` for the caller
+	UserId *string `form:"user_id,omitempty" json:"user_id,omitempty"`
+
+	// From Only executions started at or after this instant
+	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Only executions started at or before this instant
+	To *time.Time `form:"to,omitempty" json:"to,omitempty"`
+
+	// Q Substring of the SQL (trigram-indexed)
+	Q         *string             `form:"q,omitempty" json:"q,omitempty"`
+	CatalogId *openapi_types.UUID `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
+	EngineId  *openapi_types.UUID `form:"engine_id,omitempty" json:"engine_id,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListExecutionsParamsStatus defines parameters for ListExecutions.

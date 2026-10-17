@@ -44,6 +44,7 @@
 
 	let editorView: EditorView;
 	let editorEl: HTMLDivElement;
+	let editorReady = $state(false);
 	const themeCompartment = new Compartment();
 	const dialectCompartment = new Compartment();
 
@@ -362,6 +363,7 @@
 
 		const state = EditorState.create({ doc: editor.activeTab?.sql ?? '', extensions });
 		editorView = new EditorView({ state, parent: editorEl });
+		editorReady = true;
 
 		return () => {
 			observer.disconnect();
@@ -389,6 +391,16 @@
 			selection: { anchor: from + pending.text.length }
 		});
 		editorView.focus();
+	});
+
+	// "Re-run" from history (#36): run the tab the store opened.
+	let appliedRunSeq = 0;
+	$effect(() => {
+		const run = editor.pendingRun;
+		if (!editorReady || !run || run.seq === appliedRunSeq) return;
+		appliedRunSeq = run.seq;
+		if (run.tabId !== editor.activeId) return;
+		void runAll();
 	});
 
 	// ── Running ──────────────────────────────────────────────────────────
