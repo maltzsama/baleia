@@ -200,7 +200,8 @@ type Querier interface {
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	// Newest first, keyset-paginated on (occurred_at, id): the cursor is the
-	// last row of the previous page. Every filter is optional.
+	// last row of the previous page. Every filter is optional. A non-admin is
+	// scoped to their own events and to events of workspaces they own (#49).
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]BindingStatusV, error)

@@ -3,8 +3,11 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -38,8 +41,12 @@ func (h *Handlers) ListAuditEvents(ctx context.Context, request ListAuditEventsR
 		}
 		limit = *q.Limit
 	}
+	if w := auditWindow(q.From, q.To, q.ResourceId, q.ActorId); w != nil {
+		return ListAuditEvents422JSONResponse{UnprocessableEntityJSONResponse: *w}, nil
+	}
 	params := db.ListAuditEventsParams{
 		ResourceType: q.ResourceType, ResourceID: q.ResourceId, ActorID: q.ActorId, Action: q.Action,
+		RequestID: q.RequestId, TraceID: q.TraceId,
 		Lim: int32(limit + 1),
 	}
 	if q.Outcome != nil {
@@ -53,8 +60,10 @@ func (h *Handlers) ListAuditEvents(ctx context.Context, request ListAuditEventsR
 		params.ToTime = pgtype.Timestamptz{Time: *q.To, Valid: true}
 	}
 	if !p.IsAdmin() {
+		// Own events plus events of workspaces the caller owns (#49).
 		self := p.UserID.String()
-		params.ActorID = &self
+		params.ScopeActor = &self
+		params.ScopeOwner = p.UserID
 	}
 	if q.Cursor != nil && *q.Cursor != "" {
 		at, id, ok := decodeAuditCursor(*q.Cursor)
@@ -97,6 +106,175 @@ func (h *Handlers) ListAuditEvents(ctx context.Context, request ListAuditEventsR
 		out.Items = append(out.Items, e)
 	}
 	return out, nil
+}
+
+// auditWindow enforces the required, bounded time window (#49): a from date
+// unless resource_id/actor_id narrows the search, and at most 93 days.
+func auditWindow(from, to *time.Time, resourceID, actorID *string) *UnprocessableEntityJSONResponse {
+	hasResource := resourceID != nil && *resourceID != ""
+	hasActor := actorID != nil && *actorID != ""
+	if from == nil && !hasResource && !hasActor {
+		r := unprocessable("invalid_time_range", "a time window (from) is required unless resource_id or actor_id is given")
+		return &r
+	}
+	if from != nil && to != nil && to.Sub(*from) > 93*24*time.Hour {
+		r := unprocessable("invalid_time_range", "the window is larger than 93 days")
+		return &r
+	}
+	return nil
+}
+
+// ListAuditActions returns the bounded vocabulary for the action filter.
+func (h *Handlers) ListAuditActions(ctx context.Context, _ ListAuditActionsRequestObject) (ListAuditActionsResponseObject, error) {
+	if _, err := authz.PrincipalFromContext(ctx); err != nil {
+		return ListAuditActions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	actions := audit.Actions()
+	out := make([]string, len(actions))
+	for i, action := range actions {
+		out[i] = string(action)
+	}
+	return ListAuditActions200JSONResponse(out), nil
+}
+
+// ResolveAudit resolves ids to names, only for entities the caller can see.
+func (h *Handlers) ResolveAudit(ctx context.Context, request ResolveAuditRequestObject) (ResolveAuditResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return ResolveAudit401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	users := map[string]AuditResolvedUser{}
+	workspaces := map[string]AuditResolvedName{}
+	connections := map[string]AuditResolvedName{}
+	catalogs := map[string]AuditResolvedName{}
+
+	if request.Body != nil {
+		for _, id := range *request.Body.Users {
+			user, err := h.queries.GetUserByID(ctx, pgtype.UUID{Bytes: [16]byte(id), Valid: true})
+			if err != nil {
+				continue
+			}
+			email := user.Email
+			users[uuid.UUID(id).String()] = AuditResolvedUser{Name: user.Name, Email: &email}
+		}
+		for _, id := range *request.Body.Workspaces {
+			ws, err := h.authz().Workspace(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
+			if err != nil {
+				continue
+			}
+			workspaces[uuid.UUID(id).String()] = AuditResolvedName{Name: ws.Name}
+		}
+		for _, id := range *request.Body.Connections {
+			conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
+			if err != nil {
+				continue
+			}
+			connections[uuid.UUID(id).String()] = AuditResolvedName{Name: conn.Name}
+		}
+		for _, id := range *request.Body.Catalogs {
+			catalog, err := h.queries.GetCatalogByID(ctx, pgtype.UUID{Bytes: [16]byte(id), Valid: true})
+			if err != nil {
+				continue
+			}
+			if _, err := h.authz().Connection(ctx, p, catalog.ConnectionID, authz.ActRead); err != nil {
+				continue
+			}
+			catalogs[uuid.UUID(id).String()] = AuditResolvedName{Name: catalog.Name}
+		}
+	}
+	return ResolveAudit200JSONResponse(AuditResolveResult{
+		Users: &users, Workspaces: &workspaces, Connections: &connections, Catalogs: &catalogs,
+	}), nil
+}
+
+// ExportAuditCSV streams the current filter as CSV, capped at one million rows.
+func (h *Handlers) ExportAuditCSV(ctx context.Context, request ExportAuditCSVRequestObject) (ExportAuditCSVResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return ExportAuditCSV401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	if !p.IsAdmin() {
+		return ExportAuditCSV403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only administrators may export the audit trail"}}, nil
+	}
+	q := request.Params
+	if w := auditWindow(q.From, q.To, q.ResourceId, q.ActorId); w != nil {
+		return ExportAuditCSV422JSONResponse{UnprocessableEntityJSONResponse: *w}, nil
+	}
+	params := db.ListAuditEventsParams{
+		ResourceType: q.ResourceType, ResourceID: q.ResourceId, ActorID: q.ActorId, Action: q.Action,
+		RequestID: q.RequestId, TraceID: q.TraceId, Lim: 1000,
+	}
+	if q.Outcome != nil {
+		o := string(*q.Outcome)
+		params.Outcome = &o
+	}
+	if q.From != nil {
+		params.FromTime = pgtype.Timestamptz{Time: *q.From, Valid: true}
+	}
+	if q.To != nil {
+		params.ToTime = pgtype.Timestamptz{Time: *q.To, Valid: true}
+	}
+
+	reader, writer := io.Pipe()
+	go func() {
+		defer writer.Close()
+		cw := csv.NewWriter(writer)
+		_ = cw.Write([]string{
+			"occurred_at", "actor_kind", "actor_id", "auth_method", "action", "resource_type",
+			"resource_id", "workspace_id", "outcome", "reason", "request_id", "trace_id",
+			"client_ip", "user_agent",
+		})
+		cw.Flush()
+		base := context.WithoutCancel(ctx)
+		written := 0
+		for written < 1_000_000 {
+			rows, err := h.queries.ListAuditEvents(base, params)
+			if err != nil {
+				_ = writer.CloseWithError(err)
+				return
+			}
+			if len(rows) == 0 {
+				break
+			}
+			for _, r := range rows {
+				_ = cw.Write([]string{
+					r.OccurredAt.Time.UTC().Format(time.RFC3339),
+					r.ActorKind, strOrEmpty(r.ActorID), strOrEmpty(r.AuthMethod), r.Action,
+					r.ResourceType, strOrEmpty(r.ResourceID), idString(r.WorkspaceID), r.Outcome,
+					strOrEmpty(r.Reason), strOrEmpty(r.RequestID), strOrEmpty(r.TraceID),
+					ipOrEmpty(r.ClientIp), strOrEmpty(r.UserAgent),
+				})
+				written++
+				if written >= 1_000_000 {
+					break
+				}
+			}
+			cw.Flush()
+			if len(rows) < int(params.Lim) {
+				break
+			}
+			last := rows[len(rows)-1]
+			params.CursorAt = last.OccurredAt
+			id := last.ID
+			params.CursorID = &id
+		}
+		cw.Flush()
+	}()
+	return ExportAuditCSV200TextcsvResponse{Body: reader}, nil
+}
+
+func strOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func ipOrEmpty(value *netip.Addr) string {
+	if value == nil {
+		return ""
+	}
+	return value.String()
 }
 
 // The cursor is the (occurred_at, id) of the last event of a page.

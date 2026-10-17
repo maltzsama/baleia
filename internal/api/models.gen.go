@@ -585,6 +585,13 @@ const (
 	ListAuditEventsParamsOutcomeError   ListAuditEventsParamsOutcome = "error"
 )
 
+// Defines values for ExportAuditCSVParamsOutcome.
+const (
+	ExportAuditCSVParamsOutcomeAllowed ExportAuditCSVParamsOutcome = "allowed"
+	ExportAuditCSVParamsOutcomeDenied  ExportAuditCSVParamsOutcome = "denied"
+	ExportAuditCSVParamsOutcomeError   ExportAuditCSVParamsOutcome = "error"
+)
+
 // Defines values for ListMigrationItemsParamsStatus.
 const (
 	ListMigrationItemsParamsStatusFailed   ListMigrationItemsParamsStatus = "failed"
@@ -705,6 +712,33 @@ type AuditEventOutcome string
 type AuditEventPage struct {
 	Items      []AuditEvent `json:"items"`
 	NextCursor *string      `json:"next_cursor"`
+}
+
+// AuditResolveRequest defines model for AuditResolveRequest.
+type AuditResolveRequest struct {
+	Catalogs    *[]openapi_types.UUID `json:"catalogs,omitempty"`
+	Connections *[]openapi_types.UUID `json:"connections,omitempty"`
+	Users       *[]openapi_types.UUID `json:"users,omitempty"`
+	Workspaces  *[]openapi_types.UUID `json:"workspaces,omitempty"`
+}
+
+// AuditResolveResult defines model for AuditResolveResult.
+type AuditResolveResult struct {
+	Catalogs    *map[string]AuditResolvedName `json:"catalogs,omitempty"`
+	Connections *map[string]AuditResolvedName `json:"connections,omitempty"`
+	Users       *map[string]AuditResolvedUser `json:"users,omitempty"`
+	Workspaces  *map[string]AuditResolvedName `json:"workspaces,omitempty"`
+}
+
+// AuditResolvedName defines model for AuditResolvedName.
+type AuditResolvedName struct {
+	Name string `json:"name"`
+}
+
+// AuditResolvedUser defines model for AuditResolvedUser.
+type AuditResolvedUser struct {
+	Email *string `json:"email,omitempty"`
+	Name  string  `json:"name"`
 }
 
 // BindingSupport defines model for BindingSupport.
@@ -2395,6 +2429,8 @@ type ListAuditEventsParams struct {
 	ActorId      *string                       `form:"actor_id,omitempty" json:"actor_id,omitempty"`
 	Action       *string                       `form:"action,omitempty" json:"action,omitempty"`
 	Outcome      *ListAuditEventsParamsOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+	RequestId    *string                       `form:"request_id,omitempty" json:"request_id,omitempty"`
+	TraceId      *string                       `form:"trace_id,omitempty" json:"trace_id,omitempty"`
 	From         *time.Time                    `form:"from,omitempty" json:"from,omitempty"`
 	To           *time.Time                    `form:"to,omitempty" json:"to,omitempty"`
 
@@ -2405,6 +2441,22 @@ type ListAuditEventsParams struct {
 
 // ListAuditEventsParamsOutcome defines parameters for ListAuditEvents.
 type ListAuditEventsParamsOutcome string
+
+// ExportAuditCSVParams defines parameters for ExportAuditCSV.
+type ExportAuditCSVParams struct {
+	ResourceType *string                      `form:"resource_type,omitempty" json:"resource_type,omitempty"`
+	ResourceId   *string                      `form:"resource_id,omitempty" json:"resource_id,omitempty"`
+	ActorId      *string                      `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+	Action       *string                      `form:"action,omitempty" json:"action,omitempty"`
+	Outcome      *ExportAuditCSVParamsOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+	RequestId    *string                      `form:"request_id,omitempty" json:"request_id,omitempty"`
+	TraceId      *string                      `form:"trace_id,omitempty" json:"trace_id,omitempty"`
+	From         *time.Time                   `form:"from,omitempty" json:"from,omitempty"`
+	To           *time.Time                   `form:"to,omitempty" json:"to,omitempty"`
+}
+
+// ExportAuditCSVParamsOutcome defines parameters for ExportAuditCSV.
+type ExportAuditCSVParamsOutcome string
 
 // OidcCallbackParams defines parameters for OidcCallback.
 type OidcCallbackParams struct {
@@ -2651,6 +2703,9 @@ type StreamExecutionParams struct {
 
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
 type CreateApiKeyJSONRequestBody = CreateApiKeyRequest
+
+// ResolveAuditJSONRequestBody defines body for ResolveAudit for application/json ContentType.
+type ResolveAuditJSONRequestBody = AuditResolveRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest

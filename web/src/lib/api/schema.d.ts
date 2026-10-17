@@ -462,6 +462,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The bounded audit action vocabulary */
+        get: operations["listAuditActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve audit ids to names, only entities the caller can see */
+        post: operations["resolveAudit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit/events.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the current audit filter as CSV — admins */
+        get: operations["exportAuditCSV"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/metadata/catalogs": {
         parameters: {
             query?: never;
@@ -2571,6 +2622,33 @@ export interface components {
             items: components["schemas"]["AuditEvent"][];
             next_cursor?: string | null;
         };
+        AuditResolveRequest: {
+            users?: string[];
+            workspaces?: string[];
+            connections?: string[];
+            catalogs?: string[];
+        };
+        AuditResolvedUser: {
+            name: string;
+            email?: string;
+        };
+        AuditResolvedName: {
+            name: string;
+        };
+        AuditResolveResult: {
+            users?: {
+                [key: string]: components["schemas"]["AuditResolvedUser"];
+            };
+            workspaces?: {
+                [key: string]: components["schemas"]["AuditResolvedName"];
+            };
+            connections?: {
+                [key: string]: components["schemas"]["AuditResolvedName"];
+            };
+            catalogs?: {
+                [key: string]: components["schemas"]["AuditResolvedName"];
+            };
+        };
         ReconcileAction: {
             /** @description The catalog's name in the engine */
             catalog: string;
@@ -4359,6 +4437,8 @@ export interface operations {
                 actor_id?: string;
                 action?: string;
                 outcome?: "allowed" | "denied" | "error";
+                request_id?: string;
+                trace_id?: string;
                 from?: string;
                 to?: string;
                 /** @description next_cursor of the previous page */
@@ -4381,6 +4461,85 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listAuditActions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Actions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    resolveAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Resolved names */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditResolveResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    exportAuditCSV: {
+        parameters: {
+            query?: {
+                resource_type?: string;
+                resource_id?: string;
+                actor_id?: string;
+                action?: string;
+                outcome?: "allowed" | "denied" | "error";
+                request_id?: string;
+                trace_id?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
