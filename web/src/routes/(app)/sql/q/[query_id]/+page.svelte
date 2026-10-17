@@ -4,6 +4,7 @@
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import Workbench from '$lib/components/Workbench.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
+	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	let error = $state('');
@@ -27,7 +28,8 @@
 			error = apiErrorMessage(err, 'Failed to open the saved query');
 			return;
 		}
-		editor.openSavedQuery(data);
+		await savedQueries.reload(workspaceId);
+		editor.openSavedQuery(data, !savedQueries.canEdit(data.space_id));
 	});
 </script>
 

@@ -78,6 +78,7 @@ var operationAccess = map[string]access{
 	"ListConnectionProviders": {kind: kindAuthenticated, why: "static provider metadata (kinds and config schemas), no tenant data"},
 	"GetDialect":              {kind: kindAuthenticated, why: "static dialect metadata (keyword and function lists), no tenant data"},
 	"SplitStatements":         {kind: kindAuthenticated, why: "splits the caller's own text with static rules; reads no data"},
+	"ExplainSQL":              {kind: kindAuthenticated, why: "rewrites the caller's own text with static dialect rules; reads no data"},
 	"IssueWsTicket":           {kind: kindAuthenticated, why: "issues a single-use ticket for the caller's own session"},
 
 	// ── scoped to the caller

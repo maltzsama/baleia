@@ -249,8 +249,16 @@ func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemantic
 		return nil, err
 	}
 	out := make(ListSemanticMetrics200JSONResponse, 0, len(metrics))
+	versions, err := h.queries.ListSemanticMetricVersions(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	versionByID := make(map[string]int32, len(versions))
+	for _, v := range versions {
+		versionByID[uuidStr(v.EntityID)] = v.Version
+	}
 	for _, m := range metrics {
-		out = append(out, dbSemanticMetricToPublic(m))
+		out = append(out, dbSemanticMetricToPublic(m, versionByID[uuidStr(m.ID)]))
 	}
 	return out, nil
 }
@@ -286,7 +294,7 @@ func (h *Handlers) GetSemanticMetric(ctx context.Context, request GetSemanticMet
 		}
 		return GetSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
-	return GetSemanticMetric200JSONResponse(dbSemanticMetricToPublic(metric)), nil
+	return GetSemanticMetric200JSONResponse(dbSemanticMetricToPublic(metric, h.semanticMetricVersion(ctx, ws, metric.ID))), nil
 }
 
 // CreateSemanticMetric — POST /workspaces/{id}/semantic/metrics
@@ -378,7 +386,7 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 		}
 		return nil, err
 	}
-	return CreateSemanticMetric201JSONResponse(dbSemanticMetricToPublic(metric)), nil
+	return CreateSemanticMetric201JSONResponse(dbSemanticMetricToPublic(metric, 1)), nil
 }
 
 // UpdateSemanticMetric — PATCH /workspaces/{id}/semantic/metrics/{metric_id}
@@ -484,6 +492,11 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 		return nil, err
 	}
 
+	var expected *int32
+	if body.ExpectedVersion != nil {
+		v := int32(*body.ExpectedVersion)
+		expected = &v
+	}
 	updated, _, err := h.contentService().UpdateSemanticMetric(ctx, userID, db.UpdateSemanticMetricParams{
 		WorkspaceID:   ws,
 		SpaceID:       current.SpaceID,
@@ -500,14 +513,17 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 		FormatVersion: semantic.FormatVersion,
 		OwnerUserID:   ownerID,
 		UpdatedBy:     userID,
-	})
+	}, expected)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "a metric with this slug already exists in this workspace"}}, nil
 		}
+		if c, ok := h.versionConflictResponse(ctx, err); ok {
+			return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: c}, nil
+		}
 		return nil, err
 	}
-	return UpdateSemanticMetric200JSONResponse(dbSemanticMetricToPublic(updated)), nil
+	return UpdateSemanticMetric200JSONResponse(dbSemanticMetricToPublic(updated, h.semanticMetricVersion(ctx, ws, metricID))), nil
 }
 
 // DeleteSemanticMetric — DELETE /workspaces/{id}/semantic/metrics/{metric_id}
@@ -788,7 +804,18 @@ func dbSemanticSearchRowToPublic(r db.SearchSemanticDocsRow) SemanticDocSearchRe
 	return out
 }
 
-func dbSemanticMetricToPublic(m db.SemanticMetric) SemanticMetric {
+// semanticMetricVersion returns the latest content version, or 0 when none.
+func (h *Handlers) semanticMetricVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
+		WorkspaceID: ws, EntityType: content.EntitySemanticMetric, EntityID: id,
+	})
+	if err != nil {
+		return 0
+	}
+	return v.Version
+}
+
+func dbSemanticMetricToPublic(m db.SemanticMetric, version int32) SemanticMetric {
 	out := SemanticMetric{
 		Id:            openapi_types.UUID(m.ID.Bytes),
 		WorkspaceId:   openapi_types.UUID(m.WorkspaceID.Bytes),
@@ -800,6 +827,7 @@ func dbSemanticMetricToPublic(m db.SemanticMetric) SemanticMetric {
 		Namespace:     nonNilStrings(m.Namespace),
 		Table:         m.TableName,
 		FormatVersion: int(m.FormatVersion),
+		Version:       int(version),
 		UpdatedAt:     pgTimestampToTime(m.UpdatedAt),
 	}
 	var def map[string]interface{}

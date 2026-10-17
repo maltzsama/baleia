@@ -1,4 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/workbench/drafts', () => ({
+	loadDrafts: vi.fn(),
+	saveDrafts: vi.fn(),
+	MAX_DRAFT_TABS: 30,
+	MAX_DRAFT_SQL: 1 << 20
+}));
+
+import { loadDrafts, saveDrafts } from '$lib/workbench/drafts';
 import { editor } from './editor.svelte';
 
 const query = {
@@ -6,18 +15,21 @@ const query = {
 	name: 'Revenue',
 	sql: 'SELECT 1',
 	workspace_id: 'ws1',
+	space_id: 'sp1',
+	slug: 'revenue',
+	version: 1,
 	folder_id: null,
 	created_by: 'u1',
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
-	allowed_actions: []
+	target: undefined
 };
 
 describe('editor store', () => {
 	beforeEach(() => {
-		// Return to the initial tab so tests stay independent.
-		for (const tab of [...editor.tabs].slice(1)) editor.closeTab(tab.id);
-		if (editor.tabs[0]) editor.activate(editor.tabs[0].id);
+		editor.resetTabs();
+		vi.mocked(loadDrafts).mockReset();
+		vi.mocked(saveDrafts).mockReset();
 	});
 
 	it('opens a saved query in a new tab and focuses it', () => {
@@ -33,5 +45,59 @@ describe('editor store', () => {
 		const second = editor.openSavedQuery(query);
 		expect(second.id).toBe(first.id);
 		expect(editor.tabs.length).toBe(tabsBefore);
+	});
+
+	it('records the version and opens read-only for a viewer', () => {
+		const tab = editor.openSavedQuery(query, true);
+		expect(tab.readOnly).toBe(true);
+		expect(tab.savedRef).toEqual({
+			id: 'q1',
+			version: 1,
+			slug: 'revenue',
+			space_id: 'sp1',
+			folder_id: null
+		});
+	});
+
+	it('never overwrites a dirty open tab', () => {
+		const tab = editor.openSavedQuery(query);
+		editor.updateSql(tab.id, 'SELECT 2');
+		expect(tab.dirty).toBe(true);
+		editor.openSavedQuery({ ...query, sql: 'SELECT 3' });
+		expect(editor.activeTab.sql).toBe('SELECT 2');
+	});
+
+	it('clears dirty and advances the version after a save', () => {
+		const tab = editor.openSavedQuery(query);
+		editor.updateSql(tab.id, 'SELECT 2');
+		editor.markSaved(tab.id, { ...query, version: 2, sql: 'SELECT 2' });
+		expect(tab.dirty).toBe(false);
+		expect(tab.savedRef?.version).toBe(2);
+		expect(tab.savedSql).toBe('SELECT 2');
+	});
+
+	it('hydrates the drafts of a user and workspace', async () => {
+		vi.mocked(loadDrafts).mockResolvedValueOnce([
+			{
+				id: '7',
+				name: 'Draft',
+				sql: 'SELECT 9',
+				savedRef: null,
+				bindingId: 'b1',
+				schema: 's',
+				readOnly: false,
+				savedSql: 'SELECT 9',
+				savedBindingId: '',
+				savedSchema: ''
+			}
+		]);
+		await editor.hydrate('u1', 'w1');
+		expect(editor.tabs[0].name).toBe('Draft');
+		expect(editor.tabs[0].sql).toBe('SELECT 9');
+	});
+
+	it('persists through the drafts module', async () => {
+		await editor.persist('u1', 'w1');
+		expect(saveDrafts).toHaveBeenCalledWith('u1', 'w1', editor.tabs);
 	});
 });

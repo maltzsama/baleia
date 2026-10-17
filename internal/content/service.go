@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
@@ -39,7 +40,20 @@ var (
 	// ErrSpaceMissing means the snapshot's space no longer exists and the
 	// caller did not choose another one.
 	ErrSpaceMissing = errors.New("space no longer exists")
+	// ErrVersionConflict means the caller edited a stale content version.
+	ErrVersionConflict = errors.New("version_conflict")
 )
+
+// VersionConflict is the typed ErrVersionConflict: the current version and
+// who/ when wrote it, for the 409 body.
+type VersionConflict struct {
+	Current   int32
+	UpdatedBy pgtype.UUID
+	UpdatedAt time.Time
+}
+
+func (e *VersionConflict) Error() string { return "version_conflict" }
+func (e *VersionConflict) Unwrap() error { return ErrVersionConflict }
 
 // Service writes content and its versions in one transaction.
 type Service struct {
@@ -179,14 +193,29 @@ func (s *Service) CreateSavedQuery(ctx context.Context, actor pgtype.UUID, in db
 }
 
 // UpdateSavedQuery writes the change and one update version, or nothing for a
-// no-op (changed=false).
-func (s *Service) UpdateSavedQuery(ctx context.Context, actor pgtype.UUID, in db.UpdateSavedQueryParams) (db.SavedQuery, bool, error) {
+// no-op (changed=false). A non-nil expectedVersion rejects a stale edit.
+func (s *Service) UpdateSavedQuery(ctx context.Context, actor pgtype.UUID, in db.UpdateSavedQueryParams, expectedVersion *int32) (db.SavedQuery, bool, error) {
 	var out db.SavedQuery
 	changed := false
 	err := s.inTx(ctx, func(q db.Querier) error {
 		current, err := q.GetSavedQueryForUpdate(ctx, db.GetSavedQueryForUpdateParams{ID: in.ID, WorkspaceID: in.WorkspaceID})
 		if err != nil {
 			return err
+		}
+		if expectedVersion != nil {
+			latest, err := q.LatestContentVersion(ctx, db.LatestContentVersionParams{
+				WorkspaceID: in.WorkspaceID, EntityType: EntitySavedQuery, EntityID: in.ID,
+			})
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			currentVersion := int32(0)
+			if err == nil {
+				currentVersion = latest.Version
+			}
+			if currentVersion != *expectedVersion {
+				return &VersionConflict{Current: currentVersion, UpdatedBy: current.UpdatedBy, UpdatedAt: current.UpdatedAt.Time}
+			}
 		}
 		if !savedQueryDiffers(current, in) {
 			out = current
@@ -356,14 +385,29 @@ func (s *Service) CreateSemanticMetric(ctx context.Context, actor pgtype.UUID, i
 }
 
 // UpdateSemanticMetric writes the change and one update version (none for a
-// no-op).
-func (s *Service) UpdateSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticMetricParams) (db.SemanticMetric, bool, error) {
+// no-op). A non-nil expectedVersion rejects a stale edit.
+func (s *Service) UpdateSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticMetricParams, expectedVersion *int32) (db.SemanticMetric, bool, error) {
 	var out db.SemanticMetric
 	changed := false
 	err := s.inTx(ctx, func(q db.Querier) error {
 		current, err := q.GetSemanticMetricForUpdate(ctx, db.GetSemanticMetricForUpdateParams{ID: in.ID, WorkspaceID: in.WorkspaceID})
 		if err != nil {
 			return err
+		}
+		if expectedVersion != nil {
+			latest, err := q.LatestContentVersion(ctx, db.LatestContentVersionParams{
+				WorkspaceID: in.WorkspaceID, EntityType: EntitySemanticMetric, EntityID: in.ID,
+			})
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			currentVersion := int32(0)
+			if err == nil {
+				currentVersion = latest.Version
+			}
+			if currentVersion != *expectedVersion {
+				return &VersionConflict{Current: currentVersion, UpdatedBy: current.UpdatedBy, UpdatedAt: current.UpdatedAt.Time}
+			}
 		}
 		if !metricDiffers(current, in) {
 			out = current

@@ -40,13 +40,21 @@ RETURNING *;
 SELECT * FROM saved_queries WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid;
 
 -- name: ListVisibleSavedQueries :many
--- Only queries of spaces the caller can see; space_id/folder_id narrow it.
+-- Only queries of spaces the caller can see; space_id/folder_id/q narrow it.
 SELECT q.* FROM saved_queries q
 WHERE q.workspace_id = @workspace_id::uuid
   AND baleia_effective_space_role(q.workspace_id, q.space_id, @user_id::uuid) IS NOT NULL
   AND (sqlc.narg(space_id)::uuid IS NULL OR q.space_id = sqlc.narg(space_id)::uuid)
   AND q.folder_id IS NOT DISTINCT FROM sqlc.narg(folder_id)::uuid
+  AND (sqlc.narg(q)::text IS NULL OR q.name ILIKE '%' || sqlc.narg(q)::text || '%' OR q.slug ILIKE '%' || sqlc.narg(q)::text || '%')
 ORDER BY q.name;
+
+-- name: ListSavedQueryVersions :many
+-- Latest content version of every saved query in the workspace, in one query.
+SELECT entity_id, max(version)::int AS version
+FROM content_versions
+WHERE workspace_id = @workspace_id::uuid AND entity_type = 'saved_query'
+GROUP BY entity_id;
 
 -- name: SavedQuerySlugExists :one
 SELECT EXISTS (

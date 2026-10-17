@@ -253,6 +253,8 @@ type Querier interface {
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
 	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]ListRunningStatementHandlesRow, error)
+	// Latest content version of every saved query in the workspace, in one query.
+	ListSavedQueryVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSavedQueryVersionsRow, error)
 	// Semantic layer v1 (#33): docs keyed by natural key, simple metrics keyed by
 	// portable slug. Docs are workspace-scoped; the catalog must be granted to the
 	// workspace (#16). Metrics become content items in #40 and are versioned in #34.
@@ -260,6 +262,8 @@ type Querier interface {
 	// Every doc of one table (table-level and per-column), optionally narrowed to
 	// one column. The natural key is catalog + namespace + table [+ column].
 	ListSemanticDocsForTable(ctx context.Context, arg ListSemanticDocsForTableParams) ([]SemanticDoc, error)
+	// Latest content version of every metric in the workspace, in one query.
+	ListSemanticMetricVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticMetricVersionsRow, error)
 	// Bundles (#34): deterministic, portable content-as-code. Items are matched by
 	// (kind, slug), never by id; omitted items are never deleted.
 	ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]QueryFolder, error)
@@ -288,7 +292,7 @@ type Querier interface {
 	// Only folders of spaces the caller can see; #16 says to filter in SQL, not in
 	// a Go loop. space_id/folder_id narrow the listing when present.
 	ListVisibleQueryFolders(ctx context.Context, arg ListVisibleQueryFoldersParams) ([]QueryFolder, error)
-	// Only queries of spaces the caller can see; space_id/folder_id narrow it.
+	// Only queries of spaces the caller can see; space_id/folder_id/q narrow it.
 	ListVisibleSavedQueries(ctx context.Context, arg ListVisibleSavedQueriesParams) ([]SavedQuery, error)
 	// ── Metrics ─────────────────────────────────────────────────────────────────────
 	// Only metrics of spaces the caller can see (#40); space_id narrows it.

@@ -305,6 +305,39 @@ func (q *Queries) ListSemanticDocsForTable(ctx context.Context, arg ListSemantic
 	return items, nil
 }
 
+const listSemanticMetricVersions = `-- name: ListSemanticMetricVersions :many
+SELECT entity_id, max(version)::int AS version
+FROM content_versions
+WHERE workspace_id = $1::uuid AND entity_type = 'semantic_metric'
+GROUP BY entity_id
+`
+
+type ListSemanticMetricVersionsRow struct {
+	EntityID pgtype.UUID `json:"entity_id"`
+	Version  int32       `json:"version"`
+}
+
+// Latest content version of every metric in the workspace, in one query.
+func (q *Queries) ListSemanticMetricVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticMetricVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listSemanticMetricVersions, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSemanticMetricVersionsRow
+	for rows.Next() {
+		var i ListSemanticMetricVersionsRow
+		if err := rows.Scan(&i.EntityID, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVisibleSemanticMetrics = `-- name: ListVisibleSemanticMetrics :many
 
 SELECT m.id, m.workspace_id, m.slug, m.label, m.description, m.certified, m.catalog_id, m.namespace, m.table_name, m.binding_id, m.definition, m.format_version, m.owner_user_id, m.updated_by, m.updated_at, m.space_id FROM semantic_metrics m

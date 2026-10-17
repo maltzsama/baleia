@@ -216,3 +216,29 @@ func (h *Handlers) SplitStatements(ctx context.Context, request SplitStatementsR
 	}
 	return SplitStatements200JSONResponse(out), nil
 }
+
+// ExplainSQL — POST /dialects/{name}/explain (#112): the dialect decides the
+// statement; the client never prefixes EXPLAIN itself.
+func (h *Handlers) ExplainSQL(ctx context.Context, request ExplainSQLRequestObject) (ExplainSQLResponseObject, error) {
+	if _, err := authz.PrincipalFromContext(ctx); err != nil {
+		return ExplainSQL401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	d, ok := dialect.Get(request.Name)
+	if !ok {
+		return ExplainSQL404JSONResponse{NotFoundJSONResponse: dialectNotFound()}, nil
+	}
+	if request.Body == nil || strings.TrimSpace(request.Body.Sql) == "" {
+		return ExplainSQL422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "sql is required"}}, nil
+	}
+	sql := request.Body.Sql
+	if utf8.RuneCountInString(sql) > maxSplitSQL {
+		return ExplainSQL422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+			Code: "validation_error", Message: fmt.Sprintf("sql is longer than %d characters", maxSplitSQL),
+		}}, nil
+	}
+	explained, supported := d.ExplainSQL(sql)
+	if !supported {
+		return ExplainSQL200JSONResponse{Supported: false}, nil
+	}
+	return ExplainSQL200JSONResponse{Supported: true, Sql: &explained}, nil
+}

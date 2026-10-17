@@ -1198,6 +1198,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialects/{name}/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The dialect's EXPLAIN statement for a query
+         * @description Returns the statement that explains sql on this dialect, or `{supported: false}` for engines without EXPLAIN. The client runs the returned SQL; it never prefixes EXPLAIN itself.
+         */
+        post: operations["explainSQL"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engines/{id}/bindings": {
         parameters: {
             query?: never;
@@ -1942,6 +1964,10 @@ export interface components {
             /** @example not_found */
             code: string;
             message: string;
+            /** @description Structured details (for version_conflict: current_version, updated_by, updated_at) */
+            params?: {
+                [key: string]: unknown;
+            };
         };
         ValidationError: {
             /** @example validation_error */
@@ -2440,6 +2466,13 @@ export interface components {
         SplitStatementsRequest: {
             sql: string;
         };
+        ExplainRequest: {
+            sql: string;
+        };
+        ExplainResult: {
+            supported: boolean;
+            sql?: string | null;
+        };
         /** @description One statement, as offsets into the submitted SQL in UTF-16 code units (JavaScript string indices), end exclusive */
         StatementSpan: {
             start: number;
@@ -2704,6 +2737,8 @@ export interface components {
             updated_by?: string;
             /** Format: date-time */
             updated_at: string;
+            /** @description Latest content version (#34); send it as expected_version on PATCH */
+            version: number;
         };
         SemanticMetricCreate: {
             slug: string;
@@ -2741,6 +2776,8 @@ export interface components {
             };
             /** Format: uuid */
             owner_user_id?: string | null;
+            /** @description Reject with 409 version_conflict when the latest content version differs */
+            expected_version?: number | null;
         };
         SemanticMetricSQL: {
             sql: string;
@@ -3117,6 +3154,8 @@ export interface components {
             updated_by?: string | null;
             sql: string;
             target?: components["schemas"]["SavedQueryTarget"];
+            /** @description Latest content version (#34); send it as expected_version on PATCH */
+            version: number;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -3147,6 +3186,8 @@ export interface components {
             move_to_root?: boolean;
             sql?: string;
             target?: components["schemas"]["SavedQueryTarget"];
+            /** @description Reject with 409 version_conflict when the latest content version differs */
+            expected_version?: number | null;
         };
         ExecutionRequest: {
             /** Format: uuid */
@@ -5561,6 +5602,35 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    explainSQL: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplainRequest"];
+            };
+        };
+        responses: {
+            /** @description Explain statement or unsupported */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplainResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     listEngineBindings: {
         parameters: {
             query?: never;
@@ -6137,6 +6207,8 @@ export interface operations {
             query?: {
                 space_id?: string;
                 folder_id?: string;
+                /** @description Substring of the name or slug */
+                q?: string;
             };
             header?: never;
             path: {

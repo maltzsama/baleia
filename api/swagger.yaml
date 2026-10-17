@@ -126,6 +126,10 @@ components:
       properties:
         code: { type: string, example: "not_found" }
         message: { type: string }
+        params:
+          type: object
+          additionalProperties: true
+          description: "Structured details (for version_conflict: current_version, updated_by, updated_at)"
 
     ValidationError:
       type: object
@@ -745,6 +749,19 @@ components:
       properties:
         sql: { type: string, maxLength: 1048576 }
 
+    ExplainRequest:
+      type: object
+      required: [sql]
+      properties:
+        sql: { type: string, maxLength: 1048576 }
+
+    ExplainResult:
+      type: object
+      required: [supported]
+      properties:
+        supported: { type: boolean }
+        sql: { type: string, nullable: true }
+
     StatementSpan:
       type: object
       required: [start, end]
@@ -990,7 +1007,7 @@ components:
 
     SemanticMetric:
       type: object
-      required: [id, workspace_id, slug, label, catalog_id, namespace, table, definition, format_version, certified, updated_at]
+      required: [id, workspace_id, slug, label, catalog_id, namespace, table, definition, format_version, certified, updated_at, version]
       properties:
         id: { type: string, format: uuid }
         workspace_id: { type: string, format: uuid }
@@ -1013,6 +1030,7 @@ components:
         owner_user_id: { type: string, format: uuid, nullable: true }
         updated_by: { type: string, format: uuid }
         updated_at: { type: string, format: date-time }
+        version: { type: integer, description: "Latest content version (#34); send it as expected_version on PATCH" }
 
     SemanticMetricCreate:
       type: object
@@ -1042,6 +1060,7 @@ components:
         binding_id: { type: string, format: uuid, nullable: true }
         definition: { type: object, additionalProperties: true }
         owner_user_id: { type: string, format: uuid, nullable: true }
+        expected_version: { type: integer, nullable: true, description: "Reject with 409 version_conflict when the latest content version differs" }
 
     SemanticMetricSQL:
       type: object
@@ -1445,7 +1464,7 @@ components:
 
     SavedQuery:
       type: object
-      required: [id, name, workspace_id, space_id, slug, created_by, sql, created_at]
+      required: [id, name, workspace_id, space_id, slug, created_by, sql, created_at, version]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1457,6 +1476,7 @@ components:
         updated_by: { type: string, format: uuid, nullable: true }
         sql: { type: string }
         target: { $ref: "#/components/schemas/SavedQueryTarget" }
+        version: { type: integer, description: "Latest content version (#34); send it as expected_version on PATCH" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1481,6 +1501,7 @@ components:
         move_to_root: { type: boolean, description: "Explicitly move the query to the space root; folder_id wins when present" }
         sql: { type: string }
         target: { $ref: "#/components/schemas/SavedQueryTarget" }
+        expected_version: { type: integer, nullable: true, description: "Reject with 409 version_conflict when the latest content version differs" }
 
     # ── Executions ─────────────────────────────────────────────
     ExecutionRequest:
@@ -3430,6 +3451,35 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  /dialects/{name}/explain:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Engines]
+      operationId: explainSQL
+      summary: "The dialect's EXPLAIN statement for a query"
+      description: >
+        Returns the statement that explains sql on this dialect, or
+        `{supported: false}` for engines without EXPLAIN. The client runs the
+        returned SQL; it never prefixes EXPLAIN itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExplainRequest" }
+      responses:
+        "200":
+          description: "Explain statement or unsupported"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExplainResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /engines/{id}/bindings:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -3910,6 +3960,10 @@ paths:
         - name: folder_id
           in: query
           schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          description: "Substring of the name or slug"
+          schema: { type: string, minLength: 1, maxLength: 200 }
       responses:
         "200":
           description: "Queries"

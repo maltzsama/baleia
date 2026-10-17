@@ -1230,6 +1230,9 @@ type EngineDialect struct {
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+
+	// Params Structured details (for version_conflict: current_version, updated_by, updated_at)
+	Params *map[string]interface{} `json:"params,omitempty"`
 }
 
 // Execution defines model for Execution.
@@ -1281,6 +1284,17 @@ type ExecutionTarget struct {
 	EngineName    *string             `json:"engine_name,omitempty"`
 	ReadOnly      *bool               `json:"read_only,omitempty"`
 	Schema        *string             `json:"schema"`
+}
+
+// ExplainRequest defines model for ExplainRequest.
+type ExplainRequest struct {
+	Sql string `json:"sql"`
+}
+
+// ExplainResult defines model for ExplainResult.
+type ExplainResult struct {
+	Sql       *string `json:"sql"`
+	Supported bool    `json:"supported"`
 }
 
 // Features defines model for Features.
@@ -1790,18 +1804,21 @@ type RetrieverRefreshHistoryStatus string
 
 // SavedQuery defines model for SavedQuery.
 type SavedQuery struct {
-	CreatedAt   time.Time           `json:"created_at"`
-	CreatedBy   openapi_types.UUID  `json:"created_by"`
-	FolderId    *openapi_types.UUID `json:"folder_id"`
-	Id          openapi_types.UUID  `json:"id"`
-	Name        string              `json:"name"`
-	Slug        string              `json:"slug"`
-	SpaceId     openapi_types.UUID  `json:"space_id"`
-	Sql         string              `json:"sql"`
-	Target      *SavedQueryTarget   `json:"target,omitempty"`
-	UpdatedAt   *time.Time          `json:"updated_at,omitempty"`
-	UpdatedBy   *openapi_types.UUID `json:"updated_by"`
-	WorkspaceId openapi_types.UUID  `json:"workspace_id"`
+	CreatedAt time.Time           `json:"created_at"`
+	CreatedBy openapi_types.UUID  `json:"created_by"`
+	FolderId  *openapi_types.UUID `json:"folder_id"`
+	Id        openapi_types.UUID  `json:"id"`
+	Name      string              `json:"name"`
+	Slug      string              `json:"slug"`
+	SpaceId   openapi_types.UUID  `json:"space_id"`
+	Sql       string              `json:"sql"`
+	Target    *SavedQueryTarget   `json:"target,omitempty"`
+	UpdatedAt *time.Time          `json:"updated_at,omitempty"`
+	UpdatedBy *openapi_types.UUID `json:"updated_by"`
+
+	// Version Latest content version (#34); send it as expected_version on PATCH
+	Version     int                `json:"version"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
 // SavedQueryTarget defines model for SavedQueryTarget.
@@ -1868,7 +1885,10 @@ type SemanticMetric struct {
 	Table         string                 `json:"table"`
 	UpdatedAt     time.Time              `json:"updated_at"`
 	UpdatedBy     *openapi_types.UUID    `json:"updated_by,omitempty"`
-	WorkspaceId   openapi_types.UUID     `json:"workspace_id"`
+
+	// Version Latest content version (#34); send it as expected_version on PATCH
+	Version     int                `json:"version"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
 // SemanticMetricCreate defines model for SemanticMetricCreate.
@@ -1900,11 +1920,14 @@ type SemanticMetricUpdate struct {
 	Certified   *bool                   `json:"certified,omitempty"`
 	Definition  *map[string]interface{} `json:"definition,omitempty"`
 	Description *string                 `json:"description,omitempty"`
-	Label       *string                 `json:"label,omitempty"`
-	Namespace   *[]string               `json:"namespace,omitempty"`
-	OwnerUserId *openapi_types.UUID     `json:"owner_user_id"`
-	Slug        *string                 `json:"slug,omitempty"`
-	Table       *string                 `json:"table,omitempty"`
+
+	// ExpectedVersion Reject with 409 version_conflict when the latest content version differs
+	ExpectedVersion *int                `json:"expected_version"`
+	Label           *string             `json:"label,omitempty"`
+	Namespace       *[]string           `json:"namespace,omitempty"`
+	OwnerUserId     *openapi_types.UUID `json:"owner_user_id"`
+	Slug            *string             `json:"slug,omitempty"`
+	Table           *string             `json:"table,omitempty"`
 }
 
 // SetSpaceMemberRequest defines model for SetSpaceMemberRequest.
@@ -2126,7 +2149,9 @@ type UpdateRetrieverRequestStatus string
 
 // UpdateSavedQueryRequest defines model for UpdateSavedQueryRequest.
 type UpdateSavedQueryRequest struct {
-	FolderId *openapi_types.UUID `json:"folder_id"`
+	// ExpectedVersion Reject with 409 version_conflict when the latest content version differs
+	ExpectedVersion *int                `json:"expected_version"`
+	FolderId        *openapi_types.UUID `json:"folder_id"`
 
 	// MoveToRoot Explicitly move the query to the space root; folder_id wins when present
 	MoveToRoot *bool               `json:"move_to_root,omitempty"`
@@ -2435,6 +2460,9 @@ type GetMetadataTableParams struct {
 type ListSavedQueriesParams struct {
 	SpaceId  *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
 	FolderId *openapi_types.UUID `form:"folder_id,omitempty" json:"folder_id,omitempty"`
+
+	// Q Substring of the name or slug
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
 }
 
 // ListSavedQueryVersionsParams defines parameters for ListSavedQueryVersions.
@@ -2588,6 +2616,9 @@ type CreateCatalogJSONRequestBody = CreateCatalogRequest
 
 // UpdateCatalogJSONRequestBody defines body for UpdateCatalog for application/json ContentType.
 type UpdateCatalogJSONRequestBody = CreateCatalogRequest
+
+// ExplainSQLJSONRequestBody defines body for ExplainSQL for application/json ContentType.
+type ExplainSQLJSONRequestBody = ExplainRequest
 
 // SplitStatementsJSONRequestBody defines body for SplitStatements for application/json ContentType.
 type SplitStatementsJSONRequestBody = SplitStatementsRequest

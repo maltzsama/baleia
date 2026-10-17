@@ -123,6 +123,9 @@ type ServerInterface interface {
 	// A SQL dialect with its keyword and function lists (for the editor)
 	// (GET /dialects/{name})
 	GetDialect(w http.ResponseWriter, r *http.Request, name string, params GetDialectParams)
+	// The dialect's EXPLAIN statement for a query
+	// (POST /dialects/{name}/explain)
+	ExplainSQL(w http.ResponseWriter, r *http.Request, name string)
 	// Split a script into statements with the dialect's rules
 	// (POST /dialects/{name}/split)
 	SplitStatements(w http.ResponseWriter, r *http.Request, name string)
@@ -627,6 +630,12 @@ func (_ Unimplemented) UpdateCatalog(w http.ResponseWriter, r *http.Request, con
 // A SQL dialect with its keyword and function lists (for the editor)
 // (GET /dialects/{name})
 func (_ Unimplemented) GetDialect(w http.ResponseWriter, r *http.Request, name string, params GetDialectParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The dialect's EXPLAIN statement for a query
+// (POST /dialects/{name}/explain)
+func (_ Unimplemented) ExplainSQL(w http.ResponseWriter, r *http.Request, name string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2329,6 +2338,39 @@ func (siw *ServerInterfaceWrapper) GetDialect(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDialect(w, r, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExplainSQL operation middleware
+func (siw *ServerInterfaceWrapper) ExplainSQL(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", chi.URLParam(r, "name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExplainSQL(w, r, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4394,6 +4436,14 @@ func (siw *ServerInterfaceWrapper) ListSavedQueries(w http.ResponseWriter, r *ht
 	err = runtime.BindQueryParameter("form", true, false, "folder_id", r.URL.Query(), &params.FolderId)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "folder_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
 		return
 	}
 
@@ -6645,6 +6695,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/dialects/{name}", wrapper.GetDialect)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/dialects/{name}/explain", wrapper.ExplainSQL)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/dialects/{name}/split", wrapper.SplitStatements)
 	})
 	r.Group(func(r chi.Router) {
@@ -8401,6 +8454,53 @@ type GetDialect404JSONResponse struct{ NotFoundJSONResponse }
 func (response GetDialect404JSONResponse) VisitGetDialectResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExplainSQLRequestObject struct {
+	Name string `json:"name"`
+	Body *ExplainSQLJSONRequestBody
+}
+
+type ExplainSQLResponseObject interface {
+	VisitExplainSQLResponse(w http.ResponseWriter) error
+}
+
+type ExplainSQL200JSONResponse ExplainResult
+
+func (response ExplainSQL200JSONResponse) VisitExplainSQLResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExplainSQL401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ExplainSQL401JSONResponse) VisitExplainSQLResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExplainSQL404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ExplainSQL404JSONResponse) VisitExplainSQLResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExplainSQL422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ExplainSQL422JSONResponse) VisitExplainSQLResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -12681,6 +12781,9 @@ type StrictServerInterface interface {
 	// A SQL dialect with its keyword and function lists (for the editor)
 	// (GET /dialects/{name})
 	GetDialect(ctx context.Context, request GetDialectRequestObject) (GetDialectResponseObject, error)
+	// The dialect's EXPLAIN statement for a query
+	// (POST /dialects/{name}/explain)
+	ExplainSQL(ctx context.Context, request ExplainSQLRequestObject) (ExplainSQLResponseObject, error)
 	// Split a script into statements with the dialect's rules
 	// (POST /dialects/{name}/split)
 	SplitStatements(ctx context.Context, request SplitStatementsRequestObject) (SplitStatementsResponseObject, error)
@@ -13977,6 +14080,39 @@ func (sh *strictHandler) GetDialect(w http.ResponseWriter, r *http.Request, name
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetDialectResponseObject); ok {
 		if err := validResponse.VisitGetDialectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExplainSQL operation middleware
+func (sh *strictHandler) ExplainSQL(w http.ResponseWriter, r *http.Request, name string) {
+	var request ExplainSQLRequestObject
+
+	request.Name = name
+
+	var body ExplainSQLJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExplainSQL(ctx, request.(ExplainSQLRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExplainSQL")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExplainSQLResponseObject); ok {
+		if err := validResponse.VisitExplainSQLResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
