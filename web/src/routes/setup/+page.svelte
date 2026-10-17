@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable no-restricted-syntax -- #22 rewrites this legacy file */
 	import { apiErrorMessage, client, setAccessToken, setRefreshToken } from '$lib/api/client';
 	import type { components } from '$lib/api/schema';
 

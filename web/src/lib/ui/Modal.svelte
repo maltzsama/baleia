@@ -40,21 +40,23 @@
 	onclose={handleClose}
 	class="m-auto w-full max-w-[480px] rounded-xl border border-border bg-bg-panel p-0 text-text-main shadow-[0_24px_64px_rgba(0,0,0,.2)] backdrop:bg-black/40"
 >
-	<div class="flex max-h-[85vh] flex-col">
-		<header class="flex items-center border-b border-border px-5 py-[18px]">
-			<h2 class="flex-1 text-sm font-semibold">{title}</h2>
-			<button
-				type="button"
-				class="flex h-[26px] w-[26px] items-center justify-center rounded-md text-text-muted hover:bg-bg-toolbar hover:text-text-main"
-				onclick={close}
-				aria-label="Close"
-			>
-				×
-			</button>
-		</header>
-		<div class="overflow-y-auto p-5">{@render children()}</div>
-		{#if footer}
-			<footer class="border-t border-border px-5 py-3.5">{@render footer()}</footer>
-		{/if}
-	</div>
+	{#if open}
+		<div class="flex max-h-[85vh] flex-col">
+			<header class="flex items-center border-b border-border px-5 py-[18px]">
+				<h2 class="flex-1 text-sm font-semibold">{title}</h2>
+				<button
+					type="button"
+					class="flex h-[26px] w-[26px] items-center justify-center rounded-md text-text-muted hover:bg-bg-toolbar hover:text-text-main"
+					onclick={close}
+					aria-label="Close"
+				>
+					×
+				</button>
+			</header>
+			<div class="overflow-y-auto p-5">{@render children()}</div>
+			{#if footer}
+				<footer class="border-t border-border px-5 py-3.5">{@render footer()}</footer>
+			{/if}
+		</div>
+	{/if}
 </dialog>

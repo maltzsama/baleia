@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable no-restricted-syntax -- #22 rewrites this legacy file */
 	import { onMount } from 'svelte';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import type { components } from '$lib/api/schema';

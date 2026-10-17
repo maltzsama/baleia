@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable no-restricted-syntax -- #23 rewrites this legacy file */
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { apiFetch } from '$lib/api/client';

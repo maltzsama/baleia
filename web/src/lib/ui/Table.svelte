@@ -15,6 +15,7 @@
 		columns,
 		rows,
 		rowKey,
+		rowHref,
 		sort,
 		onsort,
 		loading = false,
@@ -24,6 +25,7 @@
 		columns: Column[];
 		rows: Row[];
 		rowKey: (row: Row) => string;
+		rowHref?: (row: Row) => string;
 		sort?: Sort;
 		onsort?: (key: string) => void;
 		loading?: boolean;
@@ -88,10 +90,15 @@
 			{:else}
 				{#each rows as row (rowKey(row))}
 					<tr class="hover:[&>td]:bg-bg-toolbar">
-						{#each columns as column (column.key)}
+						{#each columns as column, columnIndex (column.key)}
 							<td class={cellClass(column)}>
 								{#if cell}
 									{@render cell(row, column)}
+								{:else if rowHref && columnIndex === 0}
+									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href supplied by the caller (#105) -->
+									<a class="text-primary hover:underline" href={rowHref(row)}>
+										{String(row[column.key] ?? '')}
+									</a>
 								{:else}
 									{String(row[column.key] ?? '')}
 								{/if}

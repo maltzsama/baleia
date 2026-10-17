@@ -5,7 +5,8 @@
 		id,
 		name,
 		disabled = false,
-		class: className = ''
+		class: className = '',
+		onchange
 	}: {
 		checked?: boolean;
 		label: string;
@@ -13,6 +14,7 @@
 		name?: string;
 		disabled?: boolean;
 		class?: string;
+		onchange?: (event: Event) => void;
 	} = $props();
 
 	const uid = $props.id();
@@ -31,6 +33,7 @@
 		{disabled}
 		type="checkbox"
 		bind:checked
+		{onchange}
 		class="h-3.5 w-3.5 cursor-pointer rounded border-border accent-primary disabled:cursor-not-allowed"
 	/>
 	{label}

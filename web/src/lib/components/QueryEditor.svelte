@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable no-restricted-syntax -- #24 rewrites this legacy file */
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';

@@ -50,9 +50,16 @@ export default ts.config(
 	},
 	{
 		files: ['src/**/*.{ts,svelte}'],
+		ignores: [
+			'src/lib/ui/patterns/kindIcon.ts',
+			'src/lib/api/schema.d.ts',
+			'src/**/*.spec.ts',
+			'src/**/*.examples.svelte'
+		],
 		rules: {
 			// App state travels through typed stores (#29); window custom events
 			// are not allowed. Plain DOM events (resize, keydown, …) stay allowed.
+			// Provider/engine kind literals live only in kindIcon.ts (FD6).
 			'no-restricted-syntax': [
 				'error',
 				{
@@ -68,6 +75,11 @@ export default ts.config(
 					selector:
 						"CallExpression[callee.object.name='window'][callee.property.name='addEventListener'][arguments.0.value=/^[a-z]+-/]",
 					message: 'Use the typed stores for app events; this is not a DOM event (#29).'
+				},
+				{
+					selector:
+						'Literal[value=/^(polaris|nessie|iceberg|lakekeeper|unity|hive|glue|postgresql|mysql|mariadb|sqlserver|oracle|sqlite|clickhouse|flightsql|trino|doris|starrocks)$/]',
+					message: 'Provider/engine kinds belong in kindIcon.ts (FD6).'
 				}
 			]
 		}
