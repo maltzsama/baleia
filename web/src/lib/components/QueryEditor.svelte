@@ -10,6 +10,7 @@
 	import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 	import { format as formatSQLFormatter } from 'sql-formatter';
 	import { tableFromIPC } from 'apache-arrow';
+	import { API_ROOT, apiFetch, apiErrorMessage, client, getAccessToken } from '$lib/api/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	type Cell = unknown;
@@ -81,9 +82,7 @@
 
 	const activeTab = $derived(tabs[activeIdx]);
 	let tabCounter = $state(2);
-	const apiBase = '/api/v1';
 	const workspaceId = $derived(workspaceStore.current?.id || '');
-	const token = localStorage.getItem('token') || '';
 	let targets = $state<Target[]>([]);
 	let targetId = $state('');
 	const selectedTarget = $derived(targets.find((t) => t.binding_id === targetId));
@@ -157,11 +156,11 @@
 		targetId = '';
 		if (!wid) return;
 		try {
-			const res = await fetch(`${apiBase}/workspaces/${wid}/targets`, {
-				headers: { Authorization: `Bearer ${token}` }
+			const { data } = await client.GET('/workspaces/{id}/targets', {
+				params: { path: { id: wid } }
 			});
-			if (!res.ok) return;
-			targets = await res.json();
+			if (!data) return;
+			targets = data as Target[];
 		} catch {
 			return;
 		}
@@ -230,20 +229,19 @@
 		tabs[idx].results = [];
 		tabs[idx].statusText = 'Running...';
 		try {
-			const body: Record<string, unknown> = { workspace_id: workspaceId, sql };
-			if (targetId) body.target = { binding_id: targetId };
-			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify(body)
+			const { data, error } = await client.POST('/workspaces/{id}/executions', {
+				params: { path: { id: workspaceId } },
+				body: {
+					workspace_id: workspaceId,
+					sql,
+					target: targetId ? { binding_id: targetId } : undefined
+				}
 			});
-			if (!res.ok) {
+			if (error || !data) {
 				// The API explains target problems (target_required, engine_required, …).
-				const err = await res.json().catch(() => ({}));
-				throw new Error(err.errors?.[0]?.message || err.message || 'Failed to start execution');
+				throw new Error(apiErrorMessage(error, 'Failed to start execution'));
 			}
-			const exec = await res.json();
-			executionId = exec.id;
+			executionId = data.id;
 			connectWS(executionId);
 		} catch (e) {
 			tabs[activeIdx].errorMsg = errorMessage(e);
@@ -256,7 +254,7 @@
 		const idx = activeIdx;
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const ws = new WebSocket(
-			`${proto}//${location.host}/api/v1/ws/workspaces/${workspaceId}/executions/${execId}?token=${token}`
+			`${proto}//${location.host}${API_ROOT}/ws/workspaces/${workspaceId}/executions/${execId}?token=${getAccessToken() ?? ''}`
 		);
 		ws.onmessage = async (e) => {
 			const event = JSON.parse(e.data) as ExecutionEvent;
@@ -292,9 +290,7 @@
 
 	async function fetchResults(execId: string, idx: number) {
 		try {
-			const res = await fetch(`${apiBase}/workspaces/${workspaceId}/executions/${execId}/results`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const res = await apiFetch(`/workspaces/${workspaceId}/executions/${execId}/results`);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const buf = await res.arrayBuffer();
 			if (buf.byteLength > 0) {
@@ -342,21 +338,19 @@
 		try {
 			const sql = editorView.state.doc.toString();
 			const savedId = tabs[activeIdx].savedId;
-			const method = savedId ? 'PATCH' : 'POST';
-			const url = savedId
-				? `${apiBase}/workspaces/${workspaceId}/queries/${savedId}`
-				: `${apiBase}/workspaces/${workspaceId}/queries`;
-			const res = await fetch(url, {
-				method,
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify({ name: saveName.trim(), sql })
-			});
-			if (!res.ok) {
-				const body = await res.json().catch(() => ({}));
-				tabs[activeIdx].errorMsg = body.message || body.error || 'Save failed';
+			const { data: saved, error } = savedId
+				? await client.PATCH('/workspaces/{id}/queries/{query_id}', {
+						params: { path: { id: workspaceId, query_id: savedId } },
+						body: { name: saveName.trim(), sql }
+					})
+				: await client.POST('/workspaces/{id}/queries', {
+						params: { path: { id: workspaceId } },
+						body: { name: saveName.trim(), sql }
+					});
+			if (error || !saved) {
+				tabs[activeIdx].errorMsg = apiErrorMessage(error, 'Save failed');
 				return;
 			}
-			const saved = await res.json();
 			tabs[activeIdx].savedId = saved.id;
 			tabs[activeIdx].name = saveName.trim();
 			saveModalOpen = false;
@@ -373,9 +367,7 @@
 		const wid = workspaceStore.current?.id;
 		if (!wid) return null;
 		try {
-			const accRes = await fetch(`${apiBase}/workspaces/${wid}/catalogs`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const accRes = await apiFetch(`/workspaces/${wid}/catalogs`);
 			if (!accRes.ok) return null;
 			const access: CatalogAccess[] = await accRes.json();
 			if (!access.length) return null;
@@ -384,18 +376,14 @@
 				const connId = item.connection_id;
 				const catName = item.catalog_name;
 				try {
-					const nsRes = await fetch(
-						`${apiBase}/connections/${connId}/catalogs/${catName}/namespaces`,
-						{ headers: { Authorization: `Bearer ${token}` } }
-					);
+					const nsRes = await apiFetch(`/connections/${connId}/catalogs/${catName}/namespaces`);
 					if (!nsRes.ok) continue;
 					const nss: string[][] = await nsRes.json();
 					for (const ns of nss.slice(0, 3)) {
 						const nsName = ns.join('.');
 						try {
-							const tRes = await fetch(
-								`${apiBase}/connections/${connId}/catalogs/${catName}/namespaces/${nsName}/tables`,
-								{ headers: { Authorization: `Bearer ${token}` } }
+							const tRes = await apiFetch(
+								`/connections/${connId}/catalogs/${catName}/namespaces/${nsName}/tables`
 							);
 							if (!tRes.ok) continue;
 							const tables: TableInfo[] = await tRes.json();

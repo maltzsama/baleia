@@ -1,4 +1,9 @@
 <script lang="ts">
+	import { apiErrorMessage, client, setAccessToken, setRefreshToken } from '$lib/api/client';
+	import type { components } from '$lib/api/schema';
+
+	type CreateConnectionBody = components['schemas']['CreateCatalogConnectionRequest'];
+
 	let step = $state(1);
 	let proto = $state<'saml' | 'oidc'>('saml');
 
@@ -25,9 +30,6 @@
 	let ssoEntityId = $state('');
 	let ssoCert = $state('');
 
-	const apiBase = '/api/v1';
-	const token = () => localStorage.getItem('token') || '';
-
 	function isIcebergType() {
 		return ['polaris', 'nessie', 'iceberg'].includes(engine);
 	}
@@ -40,16 +42,18 @@
 		strengthScore = s;
 	}
 
-	function buildConnBody() {
-		const body: Record<string, unknown> = {
+	function buildConnBody(): CreateConnectionBody {
+		const body: CreateConnectionBody = {
 			name: connName,
 			type: engine,
 			url: connUrl,
 			default_readonly: true
 		};
 		if (isIcebergType()) {
-			const creds = { client_id: connUser, client_secret: connPass };
-			body.credentials = creds;
+			body.credentials = {
+				client_id: connUser,
+				client_secret: connPass
+			} as unknown as CreateConnectionBody['credentials'];
 		}
 		return body;
 	}
@@ -62,18 +66,15 @@
 				return;
 			}
 			try {
-				const res = await fetch(`${apiBase}/setup/admin`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ name: `${firstName} ${lastName}`.trim(), email, password })
+				const { data } = await client.POST('/setup/admin', {
+					body: { name: `${firstName} ${lastName}`.trim(), email, password }
 				});
-				if (!res.ok) {
+				if (!data) {
 					error = 'Failed to create admin account.';
 					return;
 				}
-				const data = await res.json();
-				localStorage.setItem('token', data.token);
-				localStorage.setItem('refresh_token', data.refresh_token);
+				setAccessToken(data.token);
+				setRefreshToken(data.refresh_token);
 			} catch {
 				error = 'Connection error. Is the server running?';
 				return;
@@ -87,14 +88,11 @@
 				return;
 			}
 			try {
-				const res = await fetch(`${apiBase}/catalog-connections`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-					body: JSON.stringify(buildConnBody())
+				const { error: err } = await client.POST('/catalog-connections', {
+					body: buildConnBody()
 				});
-				if (!res.ok) {
-					const body = await res.json().catch(() => ({}));
-					error = body.message || `Could not save the connection (HTTP ${res.status})`;
+				if (err) {
+					error = apiErrorMessage(err, 'Could not save the connection');
 					return;
 				}
 			} catch {
@@ -153,24 +151,21 @@
 		testMsg = '';
 		const snap = connSnapshot();
 		try {
-			const res = await fetch(`${apiBase}/catalog-connections/test`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-				body: JSON.stringify(buildConnBody())
+			const { data, error: err } = await client.POST('/catalog-connections/test', {
+				body: buildConnBody()
 			});
-			const r = await res.json().catch(() => ({}));
-			if (!res.ok) {
+			if (err) {
 				testStatus = 'err';
-				testMsg = r.message || `Test failed (HTTP ${res.status})`;
+				testMsg = apiErrorMessage(err, 'Test failed');
 				return;
 			}
-			if (r.success) {
+			if (data?.success) {
 				testStatus = 'ok';
-				testMsg = `Connection successful — ${r.latency_ms}ms`;
+				testMsg = `Connection successful — ${data.latency_ms}ms`;
 				testedSnapshot = snap;
 			} else {
 				testStatus = 'err';
-				testMsg = r.error_message || r.error || 'Connection test failed';
+				testMsg = data?.error_message || data?.error || 'Connection test failed';
 			}
 		} catch (e) {
 			testStatus = 'err';

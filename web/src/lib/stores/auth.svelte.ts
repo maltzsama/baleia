@@ -1,4 +1,5 @@
 // src/lib/stores/auth.svelte.ts
+import { clearSession, client, getRefreshToken } from '$lib/api/client';
 
 export type Features = {
 	agents: boolean;
@@ -37,12 +38,10 @@ function createAuthStore() {
 	async function load() {
 		loading = true;
 		try {
-			const token = localStorage.getItem('token');
-			const res = await fetch('/api/v1/auth/me', {
-				headers: token ? { Authorization: `Bearer ${token}` } : {}
-			});
-			if (res.ok) user = await res.json();
-			else user = null;
+			const { data } = await client.GET('/auth/me');
+			user = (data as AuthUser | undefined) ?? null;
+		} catch {
+			user = null;
 		} finally {
 			loading = false;
 		}
@@ -57,20 +56,15 @@ function createAuthStore() {
 	}
 
 	async function logout() {
-		const refreshToken = localStorage.getItem('refresh_token');
-		if (refreshToken) {
-			try {
-				await fetch('/api/v1/auth/logout', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ refresh_token: refreshToken })
-				});
-			} catch {
-				/* fallback */
-			}
+		const refreshToken = getRefreshToken();
+		try {
+			await client.POST('/auth/logout', {
+				body: refreshToken ? { refresh_token: refreshToken } : {}
+			});
+		} catch {
+			/* best effort: log out locally even if the API is unreachable */
 		}
-		localStorage.removeItem('token');
-		localStorage.removeItem('refresh_token');
+		clearSession();
 		clear();
 		window.location.href = '/login';
 	}

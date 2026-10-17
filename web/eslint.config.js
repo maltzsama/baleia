@@ -43,6 +43,12 @@ export default ts.config(
 		}
 	},
 	{
+		files: ['**/*.d.ts'],
+		rules: {
+			'@typescript-eslint/no-unused-vars': 'off'
+		}
+	},
+	{
 		rules: {
 			'@typescript-eslint/no-explicit-any': 'error',
 			'no-empty': ['error', { allowEmptyCatch: false }]

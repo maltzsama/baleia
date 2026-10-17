@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { API_ROOT, client, setAccessToken, setRefreshToken } from '$lib/api/client';
 
 	// Retry-After is either a number of seconds or an HTTP-date. Returns the
 	// remaining delay in whole seconds, capped at one hour; 0 when absent,
@@ -28,7 +29,6 @@
 	let retryIn = $state(0);
 	let providers = $state<Provider[]>([]);
 
-	const apiBase = '/api/v1';
 	let retryTimer: ReturnType<typeof setInterval> | undefined;
 
 	onMount(() => {
@@ -51,8 +51,8 @@
 
 	async function loadProviders() {
 		try {
-			const res = await fetch(`${apiBase}/auth/oidc/providers`);
-			if (res.ok) providers = (await res.json()) ?? [];
+			const { data } = await client.GET('/auth/oidc/providers');
+			providers = (data as Provider[] | undefined) ?? [];
 		} catch {
 			// No providers means no SSO section; password login still works.
 		}
@@ -92,28 +92,25 @@
 		error = '';
 		notice = '';
 		try {
-			const res = await fetch(`${apiBase}/auth/login`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password })
+			const { data, response } = await client.POST('/auth/login', {
+				body: { email, password }
 			});
-			if (res.status === 401) {
+			if (response.status === 401) {
 				showError('Invalid e-mail or password.', 'password');
 				return;
 			}
-			if (res.status === 429) {
-				const wait = retryAfterSeconds(res.headers.get('Retry-After'));
+			if (response.status === 429) {
+				const wait = retryAfterSeconds(response.headers.get('Retry-After'));
 				if (wait > 0) startRetryCountdown(wait);
 				else showError('Too many attempts. Try again later.');
 				return;
 			}
-			if (!res.ok) {
-				showError(`Sign in failed (HTTP ${res.status}). Try again.`);
+			if (!response.ok || !data) {
+				showError(`Sign in failed (HTTP ${response.status}). Try again.`);
 				return;
 			}
-			const data = await res.json();
-			localStorage.setItem('token', data.token);
-			localStorage.setItem('refresh_token', data.refresh_token);
+			setAccessToken(data.token);
+			setRefreshToken(data.refresh_token);
 			window.location.href = '/sql';
 		} catch {
 			showError('Connection error. Is the server running?');
@@ -127,20 +124,18 @@
 		busy = true;
 		error = '';
 		try {
-			const res = await fetch(`${apiBase}/auth/password-reset/request`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email })
+			const { response } = await client.POST('/auth/password-reset/request', {
+				body: { email }
 			});
-			if (res.status === 204) {
+			if (response.status === 204) {
 				// Same screen whether or not the account exists.
 				screen = 'sent';
-			} else if (res.status === 503) {
+			} else if (response.status === 503) {
 				showError(
 					'Password reset by e-mail is not configured on this server. Ask an administrator to reset your password.'
 				);
 			} else {
-				showError(`Could not request a reset link (HTTP ${res.status}). Try again.`);
+				showError(`Could not request a reset link (HTTP ${response.status}). Try again.`);
 			}
 		} catch {
 			showError('Connection error. Is the server running?');
@@ -150,7 +145,7 @@
 	}
 
 	function doSSO(providerId: string) {
-		window.location.href = `${apiBase}/auth/oidc/${encodeURIComponent(providerId)}/login`;
+		window.location.href = `${API_ROOT}/auth/oidc/${encodeURIComponent(providerId)}/login`;
 	}
 
 	function go(s: typeof screen) {

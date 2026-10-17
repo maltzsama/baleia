@@ -12,9 +12,6 @@
 	};
 	type Analytics = { error_count?: number; avg_duration_ms?: number; users_active?: number };
 
-	const apiBase = '/api/v1';
-	const token = localStorage.getItem('token') || '';
-
 	let queries = $state<LensQuery[]>([]);
 	let cluster = $state<LensCluster | null>(null);
 	let tableHealth = $state<TableHealth[]>([]);
@@ -26,13 +23,12 @@
 	async function load() {
 		loading = true;
 		error = '';
-		const headers = { Authorization: `Bearer ${token}` };
 		try {
 			const [q, c, h, a] = await Promise.all([
-				fetch(`${apiBase}/lens/queries`, { headers }).then((r) => r.json()),
-				fetch(`${apiBase}/lens/cluster`, { headers }).then((r) => r.json()),
-				fetch(`${apiBase}/lens/tables/health`, { headers }).then((r) => r.json()),
-				fetch(`${apiBase}/lens/analytics/queries`, { headers })
+				apiFetch('/lens/queries').then((r) => r.json()),
+				apiFetch('/lens/cluster').then((r) => r.json()),
+				apiFetch('/lens/tables/health').then((r) => r.json()),
+				apiFetch('/lens/analytics/queries')
 					.then((r) => r.json())
 					.catch(() => null)
 			]);
@@ -47,6 +43,7 @@
 	}
 
 	import { onMount } from 'svelte';
+	import { apiFetch } from '$lib/api/client';
 	onMount(load);
 </script>
 

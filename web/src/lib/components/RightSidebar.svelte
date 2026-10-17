@@ -1,8 +1,7 @@
 <script lang="ts">
-	type Column = { name: string; type?: string; doc?: string };
+	import { apiFetch } from '$lib/api/client';
 
-	const token = localStorage.getItem('token') || '';
-	const apiBase = '/api/v1';
+	type Column = { name: string; type?: string; doc?: string };
 
 	let {
 		collapsed = $bindable(true),
@@ -31,11 +30,8 @@
 		if (!selectedTable) return;
 		loading = true;
 		try {
-			const res = await fetch(
-				`${apiBase}/connections/${selectedTable.connectionId}/catalogs/${selectedTable.catalog}/namespaces/${selectedTable.namespace}/tables/${selectedTable.table}/columns`,
-				{
-					headers: { Authorization: `Bearer ${token}` }
-				}
+			const res = await apiFetch(
+				`/connections/${selectedTable.connectionId}/catalogs/${selectedTable.catalog}/namespaces/${selectedTable.namespace}/tables/${selectedTable.table}/columns`
 			);
 			if (res.ok) {
 				columns = await res.json();

@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { apiErrorMessage, client } from '$lib/api/client';
+	import type { components } from '$lib/api/schema';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+
+	type CreateConnectionBody = components['schemas']['CreateCatalogConnectionRequest'];
+	type UpdateConnectionBody = components['schemas']['UpdateCatalogConnectionRequest'];
 
 	type Connection = {
 		id: string;
@@ -23,7 +28,6 @@
 		return e instanceof Error ? e.message : String(e);
 	}
 
-	const token = localStorage.getItem('token') || '';
 	let connections = $state<Connection[]>([]);
 	let loading = $state(true);
 	let error = $state('');
@@ -74,11 +78,9 @@
 		loading = true;
 		error = '';
 		try {
-			const res = await fetch('/api/v1/catalog-connections', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			connections = await res.json();
+			const { data, error: err } = await client.GET('/catalog-connections');
+			if (err) throw new Error(apiErrorMessage(err, 'Failed to load connections'));
+			connections = (data as Connection[] | undefined) ?? [];
 		} catch (e) {
 			error = errorMessage(e);
 		}
@@ -252,20 +254,16 @@
 		const snap = JSON.stringify(form);
 		const draft = !editingId || credentialsComplete();
 		try {
-			const res = draft
-				? await fetch('/api/v1/catalog-connections/test', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-						body: JSON.stringify(buildConnBody(buildConnUrl(), true))
-					})
-				: await fetch(`/api/v1/catalog-connections/${editingId}/test`, {
-						method: 'POST',
-						headers: { Authorization: `Bearer ${token}` }
+			const body = buildConnBody(buildConnUrl(), true) as CreateConnectionBody;
+			const { data, error: err } = draft
+				? await client.POST('/catalog-connections/test', { body })
+				: await client.POST('/catalog-connections/{id}/test', {
+						params: { path: { id: editingId } }
 					});
-			const r = (await res.json().catch(() => ({}))) as TestResult;
-			if (!res.ok) {
+			const r = (data ?? {}) as TestResult;
+			if (err) {
 				testStatus = 'fail';
-				testMessage = r.message || `Test failed (HTTP ${res.status})`;
+				testMessage = apiErrorMessage(err, 'Test failed');
 				return;
 			}
 			if (r.success) {
@@ -283,19 +281,15 @@
 
 	async function saveConnection() {
 		const body = buildConnBody(buildConnUrl());
-		const method = editingId ? 'PATCH' : 'POST';
-		const apiUrl = editingId
-			? `/api/v1/catalog-connections/${editingId}`
-			: '/api/v1/catalog-connections';
-		const res = await fetch(apiUrl, {
-			method,
-			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-			body: JSON.stringify(body)
-		});
-		if (!res.ok) {
-			const r = (await res.json().catch(() => ({}))) as TestResult;
+		const { error: err } = editingId
+			? await client.PATCH('/catalog-connections/{id}', {
+					params: { path: { id: editingId } },
+					body: body as UpdateConnectionBody
+				})
+			: await client.POST('/catalog-connections', { body: body as CreateConnectionBody });
+		if (err) {
 			testStatus = 'fail';
-			testMessage = r.message || `Save failed (HTTP ${res.status})`;
+			testMessage = apiErrorMessage(err, 'Save failed');
 			return;
 		}
 		closeModal();
@@ -305,9 +299,8 @@
 
 	async function deleteConnection() {
 		if (!deleteTarget) return;
-		await fetch(`/api/v1/catalog-connections/${deleteTarget.id}`, {
-			method: 'DELETE',
-			headers: { Authorization: `Bearer ${token}` }
+		await client.DELETE('/catalog-connections/{id}', {
+			params: { path: { id: deleteTarget.id } }
 		});
 		deleteTarget = null;
 		loadConnections();

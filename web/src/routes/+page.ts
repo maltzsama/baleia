@@ -1,15 +1,16 @@
 import { redirect } from '@sveltejs/kit';
+import { client } from '$lib/api/client';
 import type { PageLoad } from './$types';
 
 // Not prerendered: the load below needs the live server.
 export const prerender = false;
 export const ssr = false;
 
-export const load: PageLoad = async ({ fetch }) => {
+export const load: PageLoad = async () => {
 	let configured = true;
 	try {
-		const res = await fetch('/api/v1/setup/status');
-		if (res.ok) configured = (await res.json()).is_configured !== false;
+		const { data } = await client.GET('/setup/status');
+		if (data) configured = data.is_configured !== false;
 	} catch {
 		// Server unreachable: fall through to the normal flow instead of trapping the user on /setup.
 	}

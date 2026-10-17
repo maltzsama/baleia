@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import { client } from '$lib/api/client';
 
-	const apiBase = '/api/v1';
 	const MIN_LENGTH = 8;
 
 	// Held in memory only: read once from the query string, then removed from the address bar.
@@ -42,22 +42,20 @@
 		busy = true;
 		error = '';
 		try {
-			const res = await fetch(`${apiBase}/auth/password-reset/confirm`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ token, new_password: newPassword })
+			const { response } = await client.POST('/auth/password-reset/confirm', {
+				body: { token, new_password: newPassword }
 			});
-			if (res.status === 204) {
+			if (response.status === 204) {
 				window.location.href = '/login?reset=1';
 				return;
 			}
 			// The backend answers 401 for an unknown, expired or used token; 400/404/410 are treated the same.
-			if ([400, 401, 404, 410].includes(res.status)) {
+			if ([400, 401, 404, 410].includes(response.status)) {
 				invalidLink = true;
-			} else if (res.status === 422) {
+			} else if (response.status === 422) {
 				error = `Password must be at least ${MIN_LENGTH} characters.`;
 			} else {
-				error = `Could not change the password (HTTP ${res.status}). Try again.`;
+				error = `Could not change the password (HTTP ${response.status}). Try again.`;
 			}
 		} catch {
 			error = 'Connection error. Is the server running?';

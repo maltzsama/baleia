@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { authStore } from '$lib/stores/auth.svelte';
+	import { apiErrorMessage, client } from '$lib/api/client';
+	import { authStore, type AuthUser } from '$lib/stores/auth.svelte';
 
 	let saving = $state(false);
 	let changingPassword = $state(false);
@@ -24,20 +25,13 @@
 		saving = true;
 		error = '';
 		successMsg = '';
-		const res = await fetch('/api/v1/me', {
-			method: 'PATCH',
-			credentials: 'include',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, email })
-		});
+		const { data, error: err } = await client.PATCH('/me', { body: { name, email } });
 		saving = false;
-		if (res.ok) {
-			const updated = await res.json();
-			authStore.set(updated);
+		if (data) {
+			authStore.set(data as AuthUser);
 			successMsg = 'Profile updated.';
 		} else {
-			const data = await res.json();
-			error = data.message ?? 'Failed to save profile.';
+			error = apiErrorMessage(err, 'Failed to save profile.');
 		}
 	}
 
@@ -49,21 +43,17 @@
 		changingPassword = true;
 		error = '';
 		successMsg = '';
-		const res = await fetch('/api/v1/me/password', {
-			method: 'PATCH',
-			credentials: 'include',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+		const { response, error: err } = await client.PATCH('/me/password', {
+			body: { current_password: currentPassword, new_password: newPassword }
 		});
 		changingPassword = false;
-		if (res.ok) {
+		if (response.ok) {
 			successMsg = 'Password changed.';
 			currentPassword = '';
 			newPassword = '';
 			confirmPassword = '';
 		} else {
-			const data = await res.json();
-			error = data.message ?? 'Failed to change password.';
+			error = apiErrorMessage(err, 'Failed to change password.');
 		}
 	}
 

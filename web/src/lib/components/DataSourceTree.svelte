@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { apiFetch } from '$lib/api/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	type CatalogAccess = {
@@ -9,9 +10,6 @@
 		connection_type: string;
 		catalog_name: string;
 	};
-
-	const token = localStorage.getItem('token') || '';
-	const apiBase = '/api/v1';
 
 	let {
 		onSelectTable
@@ -47,7 +45,7 @@
 	}
 
 	function nsApiPath(cat: CatalogAccess): string {
-		return `${apiBase}/connections/${cat.connection_id}/catalogs/${cat.catalog_name}/namespaces`;
+		return `/connections/${cat.connection_id}/catalogs/${cat.catalog_name}/namespaces`;
 	}
 
 	function tablesApiPath(cat: CatalogAccess, ns: string): string {
@@ -67,9 +65,7 @@
 		loading = true;
 		error = '';
 		try {
-			const res = await fetch(`${apiBase}/workspaces/${workspaceStore.current.id}/catalogs`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const res = await apiFetch(`/workspaces/${workspaceStore.current.id}/catalogs`);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			catalogs = await res.json();
 		} catch (e) {
@@ -87,9 +83,7 @@
 			if (!tableData[key]) {
 				tableLoading[key] = true;
 				try {
-					const res = await fetch(tablesApiPath(cat, ns), {
-						headers: { Authorization: `Bearer ${token}` }
-					});
+					const res = await apiFetch(tablesApiPath(cat, ns));
 					if (res.ok) {
 						const tables = await res.json();
 						tableData[key] = (tables as { name?: string }[]).map((t) => t.name || '?');
@@ -110,9 +104,7 @@
 			expandedCatalogs.add(`ns-${key}`);
 			if (!namespaceData[key]) {
 				try {
-					const res = await fetch(nsApiPath(cat), {
-						headers: { Authorization: `Bearer ${token}` }
-					});
+					const res = await apiFetch(nsApiPath(cat));
 					if (res.ok) {
 						const nss = (await res.json()) as string[][];
 						namespaceData[key] = nss.map((ns) => ns.join('.'));

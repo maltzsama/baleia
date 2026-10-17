@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { client, apiErrorMessage } from '$lib/api/client';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import type { components } from '$lib/api/schema';
 
-	type SavedQuery = { id: string; name: string; sql: string };
+	type SavedQuery = components['schemas']['SavedQuery'];
 
-	const token = localStorage.getItem('token') || '';
-	const apiBase = '/api/v1';
-	let workspaceId = $state('');
+	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 
 	let queries = $state<SavedQuery[]>([]);
 	let loading = $state(true);
@@ -14,38 +14,21 @@
 	let renameId = $state<string | null>(null);
 	let renameValue = $state('');
 
-	export function loadQueries() {
+	async function loadQueries() {
 		if (!workspaceId) return;
 		loading = true;
-		fetch(`${apiBase}/workspaces/${workspaceId}/queries`, {
-			headers: { Authorization: `Bearer ${token}` }
-		})
-			.then((r) => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
-			.then((data) => {
-				queries = data;
-				loading = false;
-			})
-			.catch((e) => {
-				error = e;
-				loading = false;
-			});
+		error = '';
+		const { data, error: err } = await client.GET('/workspaces/{id}/queries', {
+			params: { path: { id: workspaceId } }
+		});
+		if (err) error = apiErrorMessage(err, 'Failed to load saved queries');
+		queries = data ?? [];
+		loading = false;
 	}
 
-	onMount(async () => {
-		try {
-			const res = await fetch(`${apiBase}/workspaces`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
-			if (res.ok) {
-				const wss = await res.json();
-				if (wss.length > 0) {
-					workspaceId = wss[0].id;
-					loadQueries();
-				}
-			}
-		} catch {
-			/* workspace loading failed: the empty state renders below */
-		}
+	$effect(() => {
+		if (workspaceId) void loadQueries();
+		else loading = false;
 	});
 
 	if (typeof window !== 'undefined') {
@@ -53,19 +36,17 @@
 	}
 
 	async function deleteQuery(id: string) {
-		await fetch(`${apiBase}/workspaces/${workspaceId}/queries/${id}`, {
-			method: 'DELETE',
-			headers: { Authorization: `Bearer ${token}` }
+		await client.DELETE('/workspaces/{id}/queries/{query_id}', {
+			params: { path: { id: workspaceId, query_id: id } }
 		});
 		menuOpen = null;
 		loadQueries();
 	}
 
 	async function renameQuery(q: SavedQuery) {
-		await fetch(`${apiBase}/workspaces/${workspaceId}/queries/${q.id}`, {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-			body: JSON.stringify({ name: renameValue, sql: q.sql })
+		await client.PATCH('/workspaces/{id}/queries/{query_id}', {
+			params: { path: { id: workspaceId, query_id: q.id } },
+			body: { name: renameValue, sql: q.sql }
 		});
 		renameId = null;
 		loadQueries();
