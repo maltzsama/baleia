@@ -91,15 +91,26 @@ seed-tpch:
 	docker compose exec -T postgres psql -U baleia -d baleia < db/seed/tpch_test.sql
 
 # ── End-to-end (#106) ─────────────────────────────────────────────────────────
+# Runs against the minikube dev cluster (not compose). Port-forwards the API,
+# Postgres (for the seed) and Trino (for the run smoke).
 e2e:
-	docker compose up -d
+	$(MAKE) k8s-up
+	$(MAKE) e2e-forward
 	@echo "waiting for the API on :8080…"
 	@until curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; do sleep 1; done
-	go run -tags e2e ./cmd/e2e-seed
-	cd web && npx playwright test
+	@kubectl -n $(K8S_NS) wait --for=condition=ready pod -l app=postgres --timeout=120s
+	@sleep 2
+	DATABASE_URL="postgresql://baleia:baleia@localhost:5433/baleia?sslmode=disable" \
+		go run -tags e2e ./cmd/e2e-seed
+	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
+
+e2e-forward:
+	kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080 &
+	kubectl -n $(K8S_NS) port-forward svc/postgres 5433:5432 &
+	kubectl -n $(K8S_NS) port-forward svc/trino 8088:8080 &
 
 e2e-down:
-	docker compose down -v
+	K8S_PURGE=1 $(MAKE) k8s-down
 
 # ── Code Generation ───────────────────────────────────────────────────────────
 
@@ -128,6 +139,11 @@ build-all: build-web build
 
 K8S_PROFILE ?= baleia
 K8S_NS      ?= baleia-dev
+# CI overrides these to fit the runner; the default fits a workstation.
+K8S_CPUS    ?= 6
+K8S_MEMORY  ?= 12g
+K8S_DRIVER  ?=
+K8S_DRIVER_FLAG = $(if $(K8S_DRIVER),--driver=$(K8S_DRIVER),)
 K8S_PLUGIN_IMAGE      ?= baleia-plugins
 K8S_PLUGIN_VERSION    ?= $(BALEIA_PLUGIN_VERSION)
 # The bundle image is tagged with the plugin release it carries (the plugin repo
@@ -146,7 +162,7 @@ k8s-plugin-bundle:
 # Start minikube, deploy the dependency stack, build baleia:dev into the node,
 # then install the chart.
 k8s-up:
-	minikube start -p $(K8S_PROFILE) --cpus=6 --memory=12g
+	minikube start -p $(K8S_PROFILE) $(K8S_DRIVER_FLAG) --cpus=$(K8S_CPUS) --memory=$(K8S_MEMORY)
 	kubectl apply -k deploy/dev
 	minikube -p $(K8S_PROFILE) image build -t baleia:dev .
 	$(MAKE) k8s-plugin-bundle

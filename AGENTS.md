@@ -13,8 +13,8 @@ the phase-3 issues reference as **FD1–FD16**.
 | `make generate` / `make sqlc` | Regenerate OpenAPI handlers / SQL code. |
 | `make lint` | `golangci-lint`. |
 | `make build` / `build-web` / `build-all` | Compile binaries / frontend / both. |
-| `make e2e` | Compose + `cmd/e2e-seed` + Playwright (`web/e2e`). |
-| `make e2e-down` | Tear the stack down and destroy volumes. |
+| `make e2e` | minikube (`make k8s-up`) + `cmd/e2e-seed` + Playwright (`web/e2e`). |
+| `make e2e-down` | Tear minikube down (`k8s-down` with `K8S_PURGE=1`). |
 
 Backend definition of done (`DoD-standard`): `go vet ./...`, `go test ./...`,
 `make lint`, regenerated OpenAPI/sqlc when the contract changes, and a Bruno
@@ -112,8 +112,9 @@ server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWor
 
 ### Smoke tests (Playwright)
 
-- `web/e2e/` runs against the real compose stack; `make e2e` starts it, seeds
-  it with `cmd/e2e-seed` and runs the suite.
+- `web/e2e/` runs against the **minikube dev cluster** (not compose);
+  `make e2e` runs `k8s-up`, port-forwards the API/Postgres/Trino, seeds with
+  `cmd/e2e-seed` and runs the suite. `make e2e-down` purges the cluster.
 - Tag every spec with `@issue-<number>` in the title and run one with
   `npm run e2e -- --grep @issue-118`.
 - `loginAs('admin' | 'member' | 'viewer')` and
