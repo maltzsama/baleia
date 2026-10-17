@@ -303,6 +303,15 @@ type ServerInterface interface {
 	// Update a saved query
 	// (PATCH /workspaces/{id}/queries/{query_id})
 	UpdateSavedQuery(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID)
+	// Version history of a saved query — viewer
+	// (GET /workspaces/{id}/queries/{query_id}/versions)
+	ListSavedQueryVersions(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, params ListSavedQueryVersionsParams)
+	// One saved-query version with its snapshot — viewer
+	// (GET /workspaces/{id}/queries/{query_id}/versions/{version})
+	GetSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int)
+	// Restore a saved query to a version — editor
+	// (POST /workspaces/{id}/queries/{query_id}/versions/{version}/restore)
+	RestoreSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int)
 	// List workspace Retrievers
 	// (GET /workspaces/{id}/retrievers)
 	ListRetrievers(w http.ResponseWriter, r *http.Request, id PathId)
@@ -354,6 +363,15 @@ type ServerInterface interface {
 	// Render a metric to SQL for one binding — space viewer
 	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
 	GetSemanticMetricSql(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params GetSemanticMetricSqlParams)
+	// Version history of a metric — viewer
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/versions)
+	ListSemanticMetricVersions(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params ListSemanticMetricVersionsParams)
+	// One metric version with its snapshot — viewer
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version})
+	GetSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int)
+	// Restore a metric to a version — editor
+	// (POST /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore)
+	RestoreSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int)
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(w http.ResponseWriter, r *http.Request, id PathId)
@@ -381,6 +399,9 @@ type ServerInterface interface {
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId)
+	// Deleted content that has not been restored — workspace members
+	// (GET /workspaces/{id}/trash)
+	ListTrash(w http.ResponseWriter, r *http.Request, id PathId, params ListTrashParams)
 	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID, params StreamExecutionParams)
@@ -960,6 +981,24 @@ func (_ Unimplemented) UpdateSavedQuery(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Version history of a saved query — viewer
+// (GET /workspaces/{id}/queries/{query_id}/versions)
+func (_ Unimplemented) ListSavedQueryVersions(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, params ListSavedQueryVersionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One saved-query version with its snapshot — viewer
+// (GET /workspaces/{id}/queries/{query_id}/versions/{version})
+func (_ Unimplemented) GetSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Restore a saved query to a version — editor
+// (POST /workspaces/{id}/queries/{query_id}/versions/{version}/restore)
+func (_ Unimplemented) RestoreSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List workspace Retrievers
 // (GET /workspaces/{id}/retrievers)
 func (_ Unimplemented) ListRetrievers(w http.ResponseWriter, r *http.Request, id PathId) {
@@ -1062,6 +1101,24 @@ func (_ Unimplemented) GetSemanticMetricSql(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Version history of a metric — viewer
+// (GET /workspaces/{id}/semantic/metrics/{metric_id}/versions)
+func (_ Unimplemented) ListSemanticMetricVersions(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params ListSemanticMetricVersionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One metric version with its snapshot — viewer
+// (GET /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version})
+func (_ Unimplemented) GetSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Restore a metric to a version — editor
+// (POST /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore)
+func (_ Unimplemented) RestoreSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Spaces the caller can see, with their role — workspace members
 // (GET /workspaces/{id}/spaces)
 func (_ Unimplemented) ListSpaces(w http.ResponseWriter, r *http.Request, id PathId) {
@@ -1113,6 +1170,12 @@ func (_ Unimplemented) SetSpaceMember(w http.ResponseWriter, r *http.Request, id
 // Where the workspace can run queries — workspace members
 // (GET /workspaces/{id}/targets)
 func (_ Unimplemented) ListWorkspaceTargets(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Deleted content that has not been restored — workspace members
+// (GET /workspaces/{id}/trash)
+func (_ Unimplemented) ListTrash(w http.ResponseWriter, r *http.Request, id PathId, params ListTrashParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4410,6 +4473,169 @@ func (siw *ServerInterfaceWrapper) UpdateSavedQuery(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListSavedQueryVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListSavedQueryVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "query_id" -------------
+	var queryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "query_id", chi.URLParam(r, "query_id"), &queryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSavedQueryVersionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSavedQueryVersions(w, r, id, queryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSavedQueryVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetSavedQueryVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "query_id" -------------
+	var queryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "query_id", chi.URLParam(r, "query_id"), &queryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSavedQueryVersion(w, r, id, queryId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreSavedQueryVersion operation middleware
+func (siw *ServerInterfaceWrapper) RestoreSavedQueryVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "query_id" -------------
+	var queryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "query_id", chi.URLParam(r, "query_id"), &queryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreSavedQueryVersion(w, r, id, queryId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRetrievers operation middleware
 func (siw *ServerInterfaceWrapper) ListRetrievers(w http.ResponseWriter, r *http.Request) {
 
@@ -5308,6 +5534,169 @@ func (siw *ServerInterfaceWrapper) GetSemanticMetricSql(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListSemanticMetricVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListSemanticMetricVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "metric_id" -------------
+	var metricId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "metric_id", chi.URLParam(r, "metric_id"), &metricId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "metric_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSemanticMetricVersionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSemanticMetricVersions(w, r, id, metricId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSemanticMetricVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetSemanticMetricVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "metric_id" -------------
+	var metricId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "metric_id", chi.URLParam(r, "metric_id"), &metricId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "metric_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSemanticMetricVersion(w, r, id, metricId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreSemanticMetricVersion operation middleware
+func (siw *ServerInterfaceWrapper) RestoreSemanticMetricVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "metric_id" -------------
+	var metricId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "metric_id", chi.URLParam(r, "metric_id"), &metricId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "metric_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreSemanticMetricVersion(w, r, id, metricId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSpaces operation middleware
 func (siw *ServerInterfaceWrapper) ListSpaces(w http.ResponseWriter, r *http.Request) {
 
@@ -5697,6 +6086,66 @@ func (siw *ServerInterfaceWrapper) ListWorkspaceTargets(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListWorkspaceTargets(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTrash operation middleware
+func (siw *ServerInterfaceWrapper) ListTrash(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTrashParams
+
+	// ------------- Optional query parameter "entity_type" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "entity_type", r.URL.Query(), &params.EntityType)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "entity_type", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTrash(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6165,6 +6614,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/workspaces/{id}/queries/{query_id}", wrapper.UpdateSavedQuery)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/queries/{query_id}/versions", wrapper.ListSavedQueryVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/queries/{query_id}/versions/{version}", wrapper.GetSavedQueryVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/queries/{query_id}/versions/{version}/restore", wrapper.RestoreSavedQueryVersion)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/retrievers", wrapper.ListRetrievers)
 	})
 	r.Group(func(r chi.Router) {
@@ -6216,6 +6674,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}/sql", wrapper.GetSemanticMetricSql)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}/versions", wrapper.ListSemanticMetricVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}", wrapper.GetSemanticMetricVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore", wrapper.RestoreSemanticMetricVersion)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/spaces", wrapper.ListSpaces)
 	})
 	r.Group(func(r chi.Router) {
@@ -6241,6 +6708,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/targets", wrapper.ListWorkspaceTargets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/trash", wrapper.ListTrash)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ws/workspaces/{id}/executions/{execution_id}", wrapper.StreamExecution)
@@ -10184,6 +10654,165 @@ func (response UpdateSavedQuery422JSONResponse) VisitUpdateSavedQueryResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListSavedQueryVersionsRequestObject struct {
+	Id      PathId             `json:"id"`
+	QueryId openapi_types.UUID `json:"query_id"`
+	Params  ListSavedQueryVersionsParams
+}
+
+type ListSavedQueryVersionsResponseObject interface {
+	VisitListSavedQueryVersionsResponse(w http.ResponseWriter) error
+}
+
+type ListSavedQueryVersions200JSONResponse []ContentVersion
+
+func (response ListSavedQueryVersions200JSONResponse) VisitListSavedQueryVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSavedQueryVersions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSavedQueryVersions401JSONResponse) VisitListSavedQueryVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSavedQueryVersions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListSavedQueryVersions403JSONResponse) VisitListSavedQueryVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSavedQueryVersions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSavedQueryVersions404JSONResponse) VisitListSavedQueryVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSavedQueryVersionRequestObject struct {
+	Id      PathId             `json:"id"`
+	QueryId openapi_types.UUID `json:"query_id"`
+	Version int                `json:"version"`
+}
+
+type GetSavedQueryVersionResponseObject interface {
+	VisitGetSavedQueryVersionResponse(w http.ResponseWriter) error
+}
+
+type GetSavedQueryVersion200JSONResponse ContentVersionDetail
+
+func (response GetSavedQueryVersion200JSONResponse) VisitGetSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSavedQueryVersion401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSavedQueryVersion401JSONResponse) VisitGetSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSavedQueryVersion403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSavedQueryVersion403JSONResponse) VisitGetSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSavedQueryVersion404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSavedQueryVersion404JSONResponse) VisitGetSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSavedQueryVersionRequestObject struct {
+	Id      PathId             `json:"id"`
+	QueryId openapi_types.UUID `json:"query_id"`
+	Version int                `json:"version"`
+	Body    *RestoreSavedQueryVersionJSONRequestBody
+}
+
+type RestoreSavedQueryVersionResponseObject interface {
+	VisitRestoreSavedQueryVersionResponse(w http.ResponseWriter) error
+}
+
+type RestoreSavedQueryVersion200JSONResponse SavedQuery
+
+func (response RestoreSavedQueryVersion200JSONResponse) VisitRestoreSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSavedQueryVersion401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RestoreSavedQueryVersion401JSONResponse) VisitRestoreSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSavedQueryVersion403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestoreSavedQueryVersion403JSONResponse) VisitRestoreSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSavedQueryVersion404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestoreSavedQueryVersion404JSONResponse) VisitRestoreSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSavedQueryVersion409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RestoreSavedQueryVersion409JSONResponse) VisitRestoreSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSavedQueryVersion422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response RestoreSavedQueryVersion422JSONResponse) VisitRestoreSavedQueryVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListRetrieversRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -10928,6 +11557,165 @@ func (response GetSemanticMetricSql422JSONResponse) VisitGetSemanticMetricSqlRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListSemanticMetricVersionsRequestObject struct {
+	Id       PathId             `json:"id"`
+	MetricId openapi_types.UUID `json:"metric_id"`
+	Params   ListSemanticMetricVersionsParams
+}
+
+type ListSemanticMetricVersionsResponseObject interface {
+	VisitListSemanticMetricVersionsResponse(w http.ResponseWriter) error
+}
+
+type ListSemanticMetricVersions200JSONResponse []ContentVersion
+
+func (response ListSemanticMetricVersions200JSONResponse) VisitListSemanticMetricVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticMetricVersions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSemanticMetricVersions401JSONResponse) VisitListSemanticMetricVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticMetricVersions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListSemanticMetricVersions403JSONResponse) VisitListSemanticMetricVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticMetricVersions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSemanticMetricVersions404JSONResponse) VisitListSemanticMetricVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricVersionRequestObject struct {
+	Id       PathId             `json:"id"`
+	MetricId openapi_types.UUID `json:"metric_id"`
+	Version  int                `json:"version"`
+}
+
+type GetSemanticMetricVersionResponseObject interface {
+	VisitGetSemanticMetricVersionResponse(w http.ResponseWriter) error
+}
+
+type GetSemanticMetricVersion200JSONResponse ContentVersionDetail
+
+func (response GetSemanticMetricVersion200JSONResponse) VisitGetSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricVersion401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSemanticMetricVersion401JSONResponse) VisitGetSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricVersion403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSemanticMetricVersion403JSONResponse) VisitGetSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticMetricVersion404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSemanticMetricVersion404JSONResponse) VisitGetSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticMetricVersionRequestObject struct {
+	Id       PathId             `json:"id"`
+	MetricId openapi_types.UUID `json:"metric_id"`
+	Version  int                `json:"version"`
+	Body     *RestoreSemanticMetricVersionJSONRequestBody
+}
+
+type RestoreSemanticMetricVersionResponseObject interface {
+	VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error
+}
+
+type RestoreSemanticMetricVersion200JSONResponse SemanticMetric
+
+func (response RestoreSemanticMetricVersion200JSONResponse) VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticMetricVersion401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RestoreSemanticMetricVersion401JSONResponse) VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticMetricVersion403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestoreSemanticMetricVersion403JSONResponse) VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticMetricVersion404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestoreSemanticMetricVersion404JSONResponse) VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticMetricVersion409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RestoreSemanticMetricVersion409JSONResponse) VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticMetricVersion422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response RestoreSemanticMetricVersion422JSONResponse) VisitRestoreSemanticMetricVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListSpacesRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -11349,6 +12137,42 @@ func (response ListWorkspaceTargets404JSONResponse) VisitListWorkspaceTargetsRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListTrashRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListTrashParams
+}
+
+type ListTrashResponseObject interface {
+	VisitListTrashResponse(w http.ResponseWriter) error
+}
+
+type ListTrash200JSONResponse []TrashItem
+
+func (response ListTrash200JSONResponse) VisitListTrashResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTrash401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTrash401JSONResponse) VisitListTrashResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTrash404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListTrash404JSONResponse) VisitListTrashResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type StreamExecutionRequestObject struct {
 	Id          PathId             `json:"id"`
 	ExecutionId openapi_types.UUID `json:"execution_id"`
@@ -11663,6 +12487,15 @@ type StrictServerInterface interface {
 	// Update a saved query
 	// (PATCH /workspaces/{id}/queries/{query_id})
 	UpdateSavedQuery(ctx context.Context, request UpdateSavedQueryRequestObject) (UpdateSavedQueryResponseObject, error)
+	// Version history of a saved query — viewer
+	// (GET /workspaces/{id}/queries/{query_id}/versions)
+	ListSavedQueryVersions(ctx context.Context, request ListSavedQueryVersionsRequestObject) (ListSavedQueryVersionsResponseObject, error)
+	// One saved-query version with its snapshot — viewer
+	// (GET /workspaces/{id}/queries/{query_id}/versions/{version})
+	GetSavedQueryVersion(ctx context.Context, request GetSavedQueryVersionRequestObject) (GetSavedQueryVersionResponseObject, error)
+	// Restore a saved query to a version — editor
+	// (POST /workspaces/{id}/queries/{query_id}/versions/{version}/restore)
+	RestoreSavedQueryVersion(ctx context.Context, request RestoreSavedQueryVersionRequestObject) (RestoreSavedQueryVersionResponseObject, error)
 	// List workspace Retrievers
 	// (GET /workspaces/{id}/retrievers)
 	ListRetrievers(ctx context.Context, request ListRetrieversRequestObject) (ListRetrieversResponseObject, error)
@@ -11714,6 +12547,15 @@ type StrictServerInterface interface {
 	// Render a metric to SQL for one binding — space viewer
 	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/sql)
 	GetSemanticMetricSql(ctx context.Context, request GetSemanticMetricSqlRequestObject) (GetSemanticMetricSqlResponseObject, error)
+	// Version history of a metric — viewer
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/versions)
+	ListSemanticMetricVersions(ctx context.Context, request ListSemanticMetricVersionsRequestObject) (ListSemanticMetricVersionsResponseObject, error)
+	// One metric version with its snapshot — viewer
+	// (GET /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version})
+	GetSemanticMetricVersion(ctx context.Context, request GetSemanticMetricVersionRequestObject) (GetSemanticMetricVersionResponseObject, error)
+	// Restore a metric to a version — editor
+	// (POST /workspaces/{id}/semantic/metrics/{metric_id}/versions/{version}/restore)
+	RestoreSemanticMetricVersion(ctx context.Context, request RestoreSemanticMetricVersionRequestObject) (RestoreSemanticMetricVersionResponseObject, error)
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(ctx context.Context, request ListSpacesRequestObject) (ListSpacesResponseObject, error)
@@ -11741,6 +12583,9 @@ type StrictServerInterface interface {
 	// Where the workspace can run queries — workspace members
 	// (GET /workspaces/{id}/targets)
 	ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error)
+	// Deleted content that has not been restored — workspace members
+	// (GET /workspaces/{id}/trash)
+	ListTrash(ctx context.Context, request ListTrashRequestObject) (ListTrashResponseObject, error)
 	// WebSocket for real-time execution progress
 	// (GET /ws/workspaces/{id}/executions/{execution_id})
 	StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error)
@@ -14439,6 +15284,97 @@ func (sh *strictHandler) UpdateSavedQuery(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// ListSavedQueryVersions operation middleware
+func (sh *strictHandler) ListSavedQueryVersions(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, params ListSavedQueryVersionsParams) {
+	var request ListSavedQueryVersionsRequestObject
+
+	request.Id = id
+	request.QueryId = queryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSavedQueryVersions(ctx, request.(ListSavedQueryVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSavedQueryVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSavedQueryVersionsResponseObject); ok {
+		if err := validResponse.VisitListSavedQueryVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSavedQueryVersion operation middleware
+func (sh *strictHandler) GetSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int) {
+	var request GetSavedQueryVersionRequestObject
+
+	request.Id = id
+	request.QueryId = queryId
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSavedQueryVersion(ctx, request.(GetSavedQueryVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSavedQueryVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSavedQueryVersionResponseObject); ok {
+		if err := validResponse.VisitGetSavedQueryVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreSavedQueryVersion operation middleware
+func (sh *strictHandler) RestoreSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int) {
+	var request RestoreSavedQueryVersionRequestObject
+
+	request.Id = id
+	request.QueryId = queryId
+	request.Version = version
+
+	var body RestoreSavedQueryVersionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreSavedQueryVersion(ctx, request.(RestoreSavedQueryVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreSavedQueryVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreSavedQueryVersionResponseObject); ok {
+		if err := validResponse.VisitRestoreSavedQueryVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRetrievers operation middleware
 func (sh *strictHandler) ListRetrievers(w http.ResponseWriter, r *http.Request, id PathId) {
 	var request ListRetrieversRequestObject
@@ -14938,6 +15874,97 @@ func (sh *strictHandler) GetSemanticMetricSql(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// ListSemanticMetricVersions operation middleware
+func (sh *strictHandler) ListSemanticMetricVersions(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, params ListSemanticMetricVersionsParams) {
+	var request ListSemanticMetricVersionsRequestObject
+
+	request.Id = id
+	request.MetricId = metricId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSemanticMetricVersions(ctx, request.(ListSemanticMetricVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSemanticMetricVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSemanticMetricVersionsResponseObject); ok {
+		if err := validResponse.VisitListSemanticMetricVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSemanticMetricVersion operation middleware
+func (sh *strictHandler) GetSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int) {
+	var request GetSemanticMetricVersionRequestObject
+
+	request.Id = id
+	request.MetricId = metricId
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSemanticMetricVersion(ctx, request.(GetSemanticMetricVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSemanticMetricVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSemanticMetricVersionResponseObject); ok {
+		if err := validResponse.VisitGetSemanticMetricVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreSemanticMetricVersion operation middleware
+func (sh *strictHandler) RestoreSemanticMetricVersion(w http.ResponseWriter, r *http.Request, id PathId, metricId openapi_types.UUID, version int) {
+	var request RestoreSemanticMetricVersionRequestObject
+
+	request.Id = id
+	request.MetricId = metricId
+	request.Version = version
+
+	var body RestoreSemanticMetricVersionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreSemanticMetricVersion(ctx, request.(RestoreSemanticMetricVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreSemanticMetricVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreSemanticMetricVersionResponseObject); ok {
+		if err := validResponse.VisitRestoreSemanticMetricVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListSpaces operation middleware
 func (sh *strictHandler) ListSpaces(w http.ResponseWriter, r *http.Request, id PathId) {
 	var request ListSpacesRequestObject
@@ -15197,6 +16224,33 @@ func (sh *strictHandler) ListWorkspaceTargets(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListWorkspaceTargetsResponseObject); ok {
 		if err := validResponse.VisitListWorkspaceTargetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTrash operation middleware
+func (sh *strictHandler) ListTrash(w http.ResponseWriter, r *http.Request, id PathId, params ListTrashParams) {
+	var request ListTrashRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTrash(ctx, request.(ListTrashRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTrash")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTrashResponseObject); ok {
+		if err := validResponse.VisitListTrashResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

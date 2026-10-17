@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
@@ -256,7 +257,7 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, message)}, nil
 	}
 
-	query, err := h.queries.CreateSavedQuery(ctx, db.CreateSavedQueryParams{
+	query, err := h.contentService().CreateSavedQuery(ctx, createdBy, db.CreateSavedQueryParams{
 		WorkspaceID:     ws,
 		SpaceID:         space.ID,
 		FolderID:        folderID,
@@ -402,7 +403,7 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 	if err != nil {
 		return nil, err
 	}
-	updated, err := h.queries.UpdateSavedQuery(ctx, db.UpdateSavedQueryParams{
+	updated, _, err := h.contentService().UpdateSavedQuery(ctx, updatedBy, db.UpdateSavedQueryParams{
 		WorkspaceID:     ws,
 		ID:              queryID,
 		Name:            name,
@@ -449,12 +450,15 @@ func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQuer
 		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
 	}
 
-	deleted, err := h.queries.DeleteSavedQuery(ctx, db.DeleteSavedQueryParams{WorkspaceID: ws, ID: queryID})
+	actor, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	if deleted == 0 {
-		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+	if err := h.contentService().DeleteSavedQuery(ctx, actor, ws, queryID); err != nil {
+		if errors.Is(err, content.ErrNotFound) {
+			return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		}
+		return nil, err
 	}
 
 	return DeleteSavedQuery204Response{}, nil

@@ -121,6 +121,7 @@ type Querier interface {
 	// The freshness of a catalog snapshot: its latest pass and the end of its
 	// latest finished one.
 	GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (GetCatalogSyncStateRow, error)
+	GetContentVersion(ctx context.Context, arg GetContentVersionParams) (GetContentVersionRow, error)
 	GetDefaultSpace(ctx context.Context, workspaceID pgtype.UUID) (Space, error)
 	GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, error)
 	// The engine linked to the 'default' Trino cluster, with its connection.
@@ -153,9 +154,11 @@ type Querier interface {
 	// have (and must not trust) a caller-supplied workspace id.
 	GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
+	GetSavedQueryForUpdate(ctx context.Context, arg GetSavedQueryForUpdateParams) (SavedQuery, error)
 	GetSemanticDoc(ctx context.Context, arg GetSemanticDocParams) (SemanticDoc, error)
 	GetSemanticMetric(ctx context.Context, arg GetSemanticMetricParams) (SemanticMetric, error)
 	GetSemanticMetricBySlug(ctx context.Context, arg GetSemanticMetricBySlugParams) (SemanticMetric, error)
+	GetSemanticMetricForUpdate(ctx context.Context, arg GetSemanticMetricForUpdateParams) (SemanticMetric, error)
 	GetSpace(ctx context.Context, arg GetSpaceParams) (Space, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
 	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
@@ -175,6 +178,9 @@ type Querier interface {
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
 	// Cluster Snapshots
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
+	// Content versions (#34): append-only snapshots of saved queries and metrics.
+	// The service writes the entity and its version in one transaction.
+	InsertContentVersion(ctx context.Context, arg InsertContentVersionParams) (ContentVersion, error)
 	// A connection test's short-lived catalog (#12): enabled (the plugin
 	// resolves placeholders only from enabled rows) and expiring.
 	InsertEphemeralRegistryRow(ctx context.Context, arg InsertEphemeralRegistryRowParams) error
@@ -182,6 +188,7 @@ type Querier interface {
 	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
+	LatestContentVersion(ctx context.Context, arg LatestContentVersionParams) (ContentVersion, error)
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
@@ -199,6 +206,9 @@ type Querier interface {
 	// The namespaces one level below parent ('{}' = the top level).
 	ListChildNamespaces(ctx context.Context, arg ListChildNamespacesParams) ([][]string, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
+	ListContentVersions(ctx context.Context, arg ListContentVersionsParams) ([]ListContentVersionsRow, error)
+	// Entities whose latest delete/restore version is a delete (not restored yet).
+	ListDeletedContent(ctx context.Context, arg ListDeletedContentParams) ([]ListDeletedContentRow, error)
 	ListEnabledCatalogs(ctx context.Context) ([]Catalog, error)
 	// Every enabled engine with its connection and, for a Trino engine, its
 	// cluster: the metadata dispatcher refreshes their catalogs (#17).
@@ -285,6 +295,7 @@ type Querier interface {
 	// since it was created). One number, no catalog label (#87). Same
 	// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
 	MaxMetadataStalenessSeconds(ctx context.Context) (float64, error)
+	NextContentVersion(ctx context.Context, arg NextContentVersionParams) (int32, error)
 	// Catalogs Baleia managed and still sees in the engine, though no managed
 	// binding owns them any more (an old name that failed to drop): they stay
 	// managed, never adopted, for the reconciler (#37) to drop.
@@ -296,6 +307,10 @@ type Querier interface {
 	PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtype.UUID) error
 	ReleaseMetadataSyncLock(ctx context.Context, catalogID string) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
+	// Recreate a deleted saved query with its old id, so links and execution
+	// history still line up.
+	RestoreSavedQuery(ctx context.Context, arg RestoreSavedQueryParams) (SavedQuery, error)
+	RestoreSemanticMetric(ctx context.Context, arg RestoreSemanticMetricParams) (SemanticMetric, error)
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
 	SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugExistsParams) (bool, error)
 	// Tables and columns of the catalogs the workspace may use whose names are

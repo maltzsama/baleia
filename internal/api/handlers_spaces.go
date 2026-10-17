@@ -51,9 +51,9 @@ func (h *Handlers) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, mi
 	return role, nil, nil
 }
 
-// metricSpace is requireSpace for a metric: it returns nil when allowed, a
+// contentSpace is requireSpace for a metric: it returns nil when allowed, a
 // spaceErr with 404 (invisible) or 403 (below min), or a real error.
-func (h *Handlers) metricSpace(ctx context.Context, ws, spaceID pgtype.UUID, min authz.SpaceRole) (*spaceErr, error) {
+func (h *Handlers) contentSpace(ctx context.Context, ws, spaceID pgtype.UUID, min authz.SpaceRole) (*spaceErr, error) {
 	_, se, err := h.requireSpace(ctx, ws, spaceID, min)
 	return se, err
 }

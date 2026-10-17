@@ -1,0 +1,31 @@
+meta {
+  name: Restore Saved Query Version
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/queries/{{query_id}}/versions/1/restore
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{query_id}}
+  res.body.name: eq My Query
+}
+
+docs {
+  Restoring a deleted entity recreates it with its original id, so old links
+  and execution history still line up. A name conflict is a 409 the client
+  retries with new_name.
+}
