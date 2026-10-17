@@ -334,6 +334,7 @@
 		role="dialog"
 		aria-modal="true"
 		aria-label="Table preview"
+		tabindex="-1"
 		onclick={(e) => e.target === e.currentTarget && (previewOpen = false)}
 	>
 		<div

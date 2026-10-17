@@ -1,20 +1,37 @@
 <script lang="ts">
-	/* eslint-disable no-restricted-syntax -- #24 rewrites this legacy file */
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
 	import { EditorView, keymap } from '@codemirror/view';
 	import { EditorState, Compartment } from '@codemirror/state';
 	import { indentWithTab } from '@codemirror/commands';
-	import { sql, PostgreSQL } from '@codemirror/lang-sql';
+	import { sql as sqlLanguage } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
-	import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
+	import {
+		autocompletion,
+		type Completion,
+		type CompletionContext,
+		type CompletionResult
+	} from '@codemirror/autocomplete';
 	import { format as formatSQLFormatter } from 'sql-formatter';
 	import { tableFromIPC } from 'apache-arrow';
 	import { API_ROOT, apiFetch, apiErrorMessage, client, getAccessToken } from '$lib/api/client';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import {
+		codemirrorDialect,
+		formatterLanguage,
+		loadDialect,
+		loadEngines,
+		type Dialect,
+		type Engine,
+		type WorkspaceTarget
+	} from '$lib/engines/client';
+	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
+	import { resolveAliasColumns } from '$lib/engines/completion';
+	import Badge from '$lib/ui/Badge.svelte';
+	import Modal from '$lib/ui/Modal.svelte';
 
 	type ExecutionEvent = {
 		type: string;
@@ -23,30 +40,15 @@
 		duration_ms?: number;
 		message?: string;
 	};
-	type CatalogAccess = { connection_id: string; catalog_name: string };
-	type TableInfo = { name: string };
 
 	function errorMessage(e: unknown): string {
 		return e instanceof Error ? e.message : String(e);
 	}
-	// A place the workspace can run queries: a catalog bound to an engine
-	// (GET /workspaces/{id}/targets).
-	type Target = {
-		binding_id: string;
-		catalog_id: string;
-		catalog_name: string;
-		engine_id: string;
-		engine_name: string;
-		engine_kind: string;
-		engine_catalog_name: string;
-		mode: string;
-		permission: 'read' | 'write';
-		is_default: boolean;
-	};
 
 	let editorView: EditorView;
 	let editorEl: HTMLDivElement;
 	const themeCompartment = new Compartment();
+	const dialectCompartment = new Compartment();
 
 	const tabs = $derived(editor.tabs);
 	const activeIdx = $derived(
@@ -58,16 +60,133 @@
 	const activeTab = $derived(editor.activeTab);
 
 	let executing = $state(false);
-	let executionId = $state('');
 	let dark = $state(browser && document.body.classList.contains('dark'));
+	let cursorLine = $state(1);
+	let cursorCol = $state(1);
 
 	const workspaceId = $derived(workspaceStore.current?.id || '');
-	let targets = $state<Target[]>([]);
-	let targetId = $state('');
-	const selectedTarget = $derived(targets.find((t) => t.binding_id === targetId));
+	let targets = $state<WorkspaceTarget[]>([]);
+	let engines = $state<Engine[]>([]);
+	let targetError = $state('');
+	let dialect = $state<Dialect | null>(null);
+	let namespaces = $state<string[][]>([]);
+	let namespacesError = $state('');
+
 	let saveModalOpen = $state(false);
 	let saveName = $state('');
 	let perPage = $state(50);
+
+	// ── Target resolution ────────────────────────────────────────────────
+	const selectedTarget = $derived(targets.find((t) => t.binding_id === activeTab.bindingId));
+	const activeEngineId = $derived(selectedTarget?.engine_id ?? '');
+	const selectedEngine = $derived(engines.find((e) => e.id === activeEngineId));
+
+	const engineChoices = $derived.by(() => {
+		const out: { id: string; name: string; kind: string }[] = [];
+		for (const target of targets) {
+			if (out.some((choice) => choice.id === target.engine_id)) continue;
+			out.push({ id: target.engine_id, name: target.engine_name, kind: target.engine_kind });
+		}
+		return out;
+	});
+
+	const catalogChoices = $derived(targets.filter((target) => target.engine_id === activeEngineId));
+	const canChooseSchema = $derived((selectedEngine?.capabilities?.namespace_depth ?? 0) > 0);
+	const sessionSchema = $derived(selectedEngine?.capabilities?.session_schema ?? true);
+	const canExplain = $derived(selectedEngine?.capabilities?.supports_explain ?? true);
+	const canCancel = $derived(selectedEngine?.capabilities?.supports_cancel ?? true);
+
+	async function loadTargets(wid: string) {
+		targets = [];
+		targetError = '';
+		if (!wid) return;
+		try {
+			const [{ data, error }, loadedEngines] = await Promise.all([
+				client.GET('/workspaces/{id}/targets', { params: { path: { id: wid } } }),
+				loadEngines().catch(() => [] as Engine[])
+			]);
+			if (error) throw new Error(apiErrorMessage(error, 'Failed to load targets'));
+			targets = data ?? [];
+			engines = loadedEngines;
+		} catch (e) {
+			targetError = errorMessage(e);
+		}
+	}
+
+	$effect(() => {
+		void workspaceStore.load();
+	});
+
+	$effect(() => {
+		void loadTargets(workspaceId);
+	});
+
+	// A tab without a target starts on the workspace default, else the first.
+	$effect(() => {
+		const tab = activeTab;
+		if (!tab || targets.length === 0) return;
+		if (tab.bindingId && targets.some((t) => t.binding_id === tab.bindingId)) return;
+		const ws = workspaceStore.current;
+		const pick = targets.find((t) => t.binding_id === ws?.default_binding_id) ?? targets[0];
+		editor.setTarget(tab.id, pick.binding_id, tab.schema || ws?.default_schema || '');
+	});
+
+	// The dialect (keywords and functions) follows the selected engine.
+	$effect(() => {
+		const name = selectedEngine?.dialect?.name;
+		const wid = workspaceId;
+		void wid;
+		if (!name) {
+			dialect = null;
+			return;
+		}
+		let cancelled = false;
+		loadDialect(name)
+			.then((loaded) => {
+				if (!cancelled) dialect = loaded;
+			})
+			.catch(() => {
+				if (!cancelled) dialect = null;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	// Namespaces of the selected catalog feed the schema picker.
+	$effect(() => {
+		const catalogId = selectedTarget?.catalog_id;
+		const depth = selectedEngine?.capabilities?.namespace_depth ?? 0;
+		namespaces = [];
+		namespacesError = '';
+		if (!catalogId || depth <= 0 || !workspaceId) return;
+		let cancelled = false;
+		loadNamespaces(workspaceId, catalogId, [])
+			.then((list) => {
+				if (!cancelled) namespaces = list.items.map((item) => item.path);
+			})
+			.catch((e) => {
+				if (!cancelled) namespacesError = errorMessage(e);
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	function selectEngine(engineId: string) {
+		const candidates = targets.filter((t) => t.engine_id === engineId);
+		const pick =
+			candidates.find((t) => t.catalog_name === selectedTarget?.catalog_name) ?? candidates[0];
+		if (pick) editor.setTarget(editor.activeId, pick.binding_id, '');
+	}
+
+	function selectCatalog(bindingId: string) {
+		editor.setTarget(editor.activeId, bindingId, workspaceStore.current?.default_schema ?? '');
+	}
+
+	function selectSchema(schema: string) {
+		editor.setTarget(editor.activeId, activeTab.bindingId, schema);
+	}
 
 	function switchTab(idx: number) {
 		editor.activate(tabs[idx].id);
@@ -94,64 +213,158 @@
 		}
 	});
 
-	// Until the engine contract lands (#20) only Trino runs queries.
-	const runnable = (t: Target) => t.engine_kind === 'trino';
-	const targetKey = (wid: string) => `target:${wid}`;
-
-	async function loadTargets(wid: string) {
-		targets = [];
-		targetId = '';
-		if (!wid) return;
-		try {
-			const { data } = await client.GET('/workspaces/{id}/targets', {
-				params: { path: { id: wid } }
-			});
-			if (!data) return;
-			targets = data as Target[];
-		} catch {
-			return;
-		}
-		// The last choice in this workspace, else its default, else its only target.
-		const saved = localStorage.getItem(targetKey(wid));
-		const pick =
-			targets.find((t) => t.binding_id === saved && runnable(t)) ||
-			targets.find((t) => t.is_default && runnable(t)) ||
-			(targets.length === 1 && runnable(targets[0]) ? targets[0] : undefined);
-		targetId = pick?.binding_id || '';
-	}
-
-	function selectTarget(id: string) {
-		targetId = id;
-		if (workspaceId) localStorage.setItem(targetKey(workspaceId), id);
-	}
-
+	// Switching engine re-configures the grammar without remounting the editor.
 	$effect(() => {
-		loadTargets(workspaceId);
+		const base = selectedEngine?.dialect?.codemirror_base;
+		void base;
+		if (!editorView) return;
+		editorView.dispatch({
+			effects: dialectCompartment.reconfigure(
+				sqlLanguage({ dialect: codemirrorDialect(base), upperCaseKeywords: true })
+			)
+		});
 	});
 
+	// ── Autocomplete ─────────────────────────────────────────────────────
+	const keywordOptions = $derived<Completion[]>([
+		...(dialect?.keywords ?? []).map((keyword) => ({ label: keyword, type: 'keyword' })),
+		...(dialect?.functions ?? []).map((fn) => ({
+			label: fn,
+			type: 'function',
+			apply: `${fn}()`
+		}))
+	]);
+
+	let completionController: AbortController | undefined;
+	let completionSeq = 0;
+
+	function delay(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	async function complete(context: CompletionContext): Promise<CompletionResult | null> {
+		if (!workspaceId) return null;
+		const { state, pos } = context;
+		const before = state.sliceDoc(Math.max(0, pos - 80), pos);
+		const aliasMatch = /([A-Za-z_][\w$]*)\.$/.exec(before);
+		const word = context.matchBefore(/[\w$]*/);
+		const token = word?.text ?? '';
+		const from = word?.from ?? pos;
+
+		if (!aliasMatch && token.length < 1 && !context.explicit) return null;
+
+		completionController?.abort();
+		const controller = new AbortController();
+		completionController = controller;
+		const seq = ++completionSeq;
+
+		const options: Completion[] = keywordOptions
+			.filter((option) => option.label.toLowerCase().startsWith(token.toLowerCase()))
+			.map((option) => ({ ...option, boost: 0 }));
+
+		if (aliasMatch) {
+			try {
+				const columns = await resolveAliasColumns(
+					workspaceId,
+					state.doc.toString(),
+					aliasMatch[1],
+					controller.signal
+				);
+				if (seq !== completionSeq || controller.signal.aborted) return null;
+				for (const column of columns) {
+					options.unshift({
+						label: column.name,
+						type: 'property',
+						detail: column.display_type || column.native_type,
+						boost: 3
+					});
+				}
+			} catch {
+				// Aborted or unresolvable: fall back to keywords.
+			}
+			return { from, options };
+		}
+
+		if (token.length < 2) return { from, options };
+
+		// Debounce the search so a burst of keystrokes issues one request.
+		await delay(250);
+		if (controller.signal.aborted || seq !== completionSeq) return null;
+		try {
+			const results = await searchMetadata(workspaceId, token, {
+				kind: 'all',
+				limit: 20,
+				signal: controller.signal
+			});
+			if (seq !== completionSeq) return null;
+			for (const result of results) {
+				if (result.kind === 'column' && result.column) {
+					options.unshift({
+						label: result.column,
+						type: 'property',
+						detail: `${result.table} · ${result.native_type ?? ''}`.trim(),
+						boost: 2
+					});
+				} else {
+					options.unshift({
+						label: result.table,
+						type: 'class',
+						detail: result.namespace.join('.'),
+						boost: 1
+					});
+				}
+			}
+		} catch {
+			// Aborted: CodeMirror keeps the previous result.
+		}
+		return { from, options };
+	}
+
 	onMount(() => {
-		void workspaceStore.load();
 		const observer = new MutationObserver(() => {
 			dark = document.body.classList.contains('dark');
 		});
 		observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-		const trinoSQL = sql({ dialect: PostgreSQL });
 		const extensions = [
 			basicSetup,
-			keymap.of([indentWithTab]),
-			trinoSQL,
-			autocompletion({ override: [catalogAutocomplete] }),
+			keymap.of([
+				indentWithTab,
+				{
+					key: 'Mod-Enter',
+					run: () => {
+						void runCurrent();
+						return true;
+					}
+				},
+				{
+					key: 'Shift-Mod-Enter',
+					run: () => {
+						void runAll();
+						return true;
+					}
+				}
+			]),
+			dialectCompartment.of(
+				sqlLanguage({ dialect: codemirrorDialect(undefined), upperCaseKeywords: true })
+			),
+			autocompletion({ override: [complete] }),
 			EditorView.contentAttributes.of({ 'aria-label': 'SQL editor' }),
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of((update) => {
 				if (update.docChanged) {
-					tabs[activeIdx].sql = update.state.doc.toString();
+					editor.updateSql(editor.activeId, update.state.doc.toString());
+				}
+				if (update.selectionSet || update.docChanged) {
+					const head = update.state.selection.main.head;
+					const line = update.state.doc.lineAt(head);
+					cursorLine = line.number;
+					cursorCol = head - line.from + 1;
 				}
 			})
 		];
 
-		const state = EditorState.create({ doc: tabs[activeIdx].sql, extensions });
+		const state = EditorState.create({ doc: editor.activeTab?.sql ?? '', extensions });
 		editorView = new EditorView({ state, parent: editorEl });
 
 		return () => observer.disconnect();
@@ -179,38 +392,104 @@
 		editorView.focus();
 	});
 
-	async function runQuery() {
-		const sql = editorView.state.doc.toString().trim();
-		if (!sql) return;
+	// ── Running ──────────────────────────────────────────────────────────
+	async function splitStatements(name: string, sqlText: string) {
+		const { data, error } = await client.POST('/dialects/{name}/split', {
+			params: { path: { name } },
+			body: { sql: sqlText }
+		});
+		if (error || !data) throw new Error(apiErrorMessage(error, 'Could not split the script'));
+		return data;
+	}
+
+	async function submit(sqlText: string) {
+		const text = sqlText.trim();
+		if (!text) return;
 		const idx = activeIdx;
+		const tab = tabs[idx];
+		if (!tab.bindingId) {
+			tab.errorMsg = 'Choose an engine and catalog to run on';
+			tab.statusText = 'No target';
+			return;
+		}
 		executing = true;
-		tabs[idx].errorMsg = '';
-		tabs[idx].results = [];
-		tabs[idx].statusText = 'Running...';
+		tab.errorMsg = '';
+		tab.results = [];
+		tab.statusText = 'Running...';
 		try {
 			const { data, error } = await client.POST('/workspaces/{id}/executions', {
 				params: { path: { id: workspaceId } },
 				body: {
 					workspace_id: workspaceId,
-					sql,
-					target: targetId ? { binding_id: targetId } : undefined
+					sql: text,
+					target: {
+						binding_id: tab.bindingId,
+						...(tab.schema ? { schema: tab.schema } : {})
+					}
 				}
 			});
 			if (error || !data) {
-				// The API explains target problems (target_required, engine_required, …).
 				throw new Error(apiErrorMessage(error, 'Failed to start execution'));
 			}
-			executionId = data.id;
-			connectWS(executionId);
+			tab.runTarget = data.target ?? null;
+			editor.setExecution(tab.id, data.id);
+			connectWS(data.id, idx);
 		} catch (e) {
-			tabs[activeIdx].errorMsg = errorMessage(e);
+			tab.errorMsg = errorMessage(e);
 			executing = false;
-			tabs[activeIdx].statusText = 'Error';
+			tab.statusText = 'Error';
 		}
 	}
 
-	function connectWS(execId: string) {
-		const idx = activeIdx;
+	async function runAll() {
+		if (!editorView) return;
+		await submit(editorView.state.doc.toString());
+	}
+
+	async function runCurrent() {
+		if (!editorView) return;
+		const selection = editorView.state.selection.main;
+		const doc = editorView.state.doc;
+		if (!selection.empty) {
+			await submit(doc.sliceString(selection.from, selection.to));
+			return;
+		}
+		const full = doc.toString();
+		const name = selectedEngine?.dialect?.name;
+		if (!name) {
+			await submit(full);
+			return;
+		}
+		try {
+			const spans = await splitStatements(name, full);
+			const head = selection.head;
+			const span =
+				spans.find((s) => s.start <= head && head <= s.end) ??
+				[...spans].reverse().find((s) => s.end <= head) ??
+				spans[0];
+			await submit(span ? full.slice(span.start, span.end) : full);
+		} catch {
+			// The splitter refused (unterminated string, …): run the script.
+			await submit(full);
+		}
+	}
+
+	async function cancelExecution() {
+		const tab = activeTab;
+		if (!tab?.executionId) return;
+		try {
+			tab.statusText = 'Cancelling...';
+			const { error } = await client.POST('/workspaces/{id}/executions/{execution_id}/cancel', {
+				params: { path: { id: workspaceId, execution_id: tab.executionId } }
+			});
+			if (error) throw new Error(apiErrorMessage(error, 'Could not cancel'));
+		} catch (e) {
+			tab.errorMsg = errorMessage(e);
+		}
+	}
+
+	function connectWS(execId: string, idx: number) {
+		const tab = tabs[idx];
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const ws = new WebSocket(
 			`${proto}//${location.host}${API_ROOT}/ws/workspaces/${workspaceId}/executions/${execId}?token=${getAccessToken() ?? ''}`
@@ -219,35 +498,41 @@
 			const event = JSON.parse(e.data) as ExecutionEvent;
 			switch (event.type) {
 				case 'running':
-					tabs[idx].statusText = 'Running...';
+					tab.statusText = 'Running...';
 					break;
 				case 'progress':
-					tabs[idx].statusText = `Running... ${event.rows_so_far || 0} rows`;
+					tab.statusText = `Running... ${event.rows_so_far || 0} rows`;
 					break;
 				case 'finished':
-					tabs[idx].statusText = 'Complete';
-					tabs[idx].rowCount = event.rows_returned || 0;
-					tabs[idx].durationMs = event.duration_ms || 0;
-					tabs[idx].page = 1;
+					tab.statusText = 'Complete';
+					tab.rowCount = event.rows_returned || 0;
+					tab.durationMs = event.duration_ms || 0;
+					tab.page = 1;
 					ws.close();
 					await fetchResults(execId, idx);
 					executing = false;
 					break;
 				case 'failed':
-					tabs[idx].errorMsg = event.message || 'Query failed';
+					tab.errorMsg = event.message || 'Query failed';
 					executing = false;
-					tabs[idx].statusText = 'Failed';
+					tab.statusText = 'Failed';
+					ws.close();
+					break;
+				case 'cancelled':
+					tab.statusText = 'Cancelled';
+					executing = false;
 					ws.close();
 					break;
 			}
 		};
 		ws.onerror = () => {
 			executing = false;
-			tabs[activeIdx].statusText = 'Connection error';
+			tab.statusText = 'Connection error';
 		};
 	}
 
 	async function fetchResults(execId: string, idx: number) {
+		const tab = tabs[idx];
 		try {
 			const res = await apiFetch(`/workspaces/${workspaceId}/executions/${execId}/results`);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -255,41 +540,45 @@
 			if (buf.byteLength > 0) {
 				const arr = new Uint8Array(buf);
 				const table = tableFromIPC(arr);
-				tabs[idx].columns = table.schema.fields.map((f) => f.name);
+				tab.columns = table.schema.fields.map((f) => f.name);
 				const decoded: unknown[][] = [];
 				for (const row of table.toArray()) {
-					decoded.push(tabs[idx].columns.map((c) => (row as Record<string, unknown>)[c]));
+					decoded.push(tab.columns.map((c) => (row as Record<string, unknown>)[c]));
 				}
-				tabs[idx].results = decoded;
-				tabs[idx].rowCount = decoded.length;
+				tab.results = decoded;
+				tab.rowCount = decoded.length;
 			}
-		} catch {
-			/* results unavailable */
+		} catch (e) {
+			tab.errorMsg = 'Results unavailable: ' + errorMessage(e);
 		}
 	}
 
 	function formatSQL() {
+		if (!editorView) return;
 		try {
-			const sql = editorView.state.doc.toString();
-			const f = formatSQLFormatter(sql, {
-				language: 'postgresql',
+			const sqlText = editorView.state.doc.toString();
+			const formatted = formatSQLFormatter(sqlText, {
+				language: formatterLanguage(selectedEngine?.dialect?.formatter_language),
 				keywordCase: 'upper',
 				indentStyle: 'standard'
 			});
-			editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: f } });
+			editorView.dispatch({
+				changes: { from: 0, to: editorView.state.doc.length, insert: formatted }
+			});
 		} catch {
 			/* invalid SQL: leave the editor untouched */
 		}
 	}
 
 	function explainQuery() {
-		const sql = editorView.state.doc.toString().trim();
-		if (!sql.toUpperCase().startsWith('EXPLAIN')) {
+		if (!editorView) return;
+		const sqlText = editorView.state.doc.toString().trim();
+		if (!sqlText.toUpperCase().startsWith('EXPLAIN')) {
 			editorView.dispatch({
-				changes: { from: 0, to: editorView.state.doc.length, insert: 'EXPLAIN ' + sql }
+				changes: { from: 0, to: editorView.state.doc.length, insert: 'EXPLAIN ' + sqlText }
 			});
 		}
-		runQuery();
+		void runAll();
 	}
 
 	async function saveQuery() {
@@ -319,63 +608,11 @@
 		}
 	}
 
-	async function catalogAutocomplete(context: CompletionContext) {
-		const word = context.matchBefore(/\w+/);
-		if (!word || word.from === word.to) return null;
-		const wid = workspaceStore.current?.id;
-		if (!wid) return null;
-		try {
-			const accRes = await apiFetch(`/workspaces/${wid}/catalogs`);
-			if (!accRes.ok) return null;
-			const access: CatalogAccess[] = await accRes.json();
-			if (!access.length) return null;
-			const options: { label: string; type: string }[] = [];
-			for (const item of access.slice(0, 3)) {
-				const connId = item.connection_id;
-				const catName = item.catalog_name;
-				try {
-					const nsRes = await apiFetch(`/connections/${connId}/catalogs/${catName}/namespaces`);
-					if (!nsRes.ok) continue;
-					const nss: string[][] = await nsRes.json();
-					for (const ns of nss.slice(0, 3)) {
-						const nsName = ns.join('.');
-						try {
-							const tRes = await apiFetch(
-								`/connections/${connId}/catalogs/${catName}/namespaces/${nsName}/tables`
-							);
-							if (!tRes.ok) continue;
-							const tables: TableInfo[] = await tRes.json();
-							for (const t of tables)
-								options.push({ label: `${catName}.${nsName}.${t.name}`, type: 'table' });
-						} catch {
-							/* skip namespaces whose tables cannot be listed */
-						}
-					}
-				} catch {
-					/* skip catalogs whose namespaces cannot be listed */
-				}
-			}
-			if (options.length === 0) return null;
-			return { from: word.from, options };
-		} catch {
-			return null;
-		}
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-			e.preventDefault();
-			runQuery();
-		}
-	}
-
 	const pagedRows = $derived(
 		activeTab.results.slice((activeTab.page - 1) * perPage, activeTab.page * perPage)
 	);
 	const totalPages = $derived(Math.max(1, Math.ceil(activeTab.results.length / perPage)));
 </script>
-
-<svelte:window onkeydown={handleKeydown} />
 
 <div class="flex-1 flex flex-col overflow-hidden min-w-0">
 	<div
@@ -392,12 +629,14 @@
 				<span class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">{tab.name}</span
 				>
 				{#if tabs.length > 1}
-					<span
+					<button
+						type="button"
+						aria-label="Close tab"
 						class="text-sm text-text-muted py-px px-1 rounded-[3px] hover:bg-border hover:text-text-main"
 						onclick={(e) => {
 							e.stopPropagation();
 							closeTab(i);
-						}}>×</span
+						}}>×</button
 					>
 				{/if}
 			</button>
@@ -410,7 +649,7 @@
 
 	<div class="flex items-center py-1.5 px-3 gap-1.5 border-b border-border bg-bg-toolbar shrink-0">
 		<button
-			onclick={runQuery}
+			onclick={runAll}
 			disabled={executing}
 			class="bg-success text-white border-none py-[5px] px-3.5 text-xs font-bold rounded-[5px] cursor-pointer flex items-center gap-1.5 hover:enabled:bg-success-hover disabled:opacity-60 disabled:cursor-not-allowed"
 		>
@@ -420,9 +659,18 @@
 			{executing ? 'Running...' : 'Run'}
 			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
 		</button>
+		{#if executing && canCancel}
+			<button
+				onclick={cancelExecution}
+				class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-red-600 border border-transparent bg-transparent hover:bg-border whitespace-nowrap"
+				>Cancel</button
+			>
+		{/if}
 		<button
 			onclick={explainQuery}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			disabled={!canExplain}
+			title={canExplain ? 'Run an explain plan' : 'This engine does not support EXPLAIN'}
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 		>
 			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
 				><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line
@@ -446,45 +694,85 @@
 			>Save</button
 		>
 		<div class="flex-1"></div>
-		<label class="flex items-center gap-1.5 text-[11px] text-text-muted">
-			<span>Target</span>
+
+		<div class="flex items-center gap-1.5" aria-label="Query target">
 			<select
-				data-testid="target-select"
-				value={targetId}
-				onchange={(e) => selectTarget((e.currentTarget as HTMLSelectElement).value)}
-				title="Where the query runs: a catalog on an engine"
-				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[260px] {targetId
-					? 'text-text-main'
-					: 'text-text-muted'}"
+				data-testid="engine-select"
+				aria-label="Engine"
+				value={activeEngineId}
+				onchange={(e) => selectEngine((e.currentTarget as HTMLSelectElement).value)}
+				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[150px]"
 			>
-				<option value="">{targets.length ? 'Choose a target…' : 'No target available'}</option>
-				{#each targets as t (t.binding_id)}
-					<option value={t.binding_id} disabled={!runnable(t)}>
-						{t.catalog_name} · {t.engine_name}{t.permission === 'read'
-							? ' (read-only)'
-							: ''}{runnable(t) ? '' : ' — not runnable yet'}
+				{#if engineChoices.length === 0}
+					<option value="">No engine available</option>
+				{/if}
+				{#each engineChoices as choice (choice.id)}
+					<option value={choice.id}>{choice.name}</option>
+				{/each}
+			</select>
+
+			<select
+				data-testid="catalog-select"
+				aria-label="Catalog"
+				value={selectedTarget?.binding_id ?? ''}
+				onchange={(e) => selectCatalog((e.currentTarget as HTMLSelectElement).value)}
+				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[170px]"
+			>
+				{#if catalogChoices.length === 0}
+					<option value="">No catalog</option>
+				{/if}
+				{#each catalogChoices as target (target.binding_id)}
+					<option value={target.binding_id}>
+						{target.catalog_name}{target.permission === 'read' ? ' (read-only)' : ''}
 					</option>
 				{/each}
 			</select>
-		</label>
+
+			{#if canChooseSchema}
+				<select
+					data-testid="schema-select"
+					aria-label="Schema"
+					value={activeTab.schema}
+					onchange={(e) => selectSchema((e.currentTarget as HTMLSelectElement).value)}
+					class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[150px]"
+				>
+					<option value="">Default schema</option>
+					{#each namespaces as path (path.join('.'))}
+						<option value={path.join('.')}>{path.join('.')}</option>
+					{/each}
+				</select>
+				{#if !sessionSchema}
+					<span
+						class="text-[10px] text-text-muted"
+						title="This engine does not keep a session schema; the schema is part of the SQL"
+						>no session schema</span
+					>
+				{/if}
+			{/if}
+		</div>
 	</div>
+
+	{#if targetError}
+		<p class="px-3 py-1 text-[11px] text-red-600" role="alert">{targetError}</p>
+	{:else if namespacesError}
+		<p class="px-3 py-1 text-[11px] text-red-600" role="alert">{namespacesError}</p>
+	{/if}
 
 	<div bind:this={editorEl} class="flex-1 overflow-auto min-h-0"></div>
 
 	<div
 		class="flex items-center gap-4 px-3.5 h-6 bg-bg-toolbar border-t border-b border-border text-[11px] text-text-muted shrink-0"
 	>
-		<span class="text-primary font-semibold"
-			>{selectedTarget
-				? `${selectedTarget.engine_kind === 'trino' ? 'Trino' : selectedTarget.engine_kind} SQL`
-				: 'Trino SQL'}</span
-		>
-		<span>Ln 1, Col 1</span>
-		<span>{tabs[activeIdx].statusText}</span>
-		{#if tabs[activeIdx].errorMsg}<span class="text-red-600">{tabs[activeIdx].errorMsg}</span>{/if}
+		<span class="text-primary font-semibold">
+			{selectedEngine ? `${selectedEngine.name} · ${selectedEngine.kind}` : 'No engine'}
+		</span>
+		<span>{selectedEngine?.version ?? 'version unknown'}</span>
+		<span>Ln {cursorLine}, Col {cursorCol}</span>
+		<span>{activeTab.statusText}</span>
+		{#if activeTab.errorMsg}<span class="text-red-600">{activeTab.errorMsg}</span>{/if}
 	</div>
 
-	{#if tabs[activeIdx].results.length > 0 || executing}
+	{#if activeTab.results.length > 0 || executing}
 		<div class="h-[42%] flex flex-col shrink-0">
 			<div class="flex items-stretch bg-bg-toolbar border-b border-border px-3 shrink-0">
 				<div
@@ -492,7 +780,7 @@
 				>
 					Result <span
 						class="bg-blue-100 text-primary text-[10px] font-bold py-px px-[5px] rounded-full"
-						>{tabs[activeIdx].rowCount}</span
+						>{activeTab.rowCount}</span
 					>
 				</div>
 			</div>
@@ -502,8 +790,17 @@
 				<span class="flex items-center gap-[5px] text-text-muted"
 					><span class="w-[7px] h-[7px] rounded-full bg-success"></span> Finished</span
 				>
-				<span class="text-text-muted">{tabs[activeIdx].rowCount} rows</span>
-				<span class="text-text-muted">{tabs[activeIdx].durationMs}ms</span>
+				{#if activeTab.runTarget}
+					<span class="flex items-center gap-1.5 text-text-muted">
+						ran on {activeTab.runTarget.engine_name} ·
+						{activeTab.runTarget.catalog_name}{activeTab.runTarget.schema
+							? `.${activeTab.runTarget.schema}`
+							: ''}
+						{#if activeTab.runTarget.read_only}<Badge tone="warning">read-only</Badge>{/if}
+					</span>
+				{/if}
+				<span class="text-text-muted">{activeTab.rowCount} rows</span>
+				<span class="text-text-muted">{activeTab.durationMs}ms</span>
 			</div>
 			<div class="flex-1 overflow-auto">
 				<table class="w-full border-separate border-spacing-0 text-left text-xs">
@@ -567,41 +864,25 @@
 		</div>
 	{/if}
 
-	{#if saveModalOpen}
-		<div
-			class="modal-overlay fixed inset-0 bg-black/30 backdrop-blur-[2px] z-[100] flex items-center justify-center p-6"
-			onclick={(e) => e.target === e.currentTarget && (saveModalOpen = false)}
-		>
-			<div
-				class="modal bg-bg-panel border border-border rounded-xl w-full max-w-[360px] shadow-[0_24px_64px_rgba(0,0,0,.2)]"
-			>
-				<div class="modal-header flex items-center px-5 py-[18px] border-b border-border">
-					<h2 class="text-sm font-semibold flex-1">Save Query</h2>
-					<button
-						class="w-[26px] h-[26px] rounded-md border-none bg-transparent cursor-pointer flex items-center justify-center text-text-muted hover:bg-bg-toolbar"
-						onclick={() => (saveModalOpen = false)}>×</button
-					>
-				</div>
-				<div class="p-5">
-					<input
-						class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary mb-3.5"
-						type="text"
-						placeholder="Query name"
-						bind:value={saveName}
-						onkeydown={(e) => e.key === 'Enter' && saveQuery()}
-					/>
-					<div class="flex justify-end gap-1.5">
-						<button
-							class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer hover:border-border-hover"
-							onclick={() => (saveModalOpen = false)}>Cancel</button
-						>
-						<button
-							class="h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer hover:bg-primary-hover"
-							onclick={saveQuery}>Save</button
-						>
-					</div>
-				</div>
+	<Modal bind:open={saveModalOpen} title="Save Query">
+		{#snippet footer()}
+			<div class="flex justify-end gap-1.5">
+				<button
+					class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer hover:border-border-hover"
+					onclick={() => (saveModalOpen = false)}>Cancel</button
+				>
+				<button
+					class="h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer hover:bg-primary-hover"
+					onclick={saveQuery}>Save</button
+				>
 			</div>
-		</div>
-	{/if}
+		{/snippet}
+		<input
+			class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
+			type="text"
+			placeholder="Query name"
+			bind:value={saveName}
+			onkeydown={(e) => e.key === 'Enter' && saveQuery()}
+		/>
+	</Modal>
 </div>
