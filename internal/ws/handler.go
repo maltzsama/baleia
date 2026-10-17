@@ -2,12 +2,14 @@ package ws
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/wsticket"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -39,18 +41,31 @@ type QuerierCheckWorkspaceAccessParams struct {
 }
 
 type QuerierQueryExecution struct {
-	Status       string
-	RowsReturned *int64
-	DurationMs   *int64
-	ResultKey    *string
+	ID             pgtype.UUID
+	WorkspaceID    pgtype.UUID
+	Status         string
+	Sql            string
+	RowsReturned   *int64
+	DurationMs     *int64
+	ErrorCode      *string
+	StartedAt      pgtype.Timestamptz
+	TargetSnapshot []byte
 }
 
 type QuerierQueryStatement struct {
+	ID           pgtype.UUID
+	ExecutionID  pgtype.UUID
 	Position     int32
+	Sql          string
 	Status       string
 	RowsReturned *int64
 	DurationMs   *int64
 	ErrorMessage *string
+	ErrorCode    *string
+	ResultSets   []byte
+	Truncated    bool
+	StartedAt    pgtype.Timestamptz
+	FinishedAt   pgtype.Timestamptz
 }
 
 type Handler struct {
@@ -71,6 +86,7 @@ func New(queries Querier, jwtSecret, s3Endpoint, s3AccessKey, s3SecretKey, s3Buc
 	return &Handler{
 		queries:     queries,
 		jwtSecret:   jwtSecret,
+		tickets:     nil,
 		s3Endpoint:  s3Endpoint,
 		s3AccessKey: s3AccessKey,
 		s3SecretKey: s3SecretKey,
@@ -79,16 +95,56 @@ func New(queries Querier, jwtSecret, s3Endpoint, s3AccessKey, s3SecretKey, s3Buc
 	}
 }
 
+// ExecutionSnapshot is the Execution shape the first event of a connection
+// carries (only the fields the run panel needs).
+type ExecutionSnapshot struct {
+	ID           string          `json:"id"`
+	WorkspaceID  string          `json:"workspace_id"`
+	Status       string          `json:"status"`
+	Sql          string          `json:"sql"`
+	CreatedAt    string          `json:"created_at"`
+	RowsReturned *int64          `json:"rows_returned,omitempty"`
+	DurationMs   *int64          `json:"duration_ms,omitempty"`
+	ErrorCode    *string         `json:"error_code,omitempty"`
+	ReadOnly     bool            `json:"read_only"`
+	Target       json.RawMessage `json:"target,omitempty"`
+}
+
+// StatementSnapshot is one row of the snapshot and of a statement_status event.
+type StatementSnapshot struct {
+	ID           string  `json:"id"`
+	ExecutionID  string  `json:"execution_id"`
+	Position     int32   `json:"position"`
+	Sql          string  `json:"sql"`
+	Status       string  `json:"status"`
+	ErrorCode    *string `json:"error_code,omitempty"`
+	ErrorMessage *string `json:"error_message,omitempty"`
+	RowsReturned *int64  `json:"rows_returned,omitempty"`
+	ResultCount  int     `json:"result_count"`
+	Truncated    bool    `json:"truncated"`
+	DurationMs   *int64  `json:"duration_ms,omitempty"`
+	StartedAt    *string `json:"started_at,omitempty"`
+	FinishedAt   *string `json:"finished_at,omitempty"`
+}
+
+// WSEvent is one ExecutionEvent: snapshot, execution_status,
+// statement_status or statement_progress (#111).
 type WSEvent struct {
-	Type         string `json:"type"`
-	ExecutionID  string `json:"execution_id,omitempty"`
-	Position     *int   `json:"statement_position,omitempty"`
-	RowsReturned *int64 `json:"rows_returned,omitempty"`
-	RowsSoFar    *int64 `json:"rows_so_far,omitempty"`
-	DurationMs   *int64 `json:"duration_ms,omitempty"`
-	Message      string `json:"message,omitempty"`
-	ResultURL    string `json:"result_url,omitempty"`
-	Timestamp    string `json:"ts"`
+	Type         string              `json:"type"`
+	ExecutionID  string              `json:"execution_id"`
+	Seq          int64               `json:"seq"`
+	TS           string              `json:"ts"`
+	Execution    *ExecutionSnapshot  `json:"execution,omitempty"`
+	Statements   []StatementSnapshot `json:"statements,omitempty"`
+	Status       string              `json:"status,omitempty"`
+	ErrorCode    *string             `json:"error_code,omitempty"`
+	Position     *int                `json:"position,omitempty"`
+	ErrorMessage *string             `json:"error_message,omitempty"`
+	RowsReturned *int64              `json:"rows_returned,omitempty"`
+	ResultCount  *int                `json:"result_count,omitempty"`
+	Truncated    *bool               `json:"truncated,omitempty"`
+	DurationMs   *int64              `json:"duration_ms,omitempty"`
+	RowsSoFar    *int64              `json:"rows_so_far,omitempty"`
 }
 
 func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +213,7 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 
 	var lastStatus string
 	var seenStatements map[int32]string
+	var seq int64
 
 	pollTicker := time.NewTicker(pollInterval)
 	defer pollTicker.Stop()
@@ -179,11 +236,7 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 		case <-done:
 			return
 		case <-ctx.Done():
-			sendEvent(conn, WSEvent{
-				Type:      "failed",
-				Message:   "execution timed out",
-				Timestamp: now(),
-			})
+			sendExecutionStatus(conn, executionID, &seq, "failed", strPtr("timeout"))
 			return
 		case <-pingTicker.C:
 			conn.SetWriteDeadline(time.Now().Add(writeTimeout))
@@ -191,150 +244,151 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-pollTicker.C:
-			if !h.poll(ctx, conn, executionID, wsID, &lastStatus, &seenStatements) {
+			if !h.poll(ctx, conn, executionID, wsID, &lastStatus, &seenStatements, &seq) {
 				return
 			}
 		}
 	}
 }
 
-func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID pgtype.UUID, lastStatus *string, seenStatements *map[int32]string) bool {
+func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID pgtype.UUID, lastStatus *string, seenStatements *map[int32]string, seq *int64) bool {
 	var execID pgtype.UUID
 	execID.Scan(executionID)
 
 	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, execID, workspaceID)
 	if err != nil {
-		sendEvent(conn, WSEvent{
-			Type:      "failed",
-			Message:   "execution not found",
-			Timestamp: now(),
-		})
+		sendExecutionStatus(conn, executionID, seq, "failed", strPtr("not_found"))
 		return false
 	}
 
-	nowStr := now()
-
-	if *lastStatus == "" && execution.Status == "running" {
-		sendEvent(conn, WSEvent{
-			Type:        "running",
-			ExecutionID: executionID,
-			Timestamp:   nowStr,
-		})
+	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, execID, workspaceID)
+	if err != nil {
+		statements = nil
 	}
 
-	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, execID, workspaceID)
-	if err == nil {
-		if *seenStatements == nil {
-			*seenStatements = make(map[int32]string)
-		}
-
-		var totalRows int64
+	// The first message of every connection replaces the client state.
+	if *lastStatus == "" {
+		snapshot := executionSnapshot(execution)
+		sendEvent(conn, WSEvent{
+			Type:        "snapshot",
+			ExecutionID: executionID,
+			Seq:         nextSeq(seq),
+			TS:          now(),
+			Execution:   &snapshot,
+			Statements:  statementSnapshots(statements),
+		})
+		*seenStatements = make(map[int32]string, len(statements))
 		for _, stmt := range statements {
-			prevStatus := (*seenStatements)[stmt.Position]
-
-			if prevStatus != stmt.Status {
-				(*seenStatements)[stmt.Position] = stmt.Status
-
-				switch stmt.Status {
-				case "running":
-					sendEvent(conn, WSEvent{
-						Type:        "statement_running",
-						ExecutionID: executionID,
-						Position:    intPtr(int(stmt.Position)),
-						Timestamp:   nowStr,
-					})
-				case "finished":
-					var rows int64
-					var dur int64
-					if stmt.RowsReturned != nil {
-						rows = *stmt.RowsReturned
-					}
-					if stmt.DurationMs != nil {
-						dur = *stmt.DurationMs
-					}
-					totalRows += rows
-					sendEvent(conn, WSEvent{
-						Type:         "progress",
-						ExecutionID:  executionID,
-						Position:     intPtr(int(stmt.Position)),
-						RowsReturned: &rows,
-						DurationMs:   &dur,
-						RowsSoFar:    &totalRows,
-						Timestamp:    nowStr,
-					})
-				case "failed":
-					errMsg := ""
-					if stmt.ErrorMessage != nil {
-						errMsg = *stmt.ErrorMessage
-					}
-					sendEvent(conn, WSEvent{
-						Type:        "statement_error",
-						ExecutionID: executionID,
-						Position:    intPtr(int(stmt.Position)),
-						Message:     errMsg,
-						Timestamp:   nowStr,
-					})
-				}
-			}
+			(*seenStatements)[stmt.Position] = stmt.Status
 		}
+		*lastStatus = execution.Status
+		return !terminal(execution.Status)
+	}
+
+	for _, stmt := range statements {
+		if (*seenStatements)[stmt.Position] == stmt.Status {
+			continue
+		}
+		(*seenStatements)[stmt.Position] = stmt.Status
+		snapshot := statementSnapshot(stmt)
+		count := snapshot.ResultCount
+		truncated := snapshot.Truncated
+		sendEvent(conn, WSEvent{
+			Type:         "statement_status",
+			ExecutionID:  executionID,
+			Seq:          nextSeq(seq),
+			TS:           now(),
+			Position:     intPtr(int(stmt.Position)),
+			Status:       stmt.Status,
+			ErrorCode:    stmt.ErrorCode,
+			ErrorMessage: stmt.ErrorMessage,
+			RowsReturned: stmt.RowsReturned,
+			ResultCount:  &count,
+			Truncated:    &truncated,
+			DurationMs:   stmt.DurationMs,
+		})
 	}
 
 	if execution.Status != *lastStatus {
 		*lastStatus = execution.Status
-
-		switch execution.Status {
-		case "finished":
-			var rows int64
-			var dur int64
-			if execution.RowsReturned != nil {
-				rows = *execution.RowsReturned
-			}
-			if execution.DurationMs != nil {
-				dur = *execution.DurationMs
-			}
-			resultURL := ""
-			if execution.ResultKey != nil && *execution.ResultKey != "" {
-				resultURL = buildPresignedURL(h.s3Endpoint, h.s3AccessKey, h.s3SecretKey, h.s3Bucket, *execution.ResultKey, h.s3UseSSL)
-			}
-			sendEvent(conn, WSEvent{
-				Type:         "finished",
-				ExecutionID:  executionID,
-				RowsReturned: &rows,
-				DurationMs:   &dur,
-				ResultURL:    resultURL,
-				Timestamp:    nowStr,
-			})
-			return false
-
-		case "failed":
-			errMsg := "query execution failed"
-			if statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, execID, workspaceID); err == nil {
-				for _, s := range statements {
-					if s.Status == "failed" && s.ErrorMessage != nil && *s.ErrorMessage != "" {
-						errMsg = *s.ErrorMessage
-						break
-					}
-				}
-			}
-			sendEvent(conn, WSEvent{
-				Type:        "failed",
-				ExecutionID: executionID,
-				Message:     errMsg,
-				Timestamp:   nowStr,
-			})
-			return false
-
-		case "cancelled":
-			sendEvent(conn, WSEvent{
-				Type:        "cancelled",
-				ExecutionID: executionID,
-				Timestamp:   nowStr,
-			})
+		sendExecutionStatus(conn, executionID, seq, execution.Status, execution.ErrorCode)
+		if terminal(execution.Status) {
 			return false
 		}
 	}
-
 	return true
+}
+
+func executionSnapshot(e QuerierQueryExecution) ExecutionSnapshot {
+	out := ExecutionSnapshot{
+		ID:           uuidString(e.ID),
+		WorkspaceID:  uuidString(e.WorkspaceID),
+		Status:       e.Status,
+		Sql:          e.Sql,
+		CreatedAt:    timeString(e.StartedAt),
+		RowsReturned: e.RowsReturned,
+		DurationMs:   e.DurationMs,
+		ErrorCode:    e.ErrorCode,
+	}
+	if len(e.TargetSnapshot) > 0 {
+		out.Target = json.RawMessage(e.TargetSnapshot)
+		var target struct {
+			ReadOnly bool `json:"read_only"`
+		}
+		if err := json.Unmarshal(e.TargetSnapshot, &target); err == nil {
+			out.ReadOnly = target.ReadOnly
+		}
+	}
+	return out
+}
+
+func statementSnapshots(statements []QuerierQueryStatement) []StatementSnapshot {
+	out := make([]StatementSnapshot, 0, len(statements))
+	for _, stmt := range statements {
+		out = append(out, statementSnapshot(stmt))
+	}
+	return out
+}
+
+func statementSnapshot(s QuerierQueryStatement) StatementSnapshot {
+	out := StatementSnapshot{
+		ID:           uuidString(s.ID),
+		ExecutionID:  uuidString(s.ExecutionID),
+		Position:     s.Position,
+		Sql:          s.Sql,
+		Status:       s.Status,
+		ErrorCode:    s.ErrorCode,
+		ErrorMessage: s.ErrorMessage,
+		RowsReturned: s.RowsReturned,
+		Truncated:    s.Truncated,
+		DurationMs:   s.DurationMs,
+	}
+	if len(s.ResultSets) > 0 {
+		var sets []json.RawMessage
+		if err := json.Unmarshal(s.ResultSets, &sets); err == nil {
+			out.ResultCount = len(sets)
+		}
+	}
+	if s.StartedAt.Valid {
+		started := s.StartedAt.Time.UTC().Format(time.RFC3339)
+		out.StartedAt = &started
+	}
+	if s.FinishedAt.Valid {
+		finished := s.FinishedAt.Time.UTC().Format(time.RFC3339)
+		out.FinishedAt = &finished
+	}
+	return out
+}
+
+func sendExecutionStatus(conn *websocket.Conn, executionID string, seq *int64, status string, code *string) {
+	sendEvent(conn, WSEvent{
+		Type:        "execution_status",
+		ExecutionID: executionID,
+		Seq:         nextSeq(seq),
+		TS:          now(),
+		Status:      status,
+		ErrorCode:   code,
+	})
 }
 
 func sendEvent(conn *websocket.Conn, event WSEvent) {
@@ -351,18 +405,30 @@ func sendEvent(conn *websocket.Conn, event WSEvent) {
 	slog.Error("websocket write failed after retries", "err", lastErr)
 }
 
+func terminal(status string) bool {
+	return status == "finished" || status == "failed" || status == "cancelled"
+}
+
+func nextSeq(seq *int64) int64 {
+	*seq = *seq + 1
+	return *seq
+}
+
 func now() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
-func intPtr(i int) *int {
-	return &i
+func timeString(ts pgtype.Timestamptz) string {
+	if ts.Valid {
+		return ts.Time.UTC().Format(time.RFC3339)
+	}
+	return now()
 }
 
-func buildPresignedURL(endpoint, accessKey, secretKey, bucket, key string, useSSL bool) string {
-	scheme := "http"
-	if useSSL {
-		scheme = "https"
-	}
-	return scheme + "://" + endpoint + "/" + bucket + "/" + key
+func uuidString(id pgtype.UUID) string {
+	return uuid.UUID(id.Bytes).String()
 }
+
+func strPtr(s string) *string { return &s }
+
+func intPtr(i int) *int { return &i }

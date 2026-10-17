@@ -27,6 +27,10 @@ type QueryExecutionInput struct {
 	// ExecutionTimeout caps the whole script (BALEIA_EXECUTION_TIMEOUT);
 	// 0 = defaultExecutionTimeout.
 	ExecutionTimeout time.Duration
+	// RerunExecutionID copies the statements of an earlier execution from
+	// RerunFromPosition instead of splitting SQL again (#111).
+	RerunExecutionID  string
+	RerunFromPosition int32
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -52,22 +56,27 @@ func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) erro
 	})
 
 	var split activities.SplitSQLResult
-	if err := workflow.ExecuteActivity(bookkeepingCtx, activities.SplitSQL, activities.SplitSQLParams{
-		SQL:     in.SQL,
-		Dialect: dialectName,
-	}).Get(bookkeepingCtx, &split); err != nil {
-		return failExecution(bookkeepingCtx, in.ExecutionID, err)
+	if in.RerunExecutionID == "" {
+		if err := workflow.ExecuteActivity(bookkeepingCtx, activities.SplitSQL, activities.SplitSQLParams{
+			SQL:     in.SQL,
+			Dialect: dialectName,
+		}).Get(bookkeepingCtx, &split); err != nil {
+			return failExecution(bookkeepingCtx, in.ExecutionID, err)
+		}
 	}
 
+	var created activities.CreateStatementRecordsResult
 	if err := workflow.ExecuteActivity(bookkeepingCtx, activities.CreateStatementRecords, activities.CreateStatementRecordsParams{
-		ExecutionID: in.ExecutionID,
-		Statements:  split.Statements,
-	}).Get(bookkeepingCtx, nil); err != nil {
+		ExecutionID:       in.ExecutionID,
+		Statements:        split.Statements,
+		RerunExecutionID:  in.RerunExecutionID,
+		RerunFromPosition: in.RerunFromPosition,
+	}).Get(bookkeepingCtx, &created); err != nil {
 		return failExecution(bookkeepingCtx, in.ExecutionID, err)
 	}
 
-	refs := make([]activities.StatementRef, len(split.Statements))
-	for i, sql := range split.Statements {
+	refs := make([]activities.StatementRef, len(created.Statements))
+	for i, sql := range created.Statements {
 		refs[i] = activities.StatementRef{Position: int32(i + 1), SQL: sql}
 	}
 

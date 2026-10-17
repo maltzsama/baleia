@@ -53,7 +53,7 @@ func bookkeeping(env *testsuite.TestWorkflowEnvironment, n int) {
 		stmts[i] = "SELECT " + string(rune('1'+i))
 	}
 	env.OnActivity(activities.SplitSQL, mock.Anything, mock.Anything).Return(&activities.SplitSQLResult{Statements: stmts}, nil)
-	env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).Return(&activities.CreateStatementRecordsResult{Statements: stmts}, nil)
 }
 
 func finished(n int) *activities.ExecuteScriptResult {
@@ -77,7 +77,7 @@ func TestV2_RunsScriptOnTarget(t *testing.T) {
 		split = p
 		return true
 	})).Return(&activities.SplitSQLResult{Statements: []string{"SELECT 1", "SELECT 2"}}, nil)
-	env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).Return(&activities.CreateStatementRecordsResult{Statements: []string{"SELECT 1", "SELECT 2"}}, nil)
 	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.MatchedBy(func(p activities.ExecuteScriptParams) bool {
 		script = p
 		return true
@@ -118,7 +118,7 @@ func TestV2_TwoEnginesSameWorkflow(t *testing.T) {
 			dialectName = p.Dialect
 			return true
 		})).Return(&activities.SplitSQLResult{Statements: []string{"SELECT 1"}}, nil)
-		env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).Return(nil)
+		env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).Return(&activities.CreateStatementRecordsResult{Statements: []string{"SELECT 1"}}, nil)
 		env.OnActivity(activities.ExecuteScript, mock.Anything, mock.MatchedBy(func(p activities.ExecuteScriptParams) bool {
 			engineID = p.Target.EngineID
 			return true
@@ -320,7 +320,7 @@ func TestV2_InputHasNoSecrets(t *testing.T) {
 		}
 		return out
 	}
-	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout"}, fields(QueryExecutionInput{}))
+	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RerunExecutionID", "RerunFromPosition"}, fields(QueryExecutionInput{}))
 	require.Equal(t, []string{"EngineID", "EngineKind", "EngineName", "BindingID", "CatalogID", "CatalogName", "EngineCatalog", "Schema", "ReadOnly"}, fields(queryengine.Target{}))
 	require.Equal(t, []string{"UserID", "AgentID"}, fields(queryengine.Identity{}))
 }

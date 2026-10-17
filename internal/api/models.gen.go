@@ -1240,14 +1240,18 @@ type Execution struct {
 	DurationMs *int `json:"duration_ms"`
 
 	// EngineQueryId The statement's id on its engine (a Trino query id, …). Was trino_query_id
-	EngineQueryId *string             `json:"engine_query_id"`
-	FinishedAt    *time.Time          `json:"finished_at"`
-	Id            openapi_types.UUID  `json:"id"`
-	RowsReturned  *int                `json:"rows_returned"`
-	SavedQueryId  *openapi_types.UUID `json:"saved_query_id"`
-	Sql           string              `json:"sql"`
-	StartedAt     *time.Time          `json:"started_at,omitempty"`
-	Status        ExecutionStatus     `json:"status"`
+	EngineQueryId *string            `json:"engine_query_id"`
+	ErrorCode     *string            `json:"error_code"`
+	FinishedAt    *time.Time         `json:"finished_at"`
+	Id            openapi_types.UUID `json:"id"`
+
+	// ReadOnly The target ran in a read-only session
+	ReadOnly     *bool               `json:"read_only,omitempty"`
+	RowsReturned *int                `json:"rows_returned"`
+	SavedQueryId *openapi_types.UUID `json:"saved_query_id"`
+	Sql          string              `json:"sql"`
+	StartedAt    *time.Time          `json:"started_at,omitempty"`
+	Status       ExecutionStatus     `json:"status"`
 
 	// Target The target an execution ran on, as recorded when it started
 	Target *ExecutionTarget `json:"target,omitempty"`
@@ -1265,6 +1269,11 @@ type ExecutionStatus string
 
 // ExecutionRequest defines model for ExecutionRequest.
 type ExecutionRequest struct {
+	// Rerun Re-run the statements of an earlier execution from from_position; the server copies them, never re-splits SQL it did not send
+	Rerun *struct {
+		ExecutionId  openapi_types.UUID `json:"execution_id"`
+		FromPosition int                `json:"from_position"`
+	} `json:"rerun,omitempty"`
 	SavedQueryId *openapi_types.UUID `json:"saved_query_id"`
 	Sql          string              `json:"sql"`
 
@@ -1670,13 +1679,19 @@ type QueryStatement struct {
 	EngineQueryId *string `json:"engine_query_id"`
 
 	// ErrorCode Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown).
-	ErrorCode    *string            `json:"error_code"`
-	ErrorMessage *string            `json:"error_message"`
-	ExecutionId  openapi_types.UUID `json:"execution_id"`
-	FinishedAt   *time.Time         `json:"finished_at"`
-	Id           openapi_types.UUID `json:"id"`
-	Position     int                `json:"position"`
-	ResultBytes  *int               `json:"result_bytes"`
+	ErrorCode    *string `json:"error_code"`
+	ErrorMessage *string `json:"error_message"`
+
+	// ErrorNative The engine's own error identifier (SQLSTATE, Trino errorName, gRPC status)
+	ErrorNative *string            `json:"error_native"`
+	ExecutionId openapi_types.UUID `json:"execution_id"`
+	FinishedAt  *time.Time         `json:"finished_at"`
+	Id          openapi_types.UUID `json:"id"`
+	Position    int                `json:"position"`
+	ResultBytes *int               `json:"result_bytes"`
+
+	// ResultCount Number of result sets produced
+	ResultCount *int `json:"result_count,omitempty"`
 
 	// ResultSets Stored results of the statement, one per result set
 	ResultSets *[]struct {
@@ -1692,6 +1707,9 @@ type QueryStatement struct {
 	// Status All statements of an execution run in order in one engine session. `pending` has not started yet; `skipped` never ran because an earlier statement failed, the execution was cancelled, or the worker was interrupted.
 	Status    QueryStatementStatus `json:"status"`
 	Truncated *bool                `json:"truncated"`
+
+	// UpdateCount Affected rows for DML/DDL when the engine reports it
+	UpdateCount *int `json:"update_count"`
 }
 
 // QueryStatementStatus All statements of an execution run in order in one engine session. `pending` has not started yet; `skipped` never ran because an earlier statement failed, the execution was cancelled, or the worker was interrupted.

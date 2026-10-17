@@ -681,6 +681,33 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		}, nil
 	}
 
+	// #111: rerun copies the original statements on the server, never re-splits
+	// SQL. The target defaults to the original one unless the request names one.
+	var rerunExecutionID string
+	var rerunFromPosition int32
+	if request.Body.Rerun != nil {
+		originalID := pgtype.UUID{Bytes: request.Body.Rerun.ExecutionId, Valid: true}
+		original, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
+			ID:          originalID,
+			WorkspaceID: workspaceIDFromRequest(request.Id),
+		})
+		if err != nil {
+			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		}
+		if original.UserID.Bytes != uid.Bytes && (!workspace.OwnerUserID.Valid || workspace.OwnerUserID.Bytes != uid.Bytes) {
+			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		}
+		rerunExecutionID = openapi_types.UUID(original.ID.Bytes).String()
+		rerunFromPosition = int32(request.Body.Rerun.FromPosition)
+		request.Body.Sql = original.Sql
+		if request.Body.Target == nil && original.TargetBindingID.Valid {
+			binding := openapi_types.UUID(original.TargetBindingID.Bytes)
+			request.Body.Target = &TargetRequest{BindingId: &binding, Schema: original.TargetSchema}
+		}
+	}
+
 	target, err := h.ResolveTarget(ctx, workspace, request.Body.Target)
 	if te, ok := asTargetError(err); ok {
 		if te.notFound {
@@ -780,14 +807,16 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	}
 
 	_, err = h.temporalClient.ExecuteWorkflow(ctx, wo, workflows.QueryExecutionWorkflowV2, workflows.QueryExecutionInput{
-		ExecutionID:      executionID,
-		WorkspaceID:      request.Id.String(),
-		SQL:              request.Body.Sql,
-		Target:           target,
-		Identity:         queryengine.Identity{UserID: trinoUser},
-		StatementTimeout: h.cfg.StatementTimeout,
-		RequestID:        requestID,
-		ExecutionTimeout: h.cfg.ExecutionTimeout,
+		ExecutionID:       executionID,
+		WorkspaceID:       request.Id.String(),
+		SQL:               request.Body.Sql,
+		Target:            target,
+		Identity:          queryengine.Identity{UserID: trinoUser},
+		StatementTimeout:  h.cfg.StatementTimeout,
+		RequestID:         requestID,
+		ExecutionTimeout:  h.cfg.ExecutionTimeout,
+		RerunExecutionID:  rerunExecutionID,
+		RerunFromPosition: rerunFromPosition,
 	})
 	if err != nil {
 		// The workflow failed to start; fail the row so it does not stay
@@ -1279,6 +1308,9 @@ func dbExecutionToPublic(e db.QueryExecution) Execution {
 		exec.FinishedAt = &finished
 	}
 	exec.Target = executionTargetFrom(e.TargetSnapshot, e.EngineID, e.TargetBindingID, e.TargetCatalogID)
+	if exec.Target != nil {
+		exec.ReadOnly = exec.Target.ReadOnly
+	}
 	return exec
 }
 
@@ -1329,6 +1361,16 @@ func dbStatementToPublic(s db.QueryStatement) QueryStatement {
 	}
 	if len(s.ResultSets) > 0 && json.Unmarshal(s.ResultSets, &sets) == nil {
 		qs.ResultSets = &sets
+	}
+	count := len(sets)
+	qs.ResultCount = &count
+	if s.StartedAt.Valid {
+		started := s.StartedAt.Time
+		qs.StartedAt = &started
+	}
+	if s.FinishedAt.Valid {
+		finished := s.FinishedAt.Time
+		qs.FinishedAt = &finished
 	}
 	if s.RowsReturned != nil {
 		rows := int(*s.RowsReturned)
