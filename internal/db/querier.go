@@ -253,6 +253,7 @@ type Querier interface {
 	// binding owns them any more (an old name that failed to drop): they stay
 	// managed, never adopted, for the reconciler (#37) to drop.
 	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error)
 	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
 	// Tombstones older than 7 days go: the explorer shows "removed" for a while,
 	// history does not grow forever.
@@ -352,6 +353,7 @@ type Querier interface {
 	// Trino Query Snapshots
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
+	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

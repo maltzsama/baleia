@@ -259,6 +259,45 @@ components:
         auth_provider: { type: string, enum: [local, oidc] }
         created_at: { type: string, format: date-time }
 
+    # ── Allowed actions (#104) ──────────────────────────────────
+    CatalogConnectionAllowedAction:
+      type: string
+      enum: [view, update, delete, test, register_engine, create_catalog]
+    EngineAllowedAction:
+      type: string
+      enum: [view, update, delete, test, reconcile, bind_into]
+    CatalogAllowedAction:
+      type: string
+      enum: [view, browse, update, delete, sync_metadata, grant, create_binding]
+    CatalogBindingAllowedAction:
+      type: string
+      enum: [view, update, delete, sync]
+    WorkspaceAllowedAction:
+      type: string
+      enum: [view, update, delete, manage_grants, set_defaults, run, create_space]
+    GlobalAction:
+      type: string
+      enum: [create_connection, create_workspace, create_shared_workspace, manage_users,
+             manage_identity, view_all_audit, view_system, manage_assistant]
+    Features:
+      type: object
+      required: [agents, assistant, retrievers]
+      properties:
+        agents: { type: boolean }
+        assistant: { type: boolean }
+        retrievers: { type: boolean }
+    Me:
+      allOf:
+        - $ref: "#/components/schemas/UserPublic"
+        - type: object
+          required: [features, global_actions]
+          properties:
+            personal_workspace_id: { type: string, format: uuid, nullable: true }
+            features: { $ref: "#/components/schemas/Features" }
+            global_actions:
+              type: array
+              items: { $ref: "#/components/schemas/GlobalAction" }
+
     UpdateProfileRequest:
       type: object
       properties:
@@ -320,8 +359,12 @@ components:
     # ── Workspaces ─────────────────────────────────────────────
     Workspace:
       type: object
-      required: [id, name, type, polaris_catalog_name, created_at]
+      required: [id, name, type, polaris_catalog_name, created_at, allowed_actions]
       properties:
+        allowed_actions:
+          type: array
+          readOnly: true
+          items: { $ref: "#/components/schemas/WorkspaceAllowedAction" }
         id: { type: string, format: uuid }
         name: { type: string }
         description: { type: string, nullable: true }
@@ -409,7 +452,12 @@ components:
     # ── Catalogs ─────────────────────────────────────────────────
     Catalog:
       type: object
+      required: [allowed_actions]
       properties:
+        allowed_actions:
+          type: array
+          readOnly: true
+          items: { $ref: "#/components/schemas/CatalogAllowedAction" }
         id:                  { type: string, format: uuid }
         connection_id:       { type: string, format: uuid }
         name:                { type: string }
@@ -473,8 +521,12 @@ components:
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
-      required: [id, name, type, url, config, default_readonly, has_credentials, created_at]
+      required: [id, name, type, url, config, default_readonly, has_credentials, created_at, allowed_actions]
       properties:
+        allowed_actions:
+          type: array
+          readOnly: true
+          items: { $ref: "#/components/schemas/CatalogConnectionAllowedAction" }
         id:   { type: string, format: uuid }
         name: { type: string }
         type: { type: string, description: "Connection kind; one of the kinds listed by GET /connection-providers" }
@@ -587,8 +639,12 @@ components:
 
     Engine:
       type: object
-      required: [id, name, kind, class, connection_id, identity_mode, enabled, created_at]
+      required: [id, name, kind, class, connection_id, identity_mode, enabled, created_at, allowed_actions]
       properties:
+        allowed_actions:
+          type: array
+          readOnly: true
+          items: { $ref: "#/components/schemas/EngineAllowedAction" }
         id: { type: string, format: uuid }
         name: { type: string }
         kind: { type: string, description: "Query-engine kind: trino, postgresql, mysql, …" }
@@ -900,8 +956,12 @@ components:
 
     CatalogBinding:
       type: object
-      required: [id, catalog_id, engine_id, engine_catalog_name, mode, enabled]
+      required: [id, catalog_id, engine_id, engine_catalog_name, mode, enabled, allowed_actions]
       properties:
+        allowed_actions:
+          type: array
+          readOnly: true
+          items: { $ref: "#/components/schemas/CatalogBindingAllowedAction" }
         id: { type: string, format: uuid }
         catalog_id: { type: string, format: uuid }
         engine_id: { type: string, format: uuid }
@@ -1409,13 +1469,13 @@ paths:
     get:
       tags: [Auth]
       operationId: getMe
-      summary: "Return authenticated user"
+      summary: "Return authenticated user, feature flags and global actions"
       responses:
         "200":
-          description: "Current user"
+          description: "Current user, feature flags and global actions"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/UserPublic" }
+              schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /auth/oidc/providers:

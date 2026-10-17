@@ -208,7 +208,7 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 	for _, id := range nativeIDs {
 		h.startMetadataSync(ctx, id)
 	}
-	return CreateEngine201JSONResponse(engineToPublic(created)), nil
+	return CreateEngine201JSONResponse(h.withEngineActions(ctx, created)), nil
 }
 
 func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error) {
@@ -230,7 +230,7 @@ func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequest
 	if err != nil {
 		return nil, err
 	}
-	return UpdateEngine200JSONResponse(engineToPublic(eng)), nil
+	return UpdateEngine200JSONResponse(h.withEngineActions(ctx, eng)), nil
 }
 
 // DeleteEngine removes an engine with its native catalogs and bindings. It is

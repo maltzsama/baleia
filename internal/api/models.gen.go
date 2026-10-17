@@ -515,7 +515,119 @@ type BindingSupport struct {
 }
 
 // Catalog defines model for Catalog.
+// Defines values for CatalogAllowedAction.
+const (
+	CatalogAllowedActionBrowse        CatalogAllowedAction = "browse"
+	CatalogAllowedActionCreateBinding CatalogAllowedAction = "create_binding"
+	CatalogAllowedActionDelete        CatalogAllowedAction = "delete"
+	CatalogAllowedActionGrant         CatalogAllowedAction = "grant"
+	CatalogAllowedActionSyncMetadata  CatalogAllowedAction = "sync_metadata"
+	CatalogAllowedActionUpdate        CatalogAllowedAction = "update"
+	CatalogAllowedActionView          CatalogAllowedAction = "view"
+)
+
+type CatalogAllowedAction string
+
+// Defines values for CatalogBindingAllowedAction.
+const (
+	CatalogBindingAllowedActionDelete CatalogBindingAllowedAction = "delete"
+	CatalogBindingAllowedActionSync   CatalogBindingAllowedAction = "sync"
+	CatalogBindingAllowedActionUpdate CatalogBindingAllowedAction = "update"
+	CatalogBindingAllowedActionView   CatalogBindingAllowedAction = "view"
+)
+
+type CatalogBindingAllowedAction string
+
+// Defines values for CatalogConnectionAllowedAction.
+const (
+	CatalogConnectionAllowedActionCreateCatalog  CatalogConnectionAllowedAction = "create_catalog"
+	CatalogConnectionAllowedActionDelete         CatalogConnectionAllowedAction = "delete"
+	CatalogConnectionAllowedActionRegisterEngine CatalogConnectionAllowedAction = "register_engine"
+	CatalogConnectionAllowedActionTest           CatalogConnectionAllowedAction = "test"
+	CatalogConnectionAllowedActionUpdate         CatalogConnectionAllowedAction = "update"
+	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
+)
+
+type CatalogConnectionAllowedAction string
+
+// Defines values for EngineAllowedAction.
+const (
+	EngineAllowedActionBindInto  EngineAllowedAction = "bind_into"
+	EngineAllowedActionDelete    EngineAllowedAction = "delete"
+	EngineAllowedActionReconcile EngineAllowedAction = "reconcile"
+	EngineAllowedActionTest      EngineAllowedAction = "test"
+	EngineAllowedActionUpdate    EngineAllowedAction = "update"
+	EngineAllowedActionView      EngineAllowedAction = "view"
+)
+
+type EngineAllowedAction string
+
+// Defines values for WorkspaceAllowedAction.
+const (
+	WorkspaceAllowedActionCreateSpace  WorkspaceAllowedAction = "create_space"
+	WorkspaceAllowedActionDelete       WorkspaceAllowedAction = "delete"
+	WorkspaceAllowedActionManageGrants WorkspaceAllowedAction = "manage_grants"
+	WorkspaceAllowedActionRun          WorkspaceAllowedAction = "run"
+	WorkspaceAllowedActionSetDefaults  WorkspaceAllowedAction = "set_defaults"
+	WorkspaceAllowedActionUpdate       WorkspaceAllowedAction = "update"
+	WorkspaceAllowedActionView         WorkspaceAllowedAction = "view"
+)
+
+type WorkspaceAllowedAction string
+
+// Defines values for GlobalAction.
+const (
+	CreateConnection      GlobalAction = "create_connection"
+	CreateSharedWorkspace GlobalAction = "create_shared_workspace"
+	CreateWorkspace       GlobalAction = "create_workspace"
+	ManageAssistant       GlobalAction = "manage_assistant"
+	ManageIdentity        GlobalAction = "manage_identity"
+	ManageUsers           GlobalAction = "manage_users"
+	ViewAllAudit          GlobalAction = "view_all_audit"
+	ViewSystem            GlobalAction = "view_system"
+)
+
+type GlobalAction string
+
+// Features defines model for Features.
+type Features struct {
+	Agents     bool `json:"agents"`
+	Assistant  bool `json:"assistant"`
+	Retrievers bool `json:"retrievers"`
+}
+
+// Me defines model for Me.
+type Me struct {
+	AuthProvider        MeAuthProvider      `json:"auth_provider"`
+	CreatedAt           time.Time           `json:"created_at"`
+	Email               openapi_types.Email `json:"email"`
+	Features            Features            `json:"features"`
+	GlobalActions       []GlobalAction      `json:"global_actions"`
+	Id                  openapi_types.UUID  `json:"id"`
+	Name                string              `json:"name"`
+	PersonalWorkspaceId *openapi_types.UUID `json:"personal_workspace_id,omitempty"`
+	Role                MeRole              `json:"role"`
+}
+
+// Defines values for MeAuthProvider.
+const (
+	MeAuthProviderLocal MeAuthProvider = "local"
+	MeAuthProviderOidc  MeAuthProvider = "oidc"
+)
+
+type MeAuthProvider string
+
+// Defines values for MeRole.
+const (
+	MeRoleAdmin  MeRole = "admin"
+	MeRoleMember MeRole = "member"
+)
+
+type MeRole string
+
 type Catalog struct {
+	AllowedActions *[]CatalogAllowedAction `json:"allowed_actions,omitempty"`
+
 	// CatalogVersion SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion)
 	CatalogVersion *string             `json:"catalog_version"`
 	ConnectionId   *openapi_types.UUID `json:"connection_id,omitempty"`
@@ -555,6 +667,8 @@ type CatalogSyncStatus string
 
 // CatalogBinding defines model for CatalogBinding.
 type CatalogBinding struct {
+	AllowedActions *[]CatalogBindingAllowedAction `json:"allowed_actions,omitempty"`
+
 	CatalogId openapi_types.UUID `json:"catalog_id"`
 	Connector *string            `json:"connector"`
 	Enabled   bool               `json:"enabled"`
@@ -591,6 +705,8 @@ type CatalogBindingSyncStatus string
 
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
+	AllowedActions *[]CatalogConnectionAllowedAction `json:"allowed_actions,omitempty"`
+
 	// Config Non-secret values of the provider's config schema. Secret fields are never returned
 	Config          map[string]string `json:"config"`
 	CreatedAt       time.Time         `json:"created_at"`
@@ -814,6 +930,8 @@ type Dialect struct {
 
 // Engine defines model for Engine.
 type Engine struct {
+	AllowedActions *[]EngineAllowedAction `json:"allowed_actions,omitempty"`
+
 	// Capabilities What the engine can do; null when the engine is disabled or no adapter for its kind is available yet
 	Capabilities *EngineCapabilities `json:"capabilities"`
 	Class        EngineClass         `json:"class"`
@@ -1588,6 +1706,8 @@ type ValidationError struct {
 
 // Workspace defines model for Workspace.
 type Workspace struct {
+	AllowedActions *[]WorkspaceAllowedAction `json:"allowed_actions,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
 
 	// DefaultBindingId Target used when a run names none (GET /workspaces/{id}/targets)
