@@ -9716,6 +9716,15 @@ type NotFoundJSONResponse Error
 
 type ServiceUnavailableJSONResponse Error
 
+type TooManyRequestsResponseHeaders struct {
+	RetryAfter int
+}
+type TooManyRequestsJSONResponse struct {
+	Body Error
+
+	Headers TooManyRequestsResponseHeaders
+}
+
 type UnauthorizedJSONResponse Error
 
 type UnprocessableEntityJSONResponse ValidationError
@@ -10466,6 +10475,16 @@ func (response Login422JSONResponse) VisitLoginResponse(w http.ResponseWriter) e
 	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
+}
+
+type Login429JSONResponse struct{ TooManyRequestsJSONResponse }
+
+func (response Login429JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type LogoutRequestObject struct {

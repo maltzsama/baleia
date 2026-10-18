@@ -124,6 +124,15 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: "Rate limited"
+      headers:
+        Retry-After:
+          description: "Seconds to wait before retrying."
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     ArrowStream:
       description: >
         Apache Arrow IPC. An unpaged read streams the stored object unchanged
@@ -2836,6 +2845,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /auth/logout:
     post:

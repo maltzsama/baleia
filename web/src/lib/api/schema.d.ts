@@ -5092,6 +5092,17 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description Rate limited */
+        TooManyRequests: {
+            headers: {
+                /** @description Seconds to wait before retrying. */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description Apache Arrow IPC. An unpaged read streams the stored object unchanged (`stream` for legacy results, `file` for results written after #238); a paged read (`offset`/`limit`) always returns a `stream`. */
         ArrowStream: {
             headers: {
@@ -5233,6 +5244,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
     logout: {

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { API_ROOT, client } from '$lib/api/client';
 	import { bootstrap, login as loginSession, safeNext } from '$lib/auth/session';
+	import { describeError } from '$lib/errors/catalog';
 	import { Input, PasswordInput, Select } from '$lib/ui';
 
 	type Provider = { id: string; name: string; type: 'oidc' | 'ldap' };
@@ -15,6 +17,7 @@
 	let notice = $state('');
 	let shakeField = $state('');
 	let busy = $state(false);
+	let checking = $state(false);
 	let retryIn = $state(0);
 	let providers = $state<Provider[]>([]);
 	// 'local' or the id of the selected LDAP provider.
@@ -29,15 +32,34 @@
 	]);
 
 	let retryTimer: ReturnType<typeof setInterval> | undefined;
+	let slowTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function credentialError(code: string): string {
+		const described = describeError(code);
+		return `${described.title}: ${described.explanation}`;
+	}
 
 	onMount(() => {
 		dark = document.body.classList.contains('dark');
 
-		// Shown once after /reset-password redirects here, then dropped from the address bar.
-		const params = new URLSearchParams(window.location.search);
+		// Shown once after /reset-password or an SSO failure, then dropped from
+		// the address bar (the `next` parameter is preserved).
+		const params = new SvelteURLSearchParams(window.location.search);
+		let cleanUrl = false;
 		if (params.get('reset') === '1') {
 			notice = 'Password changed. Sign in with your new password.';
-			history.replaceState(null, '', '/login');
+			params.delete('reset');
+			cleanUrl = true;
+		}
+		const queryError = params.get('error');
+		if (queryError) {
+			error = credentialError(queryError);
+			params.delete('error');
+			cleanUrl = true;
+		}
+		if (cleanUrl) {
+			const query = params.toString();
+			history.replaceState(null, '', `/login${query ? `?${query}` : ''}`);
 		}
 
 		loadProviders();
@@ -49,7 +71,10 @@
 			if (state === 'authenticated') window.location.href = safeNext(next);
 		});
 
-		return () => clearInterval(retryTimer);
+		return () => {
+			clearInterval(retryTimer);
+			clearTimeout(slowTimer);
+		};
 	});
 
 	async function loadProviders() {
@@ -72,7 +97,8 @@
 	function startRetryCountdown(seconds: number) {
 		clearInterval(retryTimer);
 		retryIn = seconds;
-		error = `Too many attempts. Try again in ${retryIn} s.`;
+		const title = describeError('rate_limited').title;
+		error = `${title}. Try again in ${retryIn} s.`;
 		retryTimer = setInterval(() => {
 			retryIn -= 1;
 			if (retryIn <= 0) {
@@ -80,7 +106,7 @@
 				retryIn = 0;
 				error = '';
 			} else {
-				error = `Too many attempts. Try again in ${retryIn} s.`;
+				error = `${title}. Try again in ${retryIn} s.`;
 			}
 		}, 1000);
 	}
@@ -92,8 +118,12 @@
 			return;
 		}
 		busy = true;
+		checking = false;
 		error = '';
 		notice = '';
+		// The progressive delay can hold the response for up to 60 s; tell the
+		// user the request is still working after one second (#290).
+		slowTimer = setTimeout(() => (checking = true), 1000);
 		try {
 			// With an LDAP provider selected the first field is the directory
 			// username and the body carries provider_id, not email (#289).
@@ -105,29 +135,36 @@
 					})
 				: await loginSession({ email, password });
 			if (!result.ok) {
-				if (result.code === 'invalid_credentials') {
-					showError('Invalid e-mail or password.', 'password');
-					return;
-				}
 				if (result.code === 'rate_limited') {
 					if (result.retryAfter && result.retryAfter > 0) startRetryCountdown(result.retryAfter);
-					else showError('Too many attempts. Try again later.');
-					return;
-				}
-				if (result.code === 'account_suspended') {
-					showError('This account is suspended. Contact an administrator.');
+					else showError(credentialError('rate_limited'));
 					return;
 				}
 				if (result.code === 'network_error') {
-					showError('Connection error. Is the server running?');
+					showError(credentialError('network_error'));
 					return;
 				}
-				showError(`Sign in failed (HTTP ${result.status}). Try again.`);
+				if (
+					result.code === 'invalid_credentials' ||
+					result.code === 'account_suspended' ||
+					result.code === 'not_provisioned' ||
+					result.code === 'idp_unavailable' ||
+					result.code === 'sso_failed'
+				) {
+					showError(
+						credentialError(result.code),
+						result.code === 'invalid_credentials' ? 'password' : ''
+					);
+					return;
+				}
+				showError(credentialError('internal'));
 				return;
 			}
 			const next = new URLSearchParams(window.location.search).get('next');
 			window.location.href = safeNext(next);
 		} finally {
+			clearTimeout(slowTimer);
+			checking = false;
 			busy = false;
 		}
 	}
@@ -306,7 +343,7 @@
 								points="10 17 15 12 10 7"
 							/><line x1="15" y1="12" x2="3" y2="12" /></svg
 						>
-						{busy ? 'Signing in…' : 'Sign in'}
+						{busy ? (checking ? 'Checking credentials…' : 'Signing in…') : 'Sign in'}
 					</button>
 					{#if oidcProviders.length > 0}
 						<div

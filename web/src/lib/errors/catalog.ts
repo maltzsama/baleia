@@ -178,10 +178,25 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 		explanation: 'Your identity provider authenticated you, but Baleia has no account for you.',
 		remediation: 'Ask an administrator to invite you.'
 	},
+	account_suspended: {
+		title: 'Account suspended',
+		explanation: 'An administrator suspended this account.',
+		remediation: 'Contact an administrator to reinstate it.'
+	},
 	idp_unavailable: {
 		title: 'Identity provider unavailable',
 		explanation: 'The identity provider did not answer.',
 		remediation: 'Retry; if it persists, contact your administrator.'
+	},
+	sso_failed: {
+		title: 'Single sign-on failed',
+		explanation: 'The identity provider could not complete the sign-in.',
+		remediation: 'Try again; if it persists, contact your administrator.'
+	},
+	network_error: {
+		title: 'Connection error',
+		explanation: 'Baleia could not reach the server.',
+		remediation: 'Check that the server is running and retry.'
 	},
 	agent_token_not_allowed: {
 		title: 'Agent token not allowed',

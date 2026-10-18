@@ -3447,6 +3447,9 @@ type NotFound = Error
 // ServiceUnavailable defines model for ServiceUnavailable.
 type ServiceUnavailable = Error
 
+// TooManyRequests defines model for TooManyRequests.
+type TooManyRequests = Error
+
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
 
