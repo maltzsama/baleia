@@ -22,6 +22,7 @@ type OIDCProviderConfig struct {
 	RoleMapping         []identity.RoleMapping `json:"role_mapping"`
 	TeamMapping         []identity.TeamMapping `json:"team_mapping"`
 	DefaultRole         string                 `json:"default_role"`
+	Claims              OIDCClaimsConfig       `json:"claims"`
 }
 
 // SealOIDCConfig encrypts the provider config. aad is the provider id.
