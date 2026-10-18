@@ -1,0 +1,26 @@
+# Development seed for the `ldap` compose profile (#282).
+# Credentials here are local-only and must never be reused.
+dn: ou=people,dc=example,dc=org
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: alice
+cn: Alice Example
+sn: Example
+mail: alice@example.org
+uidNumber: 1000
+gidNumber: 1000
+homeDirectory: /home/alice
+userPassword: ldap-password
+
+dn: ou=groups,dc=example,dc=org
+objectClass: organizationalUnit
+ou: groups
+
+dn: cn=baleia-admins,ou=groups,dc=example,dc=org
+objectClass: groupOfUniqueNames
+cn: baleia-admins
+uniqueMember: uid=alice,ou=people,dc=example,dc=org
