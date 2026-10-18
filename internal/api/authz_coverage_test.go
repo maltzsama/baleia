@@ -108,6 +108,7 @@ var operationAccess = map[string]access{
 	"ReconcileTrino":    {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 	"ReconcileEngine":   {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 	"ListReconcileRuns": {kind: kindAdmin, calls: []string{"RequireAdmin"}},
+	"GetSystemStatus":   {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 
 	// ── connections and catalogs (internal/authz)
 	"GetCatalogConnection":    checked("Connection"),

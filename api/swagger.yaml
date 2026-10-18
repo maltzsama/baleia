@@ -35,6 +35,8 @@ tags:
     description: "Programmatic access keys"
   - name: Users
     description: "User profiles and administration"
+  - name: Admin
+    description: "Global administration and system status"
   - name: Teams
     description: "Team management"
   - name: Workspaces
@@ -181,6 +183,42 @@ components:
         password: { type: string, minLength: 8 }
 
     # ── Auth ───────────────────────────────────────────────────
+    SystemStatusSection:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, unknown]
+        error_code:
+          type: string
+          description: "Stable code for an unknown section; never a raw error, host or credential."
+        latency_ms:
+          type: integer
+          minimum: 0
+        version:
+          type: string
+        commit:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        migration_version:
+          type: integer
+          format: int64
+        configured:
+          type: boolean
+
+    SystemStatus:
+      type: object
+      required: [baleia, database, temporal, object_storage, smtp]
+      properties:
+        baleia: { $ref: "#/components/schemas/SystemStatusSection" }
+        database: { $ref: "#/components/schemas/SystemStatusSection" }
+        temporal: { $ref: "#/components/schemas/SystemStatusSection" }
+        object_storage: { $ref: "#/components/schemas/SystemStatusSection" }
+        smtp: { $ref: "#/components/schemas/SystemStatusSection" }
+
     LoginRequest:
       type: object
       required: [password]
@@ -2367,6 +2405,21 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Auth ──────────────────────────────────────────────────────
+  /admin/system/status:
+    get:
+      tags: [Admin]
+      operationId: getSystemStatus
+      summary: "Core system status"
+      description: "Admin-only health of Baleia, the database, Temporal, object storage and SMTP. Each dependency has its own 2 s timeout and reports `unknown` with a stable `error_code`; the endpoint itself always returns 200. No hosts, credentials or raw errors are exposed."
+      responses:
+        "200":
+          description: "Sectional status"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /auth/login:
     post:
       tags: [Auth]

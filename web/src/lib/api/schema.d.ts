@@ -41,6 +41,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/system/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Core system status
+         * @description Admin-only health of Baleia, the database, Temporal, object storage and SMTP. Each dependency has its own 2 s timeout and reports `unknown` with a stable `error_code`; the endpoint itself always returns 200. No hosts, credentials or raw errors are exposed.
+         */
+        get: operations["getSystemStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -2593,6 +2613,27 @@ export interface components {
             email: string;
             password: string;
         };
+        SystemStatusSection: {
+            /** @enum {string} */
+            status: "ok" | "unknown";
+            /** @description Stable code for an unknown section; never a raw error, host or credential. */
+            error_code?: string;
+            latency_ms?: number;
+            version?: string;
+            commit?: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** Format: int64 */
+            migration_version?: number;
+            configured?: boolean;
+        };
+        SystemStatus: {
+            baleia: components["schemas"]["SystemStatusSection"];
+            database: components["schemas"]["SystemStatusSection"];
+            temporal: components["schemas"]["SystemStatusSection"];
+            object_storage: components["schemas"]["SystemStatusSection"];
+            smtp: components["schemas"]["SystemStatusSection"];
+        };
         LoginRequest: {
             /**
              * Format: email
@@ -4594,6 +4635,28 @@ export interface operations {
             };
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getSystemStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sectional status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     login: {

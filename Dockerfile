@@ -16,8 +16,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . ./
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION}" -o /api ./cmd/api
-RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION}" -o /worker ./cmd/worker
+ARG COMMIT=dev
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION} -X github.com/galileostudio/baleia/internal/version.Commit=${COMMIT}" -o /api ./cmd/api
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION} -X github.com/galileostudio/baleia/internal/version.Commit=${COMMIT}" -o /worker ./cmd/worker
 RUN CGO_ENABLED=0 go build -o /migrate ./cmd/migrate
 
 FROM alpine:3.20
