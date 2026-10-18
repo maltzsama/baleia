@@ -267,3 +267,9 @@ LIMIT $2;
 
 -- name: GetReconcileRun :one
 SELECT * FROM catalog_reconcile_runs WHERE engine_id = $1 AND id = $2;
+
+-- name: LatestReconcileRuns :many
+-- Newest run per engine for the system status section (#291).
+SELECT DISTINCT ON (engine_id) engine_id, started_at, finished_at, dry_run, error
+FROM catalog_reconcile_runs
+ORDER BY engine_id, started_at DESC;

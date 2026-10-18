@@ -50,7 +50,7 @@ export interface paths {
         };
         /**
          * Core system status
-         * @description Admin-only health of Baleia, the database, Temporal, object storage and SMTP. Each dependency has its own 2 s timeout and reports `unknown` with a stable `error_code`; the endpoint itself always returns 200. No hosts, credentials or raw errors are exposed.
+         * @description Admin-only health of Baleia, the database, Temporal, object storage and SMTP, plus the platform's own components: schedules, engines, bindings, metadata, reconcile, audit export and the Trino plugin. Each section has its own 2 s timeout and reports `unknown` with a stable `error_code`; a schedule Temporal does not know is `missing`, never blank. The endpoint itself always returns 200. No hosts, credentials or raw errors are exposed.
          */
         get: operations["getSystemStatus"];
         put?: never;
@@ -2807,12 +2807,37 @@ export interface components {
             migration_version?: number;
             configured?: boolean;
         };
+        /** @description One platform component inside a status section. */
+        SystemStatusItem: {
+            name: string;
+            /** @enum {string} */
+            status: "ok" | "unknown" | "missing" | "degraded" | "unreachable";
+            /** @description Short bounded detail; never a host, credential or raw error. */
+            detail?: string;
+            /** Format: int64 */
+            value?: number;
+        };
+        /** @description A platform section. A slow or broken probe is `unknown` with a stable `error_code`. */
+        SystemStatusResource: {
+            /** @enum {string} */
+            status: "ok" | "unknown" | "missing" | "degraded";
+            /** @description Stable code; never a raw error. */
+            error_code?: string;
+            items?: components["schemas"]["SystemStatusItem"][];
+        };
         SystemStatus: {
             baleia: components["schemas"]["SystemStatusSection"];
             database: components["schemas"]["SystemStatusSection"];
             temporal: components["schemas"]["SystemStatusSection"];
             object_storage: components["schemas"]["SystemStatusSection"];
             smtp: components["schemas"]["SystemStatusSection"];
+            schedules: components["schemas"]["SystemStatusResource"];
+            engines: components["schemas"]["SystemStatusResource"];
+            bindings: components["schemas"]["SystemStatusResource"];
+            metadata: components["schemas"]["SystemStatusResource"];
+            reconcile: components["schemas"]["SystemStatusResource"];
+            audit_export: components["schemas"]["SystemStatusResource"];
+            plugin: components["schemas"]["SystemStatusResource"];
         };
         LoginRequest: {
             /**

@@ -12,6 +12,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const auditExportLagSeconds = `-- name: AuditExportLagSeconds :one
+SELECT COALESCE(
+    (SELECT EXTRACT(EPOCH FROM now() - occurred_at)
+     FROM audit_export_cursor WHERE sink = 'opensearch'),
+    0
+)::float8
+`
+
+// Age of the export cursor for the system status section (#291). Zero when no
+// cursor exists (nothing exported yet).
+func (q *Queries) AuditExportLagSeconds(ctx context.Context) (float64, error) {
+	row := q.db.QueryRow(ctx, auditExportLagSeconds)
+	var column_1 float64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const ensureAuditPartitions = `-- name: EnsureAuditPartitions :exec
 SELECT audit_ensure_partitions($1::int)
 `

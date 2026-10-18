@@ -150,3 +150,10 @@ UPDATE catalogs
 SET name = $2, description = $3, updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: PluginLastConfirmation :one
+-- Last time the plugin confirmed a registry write (#291). The writer is a
+-- parameter because only the plugin may claim it (contract test).
+SELECT max(updated_at)::timestamptz
+FROM trino_catalog_registry
+WHERE updated_by = $1;

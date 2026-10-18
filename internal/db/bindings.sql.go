@@ -389,6 +389,47 @@ func (q *Queries) InsertReconcileRun(ctx context.Context, arg InsertReconcileRun
 	return i, err
 }
 
+const latestReconcileRuns = `-- name: LatestReconcileRuns :many
+SELECT DISTINCT ON (engine_id) engine_id, started_at, finished_at, dry_run, error
+FROM catalog_reconcile_runs
+ORDER BY engine_id, started_at DESC
+`
+
+type LatestReconcileRunsRow struct {
+	EngineID   pgtype.UUID        `json:"engine_id"`
+	StartedAt  pgtype.Timestamptz `json:"started_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	DryRun     bool               `json:"dry_run"`
+	Error      *string            `json:"error"`
+}
+
+// Newest run per engine for the system status section (#291).
+func (q *Queries) LatestReconcileRuns(ctx context.Context) ([]LatestReconcileRunsRow, error) {
+	rows, err := q.db.Query(ctx, latestReconcileRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LatestReconcileRunsRow
+	for rows.Next() {
+		var i LatestReconcileRunsRow
+		if err := rows.Scan(
+			&i.EngineID,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.DryRun,
+			&i.Error,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBindingStatusByCatalog = `-- name: ListBindingStatusByCatalog :many
 SELECT s.binding_id, s.lifecycle_state, s.sync_status, s.engine_error FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id WHERE b.catalog_id = $1
 `

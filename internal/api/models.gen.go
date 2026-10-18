@@ -596,6 +596,23 @@ const (
 	SuspendUserRequestReasonPolicy SuspendUserRequestReason = "policy"
 )
 
+// Defines values for SystemStatusItemStatus.
+const (
+	SystemStatusItemStatusDegraded    SystemStatusItemStatus = "degraded"
+	SystemStatusItemStatusMissing     SystemStatusItemStatus = "missing"
+	SystemStatusItemStatusOk          SystemStatusItemStatus = "ok"
+	SystemStatusItemStatusUnknown     SystemStatusItemStatus = "unknown"
+	SystemStatusItemStatusUnreachable SystemStatusItemStatus = "unreachable"
+)
+
+// Defines values for SystemStatusResourceStatus.
+const (
+	SystemStatusResourceStatusDegraded SystemStatusResourceStatus = "degraded"
+	SystemStatusResourceStatusMissing  SystemStatusResourceStatus = "missing"
+	SystemStatusResourceStatusOk       SystemStatusResourceStatus = "ok"
+	SystemStatusResourceStatusUnknown  SystemStatusResourceStatus = "unknown"
+)
+
 // Defines values for SystemStatusSectionStatus.
 const (
 	Ok      SystemStatusSectionStatus = "ok"
@@ -2852,12 +2869,55 @@ type SuspendUserRequestReason string
 
 // SystemStatus defines model for SystemStatus.
 type SystemStatus struct {
-	Baleia        SystemStatusSection `json:"baleia"`
-	Database      SystemStatusSection `json:"database"`
-	ObjectStorage SystemStatusSection `json:"object_storage"`
-	Smtp          SystemStatusSection `json:"smtp"`
-	Temporal      SystemStatusSection `json:"temporal"`
+	// AuditExport A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+	AuditExport SystemStatusResource `json:"audit_export"`
+	Baleia      SystemStatusSection  `json:"baleia"`
+
+	// Bindings A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+	Bindings SystemStatusResource `json:"bindings"`
+	Database SystemStatusSection  `json:"database"`
+
+	// Engines A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+	Engines SystemStatusResource `json:"engines"`
+
+	// Metadata A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+	Metadata      SystemStatusResource `json:"metadata"`
+	ObjectStorage SystemStatusSection  `json:"object_storage"`
+
+	// Plugin A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+	Plugin SystemStatusResource `json:"plugin"`
+
+	// Reconcile A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+	Reconcile SystemStatusResource `json:"reconcile"`
+
+	// Schedules A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+	Schedules SystemStatusResource `json:"schedules"`
+	Smtp      SystemStatusSection  `json:"smtp"`
+	Temporal  SystemStatusSection  `json:"temporal"`
 }
+
+// SystemStatusItem One platform component inside a status section.
+type SystemStatusItem struct {
+	// Detail Short bounded detail; never a host, credential or raw error.
+	Detail *string                `json:"detail,omitempty"`
+	Name   string                 `json:"name"`
+	Status SystemStatusItemStatus `json:"status"`
+	Value  *int64                 `json:"value,omitempty"`
+}
+
+// SystemStatusItemStatus defines model for SystemStatusItem.Status.
+type SystemStatusItemStatus string
+
+// SystemStatusResource A platform section. A slow or broken probe is `unknown` with a stable `error_code`.
+type SystemStatusResource struct {
+	// ErrorCode Stable code; never a raw error.
+	ErrorCode *string                    `json:"error_code,omitempty"`
+	Items     *[]SystemStatusItem        `json:"items,omitempty"`
+	Status    SystemStatusResourceStatus `json:"status"`
+}
+
+// SystemStatusResourceStatus defines model for SystemStatusResource.Status.
+type SystemStatusResourceStatus string
 
 // SystemStatusSection defines model for SystemStatusSection.
 type SystemStatusSection struct {

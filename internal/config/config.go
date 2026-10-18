@@ -53,7 +53,10 @@ type Config struct {
 	// TrinoUserIdentity selects how a logged-in Baleia user maps to a Trino
 	// identity for their queries: "uuid" (u_<uuid>) or "email".
 	TrinoUserIdentity string
-	JWTSecret         string
+	// PluginVersion is the pinned baleia-trino-catalog-store release reported
+	// by the system status (#291).
+	PluginVersion string
+	JWTSecret     string
 	// AccessTokenTTL, RefreshTokenTTL and ResetTokenTTL configure token
 	// lifetimes (#51); zero means the default.
 	AccessTokenTTL  time.Duration
@@ -154,6 +157,7 @@ func Load() *Config {
 		TrinoAdminUser:        getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
 		TrinoServiceUser:      getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
 		TrinoUserIdentity:     getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
+		PluginVersion:         getEnv("BALEIA_PLUGIN_VERSION", "0.9.2"),
 		JWTSecret:             getEnv("JWT_SECRET", DefaultJWTSecret),
 		AccessTokenTTL:        getEnvDuration("BALEIA_ACCESS_TOKEN_TTL", DefaultAccessTokenTTL),
 		RefreshTokenTTL:       getEnvDuration("BALEIA_REFRESH_TOKEN_TTL", DefaultRefreshTokenTTL),

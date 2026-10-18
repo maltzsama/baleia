@@ -37,6 +37,7 @@ func (h *Handlers) GetSystemStatus(ctx context.Context, _ GetSystemStatusRequest
 		Smtp:   smtpStatusSection(h.cfg),
 	}
 	h.probeDependencies(ctx, &status)
+	h.probePlatform(ctx, &status)
 	return GetSystemStatus200JSONResponse(status), nil
 }
 

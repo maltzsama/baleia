@@ -20,6 +20,9 @@ type Querier interface {
 	// from the cron expression immediately, so a long refresh never triggers a
 	// burst of runs afterwards.
 	AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetrieverScheduleParams) error
+	// Age of the export cursor for the system status section (#291). Zero when no
+	// cursor exists (nothing exported yet).
+	AuditExportLagSeconds(ctx context.Context) (float64, error)
 	// Conditional cancel: only a running execution transitions to cancelled, so a
 	// concurrent completion or failure activity cannot be overwritten. Zero matched
 	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
@@ -236,6 +239,8 @@ type Querier interface {
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	LatestContentVersion(ctx context.Context, arg LatestContentVersionParams) (ContentVersion, error)
+	// Newest run per engine for the system status section (#291).
+	LatestReconcileRuns(ctx context.Context) ([]LatestReconcileRunsRow, error)
 	LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UUID) (LatestRetrieverRefreshRow, error)
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
@@ -398,6 +403,10 @@ type Querier interface {
 	// since it was created). One number, no catalog label (#87). Same
 	// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
 	MaxMetadataStalenessSeconds(ctx context.Context) (float64, error)
+	// Counts for the system status section (#291): syncable catalogs, those whose
+	// last finished pass is older than the threshold, and those whose last run
+	// failed. Same predicate as ListSyncableCatalogs.
+	MetadataStatusCounts(ctx context.Context, dollar_1 int32) (MetadataStatusCountsRow, error)
 	MoveQueryFolderSubtree(ctx context.Context, arg MoveQueryFolderSubtreeParams) error
 	MoveSavedQueriesInFolderSubtree(ctx context.Context, arg MoveSavedQueriesInFolderSubtreeParams) error
 	NextContentVersion(ctx context.Context, arg NextContentVersionParams) (int32, error)
@@ -406,6 +415,9 @@ type Querier interface {
 	// managed, never adopted, for the reconciler (#37) to drop.
 	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
 	PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error)
+	// Last time the plugin confirmed a registry write (#291). The writer is a
+	// parameter because only the plugin may claim it (contract test).
+	PluginLastConfirmation(ctx context.Context, updatedBy string) (pgtype.Timestamptz, error)
 	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
 	// Tombstones older than 7 days go: the explorer shows "removed" for a while,
 	// history does not grow forever.
