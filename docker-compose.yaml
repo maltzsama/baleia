@@ -403,6 +403,7 @@ services:
       - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
       - TEMPORAL_HOST=temporal:7233
       - TRINO_URL=http://trino:8080
+      - BALEIA_PLUGIN_VERSION=${BALEIA_PLUGIN_VERSION:-0.9.2}
       - POLARIS_URL=http://polaris:8181
       - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
       # Seals stored connection credentials; separate from JWT_SECRET.
@@ -437,6 +438,7 @@ services:
       - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
       - TEMPORAL_HOST=temporal:7233
       - TRINO_URL=http://trino:8080
+      - BALEIA_PLUGIN_VERSION=${BALEIA_PLUGIN_VERSION:-0.9.2}
       - POLARIS_URL=http://polaris:8181
       - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
       - BALEIA_ENCRYPTION_KEY=${BALEIA_ENCRYPTION_KEY:-dev-encryption-key-not-for-production-0123}

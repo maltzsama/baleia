@@ -53,6 +53,10 @@ type Handlers struct {
 	// wsTickets issues the single-use WebSocket tickets (#26); the WS handler
 	// shares this store.
 	wsTickets *wsticket.Store
+	// systemStatusSchedule and systemStatusEngine are the status page's probe
+	// seams (#291). Tests inject them without a Temporal server or an engine.
+	systemStatusSchedule func(ctx context.Context, id string) (SystemStatusItemStatus, string)
+	systemStatusEngine   func(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string)
 	// dummyHash is compared against on the unknown-account and SSO-only paths
 	// so timing does not reveal whether an account exists (#51).
 	dummyHashOnce sync.Once

@@ -213,15 +213,51 @@ components:
         configured:
           type: boolean
 
+    SystemStatusItem:
+      type: object
+      description: "One platform component inside a status section."
+      required: [name, status]
+      properties:
+        name: { type: string }
+        status:
+          type: string
+          enum: [ok, unknown, missing, degraded, unreachable]
+        detail:
+          type: string
+          description: "Short bounded detail; never a host, credential or raw error."
+        value: { type: integer, format: int64 }
+
+    SystemStatusResource:
+      type: object
+      description: "A platform section. A slow or broken probe is `unknown` with a stable `error_code`."
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, unknown, missing, degraded]
+        error_code:
+          type: string
+          description: "Stable code; never a raw error."
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SystemStatusItem" }
+
     SystemStatus:
       type: object
-      required: [baleia, database, temporal, object_storage, smtp]
+      required: [baleia, database, temporal, object_storage, smtp, schedules, engines, bindings, metadata, reconcile, audit_export, plugin]
       properties:
         baleia: { $ref: "#/components/schemas/SystemStatusSection" }
         database: { $ref: "#/components/schemas/SystemStatusSection" }
         temporal: { $ref: "#/components/schemas/SystemStatusSection" }
         object_storage: { $ref: "#/components/schemas/SystemStatusSection" }
         smtp: { $ref: "#/components/schemas/SystemStatusSection" }
+        schedules: { $ref: "#/components/schemas/SystemStatusResource" }
+        engines: { $ref: "#/components/schemas/SystemStatusResource" }
+        bindings: { $ref: "#/components/schemas/SystemStatusResource" }
+        metadata: { $ref: "#/components/schemas/SystemStatusResource" }
+        reconcile: { $ref: "#/components/schemas/SystemStatusResource" }
+        audit_export: { $ref: "#/components/schemas/SystemStatusResource" }
+        plugin: { $ref: "#/components/schemas/SystemStatusResource" }
 
     LoginRequest:
       type: object
@@ -2623,7 +2659,7 @@ paths:
       tags: [Admin]
       operationId: getSystemStatus
       summary: "Core system status"
-      description: "Admin-only health of Baleia, the database, Temporal, object storage and SMTP. Each dependency has its own 2 s timeout and reports `unknown` with a stable `error_code`; the endpoint itself always returns 200. No hosts, credentials or raw errors are exposed."
+      description: "Admin-only health of Baleia, the database, Temporal, object storage and SMTP, plus the platform's own components: schedules, engines, bindings, metadata, reconcile, audit export and the Trino plugin. Each section has its own 2 s timeout and reports `unknown` with a stable `error_code`; a schedule Temporal does not know is `missing`, never blank. The endpoint itself always returns 200. No hosts, credentials or raw errors are exposed."
       responses:
         "200":
           description: "Sectional status"

@@ -7,7 +7,6 @@ package api
 
 import "context"
 
-
 // ── Migrant ───────────────────────────────────────────────────────────────────
 
 func (h *Handlers) ListMigrations(ctx context.Context, request ListMigrationsRequestObject) (ListMigrationsResponseObject, error) {

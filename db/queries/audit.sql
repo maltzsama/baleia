@@ -40,3 +40,12 @@ LIMIT @lim;
 -- name: EnsureAuditPartitions :exec
 -- Creates the monthly partitions of this month and the next months ahead.
 SELECT audit_ensure_partitions(@months_ahead::int);
+
+-- name: AuditExportLagSeconds :one
+-- Age of the export cursor for the system status section (#291). Zero when no
+-- cursor exists (nothing exported yet).
+SELECT COALESCE(
+    (SELECT EXTRACT(EPOCH FROM now() - occurred_at)
+     FROM audit_export_cursor WHERE sink = 'opensearch'),
+    0
+)::float8;

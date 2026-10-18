@@ -679,6 +679,39 @@ func (q *Queries) MaxMetadataStalenessSeconds(ctx context.Context) (float64, err
 	return column_1, err
 }
 
+const metadataStatusCounts = `-- name: MetadataStatusCounts :one
+WITH syncable AS (
+    SELECT c.id, c.created_at,
+           (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished') AS last_finished,
+           COALESCE((SELECT r.status FROM metadata_sync_runs r WHERE r.catalog_id = c.id ORDER BY r.started_at DESC LIMIT 1), 'never') AS last_status
+    FROM catalogs c
+    WHERE c.enabled
+      AND (c.origin = 'source' OR EXISTS (
+          SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled))
+)
+SELECT
+    count(*)::bigint AS catalogs,
+    count(*) FILTER (WHERE COALESCE(last_finished, created_at) < now() - make_interval(secs => $1::int))::bigint AS stale,
+    count(*) FILTER (WHERE last_status = 'failed')::bigint AS failed
+FROM syncable
+`
+
+type MetadataStatusCountsRow struct {
+	Catalogs int64 `json:"catalogs"`
+	Stale    int64 `json:"stale"`
+	Failed   int64 `json:"failed"`
+}
+
+// Counts for the system status section (#291): syncable catalogs, those whose
+// last finished pass is older than the threshold, and those whose last run
+// failed. Same predicate as ListSyncableCatalogs.
+func (q *Queries) MetadataStatusCounts(ctx context.Context, dollar_1 int32) (MetadataStatusCountsRow, error) {
+	row := q.db.QueryRow(ctx, metadataStatusCounts, dollar_1)
+	var i MetadataStatusCountsRow
+	err := row.Scan(&i.Catalogs, &i.Stale, &i.Failed)
+	return i, err
+}
+
 const purgeMetadataNamespaceTombstones = `-- name: PurgeMetadataNamespaceTombstones :exec
 DELETE FROM metadata_namespaces
 WHERE catalog_id = $1 AND removed_at < now() - interval '7 days'

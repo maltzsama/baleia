@@ -2,9 +2,9 @@ package api
 
 import (
 	"fmt"
-	"net/smtp"
-	"log/slog"
 	"github.com/galileostudio/baleia/internal/config"
+	"log/slog"
+	"net/smtp"
 )
 
 func sendResetEmail(cfg *config.Config, to, resetURL string) error {

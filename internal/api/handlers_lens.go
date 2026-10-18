@@ -10,8 +10,8 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
@@ -137,13 +137,13 @@ func (h *lensHandlers) getCluster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"active_workers":   snapshot.ActiveWorkers,
-		"running_queries":  snapshot.RunningQueries,
-		"queued_queries":   snapshot.QueuedQueries,
-		"blocked_queries":  snapshot.BlockedQueries,
-		"total_memory_bytes":  snapshot.TotalMemoryBytes,
-		"free_memory_bytes":   snapshot.FreeMemoryBytes,
-		"captured_at":      snapshot.CapturedAt,
+		"active_workers":     snapshot.ActiveWorkers,
+		"running_queries":    snapshot.RunningQueries,
+		"queued_queries":     snapshot.QueuedQueries,
+		"blocked_queries":    snapshot.BlockedQueries,
+		"total_memory_bytes": snapshot.TotalMemoryBytes,
+		"free_memory_bytes":  snapshot.FreeMemoryBytes,
+		"captured_at":        snapshot.CapturedAt,
 	})
 }
 
@@ -160,12 +160,12 @@ func (h *lensHandlers) listClusterHistory(w http.ResponseWriter, r *http.Request
 	result := make([]map[string]interface{}, len(snapshots))
 	for i, s := range snapshots {
 		result[i] = map[string]interface{}{
-			"id":                s.ID,
-			"captured_at":       s.CapturedAt,
-			"active_workers":    s.ActiveWorkers,
-			"running_queries":   s.RunningQueries,
-			"queued_queries":    s.QueuedQueries,
-			"blocked_queries":   s.BlockedQueries,
+			"id":              s.ID,
+			"captured_at":     s.CapturedAt,
+			"active_workers":  s.ActiveWorkers,
+			"running_queries": s.RunningQueries,
+			"queued_queries":  s.QueuedQueries,
+			"blocked_queries": s.BlockedQueries,
 		}
 	}
 
@@ -367,28 +367,28 @@ func (h *lensHandlers) queryAnalytics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"total_queries":  len(snapshots),
-		"error_count":    errorCount,
+		"total_queries":   len(snapshots),
+		"error_count":     errorCount,
 		"avg_duration_ms": avgDuration,
-		"users_active":   len(userCounts),
+		"users_active":    len(userCounts),
 	})
 }
 
 func snapshotToMap(s db.TrinoQuerySnapshot) map[string]interface{} {
 	return map[string]interface{}{
-		"id":              s.ID,
-		"trino_query_id":  s.TrinoQueryID,
-		"origin":          s.Origin,
-		"user":            s.User,
-		"state":           s.State,
-		"sql":             s.Sql,
-		"catalog":         s.Catalog,
-		"created_at":      s.CreatedAt,
-		"elapsed_ms":      s.ElapsedMs,
-		"cpu_ms":          s.CpuMs,
+		"id":                   s.ID,
+		"trino_query_id":       s.TrinoQueryID,
+		"origin":               s.Origin,
+		"user":                 s.User,
+		"state":                s.State,
+		"sql":                  s.Sql,
+		"catalog":              s.Catalog,
+		"created_at":           s.CreatedAt,
+		"elapsed_ms":           s.ElapsedMs,
+		"cpu_ms":               s.CpuMs,
 		"physical_input_bytes": s.PhysicalInputBytes,
-		"output_rows":     s.OutputRows,
-		"error_message":   s.ErrorMessage,
+		"output_rows":          s.OutputRows,
+		"error_message":        s.ErrorMessage,
 	}
 }
 

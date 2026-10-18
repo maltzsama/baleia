@@ -141,6 +141,25 @@ SELECT
     COALESCE((SELECT r.error_code FROM metadata_sync_runs r WHERE r.catalog_id = $1 ORDER BY r.started_at DESC LIMIT 1), '')::text AS last_error_code,
     (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = $1 AND r.status = 'finished')::timestamptz AS synced_at;
 
+-- name: MetadataStatusCounts :one
+-- Counts for the system status section (#291): syncable catalogs, those whose
+-- last finished pass is older than the threshold, and those whose last run
+-- failed. Same predicate as ListSyncableCatalogs.
+WITH syncable AS (
+    SELECT c.id, c.created_at,
+           (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished') AS last_finished,
+           COALESCE((SELECT r.status FROM metadata_sync_runs r WHERE r.catalog_id = c.id ORDER BY r.started_at DESC LIMIT 1), 'never') AS last_status
+    FROM catalogs c
+    WHERE c.enabled
+      AND (c.origin = 'source' OR EXISTS (
+          SELECT 1 FROM catalog_bindings b WHERE b.catalog_id = c.id AND b.enabled))
+)
+SELECT
+    count(*)::bigint AS catalogs,
+    count(*) FILTER (WHERE COALESCE(last_finished, created_at) < now() - make_interval(secs => $1::int))::bigint AS stale,
+    count(*) FILTER (WHERE last_status = 'failed')::bigint AS failed
+FROM syncable;
+
 -- name: MaxMetadataStalenessSeconds :one
 -- Seconds since the stalest syncable catalog last finished a pass (never:
 -- since it was created). One number, no catalog label (#87). Same

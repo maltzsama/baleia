@@ -575,6 +575,20 @@ func (q *Queries) ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalo
 	return items, nil
 }
 
+const pluginLastConfirmation = `-- name: PluginLastConfirmation :one
+SELECT max(updated_at)::timestamptz
+FROM trino_catalog_registry
+WHERE updated_by = 'trino'
+`
+
+// Last time the trino plugin confirmed a registry write (#291).
+func (q *Queries) PluginLastConfirmation(ctx context.Context) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, pluginLastConfirmation)
+	var column_1 pgtype.Timestamptz
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const setCatalogEnabled = `-- name: SetCatalogEnabled :exec
 UPDATE catalogs SET enabled = $2, updated_at = now() WHERE id = $1
 `
