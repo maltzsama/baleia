@@ -4,14 +4,20 @@ meta {
   seq: 4
 }
 
-get {
+post {
   url: {{base_url}}/api-keys
-  body: none
+  body: json
   auth: none
 }
 
 headers {
   X-Api-Key: {{api_key_secret}}
+}
+
+body:json {
+  {
+    "name": "nope"
+  }
 }
 
 assert {
