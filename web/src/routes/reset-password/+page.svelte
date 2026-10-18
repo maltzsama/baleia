@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { client } from '$lib/api/client';
+	import { PasswordInput } from '$lib/ui';
 
 	const MIN_LENGTH = 8;
 
@@ -63,9 +64,6 @@
 			busy = false;
 		}
 	}
-
-	const inputBase =
-		'w-full h-10 bg-bg-app dark:bg-[#1c2128] border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-text-muted focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.1)] focus:bg-bg-panel';
 </script>
 
 <svelte:head>
@@ -108,12 +106,10 @@
 							{error}
 						</div>
 					{/if}
-					<div class="flex flex-col gap-[5px] mb-3.5">
-						<label class="text-[11px] font-semibold" for="new-pw">New password</label>
-						<input
+					<div class="mb-3.5">
+						<PasswordInput
 							id="new-pw"
-							class={inputBase}
-							type="password"
+							label="New password"
 							autocomplete="new-password"
 							bind:value={newPassword}
 							placeholder="••••••••"
@@ -141,12 +137,10 @@
 							{/if}
 						</div>
 					</div>
-					<div class="flex flex-col gap-[5px] mb-3.5">
-						<label class="text-[11px] font-semibold" for="confirm-pw">Confirm password</label>
-						<input
+					<div class="mb-3.5">
+						<PasswordInput
 							id="confirm-pw"
-							class={inputBase}
-							type="password"
+							label="Confirm password"
 							autocomplete="new-password"
 							bind:value={confirmPassword}
 							placeholder="••••••••"

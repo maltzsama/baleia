@@ -31,4 +31,10 @@ describe('login page', () => {
 		).toBeTruthy();
 		expect(screen.getByPlaceholderText('you@company.com')).toBeTruthy();
 	});
+
+	it('renders the password field with a show/hide toggle', async () => {
+		render(LoginPage);
+
+		expect(await screen.findByRole('button', { name: 'Show password' })).toBeTruthy();
+	});
 });
