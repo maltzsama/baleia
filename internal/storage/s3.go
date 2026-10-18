@@ -164,3 +164,80 @@ func (c *S3Client) PresignedGetURL(ctx context.Context, key string, ttl time.Dur
 	}
 	return u.String(), nil
 }
+
+// ObjectReaderAt reads byte ranges of an S3 object on demand. It implements
+// io.ReaderAt + io.Seeker so the Arrow file reader can seek through a result
+// (footer, then the batches it needs) without downloading the whole object
+// (#238).
+type ObjectReaderAt struct {
+	ctx    context.Context
+	client *minio.Client
+	bucket string
+	key    string
+	size   int64
+	pos    int64
+}
+
+// NewReaderAt stats the object and returns a range reader over it.
+func (c *S3Client) NewReaderAt(ctx context.Context, key string) (*ObjectReaderAt, error) {
+	st, err := c.client.StatObject(ctx, c.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("s3 stat: %w", err)
+	}
+	return &ObjectReaderAt{ctx: ctx, client: c.client, bucket: c.bucket, key: key, size: st.Size}, nil
+}
+
+// Size is the object size in bytes.
+func (r *ObjectReaderAt) Size() int64 { return r.size }
+
+// ReadAt fetches p from the object at off with one ranged GET. A short read at
+// the end of the object returns io.EOF.
+func (r *ObjectReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	if off >= r.size || len(p) == 0 {
+		return 0, io.EOF
+	}
+	length := int64(len(p))
+	if off+length > r.size {
+		length = r.size - off
+	}
+	opts := minio.GetObjectOptions{}
+	// SetRange's end is inclusive (bytes=start-end).
+	if err := opts.SetRange(off, off+length-1); err != nil {
+		return 0, fmt.Errorf("s3 set range: %w", err)
+	}
+	obj, err := r.client.GetObject(r.ctx, r.bucket, r.key, opts)
+	if err != nil {
+		return 0, fmt.Errorf("s3 get: %w", err)
+	}
+	defer obj.Close()
+	n, err := io.ReadFull(obj, p[:length])
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return n, fmt.Errorf("s3 read range: %w", err)
+	}
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+// Read reads from the current position.
+func (r *ObjectReaderAt) Read(p []byte) (int, error) {
+	n, err := r.ReadAt(p, r.pos)
+	r.pos += int64(n)
+	return n, err
+}
+
+// Seek moves the current position; io.SeekEnd is relative to the object size.
+func (r *ObjectReaderAt) Seek(offset int64, whence int) (int64, error) {
+	switch whence {
+	case io.SeekStart:
+		r.pos = offset
+	case io.SeekCurrent:
+		r.pos += offset
+	case io.SeekEnd:
+		r.pos = r.size + offset
+	default:
+		return 0, fmt.Errorf("s3 seek: invalid whence %d", whence)
+	}
+	return r.pos, nil
+}

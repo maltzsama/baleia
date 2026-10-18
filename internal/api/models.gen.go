@@ -3031,6 +3031,12 @@ type GetStatementResultsParams struct {
 
 	// Format `arrow` (default) streams the stored IPC object unchanged. `csv`, `tsv` and `jsonl` convert it server-side, row by row, without materializing the result, and answer with `Content-Disposition: attachment`.
 	Format *string `form:"format,omitempty" json:"format,omitempty"`
+
+	// Offset First row to return when paging an Arrow file (0-based). With `limit`, the endpoint re-emits only the covering record batches so a client never downloads the whole result.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum rows to return when paging; 0 returns the whole result.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListFoldersParams defines parameters for ListFolders.

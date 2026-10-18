@@ -104,7 +104,7 @@
 		if (url === lastResultKey && retry === lastResultRetry) return;
 		lastResultKey = url;
 		lastResultRetry = retry;
-		void store.load(url);
+		void store.load(url, activeSet?.rows ?? 0);
 	});
 
 	onDestroy(() => store.cancel());

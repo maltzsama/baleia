@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"strconv"
 	"testing"
 	"time"
 	_ "time/tzdata"
@@ -14,6 +15,40 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/ipc"
 	"github.com/stretchr/testify/require"
 )
+
+// TestFileWriterIndexesBatches verifies the IPC file writer emits a footer that
+// a file reader can seek through, which is what makes block pagination (#238)
+// possible.
+func TestFileWriterIndexesBatches(t *testing.T) {
+	cols := []ColumnInfo{{Name: "n", Type: "bigint"}}
+	b, err := NewBatcher(cols)
+	require.NoError(t, err)
+	defer b.Release()
+
+	var buf bytes.Buffer
+	fw, err := NewFileWriter(&buf, b.Schema())
+	require.NoError(t, err)
+
+	const rows = recordBatchSize + 10 // two batches
+	values := make([][]interface{}, 0, rows)
+	for i := 0; i < rows; i++ {
+		values = append(values, []interface{}{json.Number(strconv.Itoa(i))})
+	}
+	require.NoError(t, b.Append(values, fw.Write))
+	require.NoError(t, b.Flush(fw.Write))
+	require.NoError(t, fw.Close())
+
+	fr, err := ipc.NewFileReader(bytes.NewReader(buf.Bytes()))
+	require.NoError(t, err)
+	defer fr.Close()
+
+	require.Equal(t, 2, fr.NumRecords())
+	// Random access by batch index works without reading prior batches.
+	second, err := fr.RecordBatchAt(1)
+	require.NoError(t, err)
+	require.Equal(t, int64(10), second.NumRows())
+}
+
 
 // roundTrip writes rows through the streaming writer and reads them back with
 // an IPC reader, returning the exact per-cell values.

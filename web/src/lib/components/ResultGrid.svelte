@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { toasts } from '$lib/ui/toast.svelte';
 	import { cellText, formatCell, fullJson, type ColumnMeta } from '$lib/results/format';
-	import type { ResultsStore } from '$lib/results/store.svelte';
+	import { RESULT_PAGE_SIZE, type ResultsStore } from '$lib/results/store.svelte';
 
 	let { store }: { store: ResultsStore } = $props();
 
@@ -48,6 +48,16 @@
 		const count = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
 		const last = Math.min(store.rowCount, first + Math.max(count, 1));
 		return Array.from({ length: Math.max(0, last - first) }, (_, i) => first + i);
+	});
+
+	// Fetch the pages that cover the visible rows. Rows whose page has not
+	// arrived yet render blank until it lands (#238).
+	$effect(() => {
+		const rows = visibleRows;
+		if (rows.length === 0 || store.rowCount === 0) return;
+		const firstPage = Math.floor(rows[0] / RESULT_PAGE_SIZE);
+		const lastPage = Math.floor(rows[rows.length - 1] / RESULT_PAGE_SIZE);
+		for (let page = firstPage; page <= lastPage; page++) void store.ensurePage(page);
 	});
 
 	function onScroll() {

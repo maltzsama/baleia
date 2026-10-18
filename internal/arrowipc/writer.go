@@ -59,6 +59,32 @@ func (r *RecordWriter) Write(rec arrow.RecordBatch) error {
 // Close writes the end-of-stream marker.
 func (r *RecordWriter) Close() error { return r.w.Close() }
 
+// FileWriter writes Arrow record batches as one IPC *file*: the footer records
+// the offset of every block, which is what lets a reader seek to a row range
+// instead of downloading the whole result (#238).
+type FileWriter struct{ w *ipc.FileWriter }
+
+// NewFileWriter starts an IPC file with the schema. The header is written
+// immediately; the footer is appended by Close.
+func NewFileWriter(w io.Writer, schema *arrow.Schema) (*FileWriter, error) {
+	fw, err := ipc.NewFileWriter(w, ipc.WithSchema(schema), ipc.WithAllocator(memory.NewGoAllocator()))
+	if err != nil {
+		return nil, fmt.Errorf("open arrow file: %w", err)
+	}
+	return &FileWriter{w: fw}, nil
+}
+
+// Write appends a batch; the caller keeps ownership of rec.
+func (f *FileWriter) Write(rec arrow.RecordBatch) error {
+	if err := f.w.Write(rec); err != nil {
+		return fmt.Errorf("write arrow batch: %w", err)
+	}
+	return nil
+}
+
+// Close writes the footer and block index.
+func (f *FileWriter) Close() error { return f.w.Close() }
+
 // Batcher converts Trino result rows into Arrow record batches of at most
 // recordBatchSize rows, preserving exact types (decimal128, exact integers,
 // timestamps with unit). It never holds more than one batch in memory.

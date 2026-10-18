@@ -5586,6 +5586,22 @@ func (siw *ServerInterfaceWrapper) GetStatementResults(w http.ResponseWriter, r 
 		return
 	}
 
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetStatementResults(w, r, id, executionId, position, params)
 	}))
@@ -9090,6 +9106,11 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	return r
 }
 
+type ArrowStreamApplicationvndApacheArrowFileResponse struct {
+	Body io.Reader
+
+	ContentLength int64
+}
 type ArrowStreamApplicationvndApacheArrowStreamResponse struct {
 	Body io.Reader
 
@@ -13552,6 +13573,24 @@ type GetResultsResponseObject interface {
 	VisitGetResultsResponse(w http.ResponseWriter) error
 }
 
+type GetResults200ApplicationvndApacheArrowFileResponse struct {
+	ArrowStreamApplicationvndApacheArrowFileResponse
+}
+
+func (response GetResults200ApplicationvndApacheArrowFileResponse) VisitGetResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/vnd.apache.arrow.file")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
 type GetResults200ApplicationvndApacheArrowStreamResponse struct {
 	ArrowStreamApplicationvndApacheArrowStreamResponse
 }
@@ -13642,6 +13681,24 @@ type GetStatementResultsRequestObject struct {
 
 type GetStatementResultsResponseObject interface {
 	VisitGetStatementResultsResponse(w http.ResponseWriter) error
+}
+
+type GetStatementResults200ApplicationvndApacheArrowFileResponse struct {
+	ArrowStreamApplicationvndApacheArrowFileResponse
+}
+
+func (response GetStatementResults200ApplicationvndApacheArrowFileResponse) VisitGetStatementResultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/vnd.apache.arrow.file")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
 }
 
 type GetStatementResults200ApplicationvndApacheArrowStreamResponse struct {

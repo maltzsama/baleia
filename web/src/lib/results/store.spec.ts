@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
-import { ResultsStore } from './store.svelte';
+import { ResultsStore, RESULT_PAGE_SIZE } from './store.svelte';
 
 function ipc(values: Record<string, unknown[]>): ArrayBuffer {
 	const bytes = tableToIPC(tableFromArrays(values), 'stream');
@@ -79,5 +79,34 @@ describe('ResultsStore', () => {
 
 		expect(store.error).toBe('statement has no result yet');
 		expect(store.done).toBe(false);
+	});
+
+	it('fetches pages on demand with offset and limit', async () => {
+		const calls: string[] = [];
+		const pageBytes = ipc({ id: [1, 2, 3] });
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				calls.push(String(url));
+				return new Response(pageBytes, {
+					status: 200,
+					headers: { 'X-Total-Rows': '1000000' }
+				});
+			})
+		);
+
+		const store = new ResultsStore();
+		await store.load('/workspaces/ws/executions/e/statements/1/results', 0);
+
+		expect(calls[0]).toContain('offset=0');
+		expect(calls[0]).toContain(`limit=${RESULT_PAGE_SIZE}`);
+		expect(store.rowCount).toBe(1000000);
+		expect(store.cell(1, 0)).toBe(2);
+
+		await store.ensurePage(1);
+		expect(calls[1]).toContain(`offset=${RESULT_PAGE_SIZE}`);
+		expect(store.cell(RESULT_PAGE_SIZE + 1, 0)).toBe(2);
+		// A page that has not been fetched reads as null, not a wrong value.
+		expect(store.cell(3 * RESULT_PAGE_SIZE, 0)).toBeNull();
 	});
 });

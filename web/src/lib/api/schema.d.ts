@@ -2072,6 +2072,10 @@ export interface paths {
                 result_index?: number;
                 /** @description `arrow` (default) streams the stored IPC object unchanged. `csv`, `tsv` and `jsonl` convert it server-side, row by row, without materializing the result, and answer with `Content-Disposition: attachment`. */
                 format?: "arrow" | "csv" | "tsv" | "jsonl";
+                /** @description First row to return when paging an Arrow file (0-based). With `limit`, the endpoint re-emits only the covering record batches so a client never downloads the whole result. */
+                offset?: number;
+                /** @description Maximum rows to return when paging; 0 returns the whole result. */
+                limit?: number;
             };
             header?: never;
             path: {
@@ -4486,13 +4490,14 @@ export interface components {
                 "application/json": components["schemas"]["ValidationError"];
             };
         };
-        /** @description Apache Arrow IPC stream */
+        /** @description Apache Arrow IPC. An unpaged read streams the stored object unchanged (`stream` for legacy results, `file` for results written after #238); a paged read (`offset`/`limit`) always returns a `stream`. */
         ArrowStream: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
                 "application/vnd.apache.arrow.stream": string;
+                "application/vnd.apache.arrow.file": string;
             };
         };
     };
@@ -8243,6 +8248,10 @@ export interface operations {
                 result_index?: number;
                 /** @description `arrow` (default) streams the stored IPC object unchanged. `csv`, `tsv` and `jsonl` convert it server-side, row by row, without materializing the result, and answer with `Content-Disposition: attachment`. */
                 format?: "arrow" | "csv" | "tsv" | "jsonl";
+                /** @description First row to return when paging an Arrow file (0-based). With `limit`, the endpoint re-emits only the covering record batches so a client never downloads the whole result. */
+                offset?: number;
+                /** @description Maximum rows to return when paging; 0 returns the whole result. */
+                limit?: number;
             };
             header?: never;
             path: {

@@ -89,7 +89,7 @@ var recordHeartbeat = activity.RecordHeartbeat
 var statementTransportBackoff = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
 
 // arrowContentType is the MIME type used for stored Arrow IPC streams.
-const arrowContentType = "application/vnd.apache.arrow.stream"
+const arrowContentType = "application/vnd.apache.arrow.file"
 
 // errResultCapReached signals that a statement hit the row/byte cap. It is an
 // internal sentinel, converted to a truncated (not failed) result.
@@ -495,7 +495,9 @@ func s3ResultKey(executionID string, position, resultIndex int) string {
 }
 
 // resultSink streams the first result set of a statement to object storage as
-// one Arrow IPC object: batch -> IPC writer -> io.Pipe -> S3 multipart upload.
+// one Arrow IPC *file*: batch -> IPC file writer -> io.Pipe -> S3 multipart
+// upload. The file footer indexes every block, so the results endpoint can
+// later seek to a row range instead of re-reading the whole object (#238).
 // A result set without columns (DDL/DML) uploads nothing. Past the row or byte
 // cap it stops the statement with errResultCapReached; the stored result is
 // then truncated, not failed.
@@ -508,7 +510,7 @@ type resultSink struct {
 	began     bool
 	sets      int
 	key       string
-	writer    *arrowipc.RecordWriter
+	writer    *arrowipc.FileWriter
 	pw        *io.PipeWriter
 	cw        *countingWriter
 	done      chan struct{}
@@ -528,7 +530,12 @@ func (s *resultSink) Begin(schema *arrow.Schema) error {
 	pr, pw := io.Pipe()
 	s.pw = pw
 	s.cw = &countingWriter{w: pw}
-	s.writer = arrowipc.NewRecordWriter(s.cw, schema)
+	writer, err := arrowipc.NewFileWriter(s.cw, schema)
+	if err != nil {
+		_ = pw.CloseWithError(err)
+		return err
+	}
+	s.writer = writer
 	s.done = make(chan struct{})
 	go func() {
 		defer close(s.done)
