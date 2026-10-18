@@ -10,8 +10,9 @@ import (
 )
 
 func csrfFixture(called *bool) func(context.Context, http.ResponseWriter, *http.Request, interface{}) (interface{}, error) {
-	return func(context.Context, http.ResponseWriter, *http.Request, interface{}) (interface{}, error) {
+	return func(_ context.Context, w http.ResponseWriter, _ *http.Request, _ interface{}) (interface{}, error) {
 		*called = true
+		w.WriteHeader(http.StatusOK)
 		return nil, nil
 	}
 }

@@ -15,11 +15,13 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// testBcryptCost keeps password tests cheap; it is the configured minimum.
+const testBcryptCost = 10
+
 func newAuthFixture(t *testing.T) *auditFixture {
 	t.Helper()
 	f := newAuditFixture(t)
-	// Keep bcrypt cheap; the timing-specific test uses its own cost.
-	f.h.cfg.BcryptCost = 10
+	f.h.cfg.BcryptCost = testBcryptCost
 	return f
 }
 
@@ -195,7 +197,7 @@ func TestLogout_CookieRevokesFamily(t *testing.T) {
 // 8-character minimum even though oapi-codegen does not validate bodies.
 func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
 	pool := testdb.New(t)
-	h := &Handlers{queries: db.New(pool), cfg: &config.Config{BcryptCost: 10}}
+	h := &Handlers{queries: db.New(pool), cfg: &config.Config{BcryptCost: testBcryptCost}}
 	resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
 		Body: &CreateAdminRequest{Name: "Admin", Email: "admin@example.test", Password: "short"},
 	})

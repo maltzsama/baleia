@@ -522,14 +522,7 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 
 	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, request.Body.CurrentPassword) {
 		return UpdatePassword422JSONResponse{
-			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-				Code:    "validation_error",
-				Message: "current password is incorrect",
-				Errors: []struct {
-					Field   *string `json:"field,omitempty"`
-					Message *string `json:"message,omitempty"`
-				}{},
-			},
+			UnprocessableEntityJSONResponse: unprocessable("validation_error", "current password is incorrect"),
 		}, nil
 	}
 	if len(request.Body.NewPassword) < minPasswordLength {
