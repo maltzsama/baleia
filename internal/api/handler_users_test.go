@@ -15,6 +15,7 @@ import (
 type fakeUserDeleter struct {
 	db.Querier
 	deleteErr error
+	revoked   bool
 }
 
 func (f *fakeUserDeleter) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
@@ -22,6 +23,11 @@ func (f *fakeUserDeleter) GetUserByID(context.Context, pgtype.UUID) (db.User, er
 }
 
 func (f *fakeUserDeleter) DeleteUser(context.Context, pgtype.UUID) error { return f.deleteErr }
+
+func (f *fakeUserDeleter) RevokeUserRefreshTokens(context.Context, pgtype.UUID) error {
+	f.revoked = true
+	return nil
+}
 
 // TestRemoveUserConflict: a user the database still references is refused
 // with 409, not 500; the owner of a workspace gets user_owns_workspace.
@@ -59,5 +65,24 @@ func TestRemoveUserConflict(t *testing.T) {
 	h := &Handlers{queries: &fakeUserDeleter{deleteErr: errors.New("connection reset")}}
 	if _, err := h.RemoveUser(ctx, RemoveUserRequestObject{}); err == nil {
 		t.Error("a non-FK failure must stay an error")
+	}
+}
+
+// TestDisable_RevokesRefresh: removing (disabling) a user ends their refresh
+// tokens (#51).
+func TestDisable_RevokesRefresh(t *testing.T) {
+	fake := &fakeUserDeleter{}
+	h := &Handlers{queries: fake}
+	ctx := context.WithValue(context.Background(), auth.ContextKeyRole, "admin")
+
+	resp, err := h.RemoveUser(ctx, RemoveUserRequestObject{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(RemoveUser204Response); !ok {
+		t.Fatalf("RemoveUser = %T, want 204", resp)
+	}
+	if !fake.revoked {
+		t.Error("RemoveUser did not revoke the user's refresh tokens")
 	}
 }
