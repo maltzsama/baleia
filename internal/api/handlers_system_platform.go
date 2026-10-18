@@ -245,7 +245,7 @@ func (h *Handlers) pluginStatus(ctx context.Context) SystemStatusResource {
 	if h.queries == nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	last, err := h.queries.PluginLastConfirmation(ctx)
+	last, err := h.queries.PluginLastConfirmation(ctx, "trino")
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}

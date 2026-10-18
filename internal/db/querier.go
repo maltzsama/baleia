@@ -411,8 +411,9 @@ type Querier interface {
 	// managed, never adopted, for the reconciler (#37) to drop.
 	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
 	PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error)
-	// Last time the trino plugin confirmed a registry write (#291).
-	PluginLastConfirmation(ctx context.Context) (pgtype.Timestamptz, error)
+	// Last time the plugin confirmed a registry write (#291). The writer is a
+	// parameter because only the plugin may claim it (contract test).
+	PluginLastConfirmation(ctx context.Context, updatedBy string) (pgtype.Timestamptz, error)
 	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
 	// Tombstones older than 7 days go: the explorer shows "removed" for a while,
 	// history does not grow forever.
