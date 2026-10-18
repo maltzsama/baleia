@@ -365,14 +365,13 @@
 			id: 'queries',
 			label: 'Saved queries',
 			search: async (query) => {
-				if (workspaceId && savedQueries.workspaceId !== workspaceId) await savedQueries.reload(workspaceId);
+				if (workspaceId && savedQueries.workspaceId !== workspaceId)
+					await savedQueries.reload(workspaceId);
 				const q = query.trim().toLowerCase();
 				return savedQueries.list
 					.filter(
 						(item) =>
-							!q ||
-							item.name.toLowerCase().includes(q) ||
-							item.slug.toLowerCase().includes(q)
+							!q || item.name.toLowerCase().includes(q) || item.slug.toLowerCase().includes(q)
 					)
 					.slice(0, 20)
 					.map((item) => ({
