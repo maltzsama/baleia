@@ -567,6 +567,11 @@ func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
 		return
 	}
+	nonce, err := auth.GenerateNonce()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
+		return
+	}
 	state := randomState()
 
 	var redirect *string
@@ -577,6 +582,7 @@ func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
 	if err := h.queries.CreateOIDCLoginAttempt(r.Context(), db.CreateOIDCLoginAttemptParams{
 		State:        state,
 		ProviderID:   apID,
+		Nonce:        &nonce,
 		CodeVerifier: verifier,
 		Redirect:     redirect,
 		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(auth.OIDCAttemptTTL), Valid: true},
@@ -595,7 +601,7 @@ func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   int(auth.OIDCAttemptTTL / time.Second),
 	})
 
-	authURL, err := provider.AuthURL(state, challenge)
+	authURL, err := provider.AuthURL(state, challenge, nonce)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
 		return
@@ -689,7 +695,11 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := provider.Exchange(r.Context(), r.URL.Query().Get("code"), attempt.CodeVerifier)
+	nonce := ""
+	if attempt.Nonce != nil {
+		nonce = *attempt.Nonce
+	}
+	info, err := provider.Exchange(r.Context(), r.URL.Query().Get("code"), attempt.CodeVerifier, nonce)
 	if err != nil {
 		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
 		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
