@@ -69,7 +69,7 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 	}
 
 	tempPassword := randomState()
-	hash, err := auth.HashPassword(tempPassword)
+	hash, err := auth.HashPasswordWithCost(tempPassword, h.cfg.PasswordCost())
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,21 @@ const MinJWTSecretLen = 16
 // MinEncryptionKeyLen is the minimum accepted length for BALEIA_ENCRYPTION_KEY.
 const MinEncryptionKeyLen = 32
 
+// Authentication token and password defaults (#51). A zero field means the
+// default below, so a Config built without Load still gets safe values.
+const (
+	DefaultAccessTokenTTL  = 15 * time.Minute
+	DefaultRefreshTokenTTL = 30 * 24 * time.Hour
+	DefaultResetTokenTTL   = 30 * time.Minute
+
+	// DefaultBcryptCost is the production default. MinBcryptCost is bcrypt's
+	// own lower bound; MaxBcryptCost keeps a bad configuration from making
+	// every login pathologically slow.
+	DefaultBcryptCost = 12
+	MinBcryptCost     = 10
+	MaxBcryptCost     = 31
+)
+
 type Config struct {
 	Port         string
 	DatabaseURL  string
@@ -39,6 +54,13 @@ type Config struct {
 	// identity for their queries: "uuid" (u_<uuid>) or "email".
 	TrinoUserIdentity string
 	JWTSecret         string
+	// AccessTokenTTL, RefreshTokenTTL and ResetTokenTTL configure token
+	// lifetimes (#51); zero means the default.
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+	ResetTokenTTL   time.Duration
+	// BcryptCost is the password-hashing cost (#51); zero means the default.
+	BcryptCost int
 	// EncryptionKey seals connection credentials at rest. It is deliberately
 	// separate from JWTSecret so rotating the signing secret never touches stored
 	// credentials. EncryptionKeyPrevious is set only during a key rotation.
@@ -133,6 +155,10 @@ func Load() *Config {
 		TrinoServiceUser:      getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
 		TrinoUserIdentity:     getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
 		JWTSecret:             getEnv("JWT_SECRET", DefaultJWTSecret),
+		AccessTokenTTL:        getEnvDuration("BALEIA_ACCESS_TOKEN_TTL", DefaultAccessTokenTTL),
+		RefreshTokenTTL:       getEnvDuration("BALEIA_REFRESH_TOKEN_TTL", DefaultRefreshTokenTTL),
+		ResetTokenTTL:         getEnvDuration("BALEIA_RESET_TOKEN_TTL", DefaultResetTokenTTL),
+		BcryptCost:            getEnvInt("BALEIA_BCRYPT_COST", DefaultBcryptCost),
 		EncryptionKey:         getEnv("BALEIA_ENCRYPTION_KEY", ""),
 		EncryptionKeyPrevious: getEnv("BALEIA_ENCRYPTION_KEY_PREVIOUS", ""),
 		PublicURL:             getEnv("PUBLIC_URL", "http://localhost:8080"),
@@ -239,7 +265,55 @@ func (c *Config) Validate() error {
 	if c.ExecutionTimeout != 0 && c.ExecutionTimeout < time.Minute {
 		return fmt.Errorf("BALEIA_EXECUTION_TIMEOUT must be at least 1m (got %s)", c.ExecutionTimeout)
 	}
+	for _, ttl := range []struct {
+		name string
+		v    time.Duration
+	}{
+		{"BALEIA_ACCESS_TOKEN_TTL", c.AccessTokenTTL},
+		{"BALEIA_REFRESH_TOKEN_TTL", c.RefreshTokenTTL},
+		{"BALEIA_RESET_TOKEN_TTL", c.ResetTokenTTL},
+	} {
+		if ttl.v < 0 {
+			return fmt.Errorf("%s must be positive (got %s)", ttl.name, ttl.v)
+		}
+	}
+	if c.BcryptCost != 0 && (c.BcryptCost < MinBcryptCost || c.BcryptCost > MaxBcryptCost) {
+		return fmt.Errorf("BALEIA_BCRYPT_COST must be between %d and %d (got %d)", MinBcryptCost, MaxBcryptCost, c.BcryptCost)
+	}
 	return nil
+}
+
+// AccessTTL is the access-token lifetime; zero means DefaultAccessTokenTTL.
+func (c *Config) AccessTTL() time.Duration {
+	if c.AccessTokenTTL <= 0 {
+		return DefaultAccessTokenTTL
+	}
+	return c.AccessTokenTTL
+}
+
+// RefreshTTL is the refresh-token lifetime; zero means DefaultRefreshTokenTTL.
+func (c *Config) RefreshTTL() time.Duration {
+	if c.RefreshTokenTTL <= 0 {
+		return DefaultRefreshTokenTTL
+	}
+	return c.RefreshTokenTTL
+}
+
+// ResetTTL is the password-reset token lifetime; zero means
+// DefaultResetTokenTTL.
+func (c *Config) ResetTTL() time.Duration {
+	if c.ResetTokenTTL <= 0 {
+		return DefaultResetTokenTTL
+	}
+	return c.ResetTokenTTL
+}
+
+// PasswordCost is the bcrypt cost; zero means DefaultBcryptCost.
+func (c *Config) PasswordCost() int {
+	if c.BcryptCost <= 0 {
+		return DefaultBcryptCost
+	}
+	return c.BcryptCost
 }
 
 // splitList splits a comma-separated list, ignoring blanks.
