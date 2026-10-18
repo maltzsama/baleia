@@ -19,6 +19,7 @@
 	let widths = $state<Record<string, number>>({});
 	let selected = $state<{ row: number; col: number } | null>(null);
 	let expanded = $state<{ value: unknown; column: ColumnMeta } | null>(null);
+	let retryTick = $state(0);
 
 	type Layout = { column: ColumnMeta; index: number; start: number; width: number };
 
@@ -54,10 +55,13 @@
 	// arrived yet render blank until it lands (#238).
 	$effect(() => {
 		const rows = visibleRows;
+		void retryTick;
 		if (rows.length === 0 || store.rowCount === 0) return;
 		const firstPage = Math.floor(rows[0] / RESULT_PAGE_SIZE);
 		const lastPage = Math.floor(rows[rows.length - 1] / RESULT_PAGE_SIZE);
-		for (let page = firstPage; page <= lastPage; page++) void store.ensurePage(page);
+		for (let page = firstPage; page <= lastPage; page++) {
+			void store.ensurePage(page).catch(() => {});
+		}
 	});
 
 	function onScroll() {
@@ -88,16 +92,18 @@
 		}
 		if (event.key === 'Enter') {
 			event.preventDefault();
-			expandAt(row, col);
+			void expandAt(row, col);
 		} else if (event.key === 'c' && (event.ctrlKey || event.metaKey)) {
 			event.preventDefault();
-			copyCell();
+			void copyCell();
 		}
 	}
 
-	function expandAt(row: number, col: number) {
+	async function expandAt(row: number, col: number) {
 		const column = store.columns[col];
 		if (!column?.nested) return;
+		// The selected page may have been evicted; load it before reading.
+		await store.ensurePage(Math.floor(row / RESULT_PAGE_SIZE)).catch(() => {});
 		expanded = { value: store.cell(row, col), column };
 	}
 
@@ -110,29 +116,38 @@
 		}
 	}
 
-	function copyCell() {
+	async function copyCell() {
 		if (!selected) return;
 		const column = store.columns[selected.col];
 		if (!column) return;
+		await store.ensurePage(Math.floor(selected.row / RESULT_PAGE_SIZE)).catch(() => {});
 		void copy(cellText(store.cell(selected.row, selected.col), column));
 	}
 
-	function copyRow() {
+	async function copyRow() {
 		if (!selected) return;
 		const row = selected.row;
+		await store.ensurePage(Math.floor(row / RESULT_PAGE_SIZE)).catch(() => {});
 		const line = store.columns
 			.map((column, index) => cellText(store.cell(row, index), column))
 			.join('\t');
 		void copy(line);
 	}
 
-	function copyColumn() {
+	async function copyColumn() {
 		if (!selected) return;
 		const column = store.columns[selected.col];
 		if (!column) return;
+		// Walk the pages so evicted rows are refetched and read in order.
 		const lines: string[] = [];
-		for (let row = 0; row < store.rowCount; row++) {
-			lines.push(cellText(store.cell(row, selected.col), column));
+		const pages = Math.ceil(store.rowCount / RESULT_PAGE_SIZE);
+		for (let page = 0; page < pages; page++) {
+			await store.ensurePage(page).catch(() => {});
+			const start = page * RESULT_PAGE_SIZE;
+			const end = Math.min(start + RESULT_PAGE_SIZE, store.rowCount);
+			for (let row = start; row < end; row++) {
+				lines.push(cellText(store.cell(row, selected.col), column));
+			}
 		}
 		void copy(lines.join('\n'));
 	}
@@ -197,11 +212,23 @@
 				type="button"
 				class="rounded px-1.5 py-0.5 text-primary hover:bg-bg-toolbar"
 				onclick={() => {
-					if (selected) expandAt(selected.row, selected.col);
+					if (selected) void expandAt(selected.row, selected.col);
 				}}>Expand</button
 			>
 		{/if}
 	</div>
+
+	{#if store.pageError}
+		<div
+			class="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1 text-[11px] text-amber-700 dark:border-[#4d3600] dark:bg-[#241a06] dark:text-amber-300"
+			role="status"
+		>
+			<span class="flex-1">Could not load some rows: {store.pageError}</span>
+			<button type="button" class="font-semibold underline" onclick={() => retryTick++}
+				>Retry</button
+			>
+		</div>
+	{/if}
 
 	<div
 		bind:this={scrollEl}
