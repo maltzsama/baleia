@@ -43,14 +43,19 @@ func TestOIDC_FullFlowWithPKCE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	nonce, err := auth.GenerateNonce()
+	if err != nil {
+		t.Fatal(err)
+	}
 	idp, err := oidctest.New(challenge, "client")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer idp.Close()
+	idp.Nonce = nonce
 	provider := newProvider(t, idp)
 
-	authURL, err := provider.AuthURL("state-1", challenge)
+	authURL, err := provider.AuthURL("state-1", challenge, nonce)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,11 +67,14 @@ func TestOIDC_FullFlowWithPKCE(t *testing.T) {
 	if q.Get("state") != "state-1" {
 		t.Errorf("state = %q", q.Get("state"))
 	}
+	if q.Get("nonce") != nonce {
+		t.Errorf("nonce = %q, want %q", q.Get("nonce"), nonce)
+	}
 	if q.Get("code_challenge") != challenge || q.Get("code_challenge_method") != "S256" {
 		t.Errorf("PKCE params = challenge %q method %q", q.Get("code_challenge"), q.Get("code_challenge_method"))
 	}
 
-	info, err := provider.Exchange(context.Background(), "code-1", verifier)
+	info, err := provider.Exchange(context.Background(), "code-1", verifier, nonce)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,15 +89,43 @@ func TestOIDC_BadVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	nonce, err := auth.GenerateNonce()
+	if err != nil {
+		t.Fatal(err)
+	}
 	idp, err := oidctest.New(challenge, "client")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer idp.Close()
+	idp.Nonce = nonce
 	provider := newProvider(t, idp)
 
-	if _, err := provider.Exchange(context.Background(), "code-1", "wrong-verifier"); err == nil {
+	if _, err := provider.Exchange(context.Background(), "code-1", "wrong-verifier", nonce); err == nil {
 		t.Fatal("the provider accepted a mismatched PKCE verifier")
+	}
+}
+
+// TestOIDC_NonceMismatch: the ID token must carry the nonce from the attempt.
+func TestOIDC_NonceMismatch(t *testing.T) {
+	verifier, challenge, err := auth.GeneratePKCE()
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce, err := auth.GenerateNonce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	idp, err := oidctest.New(challenge, "client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idp.Close()
+	idp.Nonce = "wrong-nonce"
+	provider := newProvider(t, idp)
+
+	if _, err := provider.Exchange(context.Background(), "code-1", verifier, nonce); err == nil {
+		t.Fatal("the provider accepted a mismatched nonce")
 	}
 }
 
@@ -97,6 +133,7 @@ func TestOIDC_BadVerifier(t *testing.T) {
 // without a challenge/verifier (#250 forbids a no-PKCE path).
 func TestOIDC_NoPKCE(t *testing.T) {
 	_, challenge, _ := auth.GeneratePKCE()
+	nonce, _ := auth.GenerateNonce()
 	idp, err := oidctest.New(challenge, "client")
 	if err != nil {
 		t.Fatal(err)
@@ -104,10 +141,16 @@ func TestOIDC_NoPKCE(t *testing.T) {
 	defer idp.Close()
 	provider := newProvider(t, idp)
 
-	if _, err := provider.AuthURL("state-1", ""); err == nil {
+	if _, err := provider.AuthURL("state-1", "", nonce); err == nil {
 		t.Error("AuthURL accepted an empty challenge")
 	}
-	if _, err := provider.Exchange(context.Background(), "code-1", ""); err == nil {
+	if _, err := provider.AuthURL("state-1", challenge, ""); err == nil {
+		t.Error("AuthURL accepted an empty nonce")
+	}
+	if _, err := provider.Exchange(context.Background(), "code-1", "", nonce); err == nil {
 		t.Error("Exchange accepted an empty verifier")
+	}
+	if _, err := provider.Exchange(context.Background(), "code-1", "verifier", ""); err == nil {
+		t.Error("Exchange accepted an empty nonce")
 	}
 }

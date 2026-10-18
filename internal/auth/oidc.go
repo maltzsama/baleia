@@ -33,6 +33,15 @@ func GeneratePKCE() (verifier, challenge string, err error) {
 	return verifier, PKCEChallenge(verifier), nil
 }
 
+// GenerateNonce returns a 32-byte nonce for the OIDC request (#277).
+func GenerateNonce() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
 // PKCEChallenge is the S256 challenge for a verifier.
 func PKCEChallenge(verifier string) string {
 	sum := sha256.Sum256([]byte(verifier))
@@ -83,20 +92,23 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 	}, nil
 }
 
-// AuthURL builds the authorization URL with a mandatory S256 PKCE challenge.
-func (p *OIDCProvider) AuthURL(state, challenge string) (string, error) {
-	if state == "" || challenge == "" {
-		return "", errors.New("oidc: state and PKCE challenge are required")
+// AuthURL builds the authorization URL with a mandatory S256 PKCE challenge
+// and nonce.
+func (p *OIDCProvider) AuthURL(state, challenge, nonce string) (string, error) {
+	if state == "" || challenge == "" || nonce == "" {
+		return "", errors.New("oidc: state, PKCE challenge and nonce are required")
 	}
 	return p.config.AuthCodeURL(state, oauth2.AccessTypeOnline,
 		oauth2.SetAuthURLParam("code_challenge", challenge),
-		oauth2.SetAuthURLParam("code_challenge_method", "S256")), nil
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+		oidc.Nonce(nonce)), nil
 }
 
-// Exchange redeems the code with the server-side PKCE verifier.
-func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier string) (*OIDCUserInfo, error) {
-	if verifier == "" {
-		return nil, errors.New("oidc: PKCE verifier is required")
+// Exchange redeems the code with the server-side PKCE verifier and checks the
+// ID token nonce against the one stored with the attempt.
+func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier, nonce string) (*OIDCUserInfo, error) {
+	if verifier == "" || nonce == "" {
+		return nil, errors.New("oidc: PKCE verifier and nonce are required")
 	}
 	token, err := p.config.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
@@ -111,6 +123,9 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier string) (*OI
 	idToken, err := p.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		return nil, fmt.Errorf("token verify: %w", err)
+	}
+	if idToken.Nonce != nonce {
+		return nil, errors.New("oidc: nonce mismatch")
 	}
 
 	var claims struct {
