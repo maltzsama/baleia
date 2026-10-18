@@ -97,6 +97,9 @@ const (
 	EphemeralCatalogSweeper = "ephemeral-catalog-sweeper"
 	// TokenCleanup prunes expired refresh and password-reset tokens (#51).
 	TokenCleanup = "token-cleanup"
+	// DirectoryReconcile suspends/ reinstates users from the LDAP directory
+	// (#257).
+	DirectoryReconcile = "directory-reconcile"
 )
 
 // Remove deletes a schedule an earlier configuration created; a schedule

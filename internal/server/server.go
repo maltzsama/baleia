@@ -365,6 +365,11 @@ func authenticateAPIKey(ctx context.Context, queries db.Querier, raw string) (co
 	if err != nil {
 		return ctx, false
 	}
+	// A suspended user cannot use an API key (#283). The response stays the
+	// uniform "invalid api key" so the key's owner is not revealed.
+	if err := auth.RequireActive(user.Status); err != nil {
+		return ctx, false
+	}
 	ctx = context.WithValue(ctx, auth.ContextKeyUserID, user.ID.String())
 	ctx = context.WithValue(ctx, auth.ContextKeyRole, user.Role)
 	ctx = audit.WithAuthMethod(ctx, audit.AuthAPIKey)

@@ -61,6 +61,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/directory-reconcile-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Directory reconciliation runs — admin only
+         * @description One row per pass, newest first. `aborted_safety` means the brake refused a mass suspension.
+         */
+        get: operations["listDirectoryReconcileRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -420,6 +440,50 @@ export interface paths {
         head?: never;
         /** Update user role — admin only */
         patch: operations["updateUserRole"];
+        trace?: never;
+    };
+    "/users/{id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend a user — admin only
+         * @description Suspends without deleting, revokes the user's refresh tokens and API keys, and audits the change. The user is never deleted.
+         */
+        post: operations["suspendUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reinstate a user — admin only
+         * @description Clears the suspension and audits the change.
+         */
+        post: operations["reinstateUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/me": {
@@ -3097,6 +3161,37 @@ export interface components {
             /** @enum {string} */
             role: "admin" | "member";
         };
+        SuspendUserRequest: {
+            /**
+             * @default admin
+             * @enum {string}
+             */
+            reason: "admin" | "policy";
+        };
+        DirectoryReconcileAction: {
+            /** Format: uuid */
+            user_id?: string;
+            /** @enum {string} */
+            action?: "suspend" | "reinstate" | "role" | "team";
+            detail?: string;
+        };
+        DirectoryReconcileRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            provider_id: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at?: string | null;
+            /** @enum {string} */
+            outcome: "success" | "error" | "aborted_safety";
+            seen: number;
+            suspended: number;
+            reinstated: number;
+            error?: string;
+            actions: components["schemas"]["DirectoryReconcileAction"][];
+        };
         Team: {
             /** Format: uuid */
             id: string;
@@ -4993,6 +5088,32 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    listDirectoryReconcileRuns: {
+        parameters: {
+            query?: {
+                provider_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryReconcileRun"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -5016,6 +5137,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
@@ -5522,6 +5644,60 @@ export interface operations {
         };
         responses: {
             /** @description User updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPublic"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    suspendUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SuspendUserRequest"];
+            };
+        };
+        responses: {
+            /** @description User suspended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPublic"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    reinstateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User reinstated */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -9,8 +9,8 @@ import (
 
 func TestCore(t *testing.T) {
 	specs := Core(90 * time.Second)
-	if len(specs) != 8 {
-		t.Fatalf("Core returned %d specs, want 8", len(specs))
+	if len(specs) != 9 {
+		t.Fatalf("Core returned %d specs, want 9", len(specs))
 	}
 	seen := make(map[string]bool, len(specs))
 	for _, spec := range specs {

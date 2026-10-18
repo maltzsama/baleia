@@ -18,6 +18,9 @@ import (
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Directory reconciliation runs — admin only
+	// (GET /admin/directory-reconcile-runs)
+	ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request, params ListDirectoryReconcileRunsParams)
 	// List configured identity providers — admin only
 	// (GET /admin/identity-providers)
 	ListIdentityProviders(w http.ResponseWriter, r *http.Request)
@@ -330,6 +333,12 @@ type ServerInterface interface {
 	// Update user role — admin only
 	// (PATCH /users/{id})
 	UpdateUserRole(w http.ResponseWriter, r *http.Request, id PathId)
+	// Reinstate a user — admin only
+	// (POST /users/{id}/reinstate)
+	ReinstateUser(w http.ResponseWriter, r *http.Request, id PathId)
+	// Suspend a user — admin only
+	// (POST /users/{id}/suspend)
+	SuspendUser(w http.ResponseWriter, r *http.Request, id PathId)
 	// List workspaces accessible to current user
 	// (GET /workspaces)
 	ListWorkspaces(w http.ResponseWriter, r *http.Request)
@@ -560,6 +569,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// Directory reconciliation runs — admin only
+// (GET /admin/directory-reconcile-runs)
+func (_ Unimplemented) ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request, params ListDirectoryReconcileRunsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // List configured identity providers — admin only
 // (GET /admin/identity-providers)
@@ -1185,6 +1200,18 @@ func (_ Unimplemented) UpdateUserRole(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Reinstate a user — admin only
+// (POST /users/{id}/reinstate)
+func (_ Unimplemented) ReinstateUser(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Suspend a user — admin only
+// (POST /users/{id}/suspend)
+func (_ Unimplemented) SuspendUser(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List workspaces accessible to current user
 // (GET /workspaces)
 func (_ Unimplemented) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
@@ -1643,6 +1670,49 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListDirectoryReconcileRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDirectoryReconcileRunsParams
+
+	// ------------- Optional query parameter "provider_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "provider_id", r.URL.Query(), &params.ProviderId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDirectoryReconcileRuns(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListIdentityProviders operation middleware
 func (siw *ServerInterfaceWrapper) ListIdentityProviders(w http.ResponseWriter, r *http.Request) {
@@ -5197,6 +5267,72 @@ func (siw *ServerInterfaceWrapper) UpdateUserRole(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateUserRole(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReinstateUser operation middleware
+func (siw *ServerInterfaceWrapper) ReinstateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReinstateUser(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SuspendUser operation middleware
+func (siw *ServerInterfaceWrapper) SuspendUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SuspendUser(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8949,6 +9085,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/directory-reconcile-runs", wrapper.ListDirectoryReconcileRuns)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/identity-providers", wrapper.ListIdentityProviders)
 	})
 	r.Group(func(r chi.Router) {
@@ -9261,6 +9400,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/users/{id}", wrapper.UpdateUserRole)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users/{id}/reinstate", wrapper.ReinstateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users/{id}/suspend", wrapper.SuspendUser)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces", wrapper.ListWorkspaces)
 	})
 	r.Group(func(r chi.Router) {
@@ -9514,6 +9659,52 @@ type ServiceUnavailableJSONResponse Error
 type UnauthorizedJSONResponse Error
 
 type UnprocessableEntityJSONResponse ValidationError
+
+type ListDirectoryReconcileRunsRequestObject struct {
+	Params ListDirectoryReconcileRunsParams
+}
+
+type ListDirectoryReconcileRunsResponseObject interface {
+	VisitListDirectoryReconcileRunsResponse(w http.ResponseWriter) error
+}
+
+type ListDirectoryReconcileRuns200JSONResponse []DirectoryReconcileRun
+
+func (response ListDirectoryReconcileRuns200JSONResponse) VisitListDirectoryReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDirectoryReconcileRuns401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListDirectoryReconcileRuns401JSONResponse) VisitListDirectoryReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDirectoryReconcileRuns403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListDirectoryReconcileRuns403JSONResponse) VisitListDirectoryReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDirectoryReconcileRuns422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListDirectoryReconcileRuns422JSONResponse) VisitListDirectoryReconcileRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
 
 type ListIdentityProvidersRequestObject struct {
 }
@@ -10147,6 +10338,15 @@ type Login401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response Login401JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type Login403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response Login403JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -13769,6 +13969,95 @@ func (response UpdateUserRole404JSONResponse) VisitUpdateUserRoleResponse(w http
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ReinstateUserRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ReinstateUserResponseObject interface {
+	VisitReinstateUserResponse(w http.ResponseWriter) error
+}
+
+type ReinstateUser200JSONResponse UserPublic
+
+func (response ReinstateUser200JSONResponse) VisitReinstateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReinstateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReinstateUser401JSONResponse) VisitReinstateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReinstateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReinstateUser403JSONResponse) VisitReinstateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReinstateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReinstateUser404JSONResponse) VisitReinstateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SuspendUserRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *SuspendUserJSONRequestBody
+}
+
+type SuspendUserResponseObject interface {
+	VisitSuspendUserResponse(w http.ResponseWriter) error
+}
+
+type SuspendUser200JSONResponse UserPublic
+
+func (response SuspendUser200JSONResponse) VisitSuspendUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SuspendUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SuspendUser401JSONResponse) VisitSuspendUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SuspendUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SuspendUser403JSONResponse) VisitSuspendUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SuspendUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SuspendUser404JSONResponse) VisitSuspendUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspacesRequestObject struct {
 }
 
@@ -17164,6 +17453,9 @@ func (response StreamExecution401JSONResponse) VisitStreamExecutionResponse(w ht
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Directory reconciliation runs — admin only
+	// (GET /admin/directory-reconcile-runs)
+	ListDirectoryReconcileRuns(ctx context.Context, request ListDirectoryReconcileRunsRequestObject) (ListDirectoryReconcileRunsResponseObject, error)
 	// List configured identity providers — admin only
 	// (GET /admin/identity-providers)
 	ListIdentityProviders(ctx context.Context, request ListIdentityProvidersRequestObject) (ListIdentityProvidersResponseObject, error)
@@ -17476,6 +17768,12 @@ type StrictServerInterface interface {
 	// Update user role — admin only
 	// (PATCH /users/{id})
 	UpdateUserRole(ctx context.Context, request UpdateUserRoleRequestObject) (UpdateUserRoleResponseObject, error)
+	// Reinstate a user — admin only
+	// (POST /users/{id}/reinstate)
+	ReinstateUser(ctx context.Context, request ReinstateUserRequestObject) (ReinstateUserResponseObject, error)
+	// Suspend a user — admin only
+	// (POST /users/{id}/suspend)
+	SuspendUser(ctx context.Context, request SuspendUserRequestObject) (SuspendUserResponseObject, error)
 	// List workspaces accessible to current user
 	// (GET /workspaces)
 	ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error)
@@ -17730,6 +18028,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListDirectoryReconcileRuns operation middleware
+func (sh *strictHandler) ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request, params ListDirectoryReconcileRunsParams) {
+	var request ListDirectoryReconcileRunsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDirectoryReconcileRuns(ctx, request.(ListDirectoryReconcileRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDirectoryReconcileRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDirectoryReconcileRunsResponseObject); ok {
+		if err := validResponse.VisitListDirectoryReconcileRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListIdentityProviders operation middleware
@@ -20607,6 +20931,65 @@ func (sh *strictHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateUserRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateUserRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReinstateUser operation middleware
+func (sh *strictHandler) ReinstateUser(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ReinstateUserRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReinstateUser(ctx, request.(ReinstateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReinstateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReinstateUserResponseObject); ok {
+		if err := validResponse.VisitReinstateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SuspendUser operation middleware
+func (sh *strictHandler) SuspendUser(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request SuspendUserRequestObject
+
+	request.Id = id
+
+	var body SuspendUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SuspendUser(ctx, request.(SuspendUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SuspendUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SuspendUserResponseObject); ok {
+		if err := validResponse.VisitSuspendUserResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -39,6 +39,7 @@ type engineSource interface {
 type Activities struct {
 	metrics workerMetrics
 	queries db.Querier
+	pool    *pgxpool.Pool
 	engines engineSource
 	monitor lensMonitor
 	s3      s3Client
@@ -77,6 +78,7 @@ type s3Client interface {
 func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor) *Activities {
 	a := &Activities{
 		queries:     db.New(pool),
+		pool:        pool,
 		engines:     engines,
 		monitor:     mon,
 		s3:          storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
@@ -117,6 +119,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(EnsureAuditPartitions)
 	w.RegisterActivity(ExportAuditEvents)
 	w.RegisterActivity(ReconcileCatalogs)
+	w.RegisterActivity(ReconcileDirectories)
 	w.RegisterActivity(SweepEphemeralCatalogs)
 	w.RegisterActivity(RefreshEngineCatalogs)
 	w.RegisterActivity(ListSyncableCatalogs)
@@ -364,11 +367,12 @@ type workerMetrics struct {
 	engine    *metrics.Engine
 	schedules *metrics.Schedules
 	metadata  *metrics.Metadata
+	directory *metrics.Directory
 }
 
 // SetMetrics registers the worker's producers on reg.
 func (a *Activities) SetMetrics(reg *metrics.Registry) {
-	a.metrics = workerMetrics{engine: reg.Engine(), schedules: reg.Schedules(), metadata: reg.Metadata()}
+	a.metrics = workerMetrics{engine: reg.Engine(), schedules: reg.Schedules(), metadata: reg.Metadata(), directory: reg.Directory()}
 	if s3, ok := a.s3.(interface{ SetMetrics(*metrics.Storage) }); ok {
 		s3.SetMetrics(reg.Storage())
 	}

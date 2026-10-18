@@ -131,3 +131,18 @@ func TestAPIKey_Invalid(t *testing.T) {
 		t.Fatalf("status=%d called=%v, want 401", rec.Code, called)
 	}
 }
+
+// TestSuspendedCannotUseAPIKey: the middleware applies the status gate, so a
+// suspended account cannot authenticate with a surviving key (#283).
+func TestSuspendedCannotUseAPIKey(t *testing.T) {
+	q, secret, user, _ := apiKeyFixture(t, nil)
+	reason := "admin"
+	if _, err := q.SuspendUser(context.Background(), db.SuspendUserParams{ID: user.ID, SuspendedReason: &reason}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec, _, called := runAuth(t, q, http.MethodGet, "/api/v1/workspaces", "ListWorkspaces", secret)
+	if rec.Code != http.StatusUnauthorized || called {
+		t.Fatalf("status=%d called=%v, want 401", rec.Code, called)
+	}
+}

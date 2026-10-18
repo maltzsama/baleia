@@ -1,0 +1,31 @@
+meta {
+  name: Suspend User
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/users/{{outsider_user_id}}/suspend
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "reason": "admin"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{outsider_user_id}}
+}
+
+docs {
+  Suspension is never a delete: the account remains, but every session and
+  API key is revoked (#258). The matching reinstate follows.
+}

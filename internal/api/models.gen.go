@@ -246,6 +246,21 @@ const (
 	CreateWorkspaceRequestTypeShared   CreateWorkspaceRequestType = "shared"
 )
 
+// Defines values for DirectoryReconcileActionAction.
+const (
+	DirectoryReconcileActionActionReinstate DirectoryReconcileActionAction = "reinstate"
+	DirectoryReconcileActionActionRole      DirectoryReconcileActionAction = "role"
+	DirectoryReconcileActionActionSuspend   DirectoryReconcileActionAction = "suspend"
+	DirectoryReconcileActionActionTeam      DirectoryReconcileActionAction = "team"
+)
+
+// Defines values for DirectoryReconcileRunOutcome.
+const (
+	DirectoryReconcileRunOutcomeAbortedSafety DirectoryReconcileRunOutcome = "aborted_safety"
+	DirectoryReconcileRunOutcomeError         DirectoryReconcileRunOutcome = "error"
+	DirectoryReconcileRunOutcomeSuccess       DirectoryReconcileRunOutcome = "success"
+)
+
 // Defines values for EngineClass.
 const (
 	Direct    EngineClass = "direct"
@@ -575,6 +590,12 @@ const (
 	SpaceMemberRoleViewer  SpaceMemberRole = "viewer"
 )
 
+// Defines values for SuspendUserRequestReason.
+const (
+	SuspendUserRequestReasonAdmin  SuspendUserRequestReason = "admin"
+	SuspendUserRequestReasonPolicy SuspendUserRequestReason = "policy"
+)
+
 // Defines values for SystemStatusSectionStatus.
 const (
 	Ok      SystemStatusSectionStatus = "ok"
@@ -628,8 +649,8 @@ const (
 
 // Defines values for UpdateRetrieverRequestStatus.
 const (
-	UpdateRetrieverRequestStatusActive UpdateRetrieverRequestStatus = "active"
-	UpdateRetrieverRequestStatusPaused UpdateRetrieverRequestStatus = "paused"
+	Active UpdateRetrieverRequestStatus = "active"
+	Paused UpdateRetrieverRequestStatus = "paused"
 )
 
 // Defines values for UpdateSpaceRequestDefaultRole.
@@ -658,8 +679,8 @@ const (
 
 // Defines values for UserPublicRole.
 const (
-	UserPublicRoleAdmin  UserPublicRole = "admin"
-	UserPublicRoleMember UserPublicRole = "member"
+	Admin  UserPublicRole = "admin"
+	Member UserPublicRole = "member"
 )
 
 // Defines values for WorkspaceType.
@@ -1525,6 +1546,33 @@ type Dialect struct {
 	Keywords          []string `json:"keywords"`
 	Name              string   `json:"name"`
 }
+
+// DirectoryReconcileAction defines model for DirectoryReconcileAction.
+type DirectoryReconcileAction struct {
+	Action *DirectoryReconcileActionAction `json:"action,omitempty"`
+	Detail *string                         `json:"detail,omitempty"`
+	UserId *openapi_types.UUID             `json:"user_id,omitempty"`
+}
+
+// DirectoryReconcileActionAction defines model for DirectoryReconcileAction.Action.
+type DirectoryReconcileActionAction string
+
+// DirectoryReconcileRun defines model for DirectoryReconcileRun.
+type DirectoryReconcileRun struct {
+	Actions    []DirectoryReconcileAction   `json:"actions"`
+	Error      *string                      `json:"error,omitempty"`
+	FinishedAt *time.Time                   `json:"finished_at"`
+	Id         openapi_types.UUID           `json:"id"`
+	Outcome    DirectoryReconcileRunOutcome `json:"outcome"`
+	ProviderId openapi_types.UUID           `json:"provider_id"`
+	Reinstated int                          `json:"reinstated"`
+	Seen       int                          `json:"seen"`
+	StartedAt  time.Time                    `json:"started_at"`
+	Suspended  int                          `json:"suspended"`
+}
+
+// DirectoryReconcileRunOutcome defines model for DirectoryReconcileRun.Outcome.
+type DirectoryReconcileRunOutcome string
 
 // DiscoverResult defines model for DiscoverResult.
 type DiscoverResult struct {
@@ -2794,6 +2842,14 @@ type StatementSpan struct {
 	Start int `json:"start"`
 }
 
+// SuspendUserRequest defines model for SuspendUserRequest.
+type SuspendUserRequest struct {
+	Reason *SuspendUserRequestReason `json:"reason,omitempty"`
+}
+
+// SuspendUserRequestReason defines model for SuspendUserRequest.Reason.
+type SuspendUserRequestReason string
+
 // SystemStatus defines model for SystemStatus.
 type SystemStatus struct {
 	Baleia        SystemStatusSection `json:"baleia"`
@@ -3274,6 +3330,12 @@ type Unauthorized = Error
 // UnprocessableEntity defines model for UnprocessableEntity.
 type UnprocessableEntity = ValidationError
 
+// ListDirectoryReconcileRunsParams defines parameters for ListDirectoryReconcileRuns.
+type ListDirectoryReconcileRunsParams struct {
+	ProviderId *openapi_types.UUID `form:"provider_id,omitempty" json:"provider_id,omitempty"`
+	Limit      *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // DeleteIdentityProviderParams defines parameters for DeleteIdentityProvider.
 type DeleteIdentityProviderParams struct {
 	SuspendUsers *bool `form:"suspend_users,omitempty" json:"suspend_users,omitempty"`
@@ -3753,6 +3815,9 @@ type InviteUserJSONRequestBody = InviteUserRequest
 
 // UpdateUserRoleJSONRequestBody defines body for UpdateUserRole for application/json ContentType.
 type UpdateUserRoleJSONRequestBody = UpdateUserRoleRequest
+
+// SuspendUserJSONRequestBody defines body for SuspendUser for application/json ContentType.
+type SuspendUserJSONRequestBody = SuspendUserRequest
 
 // CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
 type CreateWorkspaceJSONRequestBody = CreateWorkspaceRequest

@@ -22,6 +22,7 @@ func Core(metadataSyncEvery time.Duration) []schedules.Spec {
 		{ID: schedules.AuditPartitions, Workflow: workflows.AuditPartitionsWorkflow, Every: 24 * time.Hour},
 		{ID: schedules.EphemeralCatalogSweeper, Workflow: workflows.EphemeralCatalogSweepWorkflow, Every: time.Minute},
 		{ID: schedules.TokenCleanup, Workflow: workflows.TokenCleanupWorkflow, Every: 24 * time.Hour},
+		{ID: schedules.DirectoryReconcile, Workflow: workflows.DirectoryReconcileWorkflow, Every: 15 * time.Minute},
 	}
 }
 

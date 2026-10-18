@@ -166,6 +166,16 @@ func (q *Queries) DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderI
 	return err
 }
 
+const deleteAPIKeysByUser = `-- name: DeleteAPIKeysByUser :exec
+DELETE FROM api_keys WHERE user_id = $1
+`
+
+// Suspension revokes every API key of the user (#258).
+func (q *Queries) DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAPIKeysByUser, userID)
+	return err
+}
+
 const deleteAuthProvider = `-- name: DeleteAuthProvider :exec
 DELETE FROM auth_providers WHERE id = $1
 `
@@ -436,6 +446,38 @@ func (q *Queries) ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	return items, nil
 }
 
+const listEnabledLDAPProviders = `-- name: ListEnabledLDAPProviders :many
+SELECT id, name, type, config_enc, enabled, created_at, updated_at FROM auth_providers WHERE enabled = true AND type = 'ldap' ORDER BY name
+`
+
+func (q *Queries) ListEnabledLDAPProviders(ctx context.Context) ([]AuthProvider, error) {
+	rows, err := q.db.Query(ctx, listEnabledLDAPProviders)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthProvider
+	for rows.Next() {
+		var i AuthProvider
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.ConfigEnc,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at FROM users ORDER BY name
 `
@@ -476,6 +518,106 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const listUsersByAuthProvider = `-- name: ListUsersByAuthProvider :many
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at FROM users WHERE auth_provider_id = $1 ORDER BY created_at
+`
+
+func (q *Queries) ListUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByAuthProvider, authProviderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.PasswordHash,
+			&i.Role,
+			&i.AuthProvider,
+			&i.AuthProviderID,
+			&i.ExternalID,
+			&i.PersonalWorkspaceID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Status,
+			&i.SuspendedAt,
+			&i.SuspendedReason,
+			&i.DirectorySyncedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markDirectorySynced = `-- name: MarkDirectorySynced :exec
+UPDATE users SET directory_synced_at = now(), updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markDirectorySynced, id)
+	return err
+}
+
+const reinstateDirectoryUser = `-- name: ReinstateDirectoryUser :exec
+UPDATE users
+SET status = 'active',
+    suspended_at = NULL,
+    suspended_reason = NULL,
+    updated_at = now()
+WHERE id = $1
+  AND status = 'suspended'
+  AND suspended_reason = 'directory'
+`
+
+// Reconciliation only lifts its own suspensions (#257): an admin suspension
+// survives a directory pass.
+func (q *Queries) ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, reinstateDirectoryUser, id)
+	return err
+}
+
+const reinstateUser = `-- name: ReinstateUser :one
+UPDATE users
+SET status = 'active',
+    suspended_at = NULL,
+    suspended_reason = NULL,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at
+`
+
+func (q *Queries) ReinstateUser(ctx context.Context, id pgtype.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, reinstateUser, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.AuthProvider,
+		&i.AuthProviderID,
+		&i.ExternalID,
+		&i.PersonalWorkspaceID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Status,
+		&i.SuspendedAt,
+		&i.SuspendedReason,
+		&i.DirectorySyncedAt,
+	)
+	return i, err
+}
+
 const revokeRefreshTokensByAuthProvider = `-- name: RevokeRefreshTokensByAuthProvider :exec
 UPDATE refresh_tokens
 SET revoked = true
@@ -486,6 +628,46 @@ WHERE revoked = false
 func (q *Queries) RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, revokeRefreshTokensByAuthProvider, authProviderID)
 	return err
+}
+
+const suspendUser = `-- name: SuspendUser :one
+UPDATE users
+SET status = 'suspended',
+    suspended_at = now(),
+    suspended_reason = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at
+`
+
+type SuspendUserParams struct {
+	ID              pgtype.UUID `json:"id"`
+	SuspendedReason *string     `json:"suspended_reason"`
+}
+
+// Suspension is the only disable switch (#54). The reason is bounded:
+// 'admin', 'policy' or 'directory'.
+func (q *Queries) SuspendUser(ctx context.Context, arg SuspendUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, suspendUser, arg.ID, arg.SuspendedReason)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.AuthProvider,
+		&i.AuthProviderID,
+		&i.ExternalID,
+		&i.PersonalWorkspaceID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Status,
+		&i.SuspendedAt,
+		&i.SuspendedReason,
+		&i.DirectorySyncedAt,
+	)
+	return i, err
 }
 
 const suspendUsersByAuthProvider = `-- name: SuspendUsersByAuthProvider :exec
