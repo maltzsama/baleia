@@ -120,6 +120,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SweepEphemeralCatalogs)
 	w.RegisterActivity(RefreshEngineCatalogs)
 	w.RegisterActivity(ListSyncableCatalogs)
+	w.RegisterActivity(CleanupExpiredTokens)
 }
 
 type SplitSQLParams struct {
