@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { canGlobal } from '$lib/authz/can';
 	import {
 		downloadAuditCsv,
 		listAuditActions,
@@ -53,7 +54,7 @@
 	let selected = $state<AuditEvent | null>(null);
 	let drawerOpen = $state(false);
 
-	const isAdmin = $derived(authStore.user?.role === 'admin');
+	const isAdmin = $derived(canGlobal(authStore.user, 'view_all_audit'));
 
 	function rangeMs(value: string): number {
 		switch (value) {
