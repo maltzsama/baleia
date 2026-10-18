@@ -93,7 +93,7 @@ func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIde
 		return nil, err
 	}
 
-	detail, err := h.identityProviderDetail(ap)
+	detail, err := h.identityProviderDetail(ctx, ap)
 	if err != nil {
 		return nil, err
 	}

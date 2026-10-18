@@ -3064,6 +3064,8 @@ export interface components {
             has_client_secret: boolean;
             /** @description An LDAP bind password is stored (never returned). */
             has_bind_password: boolean;
+            /** @description Users currently linked to this provider. */
+            linked_users: number;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -3078,6 +3080,7 @@ export interface components {
             enabled: boolean;
             has_client_secret: boolean;
             has_bind_password: boolean;
+            linked_users: number;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

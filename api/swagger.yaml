@@ -476,7 +476,7 @@ components:
 
     IdentityProvider:
       type: object
-      required: [id, name, type, enabled, has_client_secret, has_bind_password, created_at]
+      required: [id, name, type, enabled, has_client_secret, has_bind_password, linked_users, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -484,13 +484,14 @@ components:
         enabled: { type: boolean }
         has_client_secret: { type: boolean, description: "An OIDC client secret is stored (never returned)." }
         has_bind_password: { type: boolean, description: "An LDAP bind password is stored (never returned)." }
+        linked_users: { type: integer, description: "Users currently linked to this provider." }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
     IdentityProviderDetail:
       type: object
       description: "A provider with its redacted configuration."
-      required: [id, name, type, enabled, has_client_secret, has_bind_password, created_at]
+      required: [id, name, type, enabled, has_client_secret, has_bind_password, linked_users, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -498,6 +499,7 @@ components:
         enabled: { type: boolean }
         has_client_secret: { type: boolean }
         has_bind_password: { type: boolean }
+        linked_users: { type: integer }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         oidc: { $ref: "#/components/schemas/OIDCConfigAdmin" }

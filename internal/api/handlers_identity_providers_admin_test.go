@@ -82,6 +82,15 @@ func TestIdP_DeleteWithUsers409(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The admin list/detail reports how many users are linked (#265).
+	gotDetail, err := h.GetIdentityProvider(idpAdminCtx(), GetIdentityProviderRequestObject{Id: detail.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d, ok := gotDetail.(GetIdentityProvider200JSONResponse); !ok || d.LinkedUsers != 1 {
+		t.Fatalf("detail = %#v, want linked_users=1", gotDetail)
+	}
+
 	got, err := h.DeleteIdentityProvider(idpAdminCtx(), DeleteIdentityProviderRequestObject{Id: detail.Id})
 	if err != nil {
 		t.Fatal(err)
