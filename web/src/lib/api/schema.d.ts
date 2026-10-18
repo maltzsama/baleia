@@ -164,7 +164,7 @@ export interface paths {
         };
         /**
          * OIDC callback — exchange code for JWT
-         * @description Consumes the single-use login attempt (state plus the server-side PKCE verifier), exchanges the code, sets the HttpOnly `baleia_refresh` cookie and redirects to the stored relative path — never with tokens in the URL. Failures redirect to `/login?error=<code>`.
+         * @description Consumes the single-use login attempt (state plus the server-side PKCE verifier), exchanges the code, sets the HttpOnly `baleia_refresh` cookie and redirects to the stored relative path — never with tokens in the URL. Provider discovery failures return `503 idp_unavailable`; other failures redirect to `/login?error=<code>`.
          */
         get: operations["oidcCallback"];
         put?: never;
