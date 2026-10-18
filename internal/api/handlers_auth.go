@@ -762,6 +762,7 @@ func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.O
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  redirectURL,
+		Claims:       cfg.Claims,
 	})
 	if err != nil {
 		return nil, auth.OIDCProviderConfig{}, err

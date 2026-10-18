@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -49,10 +50,36 @@ func PKCEChallenge(verifier string) string {
 
 // OIDCProvider is an experimental directory login provider (#55). Phase 4
 // hardens it slice by slice; the admin UI lands later.
+// OIDCClaimsConfig names the claims the provider publishes (#279). Empty
+// fields use the standard names.
+type OIDCClaimsConfig struct {
+	Subject string `json:"subject"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Groups  string `json:"groups"`
+}
+
+func (c OIDCClaimsConfig) withDefaults() OIDCClaimsConfig {
+	if c.Subject == "" {
+		c.Subject = "sub"
+	}
+	if c.Email == "" {
+		c.Email = "email"
+	}
+	if c.Name == "" {
+		c.Name = "name"
+	}
+	if c.Groups == "" {
+		c.Groups = "groups"
+	}
+	return c
+}
+
 type OIDCProvider struct {
 	provider *oidc.Provider
 	config   oauth2.Config
 	verifier *oidc.IDTokenVerifier
+	claims   OIDCClaimsConfig
 }
 
 type OIDCConfig struct {
@@ -60,6 +87,7 @@ type OIDCConfig struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string
+	Claims       OIDCClaimsConfig
 }
 
 type OIDCUserInfo struct {
@@ -90,6 +118,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 		provider: provider,
 		config:   oauthConfig,
 		verifier: verifier,
+		claims:   cfg.Claims.withDefaults(),
 	}, nil
 }
 
@@ -129,34 +158,77 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		return nil, errors.New("oidc: nonce mismatch")
 	}
 
-	var claims struct {
-		Email         string   `json:"email"`
-		EmailVerified bool     `json:"email_verified"`
-		Name          string   `json:"name"`
-		Groups        []string `json:"groups"`
-	}
-	if err := idToken.Claims(&claims); err != nil {
+	var raw map[string]any
+	if err := idToken.Claims(&raw); err != nil {
 		return nil, fmt.Errorf("claims: %w", err)
 	}
 
-	groups := claims.Groups
-	if len(groups) == 0 {
-		// Some providers only publish groups through the userinfo endpoint.
-		if ui, err := p.provider.UserInfo(ctx, oauth2.StaticTokenSource(token)); err == nil {
-			var uc struct {
-				Groups []string `json:"groups"`
-			}
-			if err := ui.Claims(&uc); err == nil {
-				groups = uc.Groups
+	subject := idToken.Subject
+	if p.claims.Subject != "sub" {
+		subject = claimString(raw, p.claims.Subject)
+	}
+	if subject == "" {
+		return nil, errors.New("oidc: subject claim is empty")
+	}
+	email := claimString(raw, p.claims.Email)
+	name := claimString(raw, p.claims.Name)
+	groups := claimStrings(raw, p.claims.Groups)
+	emailVerified := claimBool(raw, "email_verified")
+
+	// Some providers only publish the display claims through userinfo.
+	if email == "" || name == "" || len(groups) == 0 {
+		if ui, err := p.provider.UserInfo(ctx, oauth2.StaticTokenSource(token)); err == nil && ui.Subject == idToken.Subject {
+			var ur map[string]any
+			if err := ui.Claims(&ur); err == nil {
+				if email == "" {
+					email = claimString(ur, p.claims.Email)
+				}
+				if name == "" {
+					name = claimString(ur, p.claims.Name)
+				}
+				if len(groups) == 0 {
+					groups = claimStrings(ur, p.claims.Groups)
+				}
+				if !emailVerified {
+					emailVerified = claimBool(ur, "email_verified")
+				}
 			}
 		}
 	}
 
 	return &OIDCUserInfo{
-		Subject:       idToken.Subject,
-		Email:         claims.Email,
-		EmailVerified: claims.EmailVerified,
-		Name:          claims.Name,
+		Subject:       subject,
+		Email:         email,
+		EmailVerified: emailVerified,
+		Name:          name,
 		Groups:        groups,
 	}, nil
+}
+
+func claimString(raw map[string]any, name string) string {
+	v, _ := raw[name].(string)
+	return v
+}
+
+func claimBool(raw map[string]any, name string) bool {
+	v, _ := raw[name].(bool)
+	return v
+}
+
+func claimStrings(raw map[string]any, name string) []string {
+	switch v := raw[name].(type) {
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return v
+	case string:
+		return strings.FieldsFunc(v, func(r rune) bool { return r == ' ' || r == ',' })
+	}
+	return nil
 }

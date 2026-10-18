@@ -28,6 +28,7 @@ type StubIDP struct {
 	Name              string
 	Nonce             string
 	Groups            []string
+	ExtraClaims       map[string]any
 	ExpectedChallenge string
 
 	key *rsa.PrivateKey
@@ -104,6 +105,9 @@ func (s *StubIDP) token(w http.ResponseWriter, r *http.Request) {
 		"name":           s.Name,
 		"nonce":          s.Nonce,
 		"groups":         s.Groups,
+	}
+	for k, v := range s.ExtraClaims {
+		claims[k] = v
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test"

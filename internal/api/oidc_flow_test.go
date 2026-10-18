@@ -523,6 +523,83 @@ func TestOIDC_RoleMappingEachLogin(t *testing.T) {
 	}
 }
 
+// TestOIDC_ConfigurableClaims: claim names come from the provider config
+// (#279).
+func TestOIDC_ConfigurableClaims(t *testing.T) {
+	f := newOIDCFlowWithConfig(t, func(issuer string) auth.OIDCProviderConfig {
+		cfg := oidcConfig(issuer)
+		cfg.Claims = auth.OIDCClaimsConfig{Subject: "user_id", Email: "mail", Name: "display_name", Groups: "memberOf"}
+		cfg.RoleMapping = []identity.RoleMapping{{Group: "baleia-admins", Role: identity.RoleAdmin}}
+		return cfg
+	})
+	f.idp.ExtraClaims = map[string]any{
+		"user_id":      "custom-subject",
+		"mail":         "custom@example.test",
+		"display_name": "Custom Name",
+		"memberOf":     []string{"baleia-admins"},
+	}
+	state, cookie := f.start(t)
+	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
+		t.Fatalf("login: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	external := "custom-subject"
+	user, err := f.q.GetUserByExternalID(context.Background(), db.GetUserByExternalIDParams{
+		AuthProviderID: f.provider.ID, ExternalID: &external,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.Email != "custom@example.test" || user.Name != "Custom Name" || user.Role != identity.RoleAdmin {
+		t.Errorf("user = %+v", user)
+	}
+}
+
+// TestOIDC_TeamMapping: mapped teams are upserted on login (#279).
+func TestOIDC_TeamMapping(t *testing.T) {
+	pool := testdb.New(t)
+	q := db.New(pool)
+	idp, err := oidctest.New("", "client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(idp.Close)
+	password := "not-used"
+	owner, err := q.CreateUser(context.Background(), db.CreateUserParams{
+		Name: "Owner", Email: "owner@example.test", PasswordHash: &password, Role: "admin", AuthProvider: "local",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := q.CreateTeam(context.Background(), db.CreateTeamParams{Name: "Data", CreatedBy: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := oidcConfig(idp.URL)
+	cfg.TeamMapping = []identity.TeamMapping{{Group: "data-eng", TeamID: idString(team.ID), TeamRole: identity.TeamRoleOwner}}
+	f := &oidcFlowFixture{
+		pool: pool, q: q, h: oidcHandlers(t, q), idp: idp,
+		provider: oidcProviderWithConfig(t, q, cfg),
+	}
+	f.idp.Groups = []string{"data-eng"}
+	state, cookie := f.start(t)
+	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
+		t.Fatalf("login: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	user, err := f.q.GetUserByExternalID(context.Background(), db.GetUserByExternalIDParams{
+		AuthProviderID: f.provider.ID, ExternalID: &f.idp.Subject,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	role, err := f.q.GetTeamMemberRole(context.Background(), db.GetTeamMemberRoleParams{TeamID: team.ID, UserID: user.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if role != identity.TeamRoleOwner {
+		t.Errorf("team role = %q, want owner", role)
+	}
+}
+
 // TestOIDC_AttemptExpired: an attempt older than its TTL is refused (#250).
 func TestOIDC_AttemptExpired(t *testing.T) {
 	q, provider := oidcAttemptFixture(t)
