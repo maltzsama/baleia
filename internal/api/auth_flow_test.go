@@ -28,7 +28,7 @@ func newAuthFixture(t *testing.T) *auditFixture {
 func loginRefresh(t *testing.T, h *Handlers, email, password string) string {
 	t.Helper()
 	resp, err := h.Login(context.Background(), LoginRequestObject{
-		Body: &LoginRequest{Email: openapi_types.Email(email), Password: password},
+		Body: &LoginRequest{Email: emailPtr(email), Password: password},
 	})
 	if err != nil {
 		t.Fatal(err)

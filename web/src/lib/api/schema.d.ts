@@ -52,7 +52,7 @@ export interface paths {
         put?: never;
         /**
          * Authenticate and receive JWT
-         * @description Sets the HttpOnly `baleia_refresh` cookie (Secure, SameSite=Lax, Path=/api/v1/auth). The `refresh_token` field is only returned when the request sends `X-Baleia-Client: api`.
+         * @description Authenticates a local account with `email`/`password`, or a directory account when `provider_id` (an LDAP provider) and `username` are sent; `email` is ignored in that case. Failures are the uniform `invalid_credentials` error and share the progressive delay. Sets the HttpOnly `baleia_refresh` cookie (Secure, SameSite=Lax, Path=/api/v1/auth). The `refresh_token` field is only returned when the request sends `X-Baleia-Client: api`.
          */
         post: operations["login"];
         delete?: never;
@@ -2594,8 +2594,18 @@ export interface components {
             password: string;
         };
         LoginRequest: {
-            /** Format: email */
-            email: string;
+            /**
+             * Format: email
+             * @description Local login. Ignored when `provider_id` is set.
+             */
+            email?: string;
+            /** @description Directory username. Required when `provider_id` is set. */
+            username?: string;
+            /**
+             * Format: uuid
+             * @description LDAP provider id. When set, `/auth/login` authenticates against the directory and ignores `email`.
+             */
+            provider_id?: string;
             password: string;
         };
         LoginResponse: {

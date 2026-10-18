@@ -9,7 +9,13 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+func emailPtr(s string) *openapi_types.Email {
+	e := openapi_types.Email(s)
+	return &e
+}
 
 // fakeLoginQuerier answers GetUserByEmail and nothing else.
 type fakeLoginQuerier struct {
@@ -40,6 +46,18 @@ func loginResponse(t *testing.T, resp LoginResponseObject, err error, name strin
 	}
 }
 
+func TestLogin_EmailRequiredForLocal(t *testing.T) {
+	resp, err := loginHandlers(&fakeLoginQuerier{}).Login(context.Background(), LoginRequestObject{
+		Body: &LoginRequest{Password: "whatever"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(Login422JSONResponse); !ok {
+		t.Fatalf("login = %T, want 422", resp)
+	}
+}
+
 // TestLogin_UniformErrors: an unknown e-mail, an SSO-only account and a wrong
 // password are indistinguishable (#51).
 func TestLogin_UniformErrors(t *testing.T) {
@@ -58,7 +76,7 @@ func TestLogin_UniformErrors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		resp, err := tc.handle.Login(context.Background(), LoginRequestObject{
-			Body: &LoginRequest{Email: "user@example.test", Password: "wrong"},
+			Body: &LoginRequest{Email: emailPtr("user@example.test"), Password: "wrong"},
 		})
 		loginResponse(t, resp, err, tc.name)
 	}
@@ -72,7 +90,7 @@ func TestLogin_TimingEqualized(t *testing.T) {
 	start := time.Now()
 	resp, err := loginHandlers(&fakeLoginQuerier{err: errors.New("no rows")}).Login(
 		context.Background(),
-		LoginRequestObject{Body: &LoginRequest{Email: "nobody@example.test", Password: "whatever"}},
+		LoginRequestObject{Body: &LoginRequest{Email: emailPtr("nobody@example.test"), Password: "whatever"}},
 	)
 	unknown := time.Since(start)
 	loginResponse(t, resp, err, "unknown e-mail")
@@ -87,7 +105,7 @@ func TestLogin_TimingEqualized(t *testing.T) {
 	start = time.Now()
 	resp, err = loginHandlers(&fakeLoginQuerier{user: db.User{AuthProvider: "local", PasswordHash: &hash}}).Login(
 		context.Background(),
-		LoginRequestObject{Body: &LoginRequest{Email: "user@example.test", Password: "wrong"}},
+		LoginRequestObject{Body: &LoginRequest{Email: emailPtr("user@example.test"), Password: "wrong"}},
 	)
 	wrong := time.Since(start)
 	loginResponse(t, resp, err, "wrong password")

@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -64,6 +65,9 @@ type Handlers struct {
 	mailer func(to, resetURL string) error
 	// oidcCache holds discovered providers keyed by id + config version (#280).
 	oidcCache sync.Map
+	// ldapAuthenticate verifies directory credentials (#255). Tests inject a
+	// fake so the handler branch runs without a directory server.
+	ldapAuthenticate func(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)
 }
 
 // SetMailer injects the password-reset/invite mailer (tests).

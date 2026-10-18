@@ -1688,8 +1688,15 @@ type InviteUserRequestRole string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
-	Email    openapi_types.Email `json:"email"`
-	Password string              `json:"password"`
+	// Email Local login. Ignored when `provider_id` is set.
+	Email    *openapi_types.Email `json:"email,omitempty"`
+	Password string               `json:"password"`
+
+	// ProviderId LDAP provider id. When set, `/auth/login` authenticates against the directory and ignores `email`.
+	ProviderId *openapi_types.UUID `json:"provider_id,omitempty"`
+
+	// Username Directory username. Required when `provider_id` is set.
+	Username *string `json:"username,omitempty"`
 }
 
 // LoginResponse defines model for LoginResponse.

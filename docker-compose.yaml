@@ -353,6 +353,30 @@ services:
       - app_net
 
   # ============================================
+  # DIRECTORY - OpenLDAP (development only)
+  # ============================================
+  # Start with `docker compose --profile ldap up -d ldap`.
+  # The seed LDIF lives in deploy/dev/ldap; credentials are dev-only.
+  ldap:
+    image: osixia/openldap:1.5.0
+    container_name: baleia_ldap
+    profiles: ["ldap"]
+    hostname: ldap
+    environment:
+      - LDAP_ORGANISATION=Baleia
+      - LDAP_DOMAIN=example.org
+      - LDAP_ADMIN_PASSWORD=admin
+      - OPENLDAP_BOOTSTRAP_MEMBEROF=true
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ./deploy/dev/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
+    command: --copy-service
+    networks:
+      - app_net
+
+  # ============================================
   # BALEA SERVICES
   # ============================================
 
