@@ -8,7 +8,15 @@ describe('forgot-password flow', () => {
 	beforeEach(() => {
 		localStorage.clear();
 		window.history.replaceState(null, '', '/login');
-		server.use(http.get('/auth/oidc/providers', ({ response }) => response(200).json([])));
+		server.use(
+			http.get('/auth/oidc/providers', ({ response }) => response(200).json([])),
+			http.get('/auth/me', ({ response }) =>
+				response(401).json({ code: 'unauthorized', message: 'no session' })
+			),
+			http.post('/auth/refresh', ({ response }) =>
+				response(401).json({ code: 'unauthorized', message: 'no session' })
+			)
+		);
 	});
 
 	async function submitReset() {

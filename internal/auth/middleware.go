@@ -9,9 +9,34 @@ import (
 type contextKey string
 
 const (
-	ContextKeyUserID contextKey = "user_id"
-	ContextKeyRole   contextKey = "role"
+	ContextKeyUserID        contextKey = "user_id"
+	ContextKeyRole          contextKey = "role"
+	ContextKeyRefreshCookie contextKey = "refresh_cookie"
 )
+
+// Browser session cookie for the refresh token (#51). It is scoped to the auth
+// routes so it is never sent with ordinary API requests.
+const (
+	RefreshCookieName = "baleia_refresh"
+	RefreshCookiePath = "/api/v1/auth"
+)
+
+// ClientHeader lets non-browser clients opt into the JSON refresh token.
+const (
+	ClientHeader = "X-Baleia-Client"
+	ClientAPI    = "api"
+)
+
+// WithRefreshCookie makes the refresh cookie value available to a handler.
+func WithRefreshCookie(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, ContextKeyRefreshCookie, token)
+}
+
+// RefreshCookieFromContext returns the refresh cookie value, or "".
+func RefreshCookieFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ContextKeyRefreshCookie).(string)
+	return v
+}
 
 func Middleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

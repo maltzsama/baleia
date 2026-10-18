@@ -1694,8 +1694,10 @@ type LoginRequest struct {
 
 // LoginResponse defines model for LoginResponse.
 type LoginResponse struct {
-	ExpiresAt    time.Time  `json:"expires_at"`
-	RefreshToken string     `json:"refresh_token"`
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// RefreshToken Only returned to API clients that send `X-Baleia-Client: api`. Browsers receive the refresh token in the HttpOnly `baleia_refresh` cookie.
+	RefreshToken *string    `json:"refresh_token,omitempty"`
 	Token        string     `json:"token"`
 	User         UserPublic `json:"user"`
 }
@@ -2125,14 +2127,17 @@ type ReconcileRun struct {
 
 // RefreshRequest defines model for RefreshRequest.
 type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
+	// RefreshToken Optional when the `baleia_refresh` cookie is present.
+	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
 // RefreshResponse defines model for RefreshResponse.
 type RefreshResponse struct {
-	ExpiresAt    time.Time `json:"expires_at"`
-	RefreshToken string    `json:"refresh_token"`
-	Token        string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// RefreshToken Only returned to API clients that send `X-Baleia-Client: api`. Browsers receive the rotated refresh token in the HttpOnly `baleia_refresh` cookie.
+	RefreshToken *string `json:"refresh_token,omitempty"`
+	Token        string  `json:"token"`
 }
 
 // RestoreSavedQueryRequest defines model for RestoreSavedQueryRequest.

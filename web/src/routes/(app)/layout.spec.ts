@@ -9,9 +9,7 @@ describe('app layout guard', () => {
 		localStorage.clear();
 	});
 
-	it('clears a rejected session before redirecting to login', async () => {
-		localStorage.setItem('token', 'stale-token-from-another-deploy');
-		localStorage.setItem('refresh_token', 'stale-refresh');
+	it('redirects to login when the session cannot be refreshed', async () => {
 		server.use(
 			http.get('/auth/me', ({ response }) =>
 				response(401).json({ code: 'unauthorized', message: 'expired session' })
@@ -26,7 +24,7 @@ describe('app layout guard', () => {
 			location: '/login?next=%2Fsql%3Fx%3D1'
 		});
 
-		// The login page must not see a token and bounce straight back to /sql.
+		// Tokens are never persisted on the client (#51).
 		expect(localStorage.getItem('token')).toBeNull();
 		expect(localStorage.getItem('refresh_token')).toBeNull();
 	});

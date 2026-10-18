@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_ROOT, clearSession, client, setAccessToken, setRefreshToken } from '$lib/api/client';
+	import { API_ROOT, clearSession, client, getAccessToken, setAccessToken } from '$lib/api/client';
 	import { Input, PasswordInput } from '$lib/ui';
 
 	// Retry-After is either a number of seconds or an HTTP-date. Returns the
@@ -44,20 +44,18 @@
 
 		loadProviders();
 
-		// Validate a stored token before leaving. A stale token (another
-		// deployment, a revoked session) would otherwise bounce
-		// /login → /sql → /login forever. Keep the page usable while the check
-		// runs, and clear the rejected session instead of redirecting blind.
-		if (localStorage.getItem('token')) {
-			client.GET('/auth/me').then(({ data }) => {
-				if (!data) {
-					clearSession();
-					return;
-				}
-				const next = new URLSearchParams(window.location.search).get('next');
-				window.location.href = next && next.startsWith('/') ? next : '/sql';
-			});
-		}
+		// Restore a session from the HttpOnly refresh cookie: the client retries
+		// /auth/me after a successful refresh. Without a valid cookie the form
+		// stays usable instead of bouncing /login → /sql → /login.
+		client.GET('/auth/me').then(({ data }) => {
+			if (!data) {
+				// A login may have completed while this check was in flight.
+				if (!getAccessToken()) clearSession();
+				return;
+			}
+			const next = new URLSearchParams(window.location.search).get('next');
+			window.location.href = next && next.startsWith('/') ? next : '/sql';
+		});
 
 		return () => clearInterval(retryTimer);
 	});
@@ -123,7 +121,6 @@
 				return;
 			}
 			setAccessToken(data.token);
-			setRefreshToken(data.refresh_token);
 			window.location.href = '/sql';
 		} catch {
 			showError('Connection error. Is the server running?');

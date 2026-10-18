@@ -5,7 +5,7 @@ import type { LayoutLoad } from './$types';
 export const ssr = false;
 
 export const load: LayoutLoad = async ({ url }) => {
-	if (typeof localStorage === 'undefined') return { user: null };
+	if (typeof window === 'undefined') return { user: null };
 	const { data } = await client.GET('/auth/me');
 	if (!data) {
 		// Drop the rejected session here: leaving it in localStorage makes the

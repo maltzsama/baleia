@@ -179,10 +179,12 @@ func (s *Server) routes() {
 
 	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret),
+		refreshCookieMiddleware(s.cfg),
 	})
 
 	s.mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(audit.Middleware)
+		r.Use(refreshCookieContext)
 		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
 		r.Use(authLimiter.Middleware)
 		r.Use(OptionalJSONBody)

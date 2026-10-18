@@ -185,25 +185,30 @@ components:
 
     LoginResponse:
       type: object
-      required: [token, refresh_token, expires_at, user]
+      required: [token, expires_at, user]
       properties:
         token: { type: string }
-        refresh_token: { type: string }
+        refresh_token:
+          type: string
+          description: "Only returned to API clients that send `X-Baleia-Client: api`. Browsers receive the refresh token in the HttpOnly `baleia_refresh` cookie."
         expires_at: { type: string, format: date-time }
         user: { $ref: "#/components/schemas/UserPublic" }
 
     RefreshRequest:
       type: object
-      required: [refresh_token]
       properties:
-        refresh_token: { type: string }
+        refresh_token:
+          type: string
+          description: "Optional when the `baleia_refresh` cookie is present."
 
     RefreshResponse:
       type: object
-      required: [token, refresh_token, expires_at]
+      required: [token, expires_at]
       properties:
         token: { type: string }
-        refresh_token: { type: string }
+        refresh_token:
+          type: string
+          description: "Only returned to API clients that send `X-Baleia-Client: api`. Browsers receive the rotated refresh token in the HttpOnly `baleia_refresh` cookie."
         expires_at: { type: string, format: date-time }
 
     LogoutRequest:
@@ -2329,7 +2334,7 @@ paths:
       tags: [Setup]
       operationId: createFirstAdmin
       summary: "Create first admin user"
-      description: "Returns 409 if any user already exists."
+      description: "Returns 409 if any user already exists. Sets the HttpOnly `baleia_refresh` cookie; `refresh_token` is only in the JSON for `X-Baleia-Client: api`."
       security: []
       requestBody:
         required: true
@@ -2351,6 +2356,7 @@ paths:
       tags: [Auth]
       operationId: login
       summary: "Authenticate and receive JWT"
+      description: "Sets the HttpOnly `baleia_refresh` cookie (Secure, SameSite=Lax, Path=/api/v1/auth). The `refresh_token` field is only returned when the request sends `X-Baleia-Client: api`."
       security: []
       requestBody:
         required: true
@@ -2371,6 +2377,7 @@ paths:
       tags: [Auth]
       operationId: logout
       summary: "Invalidate current session"
+      description: "Revokes the refresh-token family and clears the `baleia_refresh` cookie."
       requestBody:
         required: false
         content:
@@ -2385,9 +2392,10 @@ paths:
       tags: [Auth]
       operationId: refreshToken
       summary: "Exchange refresh token for new access token pair"
+      description: "Reads the refresh token from the `baleia_refresh` cookie (or the optional body token), rotates it, and sets the cookie. `refresh_token` is only in the JSON for `X-Baleia-Client: api`."
       security: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema: { $ref: "#/components/schemas/RefreshRequest" }

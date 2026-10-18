@@ -1,5 +1,5 @@
 // src/lib/stores/auth.svelte.ts
-import { clearSession, client, getRefreshToken } from '$lib/api/client';
+import { clearSession, client } from '$lib/api/client';
 import { clearDrafts } from '$lib/workbench/drafts';
 
 export type Features = {
@@ -59,12 +59,11 @@ function createAuthStore() {
 	}
 
 	async function logout() {
-		const refreshToken = getRefreshToken();
 		const uid = user?.id;
 		try {
-			await client.POST('/auth/logout', {
-				body: refreshToken ? { refresh_token: refreshToken } : {}
-			});
+			// The browser sends the HttpOnly refresh cookie; the API revokes the
+			// whole family and clears it.
+			await client.POST('/auth/logout', { body: {} });
 		} catch {
 			/* best effort: log out locally even if the API is unreachable */
 		}

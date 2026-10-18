@@ -30,16 +30,16 @@ func loginRefresh(t *testing.T, h *Handlers, email, password string) string {
 		t.Fatal(err)
 	}
 	ok, found := resp.(Login200JSONResponse)
-	if !found {
-		t.Fatalf("login = %T, want 200", resp)
+	if !found || ok.RefreshToken == nil {
+		t.Fatalf("login = %T, want 200 with a refresh token", resp)
 	}
-	return ok.RefreshToken
+	return *ok.RefreshToken
 }
 
 func refreshStatus(t *testing.T, h *Handlers, token string) int {
 	t.Helper()
 	resp, err := h.RefreshToken(context.Background(), RefreshTokenRequestObject{
-		Body: &RefreshRequest{RefreshToken: token},
+		Body: &RefreshRequest{RefreshToken: &token},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -58,16 +58,16 @@ func refreshStatus(t *testing.T, h *Handlers, token string) int {
 func refreshToken(t *testing.T, h *Handlers, token string) string {
 	t.Helper()
 	resp, err := h.RefreshToken(context.Background(), RefreshTokenRequestObject{
-		Body: &RefreshRequest{RefreshToken: token},
+		Body: &RefreshRequest{RefreshToken: &token},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ok, found := resp.(RefreshToken200JSONResponse)
-	if !found {
-		t.Fatalf("refresh = %T, want 200", resp)
+	if !found || ok.RefreshToken == nil {
+		t.Fatalf("refresh = %T, want 200 with a refresh token", resp)
 	}
-	return ok.RefreshToken
+	return *ok.RefreshToken
 }
 
 func TestRefresh_ConcurrentSingleWinner(t *testing.T) {
@@ -80,7 +80,7 @@ func TestRefresh_ConcurrentSingleWinner(t *testing.T) {
 		go func() {
 			<-start
 			resp, err := f.h.RefreshToken(context.Background(), RefreshTokenRequestObject{
-				Body: &RefreshRequest{RefreshToken: token},
+				Body: &RefreshRequest{RefreshToken: &token},
 			})
 			if err != nil {
 				results <- -1
@@ -149,6 +149,43 @@ func TestRefresh_ReuseRevokesFamily(t *testing.T) {
 	// The whole family is gone, so the rotated token no longer refreshes.
 	if got := refreshStatus(t, f.h, rotated); got != 401 {
 		t.Errorf("rotated token after reuse = %d, want 401", got)
+	}
+}
+
+// TestRefresh_CookieFallback: a browser refreshes with only the HttpOnly
+// cookie, no body token (#51).
+func TestRefresh_CookieFallback(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+
+	ctx := auth.WithRefreshCookie(context.Background(), token)
+	resp, err := f.h.RefreshToken(ctx, RefreshTokenRequestObject{Body: &RefreshRequest{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, found := resp.(RefreshToken200JSONResponse)
+	if !found || ok.RefreshToken == nil {
+		t.Fatalf("cookie refresh = %T, want 200 with a rotated token", resp)
+	}
+}
+
+// TestLogout_CookieRevokesFamily: logout revokes the family behind the cookie
+// token, so neither it nor the rotated token works afterwards (#51).
+func TestLogout_CookieRevokesFamily(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+	rotated := refreshToken(t, f.h, token)
+
+	ctx := auth.WithRefreshCookie(context.Background(), rotated)
+	resp, err := f.h.Logout(ctx, LogoutRequestObject{Body: &LogoutRequest{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(Logout204Response); !ok {
+		t.Fatalf("logout = %T, want 204", resp)
+	}
+	if got := refreshStatus(t, f.h, rotated); got != 401 {
+		t.Errorf("refresh after logout = %d, want 401", got)
 	}
 }
 
