@@ -18,7 +18,14 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 )
+
+// newTokenFamily returns a fresh refresh-token family id (#51). Every session
+// starts a new family; rotated tokens inherit it.
+func newTokenFamily() pgtype.UUID {
+	return pgtype.UUID{Bytes: uuid.New(), Valid: true}
+}
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -74,6 +81,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		UserID:    user.ID,
 		TokenHash: refreshHash,
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		FamilyID:  newTokenFamily(),
 	}); err != nil {
 		return nil, err
 	}
@@ -144,6 +152,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 		UserID:    user.ID,
 		TokenHash: refreshHash,
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		FamilyID:  newTokenFamily(),
 	}); err != nil {
 		return nil, err
 	}
@@ -263,7 +272,9 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	hash := auth.HashRefreshToken(request.Body.RefreshToken)
 
 	ev := audit.Event{Action: audit.AuthRefresh, ResourceType: "user"}
-	rt, err := h.queries.GetRefreshTokenByHash(ctx, hash)
+	// Atomic rotation: of two concurrent refreshes with the same token,
+	// exactly one updates the row (#51).
+	rt, err := h.queries.ConsumeRefreshToken(ctx, hash)
 	if err != nil {
 		h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("invalid_token"))
 		return RefreshToken401JSONResponse{
@@ -277,8 +288,6 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"},
 		}, nil
 	}
-
-	_ = h.queries.RevokeRefreshToken(ctx, rt.ID)
 
 	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
 	if err != nil {
@@ -294,6 +303,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 		UserID:    user.ID,
 		TokenHash: newHash,
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		FamilyID:  rt.FamilyID,
 	}); err != nil {
 		return nil, err
 	}
@@ -549,6 +559,7 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		UserID:    user.ID,
 		TokenHash: refreshHash,
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		FamilyID:  newTokenFamily(),
 	}); err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
 		return

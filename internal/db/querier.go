@@ -29,6 +29,9 @@ type Querier interface {
 	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error
+	// Atomic rotation: of two concurrent refreshes with the same token, exactly one
+	// updates a row (#51).
+	ConsumeRefreshToken(ctx context.Context, tokenHash string) (ConsumeRefreshTokenRow, error)
 	CountCatalogAccessImpact(ctx context.Context, arg CountCatalogAccessImpactParams) (CountCatalogAccessImpactRow, error)
 	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error)
 	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error)
@@ -170,6 +173,9 @@ type Querier interface {
 	GetQueryStatementByPosition(ctx context.Context, arg GetQueryStatementByPositionParams) (QueryStatement, error)
 	GetReconcileRun(ctx context.Context, arg GetReconcileRunParams) (CatalogReconcileRun, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
+	// Reuse detection looks up the row ConsumeRefreshToken refused, including a
+	// revoked one (#51).
+	GetRefreshTokenByHashAny(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)
 	// Worker-only lookup: the refresh activity runs off a due list, so it does not
 	// have (and must not trust) a caller-supplied workspace id.
@@ -370,7 +376,9 @@ type Querier interface {
 	// history still line up.
 	RestoreSavedQuery(ctx context.Context, arg RestoreSavedQueryParams) (SavedQuery, error)
 	RestoreSemanticMetric(ctx context.Context, arg RestoreSemanticMetricParams) (SemanticMetric, error)
+	RevokeRefreshFamily(ctx context.Context, familyID pgtype.UUID) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
+	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
 	SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugExistsParams) (bool, error)
 	// Tables and columns of the catalogs the workspace may use whose names are
 	// trigram-similar to q (or contain a word similar to it), best first.
