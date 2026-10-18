@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
-	"net/http"
 	"strings"
 	"time"
 
@@ -279,10 +278,129 @@ func (h *Handlers) ListOIDCProviders(ctx context.Context, request ListOIDCProvid
 }
 
 func (h *Handlers) OidcRedirect(ctx context.Context, request OidcRedirectRequestObject) (OidcRedirectResponseObject, error) {
+	providerID := request.ProviderId.String()
+	provider, _, err := h.cachedOIDCProvider(ctx, providerID)
+	if err != nil {
+		return OidcRedirect503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
+			Code: "idp_unavailable", Message: "identity provider unavailable",
+		}}, nil
+	}
+
+	verifier, challenge, err := auth.GeneratePKCE()
+	if err != nil {
+		return nil, err
+	}
+	nonce, err := auth.GenerateNonce()
+	if err != nil {
+		return nil, err
+	}
+	state := randomState()
+
+	var redirect *string
+	if request.Params.Next != nil && safeRelativePath(*request.Params.Next) {
+		redirect = request.Params.Next
+	}
+	apID := pgtype.UUID{Bytes: request.ProviderId, Valid: true}
+	if err := h.queries.CreateOIDCLoginAttempt(ctx, db.CreateOIDCLoginAttemptParams{
+		State:        state,
+		ProviderID:   apID,
+		Nonce:        &nonce,
+		CodeVerifier: verifier,
+		Redirect:     redirect,
+		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(auth.OIDCAttemptTTL), Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	authURL, err := provider.AuthURL(state, challenge, nonce)
+	if err != nil {
+		return nil, err
+	}
+	res := OIDCResultFromContext(ctx)
+	if res == nil {
+		return nil, errors.New("oidc: missing response result")
+	}
+	res.Location = authURL
+	res.OIDCCookie = &state
 	return OidcRedirect302Response{}, nil
 }
 
-func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequestObject) (OidcCallbackResponseObject, error) {
+func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequestObject) (resp OidcCallbackResponseObject, err error) {
+	outcome := metrics.OutcomeSuccess
+	defer func() { h.metrics.auth.Attempt(metrics.AuthOIDC, outcome) }()
+	res := OIDCResultFromContext(ctx)
+	if res == nil {
+		return nil, errors.New("oidc: missing response result")
+	}
+	fail := func(code, metric string) OidcCallbackResponseObject {
+		outcome = metric
+		res.Location = oidcFailureLocation(code)
+		empty := ""
+		res.OIDCCookie = &empty
+		return OidcCallback302Response{}
+	}
+
+	providerID := request.ProviderId.String()
+	provider, cfg, err := h.cachedOIDCProvider(ctx, providerID)
+	if err != nil {
+		outcome = metrics.OutcomeError
+		return OidcCallback503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
+			Code: "idp_unavailable", Message: "identity provider unavailable",
+		}}, nil
+	}
+
+	state := request.Params.State
+	if state == "" || auth.OIDCCookieFromContext(ctx) != state {
+		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
+	}
+
+	attempt, err := h.queries.ConsumeOIDCLoginAttempt(ctx, state)
+	if err != nil {
+		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "invalid_state"})
+		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
+	}
+
+	apID := pgtype.UUID{Bytes: request.ProviderId, Valid: true}
+	if apID != attempt.ProviderID {
+		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
+	}
+
+	nonce := ""
+	if attempt.Nonce != nil {
+		nonce = *attempt.Nonce
+	}
+	info, err := provider.Exchange(ctx, request.Params.Code, attempt.CodeVerifier, nonce)
+	if err != nil {
+		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
+		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
+	}
+
+	user, err := h.provisionOIDCUser(ctx, apID, cfg, info)
+	if err != nil {
+		if errors.Is(err, errOIDCNotProvisioned) {
+			return fail(oidcErrorNotProvisioned, metrics.OutcomeInvalidCredentials), nil
+		}
+		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
+	}
+
+	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
+	}
+	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		TokenHash: refreshHash,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		FamilyID:  newTokenFamily(),
+	}); err != nil {
+		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
+	}
+
+	empty := ""
+	res.OIDCCookie = &empty
+	res.RefreshCookie = &refreshToken
+	res.Location = oidcRedirectTarget(attempt.Redirect)
+	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", ResourceID: idString(user.ID), Outcome: audit.Allowed})
 	return OidcCallback302Response{}, nil
 }
 
@@ -548,87 +666,11 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 
 // ── OIDC manual (rotas com cookie + redirect) ─────────────────────────────────
 
-func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
-	providerID := r.PathValue("provider_id")
-	var apID pgtype.UUID
-	if err := apID.Scan(providerID); err != nil {
-		respondError(w, http.StatusBadRequest, "bad_request", "invalid provider")
-		return
-	}
-
-	provider, _, err := h.loadOIDCProvider(r, providerID)
-	if err != nil {
-		respondError(w, http.StatusNotFound, "not_found", "provider not found")
-		return
-	}
-
-	verifier, challenge, err := auth.GeneratePKCE()
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
-		return
-	}
-	nonce, err := auth.GenerateNonce()
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
-		return
-	}
-	state := randomState()
-
-	var redirect *string
-	if next := r.URL.Query().Get("next"); safeRelativePath(next) {
-		redirect = &next
-	}
-
-	if err := h.queries.CreateOIDCLoginAttempt(r.Context(), db.CreateOIDCLoginAttemptParams{
-		State:        state,
-		ProviderID:   apID,
-		Nonce:        &nonce,
-		CodeVerifier: verifier,
-		Redirect:     redirect,
-		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(auth.OIDCAttemptTTL), Valid: true},
-	}); err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.OIDCCookieName,
-		Value:    state,
-		Path:     auth.OIDCCookiePath,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(auth.OIDCAttemptTTL / time.Second),
-	})
-
-	authURL, err := provider.AuthURL(state, challenge, nonce)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
-		return
-	}
-	http.Redirect(w, r, authURL, http.StatusFound)
-}
-
-// safeRelativePath accepts only same-origin paths, never a scheme-relative one.
-// Browsers normalise backslashes to slashes, so "/\evil.com" is "//evil.com" in
-// disguise; control characters are refused too.
 func safeRelativePath(next string) bool {
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		return false
 	}
 	return !strings.ContainsAny(next, "\\\r\n\t\x00")
-}
-
-func clearOIDCCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.OIDCCookieName,
-		Value:    "",
-		Path:     auth.OIDCCookiePath,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-	})
 }
 
 // OIDC failure codes land on /login?error=<code> (#252). not_provisioned and
@@ -640,14 +682,14 @@ const (
 	oidcErrorSSOFailed        = "sso_failed"
 )
 
-func oidcFailure(w http.ResponseWriter, r *http.Request, code string) {
+func oidcFailureLocation(code string) string {
 	// Keep the vocabulary bounded; an unknown code is a generic SSO failure.
 	switch code {
 	case oidcErrorNotProvisioned, oidcErrorAccountSuspended, oidcErrorIDPUnavailable, oidcErrorSSOFailed:
 	default:
 		code = oidcErrorSSOFailed
 	}
-	http.Redirect(w, r, "/login?error="+code, http.StatusFound)
+	return "/login?error=" + code
 }
 
 // oidcRedirectTarget honours only a stored same-origin path (#252).
@@ -658,106 +700,64 @@ func oidcRedirectTarget(redirect *string) string {
 	return "/"
 }
 
-func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
-	outcome := metrics.OutcomeSuccess
-	defer func() { h.metrics.auth.Attempt(metrics.AuthOIDC, outcome) }()
-	fail := func(code, metric string) {
-		outcome = metric
-		oidcFailure(w, r, code)
-	}
-
-	providerID := r.PathValue("provider_id")
-	provider, cfg, err := h.loadOIDCProvider(r, providerID)
-	if err != nil {
-		fail(oidcErrorIDPUnavailable, metrics.OutcomeError)
-		return
-	}
-
-	state := r.URL.Query().Get("state")
-	stateCookie, err := r.Cookie(auth.OIDCCookieName)
-	if err != nil || state == "" || stateCookie.Value != state {
-		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
-		return
-	}
-	// The browser binding is single use: clear it before consuming the row.
-	clearOIDCCookie(w)
-
-	attempt, err := h.queries.ConsumeOIDCLoginAttempt(r.Context(), state)
-	if err != nil {
-		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "invalid_state"})
-		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
-		return
-	}
-
-	var apID pgtype.UUID
-	if err := apID.Scan(providerID); err != nil || apID != attempt.ProviderID {
-		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
-		return
-	}
-
-	nonce := ""
-	if attempt.Nonce != nil {
-		nonce = *attempt.Nonce
-	}
-	info, err := provider.Exchange(r.Context(), r.URL.Query().Get("code"), attempt.CodeVerifier, nonce)
-	if err != nil {
-		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
-		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
-		return
-	}
-
-	user, err := h.provisionOIDCUser(r.Context(), apID, cfg, info)
-	if err != nil {
-		if errors.Is(err, errOIDCNotProvisioned) {
-			fail(oidcErrorNotProvisioned, metrics.OutcomeInvalidCredentials)
-		} else {
-			fail(oidcErrorSSOFailed, metrics.OutcomeError)
-		}
-		return
-	}
-
-	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
-	if err != nil {
-		fail(oidcErrorSSOFailed, metrics.OutcomeError)
-		return
-	}
-
-	if _, err := h.queries.CreateRefreshToken(r.Context(), db.CreateRefreshTokenParams{
-		UserID:    user.ID,
-		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
-		FamilyID:  newTokenFamily(),
-	}); err != nil {
-		fail(oidcErrorSSOFailed, metrics.OutcomeError)
-		return
-	}
-
-	// No tokens in the URL (#252): the SPA restores the session from the
-	// HttpOnly cookie on its next /auth/me.
-	auth.SetRefreshCookie(w, refreshToken, h.cfg.RefreshTTL())
-	h.audited(audit.AsUser(r.Context(), user.ID.String(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", ResourceID: idString(user.ID), Outcome: audit.Allowed})
-	http.Redirect(w, r, oidcRedirectTarget(attempt.Redirect), http.StatusFound)
+// oidcCacheEntry is one discovered provider, keyed by id + config version.
+type oidcCacheEntry struct {
+	provider *auth.OIDCProvider
+	cfg      auth.OIDCProviderConfig
+	expires  time.Time
 }
 
-func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
+// cachedOIDCProvider returns the provider from the discovery cache (#280). The
+// key includes updated_at, so a config change misses immediately; entries
+// expire after an hour.
+func (h *Handlers) cachedOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
 	var apID pgtype.UUID
 	if err := apID.Scan(providerID); err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
 	}
-
-	ap, err := h.queries.GetAuthProviderByID(r.Context(), apID)
+	ap, err := h.queries.GetAuthProviderByID(ctx, apID)
 	if err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
 	}
+	version := ap.ConfigEnc
+	if ap.UpdatedAt.Valid {
+		version = ap.UpdatedAt.Time.UTC().Format(time.RFC3339Nano)
+	}
+	key := providerID + ":" + version
+	if v, ok := h.oidcCache.Load(key); ok {
+		entry := v.(*oidcCacheEntry)
+		if time.Now().Before(entry.expires) {
+			return entry.provider, entry.cfg, nil
+		}
+		h.oidcCache.Delete(key)
+	}
+	provider, cfg, err := h.newOIDCProvider(ctx, providerID, ap)
+	if err != nil {
+		return nil, auth.OIDCProviderConfig{}, err
+	}
+	h.oidcCache.Store(key, &oidcCacheEntry{provider: provider, cfg: cfg, expires: time.Now().Add(time.Hour)})
+	return provider, cfg, nil
+}
 
+func (h *Handlers) loadOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
+	var apID pgtype.UUID
+	if err := apID.Scan(providerID); err != nil {
+		return nil, auth.OIDCProviderConfig{}, err
+	}
+	ap, err := h.queries.GetAuthProviderByID(ctx, apID)
+	if err != nil {
+		return nil, auth.OIDCProviderConfig{}, err
+	}
+	return h.newOIDCProvider(ctx, providerID, ap)
+}
+
+func (h *Handlers) newOIDCProvider(ctx context.Context, providerID string, ap db.AuthProvider) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
 	cfg, err := auth.OpenOIDCConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
 	if err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
 	}
-
 	redirectURL := h.cfg.PublicURL + "/api/v1/auth/oidc/" + providerID + "/callback"
-
-	provider, err := auth.NewOIDCProvider(r.Context(), auth.OIDCConfig{
+	provider, err := auth.NewOIDCProvider(ctx, auth.OIDCConfig{
 		IssuerURL:    cfg.IssuerURL,
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,

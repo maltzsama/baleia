@@ -113,6 +113,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ValidationError" }
+    ServiceUnavailable:
+      description: "Service unavailable"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     ArrowStream:
       description: >
         Apache Arrow IPC. An unpaged read streams the stored object unchanged
@@ -2456,6 +2461,7 @@ paths:
       responses:
         "302":
           description: "Redirect to provider"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /auth/oidc/{provider_id}/callback:
     get:
@@ -2479,7 +2485,8 @@ paths:
           schema: { type: string }
       responses:
         "302":
-          description: "Redirect to frontend with token"
+          description: "Redirect to the stored path; the session is in the HttpOnly cookie"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /auth/password-reset/request:
     post:

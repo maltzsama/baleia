@@ -12,6 +12,7 @@ const (
 	ContextKeyUserID        contextKey = "user_id"
 	ContextKeyRole          contextKey = "role"
 	ContextKeyRefreshCookie contextKey = "refresh_cookie"
+	ContextKeyOIDCCookie    contextKey = "oidc_cookie"
 )
 
 // Browser session cookie for the refresh token (#51). It is scoped to the auth
@@ -42,6 +43,17 @@ func WithRefreshCookie(ctx context.Context, token string) context.Context {
 // RefreshCookieFromContext returns the refresh cookie value, or "".
 func RefreshCookieFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(ContextKeyRefreshCookie).(string)
+	return v
+}
+
+// WithOIDCCookie makes the OIDC browser binding available to a handler.
+func WithOIDCCookie(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, ContextKeyOIDCCookie, token)
+}
+
+// OIDCCookieFromContext returns the OIDC cookie value, or "".
+func OIDCCookieFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ContextKeyOIDCCookie).(string)
 	return v
 }
 

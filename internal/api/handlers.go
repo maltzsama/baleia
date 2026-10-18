@@ -62,6 +62,8 @@ type Handlers struct {
 	// mailer sends password-reset and invite e-mails (#51). Tests inject a
 	// fake so the reset-request path runs without an SMTP server.
 	mailer func(to, resetURL string) error
+	// oidcCache holds discovered providers keyed by id + config version (#280).
+	oidcCache sync.Map
 }
 
 // SetMailer injects the password-reset/invite mailer (tests).

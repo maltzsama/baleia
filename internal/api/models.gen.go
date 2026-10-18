@@ -2855,6 +2855,9 @@ type Forbidden = Error
 // NotFound defines model for NotFound.
 type NotFound = Error
 
+// ServiceUnavailable defines model for ServiceUnavailable.
+type ServiceUnavailable = Error
+
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
 

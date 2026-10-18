@@ -283,9 +283,6 @@ var routeAccess = map[string]access{
 	"GET /metrics": {kind: kindPublic},
 	"ANY /*":       {kind: kindPublic}, // the web app
 
-	"GET /api/v1/auth/oidc/{provider_id}/login":    {kind: kindPublic},
-	"GET /api/v1/auth/oidc/{provider_id}/callback": {kind: kindPublic},
-
 	// The WebSocket authenticates with a single-use ticket issued by
 	// POST /ws-tickets; the JWT never appears in the URL (#26).
 	"GET /api/v1/ws/workspaces/{id}/executions/{execution_id}": {kind: kindChecked, pkg: "../ws", calls: []string{"Consume", "CheckWorkspaceAccess"}},
