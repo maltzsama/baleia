@@ -147,12 +147,23 @@ func (s *Server) routes() {
 	h.SetAudit(auditRec)
 	h.SetDialer(dialer)
 	var onRefreshLimited func()
+	var onAuthLimited func(kind string)
 	if s.metrics != nil {
 		h.SetMetrics(s.metrics)
 		s3Client.SetMetrics(s.metrics.Storage())
 		auth := h.AuthMetrics()
 		onRefreshLimited = func() { auth.Attempt(metrics.AuthRefresh, metrics.OutcomeRateLimited) }
+		onAuthLimited = func(kind string) { auth.Attempt(kind, metrics.OutcomeRateLimited) }
 	}
+
+	// Strict per-IP limits on the password-guessing surface (#51). They are
+	// per replica: a multi-replica deployment needs a shared limiter to enforce
+	// them across the fleet.
+	authLimiter := NewAuthRouteLimiter([]AuthRouteLimit{
+		{Path: "/api/v1/auth/login", Kind: metrics.AuthPassword, Every: time.Minute, Burst: 10},
+		{Path: "/api/v1/auth/password-reset/request", Kind: metrics.AuthPasswordResetRequest, Every: 15 * time.Minute, Burst: 5},
+		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
+	}, onAuthLimited)
 
 	// OIDC needs cookie + redirect
 	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)
@@ -173,6 +184,7 @@ func (s *Server) routes() {
 	s.mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(audit.Middleware)
 		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
+		r.Use(authLimiter.Middleware)
 		r.Use(OptionalJSONBody)
 		baleiaapi.HandlerFromMux(strictHandler, r)
 
