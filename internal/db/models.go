@@ -556,6 +556,10 @@ type User struct {
 	PersonalWorkspaceID pgtype.UUID        `json:"personal_workspace_id"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	Status              string             `json:"status"`
+	SuspendedAt         pgtype.Timestamptz `json:"suspended_at"`
+	SuspendedReason     *string            `json:"suspended_reason"`
+	DirectorySyncedAt   pgtype.Timestamptz `json:"directory_synced_at"`
 }
 
 type Workspace struct {
