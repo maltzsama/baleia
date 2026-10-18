@@ -260,7 +260,7 @@ playwright-report/
 *.mutexprof
 *.trace
 debug/
-profile/
+/profile/
 cpu.out
 mem.out
 

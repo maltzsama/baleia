@@ -225,7 +225,7 @@
 				class="absolute bottom-full left-0 mb-2 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50"
 			>
 				<a
-					href={resolve('/profile')}
+					href={resolve('/settings/profile')}
 					onclick={() => (menuOpen = false)}
 					class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-slate-200 no-underline transition-colors duration-150 hover:bg-slate-700"
 				>

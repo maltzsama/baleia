@@ -1,9 +1,10 @@
-// src/routes/(app)/profile/+page.ts
-import { client } from '$lib/api/client';
+import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async () => {
-	if (typeof localStorage === 'undefined') return { user: null };
-	const { data } = await client.GET('/auth/me');
-	return { user: data ?? null };
+// The profile moved into the settings area (#287).
+export const prerender = false;
+export const ssr = false;
+
+export const load: PageLoad = () => {
+	redirect(307, '/settings/profile');
 };
