@@ -24,8 +24,10 @@ type StubIDP struct {
 	ClientID          string
 	Subject           string
 	Email             string
+	EmailVerified     bool
 	Name              string
 	Nonce             string
+	Groups            []string
 	ExpectedChallenge string
 
 	key *rsa.PrivateKey
@@ -42,6 +44,7 @@ func New(expectedChallenge, clientID string) (*StubIDP, error) {
 		ClientID:          clientID,
 		Subject:           "user-1",
 		Email:             "user@example.test",
+		EmailVerified:     true,
 		Name:              "Test User",
 		ExpectedChallenge: expectedChallenge,
 		key:               key,
@@ -91,14 +94,16 @@ func (s *StubIDP) token(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"iss":   s.URL,
-		"sub":   s.Subject,
-		"aud":   s.ClientID,
-		"exp":   now.Add(5 * time.Minute).Unix(),
-		"iat":   now.Unix(),
-		"email": s.Email,
-		"name":  s.Name,
-		"nonce": s.Nonce,
+		"iss":            s.URL,
+		"sub":            s.Subject,
+		"aud":            s.ClientID,
+		"exp":            now.Add(5 * time.Minute).Unix(),
+		"iat":            now.Unix(),
+		"email":          s.Email,
+		"email_verified": s.EmailVerified,
+		"name":           s.Name,
+		"nonce":          s.Nonce,
+		"groups":         s.Groups,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test"

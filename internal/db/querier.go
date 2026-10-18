@@ -489,6 +489,7 @@ type Querier interface {
 	UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatalogParams) (Catalog, error)
 	UpsertSemanticDoc(ctx context.Context, arg UpsertSemanticDocParams) (SemanticDoc, error)
 	UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTableHealthSnapshotParams) (TableHealthSnapshot, error)
+	UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error
 	UpsertTrinoCatalogRegistry(ctx context.Context, arg UpsertTrinoCatalogRegistryParams) error
 	// Monitoring snapshots (#117): every row is tagged with its engine or logical
 	// catalog, so two engines never mix.

@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/identity"
 	"github.com/galileostudio/baleia/internal/oidctest"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -118,7 +119,17 @@ func oidcTestKeyring(t *testing.T) *crypto.Keyring {
 	return kr
 }
 
-func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
+func oidcConfig(issuer string) auth.OIDCProviderConfig {
+	return auth.OIDCProviderConfig{
+		IssuerURL:           issuer,
+		ClientID:            "client",
+		ClientSecret:        "secret",
+		AutoCreate:          true,
+		AllowedEmailDomains: []string{"example.test"},
+	}
+}
+
+func oidcProviderWithConfig(t *testing.T, q *db.Queries, cfg auth.OIDCProviderConfig) db.AuthProvider {
 	t.Helper()
 	ctx := context.Background()
 	provider, err := q.CreateAuthProvider(ctx, db.CreateAuthProviderParams{
@@ -127,9 +138,7 @@ func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sealed, err := auth.SealOIDCConfig(oidcTestKeyring(t), idString(provider.ID), auth.OIDCProviderConfig{
-		IssuerURL: issuer, ClientID: "client", ClientSecret: "secret",
-	})
+	sealed, err := auth.SealOIDCConfig(oidcTestKeyring(t), idString(provider.ID), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,6 +149,11 @@ func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
 		t.Fatal(err)
 	}
 	return provider
+}
+
+func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
+	t.Helper()
+	return oidcProviderWithConfig(t, q, oidcConfig(issuer))
 }
 
 func oidcHandlers(t *testing.T, q *db.Queries) *Handlers {
@@ -161,6 +175,11 @@ type oidcFlowFixture struct {
 
 func newOIDCFlow(t *testing.T) *oidcFlowFixture {
 	t.Helper()
+	return newOIDCFlowWithConfig(t, func(issuer string) auth.OIDCProviderConfig { return oidcConfig(issuer) })
+}
+
+func newOIDCFlowWithConfig(t *testing.T, config func(issuer string) auth.OIDCProviderConfig) *oidcFlowFixture {
+	t.Helper()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	idp, err := oidctest.New("", "client")
@@ -168,7 +187,10 @@ func newOIDCFlow(t *testing.T) *oidcFlowFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(idp.Close)
-	return &oidcFlowFixture{pool: pool, q: q, h: oidcHandlers(t, q), idp: idp, provider: oidcProvider(t, q, idp.URL)}
+	return &oidcFlowFixture{
+		pool: pool, q: q, h: oidcHandlers(t, q), idp: idp,
+		provider: oidcProviderWithConfig(t, q, config(idp.URL)),
+	}
 }
 
 func (f *oidcFlowFixture) start(t *testing.T) (state string, cookie *http.Cookie) {
@@ -392,8 +414,112 @@ func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 	}
 	h := oidcHandlers(t, q)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/x/login", nil)
-	if _, err := h.loadOIDCProvider(req, idString(provider.ID)); err == nil {
+	if _, _, err := h.loadOIDCProvider(req, idString(provider.ID)); err == nil {
 		t.Fatal("loadOIDCProvider accepted a plaintext config")
+	}
+}
+
+// TestOIDC_UnknownUserInviteOnly: unknown subjects are denied by default
+// (#251).
+func TestOIDC_UnknownUserInviteOnly(t *testing.T) {
+	f := newOIDCFlowWithConfig(t, func(issuer string) auth.OIDCProviderConfig {
+		cfg := oidcConfig(issuer)
+		cfg.AutoCreate = false
+		return cfg
+	})
+	state, cookie := f.start(t)
+	if code := f.failure(t, f.finish(t, state, cookie)); code != oidcErrorNotProvisioned {
+		t.Errorf("error = %q, want %q", code, oidcErrorNotProvisioned)
+	}
+}
+
+// TestOIDC_AutoCreateDomainAllowList: auto-create needs a verified e-mail in an
+// allowed domain (#251).
+func TestOIDC_AutoCreateDomainAllowList(t *testing.T) {
+	// Allowed + verified creates the account.
+	f := newOIDCFlow(t)
+	state, cookie := f.start(t)
+	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
+		t.Fatalf("allowed: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	// A different domain is denied.
+	f = newOIDCFlow(t)
+	f.idp.Email = "user@other.test"
+	state, cookie = f.start(t)
+	if code := f.failure(t, f.finish(t, state, cookie)); code != oidcErrorNotProvisioned {
+		t.Errorf("other domain: %q, want %q", code, oidcErrorNotProvisioned)
+	}
+
+	// An unverified e-mail is denied.
+	f = newOIDCFlow(t)
+	f.idp.EmailVerified = false
+	state, cookie = f.start(t)
+	if code := f.failure(t, f.finish(t, state, cookie)); code != oidcErrorNotProvisioned {
+		t.Errorf("unverified: %q, want %q", code, oidcErrorNotProvisioned)
+	}
+}
+
+// TestOIDC_NoEmailLinking: an existing local account with the same e-mail is
+// never linked to the OIDC subject (#251).
+func TestOIDC_NoEmailLinking(t *testing.T) {
+	f := newOIDCFlow(t)
+	password := "not-used"
+	local, err := f.q.CreateUser(context.Background(), db.CreateUserParams{
+		Name: "Local", Email: f.idp.Email, PasswordHash: &password, Role: "member", AuthProvider: "local",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, cookie := f.start(t)
+	if code := f.failure(t, f.finish(t, state, cookie)); code != oidcErrorNotProvisioned {
+		t.Errorf("error = %q, want %q", code, oidcErrorNotProvisioned)
+	}
+	got, err := f.q.GetUserByID(context.Background(), local.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AuthProvider != "local" {
+		t.Errorf("the local account was linked: auth_provider=%q", got.AuthProvider)
+	}
+}
+
+// TestOIDC_RoleMappingEachLogin: roles follow the IdP on every login (#251).
+func TestOIDC_RoleMappingEachLogin(t *testing.T) {
+	f := newOIDCFlowWithConfig(t, func(issuer string) auth.OIDCProviderConfig {
+		cfg := oidcConfig(issuer)
+		cfg.RoleMapping = []identity.RoleMapping{{Group: "baleia-admins", Role: identity.RoleAdmin}}
+		cfg.DefaultRole = identity.RoleMember
+		return cfg
+	})
+	lookup := func() db.User {
+		t.Helper()
+		user, err := f.q.GetUserByExternalID(context.Background(), db.GetUserByExternalIDParams{
+			AuthProviderID: f.provider.ID,
+			ExternalID:     &f.idp.Subject,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return user
+	}
+
+	f.idp.Groups = []string{"baleia-admins"}
+	state, cookie := f.start(t)
+	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
+		t.Fatalf("first login: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	if user := lookup(); user.Role != identity.RoleAdmin {
+		t.Errorf("first login role = %q, want admin", user.Role)
+	}
+
+	f.idp.Groups = nil
+	state, cookie = f.start(t)
+	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
+		t.Fatalf("second login: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	if user := lookup(); user.Role != identity.RoleMember {
+		t.Errorf("second login role = %q, want member", user.Role)
 	}
 }
 

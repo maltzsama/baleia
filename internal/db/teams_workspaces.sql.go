@@ -848,6 +848,23 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 	return i, err
 }
 
+const upsertTeamMember = `-- name: UpsertTeamMember :exec
+INSERT INTO team_members (team_id, user_id, role)
+VALUES ($1, $2, $3)
+ON CONFLICT (team_id, user_id) DO UPDATE SET role = EXCLUDED.role
+`
+
+type UpsertTeamMemberParams struct {
+	TeamID pgtype.UUID `json:"team_id"`
+	UserID pgtype.UUID `json:"user_id"`
+	Role   string      `json:"role"`
+}
+
+func (q *Queries) UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberParams) error {
+	_, err := q.db.Exec(ctx, upsertTeamMember, arg.TeamID, arg.UserID, arg.Role)
+	return err
+}
+
 const upsertWorkspaceCatalogGrant = `-- name: UpsertWorkspaceCatalogGrant :one
 INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, permission, granted_by)
 VALUES ($1, $2, $3, $4)
