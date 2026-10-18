@@ -27,6 +27,12 @@ type store struct {
 	hosted  map[[2][16]byte]bool // {engine, user} -> the engine hosts a catalog granted to the user
 	// {workspace, space, user} -> effective space role
 	spaceRoles map[[3][16]byte]string
+	// {agent, workspace} -> the agent is bound to the workspace (#59)
+	agentBound map[[2][16]byte]bool
+}
+
+func (s store) AgentWorkspaceBound(_ context.Context, a db.AgentWorkspaceBoundParams) (bool, error) {
+	return s.agentBound[[2][16]byte{a.AgentID.Bytes, a.WorkspaceID.Bytes}], nil
 }
 
 func (s store) GetEffectiveSpaceRole(_ context.Context, a db.GetEffectiveSpaceRoleParams) (string, error) {
@@ -327,5 +333,62 @@ func TestDenialHook(t *testing.T) {
 	want := []string{"connection:not_found", "catalog:forbidden", "catalog:not_found", "workspace:not_found"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("denials = %v, want %v", got, want)
+	}
+}
+
+// TestAgentWorkspaceBinding: an agent reaches a workspace only while it is
+// bound to it and its owner is still a member (#59).
+func TestAgentWorkspaceBinding(t *testing.T) {
+	agentID := uid(60)
+	c := New(store{
+		wss:        map[[16]byte]db.Workspace{wsX.Bytes: {ID: wsX}},
+		members:    map[[2][16]byte]bool{{wsX.Bytes, owner.UserID.Bytes}: true},
+		agentBound: map[[2][16]byte]bool{{agentID.Bytes, wsX.Bytes}: true},
+	})
+	ctx := context.Background()
+	agent := Principal{UserID: owner.UserID, Role: "member", Kind: KindAgent, AgentID: agentID}
+	if _, err := c.Workspace(ctx, agent, wsX, ActRead); err != nil {
+		t.Fatalf("bound agent: %v", err)
+	}
+
+	unbound := Principal{UserID: owner.UserID, Role: "member", Kind: KindAgent, AgentID: uid(61)}
+	if _, err := c.Workspace(ctx, unbound, wsX, ActRead); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unbound agent = %v, want ErrNotFound", err)
+	}
+
+	// The owner leaving the workspace closes the agent's access too.
+	c = New(store{
+		wss:        map[[16]byte]db.Workspace{wsX.Bytes: {ID: wsX}},
+		agentBound: map[[2][16]byte]bool{{agentID.Bytes, wsX.Bytes}: true},
+	})
+	if _, err := c.Workspace(ctx, agent, wsX, ActRead); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("owner removed = %v, want ErrNotFound", err)
+	}
+}
+
+// TestAgentDeniedAdminActions: an agent never carries the owner's global role
+// and every write is refused, whatever the owner may do (#59).
+func TestAgentDeniedAdminActions(t *testing.T) {
+	c := fixture()
+	ctx := context.Background()
+	agent := Principal{UserID: owner.UserID, Role: "member", Kind: KindAgent, AgentID: uid(60)}
+
+	if _, err := c.Connection(ctx, agent, connA, ActWrite); !errors.Is(err, ErrForbidden) {
+		t.Errorf("connection write = %v, want ErrForbidden", err)
+	}
+	if _, _, err := c.Catalog(ctx, agent, catA, ActWrite); !errors.Is(err, ErrForbidden) {
+		t.Errorf("catalog write = %v, want ErrForbidden", err)
+	}
+	if _, _, err := c.Engine(ctx, agent, engA, ActWrite); !errors.Is(err, ErrForbidden) {
+		t.Errorf("engine write = %v, want ErrForbidden", err)
+	}
+	if _, err := c.Workspace(ctx, agent, wsX, ActWrite); !errors.Is(err, ErrForbidden) {
+		t.Errorf("workspace write = %v, want ErrForbidden", err)
+	}
+	if _, err := c.Team(ctx, agent, teamT, ActWrite); !errors.Is(err, ErrForbidden) {
+		t.Errorf("team write = %v, want ErrForbidden", err)
+	}
+	if err := agent.RequireAdmin(); !errors.Is(err, ErrForbidden) {
+		t.Errorf("RequireAdmin = %v, want ErrForbidden", err)
 	}
 }

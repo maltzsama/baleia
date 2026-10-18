@@ -1,0 +1,26 @@
+meta {
+  name: Get Agent
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/agents/{{agent_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the agent carries its workspace and allowed actions", function () {
+    expect(res.body.workspaces).to.be.an("array");
+    expect(res.body.allowed_actions).to.include("manage_tokens");
+  });
+}

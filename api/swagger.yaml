@@ -33,6 +33,8 @@ tags:
     description: "Authentication and sessions"
   - name: ApiKeys
     description: "Programmatic access keys"
+  - name: Agents
+    description: "Agent identities, workspace bindings and /mcp tokens"
   - name: Identity
     description: "Identity provider administration (OIDC and LDAP) — admin only"
   - name: Users
@@ -80,6 +82,16 @@ components:
   parameters:
     PathId:
       name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PathAgentId:
+      name: agent_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PathAgentTokenId:
+      name: token_id
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -666,6 +678,81 @@ components:
         name: { type: string }
         expires_at: { type: string, format: date-time, nullable: true }
 
+    # ── Agents (#59) ───────────────────────────────────────────
+    AgentAllowedAction:
+      type: string
+      enum: [view, update, disable, delete, manage_tokens]
+    AgentWorkspace:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    Agent:
+      type: object
+      required: [id, owner_id, name, status, workspaces, created_at, allowed_actions]
+      properties:
+        id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        workspaces:
+          type: array
+          items: { $ref: "#/components/schemas/AgentWorkspace" }
+        active_token_count: { type: integer, minimum: 0 }
+        next_token_expiry: { type: string, format: date-time, nullable: true }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        allowed_actions:
+          type: array
+          items: { $ref: "#/components/schemas/AgentAllowedAction" }
+    AgentToken:
+      type: object
+      required: [id, name, prefix, expires_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string, example: "bal_agt_abc12345..." }
+        expires_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    AgentTokenCreated:
+      allOf:
+        - $ref: "#/components/schemas/AgentToken"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: "Displayed only once upon creation"
+    CreateAgentRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string }
+        workspace_ids:
+          type: array
+          items: { type: string, format: uuid }
+    UpdateAgentRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string }
+        workspace_ids:
+          type: array
+          items: { type: string, format: uuid }
+        status: { type: string, enum: [active, disabled] }
+    CreateAgentTokenRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        expires_in_days: { type: integer, minimum: 1 }
+
     # ── Users ──────────────────────────────────────────────────
     UserPublic:
       type: object
@@ -694,6 +781,9 @@ components:
       enum: [view, update, delete, sync]
     WorkspaceAllowedAction:
       type: string
+      x-enum-varnames: [WorkspaceAllowedActionView, WorkspaceAllowedActionUpdate, WorkspaceAllowedActionDelete,
+                        WorkspaceAllowedActionManageGrants, WorkspaceAllowedActionSetDefaults,
+                        WorkspaceAllowedActionRun, WorkspaceAllowedActionCreateSpace]
       enum: [view, update, delete, manage_grants, set_defaults, run, create_space]
     GlobalAction:
       type: string
@@ -3058,6 +3148,140 @@ paths:
       tags: [ApiKeys]
       operationId: deleteApiKey
       summary: "Remove an API key"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Agents (#59) ─────────────────────────────────────────────
+  /agents:
+    get:
+      tags: [Agents]
+      operationId: listAgents
+      summary: "List the caller's external agents (admins: all with all=true)"
+      parameters:
+        - name: all
+          in: query
+          description: "Admin only: list every user's agents"
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: "Agents"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Agents]
+      operationId: createAgent
+      summary: "Create an agent owned by the caller"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAgentRequest" }
+      responses:
+        "201":
+          description: "Agent created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{agent_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathAgentId"
+    get:
+      tags: [Agents]
+      operationId: getAgent
+      summary: "Get an agent"
+      responses:
+        "200":
+          description: "Agent"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Agents]
+      operationId: updateAgent
+      summary: "Update an agent (owner; an admin may only disable it)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAgentRequest" }
+      responses:
+        "200":
+          description: "Agent updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Agents]
+      operationId: deleteAgent
+      summary: "Delete an agent (owner or admin)"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{agent_id}/tokens:
+    parameters:
+      - $ref: "#/components/parameters/PathAgentId"
+    get:
+      tags: [Agents]
+      operationId: listAgentTokens
+      summary: "List an agent's tokens (never the secret)"
+      responses:
+        "200":
+          description: "Tokens"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentToken" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Agents]
+      operationId: createAgentToken
+      summary: "Mint a token for an agent — the secret is shown once"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAgentTokenRequest" }
+      responses:
+        "201":
+          description: "Token created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTokenCreated" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{agent_id}/tokens/{token_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathAgentId"
+      - $ref: "#/components/parameters/PathAgentTokenId"
+    delete:
+      tags: [Agents]
+      operationId: revokeAgentToken
+      summary: "Revoke an agent token"
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }

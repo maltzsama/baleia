@@ -1,0 +1,38 @@
+meta {
+  name: Create Agent Token
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/agents/{{agent_id}}/tokens
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno MCP client",
+    "expires_in_days": 30
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+vars:post-response {
+  agent_token_id: res.body.id
+  agent_token_secret: res.body.token
+}
+
+tests {
+  test("the secret is returned once and carries the agent prefix", function () {
+    expect(res.body.token).to.match(/^bal_agt_/);
+    expect(res.body.prefix).to.match(/^bal_agt_/);
+  });
+}

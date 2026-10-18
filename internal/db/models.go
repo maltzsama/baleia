@@ -10,6 +10,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Agent struct {
+	ID          pgtype.UUID        `json:"id"`
+	OwnerID     pgtype.UUID        `json:"owner_id"`
+	Kind        string             `json:"kind"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AgentToken struct {
+	ID         pgtype.UUID        `json:"id"`
+	AgentID    pgtype.UUID        `json:"agent_id"`
+	Name       string             `json:"name"`
+	TokenHash  string             `json:"token_hash"`
+	Prefix     string             `json:"prefix"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	CreatedBy  pgtype.UUID        `json:"created_by"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+}
+
+type AgentWorkspace struct {
+	AgentID     pgtype.UUID `json:"agent_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
 type ApiKey struct {
 	ID         pgtype.UUID        `json:"id"`
 	UserID     pgtype.UUID        `json:"user_id"`
@@ -321,6 +350,7 @@ type QueryExecution struct {
 	TargetCatalogID pgtype.UUID        `json:"target_catalog_id"`
 	TargetSchema    *string            `json:"target_schema"`
 	TargetSnapshot  []byte             `json:"target_snapshot"`
+	AgentID         pgtype.UUID        `json:"agent_id"`
 }
 
 type QueryFolder struct {

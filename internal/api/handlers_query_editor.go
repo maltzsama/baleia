@@ -753,6 +753,16 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	if err != nil {
 		return nil, err
 	}
+	// Agents are always read-only, whatever the workspace grant says (#59).
+	// The engine enforces it; an engine that cannot is refused when the session
+	// opens (queryengine.CodeReadOnly) unless its credentials are asserted
+	// read-only.
+	principal, _ := authz.PrincipalFromContext(ctx)
+	agentID := pgtype.UUID{}
+	if principal.IsAgent() {
+		target.ReadOnly = true
+		agentID = principal.AgentID
+	}
 	// A target runs where an adapter for its engine kind exists; direct
 	// engines get theirs in #81-#83.
 	if !slices.Contains(queryengine.Kinds(), target.EngineKind) {
@@ -827,6 +837,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		TargetCatalogID: target.CatalogID,
 		TargetSchema:    targetSchema,
 		TargetSnapshot:  snapshot,
+		AgentID:         agentID,
 	})
 	if err != nil {
 		return nil, err
@@ -844,7 +855,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		WorkspaceID:       request.Id.String(),
 		SQL:               request.Body.Sql,
 		Target:            target,
-		Identity:          queryengine.Identity{UserID: trinoUser},
+		Identity:          queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID)},
 		StatementTimeout:  h.cfg.StatementTimeout,
 		RequestID:         requestID,
 		ExecutionTimeout:  h.cfg.ExecutionTimeout,

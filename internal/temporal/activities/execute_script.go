@@ -163,12 +163,16 @@ func (s *script) engine() (queryengine.Engine, error) {
 }
 
 func (s *script) openSession() (queryengine.Session, error) {
+	source := "editor"
+	if s.p.Identity.AgentID != "" {
+		source = "agent"
+	}
 	spec := queryengine.SessionSpec{
 		Catalog:  s.p.Target.EngineCatalog,
 		Identity: s.p.Identity,
 		ReadOnly: s.p.Target.ReadOnly,
 		Timeout:  s.p.Timeout,
-		Tags:     queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: "editor"},
+		Tags:     queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source},
 	}
 	if s.p.Target.Schema != "" {
 		spec.Schema = []string{s.p.Target.Schema}

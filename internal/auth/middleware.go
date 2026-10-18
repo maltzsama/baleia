@@ -11,9 +11,15 @@ type contextKey string
 const (
 	ContextKeyUserID        contextKey = "user_id"
 	ContextKeyRole          contextKey = "role"
+	ContextKeyActorKind     contextKey = "actor_kind"
+	ContextKeyAgentID       contextKey = "agent_id"
 	ContextKeyRefreshCookie contextKey = "refresh_cookie"
 	ContextKeyOIDCCookie    contextKey = "oidc_cookie"
 )
+
+// ActorAgent marks a request whose caller is an agent acting for its owner
+// (#59). The zero value means a human user.
+const ActorAgent = "agent"
 
 // Browser session cookie for the refresh token (#51). It is scoped to the auth
 // routes so it is never sent with ordinary API requests.
@@ -65,6 +71,12 @@ func Middleware(secret string) func(http.Handler) http.Handler {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
+			// Agent tokens are only valid on /mcp (#59). Reject them here and in
+			// every other auth middleware so no REST route can accept one.
+			if IsAgentToken(token) {
+				http.Error(w, "agent_token_not_allowed", http.StatusUnauthorized)
+				return
+			}
 
 			claims, err := ParseToken(token, secret)
 			if err != nil {
@@ -98,6 +110,29 @@ func UserIDFromContext(ctx context.Context) string {
 func RoleFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(ContextKeyRole).(string)
 	return v
+}
+
+// ActorKindFromContext returns ActorAgent for an agent request, or "" for a
+// human user.
+func ActorKindFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ContextKeyActorKind).(string)
+	return v
+}
+
+// AgentIDFromContext returns the agent id for an agent request, or "".
+func AgentIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ContextKeyAgentID).(string)
+	return v
+}
+
+// WithAgentPrincipal puts an agent principal in ctx. UserID is the owner and
+// the role is always member, even when the owner is a global admin (#59).
+func WithAgentPrincipal(ctx context.Context, ownerID, agentID string) context.Context {
+	ctx = context.WithValue(ctx, ContextKeyUserID, ownerID)
+	ctx = context.WithValue(ctx, ContextKeyRole, "member")
+	ctx = context.WithValue(ctx, ContextKeyActorKind, ActorAgent)
+	ctx = context.WithValue(ctx, ContextKeyAgentID, agentID)
+	return ctx
 }
 
 func extractToken(r *http.Request) string {

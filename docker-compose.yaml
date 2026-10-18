@@ -412,6 +412,7 @@ services:
       # password from it at boot so the role and Trino cannot diverge.
       - BALEIA_TRINO_DB_PASSWORD=${BALEIA_TRINO_DB_PASSWORD:-admin}
       - PUBLIC_URL=http://localhost:8080
+      - BALEIA_AGENTS_ENABLED=${BALEIA_AGENTS_ENABLED:-true}
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
       - SMTP_FROM=noreply@baleia.io
@@ -442,6 +443,7 @@ services:
       - POLARIS_URL=http://polaris:8181
       - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
       - BALEIA_ENCRYPTION_KEY=${BALEIA_ENCRYPTION_KEY:-dev-encryption-key-not-for-production-0123}
+      - BALEIA_AGENTS_ENABLED=${BALEIA_AGENTS_ENABLED:-true}
       - S3_ENDPOINT=rustfs:9000
       - S3_ACCESS_KEY=rustfsadmin
       - S3_SECRET_KEY=rustfsadmin

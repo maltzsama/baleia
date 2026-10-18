@@ -20,6 +20,21 @@ const (
 	AddTeamMemberRequestRoleOwner  AddTeamMemberRequestRole = "owner"
 )
 
+// Defines values for AgentStatus.
+const (
+	AgentStatusActive   AgentStatus = "active"
+	AgentStatusDisabled AgentStatus = "disabled"
+)
+
+// Defines values for AgentAllowedAction.
+const (
+	AgentAllowedActionDelete       AgentAllowedAction = "delete"
+	AgentAllowedActionDisable      AgentAllowedAction = "disable"
+	AgentAllowedActionManageTokens AgentAllowedAction = "manage_tokens"
+	AgentAllowedActionUpdate       AgentAllowedAction = "update"
+	AgentAllowedActionView         AgentAllowedAction = "view"
+)
+
 // Defines values for AttentionKind.
 const (
 	AgentTokenExpiring AttentionKind = "agent_token_expiring"
@@ -677,6 +692,12 @@ const (
 	TrashItemEntityTypeSemanticMetric TrashItemEntityType = "semantic_metric"
 )
 
+// Defines values for UpdateAgentRequestStatus.
+const (
+	UpdateAgentRequestStatusActive   UpdateAgentRequestStatus = "active"
+	UpdateAgentRequestStatusDisabled UpdateAgentRequestStatus = "disabled"
+)
+
 // Defines values for UpdateLDAPConfigDefaultRole.
 const (
 	UpdateLDAPConfigDefaultRoleAdmin  UpdateLDAPConfigDefaultRole = "admin"
@@ -856,6 +877,59 @@ type AddTeamMemberRequest struct {
 
 // AddTeamMemberRequestRole defines model for AddTeamMemberRequest.Role.
 type AddTeamMemberRequestRole string
+
+// Agent defines model for Agent.
+type Agent struct {
+	ActiveTokenCount *int                 `json:"active_token_count,omitempty"`
+	AllowedActions   []AgentAllowedAction `json:"allowed_actions"`
+	CreatedAt        time.Time            `json:"created_at"`
+	Description      *string              `json:"description,omitempty"`
+	Id               openapi_types.UUID   `json:"id"`
+	LastUsedAt       *time.Time           `json:"last_used_at"`
+	Name             string               `json:"name"`
+	NextTokenExpiry  *time.Time           `json:"next_token_expiry"`
+	OwnerId          openapi_types.UUID   `json:"owner_id"`
+	Status           AgentStatus          `json:"status"`
+	UpdatedAt        *time.Time           `json:"updated_at,omitempty"`
+	Workspaces       []AgentWorkspace     `json:"workspaces"`
+}
+
+// AgentStatus defines model for Agent.Status.
+type AgentStatus string
+
+// AgentAllowedAction defines model for AgentAllowedAction.
+type AgentAllowedAction string
+
+// AgentToken defines model for AgentToken.
+type AgentToken struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	ExpiresAt  time.Time          `json:"expires_at"`
+	Id         openapi_types.UUID `json:"id"`
+	LastUsedAt *time.Time         `json:"last_used_at"`
+	Name       string             `json:"name"`
+	Prefix     string             `json:"prefix"`
+	RevokedAt  *time.Time         `json:"revoked_at"`
+}
+
+// AgentTokenCreated defines model for AgentTokenCreated.
+type AgentTokenCreated struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	ExpiresAt  time.Time          `json:"expires_at"`
+	Id         openapi_types.UUID `json:"id"`
+	LastUsedAt *time.Time         `json:"last_used_at"`
+	Name       string             `json:"name"`
+	Prefix     string             `json:"prefix"`
+	RevokedAt  *time.Time         `json:"revoked_at"`
+
+	// Token Displayed only once upon creation
+	Token string `json:"token"`
+}
+
+// AgentWorkspace defines model for AgentWorkspace.
+type AgentWorkspace struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+}
 
 // ApiKey defines model for ApiKey.
 type ApiKey struct {
@@ -1409,6 +1483,19 @@ type CreateAdminRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Name     string              `json:"name"`
 	Password string              `json:"password"`
+}
+
+// CreateAgentRequest defines model for CreateAgentRequest.
+type CreateAgentRequest struct {
+	Description  *string               `json:"description,omitempty"`
+	Name         string                `json:"name"`
+	WorkspaceIds *[]openapi_types.UUID `json:"workspace_ids,omitempty"`
+}
+
+// CreateAgentTokenRequest defines model for CreateAgentTokenRequest.
+type CreateAgentTokenRequest struct {
+	ExpiresInDays *int   `json:"expires_in_days,omitempty"`
+	Name          string `json:"name"`
 }
 
 // CreateApiKeyRequest defines model for CreateApiKeyRequest.
@@ -3150,6 +3237,17 @@ type TrashItem struct {
 // TrashItemEntityType defines model for TrashItem.EntityType.
 type TrashItemEntityType string
 
+// UpdateAgentRequest defines model for UpdateAgentRequest.
+type UpdateAgentRequest struct {
+	Description  *string                   `json:"description,omitempty"`
+	Name         *string                   `json:"name,omitempty"`
+	Status       *UpdateAgentRequestStatus `json:"status,omitempty"`
+	WorkspaceIds *[]openapi_types.UUID     `json:"workspace_ids,omitempty"`
+}
+
+// UpdateAgentRequestStatus defines model for UpdateAgentRequest.Status.
+type UpdateAgentRequestStatus string
+
 // UpdateBindingRequest defines model for UpdateBindingRequest.
 type UpdateBindingRequest struct {
 	Enabled           *bool   `json:"enabled,omitempty"`
@@ -3466,6 +3564,12 @@ type WsTicketRequest struct {
 	ExecutionId *openapi_types.UUID `json:"execution_id,omitempty"`
 }
 
+// PathAgentId defines model for PathAgentId.
+type PathAgentId = openapi_types.UUID
+
+// PathAgentTokenId defines model for PathAgentTokenId.
+type PathAgentTokenId = openapi_types.UUID
+
 // PathId defines model for PathId.
 type PathId = openapi_types.UUID
 
@@ -3510,6 +3614,12 @@ type DeleteIdentityProviderParams struct {
 // TestIdentityProviderParams defines parameters for TestIdentityProvider.
 type TestIdentityProviderParams struct {
 	TestUsername *string `form:"test_username,omitempty" json:"test_username,omitempty"`
+}
+
+// ListAgentsParams defines parameters for ListAgents.
+type ListAgentsParams struct {
+	// All Admin only: list every user's agents
+	All *bool `form:"all,omitempty" json:"all,omitempty"`
 }
 
 // ListAuditEventsParams defines parameters for ListAuditEvents.
@@ -3899,6 +4009,15 @@ type TestIdentityProviderTransientJSONRequestBody = TestIdentityProviderRequest
 
 // UpdateIdentityProviderJSONRequestBody defines body for UpdateIdentityProvider for application/json ContentType.
 type UpdateIdentityProviderJSONRequestBody = UpdateIdentityProviderRequest
+
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody = UpdateAgentRequest
+
+// CreateAgentTokenJSONRequestBody defines body for CreateAgentToken for application/json ContentType.
+type CreateAgentTokenJSONRequestBody = CreateAgentTokenRequest
 
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
 type CreateApiKeyJSONRequestBody = CreateApiKeyRequest

@@ -266,6 +266,22 @@ func TestExecuteScript_RunsOnTarget(t *testing.T) {
 	}
 }
 
+// TestExecuteScript_AgentSessionTag: an agent execution carries its agent id
+// and is tagged as an agent session (#59).
+func TestExecuteScript_AgentSessionTag(t *testing.T) {
+	fake := &fakeEngine{}
+	p := scriptParams("SELECT 1")
+	p.Target.ReadOnly = true
+	p.Identity.AgentID = "a-1"
+	if _, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
+		t.Fatal(err)
+	}
+	spec := fake.lastSpec
+	if spec.Identity.AgentID != "a-1" || spec.Tags.Source != "agent" || !spec.ReadOnly {
+		t.Fatalf("session spec = %+v", spec)
+	}
+}
+
 // TestExecuteScript_NoEngineFailsFirst: a target without an engine never
 // falls back to a default engine; the first statement fails, the rest skip.
 func TestExecuteScript_NoEngineFailsFirst(t *testing.T) {
