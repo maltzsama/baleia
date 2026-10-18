@@ -14,8 +14,21 @@ function createWorkspaceStore() {
 	let workspaces = $state<Workspace[]>([]);
 	let current = $state<Workspace | null>(null);
 	let loading = $state(true);
+	let loadInFlight: Promise<void> | null = null;
 
 	async function load() {
+		// Several components (layout, workbench, data explorer) call load() on
+		// mount; share one in-flight request instead of firing duplicates (#233).
+		if (loadInFlight) return loadInFlight;
+		loadInFlight = doLoad();
+		try {
+			await loadInFlight;
+		} finally {
+			loadInFlight = null;
+		}
+	}
+
+	async function doLoad() {
 		loading = true;
 		try {
 			const { data } = await client.GET('/workspaces');

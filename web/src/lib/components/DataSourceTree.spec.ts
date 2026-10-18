@@ -83,6 +83,47 @@ describe('DataSourceTree', () => {
 		);
 	});
 
+	it('renders namespaces before tables finish loading', async () => {
+		let resolveTables!: () => void;
+		const tablesGate = new Promise<void>((resolve) => (resolveTables = resolve));
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog()])
+			),
+			http.get(
+				'/workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces',
+				({ request, response }) => {
+					const parent = new URL(request.url).searchParams.getAll('parent');
+					return response(200).json({
+						freshness: { metadata_synced_at: null },
+						items: parent.length === 0 ? [{ path: ['sales'] }] : []
+					});
+				}
+			),
+			http.get('/workspaces/{id}/metadata/catalogs/{catalog_id}/tables', async ({ response }) => {
+				await tablesGate;
+				return response(200).json({
+					freshness: { metadata_synced_at: null },
+					items: [{ id: TABLE_ID, name: 'orders', kind: 'table' }],
+					next_cursor: null
+				});
+			})
+		);
+
+		render(DataSourceTree, { props: {} });
+
+		await fireEvent.click(await screen.findByRole('button', { name: /lake/i }));
+		expect(await screen.findByText('sales')).toBeTruthy();
+
+		await fireEvent.click(screen.getByRole('button', { name: /sales/i }));
+		// The namespaces already resolved, so the leaf shows its tables-loading
+		// state rather than hiding behind the pending tables request.
+		expect(await screen.findByText(/Loading tables/)).toBeTruthy();
+
+		resolveTables();
+		expect(await screen.findByText('orders')).toBeTruthy();
+	});
+
 	it('shows an error state with retry when a level fails', async () => {
 		let fail = true;
 		server.use(

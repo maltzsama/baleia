@@ -90,8 +90,8 @@ export class ResultsStore {
 					this.columns = batch.schema.fields.map(columnMeta);
 				}
 				const previous = this.offsets[this.offsets.length - 1] ?? 0;
-				this.offsets = [...this.offsets, previous + batch.numRows];
-				this.batches = [...this.batches, batch];
+				this.offsets.push(previous + batch.numRows);
+				this.batches.push(batch);
 				this.rowCount = previous + batch.numRows;
 			}
 			if (!controller.signal.aborted) this.done = true;

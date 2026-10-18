@@ -42,13 +42,17 @@ function fail(error: unknown, status: number | undefined, fallback: string): nev
 }
 
 // Promise caches: a cache hit is the in-flight request too, so two components
-// expanding the same node share one round trip.
+// expanding the same node share one round trip. Each cache is bounded so a long
+// session (or a very large catalog) cannot grow memory without limit (#236).
 type Cache<T> = Map<string, Promise<T>>;
 
 const catalogsCache: Cache<MetadataCatalog[]> = new Map();
 const namespacesCache: Cache<MetadataNamespaceList> = new Map();
 const tablesCache: Cache<MetadataTablePage> = new Map();
 const tableCache: Cache<MetadataTableDetail> = new Map();
+
+/** Upper bound per cache; the oldest (least-recently-set) entry is evicted. */
+const CACHE_MAX = 1000;
 
 /** Drops every cached read. Tests call it between cases. */
 export function clearMetadataCache(): void {
@@ -67,6 +71,13 @@ function cached<T>(cache: Cache<T>, key: string, load: () => Promise<T>): Promis
 		throw error;
 	});
 	cache.set(key, pending);
+	// Bound the session cache (FIFO by insertion): drop the oldest entries so a
+	// long-lived tab cannot grow memory without limit (#236).
+	while (cache.size > CACHE_MAX) {
+		const oldest = cache.keys().next().value;
+		if (oldest === undefined) break;
+		cache.delete(oldest);
+	}
 	return pending;
 }
 

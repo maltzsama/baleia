@@ -109,23 +109,39 @@
 		const wid = workspaceId;
 		node.status = 'loading';
 		node.error = '';
-		return loadNamespaces(wid, catalog.id, path).then(async (list) => {
+		return loadNamespaces(wid, catalog.id, path).then((list) => {
 			// Only deeper paths are children: a self-referential row would make
 			// the recursive tree loop forever.
 			node.children = list.items
 				.map((item) => ({ path: item.path }))
 				.filter((item) => item.path.length > path.length);
 			node.freshness = list.freshness;
+			// Namespaces render as soon as they arrive; tables load in the
+			// background so expanding a level is one round trip, not two (#233).
+			node.status = 'ready';
 			// A root with namespaces has no tables of its own; an empty root
 			// (SQLite) lists its tables without a namespace.
 			if (path.length > 0 || node.children.length === 0) {
-				const page = await loadTables(wid, catalog.id, path);
-				node.tables = page.items;
-				node.nextCursor = page.next_cursor ?? null;
-				node.freshness = page.freshness;
+				void loadInitialTables(node, catalog, path);
 			}
-			node.status = 'ready';
 		});
+	}
+
+	/** Loads the first page of tables for a node, replacing whatever it had. */
+	async function loadInitialTables(node: NamespaceNode, catalog: MetadataCatalog, path: string[]) {
+		if (node.tablesLoading) return;
+		node.tablesLoading = true;
+		node.tablesError = '';
+		try {
+			const page = await loadTables(workspaceId, catalog.id, path);
+			node.tables = page.items;
+			node.nextCursor = page.next_cursor ?? null;
+			node.freshness = page.freshness;
+		} catch (e) {
+			node.tablesError = e instanceof Error ? e.message : String(e);
+		} finally {
+			node.tablesLoading = false;
+		}
 	}
 
 	function ensureLoaded(refKey: string, catalog: MetadataCatalog, path: string[]): Promise<void> {
@@ -176,6 +192,14 @@
 		} finally {
 			node.tablesLoading = false;
 		}
+	}
+
+	/** Retries the tables for a node: first page when empty, else the next page. */
+	function retryTables(refKey: string, catalog: MetadataCatalog, path: string[]) {
+		const node = nodes[nodeKey(refKey, path)];
+		if (!node || node.tablesLoading) return;
+		if (node.tables.length === 0) void loadInitialTables(node, catalog, path);
+		else void loadMoreTables(refKey, catalog, path);
 	}
 
 	function selectTable(catalog: MetadataCatalog, path: string[], table: MetadataTableSummary) {
@@ -529,7 +553,7 @@
 				<ErrorState
 					title="Could not load tables"
 					message={node.tablesError}
-					onretry={() => loadMoreTables(refKey, catalog, path)}
+					onretry={() => retryTables(refKey, catalog, path)}
 				/>
 			{:else if node.nextCursor}
 				<button
@@ -541,7 +565,9 @@
 				</button>
 			{/if}
 
-			{#if node.children.length === 0 && node.tables.length === 0 && !node.nextCursor}
+			{#if node.tablesLoading && node.tables.length === 0}
+				<p class="py-1 pl-2 text-[11px] text-text-muted">Loading tables…</p>
+			{:else if node.children.length === 0 && node.tables.length === 0 && !node.nextCursor}
 				<p class="py-1 pl-2 text-[11px] text-text-muted">No tables or namespaces.</p>
 			{/if}
 		{/if}
