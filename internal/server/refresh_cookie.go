@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"time"
 
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -34,7 +35,7 @@ func setRefreshCookie(w http.ResponseWriter, cfg *config.Config, token string) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(cfg.RefreshTTL().Seconds()),
+		MaxAge:   int(cfg.RefreshTTL() / time.Second),
 	})
 }
 
