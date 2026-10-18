@@ -89,17 +89,18 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 	token := randomState()
 	expires := time.Now().Add(72 * time.Hour)
 
-	if err := h.queries.SetPasswordResetToken(ctx, db.SetPasswordResetTokenParams{
-		Email:                  user.Email,
-		PasswordResetToken:     &token,
-		PasswordResetExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+	// The invite link carries the raw token; only its hash is stored (#51).
+	if err := h.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		TokenHash: auth.HashToken(token),
+		UserID:    user.ID,
+		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
 	}); err != nil {
-		slog.Error("SetPasswordResetToken failed", "err", err)
+		slog.Error("CreatePasswordResetToken failed", "err", err)
 		return nil, err
 	}
 
 	inviteURL := h.cfg.PublicURL + "/accept-invite?token=" + token
-	if err := sendResetEmail(h.cfg, user.Email, inviteURL); err != nil {
+	if err := h.sendMail(user.Email, inviteURL); err != nil {
 		slog.Warn("failed to send invite email", "err", err, "url", inviteURL)
 	}
 
@@ -173,6 +174,7 @@ func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObje
 	h.audited(ctx, ev.Allowed())
 	return RemoveUser204Response{}, nil
 }
+
 // removeUserConflict maps a delete the database refused because the user is
 // still referenced: a workspace the user owns (every user who has logged in
 // owns a personal one) keeps its content, so the removal is refused.

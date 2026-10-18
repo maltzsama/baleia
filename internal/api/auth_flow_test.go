@@ -2,9 +2,13 @@ package api
 
 import (
 	"context"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -118,5 +122,132 @@ func TestRefresh_FamilyPreserved(t *testing.T) {
 	}
 	if !before.FamilyID.Valid || before.FamilyID != after.FamilyID {
 		t.Errorf("family = %v, rotated token family = %v, want the same non-null family", before.FamilyID, after.FamilyID)
+	}
+}
+
+func createResetToken(t *testing.T, f *auditFixture, userID string, raw string, expires time.Time) {
+	t.Helper()
+	if err := f.h.queries.CreatePasswordResetToken(context.Background(), db.CreatePasswordResetTokenParams{
+		TokenHash: auth.HashToken(raw),
+		UserID:    mustUUID(t, userID),
+		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReset_HashedSingleUse(t *testing.T) {
+	f := newAuthFixture(t)
+	const raw = "raw-reset-token"
+	createResetToken(t, f, f.owner, raw, time.Now().Add(time.Hour))
+
+	// The database holds the hash, never the raw link token.
+	var stored string
+	if err := f.pool.QueryRow(context.Background(),
+		"SELECT token_hash FROM password_reset_tokens WHERE token_hash = $1", auth.HashToken(raw),
+	).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != auth.HashToken(raw) || stored == raw {
+		t.Fatalf("stored token = %q, want its hash only", stored)
+	}
+
+	resp, err := f.h.ConfirmPasswordReset(context.Background(), ConfirmPasswordResetRequestObject{
+		Body: &PasswordResetConfirmBody{Token: raw, NewPassword: "a-new-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ConfirmPasswordReset204Response); !ok {
+		t.Fatalf("first use = %T, want 204", resp)
+	}
+
+	resp, err = f.h.ConfirmPasswordReset(context.Background(), ConfirmPasswordResetRequestObject{
+		Body: &PasswordResetConfirmBody{Token: raw, NewPassword: "another-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ConfirmPasswordReset401JSONResponse); !ok {
+		t.Fatalf("second use = %T, want 401", resp)
+	}
+}
+
+func TestReset_Expired(t *testing.T) {
+	f := newAuthFixture(t)
+	const raw = "expired-reset-token"
+	createResetToken(t, f, f.owner, raw, time.Now().Add(-time.Minute))
+
+	resp, err := f.h.ConfirmPasswordReset(context.Background(), ConfirmPasswordResetRequestObject{
+		Body: &PasswordResetConfirmBody{Token: raw, NewPassword: "a-new-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ConfirmPasswordReset401JSONResponse); !ok {
+		t.Fatalf("expired token = %T, want 401", resp)
+	}
+}
+
+func TestReset_RevokesRefresh(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+	const raw = "reset-revokes-refresh"
+	createResetToken(t, f, f.owner, raw, time.Now().Add(time.Hour))
+
+	resp, err := f.h.ConfirmPasswordReset(context.Background(), ConfirmPasswordResetRequestObject{
+		Body: &PasswordResetConfirmBody{Token: raw, NewPassword: "a-new-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ConfirmPasswordReset204Response); !ok {
+		t.Fatalf("reset = %T, want 204", resp)
+	}
+	if got := refreshStatus(t, f.h, token); got != 401 {
+		t.Errorf("refresh after reset = %d, want 401", got)
+	}
+}
+
+func TestReset_RequestStoresHash(t *testing.T) {
+	f := newAuthFixture(t)
+	f.h.cfg.SMTPHost, f.h.cfg.SMTPPort = "smtp.example.test", "25"
+	var sentURL string
+	f.h.SetMailer(func(_, resetURL string) error { sentURL = resetURL; return nil })
+
+	resp, err := f.h.RequestPasswordReset(context.Background(), RequestPasswordResetRequestObject{
+		Body: &PasswordResetRequestBody{Email: "owner@x.io"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(RequestPasswordReset204Response); !ok {
+		t.Fatalf("request = %T, want 204", resp)
+	}
+
+	u, err := url.Parse(sentURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := u.Query().Get("token")
+	if raw == "" {
+		t.Fatal("the e-mail link carried no token")
+	}
+	var n int
+	if err := f.pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM password_reset_tokens WHERE token_hash = $1", auth.HashToken(raw),
+	).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("stored rows for the hash = %d, want 1", n)
+	}
+	if err := f.pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM password_reset_tokens WHERE token_hash = $1", raw,
+	).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Error("the raw token was stored")
 	}
 }
