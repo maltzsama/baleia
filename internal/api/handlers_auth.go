@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/identity"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/google/uuid"
@@ -555,7 +556,7 @@ func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, err := h.loadOIDCProvider(r, providerID)
+	provider, _, err := h.loadOIDCProvider(r, providerID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "not_found", "provider not found")
 		return
@@ -666,7 +667,7 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	providerID := r.PathValue("provider_id")
-	provider, err := h.loadOIDCProvider(r, providerID)
+	provider, cfg, err := h.loadOIDCProvider(r, providerID)
 	if err != nil {
 		fail(oidcErrorIDPUnavailable, metrics.OutcomeError)
 		return
@@ -705,24 +706,14 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.queries.GetUserByExternalID(r.Context(), db.GetUserByExternalIDParams{
-		AuthProviderID: apID,
-		ExternalID:     &info.Subject,
-	})
+	user, err := h.provisionOIDCUser(r.Context(), apID, cfg, info)
 	if err != nil {
-		user, err = h.queries.CreateUser(r.Context(), db.CreateUserParams{
-			Name:           info.Name,
-			Email:          info.Email,
-			AuthProvider:   "oidc",
-			AuthProviderID: apID,
-			ExternalID:     &info.Subject,
-			Role:           "member",
-		})
-		if err != nil {
-			// #251 returns not_provisioned when the provisioning policy denies.
+		if errors.Is(err, errOIDCNotProvisioned) {
+			fail(oidcErrorNotProvisioned, metrics.OutcomeInvalidCredentials)
+		} else {
 			fail(oidcErrorSSOFailed, metrics.OutcomeError)
-			return
 		}
+		return
 	}
 
 	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
@@ -748,30 +739,128 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, oidcRedirectTarget(attempt.Redirect), http.StatusFound)
 }
 
-func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.OIDCProvider, error) {
+func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
 	var apID pgtype.UUID
 	if err := apID.Scan(providerID); err != nil {
-		return nil, err
+		return nil, auth.OIDCProviderConfig{}, err
 	}
 
 	ap, err := h.queries.GetAuthProviderByID(r.Context(), apID)
 	if err != nil {
-		return nil, err
+		return nil, auth.OIDCProviderConfig{}, err
 	}
 
 	cfg, err := auth.OpenOIDCConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
 	if err != nil {
-		return nil, err
+		return nil, auth.OIDCProviderConfig{}, err
 	}
 
 	redirectURL := h.cfg.PublicURL + "/api/v1/auth/oidc/" + providerID + "/callback"
 
-	return auth.NewOIDCProvider(r.Context(), auth.OIDCConfig{
+	provider, err := auth.NewOIDCProvider(r.Context(), auth.OIDCConfig{
 		IssuerURL:    cfg.IssuerURL,
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  redirectURL,
 	})
+	if err != nil {
+		return nil, auth.OIDCProviderConfig{}, err
+	}
+	return provider, cfg, nil
+}
+
+var errOIDCNotProvisioned = errors.New("oidc: not provisioned")
+
+// provisionOIDCUser applies the provisioning policy (#251): unknown subjects
+// are denied by default, auto-create needs a verified e-mail in an allowed
+// domain, and the IdP mapping is applied on every login.
+func (h *Handlers) provisionOIDCUser(ctx context.Context, apID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
+	mapped, err := identity.MapIdentity(identity.MappingInput{
+		Groups:      info.Groups,
+		RoleMapping: cfg.RoleMapping,
+		TeamMapping: cfg.TeamMapping,
+		DefaultRole: cfg.DefaultRole,
+	})
+	if err != nil {
+		return db.User{}, err
+	}
+
+	user, err := h.queries.GetUserByExternalID(ctx, db.GetUserByExternalIDParams{
+		AuthProviderID: apID,
+		ExternalID:     &info.Subject,
+	})
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return db.User{}, err
+		}
+		if !cfg.AutoCreate || !info.EmailVerified || len(cfg.AllowedEmailDomains) == 0 || !domainAllowed(info.Email, cfg.AllowedEmailDomains) {
+			return db.User{}, errOIDCNotProvisioned
+		}
+		user, err = h.queries.CreateUser(ctx, db.CreateUserParams{
+			Name:           info.Name,
+			Email:          info.Email,
+			AuthProvider:   "oidc",
+			AuthProviderID: apID,
+			ExternalID:     &info.Subject,
+			Role:           mapped.Role,
+		})
+		if err != nil {
+			if !isUniqueViolation(err) {
+				return db.User{}, err
+			}
+			// A concurrent login may have created the same subject; an
+			// existing e-mail account is never linked.
+			user, err = h.queries.GetUserByExternalID(ctx, db.GetUserByExternalIDParams{
+				AuthProviderID: apID,
+				ExternalID:     &info.Subject,
+			})
+			if err != nil {
+				return db.User{}, errOIDCNotProvisioned
+			}
+		} else {
+			h.applyTeams(ctx, user.ID, mapped.Teams)
+			return user, nil
+		}
+	}
+
+	if mapped.Role != user.Role {
+		if err := h.queries.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: user.ID, Role: mapped.Role}); err != nil {
+			return db.User{}, err
+		}
+		user.Role = mapped.Role
+	}
+	h.applyTeams(ctx, user.ID, mapped.Teams)
+	return user, nil
+}
+
+func (h *Handlers) applyTeams(ctx context.Context, userID pgtype.UUID, teams []identity.TeamAssignment) {
+	for _, t := range teams {
+		teamID, err := uuidFromString(t.TeamID)
+		if err != nil {
+			continue
+		}
+		if err := h.queries.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
+			TeamID: teamID,
+			UserID: userID,
+			Role:   t.TeamRole,
+		}); err != nil {
+			slog.Warn("oidc team mapping failed", "team_id", t.TeamID, "err", err)
+		}
+	}
+}
+
+func domainAllowed(email string, domains []string) bool {
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return false
+	}
+	domain := strings.ToLower(email[at+1:])
+	for _, d := range domains {
+		if strings.ToLower(strings.TrimPrefix(d, "@")) == domain {
+			return true
+		}
+	}
+	return false
 }
 
 func randomState() string {

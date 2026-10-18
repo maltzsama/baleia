@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -64,9 +63,11 @@ type OIDCConfig struct {
 }
 
 type OIDCUserInfo struct {
-	Subject string
-	Email   string
-	Name    string
+	Subject       string
+	Email         string
+	EmailVerified bool
+	Name          string
+	Groups        []string
 }
 
 func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error) {
@@ -129,18 +130,33 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 	}
 
 	var claims struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
+		Email         string   `json:"email"`
+		EmailVerified bool     `json:"email_verified"`
+		Name          string   `json:"name"`
+		Groups        []string `json:"groups"`
 	}
-	raw, _ := json.Marshal(idToken)
 	if err := idToken.Claims(&claims); err != nil {
-		_ = raw
 		return nil, fmt.Errorf("claims: %w", err)
 	}
 
+	groups := claims.Groups
+	if len(groups) == 0 {
+		// Some providers only publish groups through the userinfo endpoint.
+		if ui, err := p.provider.UserInfo(ctx, oauth2.StaticTokenSource(token)); err == nil {
+			var uc struct {
+				Groups []string `json:"groups"`
+			}
+			if err := ui.Claims(&uc); err == nil {
+				groups = uc.Groups
+			}
+		}
+	}
+
 	return &OIDCUserInfo{
-		Subject: idToken.Subject,
-		Email:   claims.Email,
-		Name:    claims.Name,
+		Subject:       idToken.Subject,
+		Email:         claims.Email,
+		EmailVerified: claims.EmailVerified,
+		Name:          claims.Name,
+		Groups:        groups,
 	}, nil
 }

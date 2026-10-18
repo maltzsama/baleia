@@ -31,16 +31,16 @@ const (
 
 // RoleMapping binds a directory group to a platform role.
 type RoleMapping struct {
-	Group string
-	Role  string
+	Group string `json:"group"`
+	Role  string `json:"role"`
 }
 
 // TeamMapping binds a directory group to a team and the role the user gets in
 // it.
 type TeamMapping struct {
-	Group    string
-	TeamID   string
-	TeamRole string
+	Group    string `json:"group"`
+	TeamID   string `json:"team_id"`
+	TeamRole string `json:"team_role"`
 }
 
 // TeamAssignment is one team the identity belongs to.
