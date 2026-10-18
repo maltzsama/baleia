@@ -371,6 +371,26 @@ func (h *Handlers) globalActions(ctx context.Context, p authz.Principal) []Globa
 
 // ── OIDC ──────────────────────────────────────────────────────────────────────
 
+// ListAuthProviders — GET /auth/providers (#289). Public, enabled providers
+// only; it never returns configuration or secrets. It supersedes
+// /auth/oidc/providers and adds LDAP.
+func (h *Handlers) ListAuthProviders(ctx context.Context, _ ListAuthProvidersRequestObject) (ListAuthProvidersResponseObject, error) {
+	providers, err := h.queries.ListAuthProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(ListAuthProviders200JSONResponse, 0, len(providers))
+	for _, p := range providers {
+		result = append(result, AuthProvider{
+			Id:   openapi_types.UUID(p.ID.Bytes),
+			Name: p.Name,
+			Type: AuthProviderType(p.Type),
+		})
+	}
+	return result, nil
+}
+
 func (h *Handlers) ListOIDCProviders(ctx context.Context, request ListOIDCProvidersRequestObject) (ListOIDCProvidersResponseObject, error) {
 	providers, err := h.queries.ListAuthProviders(ctx)
 	if err != nil {

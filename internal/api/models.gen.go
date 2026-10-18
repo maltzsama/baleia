@@ -65,6 +65,12 @@ const (
 	AuditEventOutcomeError   AuditEventOutcome = "error"
 )
 
+// Defines values for AuthProviderType.
+const (
+	AuthProviderTypeLdap AuthProviderType = "ldap"
+	AuthProviderTypeOidc AuthProviderType = "oidc"
+)
+
 // Defines values for BundleItemKind.
 const (
 	BundleItemKindFolder         BundleItemKind = "folder"
@@ -708,8 +714,8 @@ const (
 
 // Defines values for UserPublicAuthProvider.
 const (
-	UserPublicAuthProviderLocal UserPublicAuthProvider = "local"
-	UserPublicAuthProviderOidc  UserPublicAuthProvider = "oidc"
+	Local UserPublicAuthProvider = "local"
+	Oidc  UserPublicAuthProvider = "oidc"
 )
 
 // Defines values for UserPublicRole.
@@ -949,6 +955,16 @@ type AuditResolvedUser struct {
 	Email *string `json:"email,omitempty"`
 	Name  string  `json:"name"`
 }
+
+// AuthProvider An enabled login provider. Configuration and secrets are never returned.
+type AuthProvider struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+	Type AuthProviderType   `json:"type"`
+}
+
+// AuthProviderType defines model for AuthProvider.Type.
+type AuthProviderType string
 
 // BindingProjection defines model for BindingProjection.
 type BindingProjection struct {
@@ -3430,6 +3446,9 @@ type NotFound = Error
 
 // ServiceUnavailable defines model for ServiceUnavailable.
 type ServiceUnavailable = Error
+
+// TooManyRequests defines model for TooManyRequests.
+type TooManyRequests = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error

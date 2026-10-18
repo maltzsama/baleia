@@ -66,6 +66,7 @@ var operationAccess = map[string]access{
 	"GetSetupStatus":       {kind: kindPublic},
 	"CreateFirstAdmin":     {kind: kindPublic},
 	"Login":                {kind: kindPublic},
+	"ListAuthProviders":    {kind: kindPublic},
 	"ListOIDCProviders":    {kind: kindPublic},
 	"OidcRedirect":         {kind: kindPublic},
 	"OidcCallback":         {kind: kindPublic},

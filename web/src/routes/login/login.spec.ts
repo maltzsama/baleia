@@ -8,7 +8,7 @@ describe('login page', () => {
 		localStorage.clear();
 		window.history.replaceState(null, '', '/login');
 		server.use(
-			http.get('/auth/oidc/providers', ({ response }) => response(200).json([])),
+			http.get('/auth/providers', ({ response }) => response(200).json([])),
 			http.get('/auth/me', ({ response }) =>
 				response(401).json({ code: 'unauthorized', message: 'no session' })
 			),

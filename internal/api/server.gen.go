@@ -96,6 +96,9 @@ type ServerInterface interface {
 	// Request password reset link
 	// (POST /auth/password-reset/request)
 	RequestPasswordReset(w http.ResponseWriter, r *http.Request)
+	// Enabled login providers
+	// (GET /auth/providers)
+	ListAuthProviders(w http.ResponseWriter, r *http.Request)
 	// Exchange refresh token for new access token pair
 	// (POST /auth/refresh)
 	RefreshToken(w http.ResponseWriter, r *http.Request)
@@ -726,6 +729,12 @@ func (_ Unimplemented) ConfirmPasswordReset(w http.ResponseWriter, r *http.Reque
 // Request password reset link
 // (POST /auth/password-reset/request)
 func (_ Unimplemented) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Enabled login providers
+// (GET /auth/providers)
+func (_ Unimplemented) ListAuthProviders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2529,6 +2538,20 @@ func (siw *ServerInterfaceWrapper) RequestPasswordReset(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RequestPasswordReset(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAuthProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListAuthProviders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuthProviders(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9194,6 +9217,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/password-reset/request", wrapper.RequestPasswordReset)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/providers", wrapper.ListAuthProviders)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/refresh", wrapper.RefreshToken)
 	})
 	r.Group(func(r chi.Router) {
@@ -9689,6 +9715,15 @@ type NoContentResponse struct {
 type NotFoundJSONResponse Error
 
 type ServiceUnavailableJSONResponse Error
+
+type TooManyRequestsResponseHeaders struct {
+	RetryAfter int
+}
+type TooManyRequestsJSONResponse struct {
+	Body Error
+
+	Headers TooManyRequestsResponseHeaders
+}
 
 type UnauthorizedJSONResponse Error
 
@@ -10442,6 +10477,16 @@ func (response Login422JSONResponse) VisitLoginResponse(w http.ResponseWriter) e
 	return json.NewEncoder(w).Encode(response)
 }
 
+type Login429JSONResponse struct{ TooManyRequestsJSONResponse }
+
+func (response Login429JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type LogoutRequestObject struct {
 	Body *LogoutJSONRequestBody
 }
@@ -10614,6 +10659,22 @@ type RequestPasswordReset503JSONResponse Error
 func (response RequestPasswordReset503JSONResponse) VisitRequestPasswordResetResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAuthProvidersRequestObject struct {
+}
+
+type ListAuthProvidersResponseObject interface {
+	VisitListAuthProvidersResponse(w http.ResponseWriter) error
+}
+
+type ListAuthProviders200JSONResponse []AuthProvider
+
+func (response ListAuthProviders200JSONResponse) VisitListAuthProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -17611,6 +17672,9 @@ type StrictServerInterface interface {
 	// Request password reset link
 	// (POST /auth/password-reset/request)
 	RequestPasswordReset(ctx context.Context, request RequestPasswordResetRequestObject) (RequestPasswordResetResponseObject, error)
+	// Enabled login providers
+	// (GET /auth/providers)
+	ListAuthProviders(ctx context.Context, request ListAuthProvidersRequestObject) (ListAuthProvidersResponseObject, error)
 	// Exchange refresh token for new access token pair
 	// (POST /auth/refresh)
 	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
@@ -18824,6 +18888,30 @@ func (sh *strictHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RequestPasswordResetResponseObject); ok {
 		if err := validResponse.VisitRequestPasswordResetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAuthProviders operation middleware
+func (sh *strictHandler) ListAuthProviders(w http.ResponseWriter, r *http.Request) {
+	var request ListAuthProvidersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAuthProviders(ctx, request.(ListAuthProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAuthProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuthProvidersResponseObject); ok {
+		if err := validResponse.VisitListAuthProvidersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
