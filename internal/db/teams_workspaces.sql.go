@@ -36,6 +36,32 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 	return i, err
 }
 
+const catalogGrantedToAgent = `-- name: CatalogGrantedToAgent :one
+SELECT EXISTS (
+    SELECT 1 FROM workspace_catalog_grants g
+    JOIN workspaces w ON w.id = g.workspace_id
+    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $2
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $3
+    WHERE g.catalog_id = $1
+      AND (w.owner_user_id = $3 OR tm.user_id = $3)
+) AS granted
+`
+
+type CatalogGrantedToAgentParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	AgentID   pgtype.UUID `json:"agent_id"`
+	UserID    pgtype.UUID `json:"user_id"`
+}
+
+// True when the catalog is granted to a workspace the agent is bound to and the
+// agent's owner is still a member of that workspace (#59).
+func (q *Queries) CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedToAgentParams) (bool, error) {
+	row := q.db.QueryRow(ctx, catalogGrantedToAgent, arg.CatalogID, arg.AgentID, arg.UserID)
+	var granted bool
+	err := row.Scan(&granted)
+	return granted, err
+}
+
 const catalogGrantedToUser = `-- name: CatalogGrantedToUser :one
 SELECT EXISTS (
     SELECT 1 FROM workspace_catalog_grants g

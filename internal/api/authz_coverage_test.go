@@ -97,6 +97,14 @@ var operationAccess = map[string]access{
 	"ListTeams":               {kind: kindSelf, calls: selfPrincipal}, // the caller's teams; admin sees all
 	"ListAttention":           {kind: kindSelf, calls: selfPrincipal}, // items scoped to what the caller can act on
 	"ListEngines":             {kind: kindSelf, calls: selfPrincipal}, // engines on the caller's connections or hosting a granted catalog; admin sees all
+	"ListAgents":              {kind: kindSelf, calls: selfPrincipal}, // the caller's agents; admin may list all with all=true
+	"CreateAgent":             {kind: kindSelf, calls: selfPrincipal}, // owner is the caller
+	"GetAgent":                {kind: kindSelf, calls: selfPrincipal}, // owner or admin
+	"UpdateAgent":             {kind: kindSelf, calls: selfPrincipal}, // owner; admin may only disable
+	"DeleteAgent":             {kind: kindSelf, calls: selfPrincipal}, // owner or admin
+	"ListAgentTokens":         {kind: kindSelf, calls: selfPrincipal}, // owner or admin; never the secret
+	"CreateAgentToken":        {kind: kindSelf, calls: selfPrincipal}, // owner only
+	"RevokeAgentToken":        {kind: kindSelf, calls: selfPrincipal}, // owner only
 
 	// ── global administrators
 	"ListUsers":                     {kind: kindAdmin, calls: adminRole},

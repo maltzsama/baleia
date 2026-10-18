@@ -15,11 +15,13 @@ type Querier interface {
 	// (cancel, crash, heartbeat timeout) and returns their handles so the engine
 	// can be asked to stop them.
 	AbandonRunningStatements(ctx context.Context, arg AbandonRunningStatementsParams) ([]AbandonRunningStatementsRow, error)
+	AddAgentWorkspace(ctx context.Context, arg AddAgentWorkspaceParams) error
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
 	// Fired by the dispatcher when a refresh run is started: schedule the next run
 	// from the cron expression immediately, so a long refresh never triggers a
 	// burst of runs afterwards.
 	AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetrieverScheduleParams) error
+	AgentWorkspaceBound(ctx context.Context, arg AgentWorkspaceBoundParams) (bool, error)
 	// Age of the export cursor for the system status section (#291). Zero when no
 	// cursor exists (nothing exported yet).
 	AuditExportLagSeconds(ctx context.Context) (float64, error)
@@ -28,9 +30,13 @@ type Querier interface {
 	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
 	CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error)
 	CatalogConnectionNameExists(ctx context.Context, name string) (bool, error)
+	// True when the catalog is granted to a workspace the agent is bound to and the
+	// agent's owner is still a member of that workspace (#59).
+	CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedToAgentParams) (bool, error)
 	// True when the user is a member of a workspace that has been granted the catalog.
 	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
+	ClearAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) error
 	ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error
 	// Single use: the row is deleted atomically, so a replayed state finds nothing.
 	ConsumeOIDCLoginAttempt(ctx context.Context, state string) (OidcLoginAttempt, error)
@@ -40,6 +46,7 @@ type Querier interface {
 	// Atomic rotation: of two concurrent refreshes with the same token, exactly one
 	// updates a row (#51).
 	ConsumeRefreshToken(ctx context.Context, tokenHash string) (ConsumeRefreshTokenRow, error)
+	CountActiveAgentTokens(ctx context.Context, agentID pgtype.UUID) (int64, error)
 	CountCatalogAccessImpact(ctx context.Context, arg CountCatalogAccessImpactParams) (CountCatalogAccessImpactRow, error)
 	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error)
 	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error)
@@ -58,6 +65,9 @@ type Querier interface {
 	CountWorkspaceImpact(ctx context.Context, workspaceID pgtype.UUID) (CountWorkspaceImpactRow, error)
 	CountWorkspaceRunningExecutions(ctx context.Context, workspaceID pgtype.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
+	// Agents (#59). External agents only; assistant agents are managed by #62.
+	CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent, error)
+	CreateAgentToken(ctx context.Context, arg CreateAgentTokenParams) (AgentToken, error)
 	CreateAuthProvider(ctx context.Context, arg CreateAuthProviderParams) (AuthProvider, error)
 	// A source catalog's source_ref is its warehouse (or database).
 	CreateCatalog(ctx context.Context, arg CreateCatalogParams) (Catalog, error)
@@ -93,6 +103,7 @@ type Querier interface {
 	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	// Suspension revokes every API key of the user (#258).
 	DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error
+	DeleteAgent(ctx context.Context, id pgtype.UUID) error
 	DeleteAuthProvider(ctx context.Context, id pgtype.UUID) error
 	DeleteBinding(ctx context.Context, id pgtype.UUID) error
 	DeleteCatalog(ctx context.Context, id pgtype.UUID) error
@@ -126,6 +137,9 @@ type Querier interface {
 	// Native catalogs an engine no longer reports are disabled, never deleted
 	// (#17): their metadata and history stay.
 	DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error)
+	// True when the engine hosts a catalog granted to a workspace the agent is
+	// bound to and the owner is still a member of that workspace (#59).
+	EngineHostsCatalogGrantedToAgent(ctx context.Context, arg EngineHostsCatalogGrantedToAgentParams) (bool, error)
 	// True when the engine has a binding of a catalog granted to a workspace the
 	// user belongs to.
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)
@@ -139,6 +153,9 @@ type Querier interface {
 	FolderSlugExists(ctx context.Context, arg FolderSlugExistsParams) (bool, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
+	GetAgentByID(ctx context.Context, id pgtype.UUID) (Agent, error)
+	GetAgentTokenByHash(ctx context.Context, tokenHash string) (AgentToken, error)
+	GetAgentTokenByID(ctx context.Context, arg GetAgentTokenByIDParams) (AgentToken, error)
 	// The age of the oldest audit event not yet exported (the lag the exporter
 	// reports). NULL when nothing is pending.
 	GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamptz, error)
@@ -245,6 +262,10 @@ type Querier interface {
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
+	ListAgentTokensByAgent(ctx context.Context, agentID pgtype.UUID) ([]AgentToken, error)
+	ListAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) ([]Workspace, error)
+	ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]Agent, error)
+	ListAllAgents(ctx context.Context) ([]Agent, error)
 	// Admin listing (#259): includes disabled providers so they can be re-enabled.
 	ListAllAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	// Every visible folder of the workspace (or one space), not only the roots.
@@ -432,6 +453,7 @@ type Querier interface {
 	// history still line up.
 	RestoreSavedQuery(ctx context.Context, arg RestoreSavedQueryParams) (SavedQuery, error)
 	RestoreSemanticMetric(ctx context.Context, arg RestoreSemanticMetricParams) (SemanticMetric, error)
+	RevokeAgentToken(ctx context.Context, arg RevokeAgentTokenParams) error
 	RevokeRefreshFamily(ctx context.Context, familyID pgtype.UUID) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
 	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
@@ -445,6 +467,7 @@ type Querier interface {
 	SearchSemanticDocs(ctx context.Context, arg SearchSemanticDocsParams) ([]SearchSemanticDocsRow, error)
 	// Every visible saved query, optionally filtered by space and text (#113).
 	SearchVisibleSavedQueries(ctx context.Context, arg SearchVisibleSavedQueriesParams) ([]SavedQuery, error)
+	SetAgentStatus(ctx context.Context, arg SetAgentStatusParams) (Agent, error)
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	// Stores the resolved target of an execution. target_snapshot is immutable
@@ -476,6 +499,7 @@ type Querier interface {
 	// Tables the pass did not see were removed at the source.
 	TombstoneMissingTables(ctx context.Context, arg TombstoneMissingTablesParams) (int64, error)
 	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
+	TouchAgentToken(ctx context.Context, id pgtype.UUID) error
 	// A table the source reported unchanged (same fingerprint, columns not
 	// loaded): it is still there.
 	TouchMetadataTable(ctx context.Context, arg TouchMetadataTableParams) (int64, error)
@@ -485,6 +509,7 @@ type Querier interface {
 	// One sync per catalog at a time; a session-level lock released by
 	// ReleaseMetadataSyncLock on the same connection.
 	TryMetadataSyncLock(ctx context.Context, catalogID string) (bool, error)
+	UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent, error)
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
 	// Writes the desired state and enters lifecycle_state, guarded by the states
 	// a change may start from; no row means a concurrent change.

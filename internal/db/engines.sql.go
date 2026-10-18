@@ -122,6 +122,33 @@ func (q *Queries) DeleteEngine(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const engineHostsCatalogGrantedToAgent = `-- name: EngineHostsCatalogGrantedToAgent :one
+SELECT EXISTS (
+    SELECT 1 FROM catalog_bindings b
+    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
+    JOIN workspaces w ON w.id = g.workspace_id
+    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $1
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
+    WHERE b.engine_id = $3
+      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+) AS granted
+`
+
+type EngineHostsCatalogGrantedToAgentParams struct {
+	AgentID  pgtype.UUID `json:"agent_id"`
+	OwnerID  pgtype.UUID `json:"owner_id"`
+	EngineID pgtype.UUID `json:"engine_id"`
+}
+
+// True when the engine hosts a catalog granted to a workspace the agent is
+// bound to and the owner is still a member of that workspace (#59).
+func (q *Queries) EngineHostsCatalogGrantedToAgent(ctx context.Context, arg EngineHostsCatalogGrantedToAgentParams) (bool, error) {
+	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToAgent, arg.AgentID, arg.OwnerID, arg.EngineID)
+	var granted bool
+	err := row.Scan(&granted)
+	return granted, err
+}
+
 const engineHostsCatalogGrantedToUser = `-- name: EngineHostsCatalogGrantedToUser :one
 SELECT EXISTS (
     SELECT 1 FROM catalog_bindings b

@@ -48,6 +48,30 @@ type ServerInterface interface {
 	// Core system status
 	// (GET /admin/system/status)
 	GetSystemStatus(w http.ResponseWriter, r *http.Request)
+	// List the caller's external agents (admins: all with all=true)
+	// (GET /agents)
+	ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams)
+	// Create an agent owned by the caller
+	// (POST /agents)
+	CreateAgent(w http.ResponseWriter, r *http.Request)
+	// Delete an agent (owner or admin)
+	// (DELETE /agents/{agent_id})
+	DeleteAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// Get an agent
+	// (GET /agents/{agent_id})
+	GetAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// Update an agent (owner; an admin may only disable it)
+	// (PATCH /agents/{agent_id})
+	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// List an agent's tokens (never the secret)
+	// (GET /agents/{agent_id}/tokens)
+	ListAgentTokens(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// Mint a token for an agent — the secret is shown once
+	// (POST /agents/{agent_id}/tokens)
+	CreateAgentToken(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// Revoke an agent token
+	// (DELETE /agents/{agent_id}/tokens/{token_id})
+	RevokeAgentToken(w http.ResponseWriter, r *http.Request, agentId PathAgentId, tokenId PathAgentTokenId)
 	// List current user's API keys
 	// (GET /api-keys)
 	ListApiKeys(w http.ResponseWriter, r *http.Request)
@@ -636,6 +660,54 @@ func (_ Unimplemented) TestIdentityProvider(w http.ResponseWriter, r *http.Reque
 // Core system status
 // (GET /admin/system/status)
 func (_ Unimplemented) GetSystemStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List the caller's external agents (admins: all with all=true)
+// (GET /agents)
+func (_ Unimplemented) ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create an agent owned by the caller
+// (POST /agents)
+func (_ Unimplemented) CreateAgent(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete an agent (owner or admin)
+// (DELETE /agents/{agent_id})
+func (_ Unimplemented) DeleteAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get an agent
+// (GET /agents/{agent_id})
+func (_ Unimplemented) GetAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update an agent (owner; an admin may only disable it)
+// (PATCH /agents/{agent_id})
+func (_ Unimplemented) UpdateAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List an agent's tokens (never the secret)
+// (GET /agents/{agent_id}/tokens)
+func (_ Unimplemented) ListAgentTokens(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Mint a token for an agent — the secret is shown once
+// (POST /agents/{agent_id}/tokens)
+func (_ Unimplemented) CreateAgentToken(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Revoke an agent token
+// (DELETE /agents/{agent_id}/tokens/{token_id})
+func (_ Unimplemented) RevokeAgentToken(w http.ResponseWriter, r *http.Request, agentId PathAgentId, tokenId PathAgentTokenId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1996,6 +2068,270 @@ func (siw *ServerInterfaceWrapper) GetSystemStatus(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSystemStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgents operation middleware
+func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentsParams
+
+	// ------------- Optional query parameter "all" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all", r.URL.Query(), &params.All)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgent operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAgent operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgent operation middleware
+func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentTokens(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentTokens(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgentToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgentToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgentToken(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeAgentToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAgentToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "token_id" -------------
+	var tokenId PathAgentTokenId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token_id", chi.URLParam(r, "token_id"), &tokenId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeAgentToken(w, r, agentId, tokenId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9236,6 +9572,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/admin/system/status", wrapper.GetSystemStatus)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/agents", wrapper.ListAgents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/agents", wrapper.CreateAgent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/agents/{agent_id}", wrapper.DeleteAgent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/agents/{agent_id}", wrapper.GetAgent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/agents/{agent_id}", wrapper.UpdateAgent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/agents/{agent_id}/tokens", wrapper.ListAgentTokens)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/agents/{agent_id}/tokens", wrapper.CreateAgentToken)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/agents/{agent_id}/tokens/{token_id}", wrapper.RevokeAgentToken)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api-keys", wrapper.ListApiKeys)
 	})
 	r.Group(func(r chi.Router) {
@@ -10244,6 +10604,345 @@ type GetSystemStatus403JSONResponse struct{ ForbiddenJSONResponse }
 func (response GetSystemStatus403JSONResponse) VisitGetSystemStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAgentsRequestObject struct {
+	Params ListAgentsParams
+}
+
+type ListAgentsResponseObject interface {
+	VisitListAgentsResponse(w http.ResponseWriter) error
+}
+
+type ListAgents200JSONResponse []Agent
+
+func (response ListAgents200JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAgents401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAgents401JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAgents403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListAgents403JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAgents404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListAgents404JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgentRequestObject struct {
+	Body *CreateAgentJSONRequestBody
+}
+
+type CreateAgentResponseObject interface {
+	VisitCreateAgentResponse(w http.ResponseWriter) error
+}
+
+type CreateAgent201JSONResponse Agent
+
+func (response CreateAgent201JSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgent401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateAgent401JSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgent404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateAgent404JSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgent422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateAgent422JSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteAgentRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+}
+
+type DeleteAgentResponseObject interface {
+	VisitDeleteAgentResponse(w http.ResponseWriter) error
+}
+
+type DeleteAgent204Response = NoContentResponse
+
+func (response DeleteAgent204Response) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAgent401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteAgent401JSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteAgent403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteAgent403JSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteAgent404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteAgent404JSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+}
+
+type GetAgentResponseObject interface {
+	VisitGetAgentResponse(w http.ResponseWriter) error
+}
+
+type GetAgent200JSONResponse Agent
+
+func (response GetAgent200JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgent401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAgent401JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgent404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAgent404JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAgentRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+	Body    *UpdateAgentJSONRequestBody
+}
+
+type UpdateAgentResponseObject interface {
+	VisitUpdateAgentResponse(w http.ResponseWriter) error
+}
+
+type UpdateAgent200JSONResponse Agent
+
+func (response UpdateAgent200JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAgent401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateAgent401JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAgent403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateAgent403JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAgent404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateAgent404JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAgent422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateAgent422JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAgentTokensRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+}
+
+type ListAgentTokensResponseObject interface {
+	VisitListAgentTokensResponse(w http.ResponseWriter) error
+}
+
+type ListAgentTokens200JSONResponse []AgentToken
+
+func (response ListAgentTokens200JSONResponse) VisitListAgentTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAgentTokens401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAgentTokens401JSONResponse) VisitListAgentTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAgentTokens404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListAgentTokens404JSONResponse) VisitListAgentTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgentTokenRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+	Body    *CreateAgentTokenJSONRequestBody
+}
+
+type CreateAgentTokenResponseObject interface {
+	VisitCreateAgentTokenResponse(w http.ResponseWriter) error
+}
+
+type CreateAgentToken201JSONResponse AgentTokenCreated
+
+func (response CreateAgentToken201JSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgentToken401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateAgentToken401JSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgentToken404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateAgentToken404JSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAgentToken422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateAgentToken422JSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevokeAgentTokenRequestObject struct {
+	AgentId PathAgentId      `json:"agent_id"`
+	TokenId PathAgentTokenId `json:"token_id"`
+}
+
+type RevokeAgentTokenResponseObject interface {
+	VisitRevokeAgentTokenResponse(w http.ResponseWriter) error
+}
+
+type RevokeAgentToken204Response = NoContentResponse
+
+func (response RevokeAgentToken204Response) VisitRevokeAgentTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeAgentToken401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevokeAgentToken401JSONResponse) VisitRevokeAgentTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevokeAgentToken404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevokeAgentToken404JSONResponse) VisitRevokeAgentTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -17773,6 +18472,30 @@ type StrictServerInterface interface {
 	// Core system status
 	// (GET /admin/system/status)
 	GetSystemStatus(ctx context.Context, request GetSystemStatusRequestObject) (GetSystemStatusResponseObject, error)
+	// List the caller's external agents (admins: all with all=true)
+	// (GET /agents)
+	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
+	// Create an agent owned by the caller
+	// (POST /agents)
+	CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error)
+	// Delete an agent (owner or admin)
+	// (DELETE /agents/{agent_id})
+	DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error)
+	// Get an agent
+	// (GET /agents/{agent_id})
+	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
+	// Update an agent (owner; an admin may only disable it)
+	// (PATCH /agents/{agent_id})
+	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
+	// List an agent's tokens (never the secret)
+	// (GET /agents/{agent_id}/tokens)
+	ListAgentTokens(ctx context.Context, request ListAgentTokensRequestObject) (ListAgentTokensResponseObject, error)
+	// Mint a token for an agent — the secret is shown once
+	// (POST /agents/{agent_id}/tokens)
+	CreateAgentToken(ctx context.Context, request CreateAgentTokenRequestObject) (CreateAgentTokenResponseObject, error)
+	// Revoke an agent token
+	// (DELETE /agents/{agent_id}/tokens/{token_id})
+	RevokeAgentToken(ctx context.Context, request RevokeAgentTokenRequestObject) (RevokeAgentTokenResponseObject, error)
 	// List current user's API keys
 	// (GET /api-keys)
 	ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error)
@@ -18602,6 +19325,234 @@ func (sh *strictHandler) GetSystemStatus(w http.ResponseWriter, r *http.Request)
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSystemStatusResponseObject); ok {
 		if err := validResponse.VisitGetSystemStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAgents operation middleware
+func (sh *strictHandler) ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams) {
+	var request ListAgentsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAgents(ctx, request.(ListAgentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAgents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAgentsResponseObject); ok {
+		if err := validResponse.VisitListAgentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAgent operation middleware
+func (sh *strictHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
+	var request CreateAgentRequestObject
+
+	var body CreateAgentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAgent(ctx, request.(CreateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAgentResponseObject); ok {
+		if err := validResponse.VisitCreateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAgent operation middleware
+func (sh *strictHandler) DeleteAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request DeleteAgentRequestObject
+
+	request.AgentId = agentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAgent(ctx, request.(DeleteAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAgentResponseObject); ok {
+		if err := validResponse.VisitDeleteAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgent operation middleware
+func (sh *strictHandler) GetAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request GetAgentRequestObject
+
+	request.AgentId = agentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgent(ctx, request.(GetAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentResponseObject); ok {
+		if err := validResponse.VisitGetAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAgent operation middleware
+func (sh *strictHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request UpdateAgentRequestObject
+
+	request.AgentId = agentId
+
+	var body UpdateAgentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAgent(ctx, request.(UpdateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAgentResponseObject); ok {
+		if err := validResponse.VisitUpdateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAgentTokens operation middleware
+func (sh *strictHandler) ListAgentTokens(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request ListAgentTokensRequestObject
+
+	request.AgentId = agentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAgentTokens(ctx, request.(ListAgentTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAgentTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAgentTokensResponseObject); ok {
+		if err := validResponse.VisitListAgentTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAgentToken operation middleware
+func (sh *strictHandler) CreateAgentToken(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request CreateAgentTokenRequestObject
+
+	request.AgentId = agentId
+
+	var body CreateAgentTokenJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAgentToken(ctx, request.(CreateAgentTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAgentToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAgentTokenResponseObject); ok {
+		if err := validResponse.VisitCreateAgentTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeAgentToken operation middleware
+func (sh *strictHandler) RevokeAgentToken(w http.ResponseWriter, r *http.Request, agentId PathAgentId, tokenId PathAgentTokenId) {
+	var request RevokeAgentTokenRequestObject
+
+	request.AgentId = agentId
+	request.TokenId = tokenId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeAgentToken(ctx, request.(RevokeAgentTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeAgentToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeAgentTokenResponseObject); ok {
+		if err := validResponse.VisitRevokeAgentTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

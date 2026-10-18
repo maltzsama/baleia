@@ -222,6 +222,9 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_TRINO_ADMIN_USER` | `baleia_admin` | Trino identity for catalog DDL/reconcile/maintenance (never user SQL) |
 | `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |
 | `BALEIA_TRINO_USER_IDENTITY` | `uuid` | Map Baleia users to Trino users: `uuid`→`u_<uuid>` or `email` |
+| `BALEIA_AGENTS_ENABLED` | `false` | Mount the agent management API and (once #58 lands) `/mcp`. Off by default |
+| `BALEIA_AGENT_TOKEN_DEFAULT_TTL` | `720h` | Default lifetime of an agent token when `expires_in_days` is omitted |
+| `BALEIA_AGENT_TOKEN_MAX_TTL` | `2160h` | Maximum accepted agent-token lifetime (90 days) |
 
 ### Credential encryption
 

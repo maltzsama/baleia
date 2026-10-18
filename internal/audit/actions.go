@@ -54,6 +54,14 @@ const (
 	APIKeyCreate Action = "api_key.create"
 	APIKeyRevoke Action = "api_key.revoke"
 
+	AgentCreate            Action = "agent.create"
+	AgentUpdate            Action = "agent.update"
+	AgentDisable           Action = "agent.disable"
+	AgentDelete            Action = "agent.delete"
+	AgentTokenCreate       Action = "agent_token.create"
+	AgentTokenRevoke       Action = "agent_token.revoke"
+	AuthAgentTokenRejected Action = "auth.agent_token_rejected"
+
 	ExecutionCreate Action = "execution.create"
 	ExecutionCancel Action = "execution.cancel"
 
@@ -93,6 +101,8 @@ var allActions = []Action{
 	IdentityProviderCreate, IdentityProviderUpdate, IdentityProviderDelete,
 	AuthLogin, AuthLogout, AuthRefresh, AuthPasswordResetRequest, AuthPasswordResetConfirm,
 	APIKeyCreate, APIKeyRevoke,
+	AgentCreate, AgentUpdate, AgentDisable, AgentDelete,
+	AgentTokenCreate, AgentTokenRevoke, AuthAgentTokenRejected,
 	ExecutionCreate, ExecutionCancel,
 	ResultsDownload,
 	MaintenanceTrigger,

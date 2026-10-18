@@ -1,0 +1,25 @@
+meta {
+  name: Agent Token Rejected on REST
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/workspaces
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{agent_token_secret}}
+}
+
+assert {
+  res.status: eq 401
+}
+
+tests {
+  test("an agent token is only valid on /mcp", function () {
+    expect(res.body.code).to.eq("agent_token_not_allowed");
+  });
+}

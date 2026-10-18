@@ -126,6 +126,18 @@ SELECT EXISTS (
       AND (w.owner_user_id = $2 OR tm.user_id = $2)
 ) AS granted;
 
+-- name: CatalogGrantedToAgent :one
+-- True when the catalog is granted to a workspace the agent is bound to and the
+-- agent's owner is still a member of that workspace (#59).
+SELECT EXISTS (
+    SELECT 1 FROM workspace_catalog_grants g
+    JOIN workspaces w ON w.id = g.workspace_id
+    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $2
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $3
+    WHERE g.catalog_id = $1
+      AND (w.owner_user_id = $3 OR tm.user_id = $3)
+) AS granted;
+
 -- name: ListCatalogsGrantedToUser :many
 -- The catalogs of one connection that a user reaches through workspace grants.
 SELECT DISTINCT c.* FROM catalogs c

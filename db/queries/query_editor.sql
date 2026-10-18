@@ -84,8 +84,8 @@ DELETE FROM saved_queries WHERE id = @id::uuid AND workspace_id = @workspace_id:
 -- keeps the engine catalog for the Trino workflow until it reads the target.
 INSERT INTO query_executions (
     workspace_id, user_id, saved_query_id, status, sql, trino_catalog, request_id,
-    engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING *;
 
 -- name: UpdateQueryExecution :one

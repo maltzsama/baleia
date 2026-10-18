@@ -1,0 +1,25 @@
+meta {
+  name: Update Agent
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/agents/{{agent_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "description": "Updated by the Bruno suite"
+  }
+}
+
+assert {
+  res.status: eq 200
+}

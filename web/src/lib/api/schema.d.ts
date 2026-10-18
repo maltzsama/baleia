@@ -312,6 +312,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the caller's external agents (admins: all with all=true) */
+        get: operations["listAgents"];
+        put?: never;
+        /** Create an agent owned by the caller */
+        post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        /** Get an agent */
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        /** Delete an agent (owner or admin) */
+        delete: operations["deleteAgent"];
+        options?: never;
+        head?: never;
+        /** Update an agent (owner; an admin may only disable it) */
+        patch: operations["updateAgent"];
+        trace?: never;
+    };
+    "/agents/{agent_id}/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        /** List an agent's tokens (never the secret) */
+        get: operations["listAgentTokens"];
+        put?: never;
+        /** Mint a token for an agent — the secret is shown once */
+        post: operations["createAgentToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agent_id}/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+                token_id: components["parameters"]["PathAgentTokenId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an agent token */
+        delete: operations["revokeAgentToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/identity-providers": {
         parameters: {
             query?: never;
@@ -3204,6 +3283,69 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
         };
+        /** @enum {string} */
+        AgentAllowedAction: "view" | "update" | "disable" | "delete" | "manage_tokens";
+        AgentWorkspace: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        Agent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            owner_id: string;
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            workspaces: components["schemas"]["AgentWorkspace"][];
+            active_token_count?: number;
+            /** Format: date-time */
+            next_token_expiry?: string | null;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at?: string;
+            allowed_actions: components["schemas"]["AgentAllowedAction"][];
+        };
+        AgentToken: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @example bal_agt_abc12345... */
+            prefix: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            /** Format: date-time */
+            revoked_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AgentTokenCreated: components["schemas"]["AgentToken"] & {
+            /** @description Displayed only once upon creation */
+            token: string;
+        };
+        CreateAgentRequest: {
+            name: string;
+            description?: string;
+            workspace_ids?: string[];
+        };
+        UpdateAgentRequest: {
+            name?: string;
+            description?: string;
+            workspace_ids?: string[];
+            /** @enum {string} */
+            status?: "active" | "disabled";
+        };
+        CreateAgentTokenRequest: {
+            name: string;
+            expires_in_days?: number;
+        };
         UserPublic: {
             /** Format: uuid */
             id: string;
@@ -5126,6 +5268,8 @@ export interface components {
     };
     parameters: {
         PathId: string;
+        PathAgentId: string;
+        PathAgentTokenId: string;
         QueryPage: number;
         QueryPerPage: number;
     };
@@ -5503,6 +5647,200 @@ export interface operations {
             header?: never;
             path: {
                 id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAgents: {
+        parameters: {
+            query?: {
+                /** @description Admin only: list every user's agents */
+                all?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listAgentTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToken"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Token created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTokenCreated"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    revokeAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+                token_id: components["parameters"]["PathAgentTokenId"];
             };
             cookie?: never;
         };

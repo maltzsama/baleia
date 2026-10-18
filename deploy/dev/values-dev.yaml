@@ -26,6 +26,7 @@ config:
   SMTP_HOST: mailpit.baleia-dev.svc
   SMTP_PORT: "1025"
   SMTP_FROM: noreply@baleia.io
+  BALEIA_AGENTS_ENABLED: "true"
 
 api:
   replicas: 1

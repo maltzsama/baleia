@@ -220,6 +220,24 @@ func requireWorkspaceAccess(ctx context.Context, queries db.Querier, workspaceID
 	if !hasAccess {
 		return ErrWorkspaceNotFound
 	}
+	// An agent acts only in the workspaces it is bound to, even though its owner
+	// remains a member of them (#59).
+	if auth.ActorKindFromContext(ctx) == auth.ActorAgent {
+		agentID, err := uuidFromString(auth.AgentIDFromContext(ctx))
+		if err != nil {
+			return ErrWorkspaceNotFound
+		}
+		bound, err := queries.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{
+			AgentID:     agentID,
+			WorkspaceID: workspaceIDFromRequest(workspaceID),
+		})
+		if err != nil {
+			return err
+		}
+		if !bound {
+			return ErrWorkspaceNotFound
+		}
+	}
 	return nil
 }
 

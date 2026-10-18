@@ -1,0 +1,31 @@
+meta {
+  name: Create Agent
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/agents
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno agent",
+    "description": "Created by the Bruno suite (#59)",
+    "workspace_ids": ["{{workspace_id}}"]
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+vars:post-response {
+  agent_id: res.body.id
+}

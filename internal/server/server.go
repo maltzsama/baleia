@@ -295,6 +295,12 @@ func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddl
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "missing token")
 				return nil, nil
 			}
+			// Agent tokens are valid only on /mcp (#59). Every REST surface
+			// rejects them explicitly instead of parsing them as a JWT.
+			if auth.IsAgentToken(token) {
+				writeAuthError(w, http.StatusUnauthorized, "agent_token_not_allowed", "agent tokens are only valid on /mcp")
+				return nil, nil
+			}
 
 			claims, err := auth.ParseToken(token, secret)
 			if err != nil {
@@ -332,6 +338,10 @@ func chiAuthMiddleware(secret string, queries db.Querier) func(http.Handler) htt
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "missing token")
 				return
 			}
+			if auth.IsAgentToken(token) {
+				writeAuthError(w, http.StatusUnauthorized, "agent_token_not_allowed", "agent tokens are only valid on /mcp")
+				return
+			}
 			claims, err := auth.ParseToken(token, secret)
 			if err != nil {
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
@@ -348,7 +358,10 @@ func chiAuthMiddleware(secret string, queries db.Querier) func(http.Handler) htt
 func apiKeyForbidden(path string) bool {
 	return strings.HasPrefix(path, "/api/v1/auth/") ||
 		path == "/api/v1/me/password" ||
-		strings.HasPrefix(path, "/api/v1/api-keys")
+		strings.HasPrefix(path, "/api/v1/api-keys") ||
+		// Agent management and token minting accept user JWTs only (#59): no
+		// API key and no agent token may mint another agent token.
+		strings.HasPrefix(path, "/api/v1/agents")
 }
 
 func authenticateAPIKey(ctx context.Context, queries db.Querier, raw string) (context.Context, bool) {

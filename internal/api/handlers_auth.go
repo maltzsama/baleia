@@ -343,11 +343,12 @@ func (h *Handlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMe
 	return GetMe200JSONResponse(me), nil
 }
 
-// features are the navigation flags of /auth/me (#104). Agents (#59) and the
-// assistant (#62) do not exist yet; retrievers exist when a Trino engine can
-// host their destination (an enabled Iceberg catalog).
+// features are the navigation flags of /auth/me (#104). Agents exist when
+// BALEIA_AGENTS_ENABLED is on; the assistant (#62) does not exist yet;
+// retrievers exist when a Trino engine can host their destination (an enabled
+// Iceberg catalog).
 func (h *Handlers) features(ctx context.Context) Features {
-	f := Features{}
+	f := Features{Agents: h.agentsEnabled()}
 	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
 	if err != nil || !cluster.EngineID.Valid {
 		return f

@@ -144,6 +144,13 @@ type Config struct {
 	DBMaxConns        int
 	DBMinConns        int
 	DBMaxConnLifetime time.Duration
+	// AgentsEnabled mounts the agent management API and /mcp (#59). Off by
+	// default: no agent token exists until an administrator enables it.
+	AgentsEnabled bool
+	// AgentTokenDefaultTTL / AgentTokenMaxTTL bound the `expires_in_days`
+	// accepted when a user mints an agent token (#59).
+	AgentTokenDefaultTTL time.Duration
+	AgentTokenMaxTTL     time.Duration
 }
 
 func Load() *Config {
@@ -197,6 +204,9 @@ func Load() *Config {
 		MetricsToken:               getEnv("BALEIA_METRICS_TOKEN", ""),
 		WorkerMetricsAddr:          getEnv("BALEIA_WORKER_METRICS_ADDR", ":9090"),
 		TracingEnabled:             getEnv("BALEIA_TRACING_ENABLED", "false") == "true",
+		AgentsEnabled:              getEnv("BALEIA_AGENTS_ENABLED", "false") == "true",
+		AgentTokenDefaultTTL:       getEnvDuration("BALEIA_AGENT_TOKEN_DEFAULT_TTL", 30*24*time.Hour),
+		AgentTokenMaxTTL:           getEnvDuration("BALEIA_AGENT_TOKEN_MAX_TTL", 90*24*time.Hour),
 		AuditExportURL:             getEnv("BALEIA_AUDIT_EXPORT_URL", ""),
 		AuditExportIndex:           getEnv("BALEIA_AUDIT_EXPORT_INDEX", "baleia-audit"),
 		AuditExportAuth:            getEnv("BALEIA_AUDIT_EXPORT_AUTH", "none"),

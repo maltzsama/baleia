@@ -67,6 +67,19 @@ SELECT EXISTS (
       AND (w.owner_user_id = sqlc.arg('user_id') OR tm.user_id = sqlc.arg('user_id'))
 ) AS granted;
 
+-- name: EngineHostsCatalogGrantedToAgent :one
+-- True when the engine hosts a catalog granted to a workspace the agent is
+-- bound to and the owner is still a member of that workspace (#59).
+SELECT EXISTS (
+    SELECT 1 FROM catalog_bindings b
+    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
+    JOIN workspaces w ON w.id = g.workspace_id
+    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = sqlc.arg('agent_id')
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = sqlc.arg('owner_id')
+    WHERE b.engine_id = sqlc.arg('engine_id')
+      AND (w.owner_user_id = sqlc.arg('owner_id') OR tm.user_id = sqlc.arg('owner_id'))
+) AS granted;
+
 -- name: ListEnginesVisibleToUser :many
 -- The engines a non-admin may see: those on connections they own and those
 -- hosting a catalog granted to one of their workspaces.

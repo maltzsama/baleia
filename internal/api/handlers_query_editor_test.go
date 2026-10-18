@@ -173,6 +173,7 @@ type fakeRunQueryQuerier struct {
 	workspace    db.Workspace
 	targets      []db.ListWorkspaceTargetsRow
 	created      []db.CreateQueryExecutionParams
+	agentBound   bool
 }
 
 func (f *fakeRunQueryQuerier) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
@@ -185,6 +186,10 @@ func (f *fakeRunQueryQuerier) CheckWorkspaceAccess(context.Context, db.CheckWork
 
 func (f *fakeRunQueryQuerier) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Workspace, error) {
 	return f.workspace, nil
+}
+
+func (f *fakeRunQueryQuerier) AgentWorkspaceBound(context.Context, db.AgentWorkspaceBoundParams) (bool, error) {
+	return f.agentBound, nil
 }
 
 func (f *fakeRunQueryQuerier) CreateQueryExecution(_ context.Context, p db.CreateQueryExecutionParams) (db.QueryExecution, error) {

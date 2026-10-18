@@ -42,14 +42,29 @@ const (
 // RoleAdmin is users.role for a global administrator.
 const RoleAdmin = "admin"
 
+// Kind distinguishes a human user from an agent acting for one (#59). An agent
+// principal never carries the owner's global role: Role is always member.
+type Kind int
+
+const (
+	KindUser Kind = iota
+	KindAgent
+	KindAssistant
+)
+
 // Principal is the authenticated caller.
 type Principal struct {
-	UserID pgtype.UUID
-	Role   string
+	UserID  pgtype.UUID
+	Role    string
+	Kind    Kind
+	AgentID pgtype.UUID
 }
 
 // IsAdmin reports whether the caller is a global administrator.
 func (p Principal) IsAdmin() bool { return p.Role == RoleAdmin }
+
+// IsAgent reports whether the caller is an agent (external or assistant).
+func (p Principal) IsAgent() bool { return p.Kind != KindUser }
 
 // PrincipalFromContext builds the caller from the request context populated by
 // the auth middleware.
@@ -58,7 +73,15 @@ func PrincipalFromContext(ctx context.Context) (Principal, error) {
 	if err := id.Scan(auth.UserIDFromContext(ctx)); err != nil || !id.Valid {
 		return Principal{}, ErrUnauthenticated
 	}
-	return Principal{UserID: id, Role: auth.RoleFromContext(ctx)}, nil
+	p := Principal{UserID: id, Role: auth.RoleFromContext(ctx)}
+	if auth.ActorKindFromContext(ctx) == auth.ActorAgent {
+		p.Kind = KindAgent
+		var agentID pgtype.UUID
+		if err := agentID.Scan(auth.AgentIDFromContext(ctx)); err == nil && agentID.Valid {
+			p.AgentID = agentID
+		}
+	}
+	return p, nil
 }
 
 // Store is the slice of the database the checker reads.
@@ -66,6 +89,7 @@ type Store interface {
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
 	CatalogGrantedToUser(ctx context.Context, arg db.CatalogGrantedToUserParams) (bool, error)
+	CatalogGrantedToAgent(ctx context.Context, arg db.CatalogGrantedToAgentParams) (bool, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error)
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	IsWorkspaceOwner(ctx context.Context, arg db.IsWorkspaceOwnerParams) (bool, error)
@@ -73,7 +97,9 @@ type Store interface {
 	GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg db.EngineHostsCatalogGrantedToUserParams) (bool, error)
+	EngineHostsCatalogGrantedToAgent(ctx context.Context, arg db.EngineHostsCatalogGrantedToAgentParams) (bool, error)
 	GetEffectiveSpaceRole(ctx context.Context, arg db.GetEffectiveSpaceRoleParams) (string, error)
+	AgentWorkspaceBound(ctx context.Context, arg db.AgentWorkspaceBoundParams) (bool, error)
 }
 
 // Checker evaluates the rules against a Store.
@@ -135,6 +161,11 @@ func uuidString(id pgtype.UUID) string {
 // a missing created_by never matches an owner. Anyone else gets ErrNotFound.
 func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUID, act Action) (_ db.CatalogConnection, err error) {
 	defer c.observe(ctx, "connection", connID, &err)
+	// Agents never touch connections directly: their data path is the metadata
+	// and execution APIs, scoped through bound workspaces (#59).
+	if p.IsAgent() {
+		return db.CatalogConnection{}, ErrNotFound
+	}
 	conn, err := c.q.GetCatalogConnectionByID(ctx, connID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -156,6 +187,9 @@ func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUI
 // else, since they can already see it). Everyone else gets ErrNotFound.
 func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUID, act Action) (_ db.Catalog, _ db.CatalogConnection, err error) {
 	defer c.observe(ctx, "catalog", catalogID, &err)
+	if p.IsAgent() && act != ActRead {
+		return db.Catalog{}, db.CatalogConnection{}, ErrForbidden
+	}
 	cat, err := c.q.GetCatalogByID(ctx, catalogID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -169,6 +203,22 @@ func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUI
 			return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
 		}
 		return db.Catalog{}, db.CatalogConnection{}, err
+	}
+	// An agent reaches a catalog only through a workspace it is bound to; the
+	// owner's connection ownership does not widen that scope (#59).
+	if p.IsAgent() {
+		granted, err := c.q.CatalogGrantedToAgent(ctx, db.CatalogGrantedToAgentParams{
+			CatalogID: cat.ID,
+			AgentID:   p.AgentID,
+			UserID:    p.UserID,
+		})
+		if err != nil {
+			return db.Catalog{}, db.CatalogConnection{}, err
+		}
+		if !granted {
+			return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
+		}
+		return cat, conn, nil
 	}
 	if p.IsAdmin() || isOwner(p, conn.CreatedBy) {
 		return cat, conn, nil
@@ -192,6 +242,9 @@ func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUI
 // (ErrForbidden for anything else); everyone else gets ErrNotFound.
 func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID, act Action) (_ db.Engine, _ db.CatalogConnection, err error) {
 	defer c.observe(ctx, "engine", engineID, &err)
+	if p.IsAgent() && act != ActRead {
+		return db.Engine{}, db.CatalogConnection{}, ErrForbidden
+	}
 	eng, err := c.q.GetEngineByID(ctx, engineID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -205,6 +258,22 @@ func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID,
 			return db.Engine{}, db.CatalogConnection{}, ErrNotFound
 		}
 		return db.Engine{}, db.CatalogConnection{}, err
+	}
+	// An agent reaches an engine only through a workspace it is bound to; the
+	// owner's connection ownership does not widen that scope (#59).
+	if p.IsAgent() {
+		granted, err := c.q.EngineHostsCatalogGrantedToAgent(ctx, db.EngineHostsCatalogGrantedToAgentParams{
+			EngineID: eng.ID,
+			AgentID:  p.AgentID,
+			OwnerID:  p.UserID,
+		})
+		if err != nil {
+			return db.Engine{}, db.CatalogConnection{}, err
+		}
+		if !granted {
+			return db.Engine{}, db.CatalogConnection{}, ErrNotFound
+		}
+		return eng, conn, nil
 	}
 	if p.IsAdmin() || isOwner(p, conn.CreatedBy) {
 		return eng, conn, nil
@@ -245,12 +314,24 @@ func (c *Checker) CatalogOfConnection(ctx context.Context, p Principal, connID, 
 // ErrNotFound, a member who is not an owner gets ErrForbidden.
 func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, act Action) (_ db.Workspace, err error) {
 	defer c.observe(ctx, "workspace", wsID, &err)
+	if p.IsAgent() && act != ActRead {
+		return db.Workspace{}, ErrForbidden
+	}
 	ws, err := c.q.GetWorkspaceByID(ctx, wsID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.Workspace{}, ErrNotFound
 		}
 		return db.Workspace{}, err
+	}
+	if p.IsAgent() {
+		bound, err := c.q.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{AgentID: p.AgentID, WorkspaceID: wsID})
+		if err != nil {
+			return db.Workspace{}, err
+		}
+		if !bound {
+			return db.Workspace{}, ErrNotFound
+		}
 	}
 	if p.IsAdmin() {
 		return ws, nil
@@ -280,6 +361,9 @@ func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, 
 // gets ErrNotFound, a member who is not an owner gets ErrForbidden.
 func (c *Checker) Team(ctx context.Context, p Principal, teamID pgtype.UUID, act Action) (_ db.Team, err error) {
 	defer c.observe(ctx, "team", teamID, &err)
+	if p.IsAgent() && act != ActRead {
+		return db.Team{}, ErrForbidden
+	}
 	team, err := c.q.GetTeamByID(ctx, teamID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
