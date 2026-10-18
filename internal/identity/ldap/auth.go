@@ -71,8 +71,8 @@ func authenticate(ctx context.Context, cfg Config, username, password string, di
 
 	return &User{
 		ExternalID: externalID,
-		Email:      strings.TrimSpace(entry.GetAttributeValue(cfg.EmailAttribute)),
-		Name:       strings.TrimSpace(entry.GetAttributeValue(cfg.NameAttribute)),
+		Email:      strings.TrimSpace(entry.GetEqualFoldAttributeValue(cfg.EmailAttribute)),
+		Name:       strings.TrimSpace(entry.GetEqualFoldAttributeValue(cfg.NameAttribute)),
 		Groups:     groups,
 		Role:       mapped.Role,
 		Teams:      mapped.Teams,
@@ -105,7 +105,7 @@ func nestedGroups(conn Conn, cfg Config, userDN string) ([]string, error) {
 }
 
 func groupValues(entry *ldapv3.Entry, attribute string) []string {
-	values := entry.GetAttributeValues(attribute)
+	values := entry.GetEqualFoldAttributeValues(attribute)
 	out := make([]string, 0, len(values))
 	for _, v := range values {
 		if v = strings.TrimSpace(v); v != "" {
@@ -140,10 +140,10 @@ func containsGroup(groups []string, want string) bool {
 
 // stableID prefers entryUUID (OpenLDAP) and falls back to objectGUID (AD).
 func stableID(entry *ldapv3.Entry) (string, error) {
-	if v := strings.TrimSpace(entry.GetAttributeValue("entryUUID")); v != "" {
+	if v := strings.TrimSpace(entry.GetEqualFoldAttributeValue("entryUUID")); v != "" {
 		return v, nil
 	}
-	if raw := entry.GetRawAttributeValue("objectGUID"); len(raw) > 0 {
+	if raw := entry.GetEqualFoldRawAttributeValue("objectGUID"); len(raw) > 0 {
 		return objectGUID(raw), nil
 	}
 	return "", errors.New("ldap: entry has neither entryUUID nor objectGUID")

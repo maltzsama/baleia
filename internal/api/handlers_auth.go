@@ -120,6 +120,10 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	}
 	defer func() { h.metrics.auth.Attempt(kind, authOutcome(resp, err)) }()
 
+	if request.Body.ProviderId == nil && request.Body.Email == nil {
+		return Login422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "email is required for local login")}, nil
+	}
+
 	identifier := loginIdentifier(request.Body)
 	ev := audit.Event{Action: audit.AuthLogin, ResourceType: "user"}
 	// A failed login is recorded by a fingerprint of the identifier, never the
@@ -138,11 +142,6 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 		return h.loginLDAP(ctx, request.Body, ev, identifier, failed)
 	}
 
-	if request.Body.Email == nil {
-		h.loginDelay().Failure(identifier)
-		failed("invalid_credentials")
-		return invalidCredentialsLogin(), nil
-	}
 	email := string(*request.Body.Email)
 
 	user, err := h.queries.GetUserByEmail(ctx, email)
@@ -234,7 +233,7 @@ func (h *Handlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.E
 		AuthProviderID: ap.ID,
 		ExternalID:     &result.ExternalID,
 	})
-	if err != nil {
+	if err != nil || user.AuthProvider != "ldap" {
 		return invalid()
 	}
 	if result.Role != user.Role {
@@ -946,7 +945,7 @@ func (h *Handlers) applyTeams(ctx context.Context, userID pgtype.UUID, teams []i
 			UserID: userID,
 			Role:   t.TeamRole,
 		}); err != nil {
-			slog.Warn("oidc team mapping failed", "team_id", t.TeamID, "err", err)
+			slog.Warn("team mapping failed", "team_id", t.TeamID, "err", err)
 		}
 	}
 }

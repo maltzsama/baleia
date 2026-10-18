@@ -46,6 +46,18 @@ func loginResponse(t *testing.T, resp LoginResponseObject, err error, name strin
 	}
 }
 
+func TestLogin_EmailRequiredForLocal(t *testing.T) {
+	resp, err := loginHandlers(&fakeLoginQuerier{}).Login(context.Background(), LoginRequestObject{
+		Body: &LoginRequest{Password: "whatever"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(Login422JSONResponse); !ok {
+		t.Fatalf("login = %T, want 422", resp)
+	}
+}
+
 // TestLogin_UniformErrors: an unknown e-mail, an SSO-only account and a wrong
 // password are indistinguishable (#51).
 func TestLogin_UniformErrors(t *testing.T) {

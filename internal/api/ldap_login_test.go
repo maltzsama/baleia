@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
@@ -162,6 +163,35 @@ func TestLogin_LDAPUniformError(t *testing.T) {
 				t.Fatal("error leaks the directory username")
 			}
 		})
+	}
+}
+
+// TestLogin_LDAPRejectsNonLDAPAccount: a local account that happens to carry
+// the provider/external id pair is not a valid directory link.
+func TestLogin_LDAPRejectsNonLDAPAccount(t *testing.T) {
+	f, ap := ldapLoginFixture(t)
+	f.h.ldapAuthenticate = func(context.Context, identityldap.Config, string, string) (*identityldap.User, error) {
+		return &identityldap.User{ExternalID: "local-linked", Role: identity.RoleAdmin}, nil
+	}
+	hash, err := auth.HashPasswordWithCost("local-password", testBcryptCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pool.Exec(context.Background(), `INSERT INTO users
+		(name, email, role, password_hash, auth_provider, auth_provider_id, external_id)
+		VALUES ('Local', 'local@corp.test', 'admin', $1, 'local', $2, 'local-linked')`, hash, ap.ID); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{
+		ProviderId: providerID(ap),
+		Username:   ptr("local"),
+		Password:   "local-password",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(Login401JSONResponse); !ok {
+		t.Fatalf("login = %T, want 401", resp)
 	}
 }
 
