@@ -594,8 +594,13 @@ func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 // safeRelativePath accepts only same-origin paths, never a scheme-relative one.
+// Browsers normalise backslashes to slashes, so "/\evil.com" is "//evil.com" in
+// disguise; control characters are refused too.
 func safeRelativePath(next string) bool {
-	return strings.HasPrefix(next, "/") && !strings.HasPrefix(next, "//")
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return false
+	}
+	return !strings.ContainsAny(next, "\\\r\n\t\x00")
 }
 
 func clearOIDCCookie(w http.ResponseWriter) {

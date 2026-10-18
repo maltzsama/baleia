@@ -10,6 +10,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+func TestSafeRelativePath(t *testing.T) {
+	cases := map[string]bool{
+		"/sql":              true,
+		"/sql?tab=1":        true,
+		"":                  false,
+		"//evil.example":    false,
+		"/\\evil.example":   false,
+		"https://evil.test": false,
+		"/a\nb":             false,
+		"/a\tb":             false,
+	}
+	for next, want := range cases {
+		if got := safeRelativePath(next); got != want {
+			t.Errorf("safeRelativePath(%q) = %v, want %v", next, got, want)
+		}
+	}
+}
+
 func oidcAttemptFixture(t *testing.T) (*db.Queries, db.AuthProvider) {
 	t.Helper()
 	pool := testdb.New(t)
