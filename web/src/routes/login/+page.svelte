@@ -1,20 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_ROOT, clearSession, client, getAccessToken, setAccessToken } from '$lib/api/client';
+	import { API_ROOT, client } from '$lib/api/client';
+	import { bootstrap, login as loginSession, safeNext } from '$lib/auth/session';
 	import { Input, PasswordInput } from '$lib/ui';
-
-	// Retry-After is either a number of seconds or an HTTP-date. Returns the
-	// remaining delay in whole seconds, capped at one hour; 0 when absent,
-	// malformed or already elapsed.
-	function retryAfterSeconds(raw: string | null): number {
-		if (!raw) return 0;
-		let wait = parseInt(raw, 10);
-		if (Number.isNaN(wait)) {
-			const at = Date.parse(raw);
-			wait = Number.isNaN(at) ? 0 : Math.ceil((at - Date.now()) / 1000);
-		}
-		return Math.min(Math.max(wait, 0), 3600);
-	}
 
 	type Provider = { id: string; name: string; type: string };
 
@@ -44,17 +32,11 @@
 
 		loadProviders();
 
-		// Restore a session from the HttpOnly refresh cookie: the client retries
-		// /auth/me after a successful refresh. Without a valid cookie the form
-		// stays usable instead of bouncing /login → /sql → /login.
-		client.GET('/auth/me').then(({ data }) => {
-			if (!data) {
-				// A login may have completed while this check was in flight.
-				if (!getAccessToken()) clearSession();
-				return;
-			}
-			const next = new URLSearchParams(window.location.search).get('next');
-			window.location.href = next && next.startsWith('/') ? next : '/sql';
+		// Restore a session from the HttpOnly refresh cookie. Without a valid
+		// cookie the form stays usable instead of bouncing /login → /sql → /login.
+		const next = new URLSearchParams(window.location.search).get('next');
+		bootstrap().then((state) => {
+			if (state === 'authenticated') window.location.href = safeNext(next);
 		});
 
 		return () => clearInterval(retryTimer);
@@ -103,27 +85,30 @@
 		error = '';
 		notice = '';
 		try {
-			const { data, response } = await client.POST('/auth/login', {
-				body: { email, password }
-			});
-			if (response.status === 401) {
-				showError('Invalid e-mail or password.', 'password');
+			const result = await loginSession({ email, password });
+			if (!result.ok) {
+				if (result.code === 'invalid_credentials') {
+					showError('Invalid e-mail or password.', 'password');
+					return;
+				}
+				if (result.code === 'rate_limited') {
+					if (result.retryAfter && result.retryAfter > 0) startRetryCountdown(result.retryAfter);
+					else showError('Too many attempts. Try again later.');
+					return;
+				}
+				if (result.code === 'account_suspended') {
+					showError('This account is suspended. Contact an administrator.');
+					return;
+				}
+				if (result.code === 'network_error') {
+					showError('Connection error. Is the server running?');
+					return;
+				}
+				showError(`Sign in failed (HTTP ${result.status}). Try again.`);
 				return;
 			}
-			if (response.status === 429) {
-				const wait = retryAfterSeconds(response.headers.get('Retry-After'));
-				if (wait > 0) startRetryCountdown(wait);
-				else showError('Too many attempts. Try again later.');
-				return;
-			}
-			if (!response.ok || !data) {
-				showError(`Sign in failed (HTTP ${response.status}). Try again.`);
-				return;
-			}
-			setAccessToken(data.token);
-			window.location.href = '/sql';
-		} catch {
-			showError('Connection error. Is the server running?');
+			const next = new URLSearchParams(window.location.search).get('next');
+			window.location.href = safeNext(next);
 		} finally {
 			busy = false;
 		}
@@ -155,11 +140,8 @@
 	}
 
 	function doSSO(providerId: string) {
-		const next = new URLSearchParams(window.location.search).get('next');
-		const suffix =
-			next && next.startsWith('/') && !next.startsWith('//')
-				? `?next=${encodeURIComponent(next)}`
-				: '';
+		const target = safeNext(new URLSearchParams(window.location.search).get('next'), '');
+		const suffix = target ? `?next=${encodeURIComponent(target)}` : '';
 		window.location.href = `${API_ROOT}/auth/oidc/${encodeURIComponent(providerId)}/login${suffix}`;
 	}
 
