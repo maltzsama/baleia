@@ -45,6 +45,58 @@ func TestValidateEncryptionKeys(t *testing.T) {
 	}
 }
 
+func TestConfig_TokenTTLDefaults(t *testing.T) {
+	// A Config built without Load still gets safe defaults.
+	c := &Config{}
+	if got := c.AccessTTL(); got != DefaultAccessTokenTTL {
+		t.Errorf("AccessTTL() = %s, want %s", got, DefaultAccessTokenTTL)
+	}
+	if got := c.RefreshTTL(); got != DefaultRefreshTokenTTL {
+		t.Errorf("RefreshTTL() = %s, want %s", got, DefaultRefreshTokenTTL)
+	}
+	if got := c.ResetTTL(); got != DefaultResetTokenTTL {
+		t.Errorf("ResetTTL() = %s, want %s", got, DefaultResetTokenTTL)
+	}
+	if got := c.PasswordCost(); got != DefaultBcryptCost {
+		t.Errorf("PasswordCost() = %d, want %d", got, DefaultBcryptCost)
+	}
+
+	// Defaults are 15m / 30d / 30m / 12 when the environment leaves them unset.
+	for _, key := range []string{
+		"BALEIA_ACCESS_TOKEN_TTL", "BALEIA_REFRESH_TOKEN_TTL",
+		"BALEIA_RESET_TOKEN_TTL", "BALEIA_BCRYPT_COST",
+	} {
+		t.Setenv(key, "")
+	}
+	loaded := Load()
+	if loaded.AccessTTL() != 15*time.Minute {
+		t.Errorf("default access TTL = %s, want 15m", loaded.AccessTTL())
+	}
+	if loaded.RefreshTTL() != 30*24*time.Hour {
+		t.Errorf("default refresh TTL = %s, want 30d", loaded.RefreshTTL())
+	}
+	if loaded.ResetTTL() != 30*time.Minute {
+		t.Errorf("default reset TTL = %s, want 30m", loaded.ResetTTL())
+	}
+	if loaded.PasswordCost() != 12 {
+		t.Errorf("default bcrypt cost = %d, want 12", loaded.PasswordCost())
+	}
+}
+
+func TestConfig_BcryptCostMin(t *testing.T) {
+	const jwt = "a-long-random-value-not-the-default"
+	for _, cost := range []int{9, 32} {
+		if err := (&Config{JWTSecret: jwt, BcryptCost: cost}).Validate(); err == nil {
+			t.Errorf("Validate accepted bcrypt cost %d", cost)
+		}
+	}
+	for _, cost := range []int{0, MinBcryptCost, DefaultBcryptCost, MaxBcryptCost} {
+		if err := (&Config{JWTSecret: jwt, BcryptCost: cost}).Validate(); err != nil {
+			t.Errorf("Validate rejected bcrypt cost %d: %v", cost, err)
+		}
+	}
+}
+
 func TestMetadataSyncEvery(t *testing.T) {
 	for in, want := range map[time.Duration]time.Duration{0: DefaultMetadataSyncInterval, 30 * time.Minute: 30 * time.Minute} {
 		if got := (&Config{MetadataSyncInterval: in}).MetadataSyncEvery(); got != want {

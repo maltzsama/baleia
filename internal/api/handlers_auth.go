@@ -44,7 +44,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		}, nil
 	}
 
-	hash, err := auth.HashPassword(request.Body.Password)
+	hash, err := auth.HashPasswordWithCost(request.Body.Password, h.cfg.PasswordCost())
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		return nil, err
 	}
 
-	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
 	}); err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 	return CreateFirstAdmin201JSONResponse{
 		Token:        accessToken,
 		RefreshToken: refreshToken,
-		ExpiresAt:    time.Now().Add(auth.AccessTokenTTL),
+		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
 		User:         dbUserToPublic(user),
 	}, nil
 }
@@ -115,7 +115,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid credentials"}}, nil
 	}
 
-	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
 	}); err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	return Login200JSONResponse{
 		Token:        accessToken,
 		RefreshToken: refreshToken,
-		ExpiresAt:    time.Now().Add(auth.AccessTokenTTL),
+		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
 		User:         dbUserToPublic(user),
 	}, nil
 }
@@ -265,7 +265,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 
 	_ = h.queries.RevokeRefreshToken(ctx, rt.ID)
 
-	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +278,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: newHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
 	}); err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	return RefreshToken200JSONResponse{
 		Token:        accessToken,
 		RefreshToken: newRefreshToken,
-		ExpiresAt:    time.Now().Add(auth.AccessTokenTTL),
+		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
 	}, nil
 }
 
@@ -312,7 +312,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 	}
 
 	token := randomState()
-	expires := time.Now().Add(1 * time.Hour)
+	expires := time.Now().Add(h.cfg.ResetTTL())
 
 	if err := h.queries.SetPasswordResetToken(ctx, db.SetPasswordResetTokenParams{
 		Email:                  string(request.Body.Email),
@@ -342,7 +342,7 @@ func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPass
 		}, nil
 	}
 
-	hash, err := auth.HashPassword(request.Body.NewPassword)
+	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.cfg.PasswordCost())
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +433,7 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 		}, nil
 	}
 
-	hash, err := auth.HashPassword(request.Body.NewPassword)
+	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.cfg.PasswordCost())
 	if err != nil {
 		return nil, err
 	}
@@ -518,7 +518,7 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	accessToken, err := auth.NewAccessToken(user.ID.String(), user.Role, h.cfg.JWTSecret)
+	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
 		return
@@ -533,7 +533,7 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.queries.CreateRefreshToken(r.Context(), db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.RefreshTokenTTL), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
 	}); err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
 		return

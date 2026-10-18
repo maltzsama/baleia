@@ -30,6 +30,9 @@ func TestNewAccessToken(t *testing.T) {
 	if claims.Role != "admin" {
 		t.Errorf("expected admin, got %s", claims.Role)
 	}
+	if claims.ID == "" {
+		t.Error("expected a jti claim for audit correlation")
+	}
 
 	expiresIn := time.Until(claims.ExpiresAt.Time)
 	if expiresIn <= 0 || expiresIn > auth.AccessTokenTTL {
