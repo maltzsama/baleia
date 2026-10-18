@@ -119,6 +119,7 @@ var operationAccess = map[string]access{
 	"DeleteIdentityProvider":        {kind: kindAdmin, calls: adminRole},
 	"TestIdentityProvider":          {kind: kindAdmin, calls: adminRole},
 	"TestIdentityProviderTransient": {kind: kindAdmin, calls: adminRole},
+	"PreviewIdentityMapping":        {kind: kindAdmin, calls: adminRole},
 	"GetSystemStatus":               {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 
 	// ── connections and catalogs (internal/authz)

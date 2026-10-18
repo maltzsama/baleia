@@ -27,6 +27,9 @@ type ServerInterface interface {
 	// Create an identity provider — admin only
 	// (POST /admin/identity-providers)
 	CreateIdentityProvider(w http.ResponseWriter, r *http.Request)
+	// Preview directory group mapping — admin only
+	// (POST /admin/identity-providers/mapping-preview)
+	PreviewIdentityMapping(w http.ResponseWriter, r *http.Request)
 	// Test an unsaved identity provider — admin only
 	// (POST /admin/identity-providers/test)
 	TestIdentityProviderTransient(w http.ResponseWriter, r *http.Request)
@@ -585,6 +588,12 @@ func (_ Unimplemented) ListIdentityProviders(w http.ResponseWriter, r *http.Requ
 // Create an identity provider — admin only
 // (POST /admin/identity-providers)
 func (_ Unimplemented) CreateIdentityProvider(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Preview directory group mapping — admin only
+// (POST /admin/identity-providers/mapping-preview)
+func (_ Unimplemented) PreviewIdentityMapping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1749,6 +1758,28 @@ func (siw *ServerInterfaceWrapper) CreateIdentityProvider(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIdentityProvider(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewIdentityMapping operation middleware
+func (siw *ServerInterfaceWrapper) PreviewIdentityMapping(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewIdentityMapping(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9094,6 +9125,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/admin/identity-providers", wrapper.CreateIdentityProvider)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/identity-providers/mapping-preview", wrapper.PreviewIdentityMapping)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/admin/identity-providers/test", wrapper.TestIdentityProviderTransient)
 	})
 	r.Group(func(r chi.Router) {
@@ -9780,6 +9814,52 @@ type CreateIdentityProvider422JSONResponse struct {
 }
 
 func (response CreateIdentityProvider422JSONResponse) VisitCreateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewIdentityMappingRequestObject struct {
+	Body *PreviewIdentityMappingJSONRequestBody
+}
+
+type PreviewIdentityMappingResponseObject interface {
+	VisitPreviewIdentityMappingResponse(w http.ResponseWriter) error
+}
+
+type PreviewIdentityMapping200JSONResponse IdentityMappingPreview
+
+func (response PreviewIdentityMapping200JSONResponse) VisitPreviewIdentityMappingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewIdentityMapping401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PreviewIdentityMapping401JSONResponse) VisitPreviewIdentityMappingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewIdentityMapping403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PreviewIdentityMapping403JSONResponse) VisitPreviewIdentityMappingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewIdentityMapping422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PreviewIdentityMapping422JSONResponse) VisitPreviewIdentityMappingResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -17462,6 +17542,9 @@ type StrictServerInterface interface {
 	// Create an identity provider — admin only
 	// (POST /admin/identity-providers)
 	CreateIdentityProvider(ctx context.Context, request CreateIdentityProviderRequestObject) (CreateIdentityProviderResponseObject, error)
+	// Preview directory group mapping — admin only
+	// (POST /admin/identity-providers/mapping-preview)
+	PreviewIdentityMapping(ctx context.Context, request PreviewIdentityMappingRequestObject) (PreviewIdentityMappingResponseObject, error)
 	// Test an unsaved identity provider — admin only
 	// (POST /admin/identity-providers/test)
 	TestIdentityProviderTransient(ctx context.Context, request TestIdentityProviderTransientRequestObject) (TestIdentityProviderTransientResponseObject, error)
@@ -18104,6 +18187,37 @@ func (sh *strictHandler) CreateIdentityProvider(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateIdentityProviderResponseObject); ok {
 		if err := validResponse.VisitCreateIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewIdentityMapping operation middleware
+func (sh *strictHandler) PreviewIdentityMapping(w http.ResponseWriter, r *http.Request) {
+	var request PreviewIdentityMappingRequestObject
+
+	var body PreviewIdentityMappingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewIdentityMapping(ctx, request.(PreviewIdentityMappingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewIdentityMapping")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewIdentityMappingResponseObject); ok {
+		if err := validResponse.VisitPreviewIdentityMappingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

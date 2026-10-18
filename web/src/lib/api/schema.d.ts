@@ -385,6 +385,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/identity-providers/mapping-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview directory group mapping — admin only
+         * @description Runs the same pure mapping as login and returns the derived role and teams. It contacts no directory and persists nothing.
+         */
+        post: operations["previewIdentityMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -3103,6 +3123,24 @@ export interface components {
             /** @description Directory username to look up. The probe never binds as this user. */
             test_username?: string;
         };
+        /** @description Groups and mapping rules evaluated exactly as login does. */
+        IdentityMappingPreviewRequest: {
+            groups: string[];
+            role_mapping?: components["schemas"]["IdentityRoleMapping"][];
+            team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            /** @enum {string} */
+            default_role?: "admin" | "member";
+        };
+        IdentityTeamAssignment: {
+            team_id: string;
+            /** @enum {string} */
+            team_role: "owner" | "member";
+        };
+        IdentityMappingPreview: {
+            /** @enum {string} */
+            role: "admin" | "member";
+            teams: components["schemas"]["IdentityTeamAssignment"][];
+        };
         PasswordResetRequestBody: {
             /** Format: email */
             email: string;
@@ -5573,6 +5611,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdentityProviderTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    previewIdentityMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityMappingPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Derived role and teams */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityMappingPreview"];
                 };
             };
             401: components["responses"]["Unauthorized"];

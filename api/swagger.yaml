@@ -573,6 +573,38 @@ components:
           type: string
           description: "Directory username to look up. The probe never binds as this user."
 
+    IdentityMappingPreviewRequest:
+      type: object
+      description: "Groups and mapping rules evaluated exactly as login does."
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items: { type: string }
+        role_mapping:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityRoleMapping" }
+        team_mapping:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityTeamMapping" }
+        default_role: { type: string, enum: [admin, member] }
+
+    IdentityTeamAssignment:
+      type: object
+      required: [team_id, team_role]
+      properties:
+        team_id: { type: string }
+        team_role: { type: string, enum: [owner, member] }
+
+    IdentityMappingPreview:
+      type: object
+      required: [role, teams]
+      properties:
+        role: { type: string, enum: [admin, member] }
+        teams:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityTeamAssignment" }
+
     PasswordResetRequestBody:
       type: object
       required: [email]
@@ -3117,6 +3149,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/IdentityProviderTestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /admin/identity-providers/mapping-preview:
+    post:
+      tags: [Identity]
+      operationId: previewIdentityMapping
+      summary: "Preview directory group mapping — admin only"
+      description: "Runs the same pure mapping as login and returns the derived role and teams. It contacts no directory and persists nothing."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityMappingPreviewRequest" }
+      responses:
+        "200":
+          description: "Derived role and teams"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityMappingPreview" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }

@@ -1,0 +1,45 @@
+meta {
+  name: Preview Group Mapping
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{base_url}}/admin/identity-providers/mapping-preview
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "groups": ["baleia-admins", "team-eng"],
+    "role_mapping": [
+      { "group": "baleia-admins", "role": "admin" }
+    ],
+    "team_mapping": [
+      { "group": "team-eng", "team_id": "team-1", "team_role": "owner" }
+    ],
+    "default_role": "member"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.role: eq "admin"
+}
+
+tests {
+  test("the preview derives the role and one team", function () {
+    expect(res.body.teams).to.be.an("array").with.lengthOf(1);
+    expect(res.body.teams[0].team_id).to.eq("team-1");
+  });
+}
+
+docs {
+  Runs the same pure mapping as login; nothing is persisted and no directory
+  is contacted (#264).
+}

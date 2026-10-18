@@ -336,6 +336,18 @@ const (
 	GrantCatalogAccessRequestPermissionWrite GrantCatalogAccessRequestPermission = "write"
 )
 
+// Defines values for IdentityMappingPreviewRole.
+const (
+	IdentityMappingPreviewRoleAdmin  IdentityMappingPreviewRole = "admin"
+	IdentityMappingPreviewRoleMember IdentityMappingPreviewRole = "member"
+)
+
+// Defines values for IdentityMappingPreviewRequestDefaultRole.
+const (
+	IdentityMappingPreviewRequestDefaultRoleAdmin  IdentityMappingPreviewRequestDefaultRole = "admin"
+	IdentityMappingPreviewRequestDefaultRoleMember IdentityMappingPreviewRequestDefaultRole = "member"
+)
+
 // Defines values for IdentityProviderTestCheckStatus.
 const (
 	IdentityProviderTestCheckStatusFailed  IdentityProviderTestCheckStatus = "failed"
@@ -353,6 +365,12 @@ const (
 const (
 	IdentityRoleMappingRoleAdmin  IdentityRoleMappingRole = "admin"
 	IdentityRoleMappingRoleMember IdentityRoleMappingRole = "member"
+)
+
+// Defines values for IdentityTeamAssignmentTeamRole.
+const (
+	IdentityTeamAssignmentTeamRoleMember IdentityTeamAssignmentTeamRole = "member"
+	IdentityTeamAssignmentTeamRoleOwner  IdentityTeamAssignmentTeamRole = "owner"
 )
 
 // Defines values for IdentityTeamMappingTeamRole.
@@ -696,8 +714,8 @@ const (
 
 // Defines values for UserPublicRole.
 const (
-	Admin  UserPublicRole = "admin"
-	Member UserPublicRole = "member"
+	UserPublicRoleAdmin  UserPublicRole = "admin"
+	UserPublicRoleMember UserPublicRole = "member"
 )
 
 // Defines values for WorkspaceType.
@@ -1859,6 +1877,26 @@ type IcebergCredentials struct {
 	Token *string `json:"token,omitempty"`
 }
 
+// IdentityMappingPreview defines model for IdentityMappingPreview.
+type IdentityMappingPreview struct {
+	Role  IdentityMappingPreviewRole `json:"role"`
+	Teams []IdentityTeamAssignment   `json:"teams"`
+}
+
+// IdentityMappingPreviewRole defines model for IdentityMappingPreview.Role.
+type IdentityMappingPreviewRole string
+
+// IdentityMappingPreviewRequest Groups and mapping rules evaluated exactly as login does.
+type IdentityMappingPreviewRequest struct {
+	DefaultRole *IdentityMappingPreviewRequestDefaultRole `json:"default_role,omitempty"`
+	Groups      []string                                  `json:"groups"`
+	RoleMapping *[]IdentityRoleMapping                    `json:"role_mapping,omitempty"`
+	TeamMapping *[]IdentityTeamMapping                    `json:"team_mapping,omitempty"`
+}
+
+// IdentityMappingPreviewRequestDefaultRole defines model for IdentityMappingPreviewRequest.DefaultRole.
+type IdentityMappingPreviewRequestDefaultRole string
+
 // IdentityProvider defines model for IdentityProvider.
 type IdentityProvider struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -1921,6 +1959,15 @@ type IdentityRoleMapping struct {
 
 // IdentityRoleMappingRole defines model for IdentityRoleMapping.Role.
 type IdentityRoleMappingRole string
+
+// IdentityTeamAssignment defines model for IdentityTeamAssignment.
+type IdentityTeamAssignment struct {
+	TeamId   string                         `json:"team_id"`
+	TeamRole IdentityTeamAssignmentTeamRole `json:"team_role"`
+}
+
+// IdentityTeamAssignmentTeamRole defines model for IdentityTeamAssignment.TeamRole.
+type IdentityTeamAssignmentTeamRole string
 
 // IdentityTeamMapping Binds a directory group to a team and role.
 type IdentityTeamMapping struct {
@@ -3782,6 +3829,9 @@ type StreamExecutionParams struct {
 
 // CreateIdentityProviderJSONRequestBody defines body for CreateIdentityProvider for application/json ContentType.
 type CreateIdentityProviderJSONRequestBody = CreateIdentityProviderRequest
+
+// PreviewIdentityMappingJSONRequestBody defines body for PreviewIdentityMapping for application/json ContentType.
+type PreviewIdentityMappingJSONRequestBody = IdentityMappingPreviewRequest
 
 // TestIdentityProviderTransientJSONRequestBody defines body for TestIdentityProviderTransient for application/json ContentType.
 type TestIdentityProviderTransientJSONRequestBody = TestIdentityProviderRequest
