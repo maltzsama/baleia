@@ -27,6 +27,13 @@ const (
 	ClientAPI    = "api"
 )
 
+// CSRFHeader is required on the cookie-authenticated refresh/logout POSTs
+// (#275). A cross-site form cannot set a custom header.
+const (
+	CSRFHeader = "X-Requested-With"
+	CSRFValue  = "baleia"
+)
+
 // WithRefreshCookie makes the refresh cookie value available to a handler.
 func WithRefreshCookie(ctx context.Context, token string) context.Context {
 	return context.WithValue(ctx, ContextKeyRefreshCookie, token)

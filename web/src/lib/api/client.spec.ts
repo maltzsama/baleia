@@ -30,6 +30,7 @@ describe('api client', () => {
 					// The SPA never sends the refresh token in the body; the
 					// browser attaches the HttpOnly cookie instead (#51).
 					expect(init?.credentials).toBe('include');
+					expect(new Headers(init?.headers).get('X-Requested-With')).toBe('baleia');
 					expect(String(init?.body)).not.toContain('refresh_token');
 					return json({ token: 'access-2', expires_at: '2030-01-01T00:00:00Z' });
 				}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -68,6 +69,34 @@ func TestOIDC_AttemptSingleUse(t *testing.T) {
 	}
 	if _, err := q.ConsumeOIDCLoginAttempt(ctx, state); err == nil {
 		t.Fatal("a replayed state was consumed twice")
+	}
+}
+
+// TestOIDC_RedirectConstraint: the database refuses unsafe redirects even if a
+// future writer forgets to validate them (#252).
+func TestOIDC_RedirectConstraint(t *testing.T) {
+	q, provider := oidcAttemptFixture(t)
+	ctx := context.Background()
+	expires := pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true}
+	create := func(state string, redirect *string) error {
+		return q.CreateOIDCLoginAttempt(ctx, db.CreateOIDCLoginAttemptParams{
+			State:        state,
+			ProviderID:   provider.ID,
+			CodeVerifier: "verifier",
+			Redirect:     redirect,
+			ExpiresAt:    expires,
+		})
+	}
+
+	for i, bad := range []string{"//evil.example", "/\\evil.example", "https://evil.example", "/a\nb"} {
+		bad := bad
+		if err := create(fmt.Sprintf("bad-%d", i), &bad); err == nil {
+			t.Errorf("redirect %q was stored", bad)
+		}
+	}
+	good := "/sql?tab=1"
+	if err := create("good", &good); err != nil {
+		t.Fatalf("relative redirect rejected: %v", err)
 	}
 }
 

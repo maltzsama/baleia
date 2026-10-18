@@ -56,7 +56,7 @@ async function performRefresh(): Promise<boolean> {
 		const res = await fetch(`${API_ROOT}/auth/refresh`, {
 			method: 'POST',
 			credentials: 'include',
-			headers: { 'Content-Type': 'application/json' },
+			headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'baleia' },
 			body: '{}'
 		});
 		if (!res.ok) return false;
@@ -86,6 +86,8 @@ const replayable = new WeakMap<Request, Request>();
 
 const authMiddleware: Middleware = {
 	onRequest({ request }) {
+		// Required by the API on refresh/logout (#275); harmless elsewhere.
+		request.headers.set('X-Requested-With', 'baleia');
 		const token = getAccessToken();
 		if (token) request.headers.set('Authorization', `Bearer ${token}`);
 		if (request.method !== 'GET' && request.method !== 'HEAD') {

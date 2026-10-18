@@ -42,8 +42,8 @@ describe('subscribeExecution', () => {
 
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		// Access tokens are memory-only; clearing local storage is irrelevant.
 		setAccessToken(null);
-		localStorage.clear();
 	});
 
 	it('connects with a single-use ticket, never the JWT', async () => {
