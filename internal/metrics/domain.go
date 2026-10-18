@@ -28,6 +28,10 @@ const (
 	AuthPassword = "password"
 	AuthOIDC     = "oidc"
 	AuthRefresh  = "refresh"
+	// Password-reset operations (#51), bounded so the kind label stays low
+	// cardinality.
+	AuthPasswordResetRequest = "password_reset_request"
+	AuthPasswordResetConfirm = "password_reset_confirm"
 
 	OutcomeSuccess            = "success"
 	OutcomeInvalidCredentials = "invalid_credentials"
