@@ -19,7 +19,7 @@ assert {
 }
 
 tests {
-  test("results are an Arrow IPC stream", function () {
-    expect(res.getHeader("content-type")).to.equal("application/vnd.apache.arrow.stream");
+  test("results are an Arrow IPC object", function () {
+    expect(res.getHeader("content-type")).to.match(/^application\/vnd\.apache\.arrow\.(stream|file)$/);
   });
 }

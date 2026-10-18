@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -10,9 +11,11 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
@@ -1048,6 +1051,9 @@ type arrowStreamResponse struct {
 	// disposition is the Content-Disposition header for an export; empty for
 	// the viewer's inline Arrow stream.
 	disposition string
+	// totalRows is the statement's full row count for a paged read; nil when the
+	// whole result is streamed.
+	totalRows *int64
 }
 
 func (r arrowStreamResponse) VisitGetResultsResponse(w http.ResponseWriter) error {
@@ -1063,6 +1069,9 @@ func (r arrowStreamResponse) write(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", r.contentType)
 	if r.disposition != "" {
 		w.Header().Set("Content-Disposition", r.disposition)
+	}
+	if r.totalRows != nil {
+		w.Header().Set("X-Total-Rows", strconv.FormatInt(*r.totalRows, 10))
 	}
 	w.WriteHeader(http.StatusOK)
 	_, err := io.Copy(w, r.reader)
@@ -1117,10 +1126,45 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 		format = parsed
 	}
 
+	offset, limit := 0, 0
+	if request.Params.Offset != nil {
+		offset = *request.Params.Offset
+	}
+	if request.Params.Limit != nil {
+		limit = *request.Params.Limit
+	}
+	if offset < 0 || limit < 0 {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "offset and limit must be zero or greater")}, nil
+	}
+
 	resultKey := resultKeyFor(statement.ResultSets, statement.ResultKey, resultIndex)
 	if resultKey == "" {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement produced no result set"}}, nil
+	}
+
+	disposition := fmt.Sprintf("attachment; filename=%q", fmt.Sprintf("%s-%d.%s", request.ExecutionId, request.Position, format.extension()))
+
+	// Paged read of the stored Arrow object: seek to the covering batches and
+	// re-emit only the requested rows, so the client never downloads the whole
+	// result (#238). The full row count travels in X-Total-Rows.
+	if format == exportArrow && limit > 0 {
+		page, err := h.pageOf(ctx, resultKey, int64(offset), int64(limit))
+		if err != nil {
+			return nil, err
+		}
+		totalRows := int64(0)
+		if statement.RowsReturned != nil {
+			totalRows = *statement.RowsReturned
+		}
+		h.audited(ctx, ev.Allowed())
+		return arrowStreamResponse{
+			reader:      io.NopCloser(bytes.NewReader(page)),
+			contentType: "application/vnd.apache.arrow.stream",
+			disposition: disposition,
+			totalRows:   &totalRows,
+		}, nil
 	}
 
 	reader, contentType, err := h.s3.GetReader(ctx, resultKey)
@@ -1130,7 +1174,6 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 	if contentType == "" || format != exportArrow {
 		contentType = format.contentType()
 	}
-	disposition := fmt.Sprintf("attachment; filename=%q", fmt.Sprintf("%s-%d.%s", request.ExecutionId, request.Position, format.extension()))
 
 	h.audited(ctx, ev.Allowed())
 	if format == exportArrow {
@@ -1145,6 +1188,22 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 		pw.CloseWithError(convertResult(pw, reader, format))
 	}()
 	return arrowStreamResponse{reader: pr, contentType: contentType, disposition: disposition}, nil
+}
+
+// pageOf returns rows [offset, offset+limit) of a stored result. New results are
+// Arrow files (seek by footer, no full download); legacy stream results are
+// decoded and sliced.
+func (h *Handlers) pageOf(ctx context.Context, key string, offset, limit int64) ([]byte, error) {
+	if ra, err := h.s3.NewReaderAt(ctx, key); err == nil {
+		if page, serr := arrowipc.SliceRows(ra, offset, limit); serr == nil {
+			return page, nil
+		}
+	}
+	data, _, err := h.s3.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return arrowipc.SliceStream(data, offset, limit)
 }
 
 // IssueWsTicket mints a single-use WebSocket ticket (#26) so the client never
