@@ -95,6 +95,8 @@ const (
 	CatalogReconcile   = "catalog-reconcile"
 	// EphemeralCatalogSweeper drops expired connection-test catalogs (#12).
 	EphemeralCatalogSweeper = "ephemeral-catalog-sweeper"
+	// TokenCleanup prunes expired refresh and password-reset tokens (#51).
+	TokenCleanup = "token-cleanup"
 )
 
 // Remove deletes a schedule an earlier configuration created; a schedule

@@ -208,6 +208,7 @@ func main() {
 	w.RegisterWorkflow(workflows.AuditExportWorkflow)
 	w.RegisterWorkflow(workflows.CatalogReconcileWorkflow)
 	w.RegisterWorkflow(workflows.EphemeralCatalogSweepWorkflow)
+	w.RegisterWorkflow(workflows.TokenCleanupWorkflow)
 
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
@@ -220,6 +221,7 @@ func main() {
 			{ID: schedules.MetadataSync, Workflow: workflows.MetadataSyncDispatchWorkflow, Every: cfg.MetadataSyncEvery()},
 			{ID: schedules.AuditPartitions, Workflow: workflows.AuditPartitionsWorkflow, Every: 24 * time.Hour},
 			{ID: schedules.EphemeralCatalogSweeper, Workflow: workflows.EphemeralCatalogSweepWorkflow, Every: time.Minute},
+			{ID: schedules.TokenCleanup, Workflow: workflows.TokenCleanupWorkflow, Every: 24 * time.Hour},
 		}); err != nil {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)
