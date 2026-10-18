@@ -33,6 +33,8 @@ tags:
     description: "Authentication and sessions"
   - name: ApiKeys
     description: "Programmatic access keys"
+  - name: Identity
+    description: "Identity provider administration (OIDC and LDAP) — admin only"
   - name: Users
     description: "User profiles and administration"
   - name: Teams
@@ -239,6 +241,143 @@ components:
         id: { type: string, format: uuid }
         name: { type: string, example: "Okta" }
         type: { type: string, enum: [oidc] }
+
+    IdentityProviderType:
+      type: string
+      enum: [oidc, ldap]
+
+    IdentityRoleMapping:
+      type: object
+      description: "Binds a directory group to a platform role."
+      required: [group, role]
+      properties:
+        group: { type: string, minLength: 1 }
+        role: { type: string, enum: [admin, member] }
+
+    IdentityTeamMapping:
+      type: object
+      description: "Binds a directory group to a team and role."
+      required: [group, team_id, team_role]
+      properties:
+        group: { type: string, minLength: 1 }
+        team_id: { type: string }
+        team_role: { type: string, enum: [owner, member] }
+
+    OIDCClaimsConfig:
+      type: object
+      description: "Claim names published by the provider; empty uses the standard name."
+      properties:
+        subject: { type: string }
+        email: { type: string }
+        name: { type: string }
+        groups: { type: string }
+
+    OIDCConfig:
+      type: object
+      description: "OIDC provider configuration written once. `client_secret` is never returned."
+      required: [issuer_url, client_id, client_secret]
+      properties:
+        issuer_url: { type: string, format: uri }
+        client_id: { type: string, minLength: 1 }
+        client_secret: { type: string, minLength: 1 }
+        auto_create: { type: boolean, default: false, description: "Provision unknown subjects. Default deny; requires allowed_email_domains." }
+        allowed_email_domains: { type: array, items: { type: string } }
+        role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
+        team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        default_role: { type: string, enum: [admin, member] }
+        claims: { $ref: "#/components/schemas/OIDCClaimsConfig" }
+
+    OIDCConfigAdmin:
+      type: object
+      description: "OIDC provider configuration without the client secret."
+      properties:
+        issuer_url: { type: string }
+        client_id: { type: string }
+        auto_create: { type: boolean }
+        allowed_email_domains: { type: array, items: { type: string } }
+        role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
+        team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        default_role: { type: string, enum: [admin, member] }
+        claims: { $ref: "#/components/schemas/OIDCClaimsConfig" }
+
+    LDAPConfig:
+      type: object
+      description: "LDAP provider configuration written once. `bind_password` is never returned."
+      required: [url, bind_dn, bind_password, base_dn, user_filter]
+      properties:
+        url: { type: string, description: "ldaps:// or ldap:// (requires start_tls)." }
+        start_tls: { type: boolean }
+        bind_dn: { type: string }
+        bind_password: { type: string }
+        base_dn: { type: string }
+        user_filter: { type: string, description: "Must contain exactly one {{username}} placeholder." }
+        group_attribute: { type: string }
+        email_attribute: { type: string }
+        name_attribute: { type: string }
+        nested_groups: { type: boolean }
+        required_group: { type: string }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 60 }
+        role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
+        team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        default_role: { type: string, enum: [admin, member] }
+
+    LDAPConfigAdmin:
+      type: object
+      description: "LDAP provider configuration without the bind password."
+      properties:
+        url: { type: string }
+        start_tls: { type: boolean }
+        bind_dn: { type: string }
+        base_dn: { type: string }
+        user_filter: { type: string }
+        group_attribute: { type: string }
+        email_attribute: { type: string }
+        name_attribute: { type: string }
+        nested_groups: { type: boolean }
+        required_group: { type: string }
+        timeout_seconds: { type: integer }
+        role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
+        team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        default_role: { type: string, enum: [admin, member] }
+
+    IdentityProvider:
+      type: object
+      required: [id, name, type, enabled, has_client_secret, has_bind_password, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/IdentityProviderType" }
+        enabled: { type: boolean }
+        has_client_secret: { type: boolean, description: "An OIDC client secret is stored (never returned)." }
+        has_bind_password: { type: boolean, description: "An LDAP bind password is stored (never returned)." }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    IdentityProviderDetail:
+      type: object
+      description: "A provider with its redacted configuration."
+      required: [id, name, type, enabled, has_client_secret, has_bind_password, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/IdentityProviderType" }
+        enabled: { type: boolean }
+        has_client_secret: { type: boolean }
+        has_bind_password: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        oidc: { $ref: "#/components/schemas/OIDCConfigAdmin" }
+        ldap: { $ref: "#/components/schemas/LDAPConfigAdmin" }
+
+    CreateIdentityProviderRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        type: { $ref: "#/components/schemas/IdentityProviderType" }
+        enabled: { type: boolean, default: true }
+        oidc: { $ref: "#/components/schemas/OIDCConfig" }
+        ldap: { $ref: "#/components/schemas/LDAPConfig" }
 
     PasswordResetRequestBody:
       type: object
@@ -2576,6 +2715,61 @@ paths:
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Identity providers (admin) ────────────────────────────────
+  /admin/identity-providers:
+    get:
+      tags: [Identity]
+      operationId: listIdentityProviders
+      summary: "List configured identity providers — admin only"
+      description: "Returns every provider (enabled or not) with no secrets. `has_client_secret` and `has_bind_password` report presence only."
+      responses:
+        "200":
+          description: "List of providers"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IdentityProvider" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Identity]
+      operationId: createIdentityProvider
+      summary: "Create an identity provider — admin only"
+      description: "Validates the type-specific configuration and seals it with the keyring. The secret is written once and never returned."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateIdentityProviderRequest" }
+      responses:
+        "201":
+          description: "Provider created (secrets redacted)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityProviderDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /admin/identity-providers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Identity]
+      operationId: getIdentityProvider
+      summary: "Get an identity provider — admin only"
+      description: "Returns the redacted configuration; secrets are never included."
+      responses:
+        "200":
+          description: "Provider (secrets redacted)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityProviderDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Users ─────────────────────────────────────────────────────

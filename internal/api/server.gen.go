@@ -18,6 +18,15 @@ import (
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List configured identity providers — admin only
+	// (GET /admin/identity-providers)
+	ListIdentityProviders(w http.ResponseWriter, r *http.Request)
+	// Create an identity provider — admin only
+	// (POST /admin/identity-providers)
+	CreateIdentityProvider(w http.ResponseWriter, r *http.Request)
+	// Get an identity provider — admin only
+	// (GET /admin/identity-providers/{id})
+	GetIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId)
 	// List current user's API keys
 	// (GET /api-keys)
 	ListApiKeys(w http.ResponseWriter, r *http.Request)
@@ -533,6 +542,24 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// List configured identity providers — admin only
+// (GET /admin/identity-providers)
+func (_ Unimplemented) ListIdentityProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create an identity provider — admin only
+// (POST /admin/identity-providers)
+func (_ Unimplemented) CreateIdentityProvider(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get an identity provider — admin only
+// (GET /admin/identity-providers/{id})
+func (_ Unimplemented) GetIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // List current user's API keys
 // (GET /api-keys)
@@ -1562,6 +1589,83 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListIdentityProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListIdentityProviders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIdentityProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIdentityProvider operation middleware
+func (siw *ServerInterfaceWrapper) CreateIdentityProvider(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIdentityProvider(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIdentityProvider operation middleware
+func (siw *ServerInterfaceWrapper) GetIdentityProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIdentityProvider(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListApiKeys operation middleware
 func (siw *ServerInterfaceWrapper) ListApiKeys(w http.ResponseWriter, r *http.Request) {
@@ -8604,6 +8708,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/identity-providers", wrapper.ListIdentityProviders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/identity-providers", wrapper.CreateIdentityProvider)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/identity-providers/{id}", wrapper.GetIdentityProvider)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api-keys", wrapper.ListApiKeys)
 	})
 	r.Group(func(r chi.Router) {
@@ -9142,6 +9255,130 @@ type ServiceUnavailableJSONResponse Error
 type UnauthorizedJSONResponse Error
 
 type UnprocessableEntityJSONResponse ValidationError
+
+type ListIdentityProvidersRequestObject struct {
+}
+
+type ListIdentityProvidersResponseObject interface {
+	VisitListIdentityProvidersResponse(w http.ResponseWriter) error
+}
+
+type ListIdentityProviders200JSONResponse []IdentityProvider
+
+func (response ListIdentityProviders200JSONResponse) VisitListIdentityProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListIdentityProviders401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListIdentityProviders401JSONResponse) VisitListIdentityProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListIdentityProviders403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListIdentityProviders403JSONResponse) VisitListIdentityProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateIdentityProviderRequestObject struct {
+	Body *CreateIdentityProviderJSONRequestBody
+}
+
+type CreateIdentityProviderResponseObject interface {
+	VisitCreateIdentityProviderResponse(w http.ResponseWriter) error
+}
+
+type CreateIdentityProvider201JSONResponse IdentityProviderDetail
+
+func (response CreateIdentityProvider201JSONResponse) VisitCreateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateIdentityProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateIdentityProvider401JSONResponse) VisitCreateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateIdentityProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateIdentityProvider403JSONResponse) VisitCreateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateIdentityProvider422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateIdentityProvider422JSONResponse) VisitCreateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetIdentityProviderRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetIdentityProviderResponseObject interface {
+	VisitGetIdentityProviderResponse(w http.ResponseWriter) error
+}
+
+type GetIdentityProvider200JSONResponse IdentityProviderDetail
+
+func (response GetIdentityProvider200JSONResponse) VisitGetIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetIdentityProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetIdentityProvider401JSONResponse) VisitGetIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetIdentityProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetIdentityProvider403JSONResponse) VisitGetIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetIdentityProvider404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetIdentityProvider404JSONResponse) VisitGetIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
 
 type ListApiKeysRequestObject struct {
 }
@@ -16410,6 +16647,15 @@ func (response StreamExecution401JSONResponse) VisitStreamExecutionResponse(w ht
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// List configured identity providers — admin only
+	// (GET /admin/identity-providers)
+	ListIdentityProviders(ctx context.Context, request ListIdentityProvidersRequestObject) (ListIdentityProvidersResponseObject, error)
+	// Create an identity provider — admin only
+	// (POST /admin/identity-providers)
+	CreateIdentityProvider(ctx context.Context, request CreateIdentityProviderRequestObject) (CreateIdentityProviderResponseObject, error)
+	// Get an identity provider — admin only
+	// (GET /admin/identity-providers/{id})
+	GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error)
 	// List current user's API keys
 	// (GET /api-keys)
 	ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error)
@@ -16949,6 +17195,87 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListIdentityProviders operation middleware
+func (sh *strictHandler) ListIdentityProviders(w http.ResponseWriter, r *http.Request) {
+	var request ListIdentityProvidersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIdentityProviders(ctx, request.(ListIdentityProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIdentityProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIdentityProvidersResponseObject); ok {
+		if err := validResponse.VisitListIdentityProvidersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateIdentityProvider operation middleware
+func (sh *strictHandler) CreateIdentityProvider(w http.ResponseWriter, r *http.Request) {
+	var request CreateIdentityProviderRequestObject
+
+	var body CreateIdentityProviderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateIdentityProvider(ctx, request.(CreateIdentityProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateIdentityProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateIdentityProviderResponseObject); ok {
+		if err := validResponse.VisitCreateIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetIdentityProvider operation middleware
+func (sh *strictHandler) GetIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetIdentityProviderRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetIdentityProvider(ctx, request.(GetIdentityProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetIdentityProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetIdentityProviderResponseObject); ok {
+		if err := validResponse.VisitGetIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListApiKeys operation middleware

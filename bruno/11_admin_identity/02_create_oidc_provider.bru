@@ -1,0 +1,46 @@
+meta {
+  name: Create OIDC Provider
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/admin/identity-providers
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno OIDC",
+    "type": "oidc",
+    "enabled": true,
+    "oidc": {
+      "issuer_url": "https://idp.example.test",
+      "client_id": "baleia-bruno",
+      "client_secret": "bruno-oidc-secret",
+      "auto_create": false,
+      "allowed_email_domains": ["example.test"]
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.has_client_secret: eq true
+}
+
+tests {
+  test("the client secret is not echoed", function () {
+    expect(res.body.client_secret).to.be.undefined;
+    expect(JSON.stringify(res.body)).to.not.contain("bruno-oidc-secret");
+  });
+}
+
+vars:post-response {
+  idp_id: res.body.id
+}

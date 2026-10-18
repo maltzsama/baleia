@@ -324,6 +324,39 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]
 	return items, nil
 }
 
+const listAllAuthProviders = `-- name: ListAllAuthProviders :many
+SELECT id, name, type, config_enc, enabled, created_at, updated_at FROM auth_providers ORDER BY name
+`
+
+// Admin listing (#259): includes disabled providers so they can be re-enabled.
+func (q *Queries) ListAllAuthProviders(ctx context.Context) ([]AuthProvider, error) {
+	rows, err := q.db.Query(ctx, listAllAuthProviders)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthProvider
+	for rows.Next() {
+		var i AuthProvider
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.ConfigEnc,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAuthProviders = `-- name: ListAuthProviders :many
 SELECT id, name, type, config_enc, enabled, created_at, updated_at FROM auth_providers WHERE enabled = true ORDER BY name
 `
