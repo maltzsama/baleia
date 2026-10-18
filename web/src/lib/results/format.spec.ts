@@ -7,7 +7,8 @@ import {
 	formatDate,
 	formatDecimal,
 	formatTimestamp,
-	previewJson
+	previewJson,
+	UNLOADED
 } from './format';
 
 describe('formatDecimal', () => {
@@ -15,6 +16,19 @@ describe('formatDecimal', () => {
 		expect(formatDecimal(12345n, 2)).toBe('123.45');
 		expect(formatDecimal(-42n, 2)).toBe('-0.42');
 		expect(formatDecimal(7n, 0)).toBe('7');
+	});
+});
+
+describe('unloaded cells', () => {
+	it('renders and copies blanks, never as SQL NULL', () => {
+		const column = columnMeta(new Field('n', new Int64(), true));
+		expect(formatCell(UNLOADED, column)).toEqual({
+			text: '',
+			align: 'left',
+			null: false,
+			nested: false
+		});
+		expect(cellText(UNLOADED, column)).toBe('');
 	});
 });
 

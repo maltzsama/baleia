@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { ResultsStore, RESULT_PAGE_SIZE } from './store.svelte';
+import { UNLOADED } from './format';
 
 function ipc(values: Record<string, unknown[]>): ArrayBuffer {
 	const bytes = tableToIPC(tableFromArrays(values), 'stream');
@@ -106,8 +107,8 @@ describe('ResultsStore', () => {
 		await store.ensurePage(1);
 		expect(calls[1]).toContain(`offset=${RESULT_PAGE_SIZE}`);
 		expect(store.cell(RESULT_PAGE_SIZE + 1, 0)).toBe(2);
-		// A page that has not been fetched reads as null, not a wrong value.
-		expect(store.cell(3 * RESULT_PAGE_SIZE, 0)).toBeNull();
+		// A page that has not been fetched reads as UNLOADED, not a wrong value.
+		expect(store.cell(3 * RESULT_PAGE_SIZE, 0)).toBe(UNLOADED);
 	});
 
 	it('evicts pages far from the viewport', async () => {
@@ -123,6 +124,6 @@ describe('ResultsStore', () => {
 
 		// The active page is kept; page 0 is far away and has been evicted.
 		expect(store.cell(10 * RESULT_PAGE_SIZE, 0)).toBe(1);
-		expect(store.cell(0, 0)).toBeNull();
+		expect(store.cell(0, 0)).toBe(UNLOADED);
 	});
 });

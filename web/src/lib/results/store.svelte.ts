@@ -3,7 +3,7 @@
 // never materializes fully in the browser.
 import { RecordBatchReader, type RecordBatch } from 'apache-arrow';
 import { apiFetch } from '$lib/api/client';
-import { columnMeta, type ColumnMeta } from './format';
+import { UNLOADED, columnMeta, type ColumnMeta } from './format';
 
 /** Rows fetched per page. The backend re-emits only the covering batches. */
 export const RESULT_PAGE_SIZE = 50_000;
@@ -56,6 +56,8 @@ export class ResultsStore {
 	done = $state(false);
 	loading = $state(false);
 	error = $state('');
+	/** A page fetched while scrolling failed; the grid offers a retry. */
+	pageError = $state('');
 
 	// Internal, deliberately non-reactive caches: the `version` signal drives
 	// re-renders, and a SvelteMap here would make page loads re-enter the effect
@@ -78,6 +80,7 @@ export class ResultsStore {
 		this.done = false;
 		this.loading = false;
 		this.error = '';
+		this.pageError = '';
 		this.pages.clear();
 		this.inflight.clear();
 		this.baseUrl = '';
@@ -117,10 +120,22 @@ export class ResultsStore {
 		}
 		const running = this.inflight.get(page);
 		if (running) return running;
-		const pending = this.fetchPage(page, isFirst).finally(() => {
-			this.inflight.delete(page);
-			this.evict();
-		});
+		const pending = this.fetchPage(page, isFirst)
+			.then(() => {
+				this.pageError = '';
+			})
+			.catch((err) => {
+				if (!isAbort(err)) {
+					this.pageError = err instanceof Error ? err.message : String(err);
+				}
+				// Re-throw so the initial load can surface it; callers that only
+				// want the retry banner pass `.catch(() => {})`.
+				throw err;
+			})
+			.finally(() => {
+				this.inflight.delete(page);
+				this.evict();
+			});
 		this.inflight.set(page, pending);
 		return pending;
 	}
@@ -172,14 +187,15 @@ export class ResultsStore {
 		this.version++;
 	}
 
-	/** The cell at a global row and column index, or null when its page is not loaded. */
+	/** The cell at a global row and column index, or UNLOADED when its page is absent. */
 	cell(row: number, column: number): unknown {
 		// Reading the version makes rendered cells re-evaluate when a page lands.
 		void this.version;
 		const page = Math.floor(row / RESULT_PAGE_SIZE);
 		const local = row - page * RESULT_PAGE_SIZE;
 		const data = this.pages.get(page);
-		if (!data || data.batches.length === 0) return null;
+		if (!data) return UNLOADED;
+		if (data.batches.length === 0) return null;
 		const { batches, offsets } = data;
 		let low = 0;
 		let high = batches.length - 1;

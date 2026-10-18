@@ -94,7 +94,14 @@ function kindOf(typeId: Type): ColumnKind {
 
 const NULL_CELL: CellDisplay = { text: 'NULL', align: 'right', null: true, nested: false };
 
+/** Returned by the results store for a cell whose page has not been loaded. */
+export const UNLOADED = Symbol('unloaded');
+
+/** A not-yet-loaded cell renders blank, never as a false SQL NULL (#234). */
+const UNLOADED_CELL: CellDisplay = { text: '', align: 'left', null: false, nested: false };
+
 export function formatCell(value: unknown, column: ColumnMeta): CellDisplay {
+	if (value === UNLOADED) return UNLOADED_CELL;
 	if (value === null || value === undefined) return NULL_CELL;
 	switch (column.kind) {
 		case 'number':
@@ -190,6 +197,6 @@ export function fullJson(value: unknown): string {
 
 /** Plain text for the clipboard: numbers and decimals exact, nested as JSON. */
 export function cellText(value: unknown, column: ColumnMeta): string {
-	if (value === null || value === undefined) return '';
+	if (value === UNLOADED || value === null || value === undefined) return '';
 	return formatCell(value, column).text;
 }
