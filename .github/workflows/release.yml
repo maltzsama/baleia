@@ -43,6 +43,18 @@ jobs:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # A release PR is recognised by the body release-please writes. If a bot
+      # (e.g. a PR-summary app) rewrites that body, release-please cannot tell
+      # the merged PR was a release: it creates no tag and reopens the next
+      # release with every commit since the bootstrap SHA. Fail loudly instead
+      # of silently shipping a wrong changelog.
+      - name: Verify a merged release PR produced a release
+        if: "${{ contains(github.event.head_commit.message, 'chore(main): release') && steps.release.outputs.release_created != 'true' }}"
+        run: |
+          echo "::error::A release PR was merged but release-please did not create a release/tag."
+          echo "Check that no bot rewrote the release PR body: release-please needs its marker to recognise the merge."
+          exit 1
+
   docker:
     needs: [test, release-please]
     if: ${{ always() && needs.test.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true') }}
@@ -87,3 +99,43 @@ jobs:
           build-args: |
             VERSION=${{ steps.rel.outputs.version }}
             COMMIT=${{ github.sha }}
+
+  chart:
+    needs: [test, release-please]
+    if: ${{ always() && needs.test.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # gh release upload
+      packages: write   # OCI chart push
+    steps:
+      - name: Resolve release tag
+        id: rel
+        run: |
+          tag="${{ inputs.tag || needs.release-please.outputs.tag_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.rel.outputs.tag }}
+
+      - uses: azure/setup-helm@v4
+
+      - name: Package the chart
+        run: |
+          mkdir -p dist
+          helm package deploy/helm/baleia \
+            --version "${{ steps.rel.outputs.version }}" \
+            --app-version "${{ steps.rel.outputs.version }}" \
+            --destination dist
+
+      - name: Publish the chart to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push "dist/baleia-${{ steps.rel.outputs.version }}.tgz" "oci://ghcr.io/${{ github.repository_owner }}/charts"
+
+      - name: Attach the chart to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.rel.outputs.tag }}" "dist/baleia-${{ steps.rel.outputs.version }}.tgz" --clobber
