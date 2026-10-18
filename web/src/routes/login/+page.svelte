@@ -373,7 +373,7 @@
 					<div class="text-xl font-bold tracking-[-.4px] mb-1">Check your email</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
 						If an account exists for this address, we sent a link to reset the password. The link
-						expires in 1 hour.
+						expires in 30 minutes.
 					</div>
 					<button
 						onclick={() => go('login')}
