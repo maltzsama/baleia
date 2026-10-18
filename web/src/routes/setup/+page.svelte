@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { client, setAccessToken } from '$lib/api/client';
+	import { apiErrorMessage, client, setAccessToken } from '$lib/api/client';
 	import { PasswordInput } from '$lib/ui';
 	import ConnectionWizard from '$lib/connections/ConnectionWizard.svelte';
 
@@ -36,13 +36,17 @@
 			error = 'Fill in the required fields and make sure the passwords match.';
 			return;
 		}
+		if (password.length < 8) {
+			error = 'Password must be at least 8 characters.';
+			return;
+		}
 		busy = true;
 		try {
 			const { data, error: err } = await client.POST('/setup/admin', {
 				body: { name: `${firstName} ${lastName}`.trim(), email, password }
 			});
 			if (err || !data) {
-				error = 'Failed to create the admin account.';
+				error = apiErrorMessage(err, 'Failed to create the admin account.');
 				return;
 			}
 			setAccessToken(data.token);

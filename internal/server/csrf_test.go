@@ -32,6 +32,17 @@ func TestRefreshRequiresCSRFHeader(t *testing.T) {
 
 	called = false
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	req.Header.Set(auth.CSRFHeader, "not-baleia")
+	rec = httptest.NewRecorder()
+	if _, err := h(context.Background(), rec, req, nil); err != nil {
+		t.Fatal(err)
+	}
+	if called || rec.Code != http.StatusForbidden {
+		t.Fatalf("wrong value: called=%v status=%d, want 403", called, rec.Code)
+	}
+
+	called = false
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
 	req.Header.Set(auth.CSRFHeader, auth.CSRFValue)
 	rec = httptest.NewRecorder()
 	resp, err = h(context.Background(), rec, req, nil)
