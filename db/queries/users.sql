@@ -80,3 +80,35 @@ DELETE FROM users WHERE id = $1;
 
 -- name: GetAPIKeyByID :one
 SELECT * FROM api_keys WHERE id = $1 AND user_id = $2;
+
+-- name: CountUsersByAuthProvider :one
+-- Delete of a provider (#285) refuses while users are still linked.
+SELECT count(*) FROM users WHERE auth_provider_id = $1;
+
+-- name: RevokeRefreshTokensByAuthProvider :exec
+UPDATE refresh_tokens
+SET revoked = true
+WHERE revoked = false
+  AND user_id IN (SELECT id FROM users WHERE auth_provider_id = $1);
+
+-- name: DeleteAPIKeysByAuthProvider :exec
+DELETE FROM api_keys
+WHERE user_id IN (SELECT id FROM users WHERE auth_provider_id = $1);
+
+-- name: SuspendUsersByAuthProvider :exec
+-- Deleting a provider (#285) suspends and detaches its users first: the FK's
+-- ON DELETE SET NULL would otherwise violate chk_oidc_auth/chk_ldap_auth. The
+-- sentinel hash can never match a password, so a detached account cannot log in.
+UPDATE users
+SET status = 'suspended',
+    suspended_at = now(),
+    suspended_reason = 'identity_provider_deleted',
+    auth_provider = 'local',
+    auth_provider_id = NULL,
+    external_id = NULL,
+    password_hash = COALESCE(password_hash, '!'),
+    updated_at = now()
+WHERE auth_provider_id = $1;
+
+-- name: DeleteAuthProvider :exec
+DELETE FROM auth_providers WHERE id = $1;
