@@ -34,11 +34,18 @@ func TestRefreshRequiresCSRFHeader(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
 	req.Header.Set(auth.CSRFHeader, auth.CSRFValue)
 	rec = httptest.NewRecorder()
-	if _, err := h(context.Background(), rec, req, nil); err != nil {
+	resp, err = h(context.Background(), rec, req, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if !called {
 		t.Error("the handler did not run with the CSRF header")
+	}
+	if resp != nil {
+		t.Errorf("handler result = %v, want nil", resp)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want the handler's 200", rec.Code)
 	}
 }
 

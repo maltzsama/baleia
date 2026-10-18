@@ -14,6 +14,12 @@ headers {
   X-Baleia-Client: api
 }
 
+script:pre-request {
+  if (!bru.getEnvVar("admin_email") || !bru.getEnvVar("admin_password")) {
+    throw new Error("Set admin_email and admin_password in the Bruno environment");
+  }
+}
+
 body:json {
   {
     "email": "{{admin_email}}",
