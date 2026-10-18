@@ -5,20 +5,20 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
-	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/version"
 	"github.com/galileostudio/baleia/internal/metrics"
-	openapi_types "github.com/oapi-codegen/runtime/types"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/version"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // newTokenFamily returns a fresh refresh-token family id (#51). Every session
@@ -339,17 +339,18 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 	token := randomState()
 	expires := time.Now().Add(h.cfg.ResetTTL())
 
-	if err := h.queries.SetPasswordResetToken(ctx, db.SetPasswordResetTokenParams{
-		Email:                  string(request.Body.Email),
-		PasswordResetToken:     &token,
-		PasswordResetExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+	// Only the hash is stored; the raw token travels in the e-mail link (#51).
+	if err := h.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		TokenHash: auth.HashToken(token),
+		UserID:    user.ID,
+		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
 	}); err != nil {
-		slog.Error("SetPasswordResetToken failed", "err", err)
+		slog.Error("CreatePasswordResetToken failed", "err", err)
 		return nil, err
 	}
 
 	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
-	if err := sendResetEmail(h.cfg, user.Email, resetURL); err != nil {
+	if err := h.sendMail(user.Email, resetURL); err != nil {
 		slog.Error("sendResetEmail failed", "err", err)
 		return nil, err
 	}
@@ -359,7 +360,8 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 
 func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPasswordResetRequestObject) (ConfirmPasswordResetResponseObject, error) {
 	ev := audit.Event{Action: audit.AuthPasswordResetConfirm, ResourceType: "user"}
-	user, err := h.queries.GetUserByResetToken(ctx, &request.Body.Token)
+	// Consuming the hash makes the link single use even before it expires (#51).
+	row, err := h.queries.ConsumePasswordResetToken(ctx, auth.HashToken(request.Body.Token))
 	if err != nil {
 		h.audited(ctx, ev.Denied("invalid_token"))
 		return ConfirmPasswordReset401JSONResponse{
@@ -373,14 +375,27 @@ func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPass
 	}
 
 	if err := h.queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
-		ID:           user.ID,
+		ID:           row.UserID,
 		PasswordHash: &hash,
 	}); err != nil {
 		return nil, err
 	}
 
-	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthPassword), withID(ev, user.ID).Allowed())
+	// A reset ends every existing session (#51).
+	h.revokeUserRefreshTokens(ctx, row.UserID)
+
+	h.audited(audit.AsUser(ctx, row.UserID.String(), audit.AuthPassword), withID(ev, row.UserID).Allowed())
 	return ConfirmPasswordReset204Response{}, nil
+}
+
+// revokeUserRefreshTokens ends every refresh token of a user after a lifecycle
+// event (password change/reset, role change, disable). Access tokens expire
+// within the configured access TTL. A failure is logged, not fatal: the
+// triggering change already succeeded.
+func (h *Handlers) revokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) {
+	if err := h.queries.RevokeUserRefreshTokens(ctx, userID); err != nil {
+		slog.Error("RevokeUserRefreshTokens failed", "user_id", idString(userID), "err", err)
+	}
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -447,14 +462,14 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 
 	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, request.Body.CurrentPassword) {
 		return UpdatePassword422JSONResponse{
-    		UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
+			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    "validation_error",
 				Message: "current password is incorrect",
 				Errors: []struct {
 					Field   *string `json:"field,omitempty"`
 					Message *string `json:"message,omitempty"`
 				}{},
-    		},
+			},
 		}, nil
 	}
 
@@ -606,6 +621,7 @@ func randomState() string {
 	// embedded raw in a query string (password reset link, OIDC state).
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
 // authOutcome classifies a strict auth handler's result for
 // baleia_auth_attempts_total.
 func authOutcome(resp any, err error) string {

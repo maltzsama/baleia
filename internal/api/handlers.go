@@ -59,6 +59,20 @@ type Handlers struct {
 	// loginDelay slows repeated login failures per account (#51).
 	loginDelayStore *LoginDelay
 	loginDelayOnce  sync.Once
+	// mailer sends password-reset and invite e-mails (#51). Tests inject a
+	// fake so the reset-request path runs without an SMTP server.
+	mailer func(to, resetURL string) error
+}
+
+// SetMailer injects the password-reset/invite mailer (tests).
+func (h *Handlers) SetMailer(f func(to, resetURL string) error) { h.mailer = f }
+
+// sendMail uses the injected mailer, or SMTP from the configuration.
+func (h *Handlers) sendMail(to, resetURL string) error {
+	if h.mailer != nil {
+		return h.mailer(to, resetURL)
+	}
+	return sendResetEmail(h.cfg, to, resetURL)
 }
 
 // SetWSTickets wires the shared WebSocket ticket store (#26).

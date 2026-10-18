@@ -29,6 +29,9 @@ type Querier interface {
 	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error
+	// Single use: only the first confirmation updates a row, so a replayed link
+	// fails even before its expiry (#51).
+	ConsumePasswordResetToken(ctx context.Context, tokenHash string) (PasswordResetToken, error)
 	// Atomic rotation: of two concurrent refreshes with the same token, exactly one
 	// updates a row (#51).
 	ConsumeRefreshToken(ctx context.Context, tokenHash string) (ConsumeRefreshTokenRow, error)
@@ -59,6 +62,7 @@ type Querier interface {
 	CreateManagedBinding(ctx context.Context, arg CreateManagedBindingParams) (CatalogBinding, error)
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) (Migration, error)
 	CreateMigrationItem(ctx context.Context, arg CreateMigrationItemParams) (MigrationItem, error)
+	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) error
 	// The target columns are the resolved execution target (#13); trino_catalog
 	// keeps the engine catalog for the Trino workflow until it reads the target.
 	CreateQueryExecution(ctx context.Context, arg CreateQueryExecutionParams) (QueryExecution, error)
@@ -84,6 +88,7 @@ type Querier interface {
 	// Hard delete: the row holds real credentials. Permanent rows are never
 	// matched.
 	DeleteEphemeralRegistryRow(ctx context.Context, arg DeleteEphemeralRegistryRowParams) error
+	DeleteExpiredPasswordResetTokens(ctx context.Context) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
 	// The native catalogs of an engine, deleted with it (their bindings cascade).
@@ -201,7 +206,6 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
-	GetUserByResetToken(ctx context.Context, passwordResetToken *string) (User, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
@@ -393,7 +397,6 @@ type Querier interface {
 	// Stores the resolved target of an execution. target_snapshot is immutable
 	// context for history and carries no secret.
 	SetExecutionTarget(ctx context.Context, arg SetExecutionTargetParams) error
-	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
 	SetSemanticMetricCertification(ctx context.Context, arg SetSemanticMetricCertificationParams) (SemanticMetric, error)
 	SetSpaceMember(ctx context.Context, arg SetSpaceMemberParams) (SpaceMember, error)
 	// Persists the engine's handle of a running statement as soon as it is known,

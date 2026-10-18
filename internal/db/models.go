@@ -267,6 +267,14 @@ type MigrationItem struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 }
 
+type PasswordResetToken struct {
+	TokenHash string             `json:"token_hash"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	UsedAt    pgtype.Timestamptz `json:"used_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type QueryExecution struct {
 	ID              pgtype.UUID        `json:"id"`
 	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
@@ -524,19 +532,17 @@ type TrinoQuerySnapshot struct {
 }
 
 type User struct {
-	ID                     pgtype.UUID        `json:"id"`
-	Name                   string             `json:"name"`
-	Email                  string             `json:"email"`
-	PasswordHash           *string            `json:"password_hash"`
-	Role                   string             `json:"role"`
-	AuthProvider           string             `json:"auth_provider"`
-	AuthProviderID         pgtype.UUID        `json:"auth_provider_id"`
-	ExternalID             *string            `json:"external_id"`
-	PersonalWorkspaceID    pgtype.UUID        `json:"personal_workspace_id"`
-	CreatedAt              pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
-	PasswordResetToken     *string            `json:"password_reset_token"`
-	PasswordResetExpiresAt pgtype.Timestamptz `json:"password_reset_expires_at"`
+	ID                  pgtype.UUID        `json:"id"`
+	Name                string             `json:"name"`
+	Email               string             `json:"email"`
+	PasswordHash        *string            `json:"password_hash"`
+	Role                string             `json:"role"`
+	AuthProvider        string             `json:"auth_provider"`
+	AuthProviderID      pgtype.UUID        `json:"auth_provider_id"`
+	ExternalID          *string            `json:"external_id"`
+	PersonalWorkspaceID pgtype.UUID        `json:"personal_workspace_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Workspace struct {

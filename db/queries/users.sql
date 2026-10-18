@@ -59,21 +59,9 @@ SELECT * FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC;
 DELETE FROM api_keys WHERE id = $1 AND user_id = $2;
 
 
--- name: SetPasswordResetToken :exec
-UPDATE users
-SET password_reset_token = $2, password_reset_expires_at = $3
-WHERE email = $1;
-
--- name: GetUserByResetToken :one
-SELECT * FROM users
-WHERE password_reset_token = $1
-  AND password_reset_expires_at > now();
-
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = $2,
-    password_reset_token = NULL,
-    password_reset_expires_at = NULL,
     updated_at = now()
 WHERE id = $1;
 
