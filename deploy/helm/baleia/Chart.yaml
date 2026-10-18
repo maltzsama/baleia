@@ -3,7 +3,7 @@ name: baleia
 description: Self-hosted SQL IDE and Iceberg catalog management platform for Trino
 type: application
 version: 0.1.0
-appVersion: "dev"
+appVersion: "0.1.0"
 keywords:
   - sql
   - iceberg
