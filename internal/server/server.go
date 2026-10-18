@@ -179,6 +179,7 @@ func (s *Server) routes() {
 
 	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret),
+		csrfMiddleware,
 		refreshCookieMiddleware(s.cfg),
 	})
 

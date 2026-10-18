@@ -23,7 +23,7 @@ func (f *fakeLoginQuerier) GetUserByEmail(context.Context, string) (db.User, err
 }
 
 func loginHandlers(q db.Querier) *Handlers {
-	return &Handlers{queries: q, cfg: &config.Config{BcryptCost: 10}}
+	return &Handlers{queries: q, cfg: &config.Config{BcryptCost: testBcryptCost}}
 }
 
 func loginResponse(t *testing.T, resp LoginResponseObject, err error, name string) {
@@ -43,7 +43,7 @@ func loginResponse(t *testing.T, resp LoginResponseObject, err error, name strin
 // TestLogin_UniformErrors: an unknown e-mail, an SSO-only account and a wrong
 // password are indistinguishable (#51).
 func TestLogin_UniformErrors(t *testing.T) {
-	wrongHash, err := auth.HashPasswordWithCost("right", 10)
+	wrongHash, err := auth.HashPasswordWithCost("right", testBcryptCost)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestLogin_TimingEqualized(t *testing.T) {
 		t.Errorf("unknown e-mail answered in %s; bcrypt was probably skipped", unknown)
 	}
 
-	hash, err := auth.HashPasswordWithCost("right", 10)
+	hash, err := auth.HashPasswordWithCost("right", testBcryptCost)
 	if err != nil {
 		t.Fatal(err)
 	}

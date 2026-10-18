@@ -53,6 +53,9 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 			ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "already set up"},
 		}, nil
 	}
+	if len(request.Body.Password) < minPasswordLength {
+		return CreateFirstAdmin422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
+	}
 
 	hash, err := auth.HashPasswordWithCost(request.Body.Password, h.cfg.PasswordCost())
 	if err != nil {
@@ -100,6 +103,14 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+
+// minPasswordLength matches the OpenAPI minLength and the UI hint. It is
+// enforced here because oapi-codegen does not validate request bodies.
+const minPasswordLength = 8
+
+func shortPassword() UnprocessableEntityJSONResponse {
+	return unprocessable("validation_error", "password must be at least 8 characters")
+}
 
 func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp LoginResponseObject, err error) {
 	defer func() { h.metrics.auth.Attempt(metrics.AuthPassword, authOutcome(resp, err)) }()
@@ -405,6 +416,10 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 
 func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPasswordResetRequestObject) (ConfirmPasswordResetResponseObject, error) {
 	ev := audit.Event{Action: audit.AuthPasswordResetConfirm, ResourceType: "user"}
+	// Validate before consuming: a short password must not burn the link.
+	if len(request.Body.NewPassword) < minPasswordLength {
+		return ConfirmPasswordReset422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
+	}
 	// Consuming the hash makes the link single use even before it expires (#51).
 	row, err := h.queries.ConsumePasswordResetToken(ctx, auth.HashToken(request.Body.Token))
 	if err != nil {
@@ -507,15 +522,11 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 
 	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, request.Body.CurrentPassword) {
 		return UpdatePassword422JSONResponse{
-			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-				Code:    "validation_error",
-				Message: "current password is incorrect",
-				Errors: []struct {
-					Field   *string `json:"field,omitempty"`
-					Message *string `json:"message,omitempty"`
-				}{},
-			},
+			UnprocessableEntityJSONResponse: unprocessable("validation_error", "current password is incorrect"),
 		}, nil
+	}
+	if len(request.Body.NewPassword) < minPasswordLength {
+		return UpdatePassword422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
 	}
 
 	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.cfg.PasswordCost())

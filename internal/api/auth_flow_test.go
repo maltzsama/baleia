@@ -8,16 +8,20 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// testBcryptCost keeps password tests cheap; it is the configured minimum.
+const testBcryptCost = 10
+
 func newAuthFixture(t *testing.T) *auditFixture {
 	t.Helper()
 	f := newAuditFixture(t)
-	// Keep bcrypt cheap; the timing-specific test uses its own cost.
-	f.h.cfg.BcryptCost = 10
+	f.h.cfg.BcryptCost = testBcryptCost
 	return f
 }
 
@@ -186,6 +190,63 @@ func TestLogout_CookieRevokesFamily(t *testing.T) {
 	}
 	if got := refreshStatus(t, f.h, rotated); got != 401 {
 		t.Errorf("refresh after logout = %d, want 401", got)
+	}
+}
+
+// TestCreateFirstAdmin_RejectsShortPassword: the API enforces the documented
+// 8-character minimum even though oapi-codegen does not validate bodies.
+func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
+	pool := testdb.New(t)
+	h := &Handlers{queries: db.New(pool), cfg: &config.Config{BcryptCost: testBcryptCost}}
+	resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
+		Body: &CreateAdminRequest{Name: "Admin", Email: "admin@example.test", Password: "short"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(CreateFirstAdmin422JSONResponse); !ok {
+		t.Fatalf("short password = %T, want 422", resp)
+	}
+}
+
+func TestUpdatePassword_RejectsShortPassword(t *testing.T) {
+	f := newAuthFixture(t)
+	resp, err := f.h.UpdatePassword(ctxAs(f.owner, "member"), UpdatePasswordRequestObject{
+		Body: &UpdatePasswordRequest{CurrentPassword: "correct horse", NewPassword: "short"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(UpdatePassword422JSONResponse); !ok {
+		t.Fatalf("short password = %T, want 422", resp)
+	}
+}
+
+// TestReset_ShortPasswordDoesNotConsumeToken: the length check runs before the
+// single-use token is consumed.
+func TestReset_ShortPasswordDoesNotConsumeToken(t *testing.T) {
+	f := newAuthFixture(t)
+	const raw = "short-password-reset"
+	createResetToken(t, f, f.owner, raw, time.Now().Add(time.Hour))
+
+	resp, err := f.h.ConfirmPasswordReset(context.Background(), ConfirmPasswordResetRequestObject{
+		Body: &PasswordResetConfirmBody{Token: raw, NewPassword: "short"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ConfirmPasswordReset422JSONResponse); !ok {
+		t.Fatalf("short password = %T, want 422", resp)
+	}
+
+	resp, err = f.h.ConfirmPasswordReset(context.Background(), ConfirmPasswordResetRequestObject{
+		Body: &PasswordResetConfirmBody{Token: raw, NewPassword: "long-enough"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ConfirmPasswordReset204Response); !ok {
+		t.Fatalf("the short password consumed the reset token: %T", resp)
 	}
 }
 
