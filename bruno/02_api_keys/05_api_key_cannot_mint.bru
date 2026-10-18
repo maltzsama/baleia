@@ -1,0 +1,19 @@
+meta {
+  name: API Key Cannot Mint Keys
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/api-keys
+  body: none
+  auth: none
+}
+
+headers {
+  X-Api-Key: {{api_key_secret}}
+}
+
+assert {
+  res.status: eq 403
+}

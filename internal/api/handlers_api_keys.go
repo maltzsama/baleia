@@ -3,9 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -52,6 +50,8 @@ func (h *Handlers) CreateApiKey(ctx context.Context, request CreateApiKeyRequest
 		UserID:    uid,
 		Name:      request.Body.Name,
 		KeyHash:   hash,
+		Prefix:    secret[:8],
+		Scopes:    []string{"*"},
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
@@ -102,10 +102,14 @@ func (h *Handlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequest
 
 func dbApiKeyToPublic(k db.ApiKey) ApiKey {
 	id := openapi_types.UUID(k.ID.Bytes)
+	prefix := k.Prefix
+	if prefix == "" {
+		prefix = k.KeyHash[:8] // pre-#276 rows
+	}
 	pub := ApiKey{
 		Id:        id,
 		Name:      k.Name,
-		KeyPrefix: k.KeyHash[:8] + "...",
+		KeyPrefix: prefix + "...",
 		CreatedAt: pgTimestampToTime(k.CreatedAt),
 	}
 	if k.ExpiresAt.Valid {
@@ -117,11 +121,10 @@ func dbApiKeyToPublic(k db.ApiKey) ApiKey {
 
 func generateAPIKey() string {
 	b := make([]byte, 32)
-	rand.Read(b)
-	return "blw_" + base64.URLEncoding.EncodeToString(b)
+	_, _ = rand.Read(b)
+	return "bal_" + base64.RawURLEncoding.EncodeToString(b)
 }
 
 func hashAPIKey(key string) string {
-	h := sha256.Sum256([]byte(key))
-	return fmt.Sprintf("%x", h)
+	return auth.HashAPIKey(key)
 }

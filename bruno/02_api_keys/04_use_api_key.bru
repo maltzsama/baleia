@@ -1,0 +1,19 @@
+meta {
+  name: Use API Key
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/workspaces
+  body: none
+  auth: none
+}
+
+headers {
+  X-Api-Key: {{api_key_secret}}
+}
+
+assert {
+  res.status: eq 200
+}

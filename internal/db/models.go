@@ -11,12 +11,15 @@ import (
 )
 
 type ApiKey struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Name      string             `json:"name"`
-	KeyHash   string             `json:"key_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Name       string             `json:"name"`
+	KeyHash    string             `json:"key_hash"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	Prefix     string             `json:"prefix"`
+	Scopes     []string           `json:"scopes"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
 }
 
 type AuditEvent struct {

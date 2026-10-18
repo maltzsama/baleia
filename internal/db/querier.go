@@ -419,6 +419,7 @@ type Querier interface {
 	TombstoneMissingNamespaces(ctx context.Context, arg TombstoneMissingNamespacesParams) error
 	// Tables the pass did not see were removed at the source.
 	TombstoneMissingTables(ctx context.Context, arg TombstoneMissingTablesParams) (int64, error)
+	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
 	// A table the source reported unchanged (same fingerprint, columns not
 	// loaded): it is still there.
 	TouchMetadataTable(ctx context.Context, arg TouchMetadataTableParams) (int64, error)

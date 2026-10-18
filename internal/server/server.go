@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -178,7 +179,7 @@ func (s *Server) routes() {
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
 
 	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
-		authMiddlewareFunc(s.cfg.JWTSecret),
+		authMiddlewareFunc(s.cfg.JWTSecret, s.queries),
 		csrfMiddleware,
 		refreshCookieMiddleware(s.cfg),
 	})
@@ -194,7 +195,7 @@ func (s *Server) routes() {
 		// Non-oapi routes (dynamic catalog browsing) share the chi auth
 		// middleware; handlers read the caller from the request context.
 		r.Group(func(r chi.Router) {
-			r.Use(chiAuthMiddleware(s.cfg.JWTSecret))
+			r.Use(chiAuthMiddleware(s.cfg.JWTSecret, s.queries))
 			r.Get("/workspaces/{id}/catalogs", h.ListWorkspaceCatalogs)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", h.HandleListNamespaces)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", h.HandleListTables)
@@ -257,7 +258,7 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 	})
 }
 
-func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
+func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddlewareFunc {
 	publicOps := map[string]bool{
 		"GetSetupStatus":       true,
 		"CreateFirstAdmin":     true,
@@ -272,55 +273,113 @@ func authMiddlewareFunc(secret string) baleiaapi.StrictMiddlewareFunc {
 
 	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+			// API keys are checked before the public operations so a key can
+			// never reach /auth/* (#276).
+			if raw := r.Header.Get("X-Api-Key"); raw != "" {
+				if apiKeyForbidden(r.URL.Path) {
+					writeAuthError(w, http.StatusForbidden, "forbidden", "api keys cannot call this route")
+					return nil, nil
+				}
+				apiCtx, ok := authenticateAPIKey(ctx, queries, raw)
+				if !ok {
+					writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid api key")
+					return nil, nil
+				}
+				return f(apiCtx, w, r, args)
+			}
+
 			if publicOps[operationID] {
 				return f(ctx, w, r, args)
 			}
 
 			token := extractToken(r)
 			if token == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"code":"unauthorized","message":"missing token"}`))
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "missing token")
 				return nil, nil
 			}
 
 			claims, err := auth.ParseToken(token, secret)
 			if err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"code":"unauthorized","message":"invalid token"}`))
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 				return nil, nil
 			}
 
 			ctx = context.WithValue(ctx, auth.ContextKeyUserID, claims.UserID)
 			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
+			ctx = audit.WithAuthMethod(ctx, audit.AuthAccessToken)
 			return f(ctx, w, r, args)
 		}
 	}
 }
 
-func chiAuthMiddleware(secret string) func(http.Handler) http.Handler {
+func chiAuthMiddleware(secret string, queries db.Querier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if raw := r.Header.Get("X-Api-Key"); raw != "" {
+				if apiKeyForbidden(r.URL.Path) {
+					writeAuthError(w, http.StatusForbidden, "forbidden", "api keys cannot call this route")
+					return
+				}
+				ctx, ok := authenticateAPIKey(r.Context(), queries, raw)
+				if !ok {
+					writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid api key")
+					return
+				}
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			token := extractToken(r)
 			if token == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"code":"unauthorized","message":"missing token"}`))
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "missing token")
 				return
 			}
 			claims, err := auth.ParseToken(token, secret)
 			if err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"code":"unauthorized","message":"invalid token"}`))
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 				return
 			}
 			ctx := context.WithValue(r.Context(), auth.ContextKeyUserID, claims.UserID)
 			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
+			ctx = audit.WithAuthMethod(ctx, audit.AuthAccessToken)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func apiKeyForbidden(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/auth/") ||
+		path == "/api/v1/me/password" ||
+		strings.HasPrefix(path, "/api/v1/api-keys")
+}
+
+func authenticateAPIKey(ctx context.Context, queries db.Querier, raw string) (context.Context, bool) {
+	key, err := queries.GetAPIKeyByHash(ctx, auth.HashAPIKey(raw))
+	if err != nil {
+		return ctx, false
+	}
+	if key.ExpiresAt.Valid && !key.ExpiresAt.Time.After(time.Now()) {
+		return ctx, false
+	}
+	if !slices.Contains(key.Scopes, "*") {
+		return ctx, false
+	}
+	user, err := queries.GetUserByID(ctx, key.UserID)
+	if err != nil {
+		return ctx, false
+	}
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, user.ID.String())
+	ctx = context.WithValue(ctx, auth.ContextKeyRole, user.Role)
+	ctx = audit.WithAuthMethod(ctx, audit.AuthAPIKey)
+	// Best effort; never log the key or its hash.
+	_ = queries.TouchAPIKey(ctx, key.ID)
+	return ctx, true
+}
+
+func writeAuthError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(`{"code":"` + code + `","message":"` + message + `"}`))
 }
 
 func extractToken(r *http.Request) string {

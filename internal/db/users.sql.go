@@ -12,15 +12,17 @@ import (
 )
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_keys (user_id, name, key_hash, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, key_hash, expires_at, created_at
+INSERT INTO api_keys (user_id, name, key_hash, prefix, scopes, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, user_id, name, key_hash, expires_at, created_at, prefix, scopes, last_used_at
 `
 
 type CreateAPIKeyParams struct {
 	UserID    pgtype.UUID        `json:"user_id"`
 	Name      string             `json:"name"`
 	KeyHash   string             `json:"key_hash"`
+	Prefix    string             `json:"prefix"`
+	Scopes    []string           `json:"scopes"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
@@ -29,6 +31,8 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		arg.UserID,
 		arg.Name,
 		arg.KeyHash,
+		arg.Prefix,
+		arg.Scopes,
 		arg.ExpiresAt,
 	)
 	var i ApiKey
@@ -39,6 +43,9 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		&i.KeyHash,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Prefix,
+		&i.Scopes,
+		&i.LastUsedAt,
 	)
 	return i, err
 }
@@ -143,7 +150,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, user_id, name, key_hash, expires_at, created_at FROM api_keys WHERE key_hash = $1
+SELECT id, user_id, name, key_hash, expires_at, created_at, prefix, scopes, last_used_at FROM api_keys WHERE key_hash = $1
 `
 
 func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
@@ -156,12 +163,15 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 		&i.KeyHash,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Prefix,
+		&i.Scopes,
+		&i.LastUsedAt,
 	)
 	return i, err
 }
 
 const getAPIKeyByID = `-- name: GetAPIKeyByID :one
-SELECT id, user_id, name, key_hash, expires_at, created_at FROM api_keys WHERE id = $1 AND user_id = $2
+SELECT id, user_id, name, key_hash, expires_at, created_at, prefix, scopes, last_used_at FROM api_keys WHERE id = $1 AND user_id = $2
 `
 
 type GetAPIKeyByIDParams struct {
@@ -179,6 +189,9 @@ func (q *Queries) GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (A
 		&i.KeyHash,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Prefix,
+		&i.Scopes,
+		&i.LastUsedAt,
 	)
 	return i, err
 }
@@ -278,7 +291,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 }
 
 const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
-SELECT id, user_id, name, key_hash, expires_at, created_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC
+SELECT id, user_id, name, key_hash, expires_at, created_at, prefix, scopes, last_used_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error) {
@@ -297,6 +310,9 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]
 			&i.KeyHash,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.Prefix,
+			&i.Scopes,
+			&i.LastUsedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -374,6 +390,15 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const touchAPIKey = `-- name: TouchAPIKey :exec
+UPDATE api_keys SET last_used_at = now() WHERE id = $1
+`
+
+func (q *Queries) TouchAPIKey(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, touchAPIKey, id)
+	return err
 }
 
 const updateAuthProvider = `-- name: UpdateAuthProvider :one
