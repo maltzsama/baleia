@@ -89,6 +89,7 @@ type Store interface {
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
 	CatalogGrantedToUser(ctx context.Context, arg db.CatalogGrantedToUserParams) (bool, error)
+	CatalogGrantedToAgent(ctx context.Context, arg db.CatalogGrantedToAgentParams) (bool, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error)
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	IsWorkspaceOwner(ctx context.Context, arg db.IsWorkspaceOwnerParams) (bool, error)
@@ -96,6 +97,7 @@ type Store interface {
 	GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg db.EngineHostsCatalogGrantedToUserParams) (bool, error)
+	EngineHostsCatalogGrantedToAgent(ctx context.Context, arg db.EngineHostsCatalogGrantedToAgentParams) (bool, error)
 	GetEffectiveSpaceRole(ctx context.Context, arg db.GetEffectiveSpaceRoleParams) (string, error)
 	AgentWorkspaceBound(ctx context.Context, arg db.AgentWorkspaceBoundParams) (bool, error)
 }
@@ -159,8 +161,10 @@ func uuidString(id pgtype.UUID) string {
 // a missing created_by never matches an owner. Anyone else gets ErrNotFound.
 func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUID, act Action) (_ db.CatalogConnection, err error) {
 	defer c.observe(ctx, "connection", connID, &err)
-	if p.IsAgent() && act != ActRead {
-		return db.CatalogConnection{}, ErrForbidden
+	// Agents never touch connections directly: their data path is the metadata
+	// and execution APIs, scoped through bound workspaces (#59).
+	if p.IsAgent() {
+		return db.CatalogConnection{}, ErrNotFound
 	}
 	conn, err := c.q.GetCatalogConnectionByID(ctx, connID)
 	if err != nil {
@@ -200,6 +204,22 @@ func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUI
 		}
 		return db.Catalog{}, db.CatalogConnection{}, err
 	}
+	// An agent reaches a catalog only through a workspace it is bound to; the
+	// owner's connection ownership does not widen that scope (#59).
+	if p.IsAgent() {
+		granted, err := c.q.CatalogGrantedToAgent(ctx, db.CatalogGrantedToAgentParams{
+			CatalogID: cat.ID,
+			AgentID:   p.AgentID,
+			UserID:    p.UserID,
+		})
+		if err != nil {
+			return db.Catalog{}, db.CatalogConnection{}, err
+		}
+		if !granted {
+			return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
+		}
+		return cat, conn, nil
+	}
 	if p.IsAdmin() || isOwner(p, conn.CreatedBy) {
 		return cat, conn, nil
 	}
@@ -238,6 +258,22 @@ func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID,
 			return db.Engine{}, db.CatalogConnection{}, ErrNotFound
 		}
 		return db.Engine{}, db.CatalogConnection{}, err
+	}
+	// An agent reaches an engine only through a workspace it is bound to; the
+	// owner's connection ownership does not widen that scope (#59).
+	if p.IsAgent() {
+		granted, err := c.q.EngineHostsCatalogGrantedToAgent(ctx, db.EngineHostsCatalogGrantedToAgentParams{
+			EngineID: eng.ID,
+			AgentID:  p.AgentID,
+			OwnerID:  p.UserID,
+		})
+		if err != nil {
+			return db.Engine{}, db.CatalogConnection{}, err
+		}
+		if !granted {
+			return db.Engine{}, db.CatalogConnection{}, ErrNotFound
+		}
+		return eng, conn, nil
 	}
 	if p.IsAdmin() || isOwner(p, conn.CreatedBy) {
 		return eng, conn, nil

@@ -29,10 +29,22 @@ type store struct {
 	spaceRoles map[[3][16]byte]string
 	// {agent, workspace} -> the agent is bound to the workspace (#59)
 	agentBound map[[2][16]byte]bool
+	// {resource, agent} -> the catalog/engine is reachable through a bound
+	// workspace (#59)
+	catalogGrantedToAgent map[[2][16]byte]bool
+	engineHostsForAgent   map[[2][16]byte]bool
 }
 
 func (s store) AgentWorkspaceBound(_ context.Context, a db.AgentWorkspaceBoundParams) (bool, error) {
 	return s.agentBound[[2][16]byte{a.AgentID.Bytes, a.WorkspaceID.Bytes}], nil
+}
+
+func (s store) CatalogGrantedToAgent(_ context.Context, a db.CatalogGrantedToAgentParams) (bool, error) {
+	return s.catalogGrantedToAgent[[2][16]byte{a.CatalogID.Bytes, a.AgentID.Bytes}], nil
+}
+
+func (s store) EngineHostsCatalogGrantedToAgent(_ context.Context, a db.EngineHostsCatalogGrantedToAgentParams) (bool, error) {
+	return s.engineHostsForAgent[[2][16]byte{a.EngineID.Bytes, a.AgentID.Bytes}], nil
 }
 
 func (s store) GetEffectiveSpaceRole(_ context.Context, a db.GetEffectiveSpaceRoleParams) (string, error) {
@@ -373,8 +385,8 @@ func TestAgentDeniedAdminActions(t *testing.T) {
 	ctx := context.Background()
 	agent := Principal{UserID: owner.UserID, Role: "member", Kind: KindAgent, AgentID: uid(60)}
 
-	if _, err := c.Connection(ctx, agent, connA, ActWrite); !errors.Is(err, ErrForbidden) {
-		t.Errorf("connection write = %v, want ErrForbidden", err)
+	if _, err := c.Connection(ctx, agent, connA, ActWrite); !errors.Is(err, ErrNotFound) {
+		t.Errorf("connection read/write = %v, want ErrNotFound", err)
 	}
 	if _, _, err := c.Catalog(ctx, agent, catA, ActWrite); !errors.Is(err, ErrForbidden) {
 		t.Errorf("catalog write = %v, want ErrForbidden", err)
@@ -390,5 +402,41 @@ func TestAgentDeniedAdminActions(t *testing.T) {
 	}
 	if err := agent.RequireAdmin(); !errors.Is(err, ErrForbidden) {
 		t.Errorf("RequireAdmin = %v, want ErrForbidden", err)
+	}
+}
+
+// TestAgentResourceScope: an agent reaches catalogs and engines only through a
+// workspace it is bound to; the owner's connection ownership and grants in
+// other workspaces do not widen that scope (#59).
+func TestAgentResourceScope(t *testing.T) {
+	agentID := uid(60)
+	catB := uid(21)
+	c := New(store{
+		conns: map[[16]byte]db.CatalogConnection{connA.Bytes: {ID: connA, CreatedBy: owner.UserID}},
+		cats: map[[16]byte]db.Catalog{
+			catA.Bytes: {ID: catA, ConnectionID: connA},
+			catB.Bytes: {ID: catB, ConnectionID: connA},
+		},
+		engines:               map[[16]byte]db.Engine{engA.Bytes: {ID: engA, ConnectionID: connA}},
+		agentBound:            map[[2][16]byte]bool{{agentID.Bytes, wsX.Bytes}: true},
+		catalogGrantedToAgent: map[[2][16]byte]bool{{catB.Bytes, agentID.Bytes}: true},
+		engineHostsForAgent:   map[[2][16]byte]bool{{engA.Bytes, agentID.Bytes}: true},
+	})
+	ctx := context.Background()
+	agent := Principal{UserID: owner.UserID, Role: "member", Kind: KindAgent, AgentID: agentID}
+
+	if _, _, err := c.Catalog(ctx, agent, catB, ActRead); err != nil {
+		t.Fatalf("catalog granted to a bound workspace: %v", err)
+	}
+	// catA is under a connection the owner created, but it is not granted to a
+	// workspace the agent is bound to.
+	if _, _, err := c.Catalog(ctx, agent, catA, ActRead); !errors.Is(err, ErrNotFound) {
+		t.Errorf("ungranted catalog = %v, want ErrNotFound", err)
+	}
+	if _, _, err := c.Engine(ctx, agent, engA, ActRead); err != nil {
+		t.Fatalf("engine hosting a granted catalog: %v", err)
+	}
+	if _, err := c.Connection(ctx, agent, connA, ActRead); !errors.Is(err, ErrNotFound) {
+		t.Errorf("connection read = %v, want ErrNotFound", err)
 	}
 }

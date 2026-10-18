@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ type agentsFixture struct {
 	other   context.Context
 	admin   context.Context
 	ownerID pgtype.UUID
+	otherID pgtype.UUID
 	wsID    pgtype.UUID
 }
 
@@ -43,6 +45,7 @@ func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 	}
 	f.ownerID = user("owner@agents.test", "member")
 	otherID := user("other@agents.test", "member")
+	f.otherID = otherID
 	adminID := user("admin@agents.test", "admin")
 	f.owner = ctxAs(idString(f.ownerID), "member")
 	f.other = ctxAs(idString(otherID), "member")
@@ -196,13 +199,70 @@ func TestAgentScope(t *testing.T) {
 	}
 }
 
+// TestUpdateAgent_InvalidWorkspaceLeavesNoWrite: a refused workspace change
+// must not persist the name/status sent in the same PATCH (#59 review).
+func TestUpdateAgent_InvalidWorkspaceLeavesNoWrite(t *testing.T) {
+	f := newAgentsFixture(t, true)
+	agent := f.createAgent(t, f.owner, "etl-agent")
+	id := openapi_types.UUID(agent.Id)
+
+	var foreign pgtype.UUID
+	if err := f.pool.QueryRow(context.Background(),
+		`INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id)
+		 VALUES ('foreign-ws', 'personal', 'foreign_polaris', $1) RETURNING id`, f.otherID).Scan(&foreign); err != nil {
+		t.Fatal(err)
+	}
+
+	name := "renamed"
+	got, err := f.h.UpdateAgent(f.owner, UpdateAgentRequestObject{
+		AgentId: id,
+		Body: &UpdateAgentJSONRequestBody{
+			Name:         &name,
+			WorkspaceIds: &[]openapi_types.UUID{openapi_types.UUID(foreign.Bytes)},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.(UpdateAgent404JSONResponse); !ok {
+		t.Fatalf("PATCH with a foreign workspace = %T, want 404", got)
+	}
+	reloaded, err := f.h.GetAgent(f.owner, GetAgentRequestObject{AgentId: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name := Agent(reloaded.(GetAgent200JSONResponse)).Name; name != "etl-agent" {
+		t.Fatalf("name persisted after a refused workspace change: %q", name)
+	}
+}
+
+// TestRequireWorkspaceAccess_AgentBinding: the execution path applies the
+// agent's workspace binding, not only its owner's membership (#59 review).
+func TestRequireWorkspaceAccess_AgentBinding(t *testing.T) {
+	fake := &fakeRunQueryQuerier{}
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
+	ctx = context.WithValue(ctx, auth.ContextKeyRole, "member")
+	ctx = context.WithValue(ctx, auth.ContextKeyActorKind, auth.ActorAgent)
+	ctx = context.WithValue(ctx, auth.ContextKeyAgentID, "22222222-2222-2222-2222-222222222222")
+	ws := openapi_types.UUID{0xAA}
+
+	if err := requireWorkspaceAccess(ctx, fake, ws); !errors.Is(err, ErrWorkspaceNotFound) {
+		t.Fatalf("unbound agent = %v, want ErrWorkspaceNotFound", err)
+	}
+	fake.agentBound = true
+	if err := requireWorkspaceAccess(ctx, fake, ws); err != nil {
+		t.Fatalf("bound agent = %v", err)
+	}
+}
+
 // TestRunQuery_AgentIsReadOnly: an agent execution forces a read-only target
 // even when the workspace grants write, records agent_id and carries the agent
 // identity into the workflow (#59).
 func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 	fake := &fakeRunQueryQuerier{
-		exec:    db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
-		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)},
+		exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+		targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)},
+		agentBound: true,
 	}
 	temporal := &fakeTemporalClient{}
 	h := &Handlers{

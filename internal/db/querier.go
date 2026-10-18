@@ -30,6 +30,9 @@ type Querier interface {
 	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
 	CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error)
 	CatalogConnectionNameExists(ctx context.Context, name string) (bool, error)
+	// True when the catalog is granted to a workspace the agent is bound to and the
+	// agent's owner is still a member of that workspace (#59).
+	CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedToAgentParams) (bool, error)
 	// True when the user is a member of a workspace that has been granted the catalog.
 	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
@@ -134,6 +137,9 @@ type Querier interface {
 	// Native catalogs an engine no longer reports are disabled, never deleted
 	// (#17): their metadata and history stay.
 	DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error)
+	// True when the engine hosts a catalog granted to a workspace the agent is
+	// bound to and the owner is still a member of that workspace (#59).
+	EngineHostsCatalogGrantedToAgent(ctx context.Context, arg EngineHostsCatalogGrantedToAgentParams) (bool, error)
 	// True when the engine has a binding of a catalog granted to a workspace the
 	// user belongs to.
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)

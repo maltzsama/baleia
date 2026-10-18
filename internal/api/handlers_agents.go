@@ -369,6 +369,40 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 	if request.Body.Description != nil {
 		description = *request.Body.Description
 	}
+
+	// Validate the new workspace set before writing anything: a refused PATCH
+	// must not leave a name or status change behind.
+	var workspaceIDs []pgtype.UUID
+	if request.Body.WorkspaceIds != nil {
+		workspaceIDs, err = h.validateAgentWorkspaces(ctx, agent.OwnerID, *request.Body.WorkspaceIds)
+		if err != nil {
+			if errors.Is(err, errWorkspaceNotVisible) {
+				return UpdateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
+			}
+			return nil, err
+		}
+	}
+
+	changes := map[string]audit.Change{"name": {From: agent.Name, To: name}}
+	if request.Body.Status != nil {
+		changes["status"] = audit.Change{From: agent.Status, To: string(*request.Body.Status)}
+	}
+	if request.Body.WorkspaceIds != nil {
+		current, err := h.queries.ListAgentWorkspaces(ctx, agent.ID)
+		if err != nil {
+			return nil, err
+		}
+		from := make([]string, 0, len(current))
+		for _, ws := range current {
+			from = append(from, idString(ws.ID))
+		}
+		to := make([]string, 0, len(workspaceIDs))
+		for _, id := range workspaceIDs {
+			to = append(to, idString(id))
+		}
+		changes["workspace_ids"] = audit.Change{From: from, To: to}
+	}
+
 	if _, err := h.queries.UpdateAgent(ctx, db.UpdateAgentParams{ID: agent.ID, Name: name, Description: description}); err != nil {
 		return nil, err
 	}
@@ -378,13 +412,6 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 		}
 	}
 	if request.Body.WorkspaceIds != nil {
-		workspaceIDs, err := h.validateAgentWorkspaces(ctx, agent.OwnerID, *request.Body.WorkspaceIds)
-		if err != nil {
-			if errors.Is(err, errWorkspaceNotVisible) {
-				return UpdateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
-			}
-			return nil, err
-		}
 		if err := h.addAgentWorkspaces(ctx, agent.ID, workspaceIDs); err != nil {
 			return nil, err
 		}
@@ -395,7 +422,7 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 		action = audit.AgentDisable
 	}
 	h.audited(ctx, audit.Event{Action: action, ResourceType: "agent", ResourceID: idString(agent.ID), Outcome: audit.Allowed,
-		Changes: map[string]audit.Change{"name": {From: agent.Name, To: name}}})
+		Changes: changes})
 
 	agent, err = h.queries.GetAgentByID(ctx, agent.ID)
 	if err != nil {
