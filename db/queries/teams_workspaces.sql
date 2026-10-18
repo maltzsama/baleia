@@ -35,7 +35,8 @@ DELETE FROM team_members WHERE team_id = $1 AND user_id = $2;
 
 -- name: ListTeamMembers :many
 SELECT tm.*, u.name AS user_name, u.email AS user_email,
-       u.role AS user_role, u.auth_provider AS user_auth_provider, u.created_at AS user_created_at
+       u.role AS user_role, u.auth_provider AS user_auth_provider,
+       u.status AS user_status, u.created_at AS user_created_at
 FROM team_members tm
 JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1

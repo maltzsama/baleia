@@ -331,6 +331,7 @@ func (h *Handlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMe
 		Email:         openapi_types.Email(user.Email),
 		Role:          MeRole(user.Role),
 		AuthProvider:  MeAuthProvider(user.AuthProvider),
+		Status:        MeStatus(user.Status),
 		CreatedAt:     pgTimestampToTime(user.CreatedAt),
 		Features:      h.features(ctx),
 		GlobalActions: h.globalActions(ctx, principal),

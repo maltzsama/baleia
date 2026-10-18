@@ -127,6 +127,7 @@ func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersR
 				Email:        openapi_types.Email(m.UserEmail),
 				Role:         UserPublicRole(m.UserRole),
 				AuthProvider: UserPublicAuthProvider(m.UserAuthProvider),
+				Status:       UserPublicStatus(m.UserStatus),
 				CreatedAt:    pgTimestampToTime(m.UserCreatedAt),
 			},
 		})
@@ -204,6 +205,12 @@ func (h *Handlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamM
 	}
 
 	memberRole := string(request.Body.Role)
+	// The generated enum is not validated at decode time; reject anything
+	// outside the team role vocabulary before touching the database.
+	if memberRole != "owner" && memberRole != "member" {
+		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "role must be owner or member")}, nil
+	}
+
 	member, err := h.queries.UpdateTeamMemberRole(ctx, db.UpdateTeamMemberRoleParams{
 		TeamID: teamID, UserID: userID, Role: memberRole,
 	})
@@ -215,13 +222,16 @@ func (h *Handlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamM
 		return nil, err
 	}
 
+	// Side effects of a persisted mutation happen before the response-only user
+	// lookup, matching AddTeamMember.
+	h.catalogCache.Clear()
+	ev.Changes["role"] = audit.Change{To: memberRole}
+	h.audited(ctx, ev.Allowed())
+
 	user, err := h.queries.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	h.catalogCache.Clear()
-	ev.Changes["role"] = audit.Change{To: memberRole}
-	h.audited(ctx, ev.Allowed())
 	return UpdateTeamMemberRole200JSONResponse(TeamMember{
 		User:     dbUserToPublic(user),
 		Role:     TeamMemberRole(member.Role),

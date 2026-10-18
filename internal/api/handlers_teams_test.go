@@ -63,6 +63,18 @@ func TestUpdateTeamMemberRole(t *testing.T) {
 		t.Errorf("user status = %q, want active", updated.User.Status)
 	}
 
+	invalid, err := h.UpdateTeamMemberRole(ctxAs(admin.ID.String(), "admin"), UpdateTeamMemberRoleRequestObject{
+		Id:     openapi_types.UUID(team.ID.Bytes),
+		UserId: openapi_types.UUID(member.ID.Bytes),
+		Body:   &UpdateTeamMemberRoleRequest{Role: UpdateTeamMemberRoleRequestRole("admin")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := invalid.(UpdateTeamMemberRole422JSONResponse); !ok {
+		t.Fatalf("invalid role = %T, want 422", invalid)
+	}
+
 	denied, err := h.UpdateTeamMemberRole(ctxAs(member.ID.String(), "member"), UpdateTeamMemberRoleRequestObject{
 		Id:     openapi_types.UUID(team.ID.Bytes),
 		UserId: openapi_types.UUID(member.ID.Bytes),

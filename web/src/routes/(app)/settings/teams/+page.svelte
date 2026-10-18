@@ -67,10 +67,14 @@
 			teams = data;
 			const next: Record<string, TeamMember[]> = {};
 			for (const team of teams) {
-				const { data: list } = await client.GET('/teams/{id}/members', {
+				const { data: list, error: listErr } = await client.GET('/teams/{id}/members', {
 					params: { path: { id: team.id } }
 				});
-				next[team.id] = list ?? [];
+				if (listErr || !list) {
+					error = apiErrorMessage(listErr, 'Could not load team members.');
+					return;
+				}
+				next[team.id] = list;
 			}
 			members = next;
 		} catch {

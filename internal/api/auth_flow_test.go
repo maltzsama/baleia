@@ -74,6 +74,46 @@ func refreshToken(t *testing.T, h *Handlers, token string) string {
 	return *ok.RefreshToken
 }
 
+// TestGetMe_IncludesStatus: the profile endpoint honours the required
+// active/suspended contract (#266 follow-up).
+func TestGetMe_IncludesStatus(t *testing.T) {
+	pool := testdb.New(t)
+	q := db.New(pool)
+	ctx := context.Background()
+	hash, err := auth.HashPassword("correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := q.CreateUser(ctx, db.CreateUserParams{
+		Name: "Me", Email: "me@x.io", PasswordHash: &hash, Role: "admin", AuthProvider: "local",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &Handlers{queries: q, pool: pool}
+
+	resp, err := h.GetMe(ctxAs(user.ID.String(), "admin"), GetMeRequestObject{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	me, ok := resp.(GetMe200JSONResponse)
+	if !ok || me.Status != MeStatus(auth.StatusActive) {
+		t.Fatalf("me = %#v, want active", resp)
+	}
+
+	reason := "admin"
+	if _, err := q.SuspendUser(ctx, db.SuspendUserParams{ID: user.ID, SuspendedReason: &reason}); err != nil {
+		t.Fatal(err)
+	}
+	resp, err = h.GetMe(ctxAs(user.ID.String(), "admin"), GetMeRequestObject{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if me, ok := resp.(GetMe200JSONResponse); !ok || me.Status != MeStatus(auth.StatusSuspended) {
+		t.Fatalf("me = %#v, want suspended", resp)
+	}
+}
+
 func TestRefresh_ConcurrentSingleWinner(t *testing.T) {
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
