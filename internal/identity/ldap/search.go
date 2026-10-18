@@ -49,6 +49,13 @@ func dialLDAP(ctx context.Context, cfg Config) (Conn, error) {
 		return nil, fmt.Errorf("ldap: url: %w", err)
 	}
 	tlsConfig := &tls.Config{ServerName: u.Hostname(), MinVersion: tls.VersionTLS12}
+	if strings.TrimSpace(cfg.CAPem) != "" {
+		pool, err := parseCAs(cfg.CAPem)
+		if err != nil {
+			return nil, fmt.Errorf("ldap: ca_pem: %w", err)
+		}
+		tlsConfig.RootCAs = pool
+	}
 
 	conn, err := ldapv3.DialURL(cfg.URL,
 		ldapv3.DialWithDialer(&net.Dialer{Timeout: timeout}),

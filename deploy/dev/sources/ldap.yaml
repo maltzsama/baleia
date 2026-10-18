@@ -1,0 +1,103 @@
+# Directory source for the LDAP login and directory-reconciliation tests
+# (#52, #54); not part of the dev stack. Start it with
+# `make k8s-source NAME=ldap`, which also creates the ConfigMap holding the
+# seed LDIF from deploy/dev/ldap/50-baleia.ldif.
+#
+# The worker runs inside the cluster, so a provider pointed at the directory
+# uses the in-cluster address (ldap://src-ldap.baleia-dev.svc:389); the
+# integration test reaches it through `make k8s-ldap-forward`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: src-ldap
+  namespace: baleia-dev
+  labels: { app: src-ldap, baleia/role: source }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: src-ldap }
+  template:
+    metadata:
+      labels: { app: src-ldap, baleia/role: source }
+    spec:
+      # The generated server certificate is named after the pod hostname, so
+      # pin it to the Service name: the worker reaches the directory at
+      # ldaps://src-ldap:636 and the certificate SAN matches.
+      hostname: src-ldap
+      initContainers:
+        # A ConfigMap volume keeps the payload behind `..data/` symlinks plus
+        # the timestamped directory. osixia's --copy-service copies both, and
+        # its `find -type f` would apply the LDIF twice (the second time as
+        # LDAP_ALREADY_EXISTS / status 68). Dereference it into a clean volume
+        # first so the bootstrap sees exactly one regular file.
+        - name: seed
+          image: alpine:3.20
+          command: ["sh", "-c", "cp -L /config/*.ldif /seed/"]
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: seed, mountPath: /seed }
+        # The CA shipped in osixia/openldap:1.5.0 expired in January 2026.
+        # Generate a fresh CA and a server certificate for the Service name so
+        # the worker can verify the directory over ldaps://src-ldap:636.
+        - name: tls
+          image: osixia/openldap:1.5.0
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+                -keyout /certs/ca.key -out /certs/ca.crt -subj "/CN=baleia-dev-ca"
+              openssl req -newkey rsa:2048 -nodes -keyout /certs/ldap.key \
+                -out /certs/ldap.csr -subj "/CN=src-ldap"
+              printf "subjectAltName=DNS:src-ldap\n" > /tmp/ext.cnf
+              openssl x509 -req -in /certs/ldap.csr -CA /certs/ca.crt \
+                -CAkey /certs/ca.key -CAcreateserial -days 3650 \
+                -out /certs/ldap.crt -extfile /tmp/ext.cnf
+              rm -f /certs/ldap.csr /certs/ca.key /certs/ca.srl
+              chmod 644 /certs/ca.crt /certs/ldap.crt
+              chmod 600 /certs/ldap.key
+          volumeMounts:
+            - { name: certs, mountPath: /certs }
+      containers:
+        - name: openldap
+          image: osixia/openldap:1.5.0
+          # Same bootstrap as the compose `ldap` profile (#282): load the
+          # custom LDIF seed and enable the memberof overlay.
+          args: ["--copy-service"]
+          ports:
+            - { name: ldap, containerPort: 389 }
+            - { name: ldaps, containerPort: 636 }
+          env:
+            - { name: LDAP_ORGANISATION, value: Baleia }
+            - { name: LDAP_DOMAIN, value: example.org }
+            - { name: LDAP_ADMIN_PASSWORD, value: admin }
+            - { name: OPENLDAP_BOOTSTRAP_MEMBEROF, value: "true" }
+            # osixia defaults to demanding a client certificate; the worker
+            # only verifies the server (ca_pem), so do not request one.
+            - { name: LDAP_TLS_VERIFY_CLIENT, value: never }
+          volumeMounts:
+            - name: seed
+              mountPath: /container/service/slapd/assets/config/bootstrap/ldif/custom
+              readOnly: true
+            - name: certs
+              mountPath: /container/service/slapd/assets/certs
+      volumes:
+        - name: config
+          configMap:
+            name: baleia-ldap-seed
+        - name: seed
+          emptyDir: {}
+        - name: certs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: src-ldap
+  namespace: baleia-dev
+  labels: { app: src-ldap, baleia/role: source }
+spec:
+  selector: { app: src-ldap }
+  ports:
+    - { name: ldap, port: 389, targetPort: 389 }
+    - { name: ldaps, port: 636, targetPort: 636 }
