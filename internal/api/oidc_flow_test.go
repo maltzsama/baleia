@@ -2,11 +2,18 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/oidctest"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -97,6 +104,166 @@ func TestOIDC_RedirectConstraint(t *testing.T) {
 	good := "/sql?tab=1"
 	if err := create("good", &good); err != nil {
 		t.Fatalf("relative redirect rejected: %v", err)
+	}
+}
+
+func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
+	t.Helper()
+	cfg, err := json.Marshal(map[string]string{
+		"issuer_url": issuer, "client_id": "client", "client_secret": "secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
+		Name: "stub", Type: "oidc", ConfigEnc: string(cfg), Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return provider
+}
+
+func oidcHandlers(q *db.Queries) *Handlers {
+	return &Handlers{queries: q, cfg: &config.Config{PublicURL: "http://localhost", JWTSecret: "test-secret"}}
+}
+
+// TestOIDC_NoTokensInRedirect: the callback hands the session off in the
+// HttpOnly cookie and redirects to the stored relative path (#252).
+func TestOIDC_NoTokensInRedirect(t *testing.T) {
+	pool := testdb.New(t)
+	q := db.New(pool)
+	idp, err := oidctest.New("", "client") // accept any verifier
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idp.Close()
+	provider := oidcProvider(t, q, idp.URL)
+	h := oidcHandlers(q)
+	providerID := idString(provider.ID)
+
+	// Start the login: stores the attempt and the baleia_oidc binding.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/x/login?next=/sql", nil)
+	req.SetPathValue("provider_id", providerID)
+	rec := httptest.NewRecorder()
+	h.HandleOIDCRedirect(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("redirect = %d, want 302", rec.Code)
+	}
+	authURL, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := authURL.Query().Get("state")
+	if state == "" {
+		t.Fatal("the authorization redirect carried no state")
+	}
+	var oidcCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.OIDCCookieName {
+			oidcCookie = c
+		}
+	}
+	if oidcCookie == nil || oidcCookie.Value != state {
+		t.Fatalf("baleia_oidc cookie = %+v, want the state", oidcCookie)
+	}
+
+	// Complete the callback.
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/x/callback?code=code-1&state="+url.QueryEscape(state), nil)
+	req.SetPathValue("provider_id", providerID)
+	req.AddCookie(oidcCookie)
+	rec = httptest.NewRecorder()
+	h.HandleOIDCCallback(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("callback = %d, want 302", rec.Code)
+	}
+	target := rec.Header().Get("Location")
+	if target != "/sql" {
+		t.Errorf("Location = %q, want /sql", target)
+	}
+	if u, err := url.Parse(target); err != nil {
+		t.Fatal(err)
+	} else if u.Query().Get("token") != "" || u.Query().Get("refresh_token") != "" {
+		t.Errorf("tokens leaked in the redirect: %q", target)
+	}
+	var refreshCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.RefreshCookieName {
+			refreshCookie = c
+		}
+	}
+	if refreshCookie == nil || refreshCookie.Value == "" {
+		t.Fatal("the baleia_refresh cookie was not set")
+	}
+	if !refreshCookie.HttpOnly || !refreshCookie.Secure || refreshCookie.SameSite != http.SameSiteLaxMode {
+		t.Errorf("refresh cookie flags = %+v", refreshCookie)
+	}
+}
+
+// TestOIDC_RedirectRelativeOnly: only a stored same-origin path is honoured.
+func TestOIDC_RedirectRelativeOnly(t *testing.T) {
+	str := func(s string) *string { return &s }
+	cases := []struct {
+		in   *string
+		want string
+	}{
+		{nil, "/"},
+		{str("/sql"), "/sql"},
+		{str("//evil.example"), "/"},
+		{str("/\\evil.example"), "/"},
+		{str("https://evil.example"), "/"},
+	}
+	for _, tc := range cases {
+		if got := oidcRedirectTarget(tc.in); got != tc.want {
+			t.Errorf("redirect target = %q, want %q", got, tc.want)
+		}
+	}
+}
+
+// TestOIDC_FailureRedirects: every failure lands on /login?error=<code>.
+func TestOIDC_FailureRedirects(t *testing.T) {
+	for _, code := range []string{oidcErrorNotProvisioned, oidcErrorAccountSuspended, oidcErrorIDPUnavailable, oidcErrorSSOFailed} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/callback", nil)
+		oidcFailure(rec, req, code)
+		if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/login?error="+code {
+			t.Errorf("%s: status %d location %q", code, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	// An unknown code cannot escape the bounded vocabulary.
+	rec := httptest.NewRecorder()
+	oidcFailure(rec, httptest.NewRequest(http.MethodGet, "/callback", nil), "bogus")
+	if got := rec.Header().Get("Location"); got != "/login?error="+oidcErrorSSOFailed {
+		t.Errorf("unknown code location = %q", got)
+	}
+
+	pool := testdb.New(t)
+	q := db.New(pool)
+	h := oidcHandlers(q)
+
+	// An unreachable issuer is an IdP outage.
+	broken := oidcProvider(t, q, "http://127.0.0.1:1")
+	req := httptest.NewRequest(http.MethodGet, "/callback", nil)
+	req.SetPathValue("provider_id", idString(broken.ID))
+	rec = httptest.NewRecorder()
+	h.HandleOIDCCallback(rec, req)
+	if got := rec.Header().Get("Location"); got != "/login?error="+oidcErrorIDPUnavailable {
+		t.Errorf("unreachable issuer location = %q", got)
+	}
+
+	// A valid provider with a bad state is an SSO failure.
+	idp, err := oidctest.New("", "client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idp.Close()
+	provider := oidcProvider(t, q, idp.URL)
+	req = httptest.NewRequest(http.MethodGet, "/callback?state=bad", nil)
+	req.SetPathValue("provider_id", idString(provider.ID))
+	rec = httptest.NewRecorder()
+	h.HandleOIDCCallback(rec, req)
+	if got := rec.Header().Get("Location"); got != "/login?error="+oidcErrorSSOFailed {
+		t.Errorf("bad state location = %q", got)
 	}
 }
 
