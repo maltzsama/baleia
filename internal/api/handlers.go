@@ -65,6 +65,9 @@ type Handlers struct {
 	mailer func(to, resetURL string) error
 	// oidcCache holds discovered providers keyed by id + config version (#280).
 	oidcCache sync.Map
+	// attentionCache caches the computed attention items for 30 s per user (#261).
+	attentionCache *TTLStore[[]AttentionItem]
+	attentionOnce  sync.Once
 	// ldapAuthenticate verifies directory credentials (#255). Tests inject a
 	// fake so the handler branch runs without a directory server.
 	ldapAuthenticate func(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)

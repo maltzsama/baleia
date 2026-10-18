@@ -128,6 +128,9 @@ type Querier interface {
 	FolderSlugExists(ctx context.Context, arg FolderSlugExistsParams) (bool, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
+	// The age of the oldest audit event not yet exported (the lag the exporter
+	// reports). NULL when nothing is pending.
+	GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamptz, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
 	GetBinding(ctx context.Context, id pgtype.UUID) (CatalogBinding, error)
 	// Everything an execution target needs about a binding: its engine and its
@@ -233,6 +236,20 @@ type Querier interface {
 	ListAllAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	// Every visible folder of the workspace (or one space), not only the roots.
 	ListAllVisibleQueryFolders(ctx context.Context, arg ListAllVisibleQueryFoldersParams) ([]QueryFolder, error)
+	// Attention items (#261). Each query returns the raw candidates for one kind;
+	// the handler filters them through the same authz predicates that guard the
+	// fix, so an item is only shown to someone who can act on it.
+	// A binding in error, or stuck deprovisioning for more than the grace period.
+	ListAttentionBindingErrors(ctx context.Context) ([]ListAttentionBindingErrorsRow, error)
+	// A syncable catalog whose last finished pass is older than the threshold
+	// (3 x the sync interval). A catalog no pass syncs is not stale.
+	ListAttentionMetadataStale(ctx context.Context, secs float64) ([]ListAttentionMetadataStaleRow, error)
+	// The latest metadata pass of a catalog failed.
+	ListAttentionMetadataSyncFailed(ctx context.Context) ([]ListAttentionMetadataSyncFailedRow, error)
+	// The latest dry run per engine reports mutating actions.
+	ListAttentionReconcileDrift(ctx context.Context) ([]ListAttentionReconcileDriftRow, error)
+	// A scheduled materialization whose last refresh failed.
+	ListAttentionRetrieverErrors(ctx context.Context) ([]ListAttentionRetrieverErrorsRow, error)
 	// Newest first, keyset-paginated on (occurred_at, id): the cursor is the
 	// last row of the previous page. Every filter is optional. A non-admin is
 	// scoped to their own events and to events of workspaces they own (#49).

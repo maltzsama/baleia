@@ -20,6 +20,36 @@ const (
 	AddTeamMemberRequestRoleOwner  AddTeamMemberRequestRole = "owner"
 )
 
+// Defines values for AttentionKind.
+const (
+	AgentTokenExpiring AttentionKind = "agent_token_expiring"
+	AuditExportLagging AttentionKind = "audit_export_lagging"
+	BindingError       AttentionKind = "binding_error"
+	EngineUnreachable  AttentionKind = "engine_unreachable"
+	MetadataStale      AttentionKind = "metadata_stale"
+	MetadataSyncFailed AttentionKind = "metadata_sync_failed"
+	ReconcileDrift     AttentionKind = "reconcile_drift"
+	RetrieverError     AttentionKind = "retriever_error"
+	ScheduleMissing    AttentionKind = "schedule_missing"
+)
+
+// Defines values for AttentionResourceType.
+const (
+	AttentionResourceTypeAgentToken  AttentionResourceType = "agent_token"
+	AttentionResourceTypeAuditExport AttentionResourceType = "audit_export"
+	AttentionResourceTypeBinding     AttentionResourceType = "binding"
+	AttentionResourceTypeCatalog     AttentionResourceType = "catalog"
+	AttentionResourceTypeEngine      AttentionResourceType = "engine"
+	AttentionResourceTypeRetriever   AttentionResourceType = "retriever"
+	AttentionResourceTypeSchedule    AttentionResourceType = "schedule"
+)
+
+// Defines values for AttentionSeverity.
+const (
+	AttentionSeverityError   AttentionSeverity = "error"
+	AttentionSeverityWarning AttentionSeverity = "warning"
+)
+
 // Defines values for AuditEventActorKind.
 const (
 	AuditEventActorKindAgent     AuditEventActorKind = "agent"
@@ -668,10 +698,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	Cancelled ListExecutionsParamsStatus = "cancelled"
-	Failed    ListExecutionsParamsStatus = "failed"
-	Finished  ListExecutionsParamsStatus = "finished"
-	Running   ListExecutionsParamsStatus = "running"
+	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
+	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
+	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
+	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for SearchMetadataParamsKind.
@@ -740,6 +770,39 @@ type ApiKeyCreated struct {
 	// Secret Displayed only once upon creation
 	Secret string `json:"secret"`
 }
+
+// AttentionItem defines model for AttentionItem.
+type AttentionItem struct {
+	// Href SPA route that fixes the item.
+	Href *string `json:"href,omitempty"`
+
+	// Kind What needs attention. `agent_token_expiring` appears once the agent platform lands (#59).
+	Kind AttentionKind `json:"kind"`
+
+	// Params Kind-specific, safe values only (never hosts, credentials or raw upstream errors).
+	Params *map[string]string `json:"params,omitempty"`
+
+	// Resource The entity to act on. `id` is opaque to the client; `href` is the SPA route that fixes it.
+	Resource AttentionResource `json:"resource"`
+	Severity AttentionSeverity `json:"severity"`
+	Since    time.Time         `json:"since"`
+}
+
+// AttentionKind What needs attention. `agent_token_expiring` appears once the agent platform lands (#59).
+type AttentionKind string
+
+// AttentionResource The entity to act on. `id` is opaque to the client; `href` is the SPA route that fixes it.
+type AttentionResource struct {
+	Id   string                `json:"id"`
+	Name string                `json:"name"`
+	Type AttentionResourceType `json:"type"`
+}
+
+// AttentionResourceType defines model for AttentionResource.Type.
+type AttentionResourceType string
+
+// AttentionSeverity defines model for AttentionSeverity.
+type AttentionSeverity string
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {

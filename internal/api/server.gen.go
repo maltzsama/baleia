@@ -36,6 +36,9 @@ type ServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId)
+	// Items that need the caller's attention
+	// (GET /attention)
+	ListAttention(w http.ResponseWriter, r *http.Request)
 	// The bounded audit action vocabulary
 	// (GET /audit/actions)
 	ListAuditActions(w http.ResponseWriter, r *http.Request)
@@ -576,6 +579,12 @@ func (_ Unimplemented) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 // Remove an API key
 // (DELETE /api-keys/{id})
 func (_ Unimplemented) DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Items that need the caller's attention
+// (GET /attention)
+func (_ Unimplemented) ListAttention(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1735,6 +1744,28 @@ func (siw *ServerInterfaceWrapper) DeleteApiKey(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteApiKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAttention operation middleware
+func (siw *ServerInterfaceWrapper) ListAttention(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAttention(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8726,6 +8757,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/api-keys/{id}", wrapper.DeleteApiKey)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/attention", wrapper.ListAttention)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/audit/actions", wrapper.ListAuditActions)
 	})
 	r.Group(func(r chi.Router) {
@@ -9460,6 +9494,31 @@ type DeleteApiKey404JSONResponse struct{ NotFoundJSONResponse }
 func (response DeleteApiKey404JSONResponse) VisitDeleteApiKeyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAttentionRequestObject struct {
+}
+
+type ListAttentionResponseObject interface {
+	VisitListAttentionResponse(w http.ResponseWriter) error
+}
+
+type ListAttention200JSONResponse []AttentionItem
+
+func (response ListAttention200JSONResponse) VisitListAttentionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAttention401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAttention401JSONResponse) VisitListAttentionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -16665,6 +16724,9 @@ type StrictServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error)
+	// Items that need the caller's attention
+	// (GET /attention)
+	ListAttention(ctx context.Context, request ListAttentionRequestObject) (ListAttentionResponseObject, error)
 	// The bounded audit action vocabulary
 	// (GET /audit/actions)
 	ListAuditActions(ctx context.Context, request ListAuditActionsRequestObject) (ListAuditActionsResponseObject, error)
@@ -17352,6 +17414,30 @@ func (sh *strictHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteApiKeyResponseObject); ok {
 		if err := validResponse.VisitDeleteApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAttention operation middleware
+func (sh *strictHandler) ListAttention(w http.ResponseWriter, r *http.Request) {
+	var request ListAttentionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAttention(ctx, request.(ListAttentionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAttention")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAttentionResponseObject); ok {
+		if err := validResponse.VisitListAttentionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

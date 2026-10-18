@@ -59,6 +59,8 @@ tags:
     description: "Semantic layer v1: table/column docs, tags, owners and simple metrics"
   - name: Spaces
     description: "Space containers, their access lists and the content they own"
+  - name: Observability
+    description: "Items that need the caller's attention, computed from current state"
 
 # ═══════════════════════════════════════════════════════════════
 # COMPONENTS
@@ -242,6 +244,46 @@ components:
         name: { type: string, example: "Okta" }
         type: { type: string, enum: [oidc] }
 
+    AttentionKind:
+      type: string
+      description: "What needs attention. `agent_token_expiring` appears once the agent platform lands (#59)."
+      enum:
+        - binding_error
+        - metadata_sync_failed
+        - metadata_stale
+        - engine_unreachable
+        - retriever_error
+        - reconcile_drift
+        - schedule_missing
+        - audit_export_lagging
+        - agent_token_expiring
+
+    AttentionSeverity:
+      type: string
+      enum: [warning, error]
+
+    AttentionResource:
+      type: object
+      description: "The entity to act on. `id` is opaque to the client; `href` is the SPA route that fixes it."
+      required: [type, id, name]
+      properties:
+        type: { type: string, enum: [binding, catalog, engine, retriever, schedule, audit_export, agent_token] }
+        id: { type: string }
+        name: { type: string }
+
+    AttentionItem:
+      type: object
+      required: [kind, severity, resource, since]
+      properties:
+        kind: { $ref: "#/components/schemas/AttentionKind" }
+        severity: { $ref: "#/components/schemas/AttentionSeverity" }
+        resource: { $ref: "#/components/schemas/AttentionResource" }
+        params:
+          type: object
+          description: "Kind-specific, safe values only (never hosts, credentials or raw upstream errors)."
+          additionalProperties: { type: string }
+        since: { type: string, format: date-time }
+        href: { type: string, description: "SPA route that fixes the item." }
     IdentityProviderType:
       type: string
       enum: [oidc, ldap]
@@ -3210,6 +3252,27 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  # ── Attention ─────────────────────────────────────────────────
+  /attention:
+    get:
+      tags: [Observability]
+      operationId: listAttention
+      summary: "Items that need the caller's attention"
+      description: >
+        Computed on demand from the current state; no read/unread state is
+        stored and no e-mail is sent. Items are scoped to what the caller can
+        act on through the same predicates that guard the fix, so admin-only
+        kinds are hidden from members. Cached for 30 s per user.
+      responses:
+        "200":
+          description: "Attention items, errors first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AttentionItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /workspaces/{id}/metadata/catalogs:
     parameters:

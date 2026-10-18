@@ -614,6 +614,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Items that need the caller's attention
+         * @description Computed on demand from the current state; no read/unread state is stored and no e-mail is sent. Items are scoped to what the caller can act on through the same predicates that guard the fix, so admin-only kinds are hidden from members. Cached for 30 s per user.
+         */
+        get: operations["listAttention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/metadata/catalogs": {
         parameters: {
             query?: never;
@@ -2684,6 +2704,33 @@ export interface components {
             name: string;
             /** @enum {string} */
             type: "oidc";
+        };
+        /**
+         * @description What needs attention. `agent_token_expiring` appears once the agent platform lands (#59).
+         * @enum {string}
+         */
+        AttentionKind: "binding_error" | "metadata_sync_failed" | "metadata_stale" | "engine_unreachable" | "retriever_error" | "reconcile_drift" | "schedule_missing" | "audit_export_lagging" | "agent_token_expiring";
+        /** @enum {string} */
+        AttentionSeverity: "warning" | "error";
+        /** @description The entity to act on. `id` is opaque to the client; `href` is the SPA route that fixes it. */
+        AttentionResource: {
+            /** @enum {string} */
+            type: "binding" | "catalog" | "engine" | "retriever" | "schedule" | "audit_export" | "agent_token";
+            id: string;
+            name: string;
+        };
+        AttentionItem: {
+            kind: components["schemas"]["AttentionKind"];
+            severity: components["schemas"]["AttentionSeverity"];
+            resource: components["schemas"]["AttentionResource"];
+            /** @description Kind-specific, safe values only (never hosts, credentials or raw upstream errors). */
+            params?: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            since: string;
+            /** @description SPA route that fixes the item. */
+            href?: string;
         };
         /** @enum {string} */
         IdentityProviderType: "oidc" | "ldap";
@@ -5715,6 +5762,27 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attention items, errors first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttentionItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     listMetadataCatalogs: {
