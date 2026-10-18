@@ -326,6 +326,7 @@ type RefreshToken struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	Revoked   bool               `json:"revoked"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	FamilyID  pgtype.UUID        `json:"family_id"`
 }
 
 type Retriever struct {
