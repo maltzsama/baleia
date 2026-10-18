@@ -2,110 +2,18 @@ package auth_test
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"encoding/base64"
-	"encoding/json"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/galileostudio/baleia/internal/oidctest"
 )
 
-// stubIDP is a minimal OIDC provider: discovery, JWKS and a token endpoint
-// that enforces the S256 PKCE challenge.
-type stubIDP struct {
-	*httptest.Server
-	key               *rsa.PrivateKey
-	clientID          string
-	expectedChallenge string
-}
-
-func newStubIDP(t *testing.T, expectedChallenge string) *stubIDP {
-	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &stubIDP{key: key, clientID: "client", expectedChallenge: expectedChallenge}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"issuer":                                s.URL,
-			"authorization_endpoint":                s.URL + "/authorize",
-			"token_endpoint":                        s.URL + "/token",
-			"jwks_uri":                              s.URL + "/jwks",
-			"response_types_supported":              []string{"code"},
-			"subject_types_supported":               []string{"public"},
-			"id_token_signing_alg_values_supported": []string{"RS256"},
-		})
-	})
-	mux.HandleFunc("/jwks", s.jwks)
-	mux.HandleFunc("/token", s.token)
-	s.Server = httptest.NewServer(mux)
-	t.Cleanup(s.Close)
-	return s
-}
-
-func (s *stubIDP) jwks(w http.ResponseWriter, _ *http.Request) {
-	pub := s.key.PublicKey
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"keys": []map[string]string{{
-			"kty": "RSA", "kid": "test", "use": "sig", "alg": "RS256",
-			"n": base64.RawURLEncoding.EncodeToString(pub.N.Bytes()),
-			"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes()),
-		}},
-	})
-}
-
-func (s *stubIDP) token(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
-		return
-	}
-	verifier := r.Form.Get("code_verifier")
-	if verifier == "" || auth.PKCEChallenge(verifier) != s.expectedChallenge {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
-		return
-	}
-	now := time.Now()
-	claims := jwt.MapClaims{
-		"iss":   s.URL,
-		"sub":   "user-1",
-		"aud":   s.clientID,
-		"exp":   now.Add(5 * time.Minute).Unix(),
-		"iat":   now.Unix(),
-		"email": "user@example.test",
-		"name":  "Test User",
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	token.Header["kid"] = "test"
-	raw, err := token.SignedString(s.key)
-	if err != nil {
-		http.Error(w, "sign", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"access_token": "access",
-		"token_type":   "Bearer",
-		"expires_in":   3600,
-		"id_token":     raw,
-	})
-}
-
-func newProvider(t *testing.T, idp *stubIDP) *auth.OIDCProvider {
+func newProvider(t *testing.T, idp *oidctest.StubIDP) *auth.OIDCProvider {
 	t.Helper()
 	provider, err := auth.NewOIDCProvider(context.Background(), auth.OIDCConfig{
 		IssuerURL:    idp.URL,
-		ClientID:     idp.clientID,
+		ClientID:     idp.ClientID,
 		ClientSecret: "secret",
 		RedirectURL:  "http://localhost/api/v1/auth/oidc/test/callback",
 	})
@@ -135,7 +43,11 @@ func TestOIDC_FullFlowWithPKCE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idp := newStubIDP(t, challenge)
+	idp, err := oidctest.New(challenge, "client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idp.Close()
 	provider := newProvider(t, idp)
 
 	authURL, err := provider.AuthURL("state-1", challenge)
@@ -158,7 +70,7 @@ func TestOIDC_FullFlowWithPKCE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Subject != "user-1" || info.Email != "user@example.test" || info.Name != "Test User" {
+	if info.Subject != idp.Subject || info.Email != idp.Email || info.Name != idp.Name {
 		t.Errorf("user info = %+v", info)
 	}
 }
@@ -169,7 +81,11 @@ func TestOIDC_BadVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idp := newStubIDP(t, challenge)
+	idp, err := oidctest.New(challenge, "client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idp.Close()
 	provider := newProvider(t, idp)
 
 	if _, err := provider.Exchange(context.Background(), "code-1", "wrong-verifier"); err == nil {
@@ -181,7 +97,11 @@ func TestOIDC_BadVerifier(t *testing.T) {
 // without a challenge/verifier (#250 forbids a no-PKCE path).
 func TestOIDC_NoPKCE(t *testing.T) {
 	_, challenge, _ := auth.GeneratePKCE()
-	idp := newStubIDP(t, challenge)
+	idp, err := oidctest.New(challenge, "client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idp.Close()
 	provider := newProvider(t, idp)
 
 	if _, err := provider.AuthURL("state-1", ""); err == nil {

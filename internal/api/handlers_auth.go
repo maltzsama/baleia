@@ -17,7 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -626,21 +625,52 @@ func clearOIDCCookie(w http.ResponseWriter) {
 	})
 }
 
+// OIDC failure codes land on /login?error=<code> (#252). not_provisioned and
+// account_suspended are emitted by the provisioning and suspension slices.
+const (
+	oidcErrorNotProvisioned   = "not_provisioned"
+	oidcErrorAccountSuspended = "account_suspended"
+	oidcErrorIDPUnavailable   = "idp_unavailable"
+	oidcErrorSSOFailed        = "sso_failed"
+)
+
+func oidcFailure(w http.ResponseWriter, r *http.Request, code string) {
+	// Keep the vocabulary bounded; an unknown code is a generic SSO failure.
+	switch code {
+	case oidcErrorNotProvisioned, oidcErrorAccountSuspended, oidcErrorIDPUnavailable, oidcErrorSSOFailed:
+	default:
+		code = oidcErrorSSOFailed
+	}
+	http.Redirect(w, r, "/login?error="+code, http.StatusFound)
+}
+
+// oidcRedirectTarget honours only a stored same-origin path (#252).
+func oidcRedirectTarget(redirect *string) string {
+	if redirect != nil && safeRelativePath(*redirect) {
+		return *redirect
+	}
+	return "/"
+}
+
 func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
-	ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-	w = ww
-	defer func() { h.metrics.auth.Attempt(metrics.AuthOIDC, statusOutcome(ww.Status())) }()
+	outcome := metrics.OutcomeSuccess
+	defer func() { h.metrics.auth.Attempt(metrics.AuthOIDC, outcome) }()
+	fail := func(code, metric string) {
+		outcome = metric
+		oidcFailure(w, r, code)
+	}
+
 	providerID := r.PathValue("provider_id")
 	provider, err := h.loadOIDCProvider(r, providerID)
 	if err != nil {
-		respondError(w, http.StatusNotFound, "not_found", "provider not found")
+		fail(oidcErrorIDPUnavailable, metrics.OutcomeError)
 		return
 	}
 
 	state := r.URL.Query().Get("state")
 	stateCookie, err := r.Cookie(auth.OIDCCookieName)
 	if err != nil || state == "" || stateCookie.Value != state {
-		respondError(w, http.StatusBadRequest, "bad_request", "invalid state")
+		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
 		return
 	}
 	// The browser binding is single use: clear it before consuming the row.
@@ -649,20 +679,20 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	attempt, err := h.queries.ConsumeOIDCLoginAttempt(r.Context(), state)
 	if err != nil {
 		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "invalid_state"})
-		respondError(w, http.StatusUnauthorized, "unauthorized", "invalid or expired login attempt")
+		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
 		return
 	}
 
 	var apID pgtype.UUID
 	if err := apID.Scan(providerID); err != nil || apID != attempt.ProviderID {
-		respondError(w, http.StatusBadRequest, "bad_request", "provider mismatch")
+		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
 		return
 	}
 
 	info, err := provider.Exchange(r.Context(), r.URL.Query().Get("code"), attempt.CodeVerifier)
 	if err != nil {
 		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
-		respondError(w, http.StatusUnauthorized, "unauthorized", "oidc exchange failed")
+		fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials)
 		return
 	}
 
@@ -680,20 +710,15 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 			Role:           "member",
 		})
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, "internal_error", "could not create user")
+			// #251 returns not_provisioned when the provisioning policy denies.
+			fail(oidcErrorSSOFailed, metrics.OutcomeError)
 			return
 		}
 	}
 
-	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
-		return
-	}
-
 	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
+		fail(oidcErrorSSOFailed, metrics.OutcomeError)
 		return
 	}
 
@@ -703,12 +728,15 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
 		FamilyID:  newTokenFamily(),
 	}); err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "token error")
+		fail(oidcErrorSSOFailed, metrics.OutcomeError)
 		return
 	}
 
+	// No tokens in the URL (#252): the SPA restores the session from the
+	// HttpOnly cookie on its next /auth/me.
+	auth.SetRefreshCookie(w, refreshToken, h.cfg.RefreshTTL())
 	h.audited(audit.AsUser(r.Context(), user.ID.String(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", ResourceID: idString(user.ID), Outcome: audit.Allowed})
-	http.Redirect(w, r, "/?token="+accessToken+"&refresh_token="+refreshToken, http.StatusFound)
+	http.Redirect(w, r, oidcRedirectTarget(attempt.Redirect), http.StatusFound)
 }
 
 func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.OIDCProvider, error) {
@@ -761,17 +789,6 @@ func authOutcome(resp any, err error) string {
 	switch resp.(type) {
 	case Login200JSONResponse, RefreshToken200JSONResponse:
 		return metrics.OutcomeSuccess
-	}
-	return metrics.OutcomeInvalidCredentials
-}
-
-// statusOutcome classifies a raw handler's status.
-func statusOutcome(status int) string {
-	switch {
-	case status == 0 || status < 400:
-		return metrics.OutcomeSuccess
-	case status >= 500:
-		return metrics.OutcomeError
 	}
 	return metrics.OutcomeInvalidCredentials
 }
