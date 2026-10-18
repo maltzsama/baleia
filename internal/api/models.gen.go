@@ -1922,11 +1922,14 @@ type IdentityProvider struct {
 	HasBindPassword bool `json:"has_bind_password"`
 
 	// HasClientSecret An OIDC client secret is stored (never returned).
-	HasClientSecret bool                 `json:"has_client_secret"`
-	Id              openapi_types.UUID   `json:"id"`
-	Name            string               `json:"name"`
-	Type            IdentityProviderType `json:"type"`
-	UpdatedAt       *time.Time           `json:"updated_at,omitempty"`
+	HasClientSecret bool               `json:"has_client_secret"`
+	Id              openapi_types.UUID `json:"id"`
+
+	// LinkedUsers Users currently linked to this provider.
+	LinkedUsers int                  `json:"linked_users"`
+	Name        string               `json:"name"`
+	Type        IdentityProviderType `json:"type"`
+	UpdatedAt   *time.Time           `json:"updated_at,omitempty"`
 }
 
 // IdentityProviderDetail A provider with its redacted configuration.
@@ -1938,8 +1941,9 @@ type IdentityProviderDetail struct {
 	Id              openapi_types.UUID `json:"id"`
 
 	// Ldap LDAP provider configuration without the bind password.
-	Ldap *LDAPConfigAdmin `json:"ldap,omitempty"`
-	Name string           `json:"name"`
+	Ldap        *LDAPConfigAdmin `json:"ldap,omitempty"`
+	LinkedUsers int              `json:"linked_users"`
+	Name        string           `json:"name"`
 
 	// Oidc OIDC provider configuration without the client secret.
 	Oidc      *OIDCConfigAdmin     `json:"oidc,omitempty"`
