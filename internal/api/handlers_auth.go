@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -760,12 +759,8 @@ func (h *Handlers) loadOIDCProvider(r *http.Request, providerID string) (*auth.O
 		return nil, err
 	}
 
-	var cfg struct {
-		IssuerURL    string `json:"issuer_url"`
-		ClientID     string `json:"client_id"`
-		ClientSecret string `json:"client_secret"`
-	}
-	if err := json.Unmarshal([]byte(ap.ConfigEnc), &cfg); err != nil {
+	cfg, err := auth.OpenOIDCConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
+	if err != nil {
 		return nil, err
 	}
 

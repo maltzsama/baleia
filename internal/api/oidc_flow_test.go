@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/oidctest"
 	"github.com/galileostudio/baleia/internal/testdb"
@@ -109,16 +109,32 @@ func TestOIDC_RedirectConstraint(t *testing.T) {
 	}
 }
 
+func oidcTestKeyring(t *testing.T) *crypto.Keyring {
+	t.Helper()
+	kr, err := crypto.NewKeyring(testSecret, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return kr
+}
+
 func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
 	t.Helper()
-	cfg, err := json.Marshal(map[string]string{
-		"issuer_url": issuer, "client_id": "client", "client_secret": "secret",
+	ctx := context.Background()
+	provider, err := q.CreateAuthProvider(ctx, db.CreateAuthProviderParams{
+		Name: "stub", Type: "oidc", ConfigEnc: "", Enabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
-		Name: "stub", Type: "oidc", ConfigEnc: string(cfg), Enabled: true,
+	sealed, err := auth.SealOIDCConfig(oidcTestKeyring(t), idString(provider.ID), auth.OIDCProviderConfig{
+		IssuerURL: issuer, ClientID: "client", ClientSecret: "secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err = q.UpdateAuthProvider(ctx, db.UpdateAuthProviderParams{
+		ID: provider.ID, Name: provider.Name, ConfigEnc: sealed, Enabled: provider.Enabled,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -126,8 +142,13 @@ func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
 	return provider
 }
 
-func oidcHandlers(q *db.Queries) *Handlers {
-	return &Handlers{queries: q, cfg: &config.Config{PublicURL: "http://localhost", JWTSecret: "test-secret"}}
+func oidcHandlers(t *testing.T, q *db.Queries) *Handlers {
+	t.Helper()
+	return &Handlers{
+		queries: q,
+		keyring: oidcTestKeyring(t),
+		cfg:     &config.Config{PublicURL: "http://localhost", JWTSecret: "test-secret"},
+	}
 }
 
 type oidcFlowFixture struct {
@@ -147,7 +168,7 @@ func newOIDCFlow(t *testing.T) *oidcFlowFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(idp.Close)
-	return &oidcFlowFixture{pool: pool, q: q, h: oidcHandlers(q), idp: idp, provider: oidcProvider(t, q, idp.URL)}
+	return &oidcFlowFixture{pool: pool, q: q, h: oidcHandlers(t, q), idp: idp, provider: oidcProvider(t, q, idp.URL)}
 }
 
 func (f *oidcFlowFixture) start(t *testing.T) (state string, cookie *http.Cookie) {
@@ -313,7 +334,7 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 
 	pool := testdb.New(t)
 	q := db.New(pool)
-	h := oidcHandlers(q)
+	h := oidcHandlers(t, q)
 
 	// An unreachable issuer is an IdP outage.
 	broken := oidcProvider(t, q, "http://127.0.0.1:1")
@@ -338,6 +359,41 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 	h.HandleOIDCCallback(rec, req)
 	if got := rec.Header().Get("Location"); got != "/login?error="+oidcErrorSSOFailed {
 		t.Errorf("bad state location = %q", got)
+	}
+}
+
+// TestOIDC_ConfigEncrypted: the provider config is sealed with the keyring and
+// bound to the provider id (#278).
+func TestOIDC_ConfigEncrypted(t *testing.T) {
+	q := db.New(testdb.New(t))
+	provider := oidcProvider(t, q, "http://issuer.example")
+	stored, err := q.GetAuthProviderByID(context.Background(), provider.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(stored.ConfigEnc, "v1:") {
+		t.Errorf("config_enc = %q, want a v1 envelope", stored.ConfigEnc)
+	}
+	if strings.Contains(stored.ConfigEnc, "secret") || strings.Contains(stored.ConfigEnc, "issuer_url") {
+		t.Error("the provider config is still plaintext")
+	}
+}
+
+// TestOIDC_ConfigDecryptFailsClosed: a plaintext config is refused, never
+// parsed as JSON (#278).
+func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
+	q := db.New(testdb.New(t))
+	plaintext := `{"issuer_url":"http://issuer.example","client_id":"client","client_secret":"secret"}`
+	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
+		Name: "plain", Type: "oidc", ConfigEnc: plaintext, Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := oidcHandlers(t, q)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/x/login", nil)
+	if _, err := h.loadOIDCProvider(req, idString(provider.ID)); err == nil {
+		t.Fatal("loadOIDCProvider accepted a plaintext config")
 	}
 }
 
