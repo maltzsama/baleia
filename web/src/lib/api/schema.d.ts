@@ -329,6 +329,56 @@ export interface paths {
         get: operations["getIdentityProvider"];
         put?: never;
         post?: never;
+        /**
+         * Delete an identity provider — admin only
+         * @description Refuses with 409 when users are still linked, unless `suspend_users=true` is given; those users are suspended and detached, never orphaned.
+         */
+        delete: operations["deleteIdentityProvider"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an identity provider — admin only
+         * @description Partial update. Omitted secret fields keep the stored value; an empty secret clears it. The provider type is immutable.
+         */
+        patch: operations["updateIdentityProvider"];
+        trace?: never;
+    };
+    "/admin/identity-providers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a stored identity provider — admin only
+         * @description Probes the stored configuration and persists nothing. An LDAP probe binds with the service account only, never as an end user.
+         */
+        post: operations["testIdentityProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/identity-providers/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test an unsaved identity provider — admin only
+         * @description Validates and probes a configuration before it is saved. Nothing is written.
+         */
+        post: operations["testIdentityProviderTransient"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2992,6 +3042,67 @@ export interface components {
             oidc?: components["schemas"]["OIDCConfig"];
             ldap?: components["schemas"]["LDAPConfig"];
         };
+        /** @description OIDC configuration update. Omitted fields keep their stored value; an empty `client_secret` clears it. */
+        UpdateOIDCConfig: {
+            /** Format: uri */
+            issuer_url?: string;
+            client_id?: string;
+            /** @description Omit to keep the stored secret; send an empty string to clear it. */
+            client_secret?: string;
+            auto_create?: boolean;
+            allowed_email_domains?: string[];
+            role_mapping?: components["schemas"]["IdentityRoleMapping"][];
+            team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            /** @enum {string} */
+            default_role?: "admin" | "member";
+            claims?: components["schemas"]["OIDCClaimsConfig"];
+        };
+        /** @description LDAP configuration update. Omitted fields keep their stored value; an empty `bind_password` clears it. */
+        UpdateLDAPConfig: {
+            url?: string;
+            start_tls?: boolean;
+            bind_dn?: string;
+            /** @description Omit to keep the stored secret; send an empty string to clear it. */
+            bind_password?: string;
+            base_dn?: string;
+            user_filter?: string;
+            group_attribute?: string;
+            email_attribute?: string;
+            name_attribute?: string;
+            nested_groups?: boolean;
+            required_group?: string;
+            timeout_seconds?: number;
+            role_mapping?: components["schemas"]["IdentityRoleMapping"][];
+            team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            /** @enum {string} */
+            default_role?: "admin" | "member";
+        };
+        /** @description Partial update. The provider type is immutable; a config of the other type is rejected. */
+        UpdateIdentityProviderRequest: {
+            name?: string;
+            enabled?: boolean;
+            oidc?: components["schemas"]["UpdateOIDCConfig"];
+            ldap?: components["schemas"]["UpdateLDAPConfig"];
+        };
+        IdentityProviderTestCheck: {
+            name: string;
+            /** @enum {string} */
+            status: "ok" | "failed" | "skipped";
+            /** @description Short stable code; never a secret, host or raw error. */
+            message?: string;
+        };
+        IdentityProviderTestResult: {
+            ok: boolean;
+            checks: components["schemas"]["IdentityProviderTestCheck"][];
+        };
+        /** @description An unsaved provider configuration to probe. Nothing is persisted. */
+        TestIdentityProviderRequest: {
+            type: components["schemas"]["IdentityProviderType"];
+            oidc?: components["schemas"]["OIDCConfig"];
+            ldap?: components["schemas"]["LDAPConfig"];
+            /** @description Directory username to look up. The probe never binds as this user. */
+            test_username?: string;
+        };
         PasswordResetRequestBody: {
             /** Format: email */
             email: string;
@@ -5363,6 +5474,110 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    deleteIdentityProvider: {
+        parameters: {
+            query?: {
+                suspend_users?: boolean;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updateIdentityProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIdentityProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider updated (secrets redacted) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityProviderDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    testIdentityProvider: {
+        parameters: {
+            query?: {
+                test_username?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Probe result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityProviderTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testIdentityProviderTransient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestIdentityProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Probe result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityProviderTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listUsers: {

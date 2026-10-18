@@ -336,6 +336,13 @@ const (
 	GrantCatalogAccessRequestPermissionWrite GrantCatalogAccessRequestPermission = "write"
 )
 
+// Defines values for IdentityProviderTestCheckStatus.
+const (
+	IdentityProviderTestCheckStatusFailed  IdentityProviderTestCheckStatus = "failed"
+	IdentityProviderTestCheckStatusOk      IdentityProviderTestCheckStatus = "ok"
+	IdentityProviderTestCheckStatusSkipped IdentityProviderTestCheckStatus = "skipped"
+)
+
 // Defines values for IdentityProviderType.
 const (
 	IdentityProviderTypeLdap IdentityProviderType = "ldap"
@@ -639,6 +646,18 @@ const (
 	TrashItemEntityTypeSemanticMetric TrashItemEntityType = "semantic_metric"
 )
 
+// Defines values for UpdateLDAPConfigDefaultRole.
+const (
+	UpdateLDAPConfigDefaultRoleAdmin  UpdateLDAPConfigDefaultRole = "admin"
+	UpdateLDAPConfigDefaultRoleMember UpdateLDAPConfigDefaultRole = "member"
+)
+
+// Defines values for UpdateOIDCConfigDefaultRole.
+const (
+	UpdateOIDCConfigDefaultRoleAdmin  UpdateOIDCConfigDefaultRole = "admin"
+	UpdateOIDCConfigDefaultRoleMember UpdateOIDCConfigDefaultRole = "member"
+)
+
 // Defines values for UpdateRetrieverRequestRefreshType.
 const (
 	UpdateRetrieverRequestRefreshTypeFull        UpdateRetrieverRequestRefreshType = "full"
@@ -742,10 +761,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
-	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
-	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
-	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
+	Cancelled ListExecutionsParamsStatus = "cancelled"
+	Failed    ListExecutionsParamsStatus = "failed"
+	Finished  ListExecutionsParamsStatus = "finished"
+	Running   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for SearchMetadataParamsKind.
@@ -1874,6 +1893,23 @@ type IdentityProviderDetail struct {
 	UpdatedAt *time.Time           `json:"updated_at,omitempty"`
 }
 
+// IdentityProviderTestCheck defines model for IdentityProviderTestCheck.
+type IdentityProviderTestCheck struct {
+	// Message Short stable code; never a secret, host or raw error.
+	Message *string                         `json:"message,omitempty"`
+	Name    string                          `json:"name"`
+	Status  IdentityProviderTestCheckStatus `json:"status"`
+}
+
+// IdentityProviderTestCheckStatus defines model for IdentityProviderTestCheck.Status.
+type IdentityProviderTestCheckStatus string
+
+// IdentityProviderTestResult defines model for IdentityProviderTestResult.
+type IdentityProviderTestResult struct {
+	Checks []IdentityProviderTestCheck `json:"checks"`
+	Ok     bool                        `json:"ok"`
+}
+
 // IdentityProviderType defines model for IdentityProviderType.
 type IdentityProviderType string
 
@@ -2992,6 +3028,19 @@ type TestConnectionRequest struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// TestIdentityProviderRequest An unsaved provider configuration to probe. Nothing is persisted.
+type TestIdentityProviderRequest struct {
+	// Ldap LDAP provider configuration written once. `bind_password` is never returned.
+	Ldap *LDAPConfig `json:"ldap,omitempty"`
+
+	// Oidc OIDC provider configuration written once. `client_secret` is never returned.
+	Oidc *OIDCConfig `json:"oidc,omitempty"`
+
+	// TestUsername Directory username to look up. The probe never binds as this user.
+	TestUsername *string              `json:"test_username,omitempty"`
+	Type         IdentityProviderType `json:"type"`
+}
+
 // TrashItem defines model for TrashItem.
 type TrashItem struct {
 	DeletedAt  time.Time           `json:"deleted_at"`
@@ -3051,6 +3100,62 @@ type UpdateFolderRequest struct {
 	Slug     *string             `json:"slug,omitempty"`
 	SpaceId  *openapi_types.UUID `json:"space_id"`
 }
+
+// UpdateIdentityProviderRequest Partial update. The provider type is immutable; a config of the other type is rejected.
+type UpdateIdentityProviderRequest struct {
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Ldap LDAP configuration update. Omitted fields keep their stored value; an empty `bind_password` clears it.
+	Ldap *UpdateLDAPConfig `json:"ldap,omitempty"`
+	Name *string           `json:"name,omitempty"`
+
+	// Oidc OIDC configuration update. Omitted fields keep their stored value; an empty `client_secret` clears it.
+	Oidc *UpdateOIDCConfig `json:"oidc,omitempty"`
+}
+
+// UpdateLDAPConfig LDAP configuration update. Omitted fields keep their stored value; an empty `bind_password` clears it.
+type UpdateLDAPConfig struct {
+	BaseDn *string `json:"base_dn,omitempty"`
+	BindDn *string `json:"bind_dn,omitempty"`
+
+	// BindPassword Omit to keep the stored secret; send an empty string to clear it.
+	BindPassword   *string                      `json:"bind_password,omitempty"`
+	DefaultRole    *UpdateLDAPConfigDefaultRole `json:"default_role,omitempty"`
+	EmailAttribute *string                      `json:"email_attribute,omitempty"`
+	GroupAttribute *string                      `json:"group_attribute,omitempty"`
+	NameAttribute  *string                      `json:"name_attribute,omitempty"`
+	NestedGroups   *bool                        `json:"nested_groups,omitempty"`
+	RequiredGroup  *string                      `json:"required_group,omitempty"`
+	RoleMapping    *[]IdentityRoleMapping       `json:"role_mapping,omitempty"`
+	StartTls       *bool                        `json:"start_tls,omitempty"`
+	TeamMapping    *[]IdentityTeamMapping       `json:"team_mapping,omitempty"`
+	TimeoutSeconds *int                         `json:"timeout_seconds,omitempty"`
+	Url            *string                      `json:"url,omitempty"`
+	UserFilter     *string                      `json:"user_filter,omitempty"`
+}
+
+// UpdateLDAPConfigDefaultRole defines model for UpdateLDAPConfig.DefaultRole.
+type UpdateLDAPConfigDefaultRole string
+
+// UpdateOIDCConfig OIDC configuration update. Omitted fields keep their stored value; an empty `client_secret` clears it.
+type UpdateOIDCConfig struct {
+	AllowedEmailDomains *[]string `json:"allowed_email_domains,omitempty"`
+	AutoCreate          *bool     `json:"auto_create,omitempty"`
+
+	// Claims Claim names published by the provider; empty uses the standard name.
+	Claims   *OIDCClaimsConfig `json:"claims,omitempty"`
+	ClientId *string           `json:"client_id,omitempty"`
+
+	// ClientSecret Omit to keep the stored secret; send an empty string to clear it.
+	ClientSecret *string                      `json:"client_secret,omitempty"`
+	DefaultRole  *UpdateOIDCConfigDefaultRole `json:"default_role,omitempty"`
+	IssuerUrl    *string                      `json:"issuer_url,omitempty"`
+	RoleMapping  *[]IdentityRoleMapping       `json:"role_mapping,omitempty"`
+	TeamMapping  *[]IdentityTeamMapping       `json:"team_mapping,omitempty"`
+}
+
+// UpdateOIDCConfigDefaultRole defines model for UpdateOIDCConfig.DefaultRole.
+type UpdateOIDCConfigDefaultRole string
 
 // UpdatePasswordRequest defines model for UpdatePasswordRequest.
 type UpdatePasswordRequest struct {
@@ -3289,6 +3394,16 @@ type UnprocessableEntity = ValidationError
 type ListDirectoryReconcileRunsParams struct {
 	ProviderId *openapi_types.UUID `form:"provider_id,omitempty" json:"provider_id,omitempty"`
 	Limit      *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteIdentityProviderParams defines parameters for DeleteIdentityProvider.
+type DeleteIdentityProviderParams struct {
+	SuspendUsers *bool `form:"suspend_users,omitempty" json:"suspend_users,omitempty"`
+}
+
+// TestIdentityProviderParams defines parameters for TestIdentityProvider.
+type TestIdentityProviderParams struct {
+	TestUsername *string `form:"test_username,omitempty" json:"test_username,omitempty"`
 }
 
 // ListAuditEventsParams defines parameters for ListAuditEvents.
@@ -3667,6 +3782,12 @@ type StreamExecutionParams struct {
 
 // CreateIdentityProviderJSONRequestBody defines body for CreateIdentityProvider for application/json ContentType.
 type CreateIdentityProviderJSONRequestBody = CreateIdentityProviderRequest
+
+// TestIdentityProviderTransientJSONRequestBody defines body for TestIdentityProviderTransient for application/json ContentType.
+type TestIdentityProviderTransientJSONRequestBody = TestIdentityProviderRequest
+
+// UpdateIdentityProviderJSONRequestBody defines body for UpdateIdentityProvider for application/json ContentType.
+type UpdateIdentityProviderJSONRequestBody = UpdateIdentityProviderRequest
 
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
 type CreateApiKeyJSONRequestBody = CreateApiKeyRequest

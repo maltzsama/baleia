@@ -75,6 +75,9 @@ type Handlers struct {
 	// ldapAuthenticate verifies directory credentials (#255). Tests inject a
 	// fake so the handler branch runs without a directory server.
 	ldapAuthenticate func(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)
+	// idpProbe probes a provider configuration without persisting anything
+	// (#286). Tests inject a fake so the handler runs without a network.
+	idpProbe func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
 }
 
 // SetMailer injects the password-reset/invite mailer (tests).
