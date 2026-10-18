@@ -13,6 +13,12 @@ export type SettingsSection = {
 
 export const settingsSections: SettingsSection[] = [
 	{
+		href: '/settings/system',
+		label: 'System status',
+		description: 'Health of every platform component.',
+		action: 'view_system'
+	},
+	{
 		href: '/settings/identity',
 		label: 'Identity providers',
 		description: 'OIDC and LDAP sign-in, group mapping and provider health.',
@@ -33,6 +39,16 @@ export const settingsSections: SettingsSection[] = [
 		href: '/settings/audit',
 		label: 'Audit trail',
 		description: 'Who changed what, when, and which requests were denied.'
+	},
+	{
+		href: '/settings/profile',
+		label: 'Profile',
+		description: 'Your name, e-mail and password.'
+	},
+	{
+		href: '/settings/api-keys',
+		label: 'API keys',
+		description: 'Keys for scripts and agents, shown once at creation.'
 	}
 ];
 

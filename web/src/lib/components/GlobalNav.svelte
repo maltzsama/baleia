@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { resolve } from '$app/paths';
+	import AttentionBell from '$lib/components/AttentionBell.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 
 	let menuOpen = $state(false);
@@ -196,6 +197,7 @@
 				><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg
 			>
 		</a>
+		<AttentionBell />
 		<a
 			href={resolve('/settings')}
 			title="Settings"
@@ -225,7 +227,7 @@
 				class="absolute bottom-full left-0 mb-2 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50"
 			>
 				<a
-					href={resolve('/profile')}
+					href={resolve('/settings/profile')}
 					onclick={() => (menuOpen = false)}
 					class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-slate-200 no-underline transition-colors duration-150 hover:bg-slate-700"
 				>

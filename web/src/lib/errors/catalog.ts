@@ -234,6 +234,53 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 		title: 'Statement rejected',
 		explanation: 'The statement is not allowed for this agent.',
 		remediation: 'Use a read-only statement.'
+	},
+
+	// Attention center (#268). The catalog key is `attention.<kind>`.
+	'attention.binding_error': {
+		title: 'Catalog binding error',
+		explanation: 'A catalog binding needs attention.',
+		remediation: 'Open the catalog bindings tab and retry the binding.'
+	},
+	'attention.metadata_sync_failed': {
+		title: 'Metadata sync failed',
+		explanation: 'The last metadata sync for this catalog failed.',
+		remediation: 'Open the catalog and retry the sync.'
+	},
+	'attention.metadata_stale': {
+		title: 'Metadata is stale',
+		explanation: 'This catalog has not synced within its expected interval.',
+		remediation: 'Open the catalog and run a metadata sync.'
+	},
+	'attention.engine_unreachable': {
+		title: 'Engine unreachable',
+		explanation: 'Baleia cannot reach this engine.',
+		remediation: 'Check the engine health and credentials.'
+	},
+	'attention.retriever_error': {
+		title: 'Retriever failed',
+		explanation: 'This retriever stopped with an error.',
+		remediation: 'Open the retriever and review the last run.'
+	},
+	'attention.reconcile_drift': {
+		title: 'Catalog drift detected',
+		explanation: 'The last reconcile found changes that need to be applied.',
+		remediation: 'Open the engine reconcile tab and apply the changes.'
+	},
+	'attention.schedule_missing': {
+		title: 'Scheduled job missing',
+		explanation: 'A recurring Temporal schedule is missing or paused.',
+		remediation: 'Open the system status page and restore the schedule.'
+	},
+	'attention.audit_export_lagging': {
+		title: 'Audit export is lagging',
+		explanation: 'Audit events are not reaching the export sink in time.',
+		remediation: 'Open the system status page and check the export lag.'
+	},
+	'attention.agent_token_expiring': {
+		title: 'Agent token expiring',
+		explanation: 'An agent token expires within seven days.',
+		remediation: 'Open the agent and rotate its token.'
 	}
 };
 
