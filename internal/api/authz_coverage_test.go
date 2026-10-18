@@ -112,6 +112,7 @@ var operationAccess = map[string]access{
 	"ListIdentityProviders":  {kind: kindAdmin, calls: adminRole},
 	"CreateIdentityProvider": {kind: kindAdmin, calls: adminRole},
 	"GetIdentityProvider":    {kind: kindAdmin, calls: adminRole},
+	"GetSystemStatus":        {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 
 	// ── connections and catalogs (internal/authz)
 	"GetCatalogConnection":    checked("Connection"),

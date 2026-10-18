@@ -568,6 +568,12 @@ const (
 	SpaceMemberRoleViewer  SpaceMemberRole = "viewer"
 )
 
+// Defines values for SystemStatusSectionStatus.
+const (
+	Ok      SystemStatusSectionStatus = "ok"
+	Unknown SystemStatusSectionStatus = "unknown"
+)
+
 // Defines values for TeamMemberRole.
 const (
 	TeamMemberRoleMember TeamMemberRole = "member"
@@ -2751,6 +2757,32 @@ type StatementSpan struct {
 	End   int `json:"end"`
 	Start int `json:"start"`
 }
+
+// SystemStatus defines model for SystemStatus.
+type SystemStatus struct {
+	Baleia        SystemStatusSection `json:"baleia"`
+	Database      SystemStatusSection `json:"database"`
+	ObjectStorage SystemStatusSection `json:"object_storage"`
+	Smtp          SystemStatusSection `json:"smtp"`
+	Temporal      SystemStatusSection `json:"temporal"`
+}
+
+// SystemStatusSection defines model for SystemStatusSection.
+type SystemStatusSection struct {
+	Commit     *string `json:"commit,omitempty"`
+	Configured *bool   `json:"configured,omitempty"`
+
+	// ErrorCode Stable code for an unknown section; never a raw error, host or credential.
+	ErrorCode        *string                   `json:"error_code,omitempty"`
+	LatencyMs        *int                      `json:"latency_ms,omitempty"`
+	MigrationVersion *int64                    `json:"migration_version,omitempty"`
+	StartedAt        *time.Time                `json:"started_at,omitempty"`
+	Status           SystemStatusSectionStatus `json:"status"`
+	Version          *string                   `json:"version,omitempty"`
+}
+
+// SystemStatusSectionStatus defines model for SystemStatusSection.Status.
+type SystemStatusSectionStatus string
 
 // TableHealth defines model for TableHealth.
 type TableHealth struct {

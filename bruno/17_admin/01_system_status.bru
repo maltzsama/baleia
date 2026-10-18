@@ -1,0 +1,24 @@
+meta {
+  name: System Status
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/admin/system/status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.baleia.status: eq ok
+  res.body.database.status: isDefined
+  res.body.temporal.status: isDefined
+  res.body.object_storage.status: isDefined
+  res.body.smtp.status: isDefined
+}

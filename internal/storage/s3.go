@@ -79,6 +79,19 @@ func (c *S3Client) MakeBucket(ctx context.Context) error {
 	return nil
 }
 
+// Health checks that the object store is reachable and the bucket exists. The
+// caller maps the error to a stable code; the error itself is never exposed.
+func (c *S3Client) Health(ctx context.Context) error {
+	exists, err := c.client.BucketExists(ctx, c.bucket)
+	if err != nil {
+		return fmt.Errorf("s3 health: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("s3 health: bucket %q is missing", c.bucket)
+	}
+	return nil
+}
+
 // SetMetrics records operations in m (#87).
 func (c *S3Client) SetMetrics(m *metrics.Storage) { c.metrics = m }
 

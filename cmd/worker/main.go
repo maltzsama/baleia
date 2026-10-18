@@ -41,6 +41,7 @@ import (
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
@@ -213,23 +214,14 @@ func main() {
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
 		// boot. Each workflow does a single pass and returns.
-		if err := schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
-			{ID: schedules.LensQueryPoller, Workflow: workflows.LensQueryPollWorkflow, Every: 30 * time.Second},
-			{ID: schedules.LensClusterPoller, Workflow: workflows.LensClusterPollWorkflow, Every: 30 * time.Second},
-			{ID: schedules.LensTableHealth, Workflow: workflows.LensTableHealthWorkflow, Every: time.Hour},
-			{ID: schedules.RetrieverScheduler, Workflow: workflows.RetrieverDispatchWorkflow, Every: 60 * time.Second},
-			{ID: schedules.MetadataSync, Workflow: workflows.MetadataSyncDispatchWorkflow, Every: cfg.MetadataSyncEvery()},
-			{ID: schedules.AuditPartitions, Workflow: workflows.AuditPartitionsWorkflow, Every: 24 * time.Hour},
-			{ID: schedules.EphemeralCatalogSweeper, Workflow: workflows.EphemeralCatalogSweepWorkflow, Every: time.Minute},
-			{ID: schedules.TokenCleanup, Workflow: workflows.TokenCleanupWorkflow, Every: 24 * time.Hour},
-		}); err != nil {
+		if err := schedules.Ensure(context.Background(), c, taskQueue, schedulespecs.Core(cfg.MetadataSyncEvery())); err != nil {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)
 		}
 		// Binding reconciliation on a schedule is opt-in (#37).
 		if cfg.ReconcileInterval > 0 {
 			err = schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
-				{ID: schedules.CatalogReconcile, Workflow: workflows.CatalogReconcileWorkflow, Every: cfg.ReconcileInterval},
+				schedulespecs.CatalogReconcile(cfg.ReconcileInterval),
 			})
 		} else {
 			err = schedules.Remove(context.Background(), c, schedules.CatalogReconcile)
@@ -244,7 +236,7 @@ func main() {
 	if cfg.SchedulesEnabled {
 		if cfg.AuditExportURL != "" {
 			if err := schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
-				{ID: schedules.AuditExport, Workflow: workflows.AuditExportWorkflow, Every: cfg.AuditExportInterval},
+				schedulespecs.AuditExport(cfg.AuditExportInterval),
 			}); err != nil {
 				slog.Error("failed to ensure the audit export schedule", "err", err)
 				os.Exit(1)
