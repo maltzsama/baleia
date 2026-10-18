@@ -58,15 +58,17 @@ describe('teams settings', () => {
 		window.history.replaceState(null, '', '/settings/teams');
 	});
 
-	it('shows a member their teams read-only', async () => {
+	it('shows a member only the teams the server scopes to them', async () => {
 		baseHandlers();
+		// The server scopes /teams for a member; the page renders that answer.
+		server.use(http.get('/teams', ({ response }) => response(200).json([team])));
 		renderPage(TeamsPage, {
 			me: makeMe({ role: 'member', global_actions: [] }),
 			url: '/settings/teams'
 		});
 
 		expect(await screen.findByText('Engineering')).toBeTruthy();
-		expect(screen.getByText('Analytics')).toBeTruthy();
+		expect(screen.queryByText('Analytics')).toBeNull();
 		expect(screen.getByText('Alice')).toBeTruthy();
 		expect(screen.queryByRole('button', { name: 'New team' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Add member' })).toBeNull();

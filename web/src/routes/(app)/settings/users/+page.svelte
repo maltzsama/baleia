@@ -58,14 +58,24 @@
 		loading = true;
 		error = '';
 		try {
-			const { data, error: err } = await client.GET('/users', {
-				params: { query: { per_page: 200 } }
-			});
-			if (err || !data) {
-				error = apiErrorMessage(err, 'Could not load users.');
-				return;
-			}
-			users = data.data ?? [];
+			// The API paginates; walk every server page so search and the count
+			// cover installations with more than one page of users.
+			const all: User[] = [];
+			let serverPage = 1;
+			let serverPages = 1;
+			do {
+				const { data, error: err } = await client.GET('/users', {
+					params: { query: { page: serverPage, per_page: 200 } }
+				});
+				if (err || !data) {
+					error = apiErrorMessage(err, 'Could not load users.');
+					return;
+				}
+				all.push(...(data.data ?? []));
+				serverPages = data.pagination?.total_pages ?? 1;
+				serverPage += 1;
+			} while (serverPage <= serverPages);
+			users = all;
 		} catch {
 			error = 'Could not load users.';
 		} finally {
@@ -90,6 +100,8 @@
 			inviteEmail = '';
 			toasts.success('Invitation sent.');
 			await load();
+		} catch (err) {
+			inviteError = err instanceof Error ? err.message : 'Could not send the invitation.';
 		} finally {
 			inviteBusy = false;
 		}
@@ -129,15 +141,19 @@
 	}
 
 	async function reinstate(user: User) {
-		const { error: err } = await client.POST('/users/{id}/reinstate', {
-			params: { path: { id: user.id } }
-		});
-		if (err) {
-			toasts.error(apiErrorMessage(err, 'Could not reinstate the user.'));
-			return;
+		try {
+			const { error: err } = await client.POST('/users/{id}/reinstate', {
+				params: { path: { id: user.id } }
+			});
+			if (err) {
+				toasts.error(apiErrorMessage(err, 'Could not reinstate the user.'));
+				return;
+			}
+			toasts.success('User reinstated.');
+			await load();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : 'Could not reinstate the user.');
 		}
-		toasts.success('User reinstated.');
-		await load();
 	}
 </script>
 
@@ -155,7 +171,12 @@
 		</div>
 
 		<div class="mt-4 flex flex-wrap items-end gap-2">
-			<Input label="Search" bind:value={search} placeholder="Name, e-mail or status" />
+			<Input
+				label="Search"
+				bind:value={search}
+				placeholder="Name, e-mail or status"
+				oninput={() => (page = 1)}
+			/>
 			<Button variant="ghost" onclick={() => (search = '')}>Clear</Button>
 		</div>
 

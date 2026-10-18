@@ -580,9 +580,9 @@ func (q *authzFake) ListTeamMembers(_ context.Context, team pgtype.UUID) ([]db.L
 	// ("owner") is not the user's global role.
 	return []db.ListTeamMembersRow{
 		{ID: pgtype.UUID{Bytes: [16]byte{0xA1}, Valid: true}, TeamID: team, UserID: uuidOf(ownerID), Role: "owner",
-			UserName: "o", UserEmail: "o@x.io", UserRole: "admin", UserAuthProvider: "oidc"},
+			UserName: "o", UserEmail: "o@x.io", UserRole: "admin", UserAuthProvider: "oidc", UserStatus: "active"},
 		{ID: pgtype.UUID{Bytes: [16]byte{0xA2}, Valid: true}, TeamID: team, UserID: uuidOf(memberID), Role: "member",
-			UserName: "m", UserEmail: "m@x.io", UserRole: "member", UserAuthProvider: "local"},
+			UserName: "m", UserEmail: "m@x.io", UserRole: "member", UserAuthProvider: "local", UserStatus: "active"},
 	}, nil
 }
 
@@ -599,7 +599,7 @@ func TestListTeamMembers_UserFields(t *testing.T) {
 		t.Fatalf("members = %d", len(members))
 	}
 	first := members[0]
-	if first.User.Id != uuidOf(ownerID).Bytes || first.Role != TeamMemberRoleOwner || first.User.Role != UserPublicRole("admin") || first.User.AuthProvider != "oidc" {
+	if first.User.Id != uuidOf(ownerID).Bytes || first.Role != TeamMemberRoleOwner || first.User.Role != UserPublicRole("admin") || first.User.AuthProvider != "oidc" || first.User.Status != UserPublicStatus("active") {
 		t.Errorf("owner row = %+v", first)
 	}
 	second := members[1]

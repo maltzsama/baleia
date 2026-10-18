@@ -503,7 +503,8 @@ func (q *Queries) ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceI
 
 const listTeamMembers = `-- name: ListTeamMembers :many
 SELECT tm.id, tm.team_id, tm.user_id, tm.role, tm.joined_at, u.name AS user_name, u.email AS user_email,
-       u.role AS user_role, u.auth_provider AS user_auth_provider, u.created_at AS user_created_at
+       u.role AS user_role, u.auth_provider AS user_auth_provider,
+       u.status AS user_status, u.created_at AS user_created_at
 FROM team_members tm
 JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1
@@ -520,6 +521,7 @@ type ListTeamMembersRow struct {
 	UserEmail        string             `json:"user_email"`
 	UserRole         string             `json:"user_role"`
 	UserAuthProvider string             `json:"user_auth_provider"`
+	UserStatus       string             `json:"user_status"`
 	UserCreatedAt    pgtype.Timestamptz `json:"user_created_at"`
 }
 
@@ -542,6 +544,7 @@ func (q *Queries) ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]Li
 			&i.UserEmail,
 			&i.UserRole,
 			&i.UserAuthProvider,
+			&i.UserStatus,
 			&i.UserCreatedAt,
 		); err != nil {
 			return nil, err
