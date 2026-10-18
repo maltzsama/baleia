@@ -10,15 +10,22 @@ import (
 
 type fakeConn struct {
 	binds        []string
+	passwords    []string
 	searches     []*ldapv3.SearchRequest
 	bindErr      error
+	userBindErr  error
 	searchErr    error
 	searchResult *ldapv3.SearchResult
+	searchQueue  []*ldapv3.SearchResult
 	closed       bool
 }
 
 func (f *fakeConn) Bind(username, password string) error {
 	f.binds = append(f.binds, username)
+	f.passwords = append(f.passwords, password)
+	if len(f.binds) == 2 && f.userBindErr != nil {
+		return f.userBindErr
+	}
 	return f.bindErr
 }
 
@@ -26,6 +33,11 @@ func (f *fakeConn) Search(req *ldapv3.SearchRequest) (*ldapv3.SearchResult, erro
 	f.searches = append(f.searches, req)
 	if f.searchErr != nil {
 		return nil, f.searchErr
+	}
+	if len(f.searchQueue) > 0 {
+		res := f.searchQueue[0]
+		f.searchQueue = f.searchQueue[1:]
+		return res, nil
 	}
 	if f.searchResult != nil {
 		return f.searchResult, nil
