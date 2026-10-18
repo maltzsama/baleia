@@ -101,18 +101,23 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	}
 	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err != nil {
+		// Unknown e-mail: compare against a dummy hash anyway so the response
+		// time does not reveal whether the account exists (#51).
+		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
 		failed("invalid_credentials")
-		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid credentials"}}, nil
+		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
 	}
 
-	if user.AuthProvider != "local" {
+	// An SSO-only account and a wrong password are indistinguishable (#51).
+	if user.AuthProvider != "local" || user.PasswordHash == nil {
+		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
 		failed("invalid_credentials")
-		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "use SSO to login"}}, nil
+		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
 	}
 
-	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, request.Body.Password) {
+	if !auth.CheckPassword(*user.PasswordHash, request.Body.Password) {
 		failed("invalid_credentials")
-		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid credentials"}}, nil
+		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
 	}
 
 	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
