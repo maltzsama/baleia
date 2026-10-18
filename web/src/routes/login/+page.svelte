@@ -2,9 +2,9 @@
 	import { onMount } from 'svelte';
 	import { API_ROOT, client } from '$lib/api/client';
 	import { bootstrap, login as loginSession, safeNext } from '$lib/auth/session';
-	import { Input, PasswordInput } from '$lib/ui';
+	import { Input, PasswordInput, Select } from '$lib/ui';
 
-	type Provider = { id: string; name: string; type: string };
+	type Provider = { id: string; name: string; type: 'oidc' | 'ldap' };
 
 	let dark = $state(false);
 	let screen = $state<'login' | 'forgot' | 'sent'>('login');
@@ -17,6 +17,16 @@
 	let busy = $state(false);
 	let retryIn = $state(0);
 	let providers = $state<Provider[]>([]);
+	// 'local' or the id of the selected LDAP provider.
+	let authMode = $state('local');
+
+	const oidcProviders = $derived(providers.filter((p) => p.type === 'oidc'));
+	const ldapProviders = $derived(providers.filter((p) => p.type === 'ldap'));
+	const ldapProvider = $derived(ldapProviders.find((p) => p.id === authMode) ?? null);
+	const signInOptions = $derived([
+		{ value: 'local', label: 'Email and password' },
+		...ldapProviders.map((p) => ({ value: p.id, label: p.name }))
+	]);
 
 	let retryTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -44,10 +54,10 @@
 
 	async function loadProviders() {
 		try {
-			const { data } = await client.GET('/auth/oidc/providers');
+			const { data } = await client.GET('/auth/providers');
 			providers = (data as Provider[] | undefined) ?? [];
 		} catch {
-			// No providers means no SSO section; password login still works.
+			// No providers means no SSO/LDAP section; password login still works.
 		}
 	}
 
@@ -85,7 +95,15 @@
 		error = '';
 		notice = '';
 		try {
-			const result = await loginSession({ email, password });
+			// With an LDAP provider selected the first field is the directory
+			// username and the body carries provider_id, not email (#289).
+			const result = ldapProvider
+				? await loginSession({
+						provider_id: ldapProvider.id,
+						username: email.trim(),
+						password
+					})
+				: await loginSession({ email, password });
 			if (!result.ok) {
 				if (result.code === 'invalid_credentials') {
 					showError('Invalid e-mail or password.', 'password');
@@ -241,13 +259,18 @@
 							{error}
 						</div>
 					{/if}
+					{#if ldapProviders.length > 0}
+						<div class="mb-3.5">
+							<Select label="Sign in with" bind:value={authMode} options={signInOptions} />
+						</div>
+					{/if}
 					<div class="mb-3.5">
 						<Input
-							label="Email"
-							type="email"
-							autocomplete="email"
+							label={ldapProvider ? 'Username' : 'Email'}
+							type={ldapProvider ? 'text' : 'email'}
+							autocomplete={ldapProvider ? 'username' : 'email'}
 							bind:value={email}
-							placeholder="you@company.com"
+							placeholder={ldapProvider ? 'alice' : 'you@company.com'}
 							onkeydown={(e) => e.key === 'Enter' && doLogin()}
 						/>
 					</div>
@@ -261,13 +284,17 @@
 							onkeydown={(e) => e.key === 'Enter' && doLogin()}
 						/>
 					</div>
-					<div class="text-right text-[11px] -mt-2 mb-4">
-						<button
-							type="button"
-							class="cursor-pointer border-none bg-transparent p-0 text-[11px] font-semibold text-primary hover:text-primary-hover"
-							onclick={() => go('forgot')}>Forgot password?</button
-						>
-					</div>
+					{#if !ldapProvider}
+						<div class="text-right text-[11px] -mt-2 mb-4">
+							<button
+								type="button"
+								class="cursor-pointer border-none bg-transparent p-0 text-[11px] font-semibold text-primary hover:text-primary-hover"
+								onclick={() => go('forgot')}>Forgot password?</button
+							>
+						</div>
+					{:else}
+						<div class="mb-4"></div>
+					{/if}
 					<button
 						onclick={doLogin}
 						disabled={busy || retryIn > 0}
@@ -281,7 +308,7 @@
 						>
 						{busy ? 'Signing in…' : 'Sign in'}
 					</button>
-					{#if providers.length > 0}
+					{#if oidcProviders.length > 0}
 						<div
 							class="flex items-center gap-2.5 my-4 text-[11px] font-semibold text-text-muted
 							before:content-[''] before:flex-1 before:h-px before:bg-border
@@ -290,7 +317,7 @@
 							or
 						</div>
 						<div class="flex flex-col gap-2">
-							{#each providers as p (p.id)}
+							{#each oidcProviders as p (p.id)}
 								<button
 									onclick={() => doSSO(p.id)}
 									class="w-full h-10 bg-transparent border border-border rounded-[7px] text-[13px] font-medium text-text-main cursor-pointer transition-all duration-150 flex items-center justify-center gap-[9px] hover:border-border-hover hover:bg-bg-app"
