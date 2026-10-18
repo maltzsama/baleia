@@ -267,6 +267,16 @@ type MigrationItem struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 }
 
+type OidcLoginAttempt struct {
+	State        string             `json:"state"`
+	ProviderID   pgtype.UUID        `json:"provider_id"`
+	Nonce        *string            `json:"nonce"`
+	CodeVerifier string             `json:"code_verifier"`
+	Redirect     *string            `json:"redirect"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type PasswordResetToken struct {
 	TokenHash string             `json:"token_hash"`
 	UserID    pgtype.UUID        `json:"user_id"`

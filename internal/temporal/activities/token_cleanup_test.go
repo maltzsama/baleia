@@ -67,6 +67,25 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	provider, err := q.CreateAuthProvider(ctx, db.CreateAuthProviderParams{
+		Name: "oidc", Type: "oidc", ConfigEnc: "{}", Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	insertAttempt := func(state string, expires time.Time) {
+		if err := q.CreateOIDCLoginAttempt(ctx, db.CreateOIDCLoginAttemptParams{
+			State:        state,
+			ProviderID:   provider.ID,
+			CodeVerifier: "verifier",
+			ExpiresAt:    pgtype.Timestamptz{Time: expires, Valid: true},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insertAttempt("oidc-expired", now.Add(-time.Hour))
+	insertAttempt("oidc-live", now.Add(time.Hour))
+
 	old := defaultActivities
 	defaultActivities = &Activities{queries: q}
 	t.Cleanup(func() { defaultActivities = old })
@@ -96,6 +115,15 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	} {
 		if got := count(tc.table, tc.hash); got != tc.want {
 			t.Errorf("%s %q: %d rows, want %d", tc.table, tc.hash, got, tc.want)
+		}
+	}
+	for state, want := range map[string]int{"oidc-live": 1, "oidc-expired": 0} {
+		var n int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM oidc_login_attempts WHERE state = $1", state).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != want {
+			t.Errorf("oidc attempt %q: %d rows, want %d", state, n, want)
 		}
 	}
 }

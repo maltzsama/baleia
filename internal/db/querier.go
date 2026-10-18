@@ -29,6 +29,8 @@ type Querier interface {
 	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error
+	// Single use: the row is deleted atomically, so a replayed state finds nothing.
+	ConsumeOIDCLoginAttempt(ctx context.Context, state string) (OidcLoginAttempt, error)
 	// Single use: only the first confirmation updates a row, so a replayed link
 	// fails even before its expiry (#51).
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string) (PasswordResetToken, error)
@@ -62,6 +64,7 @@ type Querier interface {
 	CreateManagedBinding(ctx context.Context, arg CreateManagedBindingParams) (CatalogBinding, error)
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) (Migration, error)
 	CreateMigrationItem(ctx context.Context, arg CreateMigrationItemParams) (MigrationItem, error)
+	CreateOIDCLoginAttempt(ctx context.Context, arg CreateOIDCLoginAttemptParams) error
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) error
 	// The target columns are the resolved execution target (#13); trino_catalog
 	// keeps the engine catalog for the Trino workflow until it reads the target.
@@ -88,6 +91,7 @@ type Querier interface {
 	// Hard delete: the row holds real credentials. Permanent rows are never
 	// matched.
 	DeleteEphemeralRegistryRow(ctx context.Context, arg DeleteEphemeralRegistryRowParams) error
+	DeleteExpiredOIDCLoginAttempts(ctx context.Context) error
 	DeleteExpiredPasswordResetTokens(ctx context.Context) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error

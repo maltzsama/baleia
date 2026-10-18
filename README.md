@@ -304,6 +304,14 @@ Provider (#11) and dialect (#14) integration tests run against real databases. O
 
 Each dialect (`internal/dialect`) ships keyword and function lists generated from the real server and committed with its version. `scripts/gen-dialect-lists.sh <dialect>` regenerates one (starting and removing its source database) and runs that dialect's execution test; `make dialect-lists` regenerates them all.
 
+## Experimental features
+
+These work but may change without a deprecation cycle:
+
+- **OIDC and LDAP identity providers** — directory login and group mapping are
+  being hardened in phase 4. Integration tests use in-process fake providers;
+  the admin UI lands in a later slice.
+
 ## Roadmap
 
 - Remaining backend models/handlers: `QueryFolder`, `QueryFile`, `Execution`, `ExecutionStatement`

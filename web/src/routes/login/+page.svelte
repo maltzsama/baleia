@@ -155,7 +155,12 @@
 	}
 
 	function doSSO(providerId: string) {
-		window.location.href = `${API_ROOT}/auth/oidc/${encodeURIComponent(providerId)}/login`;
+		const next = new URLSearchParams(window.location.search).get('next');
+		const suffix =
+			next && next.startsWith('/') && !next.startsWith('//')
+				? `?next=${encodeURIComponent(next)}`
+				: '';
+		window.location.href = `${API_ROOT}/auth/oidc/${encodeURIComponent(providerId)}/login${suffix}`;
 	}
 
 	function go(s: typeof screen) {

@@ -56,7 +56,7 @@ type ServerInterface interface {
 	OidcCallback(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID, params OidcCallbackParams)
 	// Redirect to OIDC provider
 	// (GET /auth/oidc/{provider_id}/login)
-	OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID)
+	OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID, params OidcRedirectParams)
 	// Confirm password reset with token
 	// (POST /auth/password-reset/confirm)
 	ConfirmPasswordReset(w http.ResponseWriter, r *http.Request)
@@ -608,7 +608,7 @@ func (_ Unimplemented) OidcCallback(w http.ResponseWriter, r *http.Request, prov
 
 // Redirect to OIDC provider
 // (GET /auth/oidc/{provider_id}/login)
-func (_ Unimplemented) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
+func (_ Unimplemented) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID, params OidcRedirectParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2042,8 +2042,19 @@ func (siw *ServerInterfaceWrapper) OidcRedirect(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OidcRedirectParams
+
+	// ------------- Optional query parameter "next" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "next", r.URL.Query(), &params.Next)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "next", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.OidcRedirect(w, r, providerId)
+		siw.Handler.OidcRedirect(w, r, providerId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9479,6 +9490,7 @@ func (response OidcCallback302Response) VisitOidcCallbackResponse(w http.Respons
 
 type OidcRedirectRequestObject struct {
 	ProviderId openapi_types.UUID `json:"provider_id"`
+	Params     OidcRedirectParams
 }
 
 type OidcRedirectResponseObject interface {
@@ -17245,10 +17257,11 @@ func (sh *strictHandler) OidcCallback(w http.ResponseWriter, r *http.Request, pr
 }
 
 // OidcRedirect operation middleware
-func (sh *strictHandler) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
+func (sh *strictHandler) OidcRedirect(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID, params OidcRedirectParams) {
 	var request OidcRedirectRequestObject
 
 	request.ProviderId = providerId
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.OidcRedirect(ctx, request.(OidcRedirectRequestObject))
