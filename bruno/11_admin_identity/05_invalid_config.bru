@@ -1,0 +1,36 @@
+meta {
+  name: Invalid Provider Config (422)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/admin/identity-providers
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Broken",
+    "type": "oidc",
+    "oidc": {
+      "issuer_url": "http://idp.example.test",
+      "client_id": "baleia",
+      "client_secret": "secret"
+    }
+  }
+}
+
+assert {
+  res.status: eq 422
+}
+
+docs {
+  An OIDC issuer must be an absolute https URL; the type's validator rejects
+  it before any row is written (#259).
+}

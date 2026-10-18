@@ -26,9 +26,9 @@ const (
 	GrantCreate Action = "grant.create"
 	GrantRevoke Action = "grant.revoke"
 
-	WorkspaceUpdate Action = "workspace.update"
-	WorkspaceDelete Action = "workspace.delete"
-	SemanticDocCertify Action = "semantic_doc.certify"
+	WorkspaceUpdate      Action = "workspace.update"
+	WorkspaceDelete      Action = "workspace.delete"
+	SemanticDocCertify   Action = "semantic_doc.certify"
 	SemanticDocUncertify Action = "semantic_doc.uncertify"
 
 	TeamMemberAdd    Action = "team.member_add"
@@ -38,6 +38,8 @@ const (
 	UserInvite     Action = "user.invite"
 	UserRoleChange Action = "user.role_change"
 	UserDisable    Action = "user.disable"
+
+	IdentityProviderCreate Action = "identity_provider.create"
 
 	AuthLogin                Action = "auth.login"
 	AuthLogout               Action = "auth.logout"
@@ -84,6 +86,7 @@ var allActions = []Action{
 	WorkspaceUpdate,
 	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,
 	UserInvite, UserRoleChange, UserDisable,
+	IdentityProviderCreate,
 	AuthLogin, AuthLogout, AuthRefresh, AuthPasswordResetRequest, AuthPasswordResetConfirm,
 	APIKeyCreate, APIKeyRevoke,
 	ExecutionCreate, ExecutionCancel,

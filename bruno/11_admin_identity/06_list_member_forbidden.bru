@@ -1,0 +1,19 @@
+meta {
+  name: List Identity Providers (member -> 403)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/admin/identity-providers
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 403
+}
