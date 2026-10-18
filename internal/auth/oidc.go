@@ -2,13 +2,45 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 )
 
+// Browser binding and lifetime of one OIDC login attempt (#250).
+const (
+	OIDCCookieName = "baleia_oidc"
+	OIDCCookiePath = "/api/v1/auth/oidc"
+	OIDCAttemptTTL = 10 * time.Minute
+)
+
+// GeneratePKCE returns a 43-character RFC 7636 verifier and its S256
+// challenge. The verifier stays server-side; only the challenge reaches the
+// provider.
+func GeneratePKCE() (verifier, challenge string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	verifier = base64.RawURLEncoding.EncodeToString(b)
+	return verifier, PKCEChallenge(verifier), nil
+}
+
+// PKCEChallenge is the S256 challenge for a verifier.
+func PKCEChallenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// OIDCProvider is an experimental directory login provider (#55). Phase 4
+// hardens it slice by slice; the admin UI lands later.
 type OIDCProvider struct {
 	provider *oidc.Provider
 	config   oauth2.Config
@@ -51,12 +83,22 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 	}, nil
 }
 
-func (p *OIDCProvider) AuthURL(state string) string {
-	return p.config.AuthCodeURL(state, oauth2.AccessTypeOnline)
+// AuthURL builds the authorization URL with a mandatory S256 PKCE challenge.
+func (p *OIDCProvider) AuthURL(state, challenge string) (string, error) {
+	if state == "" || challenge == "" {
+		return "", errors.New("oidc: state and PKCE challenge are required")
+	}
+	return p.config.AuthCodeURL(state, oauth2.AccessTypeOnline,
+		oauth2.SetAuthURLParam("code_challenge", challenge),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256")), nil
 }
 
-func (p *OIDCProvider) Exchange(ctx context.Context, code string) (*OIDCUserInfo, error) {
-	token, err := p.config.Exchange(ctx, code)
+// Exchange redeems the code with the server-side PKCE verifier.
+func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier string) (*OIDCUserInfo, error) {
+	if verifier == "" {
+		return nil, errors.New("oidc: PKCE verifier is required")
+	}
+	token, err := p.config.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %w", err)
 	}

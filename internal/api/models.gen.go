@@ -2006,7 +2006,7 @@ type NessieCredentials struct {
 	Token *string `json:"token,omitempty"`
 }
 
-// OIDCProvider defines model for OIDCProvider.
+// OIDCProvider Experimental OIDC identity provider (phase 4).
 type OIDCProvider struct {
 	Id   openapi_types.UUID `json:"id"`
 	Name string             `json:"name"`
@@ -2901,6 +2901,12 @@ type ExportAuditCSVParamsOutcome string
 type OidcCallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
+}
+
+// OidcRedirectParams defines parameters for OidcRedirect.
+type OidcRedirectParams struct {
+	// Next Relative path to return to after login.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
 }
 
 // ListCatalogConnectionsParams defines parameters for ListCatalogConnections.

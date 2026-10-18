@@ -218,6 +218,7 @@ components:
 
     OIDCProvider:
       type: object
+      description: "Experimental OIDC identity provider (phase 4)."
       required: [id, name, type]
       properties:
         id: { type: string, format: uuid }
@@ -2440,12 +2441,18 @@ paths:
       tags: [Auth]
       operationId: oidcRedirect
       summary: "Redirect to OIDC provider"
+      description: "Creates a server-side, single-use login attempt with an S256 PKCE challenge and redirects to the provider."
       security: []
       parameters:
         - name: provider_id
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: next
+          in: query
+          required: false
+          schema: { type: string }
+          description: "Relative path to return to after login."
       responses:
         "302":
           description: "Redirect to provider"
@@ -2455,6 +2462,7 @@ paths:
       tags: [Auth]
       operationId: oidcCallback
       summary: "OIDC callback — exchange code for JWT"
+      description: "Consumes the single-use login attempt (state plus the server-side PKCE verifier) and exchanges the code."
       security: []
       parameters:
         - name: provider_id

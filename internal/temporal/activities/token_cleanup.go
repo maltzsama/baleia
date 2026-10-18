@@ -14,7 +14,11 @@ func CleanupExpiredTokens(ctx context.Context) error {
 		defaultActivities.passDone(schedules.TokenCleanup, err)
 		return err
 	}
-	err := defaultActivities.queries.DeleteExpiredPasswordResetTokens(ctx)
+	if err := defaultActivities.queries.DeleteExpiredPasswordResetTokens(ctx); err != nil {
+		defaultActivities.passDone(schedules.TokenCleanup, err)
+		return err
+	}
+	err := defaultActivities.queries.DeleteExpiredOIDCLoginAttempts(ctx)
 	defaultActivities.passDone(schedules.TokenCleanup, err)
 	return err
 }

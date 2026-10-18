@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -539,21 +540,79 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 
 func (h *Handlers) HandleOIDCRedirect(w http.ResponseWriter, r *http.Request) {
 	providerID := r.PathValue("provider_id")
+	var apID pgtype.UUID
+	if err := apID.Scan(providerID); err != nil {
+		respondError(w, http.StatusBadRequest, "bad_request", "invalid provider")
+		return
+	}
+
 	provider, err := h.loadOIDCProvider(r, providerID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "not_found", "provider not found")
 		return
 	}
 
+	verifier, challenge, err := auth.GeneratePKCE()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
+		return
+	}
 	state := randomState()
+
+	var redirect *string
+	if next := r.URL.Query().Get("next"); safeRelativePath(next) {
+		redirect = &next
+	}
+
+	if err := h.queries.CreateOIDCLoginAttempt(r.Context(), db.CreateOIDCLoginAttemptParams{
+		State:        state,
+		ProviderID:   apID,
+		CodeVerifier: verifier,
+		Redirect:     redirect,
+		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(auth.OIDCAttemptTTL), Valid: true},
+	}); err != nil {
+		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:     "oidc_state",
+		Name:     auth.OIDCCookieName,
 		Value:    state,
-		Path:     "/",
+		Path:     auth.OIDCCookiePath,
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(auth.OIDCAttemptTTL / time.Second),
 	})
-	http.Redirect(w, r, provider.AuthURL(state), http.StatusFound)
+
+	authURL, err := provider.AuthURL(state, challenge)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "internal_error", "could not start login")
+		return
+	}
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// safeRelativePath accepts only same-origin paths, never a scheme-relative one.
+// Browsers normalise backslashes to slashes, so "/\evil.com" is "//evil.com" in
+// disguise; control characters are refused too.
+func safeRelativePath(next string) bool {
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return false
+	}
+	return !strings.ContainsAny(next, "\\\r\n\t\x00")
+}
+
+func clearOIDCCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.OIDCCookieName,
+		Value:    "",
+		Path:     auth.OIDCCookiePath,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
 }
 
 func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
@@ -567,22 +626,32 @@ func (h *Handlers) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stateCookie, err := r.Cookie("oidc_state")
-	if err != nil || stateCookie.Value != r.URL.Query().Get("state") {
+	state := r.URL.Query().Get("state")
+	stateCookie, err := r.Cookie(auth.OIDCCookieName)
+	if err != nil || state == "" || stateCookie.Value != state {
 		respondError(w, http.StatusBadRequest, "bad_request", "invalid state")
 		return
 	}
+	// The browser binding is single use: clear it before consuming the row.
+	clearOIDCCookie(w)
 
-	info, err := provider.Exchange(r.Context(), r.URL.Query().Get("code"))
+	attempt, err := h.queries.ConsumeOIDCLoginAttempt(r.Context(), state)
 	if err != nil {
-		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
-		respondError(w, http.StatusUnauthorized, "unauthorized", "oidc exchange failed")
+		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "invalid_state"})
+		respondError(w, http.StatusUnauthorized, "unauthorized", "invalid or expired login attempt")
 		return
 	}
 
 	var apID pgtype.UUID
-	if err := apID.Scan(providerID); err != nil {
-		respondError(w, http.StatusBadRequest, "bad_request", "invalid provider")
+	if err := apID.Scan(providerID); err != nil || apID != attempt.ProviderID {
+		respondError(w, http.StatusBadRequest, "bad_request", "provider mismatch")
+		return
+	}
+
+	info, err := provider.Exchange(r.Context(), r.URL.Query().Get("code"), attempt.CodeVerifier)
+	if err != nil {
+		h.audited(audit.WithAuthMethod(r.Context(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
+		respondError(w, http.StatusUnauthorized, "unauthorized", "oidc exchange failed")
 		return
 	}
 

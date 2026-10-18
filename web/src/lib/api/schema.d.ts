@@ -142,7 +142,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Redirect to OIDC provider */
+        /**
+         * Redirect to OIDC provider
+         * @description Creates a server-side, single-use login attempt with an S256 PKCE challenge and redirects to the provider.
+         */
         get: operations["oidcRedirect"];
         put?: never;
         post?: never;
@@ -159,7 +162,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** OIDC callback — exchange code for JWT */
+        /**
+         * OIDC callback — exchange code for JWT
+         * @description Consumes the single-use login attempt (state plus the server-side PKCE verifier) and exchanges the code.
+         */
         get: operations["oidcCallback"];
         put?: never;
         post?: never;
@@ -2614,6 +2620,7 @@ export interface components {
         LogoutRequest: {
             refresh_token?: string;
         };
+        /** @description Experimental OIDC identity provider (phase 4). */
         OIDCProvider: {
             /** Format: uuid */
             id: string;
@@ -4681,7 +4688,10 @@ export interface operations {
     };
     oidcRedirect: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Relative path to return to after login. */
+                next?: string;
+            };
             header?: never;
             path: {
                 provider_id: string;
