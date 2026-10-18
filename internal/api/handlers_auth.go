@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -276,7 +278,19 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	// exactly one updates the row (#51).
 	rt, err := h.queries.ConsumeRefreshToken(ctx, hash)
 	if err != nil {
-		h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("invalid_token"))
+		// A revoked row with this hash means a rotated token was replayed:
+		// revoke the whole family, not just this request (#51).
+		reused := false
+		if errors.Is(err, pgx.ErrNoRows) {
+			if old, lookupErr := h.queries.GetRefreshTokenByHashAny(ctx, hash); lookupErr == nil && old.Revoked {
+				_ = h.queries.RevokeRefreshFamily(ctx, old.FamilyID)
+				h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied(audit.ReasonReuseDetected))
+				reused = true
+			}
+		}
+		if !reused {
+			h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("invalid_token"))
+		}
 		return RefreshToken401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid or expired refresh token"},
 		}, nil

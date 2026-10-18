@@ -35,6 +35,8 @@ const (
 	ReasonEngineError = "engine_error"
 	ReasonConflict    = "conflict"
 	ReasonInternal    = "internal"
+	// ReasonReuseDetected marks a refresh token presented after rotation (#51).
+	ReasonReuseDetected = "reuse_detected"
 )
 
 // Auth methods recorded with an event.

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -122,6 +123,32 @@ func TestRefresh_FamilyPreserved(t *testing.T) {
 	}
 	if !before.FamilyID.Valid || before.FamilyID != after.FamilyID {
 		t.Errorf("family = %v, rotated token family = %v, want the same non-null family", before.FamilyID, after.FamilyID)
+	}
+}
+
+func TestRefresh_ReuseRevokesFamily(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+	rotated := refreshToken(t, f.h, token)
+	f.mem.take()
+
+	if got := refreshStatus(t, f.h, token); got != 401 {
+		t.Fatalf("replayed token = %d, want 401", got)
+	}
+
+	var sawReuse bool
+	for _, e := range f.mem.take() {
+		if e.Action == audit.AuthRefresh && e.Outcome == audit.Denied && e.Reason == audit.ReasonReuseDetected {
+			sawReuse = true
+		}
+	}
+	if !sawReuse {
+		t.Error("reuse was not audited as auth.refresh/reuse_detected")
+	}
+
+	// The whole family is gone, so the rotated token no longer refreshes.
+	if got := refreshStatus(t, f.h, rotated); got != 401 {
+		t.Errorf("rotated token after reuse = %d, want 401", got)
 	}
 }
 
