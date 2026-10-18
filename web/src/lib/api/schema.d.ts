@@ -158,6 +158,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enabled login providers
+         * @description Public list of enabled identity providers for the login page: OIDC and LDAP. Configuration and secrets are never returned.
+         */
+        get: operations["listAuthProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/oidc/providers": {
         parameters: {
             query?: never;
@@ -165,7 +185,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List configured OIDC providers */
+        /**
+         * List configured OIDC providers
+         * @deprecated
+         */
         get: operations["listOIDCProviders"];
         put?: never;
         post?: never;
@@ -2905,6 +2928,14 @@ export interface components {
             /** @enum {string} */
             type: "oidc";
         };
+        /** @description An enabled login provider. Configuration and secrets are never returned. */
+        AuthProvider: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            type: "oidc" | "ldap";
+        };
         /**
          * @description What needs attention. `agent_token_expiring` appears once the agent platform lands (#59).
          * @enum {string}
@@ -5265,6 +5296,26 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listAuthProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthProvider"][];
+                };
+            };
         };
     };
     listOIDCProviders: {

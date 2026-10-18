@@ -318,6 +318,15 @@ components:
         name: { type: string, example: "Okta" }
         type: { type: string, enum: [oidc] }
 
+    AuthProvider:
+      type: object
+      description: "An enabled login provider. Configuration and secrets are never returned."
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [oidc, ldap] }
+
     AttentionKind:
       type: string
       description: "What needs attention. `agent_token_expiring` appears once the agent platform lands (#59)."
@@ -2876,11 +2885,28 @@ paths:
               schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /auth/providers:
+    get:
+      tags: [Auth]
+      operationId: listAuthProviders
+      summary: "Enabled login providers"
+      description: "Public list of enabled identity providers for the login page: OIDC and LDAP. Configuration and secrets are never returned."
+      security: []
+      responses:
+        "200":
+          description: "Providers"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuthProvider" }
+
   /auth/oidc/providers:
     get:
       tags: [Auth]
       operationId: listOIDCProviders
       summary: "List configured OIDC providers"
+      deprecated: true
       security: []
       responses:
         "200":

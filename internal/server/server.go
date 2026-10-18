@@ -260,6 +260,7 @@ func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddl
 		"GetSetupStatus":       true,
 		"CreateFirstAdmin":     true,
 		"Login":                true,
+		"ListAuthProviders":    true,
 		"ListOIDCProviders":    true,
 		"OidcRedirect":         true,
 		"OidcCallback":         true,
