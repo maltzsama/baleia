@@ -7,6 +7,8 @@ import { columnMeta, type ColumnMeta } from './format';
 
 /** Rows fetched per page. The backend re-emits only the covering batches. */
 export const RESULT_PAGE_SIZE = 50_000;
+/** Pages kept in memory around the viewport; farther pages are evicted. */
+const MAX_CACHED_PAGES = 6;
 
 function countBytes(
 	body: ReadableStream<Uint8Array>,
@@ -63,6 +65,7 @@ export class ResultsStore {
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	private inflight = new Map<number, Promise<void>>();
 	private baseUrl = '';
+	private activePage = 0;
 	private controller: AbortController | undefined;
 
 	reset(): void {
@@ -107,12 +110,29 @@ export class ResultsStore {
 
 	/** Loads a page unless it is already loaded; concurrent calls share one request. */
 	ensurePage(page: number, isFirst = false): Promise<void> {
-		if (this.pages.has(page)) return Promise.resolve();
+		this.activePage = page;
+		if (this.pages.has(page)) {
+			this.evict();
+			return Promise.resolve();
+		}
 		const running = this.inflight.get(page);
 		if (running) return running;
-		const pending = this.fetchPage(page, isFirst).finally(() => this.inflight.delete(page));
+		const pending = this.fetchPage(page, isFirst).finally(() => {
+			this.inflight.delete(page);
+			this.evict();
+		});
 		this.inflight.set(page, pending);
 		return pending;
+	}
+
+	/** Keeps only the pages closest to the viewport, so scrolling cannot grow memory. */
+	private evict(): void {
+		if (this.pages.size <= MAX_CACHED_PAGES) return;
+		const active = this.activePage;
+		const keys = [...this.pages.keys()].sort((a, b) => Math.abs(a - active) - Math.abs(b - active));
+		for (const key of keys.slice(MAX_CACHED_PAGES)) this.pages.delete(key);
+		// The evicted rows must re-render as blanks, not stale values.
+		this.version++;
 	}
 
 	private async fetchPage(page: number, isFirst: boolean): Promise<void> {

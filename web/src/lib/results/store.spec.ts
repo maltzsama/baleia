@@ -109,4 +109,20 @@ describe('ResultsStore', () => {
 		// A page that has not been fetched reads as null, not a wrong value.
 		expect(store.cell(3 * RESULT_PAGE_SIZE, 0)).toBeNull();
 	});
+
+	it('evicts pages far from the viewport', async () => {
+		const pageBytes = ipc({ id: [1] });
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(pageBytes, { status: 200 }))
+		);
+
+		const store = new ResultsStore();
+		await store.load('/x', 0);
+		for (let page = 1; page <= 10; page++) await store.ensurePage(page);
+
+		// The active page is kept; page 0 is far away and has been evicted.
+		expect(store.cell(10 * RESULT_PAGE_SIZE, 0)).toBe(1);
+		expect(store.cell(0, 0)).toBeNull();
+	});
 });
