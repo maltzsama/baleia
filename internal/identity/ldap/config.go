@@ -5,6 +5,7 @@ package ldap
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,10 @@ type Config struct {
 	// StartTLS upgrades an ldap:// connection. It is required for ldap:// and
 	// ignored (the connection is already TLS) for ldaps://.
 	StartTLS bool `json:"start_tls"`
+	// CAPem is an optional PEM bundle used to verify a private CA, such as the
+	// self-signed certificate of a development directory. Empty uses the
+	// system roots.
+	CAPem string `json:"ca_pem"`
 
 	// BindDN/BindPassword are the service account used to search the directory.
 	// They never authenticate a user; the user bind uses the submitted
@@ -105,6 +110,11 @@ func (c Config) Validate() error {
 		return fmt.Errorf("ldap config: unsupported scheme %q (use ldaps:// or ldap:// with start_tls)", u.Scheme)
 	}
 
+	if strings.TrimSpace(c.CAPem) != "" {
+		if _, err := parseCAs(c.CAPem); err != nil {
+			return fmt.Errorf("ldap config: ca_pem: %w", err)
+		}
+	}
 	if strings.TrimSpace(c.BindDN) == "" {
 		return errors.New("ldap config: bind_dn is required")
 	}
@@ -146,6 +156,16 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+// parseCAs builds a trust pool from a PEM bundle. It is used by dialLDAP so a
+// private or development CA can be pinned in the provider config.
+func parseCAs(pemBundle string) (*x509.CertPool, error) {
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM([]byte(pemBundle)) {
+		return nil, errors.New("no PEM certificate found")
+	}
+	return pool, nil
 }
 
 func validRole(role string) bool {

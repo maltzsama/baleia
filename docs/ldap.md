@@ -1,8 +1,9 @@
 # LDAP and Active Directory
 
-> **Experimental.** LDAP login works, but the admin UI and provisioning
-> workflow are still landing; the configuration format may change without a
-> deprecation cycle. OIDC is the more mature directory option.
+> **Experimental.** LDAP login, group mapping, the admin UI and scheduled
+> directory reconciliation are complete (phase 4); the configuration format may
+> still change without a deprecation cycle. OIDC is the more mature directory
+> option.
 
 Baleia authenticates a directory user with a **user bind**, then maps the
 user's groups to a platform role and teams with the same engine OIDC uses
@@ -38,6 +39,7 @@ slice). The JSON shape is:
 {
   "url": "ldaps://ldap.example.org:636",
   "start_tls": false,
+  "ca_pem": "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----",
   "bind_dn": "cn=svc-baleia,ou=services,dc=example,dc=org",
   "bind_password": "…",
   "base_dn": "ou=people,dc=example,dc=org",
@@ -62,6 +64,7 @@ slice). The JSON shape is:
 |---|---|---|
 | `url` | yes | `ldaps://` or `ldap://` with `start_tls: true`. Credentials in the URL are rejected. |
 | `start_tls` | for `ldap://` | Upgrades a plaintext connection before the service bind. |
+| `ca_pem` | no | PEM bundle for a private CA (or a development self-signed certificate). Empty uses the system roots. |
 | `bind_dn`, `bind_password` | yes | Read-only service account; the config is sealed. |
 | `base_dn` | yes | Subtree searched for users (and groups when nested groups are enabled). |
 | `user_filter` | yes | Exactly one `{{username}}` placeholder; the value is escaped. |
@@ -126,12 +129,21 @@ server supports the AD matching rule.
 
 ## Local directory
 
+The canonical place to run the directory tests is the **minikube dev cluster**,
+because the worker that runs `directory-reconcile` lives there too (#54):
+
 ```bash
-docker compose --profile ldap up -d ldap
+make k8s-up                 # the dev stack (skip if already running)
+make k8s-source NAME=ldap   # start src-ldap, seeded from deploy/dev/ldap/50-baleia.ldif
+make k8s-ldap-forward       # 1389:389 and 1636:636 on localhost
+
+BALEIA_TEST_LDAP_URL=ldap://localhost:1389 \
+  go test -tags integration ./internal/identity/ldap/
 ```
 
-The profile starts OpenLDAP on `localhost:389`/`636` with the seed LDIF in
-`deploy/dev/ldap/50-baleia.ldif`:
+`make k8s-source NAME=ldap` also creates the `baleia-ldap-seed` ConfigMap from
+the seed file, so the directory always matches the tracked LDIF. The profile
+starts OpenLDAP with the seed LDIF in `deploy/dev/ldap/50-baleia.ldif`:
 
 | | |
 |---|---|
@@ -140,14 +152,24 @@ The profile starts OpenLDAP on `localhost:389`/`636` with the seed LDIF in
 | Base DN | `ou=people,dc=example,dc=org` |
 | Admin group | `cn=baleia-admins,ou=groups,dc=example,dc=org` |
 
-These credentials are development-only. The seed does not enable TLS; point the
-integration test at `ldap://localhost:389` directly (the production config
-validator still refuses plaintext).
+These credentials are development-only. The seed does not enable TLS; the
+integration test uses the forwarded `ldap://localhost:1389` (the production
+config validator still refuses plaintext).
 
-Run the integration test against the profile:
+The integration test verifies the user bind and that `cn=baleia-admins` maps to
+the `admin` role.
 
-```bash
-BALEIA_TEST_LDAP_URL=ldap://localhost:389 go test -tags integration ./internal/identity/ldap/
+For the reconciliation test (#54), configure the provider with the **in-cluster**
+address instead of `localhost`, because the worker dials it from its pod:
+
+```
+ldap://src-ldap.baleia-dev.svc:389
 ```
 
-It verifies the user bind and that `cn=baleia-admins` maps to the `admin` role.
+Then disable `alice` in the directory, wait one `directory-reconcile` run (the
+schedule fires every 15 minutes) and verify `users.status = 'suspended'` with
+the refresh tokens revoked.
+
+For a quick local check outside the cluster, the compose profile also works
+(`docker compose --profile ldap up -d ldap`). It binds `localhost:389` through
+the Docker daemon, so point the test at that port instead.

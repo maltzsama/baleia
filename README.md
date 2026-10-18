@@ -308,9 +308,10 @@ Each dialect (`internal/dialect`) ships keyword and function lists generated fro
 
 These work but may change without a deprecation cycle:
 
-- **OIDC and LDAP identity providers** — directory login and group mapping are
-  being hardened in phase 4. Integration tests use in-process fake providers;
-  the admin UI lands in a later slice.
+- **OIDC and LDAP identity providers** — directory login, claim/group mapping,
+  provider administration and scheduled directory reconciliation are complete
+  (phase 4). OIDC integration tests use an in-process IdP; the LDAP integration
+  test and the reconciliation run use the minikube `src-ldap` source.
 
 ## Roadmap
 

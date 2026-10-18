@@ -1,8 +1,16 @@
 package ldap
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/identity"
@@ -42,6 +50,45 @@ func TestLDAPConfig_StartTLSAllowed(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("ldap:// with start_tls rejected: %v", err)
 	}
+}
+
+func TestLDAPConfig_CAPem(t *testing.T) {
+	cfg := validConfig()
+	cfg.CAPem = testCACertPEM(t)
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid ca_pem rejected: %v", err)
+	}
+	if _, err := parseCAs(cfg.CAPem); err != nil {
+		t.Fatalf("parseCAs: %v", err)
+	}
+
+	cfg.CAPem = "not a certificate"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("invalid ca_pem accepted")
+	}
+}
+
+// testCACertPEM returns a throwaway self-signed CA in PEM form.
+func testCACertPEM(t *testing.T) string {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "baleia-test-ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("CreateCertificate: %v", err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 }
 
 func TestLDAPConfig_RequiredFields(t *testing.T) {

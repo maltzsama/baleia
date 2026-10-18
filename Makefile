@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate migrate-credentials migrate-oidc-providers migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down dialect-lists
+.PHONY: dev worker migrate migrate-credentials migrate-oidc-providers migrate-down migrate-status migrate-reset sqlc generate lint build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down dialect-lists
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -195,15 +195,27 @@ k8s-logs:
 k8s-seed-tpch:
 	kubectl -n $(K8S_NS) exec -i statefulset/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql
 
-# Start one source database (deploy/dev/sources/<NAME>.yaml) for provider and
-# dialect tests; k8s-source-down removes it. scripts/gen-dialect-lists.sh
-# starts and removes them by itself.
+# Start one source (deploy/dev/sources/<NAME>.yaml) for provider, dialect and
+# directory tests; k8s-source-down removes it. scripts/gen-dialect-lists.sh
+# starts and removes them by itself. `NAME=ldap` also (re)creates the seed
+# ConfigMap from deploy/dev/ldap/50-baleia.ldif.
 k8s-source:
+	@if [ "$(NAME)" = "ldap" ]; then \
+		kubectl -n $(K8S_NS) create configmap baleia-ldap-seed \
+			--from-file=50-baleia.ldif=deploy/dev/ldap/50-baleia.ldif \
+			--dry-run=client -o yaml | kubectl apply -f -; \
+	fi
 	kubectl apply -f deploy/dev/sources/$(NAME).yaml
 	kubectl -n $(K8S_NS) rollout status deployment/src-$(NAME) --timeout=15m
 
 k8s-source-down:
 	kubectl delete -f deploy/dev/sources/$(NAME).yaml
+
+# Port-forward the LDAP source so the integration test (and a manual browser
+# login) can reach it at ldap://localhost:1389. The local ports are above 1024
+# because a non-root kubectl cannot bind 389/636 locally.
+k8s-ldap-forward:
+	kubectl -n $(K8S_NS) port-forward svc/src-ldap 1389:389 1636:636 &
 
 # Regenerate every dialect's keyword and function lists from real servers on
 # the dev cluster, running each dialect's execution test (one source at a time).
