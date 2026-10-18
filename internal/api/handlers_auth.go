@@ -167,6 +167,13 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 		failed("invalid_credentials")
 		return invalidCredentialsLogin(), nil
 	}
+	// The password is correct, so revealing the suspension is safe (#283).
+	if err := auth.RequireActive(user.Status); err != nil {
+		failed("account_suspended")
+		return Login403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
+			Code: "account_suspended", Message: "account suspended",
+		}}, nil
+	}
 	h.loginDelay().Success(identifier)
 	return h.issueLogin(ctx, user, ev, audit.AuthPassword)
 }
@@ -234,6 +241,11 @@ func (h *Handlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.E
 		ExternalID:     &result.ExternalID,
 	})
 	if err != nil || user.AuthProvider != "ldap" {
+		return invalid()
+	}
+	// A suspended directory account is indistinguishable from bad credentials
+	// (#284): never reveal the suspension to an unauthenticated caller.
+	if err := auth.RequireActive(user.Status); err != nil {
 		return invalid()
 	}
 	if result.Role != user.Role {
@@ -482,6 +494,14 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 		}
 		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
 	}
+	// OIDC reports suspension explicitly on the login page (#284).
+	if err := auth.RequireActive(user.Status); err != nil {
+		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{
+			Action: audit.AuthLogin, ResourceType: "user", ResourceID: idString(user.ID),
+			Outcome: audit.Denied, Reason: "account_suspended",
+		})
+		return fail(oidcErrorAccountSuspended, metrics.OutcomeInvalidCredentials), nil
+	}
 
 	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
 	if err != nil {
@@ -550,6 +570,15 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	if err != nil {
 		return RefreshToken401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"},
+		}, nil
+	}
+	// A suspension ends every session and blocks a refresh even if a token
+	// survived (#283).
+	if err := auth.RequireActive(user.Status); err != nil {
+		h.revokeUserRefreshTokens(ctx, user.ID)
+		h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("account_suspended"))
+		return RefreshToken401JSONResponse{
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "account_suspended", Message: "account suspended"},
 		}, nil
 	}
 

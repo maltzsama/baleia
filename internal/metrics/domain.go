@@ -343,3 +343,43 @@ func (a *AuditExport) Observe(outcome string, n int) {
 
 // SetLag records the current export lag in seconds.
 func (a *AuditExport) SetLag(seconds float64) { a.lag.Set(seconds) }
+
+// Directory observes user lifecycle and directory reconciliation (#257).
+type Directory struct {
+	runs      *prometheus.CounterVec
+	suspended *prometheus.CounterVec
+}
+
+// Directory registers baleia_directory_reconcile_runs_total{outcome} and
+// baleia_users_suspended_total{reason}; both labels are bounded.
+func (r *Registry) Directory() *Directory {
+	d := &Directory{
+		runs: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace, Name: "directory_reconcile_runs_total", Help: "Directory reconciliation passes by outcome.",
+		}, []string{"outcome"}),
+		suspended: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace, Name: "users_suspended_total", Help: "Users suspended by reason.",
+		}, []string{"reason"}),
+	}
+	r.reg.MustRegister(d.runs, d.suspended)
+	return d
+}
+
+// Run records one reconciliation outcome: success, error or aborted_safety.
+func (d *Directory) Run(outcome string) {
+	if d == nil {
+		return
+	}
+	d.runs.WithLabelValues(outcome).Inc()
+}
+
+// Suspended records one suspension: admin, policy or directory.
+func (d *Directory) Suspended(reason string) {
+	if d == nil {
+		return
+	}
+	if reason == "" {
+		reason = "unknown"
+	}
+	d.suspended.WithLabelValues(reason).Inc()
+}

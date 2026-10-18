@@ -38,6 +38,8 @@ const (
 	UserInvite     Action = "user.invite"
 	UserRoleChange Action = "user.role_change"
 	UserDisable    Action = "user.disable"
+	UserSuspend    Action = "user.suspend"
+	UserReinstate  Action = "user.reinstate"
 
 	IdentityProviderCreate Action = "identity_provider.create"
 
@@ -85,7 +87,7 @@ var allActions = []Action{
 	GrantCreate, GrantRevoke,
 	WorkspaceUpdate,
 	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,
-	UserInvite, UserRoleChange, UserDisable,
+	UserInvite, UserRoleChange, UserDisable, UserSuspend, UserReinstate,
 	IdentityProviderCreate,
 	AuthLogin, AuthLogout, AuthRefresh, AuthPasswordResetRequest, AuthPasswordResetConfirm,
 	APIKeyCreate, APIKeyRevoke,

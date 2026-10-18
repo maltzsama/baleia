@@ -577,6 +577,38 @@ components:
       properties:
         role: { type: string, enum: [admin, member] }
 
+    SuspendUserRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum: [admin, policy]
+          default: admin
+
+    DirectoryReconcileAction:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        action: { type: string, enum: [suspend, reinstate, role, team] }
+        detail: { type: string }
+
+    DirectoryReconcileRun:
+      type: object
+      required: [id, provider_id, started_at, outcome, seen, suspended, reinstated, actions]
+      properties:
+        id: { type: string, format: uuid }
+        provider_id: { type: string, format: uuid }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        outcome: { type: string, enum: [success, error, aborted_safety] }
+        seen: { type: integer }
+        suspended: { type: integer }
+        reinstated: { type: integer }
+        error: { type: string }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/DirectoryReconcileAction" }
+
     # ── Teams ──────────────────────────────────────────────────
     Team:
       type: object
@@ -2601,6 +2633,33 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /admin/directory-reconcile-runs:
+    get:
+      tags: [Admin]
+      operationId: listDirectoryReconcileRuns
+      summary: "Directory reconciliation runs — admin only"
+      description: "One row per pass, newest first. `aborted_safety` means the brake refused a mass suspension."
+      parameters:
+        - name: provider_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: "Runs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DirectoryReconcileRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /auth/login:
     post:
       tags: [Auth]
@@ -2620,6 +2679,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/LoginResponse" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /auth/logout:
@@ -2946,6 +3006,47 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /users/{id}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Users]
+      operationId: suspendUser
+      summary: "Suspend a user — admin only"
+      description: "Suspends without deleting, revokes the user's refresh tokens and API keys, and audits the change. The user is never deleted."
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SuspendUserRequest" }
+      responses:
+        "200":
+          description: "User suspended"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserPublic" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /users/{id}/reinstate:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Users]
+      operationId: reinstateUser
+      summary: "Reinstate a user — admin only"
+      description: "Clears the suspension and audits the change."
+      responses:
+        "200":
+          description: "User reinstated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserPublic" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /me:
     get:

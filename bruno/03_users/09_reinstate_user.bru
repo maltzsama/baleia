@@ -1,0 +1,24 @@
+meta {
+  name: Reinstate User
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/users/{{outsider_user_id}}/reinstate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{outsider_user_id}}
+}
+
+docs {
+  Lifts the suspension and audits the change (#258).
+}

@@ -80,3 +80,48 @@ DELETE FROM users WHERE id = $1;
 
 -- name: GetAPIKeyByID :one
 SELECT * FROM api_keys WHERE id = $1 AND user_id = $2;
+
+-- name: DeleteAPIKeysByUser :exec
+-- Suspension revokes every API key of the user (#258).
+DELETE FROM api_keys WHERE user_id = $1;
+
+-- name: ListEnabledLDAPProviders :many
+SELECT * FROM auth_providers WHERE enabled = true AND type = 'ldap' ORDER BY name;
+
+-- name: ListUsersByAuthProvider :many
+SELECT * FROM users WHERE auth_provider_id = $1 ORDER BY created_at;
+
+-- name: SuspendUser :one
+-- Suspension is the only disable switch (#54). The reason is bounded:
+-- 'admin', 'policy' or 'directory'.
+UPDATE users
+SET status = 'suspended',
+    suspended_at = now(),
+    suspended_reason = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ReinstateUser :one
+UPDATE users
+SET status = 'active',
+    suspended_at = NULL,
+    suspended_reason = NULL,
+    updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ReinstateDirectoryUser :exec
+-- Reconciliation only lifts its own suspensions (#257): an admin suspension
+-- survives a directory pass.
+UPDATE users
+SET status = 'active',
+    suspended_at = NULL,
+    suspended_reason = NULL,
+    updated_at = now()
+WHERE id = $1
+  AND status = 'suspended'
+  AND suspended_reason = 'directory';
+
+-- name: MarkDirectorySynced :exec
+UPDATE users SET directory_synced_at = now(), updated_at = now() WHERE id = $1;

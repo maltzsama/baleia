@@ -154,6 +154,19 @@ type ContentVersion struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type DirectoryReconcileRun struct {
+	ID         pgtype.UUID        `json:"id"`
+	ProviderID pgtype.UUID        `json:"provider_id"`
+	StartedAt  pgtype.Timestamptz `json:"started_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	Outcome    *string            `json:"outcome"`
+	Seen       int32              `json:"seen"`
+	Suspended  int32              `json:"suspended"`
+	Reinstated int32              `json:"reinstated"`
+	Error      *string            `json:"error"`
+	Actions    []byte             `json:"actions"`
+}
+
 type Engine struct {
 	ID           pgtype.UUID        `json:"id"`
 	Name         string             `json:"name"`

@@ -33,6 +33,7 @@ var usernameRE = regexp.MustCompile(`^[A-Za-z0-9._@-]{1,128}$`)
 type Conn interface {
 	Bind(username, password string) error
 	Search(req *ldapv3.SearchRequest) (*ldapv3.SearchResult, error)
+	SearchWithPaging(req *ldapv3.SearchRequest, pageSize uint32) (*ldapv3.SearchResult, error)
 	Close() error
 }
 

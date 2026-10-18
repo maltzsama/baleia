@@ -208,6 +208,7 @@ func main() {
 	w.RegisterWorkflow(workflows.AuditPartitionsWorkflow)
 	w.RegisterWorkflow(workflows.AuditExportWorkflow)
 	w.RegisterWorkflow(workflows.CatalogReconcileWorkflow)
+	w.RegisterWorkflow(workflows.DirectoryReconcileWorkflow)
 	w.RegisterWorkflow(workflows.EphemeralCatalogSweepWorkflow)
 	w.RegisterWorkflow(workflows.TokenCleanupWorkflow)
 

@@ -45,6 +45,12 @@ func (f *fakeConn) Search(req *ldapv3.SearchRequest) (*ldapv3.SearchResult, erro
 	return &ldapv3.SearchResult{}, nil
 }
 
+// SearchWithPaging pages through the same fake result; tests assert the
+// request in searches like the plain Search.
+func (f *fakeConn) SearchWithPaging(req *ldapv3.SearchRequest, _ uint32) (*ldapv3.SearchResult, error) {
+	return f.Search(req)
+}
+
 func (f *fakeConn) Close() error {
 	f.closed = true
 	return nil

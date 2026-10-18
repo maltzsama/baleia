@@ -106,9 +106,10 @@ func (h *Handlers) contentService() *content.Service {
 // apiMetrics are the API's producers (#87); all nil-safe, zero without
 // SetMetrics.
 type apiMetrics struct {
-	auth    *metrics.Auth
-	authz   *metrics.Authz
-	catalog *metrics.Catalog
+	auth      *metrics.Auth
+	authz     *metrics.Authz
+	catalog   *metrics.Catalog
+	directory *metrics.Directory
 }
 
 // AuthMetrics is the authentication producer (for the server's rate limiter).
@@ -117,7 +118,7 @@ func (h *Handlers) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 // SetMetrics registers the API's producers on reg and exports bindings by
 // lifecycle state.
 func (h *Handlers) SetMetrics(reg *metrics.Registry) {
-	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog()}
+	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory()}
 	reg.WatchBindingStates(func(ctx context.Context) (map[string]int64, error) {
 		rows, err := h.queries.CountManagedBindingsByState(ctx)
 		if err != nil {

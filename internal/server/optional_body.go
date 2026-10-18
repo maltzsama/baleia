@@ -15,6 +15,7 @@ var optionalBodyRoutes = []*regexp.Regexp{
 	regexp.MustCompile(`^/api/v1/auth/refresh$`),
 	regexp.MustCompile(`^/api/v1/ws-tickets$`),
 	regexp.MustCompile(`^/api/v1/workspaces/[^/]+/retrievers/[^/]+/refresh$`),
+	regexp.MustCompile(`^/api/v1/users/[^/]+/suspend$`),
 }
 
 // OptionalJSONBody gives a POST to those operations an empty JSON object
