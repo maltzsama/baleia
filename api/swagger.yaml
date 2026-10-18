@@ -459,6 +459,84 @@ components:
         oidc: { $ref: "#/components/schemas/OIDCConfig" }
         ldap: { $ref: "#/components/schemas/LDAPConfig" }
 
+    UpdateOIDCConfig:
+      type: object
+      description: "OIDC configuration update. Omitted fields keep their stored value; an empty `client_secret` clears it."
+      properties:
+        issuer_url: { type: string, format: uri }
+        client_id: { type: string, minLength: 1 }
+        client_secret:
+          type: string
+          description: "Omit to keep the stored secret; send an empty string to clear it."
+        auto_create: { type: boolean }
+        allowed_email_domains: { type: array, items: { type: string } }
+        role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
+        team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        default_role: { type: string, enum: [admin, member] }
+        claims: { $ref: "#/components/schemas/OIDCClaimsConfig" }
+
+    UpdateLDAPConfig:
+      type: object
+      description: "LDAP configuration update. Omitted fields keep their stored value; an empty `bind_password` clears it."
+      properties:
+        url: { type: string }
+        start_tls: { type: boolean }
+        bind_dn: { type: string }
+        bind_password:
+          type: string
+          description: "Omit to keep the stored secret; send an empty string to clear it."
+        base_dn: { type: string }
+        user_filter: { type: string }
+        group_attribute: { type: string }
+        email_attribute: { type: string }
+        name_attribute: { type: string }
+        nested_groups: { type: boolean }
+        required_group: { type: string }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 60 }
+        role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
+        team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        default_role: { type: string, enum: [admin, member] }
+
+    UpdateIdentityProviderRequest:
+      type: object
+      description: "Partial update. The provider type is immutable; a config of the other type is rejected."
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        enabled: { type: boolean }
+        oidc: { $ref: "#/components/schemas/UpdateOIDCConfig" }
+        ldap: { $ref: "#/components/schemas/UpdateLDAPConfig" }
+
+    IdentityProviderTestCheck:
+      type: object
+      required: [name, status]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [ok, failed, skipped] }
+        message:
+          type: string
+          description: "Short stable code; never a secret, host or raw error."
+
+    IdentityProviderTestResult:
+      type: object
+      required: [ok, checks]
+      properties:
+        ok: { type: boolean }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityProviderTestCheck" }
+
+    TestIdentityProviderRequest:
+      type: object
+      description: "An unsaved provider configuration to probe. Nothing is persisted."
+      required: [type]
+      properties:
+        type: { $ref: "#/components/schemas/IdentityProviderType" }
+        oidc: { $ref: "#/components/schemas/OIDCConfig" }
+        ldap: { $ref: "#/components/schemas/LDAPConfig" }
+        test_username:
+          type: string
+          description: "Directory username to look up. The probe never binds as this user."
+
     PasswordResetRequestBody:
       type: object
       required: [email]
@@ -2926,6 +3004,86 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Identity]
+      operationId: updateIdentityProvider
+      summary: "Update an identity provider — admin only"
+      description: "Partial update. Omitted secret fields keep the stored value; an empty secret clears it. The provider type is immutable."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateIdentityProviderRequest" }
+      responses:
+        "200":
+          description: "Provider updated (secrets redacted)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityProviderDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Identity]
+      operationId: deleteIdentityProvider
+      summary: "Delete an identity provider — admin only"
+      description: "Refuses with 409 when users are still linked, unless `suspend_users=true` is given; those users are suspended and detached, never orphaned."
+      parameters:
+        - name: suspend_users
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /admin/identity-providers/{id}/test:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Identity]
+      operationId: testIdentityProvider
+      summary: "Test a stored identity provider — admin only"
+      description: "Probes the stored configuration and persists nothing. An LDAP probe binds with the service account only, never as an end user."
+      parameters:
+        - name: test_username
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: "Probe result"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityProviderTestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/identity-providers/test:
+    post:
+      tags: [Identity]
+      operationId: testIdentityProviderTransient
+      summary: "Test an unsaved identity provider — admin only"
+      description: "Validates and probes a configuration before it is saved. Nothing is written."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestIdentityProviderRequest" }
+      responses:
+        "200":
+          description: "Probe result"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityProviderTestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Users ─────────────────────────────────────────────────────
   /users:

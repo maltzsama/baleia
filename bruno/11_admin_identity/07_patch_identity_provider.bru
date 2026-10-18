@@ -1,0 +1,38 @@
+meta {
+  name: Patch Identity Provider (secret retained)
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{base_url}}/admin/identity-providers/{{idp_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno OIDC renamed"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq "Bruno OIDC renamed"
+  res.body.has_client_secret: eq true
+}
+
+tests {
+  test("the omitted client secret is kept and never echoed", function () {
+    expect(res.body.client_secret).to.be.undefined;
+    expect(JSON.stringify(res.body)).to.not.contain("bruno-oidc-secret");
+  });
+}
+
+docs {
+  A PATCH with no secret field keeps the stored value (#285).
+}

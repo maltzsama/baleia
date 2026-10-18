@@ -27,9 +27,21 @@ type ServerInterface interface {
 	// Create an identity provider — admin only
 	// (POST /admin/identity-providers)
 	CreateIdentityProvider(w http.ResponseWriter, r *http.Request)
+	// Test an unsaved identity provider — admin only
+	// (POST /admin/identity-providers/test)
+	TestIdentityProviderTransient(w http.ResponseWriter, r *http.Request)
+	// Delete an identity provider — admin only
+	// (DELETE /admin/identity-providers/{id})
+	DeleteIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId, params DeleteIdentityProviderParams)
 	// Get an identity provider — admin only
 	// (GET /admin/identity-providers/{id})
 	GetIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId)
+	// Update an identity provider — admin only
+	// (PATCH /admin/identity-providers/{id})
+	UpdateIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId)
+	// Test a stored identity provider — admin only
+	// (POST /admin/identity-providers/{id}/test)
+	TestIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId, params TestIdentityProviderParams)
 	// Core system status
 	// (GET /admin/system/status)
 	GetSystemStatus(w http.ResponseWriter, r *http.Request)
@@ -576,9 +588,33 @@ func (_ Unimplemented) CreateIdentityProvider(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Test an unsaved identity provider — admin only
+// (POST /admin/identity-providers/test)
+func (_ Unimplemented) TestIdentityProviderTransient(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete an identity provider — admin only
+// (DELETE /admin/identity-providers/{id})
+func (_ Unimplemented) DeleteIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId, params DeleteIdentityProviderParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Get an identity provider — admin only
 // (GET /admin/identity-providers/{id})
 func (_ Unimplemented) GetIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update an identity provider — admin only
+// (PATCH /admin/identity-providers/{id})
+func (_ Unimplemented) UpdateIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Test a stored identity provider — admin only
+// (POST /admin/identity-providers/{id}/test)
+func (_ Unimplemented) TestIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId, params TestIdentityProviderParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1722,6 +1758,72 @@ func (siw *ServerInterfaceWrapper) CreateIdentityProvider(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// TestIdentityProviderTransient operation middleware
+func (siw *ServerInterfaceWrapper) TestIdentityProviderTransient(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestIdentityProviderTransient(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteIdentityProvider operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIdentityProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteIdentityProviderParams
+
+	// ------------- Optional query parameter "suspend_users" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "suspend_users", r.URL.Query(), &params.SuspendUsers)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "suspend_users", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIdentityProvider(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetIdentityProvider operation middleware
 func (siw *ServerInterfaceWrapper) GetIdentityProvider(w http.ResponseWriter, r *http.Request) {
 
@@ -1746,6 +1848,83 @@ func (siw *ServerInterfaceWrapper) GetIdentityProvider(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetIdentityProvider(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateIdentityProvider operation middleware
+func (siw *ServerInterfaceWrapper) UpdateIdentityProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateIdentityProvider(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestIdentityProvider operation middleware
+func (siw *ServerInterfaceWrapper) TestIdentityProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TestIdentityProviderParams
+
+	// ------------- Optional query parameter "test_username" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "test_username", r.URL.Query(), &params.TestUsername)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "test_username", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestIdentityProvider(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8915,7 +9094,19 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/admin/identity-providers", wrapper.CreateIdentityProvider)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/identity-providers/test", wrapper.TestIdentityProviderTransient)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/identity-providers/{id}", wrapper.DeleteIdentityProvider)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/identity-providers/{id}", wrapper.GetIdentityProvider)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/identity-providers/{id}", wrapper.UpdateIdentityProvider)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/identity-providers/{id}/test", wrapper.TestIdentityProvider)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/system/status", wrapper.GetSystemStatus)
@@ -9595,6 +9786,104 @@ func (response CreateIdentityProvider422JSONResponse) VisitCreateIdentityProvide
 	return json.NewEncoder(w).Encode(response)
 }
 
+type TestIdentityProviderTransientRequestObject struct {
+	Body *TestIdentityProviderTransientJSONRequestBody
+}
+
+type TestIdentityProviderTransientResponseObject interface {
+	VisitTestIdentityProviderTransientResponse(w http.ResponseWriter) error
+}
+
+type TestIdentityProviderTransient200JSONResponse IdentityProviderTestResult
+
+func (response TestIdentityProviderTransient200JSONResponse) VisitTestIdentityProviderTransientResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestIdentityProviderTransient401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TestIdentityProviderTransient401JSONResponse) VisitTestIdentityProviderTransientResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestIdentityProviderTransient403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TestIdentityProviderTransient403JSONResponse) VisitTestIdentityProviderTransientResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestIdentityProviderTransient422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response TestIdentityProviderTransient422JSONResponse) VisitTestIdentityProviderTransientResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteIdentityProviderRequestObject struct {
+	Id     PathId `json:"id"`
+	Params DeleteIdentityProviderParams
+}
+
+type DeleteIdentityProviderResponseObject interface {
+	VisitDeleteIdentityProviderResponse(w http.ResponseWriter) error
+}
+
+type DeleteIdentityProvider204Response = NoContentResponse
+
+func (response DeleteIdentityProvider204Response) VisitDeleteIdentityProviderResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteIdentityProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteIdentityProvider401JSONResponse) VisitDeleteIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteIdentityProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteIdentityProvider403JSONResponse) VisitDeleteIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteIdentityProvider404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteIdentityProvider404JSONResponse) VisitDeleteIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteIdentityProvider409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteIdentityProvider409JSONResponse) VisitDeleteIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetIdentityProviderRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -9633,6 +9922,107 @@ func (response GetIdentityProvider403JSONResponse) VisitGetIdentityProviderRespo
 type GetIdentityProvider404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetIdentityProvider404JSONResponse) VisitGetIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateIdentityProviderRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *UpdateIdentityProviderJSONRequestBody
+}
+
+type UpdateIdentityProviderResponseObject interface {
+	VisitUpdateIdentityProviderResponse(w http.ResponseWriter) error
+}
+
+type UpdateIdentityProvider200JSONResponse IdentityProviderDetail
+
+func (response UpdateIdentityProvider200JSONResponse) VisitUpdateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateIdentityProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateIdentityProvider401JSONResponse) VisitUpdateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateIdentityProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateIdentityProvider403JSONResponse) VisitUpdateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateIdentityProvider404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateIdentityProvider404JSONResponse) VisitUpdateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateIdentityProvider422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateIdentityProvider422JSONResponse) VisitUpdateIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestIdentityProviderRequestObject struct {
+	Id     PathId `json:"id"`
+	Params TestIdentityProviderParams
+}
+
+type TestIdentityProviderResponseObject interface {
+	VisitTestIdentityProviderResponse(w http.ResponseWriter) error
+}
+
+type TestIdentityProvider200JSONResponse IdentityProviderTestResult
+
+func (response TestIdentityProvider200JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestIdentityProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TestIdentityProvider401JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestIdentityProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TestIdentityProvider403JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestIdentityProvider404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response TestIdentityProvider404JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -17072,9 +17462,21 @@ type StrictServerInterface interface {
 	// Create an identity provider — admin only
 	// (POST /admin/identity-providers)
 	CreateIdentityProvider(ctx context.Context, request CreateIdentityProviderRequestObject) (CreateIdentityProviderResponseObject, error)
+	// Test an unsaved identity provider — admin only
+	// (POST /admin/identity-providers/test)
+	TestIdentityProviderTransient(ctx context.Context, request TestIdentityProviderTransientRequestObject) (TestIdentityProviderTransientResponseObject, error)
+	// Delete an identity provider — admin only
+	// (DELETE /admin/identity-providers/{id})
+	DeleteIdentityProvider(ctx context.Context, request DeleteIdentityProviderRequestObject) (DeleteIdentityProviderResponseObject, error)
 	// Get an identity provider — admin only
 	// (GET /admin/identity-providers/{id})
 	GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error)
+	// Update an identity provider — admin only
+	// (PATCH /admin/identity-providers/{id})
+	UpdateIdentityProvider(ctx context.Context, request UpdateIdentityProviderRequestObject) (UpdateIdentityProviderResponseObject, error)
+	// Test a stored identity provider — admin only
+	// (POST /admin/identity-providers/{id}/test)
+	TestIdentityProvider(ctx context.Context, request TestIdentityProviderRequestObject) (TestIdentityProviderResponseObject, error)
 	// Core system status
 	// (GET /admin/system/status)
 	GetSystemStatus(ctx context.Context, request GetSystemStatusRequestObject) (GetSystemStatusResponseObject, error)
@@ -17709,6 +18111,64 @@ func (sh *strictHandler) CreateIdentityProvider(w http.ResponseWriter, r *http.R
 	}
 }
 
+// TestIdentityProviderTransient operation middleware
+func (sh *strictHandler) TestIdentityProviderTransient(w http.ResponseWriter, r *http.Request) {
+	var request TestIdentityProviderTransientRequestObject
+
+	var body TestIdentityProviderTransientJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestIdentityProviderTransient(ctx, request.(TestIdentityProviderTransientRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestIdentityProviderTransient")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestIdentityProviderTransientResponseObject); ok {
+		if err := validResponse.VisitTestIdentityProviderTransientResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteIdentityProvider operation middleware
+func (sh *strictHandler) DeleteIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId, params DeleteIdentityProviderParams) {
+	var request DeleteIdentityProviderRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteIdentityProvider(ctx, request.(DeleteIdentityProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteIdentityProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteIdentityProviderResponseObject); ok {
+		if err := validResponse.VisitDeleteIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetIdentityProvider operation middleware
 func (sh *strictHandler) GetIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId) {
 	var request GetIdentityProviderRequestObject
@@ -17728,6 +18188,66 @@ func (sh *strictHandler) GetIdentityProvider(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetIdentityProviderResponseObject); ok {
 		if err := validResponse.VisitGetIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateIdentityProvider operation middleware
+func (sh *strictHandler) UpdateIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request UpdateIdentityProviderRequestObject
+
+	request.Id = id
+
+	var body UpdateIdentityProviderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateIdentityProvider(ctx, request.(UpdateIdentityProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateIdentityProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateIdentityProviderResponseObject); ok {
+		if err := validResponse.VisitUpdateIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestIdentityProvider operation middleware
+func (sh *strictHandler) TestIdentityProvider(w http.ResponseWriter, r *http.Request, id PathId, params TestIdentityProviderParams) {
+	var request TestIdentityProviderRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestIdentityProvider(ctx, request.(TestIdentityProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestIdentityProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestIdentityProviderResponseObject); ok {
+		if err := validResponse.VisitTestIdentityProviderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

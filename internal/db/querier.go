@@ -50,6 +50,8 @@ type Querier interface {
 	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
 	CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error)
 	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
+	// Delete of a provider (#285) refuses while users are still linked.
+	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
 	CountWorkspaceImpact(ctx context.Context, workspaceID pgtype.UUID) (CountWorkspaceImpactRow, error)
 	CountWorkspaceRunningExecutions(ctx context.Context, workspaceID pgtype.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
@@ -85,8 +87,10 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
+	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	// Suspension revokes every API key of the user (#258).
 	DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error
+	DeleteAuthProvider(ctx context.Context, id pgtype.UUID) error
 	DeleteBinding(ctx context.Context, id pgtype.UUID) error
 	DeleteCatalog(ctx context.Context, id pgtype.UUID) error
 	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
@@ -418,6 +422,7 @@ type Querier interface {
 	RestoreSemanticMetric(ctx context.Context, arg RestoreSemanticMetricParams) (SemanticMetric, error)
 	RevokeRefreshFamily(ctx context.Context, familyID pgtype.UUID) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
+	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
 	SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugExistsParams) (bool, error)
 	// Tables and columns of the catalogs the workspace may use whose names are
@@ -451,6 +456,10 @@ type Querier interface {
 	// Suspension is the only disable switch (#54). The reason is bounded:
 	// 'admin', 'policy' or 'directory'.
 	SuspendUser(ctx context.Context, arg SuspendUserParams) (User, error)
+	// Deleting a provider (#285) suspends and detaches its users first: the FK's
+	// ON DELETE SET NULL would otherwise violate chk_oidc_auth/chk_ldap_auth. The
+	// sentinel hash can never match a password, so a detached account cannot log in.
+	SuspendUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	TombstoneMissingNamespaces(ctx context.Context, arg TombstoneMissingNamespacesParams) error
 	// Tables the pass did not see were removed at the source.
 	TombstoneMissingTables(ctx context.Context, arg TombstoneMissingTablesParams) (int64, error)

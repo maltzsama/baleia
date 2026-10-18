@@ -42,6 +42,8 @@ const (
 	UserReinstate  Action = "user.reinstate"
 
 	IdentityProviderCreate Action = "identity_provider.create"
+	IdentityProviderUpdate Action = "identity_provider.update"
+	IdentityProviderDelete Action = "identity_provider.delete"
 
 	AuthLogin                Action = "auth.login"
 	AuthLogout               Action = "auth.logout"
@@ -88,7 +90,7 @@ var allActions = []Action{
 	WorkspaceUpdate,
 	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,
 	UserInvite, UserRoleChange, UserDisable, UserSuspend, UserReinstate,
-	IdentityProviderCreate,
+	IdentityProviderCreate, IdentityProviderUpdate, IdentityProviderDelete,
 	AuthLogin, AuthLogout, AuthRefresh, AuthPasswordResetRequest, AuthPasswordResetConfirm,
 	APIKeyCreate, APIKeyRevoke,
 	ExecutionCreate, ExecutionCancel,

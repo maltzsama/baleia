@@ -122,6 +122,13 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 	}, nil
 }
 
+// Discovery unmarshals the provider's discovery document into v. It is used
+// by the admin probe to read jwks_uri, token_endpoint and the supported grants
+// without exposing the raw document.
+func (p *OIDCProvider) Discovery(v any) error {
+	return p.provider.Claims(v)
+}
+
 // AuthURL builds the authorization URL with a mandatory S256 PKCE challenge
 // and nonce.
 func (p *OIDCProvider) AuthURL(state, challenge, nonce string) (string, error) {

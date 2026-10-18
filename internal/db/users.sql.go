@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countUsersByAuthProvider = `-- name: CountUsersByAuthProvider :one
+SELECT count(*) FROM users WHERE auth_provider_id = $1
+`
+
+// Delete of a provider (#285) refuses while users are still linked.
+func (q *Queries) CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersByAuthProvider, authProviderID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAPIKey = `-- name: CreateAPIKey :one
 INSERT INTO api_keys (user_id, name, key_hash, prefix, scopes, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -144,6 +156,16 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) erro
 	return err
 }
 
+const deleteAPIKeysByAuthProvider = `-- name: DeleteAPIKeysByAuthProvider :exec
+DELETE FROM api_keys
+WHERE user_id IN (SELECT id FROM users WHERE auth_provider_id = $1)
+`
+
+func (q *Queries) DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAPIKeysByAuthProvider, authProviderID)
+	return err
+}
+
 const deleteAPIKeysByUser = `-- name: DeleteAPIKeysByUser :exec
 DELETE FROM api_keys WHERE user_id = $1
 `
@@ -151,6 +173,15 @@ DELETE FROM api_keys WHERE user_id = $1
 // Suspension revokes every API key of the user (#258).
 func (q *Queries) DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteAPIKeysByUser, userID)
+	return err
+}
+
+const deleteAuthProvider = `-- name: DeleteAuthProvider :exec
+DELETE FROM auth_providers WHERE id = $1
+`
+
+func (q *Queries) DeleteAuthProvider(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAuthProvider, id)
 	return err
 }
 
@@ -587,6 +618,18 @@ func (q *Queries) ReinstateUser(ctx context.Context, id pgtype.UUID) (User, erro
 	return i, err
 }
 
+const revokeRefreshTokensByAuthProvider = `-- name: RevokeRefreshTokensByAuthProvider :exec
+UPDATE refresh_tokens
+SET revoked = true
+WHERE revoked = false
+  AND user_id IN (SELECT id FROM users WHERE auth_provider_id = $1)
+`
+
+func (q *Queries) RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, revokeRefreshTokensByAuthProvider, authProviderID)
+	return err
+}
+
 const suspendUser = `-- name: SuspendUser :one
 UPDATE users
 SET status = 'suspended',
@@ -625,6 +668,27 @@ func (q *Queries) SuspendUser(ctx context.Context, arg SuspendUserParams) (User,
 		&i.DirectorySyncedAt,
 	)
 	return i, err
+}
+
+const suspendUsersByAuthProvider = `-- name: SuspendUsersByAuthProvider :exec
+UPDATE users
+SET status = 'suspended',
+    suspended_at = now(),
+    suspended_reason = 'identity_provider_deleted',
+    auth_provider = 'local',
+    auth_provider_id = NULL,
+    external_id = NULL,
+    password_hash = COALESCE(password_hash, '!'),
+    updated_at = now()
+WHERE auth_provider_id = $1
+`
+
+// Deleting a provider (#285) suspends and detaches its users first: the FK's
+// ON DELETE SET NULL would otherwise violate chk_oidc_auth/chk_ldap_auth. The
+// sentinel hash can never match a password, so a detached account cannot log in.
+func (q *Queries) SuspendUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, suspendUsersByAuthProvider, authProviderID)
+	return err
 }
 
 const touchAPIKey = `-- name: TouchAPIKey :exec

@@ -137,15 +137,21 @@ func (h *Handlers) CreateIdentityProvider(ctx context.Context, request CreateIde
 // parseProviderConfig maps and validates the type-specific config. It runs
 // before any write so an invalid provider never creates a row.
 func parseProviderConfig(body *CreateIdentityProviderRequest) (providerConfig, error) {
-	switch body.Type {
+	return parseProviderConfigParts(body.Type, body.Oidc, body.Ldap)
+}
+
+// parseProviderConfigParts is shared by create, transient test and update so a
+// configuration is validated identically everywhere.
+func parseProviderConfigParts(typ IdentityProviderType, oidc *OIDCConfig, ldap *LDAPConfig) (providerConfig, error) {
+	switch typ {
 	case IdentityProviderTypeOidc:
-		if body.Oidc == nil {
+		if oidc == nil {
 			return providerConfig{}, errors.New("oidc configuration is required")
 		}
-		if body.Ldap != nil {
+		if ldap != nil {
 			return providerConfig{}, errors.New("ldap configuration does not belong to an oidc provider")
 		}
-		raw, err := json.Marshal(body.Oidc)
+		raw, err := json.Marshal(oidc)
 		if err != nil {
 			return providerConfig{}, err
 		}
@@ -159,13 +165,13 @@ func parseProviderConfig(body *CreateIdentityProviderRequest) (providerConfig, e
 		return providerConfig{oidc: &cfg}, nil
 
 	case IdentityProviderTypeLdap:
-		if body.Ldap == nil {
+		if ldap == nil {
 			return providerConfig{}, errors.New("ldap configuration is required")
 		}
-		if body.Oidc != nil {
+		if oidc != nil {
 			return providerConfig{}, errors.New("oidc configuration does not belong to an ldap provider")
 		}
-		raw, err := json.Marshal(body.Ldap)
+		raw, err := json.Marshal(ldap)
 		if err != nil {
 			return providerConfig{}, err
 		}
@@ -176,7 +182,7 @@ func parseProviderConfig(body *CreateIdentityProviderRequest) (providerConfig, e
 		return providerConfig{ldap: &cfg}, nil
 
 	default:
-		return providerConfig{}, fmt.Errorf("unknown provider type %q", body.Type)
+		return providerConfig{}, fmt.Errorf("unknown provider type %q", typ)
 	}
 }
 
