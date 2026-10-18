@@ -1,0 +1,30 @@
+meta {
+  name: Update Team Member Role
+  type: http
+  seq: 10
+}
+
+patch {
+  url: {{base_url}}/teams/{{team_id}}/members/{{team_member_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "role": "owner"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.role: eq "owner"
+}
+
+docs {
+  Changes a member role in place, admin-only and audited (#288).
+}

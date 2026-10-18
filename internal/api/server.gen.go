@@ -324,6 +324,9 @@ type ServerInterface interface {
 	// Remove user from team — admin only
 	// (DELETE /teams/{id}/members/{user_id})
 	RemoveTeamMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID)
+	// Change a team member's role — admin only
+	// (PATCH /teams/{id}/members/{user_id})
+	UpdateTeamMemberRole(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID)
 	// Deprecated alias of POST /engines/{id}/reconcile for the default Trino engine
 	// (POST /trino/reconcile)
 	ReconcileTrino(w http.ResponseWriter, r *http.Request, params ReconcileTrinoParams)
@@ -1185,6 +1188,12 @@ func (_ Unimplemented) AddTeamMember(w http.ResponseWriter, r *http.Request, id 
 // Remove user from team — admin only
 // (DELETE /teams/{id}/members/{user_id})
 func (_ Unimplemented) RemoveTeamMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a team member's role — admin only
+// (PATCH /teams/{id}/members/{user_id})
+func (_ Unimplemented) UpdateTeamMemberRole(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5155,6 +5164,48 @@ func (siw *ServerInterfaceWrapper) RemoveTeamMember(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveTeamMember(w, r, id, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTeamMemberRole operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTeamMemberRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", chi.URLParam(r, "user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTeamMemberRole(w, r, id, userId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9443,6 +9494,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/teams/{id}/members/{user_id}", wrapper.RemoveTeamMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/teams/{id}/members/{user_id}", wrapper.UpdateTeamMemberRole)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/trino/reconcile", wrapper.ReconcileTrino)
@@ -13886,6 +13940,63 @@ func (response RemoveTeamMember404JSONResponse) VisitRemoveTeamMemberResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateTeamMemberRoleRequestObject struct {
+	Id     PathId             `json:"id"`
+	UserId openapi_types.UUID `json:"user_id"`
+	Body   *UpdateTeamMemberRoleJSONRequestBody
+}
+
+type UpdateTeamMemberRoleResponseObject interface {
+	VisitUpdateTeamMemberRoleResponse(w http.ResponseWriter) error
+}
+
+type UpdateTeamMemberRole200JSONResponse TeamMember
+
+func (response UpdateTeamMemberRole200JSONResponse) VisitUpdateTeamMemberRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTeamMemberRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateTeamMemberRole401JSONResponse) VisitUpdateTeamMemberRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTeamMemberRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateTeamMemberRole403JSONResponse) VisitUpdateTeamMemberRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTeamMemberRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateTeamMemberRole404JSONResponse) VisitUpdateTeamMemberRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTeamMemberRole422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateTeamMemberRole422JSONResponse) VisitUpdateTeamMemberRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ReconcileTrinoRequestObject struct {
 	Params ReconcileTrinoParams
 }
@@ -17900,6 +18011,9 @@ type StrictServerInterface interface {
 	// Remove user from team — admin only
 	// (DELETE /teams/{id}/members/{user_id})
 	RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error)
+	// Change a team member's role — admin only
+	// (PATCH /teams/{id}/members/{user_id})
+	UpdateTeamMemberRole(ctx context.Context, request UpdateTeamMemberRoleRequestObject) (UpdateTeamMemberRoleResponseObject, error)
 	// Deprecated alias of POST /engines/{id}/reconcile for the default Trino engine
 	// (POST /trino/reconcile)
 	ReconcileTrino(ctx context.Context, request ReconcileTrinoRequestObject) (ReconcileTrinoResponseObject, error)
@@ -20991,6 +21105,40 @@ func (sh *strictHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RemoveTeamMemberResponseObject); ok {
 		if err := validResponse.VisitRemoveTeamMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateTeamMemberRole operation middleware
+func (sh *strictHandler) UpdateTeamMemberRole(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
+	var request UpdateTeamMemberRoleRequestObject
+
+	request.Id = id
+	request.UserId = userId
+
+	var body UpdateTeamMemberRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTeamMemberRole(ctx, request.(UpdateTeamMemberRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTeamMemberRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTeamMemberRoleResponseObject); ok {
+		if err := validResponse.VisitUpdateTeamMemberRoleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -20,9 +20,10 @@ INSERT INTO team_members (team_id, user_id, role)
 VALUES ($1, $2, $3)
 RETURNING *;
 
--- name: UpdateTeamMemberRole :exec
+-- name: UpdateTeamMemberRole :one
 UPDATE team_members SET role = $3
-WHERE team_id = $1 AND user_id = $2;
+WHERE team_id = $1 AND user_id = $2
+RETURNING *;
 
 -- name: UpsertTeamMember :exec
 INSERT INTO team_members (team_id, user_id, role)

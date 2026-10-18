@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -181,6 +182,51 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 		JoinedAt: pgTimestampToTime(member.JoinedAt),
 		User:     dbUserToPublic(user),
 	}, nil
+}
+
+// UpdateTeamMemberRole — PATCH /teams/{id}/members/{user_id} (#288).
+func (h *Handlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamMemberRoleRequestObject) (UpdateTeamMemberRoleResponseObject, error) {
+	ev := audit.Event{Action: audit.TeamRoleChange, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true}),
+		Changes: map[string]audit.Change{"member": {To: idString(pgtype.UUID{Bytes: request.UserId, Valid: true})}}}
+	if auth.RoleFromContext(ctx) != "admin" {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
+		return UpdateTeamMemberRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+	}
+	if request.Body == nil {
+		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "request body is required")}, nil
+	}
+
+	teamID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	userID := pgtype.UUID{Bytes: request.UserId, Valid: true}
+	if _, err := h.queries.GetTeamByID(ctx, teamID); err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+	}
+
+	memberRole := string(request.Body.Role)
+	member, err := h.queries.UpdateTeamMemberRole(ctx, db.UpdateTeamMemberRoleParams{
+		TeamID: teamID, UserID: userID, Role: memberRole,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "member not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := h.queries.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	h.catalogCache.Clear()
+	ev.Changes["role"] = audit.Change{To: memberRole}
+	h.audited(ctx, ev.Allowed())
+	return UpdateTeamMemberRole200JSONResponse(TeamMember{
+		User:     dbUserToPublic(user),
+		Role:     TeamMemberRole(member.Role),
+		JoinedAt: pgTimestampToTime(member.JoinedAt),
+	}), nil
 }
 
 func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error) {
