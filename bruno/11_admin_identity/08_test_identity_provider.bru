@@ -1,0 +1,31 @@
+meta {
+  name: Test Stored Identity Provider
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/admin/identity-providers/{{idp_id}}/test
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.ok: isBoolean
+}
+
+tests {
+  test("the probe returns a bounded check list", function () {
+    expect(res.body.checks).to.be.an("array");
+  });
+}
+
+docs {
+  The probe persists nothing and never exposes a host, credential or raw error
+  (#286).
+}
