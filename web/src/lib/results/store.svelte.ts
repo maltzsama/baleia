@@ -1,7 +1,7 @@
 // Paged Arrow results (#26, #238). Batches are decoded columnar as they arrive,
 // but only the pages the viewer actually reaches are fetched, so a large result
 // never materializes fully in the browser.
-import { RecordBatchReader, type RecordBatch } from 'apache-arrow';
+import type { RecordBatch } from 'apache-arrow';
 import { apiFetch } from '$lib/api/client';
 import { UNLOADED, columnMeta, type ColumnMeta } from './format';
 
@@ -168,6 +168,9 @@ export class ResultsStore {
 			: response.body;
 		if (isFirst) this.totalBytes = Number(response.headers.get('Content-Length') ?? 0);
 
+		// The Arrow IPC decoder is heavy and only needed once a result is
+		// fetched; import the reader submodule lazily (#237).
+		const { RecordBatchReader } = await import('apache-arrow/ipc/reader');
 		const reader = await RecordBatchReader.from(body);
 		const batches: RecordBatch[] = [];
 		const offsets = [0];

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tableFromIPC } from 'apache-arrow';
 	import { apiFetch, client } from '$lib/api/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
@@ -152,6 +151,7 @@
 				previewRows = [];
 				return;
 			}
+			const { tableFromIPC } = await import('apache-arrow/ipc/serialization');
 			const decoded = tableFromIPC(new Uint8Array(buffer));
 			previewColumns = decoded.schema.fields.map((field) => field.name);
 			previewRows = decoded

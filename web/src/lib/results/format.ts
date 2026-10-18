@@ -1,6 +1,7 @@
 // Type-aware cell formatting (#26). Everything is driven by the Arrow schema
 // and the `baleia.native_type` field metadata, never by the engine's name.
-import { Type, type Field } from 'apache-arrow';
+import { Type } from 'apache-arrow/enum';
+import type { Field } from 'apache-arrow';
 
 export type ColumnKind =
 	| 'number'
