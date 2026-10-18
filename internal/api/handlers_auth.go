@@ -92,7 +92,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 
 	return CreateFirstAdmin201JSONResponse{
 		Token:        accessToken,
-		RefreshToken: refreshToken,
+		RefreshToken: &refreshToken,
 		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
 		User:         dbUserToPublic(user),
 	}, nil
@@ -164,17 +164,25 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 
 	return Login200JSONResponse{
 		Token:        accessToken,
-		RefreshToken: refreshToken,
+		RefreshToken: &refreshToken,
 		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
 		User:         dbUserToPublic(user),
 	}, nil
 }
 
 func (h *Handlers) Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error) {
-	if request.Body != nil && request.Body.RefreshToken != nil && *request.Body.RefreshToken != "" {
-		hash := auth.HashRefreshToken(*request.Body.RefreshToken)
-		if rt, err := h.queries.GetRefreshTokenByHash(ctx, hash); err == nil {
-			_ = h.queries.RevokeRefreshToken(ctx, rt.ID)
+	// Browsers send the refresh token in the HttpOnly cookie; API clients may
+	// still send it in the body (#51).
+	var bodyToken *string
+	if request.Body != nil {
+		bodyToken = request.Body.RefreshToken
+	}
+	token := refreshTokenFromBody(bodyToken, ctx)
+	if token != "" {
+		hash := auth.HashRefreshToken(token)
+		if rt, err := h.queries.GetRefreshTokenByHashAny(ctx, hash); err == nil {
+			// Logout ends the whole rotation family, not only this token.
+			_ = h.queries.RevokeRefreshFamily(ctx, rt.FamilyID)
 			h.audited(audit.AsUser(ctx, idString(rt.UserID), audit.AuthRefreshTok),
 				audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(rt.UserID), Outcome: audit.Allowed})
 		}
@@ -271,7 +279,20 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 
 func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (resp RefreshTokenResponseObject, err error) {
 	defer func() { h.metrics.auth.Attempt(metrics.AuthRefresh, authOutcome(resp, err)) }()
-	hash := auth.HashRefreshToken(request.Body.RefreshToken)
+
+	// Browsers rely on the HttpOnly cookie; API clients may send the token in
+	// the body (#51).
+	var bodyToken *string
+	if request.Body != nil {
+		bodyToken = request.Body.RefreshToken
+	}
+	token := refreshTokenFromBody(bodyToken, ctx)
+	if token == "" {
+		return RefreshToken401JSONResponse{
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "missing refresh token"},
+		}, nil
+	}
+	hash := auth.HashRefreshToken(token)
 
 	ev := audit.Event{Action: audit.AuthRefresh, ResourceType: "user"}
 	// Atomic rotation: of two concurrent refreshes with the same token,
@@ -325,9 +346,18 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthRefreshTok), withID(ev, user.ID).Allowed())
 	return RefreshToken200JSONResponse{
 		Token:        accessToken,
-		RefreshToken: newRefreshToken,
+		RefreshToken: &newRefreshToken,
 		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
 	}, nil
+}
+
+// refreshTokenFromBody prefers the body token (API clients) and falls back to
+// the HttpOnly cookie (browsers, #51).
+func refreshTokenFromBody(bodyToken *string, ctx context.Context) string {
+	if bodyToken != nil && *bodyToken != "" {
+		return *bodyToken
+	}
+	return auth.RefreshCookieFromContext(ctx)
 }
 
 // ── Password Reset ────────────────────────────────────────────────────────────

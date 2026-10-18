@@ -21,25 +21,28 @@ describe('api client', () => {
 		vi.unstubAllGlobals();
 	});
 
-	it('refreshes once on 401 and retries the request', async () => {
-		localStorage.setItem('refresh_token', 'refresh-1');
+	it('refreshes from the HttpOnly cookie on 401 and retries the request', async () => {
 		let workspaceCalls = 0;
-		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-			const url = urlOf(input);
-			if (url.includes('/auth/refresh')) {
-				return json({
-					token: 'access-2',
-					refresh_token: 'refresh-2',
-					expires_at: '2030-01-01T00:00:00Z'
-				});
+		const fetchMock = vi.fn(
+			async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+				const url = urlOf(input);
+				if (url.includes('/auth/refresh')) {
+					// The SPA never sends the refresh token in the body; the
+					// browser attaches the HttpOnly cookie instead (#51).
+					expect(init?.credentials).toBe('include');
+					expect(String(init?.body)).not.toContain('refresh_token');
+					return json({ token: 'access-2', expires_at: '2030-01-01T00:00:00Z' });
+				}
+				if (url.includes('/workspaces')) {
+					workspaceCalls += 1;
+					if (workspaceCalls === 1) {
+						return json({ code: 'unauthorized', message: 'expired' }, 401);
+					}
+					return json([{ id: 'ws-1' }]);
+				}
+				return json({}, 404);
 			}
-			if (url.includes('/workspaces')) {
-				workspaceCalls += 1;
-				if (workspaceCalls === 1) return json({ code: 'unauthorized', message: 'expired' }, 401);
-				return json([{ id: 'ws-1' }]);
-			}
-			return json({}, 404);
-		});
+		);
 		vi.stubGlobal('fetch', fetchMock);
 
 		const { client, setAccessToken } = await import('./client');
@@ -54,7 +57,6 @@ describe('api client', () => {
 	});
 
 	it('emits onSessionExpired when the refresh fails', async () => {
-		localStorage.setItem('refresh_token', 'refresh-1');
 		const onSessionExpired = vi.fn();
 		vi.stubGlobal(
 			'fetch',
@@ -71,5 +73,15 @@ describe('api client', () => {
 		await client.GET('/workspaces');
 
 		expect(onSessionExpired).toHaveBeenCalledOnce();
+	});
+
+	it('keeps access tokens out of localStorage', async () => {
+		const { setAccessToken, getAccessToken, clearSession } = await import('./client');
+		setAccessToken('access-1');
+		expect(getAccessToken()).toBe('access-1');
+		expect(localStorage.getItem('token')).toBeNull();
+		expect(localStorage.getItem('refresh_token')).toBeNull();
+		clearSession();
+		expect(getAccessToken()).toBeNull();
 	});
 });

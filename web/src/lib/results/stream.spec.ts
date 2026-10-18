@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setAccessToken } from '$lib/api/client';
 import { http, server } from '../../test/server';
 import { subscribeExecution, type ExecutionEvent } from './stream';
 
@@ -36,11 +37,12 @@ describe('subscribeExecution', () => {
 	beforeEach(() => {
 		FakeSocket.instances = [];
 		vi.stubGlobal('WebSocket', FakeSocket);
-		localStorage.setItem('token', 'secret-jwt');
+		setAccessToken('secret-jwt');
 	});
 
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		setAccessToken(null);
 		localStorage.clear();
 	});
 

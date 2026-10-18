@@ -32,7 +32,7 @@ export interface paths {
         put?: never;
         /**
          * Create first admin user
-         * @description Returns 409 if any user already exists.
+         * @description Returns 409 if any user already exists. Sets the HttpOnly `baleia_refresh` cookie; `refresh_token` is only in the JSON for `X-Baleia-Client: api`.
          */
         post: operations["createFirstAdmin"];
         delete?: never;
@@ -50,7 +50,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Authenticate and receive JWT */
+        /**
+         * Authenticate and receive JWT
+         * @description Sets the HttpOnly `baleia_refresh` cookie (Secure, SameSite=Lax, Path=/api/v1/auth). The `refresh_token` field is only returned when the request sends `X-Baleia-Client: api`.
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -67,7 +70,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Invalidate current session */
+        /**
+         * Invalidate current session
+         * @description Revokes the refresh-token family and clears the `baleia_refresh` cookie.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -84,7 +90,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Exchange refresh token for new access token pair */
+        /**
+         * Exchange refresh token for new access token pair
+         * @description Reads the refresh token from the `baleia_refresh` cookie (or the optional body token), rotates it, and sets the cookie. `refresh_token` is only in the JSON for `X-Baleia-Client: api`.
+         */
         post: operations["refreshToken"];
         delete?: never;
         options?: never;
@@ -2585,17 +2594,20 @@ export interface components {
         };
         LoginResponse: {
             token: string;
-            refresh_token: string;
+            /** @description Only returned to API clients that send `X-Baleia-Client: api`. Browsers receive the refresh token in the HttpOnly `baleia_refresh` cookie. */
+            refresh_token?: string;
             /** Format: date-time */
             expires_at: string;
             user: components["schemas"]["UserPublic"];
         };
         RefreshRequest: {
-            refresh_token: string;
+            /** @description Optional when the `baleia_refresh` cookie is present. */
+            refresh_token?: string;
         };
         RefreshResponse: {
             token: string;
-            refresh_token: string;
+            /** @description Only returned to API clients that send `X-Baleia-Client: api`. Browsers receive the rotated refresh token in the HttpOnly `baleia_refresh` cookie. */
+            refresh_token?: string;
             /** Format: date-time */
             expires_at: string;
         };
@@ -4608,7 +4620,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["RefreshRequest"];
             };

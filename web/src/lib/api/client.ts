@@ -12,13 +12,17 @@ export const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 /** Root of the versioned API, used for raw requests (Arrow, WebSocket tickets). */
 export const API_ROOT = `${API_BASE}/api/v1`;
 
-const ACCESS_TOKEN_KEY = 'token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
+// Access tokens live in memory only. The refresh token is an HttpOnly cookie
+// scoped to /api/v1/auth (#51), so it is never readable from JavaScript.
+const LEGACY_TOKEN_KEYS = ['token', 'refresh_token'];
 
-// Access tokens live in memory once #51 lands. Until then they are mirrored to
-// localStorage so the rest of the app keeps working during the migration.
 let accessToken: string | null = null;
 let refreshInFlight: Promise<boolean> | null = null;
+
+// Drop tokens an older build left in localStorage so a deploy cleans them up.
+if (typeof localStorage !== 'undefined') {
+	for (const key of LEGACY_TOKEN_KEYS) localStorage.removeItem(key);
+}
 
 export type AuthHandlers = {
 	/** Called once when a refresh fails and the session is gone. */
@@ -35,55 +39,29 @@ export function configureAuth(next: AuthHandlers): void {
 
 export function setAccessToken(token: string | null): void {
 	accessToken = token;
-	if (typeof localStorage !== 'undefined') {
-		if (token) localStorage.setItem(ACCESS_TOKEN_KEY, token);
-		else localStorage.removeItem(ACCESS_TOKEN_KEY);
-	}
 }
 
 export function getAccessToken(): string | null {
-	if (accessToken) return accessToken;
-	if (typeof localStorage !== 'undefined') {
-		return localStorage.getItem(ACCESS_TOKEN_KEY);
-	}
-	return null;
-}
-
-export function getRefreshToken(): string | null {
-	if (typeof localStorage !== 'undefined') {
-		return localStorage.getItem(REFRESH_TOKEN_KEY);
-	}
-	return null;
-}
-
-export function setRefreshToken(token: string | null): void {
-	if (typeof localStorage === 'undefined') return;
-	if (token) localStorage.setItem(REFRESH_TOKEN_KEY, token);
-	else localStorage.removeItem(REFRESH_TOKEN_KEY);
+	return accessToken;
 }
 
 export function clearSession(): void {
 	accessToken = null;
-	if (typeof localStorage === 'undefined') return;
-	localStorage.removeItem(ACCESS_TOKEN_KEY);
-	localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
-type RefreshResponse = { token: string; refresh_token: string; expires_at: string };
-
 async function performRefresh(): Promise<boolean> {
-	const refreshToken = getRefreshToken();
-	if (!refreshToken) return false;
 	try {
+		// The browser sends the HttpOnly cookie; API clients can still send a
+		// body token, but the SPA never sees it.
 		const res = await fetch(`${API_ROOT}/auth/refresh`, {
 			method: 'POST',
+			credentials: 'include',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ refresh_token: refreshToken })
+			body: '{}'
 		});
 		if (!res.ok) return false;
-		const data = (await res.json()) as RefreshResponse;
+		const data = (await res.json()) as { token: string };
 		setAccessToken(data.token);
-		setRefreshToken(data.refresh_token);
 		handlers.onTokenRefreshed?.(data.token);
 		return true;
 	} catch {
@@ -138,6 +116,8 @@ const authMiddleware: Middleware = {
 
 export const client = createClient<paths>({
 	baseUrl: API_ROOT,
+	// Send the HttpOnly refresh cookie on the auth routes (#51).
+	credentials: 'include',
 	// Resolve fetch at call time so test interceptors (MSW) and stubs apply.
 	fetch: (...args) => fetch(...args)
 });

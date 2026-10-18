@@ -23,6 +23,7 @@ func TestOptionalJSONBody(t *testing.T) {
 	}))
 	cases := []struct{ path, body, want string }{
 		{"/api/v1/auth/logout", "", "{}"},
+		{"/api/v1/auth/refresh", "", "{}"},
 		{"/api/v1/workspaces/w1/retrievers/r1/refresh", "", "{}"},
 		{"/api/v1/workspaces/w1/retrievers/r1/refresh", `{"refresh_type":"incremental"}`, `{"refresh_type":"incremental"}`},
 		{"/api/v1/auth/login", "", ""},

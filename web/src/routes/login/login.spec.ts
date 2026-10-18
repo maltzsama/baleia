@@ -7,29 +7,27 @@ describe('login page', () => {
 	beforeEach(() => {
 		localStorage.clear();
 		window.history.replaceState(null, '', '/login');
-		server.use(http.get('/auth/oidc/providers', ({ response }) => response(200).json([])));
-	});
-
-	it('clears a stale token instead of bouncing to /sql', async () => {
-		localStorage.setItem('token', 'stale-token-from-another-deploy');
-		localStorage.setItem('refresh_token', 'stale-refresh');
 		server.use(
+			http.get('/auth/oidc/providers', ({ response }) => response(200).json([])),
 			http.get('/auth/me', ({ response }) =>
-				response(401).json({ code: 'unauthorized', message: 'expired session' })
+				response(401).json({ code: 'unauthorized', message: 'no session' })
 			),
 			http.post('/auth/refresh', ({ response }) =>
-				response(401).json({ code: 'unauthorized', message: 'expired session' })
+				response(401).json({ code: 'unauthorized', message: 'no session' })
 			)
 		);
+	});
 
+	it('keeps the form usable when there is no session and persists no tokens', async () => {
 		render(LoginPage);
 
-		await waitFor(() => expect(localStorage.getItem('token')).toBeNull());
 		// The form is still there: the page did not navigate away.
 		expect(
 			await screen.findByText('Welcome back. Enter your credentials to continue.')
 		).toBeTruthy();
 		expect(screen.getByPlaceholderText('you@company.com')).toBeTruthy();
+		await waitFor(() => expect(localStorage.getItem('token')).toBeNull());
+		expect(localStorage.getItem('refresh_token')).toBeNull();
 	});
 
 	it('renders the password field with a show/hide toggle', async () => {

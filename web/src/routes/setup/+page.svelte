@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { client, setAccessToken, setRefreshToken } from '$lib/api/client';
+	import { client, setAccessToken } from '$lib/api/client';
 	import { PasswordInput } from '$lib/ui';
 	import ConnectionWizard from '$lib/connections/ConnectionWizard.svelte';
 
@@ -46,7 +46,6 @@
 				return;
 			}
 			setAccessToken(data.token);
-			setRefreshToken(data.refresh_token);
 			step = 2;
 		} catch {
 			error = 'Connection error. Is the server running?';
