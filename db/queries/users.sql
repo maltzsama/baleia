@@ -45,12 +45,15 @@ WHERE id = $1;
 SELECT * FROM users ORDER BY name;
 
 -- name: CreateAPIKey :one
-INSERT INTO api_keys (user_id, name, key_hash, expires_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO api_keys (user_id, name, key_hash, prefix, scopes, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetAPIKeyByHash :one
 SELECT * FROM api_keys WHERE key_hash = $1;
+
+-- name: TouchAPIKey :exec
+UPDATE api_keys SET last_used_at = now() WHERE id = $1;
 
 -- name: ListAPIKeysByUser :many
 SELECT * FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC;

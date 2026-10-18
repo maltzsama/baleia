@@ -2641,7 +2641,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            /** @example blw_live_abc... */
+            /** @example bal_abc... */
             key_prefix: string;
             /** Format: date-time */
             expires_at?: string | null;

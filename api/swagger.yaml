@@ -245,7 +245,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        key_prefix: { type: string, example: "blw_live_abc..." }
+        key_prefix: { type: string, example: "bal_abc..." }
         expires_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
 

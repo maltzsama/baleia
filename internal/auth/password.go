@@ -1,6 +1,18 @@
 package auth
 
-import "golang.org/x/crypto/bcrypt"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+// HashAPIKey is the lookup hash for an X-Api-Key secret. The raw key is never
+// stored; hex matches the pre-#276 on-disk format so existing keys keep working.
+func HashAPIKey(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
+}
 
 // DefaultBcryptCost is the production default (BALEIA_BCRYPT_COST). bcrypt
 // refuses values below bcrypt.MinCost (10).
