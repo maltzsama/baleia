@@ -140,6 +140,10 @@ func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleReq
 		return nil, err
 	}
 
+	// A role change must take effect on the next login: end the old sessions
+	// (#51). Access tokens carry the old role until they expire.
+	h.revokeUserRefreshTokens(ctx, uid)
+
 	ev.Changes = map[string]audit.Change{"role": {From: before.Role, To: user.Role}}
 	h.audited(ctx, ev.Allowed())
 	return UpdateUserRole200JSONResponse(dbUserToPublic(user)), nil
@@ -170,6 +174,10 @@ func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObje
 		}
 		return nil, err
 	}
+
+	// The foreign key already cascades a delete; revoking explicitly also
+	// covers a future soft disable that keeps the row (#51).
+	h.revokeUserRefreshTokens(ctx, uid)
 
 	h.audited(ctx, ev.Allowed())
 	return RemoveUser204Response{}, nil

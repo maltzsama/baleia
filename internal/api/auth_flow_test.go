@@ -278,3 +278,40 @@ func TestReset_RequestStoresHash(t *testing.T) {
 		t.Error("the raw token was stored")
 	}
 }
+
+func TestPasswordChange_RevokesRefresh(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+
+	resp, err := f.h.UpdatePassword(ctxAs(f.owner, "member"), UpdatePasswordRequestObject{
+		Body: &UpdatePasswordRequest{CurrentPassword: "correct horse", NewPassword: "a-new-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(UpdatePassword204Response); !ok {
+		t.Fatalf("password change = %T, want 204", resp)
+	}
+	if got := refreshStatus(t, f.h, token); got != 401 {
+		t.Errorf("refresh after password change = %d, want 401", got)
+	}
+}
+
+func TestRoleChange_RevokesRefresh(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+	ownerID := openapi_types.UUID(mustUUID(t, f.owner).Bytes)
+
+	resp, err := f.h.UpdateUserRole(ctxAs(f.admin, "admin"), UpdateUserRoleRequestObject{
+		Id: ownerID, Body: &UpdateUserRoleRequest{Role: "admin"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(UpdateUserRole200JSONResponse); !ok {
+		t.Fatalf("role change = %T, want 200", resp)
+	}
+	if got := refreshStatus(t, f.h, token); got != 401 {
+		t.Errorf("refresh after role change = %d, want 401", got)
+	}
+}

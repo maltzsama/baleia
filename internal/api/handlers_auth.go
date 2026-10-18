@@ -499,6 +499,9 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 		return nil, err
 	}
 
+	// A password change ends the user's other sessions (#51).
+	h.revokeUserRefreshTokens(ctx, uid)
+
 	return UpdatePassword204Response{}, nil
 }
 
