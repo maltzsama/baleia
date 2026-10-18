@@ -1,5 +1,6 @@
 // src/lib/stores/auth.svelte.ts
 import { clearSession, client } from '$lib/api/client';
+import { logout as endSession } from '$lib/auth/session';
 import { clearDrafts } from '$lib/workbench/drafts';
 
 export type Features = {
@@ -60,16 +61,11 @@ function createAuthStore() {
 
 	async function logout() {
 		const uid = user?.id;
-		try {
-			// The browser sends the HttpOnly refresh cookie; the API revokes the
-			// whole family and clears it.
-			await client.POST('/auth/logout', { body: {} });
-		} catch {
-			/* best effort: log out locally even if the API is unreachable */
-		}
+		// The API revokes the refresh family and every other tab is told to
+		// clear its in-memory token (#263).
+		await endSession();
 		// Shared computers: explicit logout removes the workbench drafts (#112).
 		if (uid) await clearDrafts(uid);
-		clearSession();
 		clear();
 		window.location.href = '/login';
 	}

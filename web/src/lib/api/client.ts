@@ -5,24 +5,12 @@
 // build URLs by hand.
 import createClient, { type Middleware } from 'openapi-fetch';
 import type { paths } from './schema';
+import { API_BASE, API_ROOT } from './base';
+import { clear, getAccessToken, refresh, setAccessToken } from '$lib/auth/session';
 
-/** Configured origin for the API, without the `/api/v1` prefix. */
-export const API_BASE = import.meta.env.VITE_API_BASE ?? '';
-
-/** Root of the versioned API, used for raw requests (Arrow, WebSocket tickets). */
-export const API_ROOT = `${API_BASE}/api/v1`;
-
-// Access tokens live in memory only. The refresh token is an HttpOnly cookie
-// scoped to /api/v1/auth (#51), so it is never readable from JavaScript.
-const LEGACY_TOKEN_KEYS = ['token', 'refresh_token'];
-
-let accessToken: string | null = null;
-let refreshInFlight: Promise<boolean> | null = null;
-
-// Drop tokens an older build left in localStorage so a deploy cleans them up.
-if (typeof localStorage !== 'undefined') {
-	for (const key of LEGACY_TOKEN_KEYS) localStorage.removeItem(key);
-}
+export { API_BASE, API_ROOT };
+export { getAccessToken, setAccessToken };
+export const clearSession = clear;
 
 export type AuthHandlers = {
 	/** Called once when a refresh fails and the session is gone. */
@@ -35,49 +23,6 @@ let handlers: AuthHandlers = {};
 
 export function configureAuth(next: AuthHandlers): void {
 	handlers = next;
-}
-
-export function setAccessToken(token: string | null): void {
-	accessToken = token;
-}
-
-export function getAccessToken(): string | null {
-	return accessToken;
-}
-
-export function clearSession(): void {
-	accessToken = null;
-}
-
-async function performRefresh(): Promise<boolean> {
-	try {
-		// The browser sends the HttpOnly cookie; API clients can still send a
-		// body token, but the SPA never sees it.
-		const res = await fetch(`${API_ROOT}/auth/refresh`, {
-			method: 'POST',
-			credentials: 'include',
-			headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'baleia' },
-			body: '{}'
-		});
-		if (!res.ok) return false;
-		const data = (await res.json()) as { token: string };
-		setAccessToken(data.token);
-		handlers.onTokenRefreshed?.(data.token);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-/** Serializes concurrent refreshes so a single token rotation is enough. */
-async function refreshOnce(): Promise<boolean> {
-	if (refreshInFlight) return refreshInFlight;
-	refreshInFlight = performRefresh();
-	try {
-		return await refreshInFlight;
-	} finally {
-		refreshInFlight = null;
-	}
 }
 
 // A request body can only be read once. Keep an unconsumed clone so a 401 retry
@@ -103,14 +48,15 @@ const authMiddleware: Middleware = {
 			return response;
 		}
 
-		const refreshed = await refreshOnce();
+		const refreshed = await refresh(true);
 		if (!refreshed) {
 			handlers.onSessionExpired?.();
 			return response;
 		}
 
-		const retry = (replayable.get(request) ?? request).clone();
 		const token = getAccessToken();
+		if (token) handlers.onTokenRefreshed?.(token);
+		const retry = (replayable.get(request) ?? request).clone();
 		if (token) retry.headers.set('Authorization', `Bearer ${token}`);
 		return fetch(retry);
 	}

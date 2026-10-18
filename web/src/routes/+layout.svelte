@@ -1,10 +1,20 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import { configureSession } from '$lib/auth/session';
+	import { authStore } from '$lib/stores/auth.svelte';
 
 	let { children } = $props();
 
 	onMount(() => {
+		// A logout in another tab clears this tab too (#263).
+		configureSession({
+			onLogout: () => {
+				authStore.clear();
+				if (!window.location.pathname.startsWith('/login')) window.location.href = '/login';
+			}
+		});
+
 		// Apply the persisted theme on every route so it survives navigation.
 		const dark = localStorage.getItem('theme') === 'dark';
 		document.body.classList.toggle('dark', dark);
