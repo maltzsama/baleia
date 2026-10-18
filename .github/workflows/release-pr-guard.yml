@@ -1,0 +1,31 @@
+name: Release PR guard
+
+# release-please recognises a merged release PR by the body it wrote. A bot that
+# appends to that body (Sourcery does) breaks the match: no tag is created and
+# the next release starts again from the bootstrap SHA. Restore the body as soon
+# as it is edited. If the Sourcery app is uninstalled, this job is a no-op.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  strip-bot-summary:
+    if: startsWith(github.head_ref, 'release-please--branches--')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove a bot-appended summary from the release PR body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          body="$(gh pr view "$PR" --json body --jq .body)"
+          if ! printf '%s' "$body" | grep -q '^## Summary by Sourcery'; then
+            exit 0
+          fi
+          printf '%s\n' "$body" | sed '/^## Summary by Sourcery$/,$d' > /tmp/release-pr.md
+          gh pr edit "$PR" --body-file /tmp/release-pr.md
+          echo "::notice::Removed the bot-appended summary; release-please needs its original body."
