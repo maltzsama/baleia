@@ -13,7 +13,7 @@
 		type CompletionContext,
 		type CompletionResult
 	} from '@codemirror/autocomplete';
-	import { format as formatSQLFormatter } from 'sql-formatter';
+
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
@@ -254,14 +254,17 @@
 	}
 
 	function switchTab(idx: number) {
+		flushSql();
 		editor.activate(tabs[idx].id);
 	}
 
 	function newTab() {
+		flushSql();
 		editor.addTab();
 	}
 
 	function closeTab(idx: number) {
+		flushSql();
 		const tab = tabs[idx];
 		if (!tab) return;
 		if (tab.dirty) {
@@ -274,6 +277,7 @@
 
 	function discardAndClose() {
 		if (closingIdx === null) return;
+		flushSql();
 		const id = tabs[closingIdx]?.id;
 		if (id) editor.closeTab(id);
 		closingIdx = null;
@@ -309,7 +313,7 @@
 			void explainQuery();
 		} else if (event.shiftKey && event.altKey && event.key.toLowerCase() === 'f') {
 			event.preventDefault();
-			formatSQL();
+			void formatSQL();
 		} else if (event.altKey && event.key.toLowerCase() === 'n') {
 			event.preventDefault();
 			newTab();
@@ -322,6 +326,7 @@
 	}
 
 	function onBeforeUnload(event: BeforeUnloadEvent) {
+		flushSql();
 		if (editor.dirty) {
 			event.preventDefault();
 			event.returnValue = '';
@@ -454,10 +459,16 @@
 	});
 
 	// ── Autocomplete ─────────────────────────────────────────────────────
-	const keywordOptions = $derived<Completion[]>([
-		...(dialect?.keywords ?? []).map((keyword) => ({ label: keyword, type: 'keyword' })),
+	type KeywordOption = { label: string; lower: string; type: string; apply?: string };
+	const keywordOptions = $derived<KeywordOption[]>([
+		...(dialect?.keywords ?? []).map((keyword) => ({
+			label: keyword,
+			lower: keyword.toLowerCase(),
+			type: 'keyword'
+		})),
 		...(dialect?.functions ?? []).map((fn) => ({
 			label: fn,
+			lower: fn.toLowerCase(),
 			type: 'function',
 			apply: `${fn}()`
 		}))
@@ -486,9 +497,10 @@
 		completionController = controller;
 		const seq = ++completionSeq;
 
+		const lowerToken = token.toLowerCase();
 		const options: Completion[] = keywordOptions
-			.filter((option) => option.label.toLowerCase().startsWith(token.toLowerCase()))
-			.map((option) => ({ ...option, boost: 0 }));
+			.filter((option) => option.lower.startsWith(lowerToken))
+			.map((option) => ({ label: option.label, type: option.type, apply: option.apply, boost: 0 }));
 
 		if (aliasMatch) {
 			try {
@@ -548,6 +560,29 @@
 		return { from, options };
 	}
 
+	// The live document lives in CodeMirror; `tab.sql` is a debounced mirror so a
+	// burst of keystrokes does not serialize the whole doc, rebuild the draft
+	// snapshot and compare `dirty` on every keypress (#233). It is flushed on blur
+	// and before any action that reads or switches the tab (save, close, switch).
+	let sqlSyncTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function flushSql() {
+		if (!editorView) return;
+		if (sqlSyncTimer) {
+			clearTimeout(sqlSyncTimer);
+			sqlSyncTimer = undefined;
+		}
+		editor.updateSql(editor.activeId, editorView.state.doc.toString());
+	}
+
+	function scheduleSqlSync() {
+		if (sqlSyncTimer) return;
+		sqlSyncTimer = setTimeout(() => {
+			sqlSyncTimer = undefined;
+			if (editorView) editor.updateSql(editor.activeId, editorView.state.doc.toString());
+		}, 150);
+	}
+
 	onMount(() => {
 		registerPalette();
 		window.addEventListener('keydown', onGlobalKeydown, true);
@@ -586,7 +621,10 @@
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of((update) => {
 				if (update.docChanged) {
-					editor.updateSql(editor.activeId, update.state.doc.toString());
+					scheduleSqlSync();
+				}
+				if (update.focusChanged && !editorView.hasFocus) {
+					flushSql();
 				}
 				if (update.selectionSet || update.docChanged) {
 					const head = update.state.selection.main.head;
@@ -822,9 +860,11 @@
 		}
 	}
 
-	function formatSQL() {
+	async function formatSQL() {
 		if (!editorView) return;
 		try {
+			// sql-formatter is heavy and only used on demand (#233): load it lazily.
+			const { format: formatSQLFormatter } = await import('sql-formatter');
 			const sqlText = editorView.state.doc.toString();
 			const formatted = formatSQLFormatter(sqlText, {
 				language: formatterLanguage(selectedEngine?.dialect?.formatter_language),
@@ -865,6 +905,7 @@
 	}
 
 	function openSave(mode: 'save' | 'copy', prefill = '') {
+		flushSql();
 		if (workspaceId && savedQueries.spaces.length === 0) void savedQueries.reload(workspaceId);
 		saveMode = mode;
 		savePrefill = prefill;
