@@ -25,6 +25,11 @@ export const settingsSections: SettingsSection[] = [
 		action: 'manage_users'
 	},
 	{
+		href: '/settings/teams',
+		label: 'Teams',
+		description: 'Team membership and roles for sharing workspaces.'
+	},
+	{
 		href: '/settings/audit',
 		label: 'Audit trail',
 		description: 'Who changed what, when, and which requests were denied.'
