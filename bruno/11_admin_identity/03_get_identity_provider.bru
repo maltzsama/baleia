@@ -1,0 +1,28 @@
+meta {
+  name: Get Identity Provider (redacted)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/admin/identity-providers/{{idp_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{idp_id}}
+  res.body.has_client_secret: eq true
+}
+
+tests {
+  test("no secret field is present", function () {
+    expect(res.body.client_secret).to.be.undefined;
+    expect(JSON.stringify(res.body)).to.not.contain("bruno-oidc-secret");
+  });
+}

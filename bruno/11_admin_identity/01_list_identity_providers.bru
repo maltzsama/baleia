@@ -1,0 +1,36 @@
+meta {
+  name: List Identity Providers (admin)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/admin/identity-providers
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+tests {
+  test("no secret is returned", function () {
+    for (const p of res.body) {
+      expect(p.client_secret).to.be.undefined;
+      expect(p.bind_password).to.be.undefined;
+      expect(p).to.have.property("has_client_secret");
+      expect(p).to.have.property("has_bind_password");
+    }
+  });
+}
+
+docs {
+  Admin listing (#259). Returns every provider (enabled or not). Secrets are
+  write-only: only `has_client_secret` / `has_bind_password` report presence.
+}

@@ -4,6 +4,10 @@ SELECT * FROM auth_providers WHERE id = $1;
 -- name: ListAuthProviders :many
 SELECT * FROM auth_providers WHERE enabled = true ORDER BY name;
 
+-- name: ListAllAuthProviders :many
+-- Admin listing (#259): includes disabled providers so they can be re-enabled.
+SELECT * FROM auth_providers ORDER BY name;
+
 -- name: CreateAuthProvider :one
 INSERT INTO auth_providers (name, type, config_enc, enabled)
 VALUES ($1, $2, $3, $4)

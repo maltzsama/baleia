@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/identity"
@@ -23,6 +25,44 @@ type OIDCProviderConfig struct {
 	TeamMapping         []identity.TeamMapping `json:"team_mapping"`
 	DefaultRole         string                 `json:"default_role"`
 	Claims              OIDCClaimsConfig       `json:"claims"`
+}
+
+// Validate checks a provider config before it is sealed. It is the validator
+// the admin API calls, so a malformed or insecure provider is rejected at the
+// boundary instead of failing at the next login.
+func (c OIDCProviderConfig) Validate() error {
+	u, err := url.Parse(strings.TrimSpace(c.IssuerURL))
+	if err != nil {
+		return fmt.Errorf("oidc config: issuer_url: %w", err)
+	}
+	if u.Scheme != "https" || u.Host == "" {
+		return errors.New("oidc config: issuer_url must be an absolute https URL")
+	}
+	if u.User != nil {
+		return errors.New("oidc config: issuer_url must not contain credentials")
+	}
+	if strings.TrimSpace(c.ClientID) == "" {
+		return errors.New("oidc config: client_id is required")
+	}
+	if c.ClientSecret == "" {
+		return errors.New("oidc config: client_secret is required")
+	}
+	if c.AutoCreate && len(c.AllowedEmailDomains) == 0 {
+		return errors.New("oidc config: auto_create requires allowed_email_domains")
+	}
+	for i, d := range c.AllowedEmailDomains {
+		if strings.TrimSpace(d) == "" {
+			return fmt.Errorf("oidc config: allowed_email_domains %d is empty", i)
+		}
+	}
+	if _, err := identity.MapIdentity(identity.MappingInput{
+		RoleMapping: c.RoleMapping,
+		TeamMapping: c.TeamMapping,
+		DefaultRole: c.DefaultRole,
+	}); err != nil {
+		return fmt.Errorf("oidc config: %w", err)
+	}
+	return nil
 }
 
 // SealOIDCConfig encrypts the provider config. aad is the provider id.

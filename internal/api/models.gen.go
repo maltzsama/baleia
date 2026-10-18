@@ -291,6 +291,24 @@ const (
 	GrantCatalogAccessRequestPermissionWrite GrantCatalogAccessRequestPermission = "write"
 )
 
+// Defines values for IdentityProviderType.
+const (
+	IdentityProviderTypeLdap IdentityProviderType = "ldap"
+	IdentityProviderTypeOidc IdentityProviderType = "oidc"
+)
+
+// Defines values for IdentityRoleMappingRole.
+const (
+	IdentityRoleMappingRoleAdmin  IdentityRoleMappingRole = "admin"
+	IdentityRoleMappingRoleMember IdentityRoleMappingRole = "member"
+)
+
+// Defines values for IdentityTeamMappingTeamRole.
+const (
+	IdentityTeamMappingTeamRoleMember IdentityTeamMappingTeamRole = "member"
+	IdentityTeamMappingTeamRoleOwner  IdentityTeamMappingTeamRole = "owner"
+)
+
 // Defines values for ImportItemAction.
 const (
 	CREATE    ImportItemAction = "CREATE"
@@ -309,6 +327,18 @@ const (
 const (
 	InviteUserRequestRoleAdmin  InviteUserRequestRole = "admin"
 	InviteUserRequestRoleMember InviteUserRequestRole = "member"
+)
+
+// Defines values for LDAPConfigDefaultRole.
+const (
+	LDAPConfigDefaultRoleAdmin  LDAPConfigDefaultRole = "admin"
+	LDAPConfigDefaultRoleMember LDAPConfigDefaultRole = "member"
+)
+
+// Defines values for LDAPConfigAdminDefaultRole.
+const (
+	LDAPConfigAdminDefaultRoleAdmin  LDAPConfigAdminDefaultRole = "admin"
+	LDAPConfigAdminDefaultRoleMember LDAPConfigAdminDefaultRole = "member"
 )
 
 // Defines values for MeAuthProvider.
@@ -398,6 +428,18 @@ const (
 	MigrationItemStatusPending  MigrationItemStatus = "pending"
 	MigrationItemStatusRunning  MigrationItemStatus = "running"
 	MigrationItemStatusSkipped  MigrationItemStatus = "skipped"
+)
+
+// Defines values for OIDCConfigDefaultRole.
+const (
+	OIDCConfigDefaultRoleAdmin  OIDCConfigDefaultRole = "admin"
+	OIDCConfigDefaultRoleMember OIDCConfigDefaultRole = "member"
+)
+
+// Defines values for OIDCConfigAdminDefaultRole.
+const (
+	OIDCConfigAdminDefaultRoleAdmin  OIDCConfigAdminDefaultRole = "admin"
+	OIDCConfigAdminDefaultRoleMember OIDCConfigAdminDefaultRole = "member"
 )
 
 // Defines values for OIDCProviderType.
@@ -561,8 +603,8 @@ const (
 
 // Defines values for UserPublicAuthProvider.
 const (
-	Local UserPublicAuthProvider = "local"
-	Oidc  UserPublicAuthProvider = "oidc"
+	UserPublicAuthProviderLocal UserPublicAuthProvider = "local"
+	UserPublicAuthProviderOidc  UserPublicAuthProvider = "oidc"
 )
 
 // Defines values for UserPublicRole.
@@ -1270,6 +1312,19 @@ type CreateFolderRequest struct {
 	SpaceId *openapi_types.UUID `json:"space_id"`
 }
 
+// CreateIdentityProviderRequest defines model for CreateIdentityProviderRequest.
+type CreateIdentityProviderRequest struct {
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Ldap LDAP provider configuration written once. `bind_password` is never returned.
+	Ldap *LDAPConfig `json:"ldap,omitempty"`
+	Name string      `json:"name"`
+
+	// Oidc OIDC provider configuration written once. `client_secret` is never returned.
+	Oidc *OIDCConfig          `json:"oidc,omitempty"`
+	Type IdentityProviderType `json:"type"`
+}
+
 // CreateMaintenanceRequest defines model for CreateMaintenanceRequest.
 type CreateMaintenanceRequest struct {
 	BindingId  *openapi_types.UUID `json:"binding_id"`
@@ -1657,6 +1712,62 @@ type IcebergCredentials struct {
 	Token *string `json:"token,omitempty"`
 }
 
+// IdentityProvider defines model for IdentityProvider.
+type IdentityProvider struct {
+	CreatedAt time.Time `json:"created_at"`
+	Enabled   bool      `json:"enabled"`
+
+	// HasBindPassword An LDAP bind password is stored (never returned).
+	HasBindPassword bool `json:"has_bind_password"`
+
+	// HasClientSecret An OIDC client secret is stored (never returned).
+	HasClientSecret bool                 `json:"has_client_secret"`
+	Id              openapi_types.UUID   `json:"id"`
+	Name            string               `json:"name"`
+	Type            IdentityProviderType `json:"type"`
+	UpdatedAt       *time.Time           `json:"updated_at,omitempty"`
+}
+
+// IdentityProviderDetail A provider with its redacted configuration.
+type IdentityProviderDetail struct {
+	CreatedAt       time.Time          `json:"created_at"`
+	Enabled         bool               `json:"enabled"`
+	HasBindPassword bool               `json:"has_bind_password"`
+	HasClientSecret bool               `json:"has_client_secret"`
+	Id              openapi_types.UUID `json:"id"`
+
+	// Ldap LDAP provider configuration without the bind password.
+	Ldap *LDAPConfigAdmin `json:"ldap,omitempty"`
+	Name string           `json:"name"`
+
+	// Oidc OIDC provider configuration without the client secret.
+	Oidc      *OIDCConfigAdmin     `json:"oidc,omitempty"`
+	Type      IdentityProviderType `json:"type"`
+	UpdatedAt *time.Time           `json:"updated_at,omitempty"`
+}
+
+// IdentityProviderType defines model for IdentityProviderType.
+type IdentityProviderType string
+
+// IdentityRoleMapping Binds a directory group to a platform role.
+type IdentityRoleMapping struct {
+	Group string                  `json:"group"`
+	Role  IdentityRoleMappingRole `json:"role"`
+}
+
+// IdentityRoleMappingRole defines model for IdentityRoleMapping.Role.
+type IdentityRoleMappingRole string
+
+// IdentityTeamMapping Binds a directory group to a team and role.
+type IdentityTeamMapping struct {
+	Group    string                      `json:"group"`
+	TeamId   string                      `json:"team_id"`
+	TeamRole IdentityTeamMappingTeamRole `json:"team_role"`
+}
+
+// IdentityTeamMappingTeamRole defines model for IdentityTeamMapping.TeamRole.
+type IdentityTeamMappingTeamRole string
+
 // ImportItem defines model for ImportItem.
 type ImportItem struct {
 	Action ImportItemAction `json:"action"`
@@ -1691,6 +1802,53 @@ type InviteUserRequest struct {
 
 // InviteUserRequestRole defines model for InviteUserRequest.Role.
 type InviteUserRequestRole string
+
+// LDAPConfig LDAP provider configuration written once. `bind_password` is never returned.
+type LDAPConfig struct {
+	BaseDn         string                 `json:"base_dn"`
+	BindDn         string                 `json:"bind_dn"`
+	BindPassword   string                 `json:"bind_password"`
+	DefaultRole    *LDAPConfigDefaultRole `json:"default_role,omitempty"`
+	EmailAttribute *string                `json:"email_attribute,omitempty"`
+	GroupAttribute *string                `json:"group_attribute,omitempty"`
+	NameAttribute  *string                `json:"name_attribute,omitempty"`
+	NestedGroups   *bool                  `json:"nested_groups,omitempty"`
+	RequiredGroup  *string                `json:"required_group,omitempty"`
+	RoleMapping    *[]IdentityRoleMapping `json:"role_mapping,omitempty"`
+	StartTls       *bool                  `json:"start_tls,omitempty"`
+	TeamMapping    *[]IdentityTeamMapping `json:"team_mapping,omitempty"`
+	TimeoutSeconds *int                   `json:"timeout_seconds,omitempty"`
+
+	// Url ldaps:// or ldap:// (requires start_tls).
+	Url string `json:"url"`
+
+	// UserFilter Must contain exactly one {{username}} placeholder.
+	UserFilter string `json:"user_filter"`
+}
+
+// LDAPConfigDefaultRole defines model for LDAPConfig.DefaultRole.
+type LDAPConfigDefaultRole string
+
+// LDAPConfigAdmin LDAP provider configuration without the bind password.
+type LDAPConfigAdmin struct {
+	BaseDn         *string                     `json:"base_dn,omitempty"`
+	BindDn         *string                     `json:"bind_dn,omitempty"`
+	DefaultRole    *LDAPConfigAdminDefaultRole `json:"default_role,omitempty"`
+	EmailAttribute *string                     `json:"email_attribute,omitempty"`
+	GroupAttribute *string                     `json:"group_attribute,omitempty"`
+	NameAttribute  *string                     `json:"name_attribute,omitempty"`
+	NestedGroups   *bool                       `json:"nested_groups,omitempty"`
+	RequiredGroup  *string                     `json:"required_group,omitempty"`
+	RoleMapping    *[]IdentityRoleMapping      `json:"role_mapping,omitempty"`
+	StartTls       *bool                       `json:"start_tls,omitempty"`
+	TeamMapping    *[]IdentityTeamMapping      `json:"team_mapping,omitempty"`
+	TimeoutSeconds *int                        `json:"timeout_seconds,omitempty"`
+	Url            *string                     `json:"url,omitempty"`
+	UserFilter     *string                     `json:"user_filter,omitempty"`
+}
+
+// LDAPConfigAdminDefaultRole defines model for LDAPConfigAdmin.DefaultRole.
+type LDAPConfigAdminDefaultRole string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -2018,6 +2176,51 @@ type NessieCredentials struct {
 	// Token Bearer token optional
 	Token *string `json:"token,omitempty"`
 }
+
+// OIDCClaimsConfig Claim names published by the provider; empty uses the standard name.
+type OIDCClaimsConfig struct {
+	Email   *string `json:"email,omitempty"`
+	Groups  *string `json:"groups,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	Subject *string `json:"subject,omitempty"`
+}
+
+// OIDCConfig OIDC provider configuration written once. `client_secret` is never returned.
+type OIDCConfig struct {
+	AllowedEmailDomains *[]string `json:"allowed_email_domains,omitempty"`
+
+	// AutoCreate Provision unknown subjects. Default deny; requires allowed_email_domains.
+	AutoCreate *bool `json:"auto_create,omitempty"`
+
+	// Claims Claim names published by the provider; empty uses the standard name.
+	Claims       *OIDCClaimsConfig      `json:"claims,omitempty"`
+	ClientId     string                 `json:"client_id"`
+	ClientSecret string                 `json:"client_secret"`
+	DefaultRole  *OIDCConfigDefaultRole `json:"default_role,omitempty"`
+	IssuerUrl    string                 `json:"issuer_url"`
+	RoleMapping  *[]IdentityRoleMapping `json:"role_mapping,omitempty"`
+	TeamMapping  *[]IdentityTeamMapping `json:"team_mapping,omitempty"`
+}
+
+// OIDCConfigDefaultRole defines model for OIDCConfig.DefaultRole.
+type OIDCConfigDefaultRole string
+
+// OIDCConfigAdmin OIDC provider configuration without the client secret.
+type OIDCConfigAdmin struct {
+	AllowedEmailDomains *[]string `json:"allowed_email_domains,omitempty"`
+	AutoCreate          *bool     `json:"auto_create,omitempty"`
+
+	// Claims Claim names published by the provider; empty uses the standard name.
+	Claims      *OIDCClaimsConfig           `json:"claims,omitempty"`
+	ClientId    *string                     `json:"client_id,omitempty"`
+	DefaultRole *OIDCConfigAdminDefaultRole `json:"default_role,omitempty"`
+	IssuerUrl   *string                     `json:"issuer_url,omitempty"`
+	RoleMapping *[]IdentityRoleMapping      `json:"role_mapping,omitempty"`
+	TeamMapping *[]IdentityTeamMapping      `json:"team_mapping,omitempty"`
+}
+
+// OIDCConfigAdminDefaultRole defines model for OIDCConfigAdmin.DefaultRole.
+type OIDCConfigAdminDefaultRole string
 
 // OIDCProvider Experimental OIDC identity provider (phase 4).
 type OIDCProvider struct {
@@ -3276,6 +3479,9 @@ type ListTrashParamsEntityType string
 type StreamExecutionParams struct {
 	Ticket string `form:"ticket" json:"ticket"`
 }
+
+// CreateIdentityProviderJSONRequestBody defines body for CreateIdentityProvider for application/json ContentType.
+type CreateIdentityProviderJSONRequestBody = CreateIdentityProviderRequest
 
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
 type CreateApiKeyJSONRequestBody = CreateApiKeyRequest
