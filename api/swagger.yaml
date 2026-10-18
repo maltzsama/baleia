@@ -113,6 +113,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ValidationError" }
+    ServiceUnavailable:
+      description: "Service unavailable"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     ArrowStream:
       description: >
         Apache Arrow IPC. An unpaged read streams the stored object unchanged
@@ -2456,13 +2461,14 @@ paths:
       responses:
         "302":
           description: "Redirect to provider"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /auth/oidc/{provider_id}/callback:
     get:
       tags: [Auth]
       operationId: oidcCallback
       summary: "OIDC callback — exchange code for JWT"
-      description: "Consumes the single-use login attempt (state plus the server-side PKCE verifier), exchanges the code, sets the HttpOnly `baleia_refresh` cookie and redirects to the stored relative path — never with tokens in the URL. Failures redirect to `/login?error=<code>`."
+      description: "Consumes the single-use login attempt (state plus the server-side PKCE verifier), exchanges the code, sets the HttpOnly `baleia_refresh` cookie and redirects to the stored relative path — never with tokens in the URL. Provider discovery failures return `503 idp_unavailable`; other failures redirect to `/login?error=<code>`."
       security: []
       parameters:
         - name: provider_id
@@ -2479,7 +2485,8 @@ paths:
           schema: { type: string }
       responses:
         "302":
-          description: "Redirect to frontend with token"
+          description: "Redirect to the stored path; the session is in the HttpOnly cookie"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /auth/password-reset/request:
     post:

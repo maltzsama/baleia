@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -19,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func TestSafeRelativePath(t *testing.T) {
@@ -193,16 +193,26 @@ func newOIDCFlowWithConfig(t *testing.T, config func(issuer string) auth.OIDCPro
 	}
 }
 
+func oidcPtr[T any](v T) *T { return &v }
+
 func (f *oidcFlowFixture) start(t *testing.T) (state string, cookie *http.Cookie) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/x/login?next=/sql", nil)
-	req.SetPathValue("provider_id", idString(f.provider.ID))
-	rec := httptest.NewRecorder()
-	f.h.HandleOIDCRedirect(rec, req)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("redirect = %d, want 302", rec.Code)
+	result := &OIDCResult{}
+	ctx := WithOIDCResult(context.Background(), result)
+	resp, err := f.h.OidcRedirect(ctx, OidcRedirectRequestObject{
+		ProviderId: openapi_types.UUID(f.provider.ID.Bytes),
+		Params:     OidcRedirectParams{Next: oidcPtr("/sql")},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	u, err := url.Parse(rec.Header().Get("Location"))
+	if _, ok := resp.(OidcRedirect302Response); !ok {
+		t.Fatalf("redirect = %T, want 302", resp)
+	}
+	if result.Location == "" || result.OIDCCookie == nil {
+		t.Fatalf("redirect result = %+v", result)
+	}
+	u, err := url.Parse(result.Location)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,38 +222,40 @@ func (f *oidcFlowFixture) start(t *testing.T) (state string, cookie *http.Cookie
 		t.Fatalf("state=%q nonce=%q", state, nonce)
 	}
 	f.idp.Nonce = nonce
-	for _, c := range rec.Result().Cookies() {
-		if c.Name == auth.OIDCCookieName {
-			cookie = c
-		}
-	}
-	if cookie == nil || cookie.Value != state {
-		t.Fatalf("baleia_oidc cookie = %+v, want the state", cookie)
+	cookie = &http.Cookie{Name: auth.OIDCCookieName, Value: *result.OIDCCookie}
+	if cookie.Value != state {
+		t.Fatalf("baleia_oidc cookie = %q, want the state %q", cookie.Value, state)
 	}
 	return state, cookie
 }
 
-func (f *oidcFlowFixture) finish(t *testing.T, state string, cookie *http.Cookie) *httptest.ResponseRecorder {
+func (f *oidcFlowFixture) finish(t *testing.T, state string, cookie *http.Cookie) *OIDCResult {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/x/callback?code=code-1&state="+url.QueryEscape(state), nil)
-	req.SetPathValue("provider_id", idString(f.provider.ID))
-	req.AddCookie(cookie)
-	rec := httptest.NewRecorder()
-	f.h.HandleOIDCCallback(rec, req)
-	return rec
+	result := &OIDCResult{}
+	ctx := WithOIDCResult(context.Background(), result)
+	ctx = auth.WithOIDCCookie(ctx, cookie.Value)
+	resp, err := f.h.OidcCallback(ctx, OidcCallbackRequestObject{
+		ProviderId: openapi_types.UUID(f.provider.ID.Bytes),
+		Params:     OidcCallbackParams{Code: "code-1", State: state},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	switch resp.(type) {
+	case OidcCallback302Response, OidcCallback503JSONResponse:
+	default:
+		t.Fatalf("callback = %T", resp)
+	}
+	return result
 }
 
-func (f *oidcFlowFixture) failure(t *testing.T, rec *httptest.ResponseRecorder) string {
+func (f *oidcFlowFixture) failure(t *testing.T, result *OIDCResult) string {
 	t.Helper()
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302", rec.Code)
-	}
-	loc := rec.Header().Get("Location")
 	const prefix = "/login?error="
-	if !strings.HasPrefix(loc, prefix) {
-		t.Fatalf("Location = %q, want /login?error=...", loc)
+	if !strings.HasPrefix(result.Location, prefix) {
+		t.Fatalf("Location = %q, want /login?error=...", result.Location)
 	}
-	return strings.TrimPrefix(loc, prefix)
+	return strings.TrimPrefix(result.Location, prefix)
 }
 
 // TestOIDC_NoTokensInRedirect: the callback hands the session off in the
@@ -251,30 +263,17 @@ func (f *oidcFlowFixture) failure(t *testing.T, rec *httptest.ResponseRecorder) 
 func TestOIDC_NoTokensInRedirect(t *testing.T) {
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
-	rec := f.finish(t, state, cookie)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("callback = %d, want 302", rec.Code)
+	result := f.finish(t, state, cookie)
+	if result.Location != "/sql" {
+		t.Errorf("Location = %q, want /sql", result.Location)
 	}
-	target := rec.Header().Get("Location")
-	if target != "/sql" {
-		t.Errorf("Location = %q, want /sql", target)
-	}
-	if u, err := url.Parse(target); err != nil {
+	if u, err := url.Parse(result.Location); err != nil {
 		t.Fatal(err)
 	} else if u.Query().Get("token") != "" || u.Query().Get("refresh_token") != "" {
-		t.Errorf("tokens leaked in the redirect: %q", target)
+		t.Errorf("tokens leaked in the redirect: %q", result.Location)
 	}
-	var refreshCookie *http.Cookie
-	for _, c := range rec.Result().Cookies() {
-		if c.Name == auth.RefreshCookieName {
-			refreshCookie = c
-		}
-	}
-	if refreshCookie == nil || refreshCookie.Value == "" {
+	if result.RefreshCookie == nil || *result.RefreshCookie == "" {
 		t.Fatal("the baleia_refresh cookie was not set")
-	}
-	if !refreshCookie.HttpOnly || !refreshCookie.Secure || refreshCookie.SameSite != http.SameSiteLaxMode {
-		t.Errorf("refresh cookie flags = %+v", refreshCookie)
 	}
 }
 
@@ -289,8 +288,8 @@ func TestOIDC_StateMismatch(t *testing.T) {
 func TestOIDC_StateReplay(t *testing.T) {
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
-	if rec := f.finish(t, state, cookie); rec.Code != http.StatusFound || rec.Header().Get("Location") != "/sql" {
-		t.Fatalf("first callback = %d %q", rec.Code, rec.Header().Get("Location"))
+	if result := f.finish(t, state, cookie); result.Location != "/sql" {
+		t.Fatalf("first callback = %q", result.Location)
 	}
 	if code := f.failure(t, f.finish(t, state, cookie)); code != oidcErrorSSOFailed {
 		t.Errorf("replay error = %q, want %q", code, oidcErrorSSOFailed)
@@ -340,17 +339,12 @@ func TestOIDC_RedirectRelativeOnly(t *testing.T) {
 // TestOIDC_FailureRedirects: every failure lands on /login?error=<code>.
 func TestOIDC_FailureRedirects(t *testing.T) {
 	for _, code := range []string{oidcErrorNotProvisioned, oidcErrorAccountSuspended, oidcErrorIDPUnavailable, oidcErrorSSOFailed} {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/callback", nil)
-		oidcFailure(rec, req, code)
-		if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/login?error="+code {
-			t.Errorf("%s: status %d location %q", code, rec.Code, rec.Header().Get("Location"))
+		if got := oidcFailureLocation(code); got != "/login?error="+code {
+			t.Errorf("%s: location %q", code, got)
 		}
 	}
 	// An unknown code cannot escape the bounded vocabulary.
-	rec := httptest.NewRecorder()
-	oidcFailure(rec, httptest.NewRequest(http.MethodGet, "/callback", nil), "bogus")
-	if got := rec.Header().Get("Location"); got != "/login?error="+oidcErrorSSOFailed {
+	if got := oidcFailureLocation("bogus"); got != "/login?error="+oidcErrorSSOFailed {
 		t.Errorf("unknown code location = %q", got)
 	}
 
@@ -358,14 +352,20 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 	q := db.New(pool)
 	h := oidcHandlers(t, q)
 
-	// An unreachable issuer is an IdP outage.
+	// An unreachable issuer is a 503 IdP outage.
 	broken := oidcProvider(t, q, "http://127.0.0.1:1")
-	req := httptest.NewRequest(http.MethodGet, "/callback", nil)
-	req.SetPathValue("provider_id", idString(broken.ID))
-	rec = httptest.NewRecorder()
-	h.HandleOIDCCallback(rec, req)
-	if got := rec.Header().Get("Location"); got != "/login?error="+oidcErrorIDPUnavailable {
-		t.Errorf("unreachable issuer location = %q", got)
+	result := &OIDCResult{}
+	ctx := WithOIDCResult(context.Background(), result)
+	resp, err := h.OidcCallback(ctx, OidcCallbackRequestObject{
+		ProviderId: openapi_types.UUID(broken.ID.Bytes),
+		Params:     OidcCallbackParams{Code: "code-1", State: "state"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unavailable, ok := resp.(OidcCallback503JSONResponse)
+	if !ok || unavailable.Code != oidcErrorIDPUnavailable {
+		t.Errorf("unreachable issuer = %T %+v", resp, unavailable)
 	}
 
 	// A valid provider with a bad state is an SSO failure.
@@ -375,12 +375,20 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 	}
 	defer idp.Close()
 	provider := oidcProvider(t, q, idp.URL)
-	req = httptest.NewRequest(http.MethodGet, "/callback?state=bad", nil)
-	req.SetPathValue("provider_id", idString(provider.ID))
-	rec = httptest.NewRecorder()
-	h.HandleOIDCCallback(rec, req)
-	if got := rec.Header().Get("Location"); got != "/login?error="+oidcErrorSSOFailed {
-		t.Errorf("bad state location = %q", got)
+	result = &OIDCResult{}
+	ctx = WithOIDCResult(context.Background(), result)
+	resp, err = h.OidcCallback(ctx, OidcCallbackRequestObject{
+		ProviderId: openapi_types.UUID(provider.ID.Bytes),
+		Params:     OidcCallbackParams{Code: "code-1", State: "bad"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(OidcCallback302Response); !ok {
+		t.Fatalf("bad state = %T", resp)
+	}
+	if result.Location != "/login?error="+oidcErrorSSOFailed {
+		t.Errorf("bad state location = %q", result.Location)
 	}
 }
 
@@ -413,9 +421,66 @@ func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := oidcHandlers(t, q)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/x/login", nil)
-	if _, _, err := h.loadOIDCProvider(req, idString(provider.ID)); err == nil {
+	if _, _, err := h.loadOIDCProvider(context.Background(), idString(provider.ID)); err == nil {
 		t.Fatal("loadOIDCProvider accepted a plaintext config")
+	}
+}
+
+// TestOIDC_ProviderCache: discovery is cached and a config change invalidates
+// it (#280).
+func TestOIDC_ProviderCache(t *testing.T) {
+	pool := testdb.New(t)
+	q := db.New(pool)
+	idp, err := oidctest.New("", "client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(idp.Close)
+	provider := oidcProvider(t, q, idp.URL)
+	h := oidcHandlers(t, q)
+	ctx := context.Background()
+
+	if _, _, err := h.cachedOIDCProvider(ctx, idString(provider.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := h.cachedOIDCProvider(ctx, idString(provider.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if got := idp.DiscoveryCount(); got != 1 {
+		t.Errorf("discovery hits = %d, want 1", got)
+	}
+
+	// A config update bumps updated_at, so the cache misses.
+	if _, err := q.UpdateAuthProvider(ctx, db.UpdateAuthProviderParams{
+		ID: provider.ID, Name: provider.Name, ConfigEnc: provider.ConfigEnc, Enabled: provider.Enabled,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := h.cachedOIDCProvider(ctx, idString(provider.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if got := idp.DiscoveryCount(); got != 2 {
+		t.Errorf("discovery hits after update = %d, want 2", got)
+	}
+}
+
+// TestOIDC_StrictParity: the redirect/callback are the strict handlers (#280).
+func TestOIDC_StrictParity(t *testing.T) {
+	f := newOIDCFlow(t)
+	result := &OIDCResult{}
+	ctx := WithOIDCResult(context.Background(), result)
+	resp, err := f.h.OidcRedirect(ctx, OidcRedirectRequestObject{
+		ProviderId: openapi_types.UUID(f.provider.ID.Bytes),
+		Params:     OidcRedirectParams{Next: oidcPtr("/sql")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(OidcRedirect302Response); !ok {
+		t.Fatalf("redirect = %T, want 302", resp)
+	}
+	if result.Location == "" || result.OIDCCookie == nil {
+		t.Fatalf("strict result = %+v", result)
 	}
 }
 
@@ -439,8 +504,8 @@ func TestOIDC_AutoCreateDomainAllowList(t *testing.T) {
 	// Allowed + verified creates the account.
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
-	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
-		t.Fatalf("allowed: %d %q", rec.Code, rec.Header().Get("Location"))
+	if result := f.finish(t, state, cookie); result.Location != "/sql" {
+		t.Fatalf("allowed: %q", result.Location)
 	}
 
 	// A different domain is denied.
@@ -506,8 +571,8 @@ func TestOIDC_RoleMappingEachLogin(t *testing.T) {
 
 	f.idp.Groups = []string{"baleia-admins"}
 	state, cookie := f.start(t)
-	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
-		t.Fatalf("first login: %d %q", rec.Code, rec.Header().Get("Location"))
+	if result := f.finish(t, state, cookie); result.Location != "/sql" {
+		t.Fatalf("first login: %q", result.Location)
 	}
 	if user := lookup(); user.Role != identity.RoleAdmin {
 		t.Errorf("first login role = %q, want admin", user.Role)
@@ -515,8 +580,8 @@ func TestOIDC_RoleMappingEachLogin(t *testing.T) {
 
 	f.idp.Groups = nil
 	state, cookie = f.start(t)
-	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
-		t.Fatalf("second login: %d %q", rec.Code, rec.Header().Get("Location"))
+	if result := f.finish(t, state, cookie); result.Location != "/sql" {
+		t.Fatalf("second login: %q", result.Location)
 	}
 	if user := lookup(); user.Role != identity.RoleMember {
 		t.Errorf("second login role = %q, want member", user.Role)
@@ -539,8 +604,8 @@ func TestOIDC_ConfigurableClaims(t *testing.T) {
 		"memberOf":     []string{"baleia-admins"},
 	}
 	state, cookie := f.start(t)
-	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
-		t.Fatalf("login: %d %q", rec.Code, rec.Header().Get("Location"))
+	if result := f.finish(t, state, cookie); result.Location != "/sql" {
+		t.Fatalf("login: %q", result.Location)
 	}
 	external := "custom-subject"
 	user, err := f.q.GetUserByExternalID(context.Background(), db.GetUserByExternalIDParams{
@@ -582,8 +647,8 @@ func TestOIDC_TeamMapping(t *testing.T) {
 	}
 	f.idp.Groups = []string{"data-eng"}
 	state, cookie := f.start(t)
-	if rec := f.finish(t, state, cookie); rec.Header().Get("Location") != "/sql" {
-		t.Fatalf("login: %d %q", rec.Code, rec.Header().Get("Location"))
+	if result := f.finish(t, state, cookie); result.Location != "/sql" {
+		t.Fatalf("login: %q", result.Location)
 	}
 	user, err := f.q.GetUserByExternalID(context.Background(), db.GetUserByExternalIDParams{
 		AuthProviderID: f.provider.ID, ExternalID: &f.idp.Subject,

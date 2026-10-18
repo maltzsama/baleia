@@ -16,6 +16,9 @@ func refreshCookieContext(next http.Handler) http.Handler {
 		if c, err := r.Cookie(auth.RefreshCookieName); err == nil && c.Value != "" {
 			r = r.WithContext(auth.WithRefreshCookie(r.Context(), c.Value))
 		}
+		if c, err := r.Cookie(auth.OIDCCookieName); err == nil && c.Value != "" {
+			r = r.WithContext(auth.WithOIDCCookie(r.Context(), c.Value))
+		}
 		next.ServeHTTP(w, r)
 	})
 }

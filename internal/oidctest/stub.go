@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -32,7 +33,12 @@ type StubIDP struct {
 	ExpectedChallenge string
 
 	key *rsa.PrivateKey
+
+	discoveryHits atomic.Int32
 }
+
+// DiscoveryCount is how many times the discovery document was fetched.
+func (s *StubIDP) DiscoveryCount() int { return int(s.discoveryHits.Load()) }
 
 // New starts a stub provider. An empty expectedChallenge accepts any non-empty
 // verifier, which is useful when the caller generates the verifier itself.
@@ -59,6 +65,7 @@ func New(expectedChallenge, clientID string) (*StubIDP, error) {
 }
 
 func (s *StubIDP) discovery(w http.ResponseWriter, _ *http.Request) {
+	s.discoveryHits.Add(1)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"issuer":                                s.URL,
 		"authorization_endpoint":                s.URL + "/authorize",

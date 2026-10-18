@@ -164,7 +164,7 @@ export interface paths {
         };
         /**
          * OIDC callback — exchange code for JWT
-         * @description Consumes the single-use login attempt (state plus the server-side PKCE verifier), exchanges the code, sets the HttpOnly `baleia_refresh` cookie and redirects to the stored relative path — never with tokens in the URL. Failures redirect to `/login?error=<code>`.
+         * @description Consumes the single-use login attempt (state plus the server-side PKCE verifier), exchanges the code, sets the HttpOnly `baleia_refresh` cookie and redirects to the stored relative path — never with tokens in the URL. Provider discovery failures return `503 idp_unavailable`; other failures redirect to `/login?error=<code>`.
          */
         get: operations["oidcCallback"];
         put?: never;
@@ -4509,6 +4509,15 @@ export interface components {
                 "application/json": components["schemas"]["ValidationError"];
             };
         };
+        /** @description Service unavailable */
+        ServiceUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description Apache Arrow IPC. An unpaged read streams the stored object unchanged (`stream` for legacy results, `file` for results written after #238); a paged read (`offset`/`limit`) always returns a `stream`. */
         ArrowStream: {
             headers: {
@@ -4707,6 +4716,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     oidcCallback: {
@@ -4723,13 +4733,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to frontend with token */
+            /** @description Redirect to the stored path; the session is in the HttpOnly cookie */
             302: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     requestPasswordReset: {

@@ -23,6 +23,32 @@ func SetRefreshCookie(w http.ResponseWriter, token string, ttl time.Duration) {
 	})
 }
 
+// SetOIDCCookie writes the short-lived browser binding for an OIDC login.
+func SetOIDCCookie(w http.ResponseWriter, value string, ttl time.Duration) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     OIDCCookieName,
+		Value:    value,
+		Path:     OIDCCookiePath,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(ttl / time.Second),
+	})
+}
+
+// ClearOIDCCookie expires the OIDC browser binding.
+func ClearOIDCCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     OIDCCookieName,
+		Value:    "",
+		Path:     OIDCCookiePath,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+}
+
 // ClearRefreshCookie expires the browser session cookie.
 func ClearRefreshCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{

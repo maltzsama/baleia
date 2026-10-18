@@ -166,10 +166,6 @@ func (s *Server) routes() {
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
 	}, onAuthLimited)
 
-	// OIDC needs cookie + redirect
-	s.mux.Get("/api/v1/auth/oidc/{provider_id}/login", h.HandleOIDCRedirect)
-	s.mux.Get("/api/v1/auth/oidc/{provider_id}/callback", h.HandleOIDCCallback)
-
 	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
 	// that the handler consumes; the JWT never appears in the URL.
 	tickets := wsticket.New()
@@ -182,6 +178,7 @@ func (s *Server) routes() {
 		authMiddlewareFunc(s.cfg.JWTSecret, s.queries),
 		csrfMiddleware,
 		refreshCookieMiddleware(s.cfg),
+		oidcMiddleware(s.cfg),
 	})
 
 	s.mux.Route("/api/v1", func(r chi.Router) {

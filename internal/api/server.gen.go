@@ -9137,6 +9137,8 @@ type NoContentResponse struct {
 
 type NotFoundJSONResponse Error
 
+type ServiceUnavailableJSONResponse Error
+
 type UnauthorizedJSONResponse Error
 
 type UnprocessableEntityJSONResponse ValidationError
@@ -9488,6 +9490,15 @@ func (response OidcCallback302Response) VisitOidcCallbackResponse(w http.Respons
 	return nil
 }
 
+type OidcCallback503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response OidcCallback503JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type OidcRedirectRequestObject struct {
 	ProviderId openapi_types.UUID `json:"provider_id"`
 	Params     OidcRedirectParams
@@ -9503,6 +9514,15 @@ type OidcRedirect302Response struct {
 func (response OidcRedirect302Response) VisitOidcRedirectResponse(w http.ResponseWriter) error {
 	w.WriteHeader(302)
 	return nil
+}
+
+type OidcRedirect503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response OidcRedirect503JSONResponse) VisitOidcRedirectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ConfirmPasswordResetRequestObject struct {
