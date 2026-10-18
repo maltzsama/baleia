@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { client, setAccessToken, setRefreshToken } from '$lib/api/client';
+	import { PasswordInput } from '$lib/ui';
 	import ConnectionWizard from '$lib/connections/ConnectionWizard.svelte';
 
 	let step = $state(1);
@@ -173,12 +174,11 @@
 						placeholder="admin@company.com"
 					/>
 				</div>
-				<div class="flex flex-col gap-[5px] mb-3.5">
-					<label class="text-[11px] font-semibold" for="setup-password">Password</label>
-					<input
+				<div class="mb-3.5">
+					<PasswordInput
 						id="setup-password"
-						class={inputBase}
-						type="password"
+						label="Password"
+						autocomplete="new-password"
 						bind:value={password}
 						placeholder="••••••••"
 						oninput={(e) => checkStrength((e.target as HTMLInputElement).value)}
@@ -198,12 +198,11 @@
 						{/each}
 					</div>
 				</div>
-				<div class="flex flex-col gap-[5px] mb-3.5">
-					<label class="text-[11px] font-semibold" for="setup-confirm">Confirm password</label>
-					<input
+				<div class="mb-3.5">
+					<PasswordInput
 						id="setup-confirm"
-						class={inputBase}
-						type="password"
+						label="Confirm password"
+						autocomplete="new-password"
 						bind:value={confirmPass}
 						placeholder="••••••••"
 					/>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { API_ROOT, clearSession, client, setAccessToken, setRefreshToken } from '$lib/api/client';
+	import { Input, PasswordInput } from '$lib/ui';
 
 	// Retry-After is either a number of seconds or an HTTP-date. Returns the
 	// remaining delay in whole seconds, capped at one hour; 0 when absent,
@@ -175,9 +176,6 @@
 			/* storage unavailable */
 		}
 	}
-
-	const inputBase =
-		'w-full h-10 bg-bg-app dark:bg-[#1c2128] border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-text-muted focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.1)] focus:bg-bg-panel';
 </script>
 
 <div
@@ -259,32 +257,31 @@
 							{error}
 						</div>
 					{/if}
-					<div class="flex flex-col gap-[5px] mb-3.5">
-						<label class="text-[11px] font-semibold">Email</label>
-						<input
-							class="{inputBase} font-mono text-xs"
+					<div class="mb-3.5">
+						<Input
+							label="Email"
 							type="email"
+							autocomplete="email"
 							bind:value={email}
 							placeholder="you@company.com"
 							onkeydown={(e) => e.key === 'Enter' && doLogin()}
 						/>
 					</div>
-					<div class="flex flex-col gap-[5px] mb-3.5">
-						<label class="text-[11px] font-semibold">Password</label>
-						<div class="relative">
-							<input
-								class="{inputBase} {shakeField === 'password' ? 'animate-[shake_.35s_ease]' : ''}"
-								type="password"
-								bind:value={password}
-								placeholder="••••••••"
-								onkeydown={(e) => e.key === 'Enter' && doLogin()}
-							/>
-						</div>
+					<div class="mb-3.5">
+						<PasswordInput
+							label="Password"
+							autocomplete="current-password"
+							bind:value={password}
+							placeholder="••••••••"
+							class={shakeField === 'password' ? 'animate-[shake_.35s_ease]' : ''}
+							onkeydown={(e) => e.key === 'Enter' && doLogin()}
+						/>
 					</div>
 					<div class="text-right text-[11px] -mt-2 mb-4">
-						<span
-							class="text-primary cursor-pointer font-semibold hover:text-primary-hover"
-							onclick={() => go('forgot')}>Forgot password?</span
+						<button
+							type="button"
+							class="cursor-pointer border-none bg-transparent p-0 text-[11px] font-semibold text-primary hover:text-primary-hover"
+							onclick={() => go('forgot')}>Forgot password?</button
 						>
 					</div>
 					<button
@@ -324,15 +321,16 @@
 
 			{#if screen === 'forgot'}
 				<div class="flex flex-col animate-[fadeIn_.2s_ease]">
-					<div
-						class="flex items-center gap-[5px] text-xs font-semibold text-text-muted cursor-pointer mb-5 w-fit transition-colors duration-150 hover:text-text-main"
+					<button
+						type="button"
+						class="flex items-center gap-[5px] text-xs font-semibold text-text-muted cursor-pointer mb-5 w-fit border-none bg-transparent p-0 transition-colors duration-150 hover:text-text-main"
 						onclick={() => go('login')}
 					>
 						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
 							><polyline points="15 18 9 12 15 6" /></svg
 						>
 						Back to sign in
-					</div>
+					</button>
 					<div class="text-xl font-bold tracking-[-.4px] mb-1">Forgot password?</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
 						Enter your email and we'll send a link to reset your password.
@@ -344,11 +342,11 @@
 							{error}
 						</div>
 					{/if}
-					<div class="flex flex-col gap-[5px] mb-3.5">
-						<label class="text-[11px] font-semibold">Email</label>
-						<input
-							class="{inputBase} font-mono text-xs"
+					<div class="mb-3.5">
+						<Input
+							label="Email"
 							type="email"
+							autocomplete="email"
 							bind:value={email}
 							placeholder="you@company.com"
 							onkeydown={(e) => e.key === 'Enter' && sendReset()}

@@ -4,6 +4,7 @@
 	import { authStore, type AuthUser } from '$lib/stores/auth.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Input from '$lib/ui/Input.svelte';
+	import PasswordInput from '$lib/ui/PasswordInput.svelte';
 
 	let saving = $state(false);
 	let changingPassword = $state(false);
@@ -120,13 +121,17 @@
 				Change password
 			</h2>
 			<div class="mb-3">
-				<Input label="Current password" type="password" bind:value={currentPassword} />
+				<PasswordInput label="Current password" bind:value={currentPassword} />
 			</div>
 			<div class="mb-3">
-				<Input label="New password" type="password" bind:value={newPassword} />
+				<PasswordInput label="New password" autocomplete="new-password" bind:value={newPassword} />
 			</div>
 			<div class="mb-3">
-				<Input label="Confirm new password" type="password" bind:value={confirmPassword} />
+				<PasswordInput
+					label="Confirm new password"
+					autocomplete="new-password"
+					bind:value={confirmPassword}
+				/>
 			</div>
 			<div class="flex justify-end mt-2">
 				<Button
