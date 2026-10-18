@@ -181,6 +181,7 @@ func dbUserToPublic(u db.User) UserPublic {
 		Email:        email,
 		Role:         UserPublicRole(u.Role),
 		AuthProvider: UserPublicAuthProvider(u.AuthProvider),
+		Status:       UserPublicStatus(u.Status),
 		CreatedAt:    pgTimestampToTime(u.CreatedAt),
 	}
 }

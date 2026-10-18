@@ -110,6 +110,7 @@ var operationAccess = map[string]access{
 	"DeleteTeam":                    {kind: kindAdmin, calls: adminRole},
 	"AddTeamMember":                 {kind: kindAdmin, calls: adminRole},
 	"RemoveTeamMember":              {kind: kindAdmin, calls: adminRole},
+	"UpdateTeamMemberRole":          {kind: kindAdmin, calls: adminRole},
 	"ReconcileTrino":                {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 	"ReconcileEngine":               {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 	"ListReconcileRuns":             {kind: kindAdmin, calls: []string{"RequireAdmin"}},

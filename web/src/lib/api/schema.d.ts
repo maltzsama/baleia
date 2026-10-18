@@ -639,7 +639,8 @@ export interface paths {
         delete: operations["removeTeamMember"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change a team member's role — admin only */
+        patch: operations["updateTeamMemberRole"];
         trace?: never;
     };
     "/workspaces": {
@@ -3212,7 +3213,9 @@ export interface components {
             /** @enum {string} */
             role: "admin" | "member";
             /** @enum {string} */
-            auth_provider: "local" | "oidc";
+            auth_provider: "local" | "oidc" | "ldap";
+            /** @enum {string} */
+            status: "active" | "suspended";
             /** Format: date-time */
             created_at: string;
         };
@@ -3315,6 +3318,10 @@ export interface components {
              * @default member
              * @enum {string}
              */
+            role: "owner" | "member";
+        };
+        UpdateTeamMemberRoleRequest: {
+            /** @enum {string} */
             role: "owner" | "member";
         };
         Workspace: {
@@ -6089,6 +6096,37 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    updateTeamMemberRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeamMemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Member updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamMember"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listWorkspaces: {

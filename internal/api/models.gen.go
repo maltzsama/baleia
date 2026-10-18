@@ -419,6 +419,7 @@ const (
 
 // Defines values for MeAuthProvider.
 const (
+	MeAuthProviderLdap  MeAuthProvider = "ldap"
 	MeAuthProviderLocal MeAuthProvider = "local"
 	MeAuthProviderOidc  MeAuthProvider = "oidc"
 )
@@ -427,6 +428,12 @@ const (
 const (
 	MeRoleAdmin  MeRole = "admin"
 	MeRoleMember MeRole = "member"
+)
+
+// Defines values for MeStatus.
+const (
+	MeStatusActive    MeStatus = "active"
+	MeStatusSuspended MeStatus = "suspended"
 )
 
 // Defines values for MetadataCatalogMetadataSyncStatus.
@@ -690,8 +697,8 @@ const (
 
 // Defines values for UpdateRetrieverRequestStatus.
 const (
-	Active UpdateRetrieverRequestStatus = "active"
-	Paused UpdateRetrieverRequestStatus = "paused"
+	UpdateRetrieverRequestStatusActive UpdateRetrieverRequestStatus = "active"
+	UpdateRetrieverRequestStatusPaused UpdateRetrieverRequestStatus = "paused"
 )
 
 // Defines values for UpdateSpaceRequestDefaultRole.
@@ -706,6 +713,12 @@ const (
 	UpdateSpaceRequestVisibilityWorkspace  UpdateSpaceRequestVisibility = "workspace"
 )
 
+// Defines values for UpdateTeamMemberRoleRequestRole.
+const (
+	UpdateTeamMemberRoleRequestRoleMember UpdateTeamMemberRoleRequestRole = "member"
+	UpdateTeamMemberRoleRequestRoleOwner  UpdateTeamMemberRoleRequestRole = "owner"
+)
+
 // Defines values for UpdateUserRoleRequestRole.
 const (
 	UpdateUserRoleRequestRoleAdmin  UpdateUserRoleRequestRole = "admin"
@@ -714,14 +727,21 @@ const (
 
 // Defines values for UserPublicAuthProvider.
 const (
+	Ldap  UserPublicAuthProvider = "ldap"
 	Local UserPublicAuthProvider = "local"
 	Oidc  UserPublicAuthProvider = "oidc"
 )
 
 // Defines values for UserPublicRole.
 const (
-	UserPublicRoleAdmin  UserPublicRole = "admin"
-	UserPublicRoleMember UserPublicRole = "member"
+	Admin  UserPublicRole = "admin"
+	Member UserPublicRole = "member"
+)
+
+// Defines values for UserPublicStatus.
+const (
+	Active    UserPublicStatus = "active"
+	Suspended UserPublicStatus = "suspended"
 )
 
 // Defines values for WorkspaceType.
@@ -2138,6 +2158,7 @@ type Me struct {
 	Name                string              `json:"name"`
 	PersonalWorkspaceId *openapi_types.UUID `json:"personal_workspace_id"`
 	Role                MeRole              `json:"role"`
+	Status              MeStatus            `json:"status"`
 }
 
 // MeAuthProvider defines model for Me.AuthProvider.
@@ -2145,6 +2166,9 @@ type MeAuthProvider string
 
 // MeRole defines model for Me.Role.
 type MeRole string
+
+// MeStatus defines model for Me.Status.
+type MeStatus string
 
 // MetadataCatalog defines model for MetadataCatalog.
 type MetadataCatalog struct {
@@ -3284,6 +3308,14 @@ type UpdateSpaceRequestDefaultRole string
 // UpdateSpaceRequestVisibility defines model for UpdateSpaceRequest.Visibility.
 type UpdateSpaceRequestVisibility string
 
+// UpdateTeamMemberRoleRequest defines model for UpdateTeamMemberRoleRequest.
+type UpdateTeamMemberRoleRequest struct {
+	Role UpdateTeamMemberRoleRequestRole `json:"role"`
+}
+
+// UpdateTeamMemberRoleRequestRole defines model for UpdateTeamMemberRoleRequest.Role.
+type UpdateTeamMemberRoleRequestRole string
+
 // UpdateUserRoleRequest defines model for UpdateUserRoleRequest.
 type UpdateUserRoleRequest struct {
 	Role UpdateUserRoleRequestRole `json:"role"`
@@ -3311,6 +3343,7 @@ type UserPublic struct {
 	Id           openapi_types.UUID     `json:"id"`
 	Name         string                 `json:"name"`
 	Role         UserPublicRole         `json:"role"`
+	Status       UserPublicStatus       `json:"status"`
 }
 
 // UserPublicAuthProvider defines model for UserPublic.AuthProvider.
@@ -3318,6 +3351,9 @@ type UserPublicAuthProvider string
 
 // UserPublicRole defines model for UserPublic.Role.
 type UserPublicRole string
+
+// UserPublicStatus defines model for UserPublic.Status.
+type UserPublicStatus string
 
 // ValidateRetrieverRequest defines model for ValidateRetrieverRequest.
 type ValidateRetrieverRequest struct {
@@ -3942,6 +3978,9 @@ type CreateTeamJSONRequestBody = CreateTeamRequest
 
 // AddTeamMemberJSONRequestBody defines body for AddTeamMember for application/json ContentType.
 type AddTeamMemberJSONRequestBody = AddTeamMemberRequest
+
+// UpdateTeamMemberRoleJSONRequestBody defines body for UpdateTeamMemberRole for application/json ContentType.
+type UpdateTeamMemberRoleJSONRequestBody = UpdateTeamMemberRoleRequest
 
 // InviteUserJSONRequestBody defines body for InviteUser for application/json ContentType.
 type InviteUserJSONRequestBody = InviteUserRequest

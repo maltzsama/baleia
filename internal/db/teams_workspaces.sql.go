@@ -800,9 +800,10 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 	return i, err
 }
 
-const updateTeamMemberRole = `-- name: UpdateTeamMemberRole :exec
+const updateTeamMemberRole = `-- name: UpdateTeamMemberRole :one
 UPDATE team_members SET role = $3
 WHERE team_id = $1 AND user_id = $2
+RETURNING id, team_id, user_id, role, joined_at
 `
 
 type UpdateTeamMemberRoleParams struct {
@@ -811,9 +812,17 @@ type UpdateTeamMemberRoleParams struct {
 	Role   string      `json:"role"`
 }
 
-func (q *Queries) UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) error {
-	_, err := q.db.Exec(ctx, updateTeamMemberRole, arg.TeamID, arg.UserID, arg.Role)
-	return err
+func (q *Queries) UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) (TeamMember, error) {
+	row := q.db.QueryRow(ctx, updateTeamMemberRole, arg.TeamID, arg.UserID, arg.Role)
+	var i TeamMember
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.UserID,
+		&i.Role,
+		&i.JoinedAt,
+	)
+	return i, err
 }
 
 const updateWorkspace = `-- name: UpdateWorkspace :one

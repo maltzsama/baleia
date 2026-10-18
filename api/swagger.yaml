@@ -669,13 +669,14 @@ components:
     # ── Users ──────────────────────────────────────────────────
     UserPublic:
       type: object
-      required: [id, name, email, role, auth_provider, created_at]
+      required: [id, name, email, role, auth_provider, status, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         email: { type: string, format: email }
         role: { type: string, enum: [admin, member] }
-        auth_provider: { type: string, enum: [local, oidc] }
+        auth_provider: { type: string, enum: [local, oidc, ldap] }
+        status: { type: string, enum: [active, suspended] }
         created_at: { type: string, format: date-time }
 
     # ── Allowed actions (#104) ──────────────────────────────────
@@ -806,6 +807,12 @@ components:
       properties:
         user_id: { type: string, format: uuid }
         role: { type: string, enum: [owner, member], default: member }
+
+    UpdateTeamMemberRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [owner, member] }
 
     # ── Workspaces ─────────────────────────────────────────────
     Workspace:
@@ -3479,6 +3486,25 @@ paths:
         in: path
         required: true
         schema: { type: string, format: uuid }
+    patch:
+      tags: [Teams]
+      operationId: updateTeamMemberRole
+      summary: "Change a team member's role — admin only"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTeamMemberRoleRequest" }
+      responses:
+        "200":
+          description: "Member updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [Teams]
       operationId: removeTeamMember
