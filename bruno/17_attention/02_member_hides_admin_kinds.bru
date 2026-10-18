@@ -1,0 +1,28 @@
+meta {
+  name: Member Does Not See Admin Kinds
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/attention
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("admin-only kinds are hidden", function () {
+    const adminKinds = ["reconcile_drift", "schedule_missing", "audit_export_lagging"];
+    for (const item of res.body) {
+      expect(adminKinds).to.not.include(item.kind);
+    }
+  });
+}

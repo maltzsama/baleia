@@ -1,0 +1,39 @@
+meta {
+  name: List Attention Items
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/attention
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+tests {
+  test("every item has the fix link and no secret", function () {
+    for (const item of res.body) {
+      expect(item).to.have.property("kind");
+      expect(item).to.have.property("severity");
+      expect(item).to.have.property("resource");
+      expect(item).to.have.property("since");
+      expect(JSON.stringify(item)).to.not.contain("password");
+    }
+  });
+}
+
+docs {
+  Attention items (#261), computed from current state and cached for 30 s per
+  user. Items are scoped to what the caller can act on; the admin-only kinds
+  (reconcile_drift, schedule_missing, audit_export_lagging) never reach a
+  member. Nothing is stored: an item disappears when its condition clears.
+}

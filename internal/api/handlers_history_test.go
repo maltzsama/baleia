@@ -131,7 +131,7 @@ func TestHistory_Filters(t *testing.T) {
 	}
 
 	failed := f.list(t, f.owner.String(), "member", ListExecutionsParams{
-		Status: statusPtr(Failed),
+		Status: statusPtr(ListExecutionsParamsStatusFailed),
 	})
 	if got := executionIDs(failed); len(got) != 1 || got[0] != second.String() {
 		t.Fatalf("status: %v", got)
