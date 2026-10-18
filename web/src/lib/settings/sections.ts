@@ -13,6 +13,12 @@ export type SettingsSection = {
 
 export const settingsSections: SettingsSection[] = [
 	{
+		href: '/settings/system',
+		label: 'System status',
+		description: 'Health of every platform component.',
+		action: 'view_system'
+	},
+	{
 		href: '/settings/identity',
 		label: 'Identity providers',
 		description: 'OIDC and LDAP sign-in, group mapping and provider health.',
