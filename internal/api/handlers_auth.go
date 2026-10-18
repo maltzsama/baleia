@@ -99,11 +99,18 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 		actx := audit.WithAuthMethod(audit.WithAnonymous(ctx, audit.EmailFingerprint(string(request.Body.Email))), audit.AuthPassword)
 		h.audited(actx, ev.Denied(reason))
 	}
+	// Progressive per-account delay (#51): repeated failures slow down, but a
+	// cancelled request stops waiting and never hard-locks the account.
+	if err := h.loginDelay().Wait(ctx, string(request.Body.Email)); err != nil {
+		return nil, err
+	}
+
 	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err != nil {
 		// Unknown e-mail: compare against a dummy hash anyway so the response
 		// time does not reveal whether the account exists (#51).
 		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
+		h.loginDelay().Failure(string(request.Body.Email))
 		failed("invalid_credentials")
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
 	}
@@ -111,14 +118,17 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	// An SSO-only account and a wrong password are indistinguishable (#51).
 	if user.AuthProvider != "local" || user.PasswordHash == nil {
 		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
+		h.loginDelay().Failure(string(request.Body.Email))
 		failed("invalid_credentials")
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
 	}
 
 	if !auth.CheckPassword(*user.PasswordHash, request.Body.Password) {
+		h.loginDelay().Failure(string(request.Body.Email))
 		failed("invalid_credentials")
 		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
 	}
+	h.loginDelay().Success(string(request.Body.Email))
 
 	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
 	if err != nil {

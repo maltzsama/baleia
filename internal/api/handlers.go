@@ -56,6 +56,9 @@ type Handlers struct {
 	// so timing does not reveal whether an account exists (#51).
 	dummyHashOnce sync.Once
 	dummyHash     string
+	// loginDelay slows repeated login failures per account (#51).
+	loginDelayStore *LoginDelay
+	loginDelayOnce  sync.Once
 }
 
 // SetWSTickets wires the shared WebSocket ticket store (#26).
