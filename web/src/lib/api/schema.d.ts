@@ -6733,6 +6733,7 @@ export interface operations {
                 catalog_id?: string;
                 certified?: boolean;
                 owner_id?: string;
+                limit?: number;
             };
             header?: never;
             path: {
@@ -6753,6 +6754,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     createSemanticMetric: {
@@ -8975,6 +8977,7 @@ export interface operations {
                 folder_id?: string;
                 /** @description Substring of the name or slug */
                 q?: string;
+                limit?: number;
             };
             header?: never;
             path: {
@@ -8994,6 +8997,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     createSavedQuery: {

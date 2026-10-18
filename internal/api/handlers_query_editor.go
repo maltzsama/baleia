@@ -184,6 +184,15 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 		return ListSavedQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
 	}
 
+	var lim *int32
+	if request.Params.Limit != nil {
+		if *request.Params.Limit < 1 || *request.Params.Limit > 200 {
+			return ListSavedQueries422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 200")}, nil
+		}
+		v := int32(*request.Params.Limit)
+		lim = &v
+	}
+
 	var folderID pgtype.UUID
 	if request.Params.FolderId != nil {
 		folderID.Bytes = *request.Params.FolderId
@@ -206,6 +215,7 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 			SpaceID:     spaceID,
 			FolderID:    folderID,
 			Q:           request.Params.Q,
+			Lim:         lim,
 		})
 	} else {
 		queries, err = h.queries.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{
@@ -213,6 +223,7 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 			UserID:      userID,
 			SpaceID:     spaceID,
 			Q:           request.Params.Q,
+			Lim:         lim,
 		})
 	}
 	if err != nil {

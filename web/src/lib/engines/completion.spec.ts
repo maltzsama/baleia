@@ -69,4 +69,35 @@ describe('resolveAliasColumns', () => {
 
 		expect(tableCalls).toBe(1);
 	});
+
+	it('does not share cached columns across workspaces', async () => {
+		const WS2 = '00000000-0000-0000-0000-000000000002';
+		server.use(
+			http.get('/workspaces/{id}/metadata/search', ({ response }) =>
+				response(200).json([makeSearchResult({ kind: 'table', table: 'orders' })])
+			),
+			http.get('/workspaces/{id}/metadata/tables/{table_id}', ({ params, response }) =>
+				response(200).json(
+					makeTableDetail({
+						columns: [
+							{
+								ordinal: 1,
+								name: params.id === WS2 ? 'other_col' : 'id',
+								native_type: 'long',
+								type_system: 'iceberg',
+								display_type: 'bigint',
+								nullable: false
+							}
+						]
+					})
+				)
+			)
+		);
+
+		const a = await resolveAliasColumns(WS, 'SELECT * FROM orders o', 'o');
+		const b = await resolveAliasColumns(WS2, 'SELECT * FROM orders o', 'o');
+
+		expect(a.map((c) => c.name)).toEqual(['id']);
+		expect(b.map((c) => c.name)).toEqual(['other_col']);
+	});
 });

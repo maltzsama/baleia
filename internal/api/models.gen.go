@@ -3753,7 +3753,8 @@ type ListSavedQueriesParams struct {
 	FolderId *openapi_types.UUID `form:"folder_id,omitempty" json:"folder_id,omitempty"`
 
 	// Q Substring of the name or slug
-	Q *string `form:"q,omitempty" json:"q,omitempty"`
+	Q     *string `form:"q,omitempty" json:"q,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListSavedQueryVersionsParams defines parameters for ListSavedQueryVersions.
@@ -3828,6 +3829,7 @@ type ListSemanticMetricsParams struct {
 	CatalogId *openapi_types.UUID `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
 	Certified *bool               `form:"certified,omitempty" json:"certified,omitempty"`
 	OwnerId   *openapi_types.UUID `form:"owner_id,omitempty" json:"owner_id,omitempty"`
+	Limit     *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetSemanticMetricSqlParams defines parameters for GetSemanticMetricSql.
