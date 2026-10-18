@@ -232,6 +232,8 @@ type Querier interface {
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
+	// Admin listing (#259): includes disabled providers so they can be re-enabled.
+	ListAllAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	// Every visible folder of the workspace (or one space), not only the roots.
 	ListAllVisibleQueryFolders(ctx context.Context, arg ListAllVisibleQueryFoldersParams) ([]QueryFolder, error)
 	// Attention items (#261). Each query returns the raw candidates for one kind;

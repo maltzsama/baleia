@@ -163,6 +163,18 @@ func TestAuditMatrix(t *testing.T) {
 		t.Fatalf("changes = %+v", ev.Changes)
 	}
 
+	// Identity providers (#259).
+	idp := func() *CreateIdentityProviderRequest {
+		return &CreateIdentityProviderRequest{
+			Name: "okta", Type: IdentityProviderTypeOidc,
+			Oidc: &OIDCConfig{IssuerUrl: "https://idp.example.test", ClientId: "client", ClientSecret: "secret"},
+		}
+	}
+	_, _ = h.CreateIdentityProvider(admin, CreateIdentityProviderRequestObject{Body: idp()})
+	one(t, "identity_provider.create", mem.take(), audit.IdentityProviderCreate, audit.Allowed)
+	_, _ = h.CreateIdentityProvider(owner, CreateIdentityProviderRequestObject{Body: idp()})
+	one(t, "identity_provider.create by a member", mem.take(), audit.IdentityProviderCreate, audit.Denied)
+
 	// API keys.
 	kr, _ := h.CreateApiKey(owner, CreateApiKeyRequestObject{Body: &CreateApiKeyRequest{Name: "ci"}})
 	one(t, "api_key.create", mem.take(), audit.APIKeyCreate, audit.Allowed)

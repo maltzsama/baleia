@@ -1,0 +1,46 @@
+meta {
+  name: Create LDAP Provider
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/admin/identity-providers
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno LDAP",
+    "type": "ldap",
+    "enabled": true,
+    "ldap": {
+      "url": "ldaps://ldap.example.test",
+      "bind_dn": "cn=svc,dc=example,dc=test",
+      "bind_password": "bruno-ldap-secret",
+      "base_dn": "dc=example,dc=test",
+      "user_filter": "(uid={{username}})"
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.has_bind_password: eq true
+}
+
+tests {
+  test("the bind password is not echoed", function () {
+    expect(res.body.bind_password).to.be.undefined;
+    expect(JSON.stringify(res.body)).to.not.contain("bruno-ldap-secret");
+  });
+}
+
+vars:post-response {
+  ldap_idp_id: res.body.id
+}

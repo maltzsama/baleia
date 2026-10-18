@@ -249,6 +249,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/identity-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List configured identity providers — admin only
+         * @description Returns every provider (enabled or not) with no secrets. `has_client_secret` and `has_bind_password` report presence only.
+         */
+        get: operations["listIdentityProviders"];
+        put?: never;
+        /**
+         * Create an identity provider — admin only
+         * @description Validates the type-specific configuration and seals it with the keyring. The secret is written once and never returned.
+         */
+        post: operations["createIdentityProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/identity-providers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get an identity provider — admin only
+         * @description Returns the redacted configuration; secrets are never included.
+         */
+        get: operations["getIdentityProvider"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -2686,6 +2732,136 @@ export interface components {
             /** @description SPA route that fixes the item. */
             href?: string;
         };
+        /** @enum {string} */
+        IdentityProviderType: "oidc" | "ldap";
+        /** @description Binds a directory group to a platform role. */
+        IdentityRoleMapping: {
+            group: string;
+            /** @enum {string} */
+            role: "admin" | "member";
+        };
+        /** @description Binds a directory group to a team and role. */
+        IdentityTeamMapping: {
+            group: string;
+            team_id: string;
+            /** @enum {string} */
+            team_role: "owner" | "member";
+        };
+        /** @description Claim names published by the provider; empty uses the standard name. */
+        OIDCClaimsConfig: {
+            subject?: string;
+            email?: string;
+            name?: string;
+            groups?: string;
+        };
+        /** @description OIDC provider configuration written once. `client_secret` is never returned. */
+        OIDCConfig: {
+            /** Format: uri */
+            issuer_url: string;
+            client_id: string;
+            client_secret: string;
+            /**
+             * @description Provision unknown subjects. Default deny; requires allowed_email_domains.
+             * @default false
+             */
+            auto_create: boolean;
+            allowed_email_domains?: string[];
+            role_mapping?: components["schemas"]["IdentityRoleMapping"][];
+            team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            /** @enum {string} */
+            default_role?: "admin" | "member";
+            claims?: components["schemas"]["OIDCClaimsConfig"];
+        };
+        /** @description OIDC provider configuration without the client secret. */
+        OIDCConfigAdmin: {
+            issuer_url?: string;
+            client_id?: string;
+            auto_create?: boolean;
+            allowed_email_domains?: string[];
+            role_mapping?: components["schemas"]["IdentityRoleMapping"][];
+            team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            /** @enum {string} */
+            default_role?: "admin" | "member";
+            claims?: components["schemas"]["OIDCClaimsConfig"];
+        };
+        /** @description LDAP provider configuration written once. `bind_password` is never returned. */
+        LDAPConfig: {
+            /** @description ldaps:// or ldap:// (requires start_tls). */
+            url: string;
+            start_tls?: boolean;
+            bind_dn: string;
+            bind_password: string;
+            base_dn: string;
+            /** @description Must contain exactly one {{username}} placeholder. */
+            user_filter: string;
+            group_attribute?: string;
+            email_attribute?: string;
+            name_attribute?: string;
+            nested_groups?: boolean;
+            required_group?: string;
+            timeout_seconds?: number;
+            role_mapping?: components["schemas"]["IdentityRoleMapping"][];
+            team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            /** @enum {string} */
+            default_role?: "admin" | "member";
+        };
+        /** @description LDAP provider configuration without the bind password. */
+        LDAPConfigAdmin: {
+            url?: string;
+            start_tls?: boolean;
+            bind_dn?: string;
+            base_dn?: string;
+            user_filter?: string;
+            group_attribute?: string;
+            email_attribute?: string;
+            name_attribute?: string;
+            nested_groups?: boolean;
+            required_group?: string;
+            timeout_seconds?: number;
+            role_mapping?: components["schemas"]["IdentityRoleMapping"][];
+            team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            /** @enum {string} */
+            default_role?: "admin" | "member";
+        };
+        IdentityProvider: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: components["schemas"]["IdentityProviderType"];
+            enabled: boolean;
+            /** @description An OIDC client secret is stored (never returned). */
+            has_client_secret: boolean;
+            /** @description An LDAP bind password is stored (never returned). */
+            has_bind_password: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        /** @description A provider with its redacted configuration. */
+        IdentityProviderDetail: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: components["schemas"]["IdentityProviderType"];
+            enabled: boolean;
+            has_client_secret: boolean;
+            has_bind_password: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at?: string;
+            oidc?: components["schemas"]["OIDCConfigAdmin"];
+            ldap?: components["schemas"]["LDAPConfigAdmin"];
+        };
+        CreateIdentityProviderRequest: {
+            name: string;
+            type: components["schemas"]["IdentityProviderType"];
+            /** @default true */
+            enabled: boolean;
+            oidc?: components["schemas"]["OIDCConfig"];
+            ldap?: components["schemas"]["LDAPConfig"];
+        };
         PasswordResetRequestBody: {
             /** Format: email */
             email: string;
@@ -4902,6 +5078,80 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listIdentityProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityProvider"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createIdentityProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIdentityProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider created (secrets redacted) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityProviderDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getIdentityProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider (secrets redacted) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityProviderDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
