@@ -365,22 +365,24 @@
 			id: 'queries',
 			label: 'Saved queries',
 			search: async (query) => {
-				if (workspaceId && savedQueries.spaces.length === 0) await savedQueries.reload(workspaceId);
-				const { data } = await client.GET('/workspaces/{id}/queries', {
-					params: {
-						path: { id: workspaceId },
-						query: query.trim() ? { q: query.trim() } : {}
-					}
-				});
-				return (data ?? []).slice(0, 20).map((item) => ({
-					id: `query-${item.id}`,
-					label: item.name,
-					detail: item.slug,
-					group: 'Saved queries',
-					run: () => {
-						editor.openSavedQuery(item, !savedQueries.canEdit(item.space_id));
-					}
-				}));
+				if (workspaceId && savedQueries.workspaceId !== workspaceId)
+					await savedQueries.reload(workspaceId);
+				const q = query.trim().toLowerCase();
+				return savedQueries.list
+					.filter(
+						(item) =>
+							!q || item.name.toLowerCase().includes(q) || item.slug.toLowerCase().includes(q)
+					)
+					.slice(0, 20)
+					.map((item) => ({
+						id: `query-${item.id}`,
+						label: item.name,
+						detail: item.slug,
+						group: 'Saved queries',
+						run: () => {
+							editor.openSavedQuery(item, !savedQueries.canEdit(item.space_id));
+						}
+					}));
 			}
 		});
 		registerProvider({
@@ -408,7 +410,7 @@
 				const q = query.trim();
 				if (!workspaceId) return [];
 				const { data } = await client.GET('/workspaces/{id}/semantic/metrics', {
-					params: { path: { id: workspaceId }, query: q ? { q } : {} }
+					params: { path: { id: workspaceId }, query: { ...(q ? { q } : {}), limit: 20 } }
 				});
 				const tabBinding = editor.activeTab?.bindingId ?? '';
 				return (data ?? []).slice(0, 20).map((metric) => ({

@@ -6804,6 +6804,14 @@ func (siw *ServerInterfaceWrapper) ListSavedQueries(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListSavedQueries(w, r, id, params)
 	}))
@@ -7910,6 +7918,14 @@ func (siw *ServerInterfaceWrapper) ListSemanticMetrics(w http.ResponseWriter, r 
 	err = runtime.BindQueryParameter("form", true, false, "owner_id", r.URL.Query(), &params.OwnerId)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "owner_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
 		return
 	}
 
@@ -15569,6 +15585,17 @@ func (response ListSavedQueries401JSONResponse) VisitListSavedQueriesResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListSavedQueries422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListSavedQueries422JSONResponse) VisitListSavedQueriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateSavedQueryRequestObject struct {
 	Id   PathId `json:"id"`
 	Body *CreateSavedQueryJSONRequestBody
@@ -16503,6 +16530,17 @@ type ListSemanticMetrics404JSONResponse struct{ NotFoundJSONResponse }
 func (response ListSemanticMetrics404JSONResponse) VisitListSemanticMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticMetrics422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListSemanticMetrics422JSONResponse) VisitListSemanticMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }

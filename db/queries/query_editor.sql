@@ -47,7 +47,8 @@ WHERE q.workspace_id = @workspace_id::uuid
   AND (sqlc.narg(space_id)::uuid IS NULL OR q.space_id = sqlc.narg(space_id)::uuid)
   AND q.folder_id IS NOT DISTINCT FROM sqlc.narg(folder_id)::uuid
   AND (sqlc.narg(q)::text IS NULL OR q.name ILIKE '%' || sqlc.narg(q)::text || '%' OR q.slug ILIKE '%' || sqlc.narg(q)::text || '%')
-ORDER BY q.name;
+ORDER BY q.name
+LIMIT sqlc.narg(lim)::int;
 
 -- name: ListSavedQueryVersions :many
 -- Latest content version of every saved query in the workspace, in one query.
@@ -253,4 +254,5 @@ WHERE q.workspace_id = @workspace_id::uuid
   AND baleia_effective_space_role(q.workspace_id, q.space_id, @user_id::uuid) IS NOT NULL
   AND (sqlc.narg(space_id)::uuid IS NULL OR q.space_id = sqlc.narg(space_id)::uuid)
   AND (sqlc.narg(q)::text IS NULL OR q.name ILIKE '%' || sqlc.narg(q)::text || '%' OR q.slug ILIKE '%' || sqlc.narg(q)::text || '%')
-ORDER BY q.name;
+ORDER BY q.name
+LIMIT sqlc.narg(lim)::int;

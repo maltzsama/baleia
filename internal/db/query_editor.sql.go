@@ -946,6 +946,7 @@ WHERE q.workspace_id = $1::uuid
   AND q.folder_id IS NOT DISTINCT FROM $4::uuid
   AND ($5::text IS NULL OR q.name ILIKE '%' || $5::text || '%' OR q.slug ILIKE '%' || $5::text || '%')
 ORDER BY q.name
+LIMIT $6::int
 `
 
 type ListVisibleSavedQueriesParams struct {
@@ -954,6 +955,7 @@ type ListVisibleSavedQueriesParams struct {
 	SpaceID     pgtype.UUID `json:"space_id"`
 	FolderID    pgtype.UUID `json:"folder_id"`
 	Q           *string     `json:"q"`
+	Lim         *int32      `json:"lim"`
 }
 
 // Only queries of spaces the caller can see; space_id/folder_id/q narrow it.
@@ -964,6 +966,7 @@ func (q *Queries) ListVisibleSavedQueries(ctx context.Context, arg ListVisibleSa
 		arg.SpaceID,
 		arg.FolderID,
 		arg.Q,
+		arg.Lim,
 	)
 	if err != nil {
 		return nil, err
@@ -1064,6 +1067,7 @@ WHERE q.workspace_id = $1::uuid
   AND ($3::uuid IS NULL OR q.space_id = $3::uuid)
   AND ($4::text IS NULL OR q.name ILIKE '%' || $4::text || '%' OR q.slug ILIKE '%' || $4::text || '%')
 ORDER BY q.name
+LIMIT $5::int
 `
 
 type SearchVisibleSavedQueriesParams struct {
@@ -1071,6 +1075,7 @@ type SearchVisibleSavedQueriesParams struct {
 	UserID      pgtype.UUID `json:"user_id"`
 	SpaceID     pgtype.UUID `json:"space_id"`
 	Q           *string     `json:"q"`
+	Lim         *int32      `json:"lim"`
 }
 
 // Every visible saved query, optionally filtered by space and text (#113).
@@ -1080,6 +1085,7 @@ func (q *Queries) SearchVisibleSavedQueries(ctx context.Context, arg SearchVisib
 		arg.UserID,
 		arg.SpaceID,
 		arg.Q,
+		arg.Lim,
 	)
 	if err != nil {
 		return nil, err

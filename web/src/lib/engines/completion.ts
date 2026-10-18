@@ -29,7 +29,7 @@ export function clearCompletionCache(): void {
 
 /**
  * Columns of the table an alias refers to. Exact table-name matches win over
- * fuzzy search hits; the result is cached per table name.
+ * fuzzy search hits; the result is cached per workspace and table name.
  */
 export async function resolveAliasColumns(
 	workspaceId: string,
@@ -38,12 +38,15 @@ export async function resolveAliasColumns(
 	signal?: AbortSignal
 ): Promise<MetadataColumn[]> {
 	const table = tableForAlias(statement, alias);
-	const cached = columnCache.get(table);
+	const cacheKey = `${workspaceId}:${table}`;
+	const cached = columnCache.get(cacheKey);
 	if (cached) return cached;
 	const results = await searchMetadata(workspaceId, table, { kind: 'table', limit: 20, signal });
+	if (signal?.aborted) return [];
 	const hit = results.find((result) => result.table === table) ?? results[0];
 	if (!hit) return [];
 	const detail = await loadTable(workspaceId, hit.table_id);
-	columnCache.set(table, detail.columns);
+	if (signal?.aborted) return [];
+	columnCache.set(cacheKey, detail.columns);
 	return detail.columns;
 }

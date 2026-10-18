@@ -344,6 +344,13 @@ func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemantic
 	if err != nil {
 		return nil, err
 	}
+	limit := 0
+	if request.Params.Limit != nil {
+		if *request.Params.Limit < 1 || *request.Params.Limit > 200 {
+			return ListSemanticMetrics422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 200")}, nil
+		}
+		limit = *request.Params.Limit
+	}
 	metrics, err := h.queries.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{
 		WorkspaceID: ws, UserID: userID,
 	})
@@ -383,6 +390,9 @@ func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemantic
 		acts := h.metricActions(ctx, ws, m.SpaceID)
 		metric.AllowedActions = &acts
 		out = append(out, metric)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 	}
 	return out, nil
 }
