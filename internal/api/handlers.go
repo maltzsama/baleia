@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -51,6 +52,10 @@ type Handlers struct {
 	// wsTickets issues the single-use WebSocket tickets (#26); the WS handler
 	// shares this store.
 	wsTickets *wsticket.Store
+	// dummyHash is compared against on the unknown-account and SSO-only paths
+	// so timing does not reveal whether an account exists (#51).
+	dummyHashOnce sync.Once
+	dummyHash     string
 }
 
 // SetWSTickets wires the shared WebSocket ticket store (#26).
