@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
+	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/google/uuid"
@@ -111,45 +112,145 @@ func shortPassword() UnprocessableEntityJSONResponse {
 }
 
 func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp LoginResponseObject, err error) {
-	defer func() { h.metrics.auth.Attempt(metrics.AuthPassword, authOutcome(resp, err)) }()
+	kind := metrics.AuthPassword
+	method := audit.AuthPassword
+	if request.Body.ProviderId != nil {
+		kind = metrics.AuthLDAP
+		method = audit.AuthLDAP
+	}
+	defer func() { h.metrics.auth.Attempt(kind, authOutcome(resp, err)) }()
+
+	identifier := loginIdentifier(request.Body)
 	ev := audit.Event{Action: audit.AuthLogin, ResourceType: "user"}
-	// A failed login is recorded by a fingerprint of the e-mail, never the
-	// e-mail itself or the password.
+	// A failed login is recorded by a fingerprint of the identifier, never the
+	// e-mail/username itself or the password.
 	failed := func(reason string) {
-		actx := audit.WithAuthMethod(audit.WithAnonymous(ctx, audit.EmailFingerprint(string(request.Body.Email))), audit.AuthPassword)
+		actx := audit.WithAuthMethod(audit.WithAnonymous(ctx, audit.EmailFingerprint(identifier)), method)
 		h.audited(actx, ev.Denied(reason))
 	}
 	// Progressive per-account delay (#51): repeated failures slow down, but a
 	// cancelled request stops waiting and never hard-locks the account.
-	if err := h.loginDelay().Wait(ctx, string(request.Body.Email)); err != nil {
+	if err := h.loginDelay().Wait(ctx, identifier); err != nil {
 		return nil, err
 	}
 
-	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
+	if request.Body.ProviderId != nil {
+		return h.loginLDAP(ctx, request.Body, ev, identifier, failed)
+	}
+
+	if request.Body.Email == nil {
+		h.loginDelay().Failure(identifier)
+		failed("invalid_credentials")
+		return invalidCredentialsLogin(), nil
+	}
+	email := string(*request.Body.Email)
+
+	user, err := h.queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		// Unknown e-mail: compare against a dummy hash anyway so the response
 		// time does not reveal whether the account exists (#51).
 		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
-		h.loginDelay().Failure(string(request.Body.Email))
+		h.loginDelay().Failure(identifier)
 		failed("invalid_credentials")
-		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
+		return invalidCredentialsLogin(), nil
 	}
 
 	// An SSO-only account and a wrong password are indistinguishable (#51).
 	if user.AuthProvider != "local" || user.PasswordHash == nil {
 		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
-		h.loginDelay().Failure(string(request.Body.Email))
+		h.loginDelay().Failure(identifier)
 		failed("invalid_credentials")
-		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
+		return invalidCredentialsLogin(), nil
 	}
 
 	if !auth.CheckPassword(*user.PasswordHash, request.Body.Password) {
-		h.loginDelay().Failure(string(request.Body.Email))
+		h.loginDelay().Failure(identifier)
 		failed("invalid_credentials")
-		return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}, nil
+		return invalidCredentialsLogin(), nil
 	}
-	h.loginDelay().Success(string(request.Body.Email))
+	h.loginDelay().Success(identifier)
+	return h.issueLogin(ctx, user, ev, audit.AuthPassword)
+}
 
+func invalidCredentialsLogin() LoginResponseObject {
+	return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}
+}
+
+// loginIdentifier keys the progressive delay and the audit fingerprint. LDAP
+// usernames are namespaced so they never collide with local e-mails.
+func loginIdentifier(body *LoginRequest) string {
+	if body.ProviderId != nil {
+		if body.Username != nil {
+			return "ldap:" + strings.TrimSpace(*body.Username)
+		}
+		return "ldap:"
+	}
+	if body.Email != nil {
+		return string(*body.Email)
+	}
+	return ""
+}
+
+// loginLDAP authenticates against an LDAP provider (#255). Unknown directory
+// users are never auto-provisioned: the account must already be linked by its
+// stable id (default deny). Every failure is the uniform
+// invalid_credentials error.
+func (h *Handlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.Event, identifier string, failed func(string)) (LoginResponseObject, error) {
+	invalid := func() (LoginResponseObject, error) {
+		h.loginDelay().Failure(identifier)
+		failed("invalid_credentials")
+		return invalidCredentialsLogin(), nil
+	}
+
+	username := ""
+	if body.Username != nil {
+		username = strings.TrimSpace(*body.Username)
+	}
+	if username == "" || body.Password == "" {
+		return invalid()
+	}
+
+	apID := pgtype.UUID{Bytes: *body.ProviderId, Valid: true}
+	ap, err := h.queries.GetAuthProviderByID(ctx, apID)
+	if err != nil || ap.Type != "ldap" || !ap.Enabled {
+		return invalid()
+	}
+	cfg, err := identityldap.OpenConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
+	if err != nil {
+		// Fail closed: an unreadable config never falls back to another method.
+		return invalid()
+	}
+
+	authenticate := h.ldapAuthenticate
+	if authenticate == nil {
+		authenticate = identityldap.Authenticate
+	}
+	result, err := authenticate(ctx, cfg, username, body.Password)
+	if err != nil {
+		return invalid()
+	}
+
+	user, err := h.queries.GetUserByExternalID(ctx, db.GetUserByExternalIDParams{
+		AuthProviderID: ap.ID,
+		ExternalID:     &result.ExternalID,
+	})
+	if err != nil {
+		return invalid()
+	}
+	if result.Role != user.Role {
+		if err := h.queries.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: user.ID, Role: result.Role}); err != nil {
+			return nil, err
+		}
+		user.Role = result.Role
+	}
+	h.applyTeams(ctx, user.ID, result.Teams)
+	h.loginDelay().Success(identifier)
+	return h.issueLogin(ctx, user, ev, audit.AuthLDAP)
+}
+
+// issueLogin mints the access and refresh tokens after the credential check
+// succeeded, so local and directory logins behave identically.
+func (h *Handlers) issueLogin(ctx context.Context, user db.User, ev audit.Event, method string) (LoginResponseObject, error) {
 	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
 	if err != nil {
 		return nil, err
@@ -170,7 +271,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	}
 
 	h.ensurePersonalWorkspace(ctx, user.ID)
-	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthPassword), withID(ev, user.ID).Allowed())
+	h.audited(audit.AsUser(ctx, user.ID.String(), method), withID(ev, user.ID).Allowed())
 
 	return Login200JSONResponse{
 		Token:        accessToken,

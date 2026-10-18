@@ -43,6 +43,7 @@ const (
 const (
 	AuthPassword    = "password"
 	AuthOIDC        = "oidc"
+	AuthLDAP        = "ldap"
 	AuthRefreshTok  = "refresh"
 	AuthAPIKey      = "api_key"
 	AuthAgentToken  = "agent_token"

@@ -1,0 +1,34 @@
+meta {
+  name: Login (LDAP)
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{base_url}}/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  X-Baleia-Client: api
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("ldap_provider_id") || !bru.getEnvVar("ldap_username") || !bru.getEnvVar("ldap_password")) {
+    throw new Error("Set ldap_provider_id, ldap_username and ldap_password (see `docker compose --profile ldap up`)");
+  }
+}
+
+body:json {
+  {
+    "provider_id": "{{ldap_provider_id}}",
+    "username": "{{ldap_username}}",
+    "password": "{{ldap_password}}"
+  }
+}
+
+vars:post-response {
+  token: res.body.token
+  refresh_token: res.body.refresh_token
+}

@@ -171,7 +171,7 @@ func TestAuditMatrix(t *testing.T) {
 	one(t, "api_key.revoke", mem.take(), audit.APIKeyRevoke, audit.Allowed)
 
 	// Auth.
-	_, _ = h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: "owner@x.io", Password: "correct horse"}})
+	_, _ = h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: emailPtr("owner@x.io"), Password: "correct horse"}})
 	ev = one(t, "auth.login", mem.take(), audit.AuthLogin, audit.Allowed)
 	if ev.actorKind != "user" || ev.actorID != f.owner || ev.method != audit.AuthPassword {
 		t.Fatalf("login actor = %+v", ev)
@@ -228,8 +228,8 @@ func TestAuditNoSecrets(t *testing.T) {
 // e-mail's fingerprint, never the e-mail itself.
 func TestAuditLoginFailureHashesEmail(t *testing.T) {
 	f := newAuditFixture(t)
-	_, _ = f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: "owner@x.io", Password: "wrong"}})
-	_, _ = f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: "nobody@x.io", Password: "wrong"}})
+	_, _ = f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: emailPtr("owner@x.io"), Password: "wrong"}})
+	_, _ = f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: emailPtr("nobody@x.io"), Password: "wrong"}})
 	events := f.mem.take()
 	if len(events) != 2 {
 		t.Fatalf("events = %+v", events)

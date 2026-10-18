@@ -27,6 +27,7 @@ func (r *Registry) Auth() *Auth {
 const (
 	AuthPassword = "password"
 	AuthOIDC     = "oidc"
+	AuthLDAP     = "ldap"
 	AuthRefresh  = "refresh"
 	// Password-reset operations (#51), bounded so the kind label stays low
 	// cardinality.
