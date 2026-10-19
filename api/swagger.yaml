@@ -681,7 +681,7 @@ components:
     # ── Agents (#59) ───────────────────────────────────────────
     AgentAllowedAction:
       type: string
-      enum: [view, update, disable, delete, manage_tokens]
+      enum: [view, update, disable, delete, manage_tokens, manage_policy]
     AgentWorkspace:
       type: object
       required: [id, name]
@@ -752,6 +752,45 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         expires_in_days: { type: integer, minimum: 1 }
+
+    AgentPolicyLimits:
+      type: object
+      properties:
+        max_rows_returned: { type: integer, minimum: 0 }
+        max_result_bytes: { type: integer, minimum: 0 }
+        max_query_runtime_seconds: { type: integer, minimum: 0 }
+        max_concurrent_queries: { type: integer, minimum: 0 }
+        max_queries_per_hour: { type: integer, minimum: 0 }
+        max_tool_calls_per_minute: { type: integer, minimum: 0 }
+    AgentPolicy:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, enum: [1] }
+        tools:
+          type: array
+          items: { type: string }
+        catalogs:
+          type: array
+          nullable: true
+          items: { type: string, format: uuid }
+        engines:
+          type: array
+          nullable: true
+          items: { type: string, format: uuid }
+        max_rows_returned: { type: integer, minimum: 0 }
+        max_result_bytes: { type: integer, minimum: 0 }
+        max_query_runtime_seconds: { type: integer, minimum: 0 }
+        max_concurrent_queries: { type: integer, minimum: 0 }
+        max_queries_per_hour: { type: integer, minimum: 0 }
+        max_tool_calls_per_minute: { type: integer, minimum: 0 }
+    AgentPolicyResponse:
+      type: object
+      required: [policy, stored, ceilings]
+      properties:
+        policy: { $ref: "#/components/schemas/AgentPolicy" }
+        stored: { $ref: "#/components/schemas/AgentPolicy" }
+        ceilings: { $ref: "#/components/schemas/AgentPolicyLimits" }
 
     # ── Users ──────────────────────────────────────────────────
     UserPublic:
@@ -3286,6 +3325,41 @@ paths:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{agent_id}/policy:
+    parameters:
+      - $ref: "#/components/parameters/PathAgentId"
+    get:
+      tags: [Agents]
+      operationId: getAgentPolicy
+      summary: "Effective, stored and ceiling values of an agent's policy"
+      responses:
+        "200":
+          description: "Policy"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentPolicyResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Agents]
+      operationId: putAgentPolicy
+      summary: "Replace an agent's policy within the server ceilings"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentPolicy" }
+      responses:
+        "200":
+          description: "Policy updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentPolicyResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Identity providers (admin) ────────────────────────────────
   /admin/identity-providers:

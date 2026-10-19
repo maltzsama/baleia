@@ -11,14 +11,17 @@ import (
 )
 
 type Agent struct {
-	ID          pgtype.UUID        `json:"id"`
-	OwnerID     pgtype.UUID        `json:"owner_id"`
-	Kind        string             `json:"kind"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID              pgtype.UUID        `json:"id"`
+	OwnerID         pgtype.UUID        `json:"owner_id"`
+	Kind            string             `json:"kind"`
+	Name            string             `json:"name"`
+	Description     string             `json:"description"`
+	Status          string             `json:"status"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	Policy          []byte             `json:"policy"`
+	PolicyUpdatedAt pgtype.Timestamptz `json:"policy_updated_at"`
+	PolicyUpdatedBy pgtype.UUID        `json:"policy_updated_by"`
 }
 
 type AgentToken struct {

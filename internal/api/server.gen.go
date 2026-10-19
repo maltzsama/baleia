@@ -63,6 +63,12 @@ type ServerInterface interface {
 	// Update an agent (owner; an admin may only disable it)
 	// (PATCH /agents/{agent_id})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// Effective, stored and ceiling values of an agent's policy
+	// (GET /agents/{agent_id}/policy)
+	GetAgentPolicy(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// Replace an agent's policy within the server ceilings
+	// (PUT /agents/{agent_id}/policy)
+	PutAgentPolicy(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
 	// List an agent's tokens (never the secret)
 	// (GET /agents/{agent_id}/tokens)
 	ListAgentTokens(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
@@ -690,6 +696,18 @@ func (_ Unimplemented) GetAgent(w http.ResponseWriter, r *http.Request, agentId 
 // Update an agent (owner; an admin may only disable it)
 // (PATCH /agents/{agent_id})
 func (_ Unimplemented) UpdateAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Effective, stored and ceiling values of an agent's policy
+// (GET /agents/{agent_id}/policy)
+func (_ Unimplemented) GetAgentPolicy(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace an agent's policy within the server ceilings
+// (PUT /agents/{agent_id}/policy)
+func (_ Unimplemented) PutAgentPolicy(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2224,6 +2242,72 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentPolicy(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutAgentPolicy operation middleware
+func (siw *ServerInterfaceWrapper) PutAgentPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutAgentPolicy(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9587,6 +9671,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/agents/{agent_id}", wrapper.UpdateAgent)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/agents/{agent_id}/policy", wrapper.GetAgentPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/agents/{agent_id}/policy", wrapper.PutAgentPolicy)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/agents/{agent_id}/tokens", wrapper.ListAgentTokens)
 	})
 	r.Group(func(r chi.Router) {
@@ -10825,6 +10915,97 @@ type UpdateAgent422JSONResponse struct {
 }
 
 func (response UpdateAgent422JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentPolicyRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+}
+
+type GetAgentPolicyResponseObject interface {
+	VisitGetAgentPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetAgentPolicy200JSONResponse AgentPolicyResponse
+
+func (response GetAgentPolicy200JSONResponse) VisitGetAgentPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAgentPolicy401JSONResponse) VisitGetAgentPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAgentPolicy404JSONResponse) VisitGetAgentPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAgentPolicyRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+	Body    *PutAgentPolicyJSONRequestBody
+}
+
+type PutAgentPolicyResponseObject interface {
+	VisitPutAgentPolicyResponse(w http.ResponseWriter) error
+}
+
+type PutAgentPolicy200JSONResponse AgentPolicyResponse
+
+func (response PutAgentPolicy200JSONResponse) VisitPutAgentPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAgentPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PutAgentPolicy401JSONResponse) VisitPutAgentPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAgentPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutAgentPolicy403JSONResponse) VisitPutAgentPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAgentPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutAgentPolicy404JSONResponse) VisitPutAgentPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAgentPolicy422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PutAgentPolicy422JSONResponse) VisitPutAgentPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -18487,6 +18668,12 @@ type StrictServerInterface interface {
 	// Update an agent (owner; an admin may only disable it)
 	// (PATCH /agents/{agent_id})
 	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
+	// Effective, stored and ceiling values of an agent's policy
+	// (GET /agents/{agent_id}/policy)
+	GetAgentPolicy(ctx context.Context, request GetAgentPolicyRequestObject) (GetAgentPolicyResponseObject, error)
+	// Replace an agent's policy within the server ceilings
+	// (PUT /agents/{agent_id}/policy)
+	PutAgentPolicy(ctx context.Context, request PutAgentPolicyRequestObject) (PutAgentPolicyResponseObject, error)
 	// List an agent's tokens (never the secret)
 	// (GET /agents/{agent_id}/tokens)
 	ListAgentTokens(ctx context.Context, request ListAgentTokensRequestObject) (ListAgentTokensResponseObject, error)
@@ -19467,6 +19654,65 @@ func (sh *strictHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, age
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateAgentResponseObject); ok {
 		if err := validResponse.VisitUpdateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgentPolicy operation middleware
+func (sh *strictHandler) GetAgentPolicy(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request GetAgentPolicyRequestObject
+
+	request.AgentId = agentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgentPolicy(ctx, request.(GetAgentPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgentPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentPolicyResponseObject); ok {
+		if err := validResponse.VisitGetAgentPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutAgentPolicy operation middleware
+func (sh *strictHandler) PutAgentPolicy(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request PutAgentPolicyRequestObject
+
+	request.AgentId = agentId
+
+	var body PutAgentPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutAgentPolicy(ctx, request.(PutAgentPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutAgentPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutAgentPolicyResponseObject); ok {
+		if err := validResponse.VisitPutAgentPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

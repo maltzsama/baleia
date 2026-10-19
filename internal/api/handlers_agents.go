@@ -78,11 +78,11 @@ func (h *Handlers) agentActions(p authz.Principal, agent db.Agent) []AgentAllowe
 	if agent.OwnerID.Bytes == p.UserID.Bytes {
 		return []AgentAllowedAction{
 			AgentAllowedActionView, AgentAllowedActionUpdate, AgentAllowedActionDisable,
-			AgentAllowedActionDelete, AgentAllowedActionManageTokens,
+			AgentAllowedActionDelete, AgentAllowedActionManageTokens, AgentAllowedActionManagePolicy,
 		}
 	}
 	if p.IsAdmin() {
-		return []AgentAllowedAction{AgentAllowedActionView, AgentAllowedActionDisable, AgentAllowedActionDelete}
+		return []AgentAllowedAction{AgentAllowedActionView, AgentAllowedActionDisable, AgentAllowedActionDelete, AgentAllowedActionManagePolicy}
 	}
 	return nil
 }

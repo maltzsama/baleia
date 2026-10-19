@@ -391,6 +391,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agent_id}/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        /** Effective, stored and ceiling values of an agent's policy */
+        get: operations["getAgentPolicy"];
+        /** Replace an agent's policy within the server ceilings */
+        put: operations["putAgentPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/identity-providers": {
         parameters: {
             query?: never;
@@ -3284,7 +3304,7 @@ export interface components {
             expires_at?: string | null;
         };
         /** @enum {string} */
-        AgentAllowedAction: "view" | "update" | "disable" | "delete" | "manage_tokens";
+        AgentAllowedAction: "view" | "update" | "disable" | "delete" | "manage_tokens" | "manage_policy";
         AgentWorkspace: {
             /** Format: uuid */
             id: string;
@@ -3345,6 +3365,32 @@ export interface components {
         CreateAgentTokenRequest: {
             name: string;
             expires_in_days?: number;
+        };
+        AgentPolicyLimits: {
+            max_rows_returned?: number;
+            max_result_bytes?: number;
+            max_query_runtime_seconds?: number;
+            max_concurrent_queries?: number;
+            max_queries_per_hour?: number;
+            max_tool_calls_per_minute?: number;
+        };
+        AgentPolicy: {
+            /** @enum {integer} */
+            version: 1;
+            tools?: string[];
+            catalogs?: string[] | null;
+            engines?: string[] | null;
+            max_rows_returned?: number;
+            max_result_bytes?: number;
+            max_query_runtime_seconds?: number;
+            max_concurrent_queries?: number;
+            max_queries_per_hour?: number;
+            max_tool_calls_per_minute?: number;
+        };
+        AgentPolicyResponse: {
+            policy: components["schemas"]["AgentPolicy"];
+            stored: components["schemas"]["AgentPolicy"];
+            ceilings: components["schemas"]["AgentPolicyLimits"];
         };
         UserPublic: {
             /** Format: uuid */
@@ -5849,6 +5895,60 @@ export interface operations {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPolicyResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putAgentPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["PathAgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentPolicy"];
+            };
+        };
+        responses: {
+            /** @description Policy updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPolicyResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listIdentityProviders: {

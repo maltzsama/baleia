@@ -225,6 +225,12 @@ All settings are environment variables. Defaults work for local development with
 | `BALEIA_AGENTS_ENABLED` | `false` | Mount the agent management API and (once #58 lands) `/mcp`. Off by default |
 | `BALEIA_AGENT_TOKEN_DEFAULT_TTL` | `720h` | Default lifetime of an agent token when `expires_in_days` is omitted |
 | `BALEIA_AGENT_TOKEN_MAX_TTL` | `2160h` | Maximum accepted agent-token lifetime (90 days) |
+| `BALEIA_AGENT_MAX_ROWS` | `5000` | Ceiling for an agent policy's `max_rows_returned` |
+| `BALEIA_AGENT_MAX_RESULT_BYTES` | `1048576` | Ceiling for `max_result_bytes` (1 MiB) |
+| `BALEIA_AGENT_MAX_QUERY_RUNTIME_SECONDS` | `900` | Ceiling for `max_query_runtime_seconds` |
+| `BALEIA_AGENT_MAX_CONCURRENT_QUERIES` | `10` | Ceiling for `max_concurrent_queries` |
+| `BALEIA_AGENT_MAX_QUERIES_PER_HOUR` | `2000` | Ceiling for `max_queries_per_hour` |
+| `BALEIA_AGENT_MAX_TOOL_CALLS_PER_MINUTE` | `600` | Ceiling for `max_tool_calls_per_minute` |
 
 ### Credential encryption
 

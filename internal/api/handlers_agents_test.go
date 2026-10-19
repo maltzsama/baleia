@@ -298,3 +298,103 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 		t.Error("workflow identity has no agent id")
 	}
 }
+
+func TestAgentPolicy_DefaultsAndCeilings(t *testing.T) {
+	f := newAgentsFixture(t, true)
+	agent := f.createAgent(t, f.owner, "etl-agent")
+
+	got, err := f.h.GetAgentPolicy(f.owner, GetAgentPolicyRequestObject{AgentId: openapi_types.UUID(agent.Id)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, ok := got.(GetAgentPolicy200JSONResponse)
+	if !ok {
+		t.Fatalf("get policy = %T", got)
+	}
+	if resp.Policy.MaxRowsReturned == nil || *resp.Policy.MaxRowsReturned != 500 {
+		t.Fatalf("effective rows = %v, want 500", resp.Policy.MaxRowsReturned)
+	}
+	if resp.Ceilings.MaxRowsReturned == nil || *resp.Ceilings.MaxRowsReturned != 5000 {
+		t.Fatalf("ceiling rows = %v, want 5000", resp.Ceilings.MaxRowsReturned)
+	}
+	if resp.Stored.Tools != nil {
+		t.Errorf("stored tools = %v, want nil (defaults)", resp.Stored.Tools)
+	}
+}
+
+func TestAgentPolicy_PutAndClamp(t *testing.T) {
+	f := newAgentsFixture(t, true)
+	agent := f.createAgent(t, f.owner, "etl-agent")
+
+	version := AgentPolicyVersion(1)
+	tools := []string{"list_catalogs", "run_query"}
+	rows := 10
+	got, err := f.h.PutAgentPolicy(f.owner, PutAgentPolicyRequestObject{
+		AgentId: openapi_types.UUID(agent.Id),
+		Body:    &PutAgentPolicyJSONRequestBody{Version: version, Tools: &tools, MaxRowsReturned: &rows},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, ok := got.(PutAgentPolicy200JSONResponse)
+	if !ok {
+		t.Fatalf("put policy = %T", got)
+	}
+	if resp.Policy.MaxRowsReturned == nil || *resp.Policy.MaxRowsReturned != 10 {
+		t.Fatalf("effective rows = %v, want 10", resp.Policy.MaxRowsReturned)
+	}
+	if resp.Stored.MaxRowsReturned == nil || *resp.Stored.MaxRowsReturned != 10 {
+		t.Fatalf("stored rows = %v, want 10", resp.Stored.MaxRowsReturned)
+	}
+	if len(*resp.Stored.Tools) != 2 {
+		t.Fatalf("stored tools = %v, want 2", *resp.Stored.Tools)
+	}
+}
+
+func TestAgentPolicy_Validation(t *testing.T) {
+	f := newAgentsFixture(t, true)
+	agent := f.createAgent(t, f.owner, "etl-agent")
+	version := AgentPolicyVersion(1)
+	id := openapi_types.UUID(agent.Id)
+
+	rows := 10000
+	got, err := f.h.PutAgentPolicy(f.owner, PutAgentPolicyRequestObject{
+		AgentId: id,
+		Body:    &PutAgentPolicyJSONRequestBody{Version: version, MaxRowsReturned: &rows},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.(PutAgentPolicy422JSONResponse); !ok {
+		t.Fatalf("above the ceiling = %T, want 422", got)
+	}
+
+	tools := []string{"not_a_tool"}
+	got, err = f.h.PutAgentPolicy(f.owner, PutAgentPolicyRequestObject{
+		AgentId: id,
+		Body:    &PutAgentPolicyJSONRequestBody{Version: version, Tools: &tools},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.(PutAgentPolicy422JSONResponse); !ok {
+		t.Fatalf("unknown tool = %T, want 422", got)
+	}
+}
+
+func TestAgentPolicy_Scope(t *testing.T) {
+	f := newAgentsFixture(t, true)
+	agent := f.createAgent(t, f.owner, "etl-agent")
+	id := openapi_types.UUID(agent.Id)
+
+	if got, err := f.h.GetAgentPolicy(f.other, GetAgentPolicyRequestObject{AgentId: id}); err != nil {
+		t.Fatal(err)
+	} else if _, ok := got.(GetAgentPolicy404JSONResponse); !ok {
+		t.Fatalf("other member get = %T, want 404", got)
+	}
+	if got, err := f.h.GetAgentPolicy(f.admin, GetAgentPolicyRequestObject{AgentId: id}); err != nil {
+		t.Fatal(err)
+	} else if _, ok := got.(GetAgentPolicy200JSONResponse); !ok {
+		t.Fatalf("admin get = %T, want 200", got)
+	}
+}

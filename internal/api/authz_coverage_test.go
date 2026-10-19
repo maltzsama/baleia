@@ -105,6 +105,8 @@ var operationAccess = map[string]access{
 	"ListAgentTokens":         {kind: kindSelf, calls: selfPrincipal}, // owner or admin; never the secret
 	"CreateAgentToken":        {kind: kindSelf, calls: selfPrincipal}, // owner only
 	"RevokeAgentToken":        {kind: kindSelf, calls: selfPrincipal}, // owner only
+	"GetAgentPolicy":          {kind: kindSelf, calls: selfPrincipal}, // owner or admin
+	"PutAgentPolicy":          {kind: kindSelf, calls: selfPrincipal}, // owner or admin
 
 	// ── global administrators
 	"ListUsers":                     {kind: kindAdmin, calls: adminRole},

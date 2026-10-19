@@ -55,8 +55,10 @@ type Querier interface {
 	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (CountEngineBlockersRow, error)
 	// What depends on an engine before disabling or deleting it (#110).
 	CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (CountEngineImpactRow, error)
+	CountExecutionsByAgentSince(ctx context.Context, arg CountExecutionsByAgentSinceParams) (int64, error)
 	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
 	CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
+	CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error)
 	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
 	CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error)
 	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
@@ -435,6 +437,7 @@ type Querier interface {
 	// binding owns them any more (an old name that failed to drop): they stay
 	// managed, never adopted, for the reconciler (#37) to drop.
 	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	OldestExecutionByAgentSince(ctx context.Context, arg OldestExecutionByAgentSinceParams) (pgtype.Timestamptz, error)
 	PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error)
 	// Last time the plugin confirmed a registry write (#291). The writer is a
 	// parameter because only the plugin may claim it (contract test).
@@ -510,6 +513,8 @@ type Querier interface {
 	// ReleaseMetadataSyncLock on the same connection.
 	TryMetadataSyncLock(ctx context.Context, catalogID string) (bool, error)
 	UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent, error)
+	// ── policy and quotas (#60) ──────────────────────────────────────────────────
+	UpdateAgentPolicy(ctx context.Context, arg UpdateAgentPolicyParams) (Agent, error)
 	UpdateAuthProvider(ctx context.Context, arg UpdateAuthProviderParams) (AuthProvider, error)
 	// Writes the desired state and enters lifecycle_state, guarded by the states
 	// a change may start from; no row means a concurrent change.
