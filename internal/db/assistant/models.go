@@ -647,6 +647,7 @@ type User struct {
 	SuspendedAt         pgtype.Timestamptz `json:"suspended_at"`
 	SuspendedReason     *string            `json:"suspended_reason"`
 	DirectorySyncedAt   pgtype.Timestamptz `json:"directory_synced_at"`
+	Locale              *string            `json:"locale"`
 }
 
 type Workspace struct {

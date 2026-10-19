@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -72,7 +73,7 @@ type Handlers struct {
 	loginDelayOnce  sync.Once
 	// mailer sends password-reset and invite e-mails (#51). Tests inject a
 	// fake so the reset-request path runs without an SMTP server.
-	mailer func(to, resetURL string) error
+	mailer func(to, locale, resetURL string) error
 	// oidcCache holds discovered providers keyed by id + config version (#280).
 	oidcCache sync.Map
 	// attentionCache caches the computed attention items for 30 s per user (#261).
@@ -87,14 +88,28 @@ type Handlers struct {
 }
 
 // SetMailer injects the password-reset/invite mailer (tests).
-func (h *Handlers) SetMailer(f func(to, resetURL string) error) { h.mailer = f }
+func (h *Handlers) SetMailer(f func(to, locale, resetURL string) error) { h.mailer = f }
 
 // sendMail uses the injected mailer, or SMTP from the configuration.
-func (h *Handlers) sendMail(to, resetURL string) error {
+func (h *Handlers) sendMail(to string, locale *string, resetURL string) error {
+	resolved := mail.Locale(locale, h.cfg.DefaultLocale)
 	if h.mailer != nil {
-		return h.mailer(to, resetURL)
+		return h.mailer(to, resolved, resetURL)
 	}
-	return sendResetEmail(h.cfg, to, resetURL)
+	return mail.Send(mail.ConfigFrom(
+		h.cfg.SMTPHost, h.cfg.SMTPPort, h.cfg.SMTPUser, h.cfg.SMTPPassword, h.cfg.SMTPFrom, h.cfg.DefaultLocale,
+	), to, resolved, "password_reset", map[string]string{"ResetURL": resetURL})
+}
+
+// sendInvite delivers the account-invite e-mail in the recipient's locale.
+func (h *Handlers) sendInvite(to string, locale *string, inviteURL string) error {
+	resolved := mail.Locale(locale, h.cfg.DefaultLocale)
+	if h.mailer != nil {
+		return h.mailer(to, resolved, inviteURL)
+	}
+	return mail.Send(mail.ConfigFrom(
+		h.cfg.SMTPHost, h.cfg.SMTPPort, h.cfg.SMTPUser, h.cfg.SMTPPassword, h.cfg.SMTPFrom, h.cfg.DefaultLocale,
+	), to, resolved, "invite", map[string]string{"InviteURL": inviteURL})
 }
 
 // SetWSTickets wires the shared WebSocket ticket store (#26).
@@ -192,7 +207,7 @@ func (h *Handlers) AssistantService() *assistant.Service { return h.assistant }
 func dbUserToPublic(u db.User) UserPublic {
 	id := openapi_types.UUID(u.ID.Bytes)
 	email := openapi_types.Email(u.Email)
-	return UserPublic{
+	out := UserPublic{
 		Id:           id,
 		Name:         u.Name,
 		Email:        email,
@@ -201,6 +216,11 @@ func dbUserToPublic(u db.User) UserPublic {
 		Status:       UserPublicStatus(u.Status),
 		CreatedAt:    pgTimestampToTime(u.CreatedAt),
 	}
+	if u.Locale != nil {
+		locale := UserPublicLocale(*u.Locale)
+		out.Locale = &locale
+	}
+	return out
 }
 
 func pgTimestampToTime(ts pgtype.Timestamptz) time.Time {

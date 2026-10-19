@@ -1,0 +1,7 @@
+Olá,
+
+Você foi convidado para o Baleia. Clique no link abaixo para definir sua senha e entrar:
+
+{{.InviteURL}}
+
+O link expira em 72 horas.

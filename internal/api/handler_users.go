@@ -100,7 +100,7 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 	}
 
 	inviteURL := h.cfg.PublicURL + "/accept-invite?token=" + token
-	if err := h.sendMail(user.Email, inviteURL); err != nil {
+	if err := h.sendInvite(user.Email, user.Locale, inviteURL); err != nil {
 		slog.Warn("failed to send invite email", "err", err, "url", inviteURL)
 	}
 

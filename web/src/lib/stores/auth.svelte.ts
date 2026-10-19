@@ -19,6 +19,7 @@ export type AuthUser = {
 	// Feature flags and actions outside any resource (#104). Optional because
 	// login responses carry only the user; /auth/me fills them.
 	personal_workspace_id?: string | null;
+	locale?: 'en' | 'pt-BR' | null;
 	features?: Features;
 	global_actions?: string[];
 };

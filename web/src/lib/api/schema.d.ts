@@ -3690,6 +3690,11 @@ export interface components {
             auth_provider: "local" | "oidc" | "ldap";
             /** @enum {string} */
             status: "active" | "suspended";
+            /**
+             * @description UI language; null follows the browser
+             * @enum {string|null}
+             */
+            locale?: "en" | "pt-BR" | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -3720,6 +3725,8 @@ export interface components {
             name?: string;
             /** Format: email */
             email?: string;
+            /** @enum {string} */
+            locale?: "en" | "pt-BR";
         };
         UpdatePasswordRequest: {
             current_password: string;

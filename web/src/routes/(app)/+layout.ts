@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { clearSession, client } from '$lib/api/client';
 import { bootstrap } from '$lib/auth/session';
+import { initLocale } from '$lib/i18n';
 import type { LayoutLoad } from './$types';
 
 export const ssr = false;
@@ -23,5 +24,6 @@ export const load: LayoutLoad = async ({ url }) => {
 		const next = `${url.pathname}${url.search}`;
 		redirect(307, `/login?next=${encodeURIComponent(next)}`);
 	}
+	initLocale((data as { locale?: string | null }).locale);
 	return { user: data };
 };

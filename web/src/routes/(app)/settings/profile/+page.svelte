@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiErrorMessage, client } from '$lib/api/client';
+	import { initLocale, t } from '$lib/i18n';
 	import { authStore, type AuthUser } from '$lib/stores/auth.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import PasswordInput from '$lib/ui/PasswordInput.svelte';
+	import Select from '$lib/ui/Select.svelte';
 
 	let saving = $state(false);
 	let changingPassword = $state(false);
@@ -13,6 +15,12 @@
 
 	let name = $state('');
 	let email = $state('');
+	let locale = $state('');
+	const localeOptions = [
+		{ value: '', label: t('profile_language_auto') },
+		{ value: 'en', label: 'English' },
+		{ value: 'pt-BR', label: 'Português (Brasil)' }
+	];
 
 	let currentPassword = $state('');
 	let newPassword = $state('');
@@ -22,16 +30,21 @@
 		await authStore.load();
 		name = authStore.user?.name ?? '';
 		email = authStore.user?.email ?? '';
+		locale = authStore.user?.locale ?? '';
+		initLocale(locale || null);
 	});
 
 	async function saveProfile() {
 		saving = true;
 		error = '';
 		successMsg = '';
-		const { data, error: err } = await client.PATCH('/me', { body: { name, email } });
+		const { data, error: err } = await client.PATCH('/me', {
+			body: { name, email, locale: locale === '' ? undefined : (locale as 'en' | 'pt-BR') }
+		});
 		saving = false;
 		if (data) {
 			authStore.set(data as AuthUser);
+			initLocale(locale || null);
 			successMsg = 'Profile updated.';
 		} else {
 			error = apiErrorMessage(err, 'Failed to save profile.');
@@ -108,6 +121,9 @@
 					bind:value={email}
 					disabled={authStore.user?.auth_provider !== 'password'}
 				/>
+			</div>
+			<div class="mb-3">
+				<Select label={t('profile_language')} bind:value={locale} options={localeOptions} />
 			</div>
 			<div class="flex justify-end mt-2">
 				<Button variant="primary" onclick={saveProfile} disabled={saving} loading={saving}>

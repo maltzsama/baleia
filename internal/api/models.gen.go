@@ -493,6 +493,12 @@ const (
 	MeAuthProviderOidc  MeAuthProvider = "oidc"
 )
 
+// Defines values for MeLocale.
+const (
+	MeLocaleEn   MeLocale = "en"
+	MeLocalePtBR MeLocale = "pt-BR"
+)
+
 // Defines values for MeRole.
 const (
 	MeRoleAdmin  MeRole = "admin"
@@ -776,6 +782,12 @@ const (
 	UpdateOIDCConfigDefaultRoleMember UpdateOIDCConfigDefaultRole = "member"
 )
 
+// Defines values for UpdateProfileRequestLocale.
+const (
+	UpdateProfileRequestLocaleEn   UpdateProfileRequestLocale = "en"
+	UpdateProfileRequestLocalePtBR UpdateProfileRequestLocale = "pt-BR"
+)
+
 // Defines values for UpdateRetrieverRequestRefreshType.
 const (
 	UpdateRetrieverRequestRefreshTypeFull        UpdateRetrieverRequestRefreshType = "full"
@@ -817,6 +829,12 @@ const (
 	Ldap  UserPublicAuthProvider = "ldap"
 	Local UserPublicAuthProvider = "local"
 	Oidc  UserPublicAuthProvider = "oidc"
+)
+
+// Defines values for UserPublicLocale.
+const (
+	En   UserPublicLocale = "en"
+	PtBR UserPublicLocale = "pt-BR"
 )
 
 // Defines values for UserPublicRole.
@@ -2454,12 +2472,15 @@ type MaintenanceRun struct {
 
 // Me defines model for Me.
 type Me struct {
-	AuthProvider        MeAuthProvider      `json:"auth_provider"`
-	CreatedAt           time.Time           `json:"created_at"`
-	Email               openapi_types.Email `json:"email"`
-	Features            Features            `json:"features"`
-	GlobalActions       []GlobalAction      `json:"global_actions"`
-	Id                  openapi_types.UUID  `json:"id"`
+	AuthProvider  MeAuthProvider      `json:"auth_provider"`
+	CreatedAt     time.Time           `json:"created_at"`
+	Email         openapi_types.Email `json:"email"`
+	Features      Features            `json:"features"`
+	GlobalActions []GlobalAction      `json:"global_actions"`
+	Id            openapi_types.UUID  `json:"id"`
+
+	// Locale UI language; null follows the browser
+	Locale              *MeLocale           `json:"locale"`
 	Name                string              `json:"name"`
 	PersonalWorkspaceId *openapi_types.UUID `json:"personal_workspace_id"`
 	Role                MeRole              `json:"role"`
@@ -2468,6 +2489,9 @@ type Me struct {
 
 // MeAuthProvider defines model for Me.AuthProvider.
 type MeAuthProvider string
+
+// MeLocale UI language; null follows the browser
+type MeLocale string
 
 // MeRole defines model for Me.Role.
 type MeRole string
@@ -3603,9 +3627,13 @@ type UpdatePasswordRequest struct {
 
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
-	Email *openapi_types.Email `json:"email,omitempty"`
-	Name  *string              `json:"name,omitempty"`
+	Email  *openapi_types.Email        `json:"email,omitempty"`
+	Locale *UpdateProfileRequestLocale `json:"locale,omitempty"`
+	Name   *string                     `json:"name,omitempty"`
 }
+
+// UpdateProfileRequestLocale defines model for UpdateProfileRequest.Locale.
+type UpdateProfileRequestLocale string
 
 // UpdateRetrieverRequest defines model for UpdateRetrieverRequest.
 type UpdateRetrieverRequest struct {
@@ -3688,13 +3716,19 @@ type UserPublic struct {
 	CreatedAt    time.Time              `json:"created_at"`
 	Email        openapi_types.Email    `json:"email"`
 	Id           openapi_types.UUID     `json:"id"`
-	Name         string                 `json:"name"`
-	Role         UserPublicRole         `json:"role"`
-	Status       UserPublicStatus       `json:"status"`
+
+	// Locale UI language; null follows the browser
+	Locale *UserPublicLocale `json:"locale"`
+	Name   string            `json:"name"`
+	Role   UserPublicRole    `json:"role"`
+	Status UserPublicStatus  `json:"status"`
 }
 
 // UserPublicAuthProvider defines model for UserPublic.AuthProvider.
 type UserPublicAuthProvider string
+
+// UserPublicLocale UI language; null follows the browser
+type UserPublicLocale string
 
 // UserPublicRole defines model for UserPublic.Role.
 type UserPublicRole string

@@ -378,7 +378,7 @@ func TestReset_RequestStoresHash(t *testing.T) {
 	f := newAuthFixture(t)
 	f.h.cfg.SMTPHost, f.h.cfg.SMTPPort = "smtp.example.test", "25"
 	var sentURL string
-	f.h.SetMailer(func(_, resetURL string) error { sentURL = resetURL; return nil })
+	f.h.SetMailer(func(_, _, resetURL string) error { sentURL = resetURL; return nil })
 
 	resp, err := f.h.RequestPasswordReset(context.Background(), RequestPasswordResetRequestObject{
 		Body: &PasswordResetRequestBody{Email: "owner@x.io"},

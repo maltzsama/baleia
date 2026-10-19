@@ -1,0 +1,7 @@
+Hello,
+
+You have been invited to Baleia. Click the link below to set your password and sign in:
+
+{{.InviteURL}}
+
+The link expires in 72 hours.

@@ -674,7 +674,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 	}
 
 	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
-	if err := h.sendMail(user.Email, resetURL); err != nil {
+	if err := h.sendMail(user.Email, user.Locale, resetURL); err != nil {
 		slog.Error("sendResetEmail failed", "err", err)
 		return nil, err
 	}
@@ -771,6 +771,13 @@ func (h *Handlers) UpdateProfile(ctx context.Context, request UpdateProfileReque
 	})
 	if err != nil {
 		return nil, err
+	}
+	if request.Body.Locale != nil {
+		locale := string(*request.Body.Locale)
+		if err := h.queries.SetUserLocale(ctx, db.SetUserLocaleParams{ID: uid, Locale: &locale}); err != nil {
+			return nil, err
+		}
+		updated.Locale = &locale
 	}
 
 	return UpdateProfile200JSONResponse(dbUserToPublic(updated)), nil

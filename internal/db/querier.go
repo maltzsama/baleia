@@ -481,6 +481,8 @@ type Querier interface {
 	// Persists the engine's handle of a running statement as soon as it is known,
 	// so the API can cancel it from another process.
 	SetStatementQueryHandle(ctx context.Context, arg SetStatementQueryHandleParams) error
+	// UI language preference (#67).
+	SetUserLocale(ctx context.Context, arg SetUserLocaleParams) error
 	SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error
 	// After a failure, a cancel or a crash the statements that never ran are
 	// skipped.

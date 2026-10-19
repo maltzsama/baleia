@@ -75,6 +75,7 @@ type Config struct {
 	SMTPUser              string
 	SMTPPassword          string
 	SMTPFrom              string
+	DefaultLocale         string
 	S3Endpoint            string
 	S3AccessKey           string
 	S3SecretKey           string
@@ -189,6 +190,7 @@ func Load() *Config {
 		SMTPUser:              getEnv("SMTP_USER", ""),
 		SMTPPassword:          getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:              getEnv("SMTP_FROM", ""),
+		DefaultLocale:         getEnv("BALEIA_DEFAULT_LOCALE", "en"),
 		S3Endpoint:            getEnv("S3_ENDPOINT", "localhost:9000"),
 		S3AccessKey:           getEnv("S3_ACCESS_KEY", "rustfsadmin"),
 		S3SecretKey:           getEnv("S3_SECRET_KEY", "rustfsadmin"),

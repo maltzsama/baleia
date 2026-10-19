@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { resolve } from '$app/paths';
 	import AttentionBell from '$lib/components/AttentionBell.svelte';
+	import { t } from '$lib/i18n';
 	import { authStore } from '$lib/stores/auth.svelte';
 
 	let menuOpen = $state(false);
@@ -47,7 +48,7 @@
 		</a>
 		<a
 			href={resolve('/sql')}
-			title="SQL Editor"
+			title={t('nav_sql')}
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
 				{isActive('/sql') ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
 		>
@@ -55,7 +56,7 @@
 		</a>
 		<a
 			href={resolve('/data')}
-			title="Data Explorer"
+			title={t('nav_data')}
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
 				{isActive('/data')
 				? 'bg-primary text-white'
@@ -72,7 +73,7 @@
 		</a>
 		<a
 			href={resolve('/connections')}
-			title="Connections"
+			title={t('nav_connections')}
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
 				{isActive('/connections')
 				? 'bg-primary text-white'
@@ -156,7 +157,7 @@
 		</a>
 		<a
 			href={resolve('/monitoring')}
-			title="Monitoring"
+			title={t('nav_monitoring')}
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
 				{isActive('/monitoring')
 				? 'bg-primary text-white'
@@ -174,7 +175,7 @@
 		{#if authStore.user?.features?.retrievers}
 			<a
 				href={resolve('/retrievers')}
-				title="Retrievers"
+				title={t('nav_retrievers')}
 				class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
 					{isActive('/retrievers')
 					? 'bg-primary text-white'
@@ -187,7 +188,7 @@
 		{/if}
 		<a
 			href={resolve('/history')}
-			title="Query History"
+			title={t('nav_history')}
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
 				{isActive('/history')
 				? 'bg-primary text-white'
@@ -200,7 +201,7 @@
 		<AttentionBell />
 		<a
 			href={resolve('/settings')}
-			title="Settings"
+			title={t('nav_settings')}
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
 				{isActive('/settings')
 				? 'bg-primary text-white'
@@ -238,7 +239,7 @@
 							r="4"
 						/></svg
 					>
-					Profile
+					{t('nav_profile')}
 				</a>
 				<button
 					onclick={authStore.logout}
@@ -247,7 +248,7 @@
 					<svg viewBox="0 0 24 24" class="w-4 h-4"
 						><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg
 					>
-					Logout
+					{t('nav_signout')}
 				</button>
 			</div>
 		{/if}
