@@ -903,8 +903,21 @@ func (h *Handlers) GetExecution(ctx context.Context, request GetExecutionRequest
 	if err != nil {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}
+	if !agentOwnsExecution(ctx, execution) {
+		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+	}
 
 	return GetExecution200JSONResponse(dbExecutionToPublic(execution)), nil
+}
+
+// agentOwnsExecution enforces that an agent sees only the executions it
+// created (#58). A human principal is unaffected.
+func agentOwnsExecution(ctx context.Context, exec db.QueryExecution) bool {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil || !p.IsAgent() {
+		return true
+	}
+	return exec.AgentID.Valid && exec.AgentID.Bytes == p.AgentID.Bytes
 }
 
 func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error) {
@@ -918,6 +931,14 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 	wsID := workspaceIDFromRequest(request.Id)
+
+	// Agents may cancel only the executions they created (#58).
+	if p, err := authz.PrincipalFromContext(ctx); err == nil && p.IsAgent() {
+		exec, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{ID: executionID, WorkspaceID: wsID})
+		if err != nil || !agentOwnsExecution(ctx, exec) {
+			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		}
+	}
 
 	// Conditional cancel: only a running execution transitions to cancelled, so
 	// a completion or failure that races after this call cannot be overwritten.
@@ -1042,6 +1063,9 @@ func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObje
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 	})
 	if err != nil {
+		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+	}
+	if !agentOwnsExecution(ctx, execution) {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
 	}
 
