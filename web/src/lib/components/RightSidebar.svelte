@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import TableDetail from './TableDetail.svelte';
+	import AssistantPanel from '$lib/assistant/Panel.svelte';
+	import { assistantStore } from '$lib/assistant/store.svelte';
 	import type { TableRef } from '$lib/metadata/client';
 
 	let {
@@ -9,11 +12,28 @@
 		collapsed?: boolean;
 		selectedTable?: TableRef | null;
 	} = $props();
+
+	let tab = $state<'inspector' | 'assistant'>('inspector');
+
+	onMount(() => {
+		void assistantStore.loadStatus();
+		const onKey = (event: KeyboardEvent) => {
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'i') {
+				event.preventDefault();
+				if (assistantStore.enabled) {
+					collapsed = false;
+					tab = 'assistant';
+				}
+			}
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
 </script>
 
 <aside
 	class="bg-bg-panel border border-border rounded-[var(--radius)] shadow-sm flex flex-col overflow-hidden transition-[width] duration-200 shrink-0
-	{collapsed ? 'w-9' : 'w-[320px]'}"
+	{collapsed ? 'w-9' : 'w-[340px]'}"
 >
 	{#if collapsed}
 		<div class="flex flex-col items-center py-2.5 gap-2.5 flex-1">
@@ -41,9 +61,38 @@
 	{:else}
 		<div class="flex flex-col flex-1 overflow-hidden">
 			<div class="flex items-center gap-2 border-b border-border bg-bg-toolbar px-2.5 py-[7px]">
-				<span class="flex-1 text-[10px] font-bold uppercase tracking-wide text-text-muted"
-					>Inspector</span
-				>
+				{#if assistantStore.enabled}
+					<div class="flex flex-1 gap-1" role="tablist" aria-label="Right sidebar">
+						<button
+							type="button"
+							role="tab"
+							aria-selected={tab === 'inspector'}
+							class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide {tab ===
+							'inspector'
+								? 'bg-bg-panel text-text-main'
+								: 'text-text-muted hover:text-text-main'}"
+							onclick={() => (tab = 'inspector')}
+						>
+							Inspector
+						</button>
+						<button
+							type="button"
+							role="tab"
+							aria-selected={tab === 'assistant'}
+							class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide {tab ===
+							'assistant'
+								? 'bg-bg-panel text-text-main'
+								: 'text-text-muted hover:text-text-main'}"
+							onclick={() => (tab = 'assistant')}
+						>
+							Assistant
+						</button>
+					</div>
+				{:else}
+					<span class="flex-1 text-[10px] font-bold uppercase tracking-wide text-text-muted"
+						>Inspector</span
+					>
+				{/if}
 				<button
 					onclick={() => (collapsed = true)}
 					title="Collapse"
@@ -53,7 +102,11 @@
 					<svg viewBox="0 0 24 24" class="w-3 h-3"><path d="M9 18l6-6-6-6" /></svg>
 				</button>
 			</div>
-			<TableDetail table={selectedTable ?? null} />
+			{#if tab === 'assistant' && assistantStore.enabled}
+				<AssistantPanel />
+			{:else}
+				<TableDetail table={selectedTable ?? null} />
+			{/if}
 		</div>
 	{/if}
 </aside>

@@ -44,6 +44,12 @@ export const settingsSections: SettingsSection[] = [
 		feature: 'agents'
 	},
 	{
+		href: '/settings/assistant',
+		label: 'Assistant',
+		description: 'Provider, data sharing and turn limits for the embedded assistant.',
+		feature: 'assistant'
+	},
+	{
 		href: '/settings/audit',
 		label: 'Audit trail',
 		description: 'Who changed what, when, and which requests were denied.'
