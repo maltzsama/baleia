@@ -15,21 +15,25 @@ import (
 	"github.com/galileostudio/baleia/internal/agentauth"
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/results"
 	"github.com/galileostudio/baleia/internal/version"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Outcome is what the audit hook needs to know about one tool invocation
 // (#61). Args are intentionally absent: SQL lives in query_executions.
 type Outcome struct {
-	Allowed   bool
-	Reason    agentpolicy.ReasonCode
-	Rows      int64
-	Truncated bool
-	Duration  time.Duration
+	Allowed     bool
+	Reason      agentpolicy.ReasonCode
+	Rows        int64
+	Truncated   bool
+	Duration    time.Duration
+	ExecutionID string
+	Err         error
 }
 
 // Hooks receives every tool invocation. #58 installs NopHooks; #61 installs the
@@ -118,6 +122,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	*r = *r.WithContext(auth.WithAgentPrincipal(r.Context(), ident.OwnerID.String(), ident.AgentID.String()))
+	*r = *r.WithContext(audit.WithAuthMethod(r.Context(), audit.AuthAgentToken))
 	return true
 }
 
@@ -151,11 +156,19 @@ func (s *Server) dispatch(ctx context.Context, call agentpolicy.Call, run func(c
 	}
 	out, err := run(ctx, dec.Effective)
 	if err != nil {
-		s.hooks.OnToolCall(ctx, call, Outcome{Allowed: true, Duration: time.Since(start)})
+		s.hooks.OnToolCall(ctx, call, Outcome{Allowed: true, Err: err, Duration: time.Since(start)})
 		return toolError("internal", err.Error())
 	}
 	rows, truncated := summarize(out)
-	s.hooks.OnToolCall(ctx, call, Outcome{Allowed: true, Rows: rows, Truncated: truncated, Duration: time.Since(start)})
+	o := Outcome{Allowed: true, Rows: rows, Truncated: truncated, Duration: time.Since(start)}
+	if call.Tool == agentpolicy.ToolRunQuery {
+		if m, ok := out.(map[string]any); ok {
+			if id, ok := m["execution_id"].(openapi_types.UUID); ok {
+				o.ExecutionID = id.String()
+			}
+		}
+	}
+	s.hooks.OnToolCall(ctx, call, o)
 	return &mcpsdk.CallToolResult{}, out, nil
 }
 

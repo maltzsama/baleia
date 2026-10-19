@@ -492,7 +492,7 @@ func (s *Server) getExecution(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 	if err != nil {
 		return toolError("invalid_argument", "execution_id must be a UUID")
 	}
-	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolGetExecution, WorkspaceID: pgUUID(ws)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
+	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolGetExecution, WorkspaceID: pgUUID(ws), ExecutionID: pgPtr(execID)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
 		got, err := s.handlers.GetExecution(ctx, api.GetExecutionRequestObject{Id: pathOf(ws), ExecutionId: execID})
 		if err != nil {
 			return nil, err
@@ -517,7 +517,7 @@ func (s *Server) getResults(ctx context.Context, _ *mcpsdk.CallToolRequest, in r
 	if err != nil {
 		return toolError("invalid_argument", "execution_id must be a UUID")
 	}
-	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolGetResults, WorkspaceID: pgUUID(ws)}, func(ctx context.Context, eff agentpolicy.Effective) (any, error) {
+	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolGetResults, WorkspaceID: pgUUID(ws), ExecutionID: pgPtr(execID)}, func(ctx context.Context, eff agentpolicy.Effective) (any, error) {
 		res, err := s.handlers.MCPResults(ctx, ws, execID, in.Offset, in.Limit, eff.MaxRowsReturned, eff.MaxResultBytes)
 		if err != nil {
 			if errors.Is(err, api.ErrWorkspaceNotFound) {
@@ -538,7 +538,7 @@ func (s *Server) cancelExecution(ctx context.Context, _ *mcpsdk.CallToolRequest,
 	if err != nil {
 		return toolError("invalid_argument", "execution_id must be a UUID")
 	}
-	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolCancelExecution, WorkspaceID: pgUUID(ws)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
+	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolCancelExecution, WorkspaceID: pgUUID(ws), ExecutionID: pgPtr(execID)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
 		got, err := s.handlers.CancelExecution(ctx, api.CancelExecutionRequestObject{Id: pathOf(ws), ExecutionId: execID})
 		if err != nil {
 			return nil, err

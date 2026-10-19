@@ -38,6 +38,7 @@ type Call struct {
 	WorkspaceID pgtype.UUID
 	CatalogID   *pgtype.UUID
 	EngineID    *pgtype.UUID
+	ExecutionID *pgtype.UUID
 	SQL         *string
 }
 
