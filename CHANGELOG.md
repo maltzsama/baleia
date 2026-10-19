@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.0](https://github.com/maltzsama/baleia/compare/v0.1.0...v0.2.0) (2026-10-19)
+
+
+### Features
+
+* **agents:** add agent identity, tokens and read-only execution ([#59](https://github.com/maltzsama/baleia/issues/59)) ([1e19092](https://github.com/maltzsama/baleia/commit/1e1909269dd4778c5d15b072897e9dc0d66f2c64))
+* **agents:** add the capability policy and the single enforcement gate ([#60](https://github.com/maltzsama/baleia/issues/60)) ([60552c4](https://github.com/maltzsama/baleia/commit/60552c48e03f9c9aefce7082b46524a1d220b8ca))
+* **agents:** agent identity, tokens and read-only execution ([#59](https://github.com/maltzsama/baleia/issues/59)) ([0e869b4](https://github.com/maltzsama/baleia/commit/0e869b4153b091bcaa9efb35291a1b9d8c130aef))
+* **agents:** capability policy and the single enforcement gate ([#60](https://github.com/maltzsama/baleia/issues/60)) ([1c3e107](https://github.com/maltzsama/baleia/commit/1c3e1079a4a47cf54c34162923476a39807e5560))
+* **mcp:** add the read-only MCP server for metadata and execution ([#58](https://github.com/maltzsama/baleia/issues/58)) ([7a9daf2](https://github.com/maltzsama/baleia/commit/7a9daf2539e966d504234ad4222232e01a68cc0d))
+* **mcp:** read-only MCP server for metadata and execution ([#58](https://github.com/maltzsama/baleia/issues/58)) ([bbd5c76](https://github.com/maltzsama/baleia/commit/bbd5c76ee39b59f90f4f72f2eb167c57721d2f3e))
+
+
+### Bug Fixes
+
+* **agents:** address CodeRabbit review on [#59](https://github.com/maltzsama/baleia/issues/59) ([63441a3](https://github.com/maltzsama/baleia/commit/63441a3b48f92a71501841546d01ad4774885c54))
+* **release:** fail when a merged release PR creates no tag ([f1aae08](https://github.com/maltzsama/baleia/commit/f1aae08618f68f95fea0d8d95ee39620e2dd9583))
+* **release:** package and publish the Helm chart with each release ([2538aad](https://github.com/maltzsama/baleia/commit/2538aadbe1290c0fc79a7e01f0250fab99c197c9))
+* **release:** recognise merged releases and publish the Helm chart ([274ae39](https://github.com/maltzsama/baleia/commit/274ae3949ab54679ce4d2420a8031bab12f80643))
+
+
+### Documentation
+
+* **release:** document the image and chart artifacts ([8596573](https://github.com/maltzsama/baleia/commit/8596573586c27929127b991cbbaa4ea373713eab))
+
 ## 0.1.0 (2026-10-18)
 
 
