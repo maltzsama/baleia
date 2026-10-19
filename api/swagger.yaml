@@ -1097,10 +1097,7 @@ components:
         name: { type: string }
         email: { type: string, format: email }
         locale:
-          allOf:
-            - $ref: "#/components/schemas/Locale"
-          nullable: true
-          description: "UI language preference; null follows the browser (#67)."
+          $ref: "#/components/schemas/Locale"
 
     UpdatePasswordRequest:
       type: object

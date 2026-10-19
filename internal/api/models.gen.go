@@ -3717,11 +3717,9 @@ type UpdatePasswordRequest struct {
 
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
-	Email *openapi_types.Email `json:"email,omitempty"`
-
-	// Locale UI language preference; null follows the browser (#67).
-	Locale *Locale `json:"locale"`
-	Name   *string `json:"name,omitempty"`
+	Email  *openapi_types.Email `json:"email,omitempty"`
+	Locale *Locale              `json:"locale,omitempty"`
+	Name   *string              `json:"name,omitempty"`
 }
 
 // UpdateRetrieverRequest defines model for UpdateRetrieverRequest.

@@ -192,7 +192,7 @@ func (h *Handlers) AssistantService() *assistant.Service { return h.assistant }
 func dbUserToPublic(u db.User) UserPublic {
 	id := openapi_types.UUID(u.ID.Bytes)
 	email := openapi_types.Email(u.Email)
-	return UserPublic{
+	out := UserPublic{
 		Id:           id,
 		Name:         u.Name,
 		Email:        email,
@@ -201,6 +201,11 @@ func dbUserToPublic(u db.User) UserPublic {
 		Status:       UserPublicStatus(u.Status),
 		CreatedAt:    pgTimestampToTime(u.CreatedAt),
 	}
+	if u.Locale != nil {
+		locale := Locale(*u.Locale)
+		out.Locale = &locale
+	}
+	return out
 }
 
 func pgTimestampToTime(ts pgtype.Timestamptz) time.Time {

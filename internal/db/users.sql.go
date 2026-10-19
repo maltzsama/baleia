@@ -98,7 +98,7 @@ func (q *Queries) CreateAuthProvider(ctx context.Context, arg CreateAuthProvider
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email, password_hash, role, auth_provider, auth_provider_id, external_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale
 `
 
 type CreateUserParams struct {
@@ -138,6 +138,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.SuspendedAt,
 		&i.SuspendedReason,
 		&i.DirectorySyncedAt,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -261,7 +262,7 @@ func (q *Queries) GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (Auth
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at FROM users WHERE email = $1
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -283,12 +284,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.SuspendedAt,
 		&i.SuspendedReason,
 		&i.DirectorySyncedAt,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getUserByExternalID = `-- name: GetUserByExternalID :one
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at FROM users
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale FROM users
 WHERE auth_provider_id = $1 AND external_id = $2
 `
 
@@ -316,12 +318,13 @@ func (q *Queries) GetUserByExternalID(ctx context.Context, arg GetUserByExternal
 		&i.SuspendedAt,
 		&i.SuspendedReason,
 		&i.DirectorySyncedAt,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at FROM users WHERE id = $1
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -343,6 +346,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.SuspendedAt,
 		&i.SuspendedReason,
 		&i.DirectorySyncedAt,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -479,7 +483,7 @@ func (q *Queries) ListEnabledLDAPProviders(ctx context.Context) ([]AuthProvider,
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at FROM users ORDER BY name
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale FROM users ORDER BY name
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -507,6 +511,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.SuspendedAt,
 			&i.SuspendedReason,
 			&i.DirectorySyncedAt,
+			&i.Locale,
 		); err != nil {
 			return nil, err
 		}
@@ -519,7 +524,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersByAuthProvider = `-- name: ListUsersByAuthProvider :many
-SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at FROM users WHERE auth_provider_id = $1 ORDER BY created_at
+SELECT id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale FROM users WHERE auth_provider_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) ([]User, error) {
@@ -547,6 +552,7 @@ func (q *Queries) ListUsersByAuthProvider(ctx context.Context, authProviderID pg
 			&i.SuspendedAt,
 			&i.SuspendedReason,
 			&i.DirectorySyncedAt,
+			&i.Locale,
 		); err != nil {
 			return nil, err
 		}
@@ -592,7 +598,7 @@ SET status = 'active',
     suspended_reason = NULL,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale
 `
 
 func (q *Queries) ReinstateUser(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -614,6 +620,7 @@ func (q *Queries) ReinstateUser(ctx context.Context, id pgtype.UUID) (User, erro
 		&i.SuspendedAt,
 		&i.SuspendedReason,
 		&i.DirectorySyncedAt,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -637,7 +644,7 @@ SET status = 'suspended',
     suspended_reason = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale
 `
 
 type SuspendUserParams struct {
@@ -666,6 +673,7 @@ func (q *Queries) SuspendUser(ctx context.Context, arg SuspendUserParams) (User,
 		&i.SuspendedAt,
 		&i.SuspendedReason,
 		&i.DirectorySyncedAt,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -736,19 +744,25 @@ func (q *Queries) UpdateAuthProvider(ctx context.Context, arg UpdateAuthProvider
 
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
-SET name = $2, email = $3, updated_at = now()
+SET name = $2, email = $3, locale = $4, updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at
+RETURNING id, name, email, password_hash, role, auth_provider, auth_provider_id, external_id, personal_workspace_id, created_at, updated_at, status, suspended_at, suspended_reason, directory_synced_at, locale
 `
 
 type UpdateUserParams struct {
-	ID    pgtype.UUID `json:"id"`
-	Name  string      `json:"name"`
-	Email string      `json:"email"`
+	ID     pgtype.UUID `json:"id"`
+	Name   string      `json:"name"`
+	Email  string      `json:"email"`
+	Locale *string     `json:"locale"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUser, arg.ID, arg.Name, arg.Email)
+	row := q.db.QueryRow(ctx, updateUser,
+		arg.ID,
+		arg.Name,
+		arg.Email,
+		arg.Locale,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -766,6 +780,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.SuspendedAt,
 		&i.SuspendedReason,
 		&i.DirectorySyncedAt,
+		&i.Locale,
 	)
 	return i, err
 }

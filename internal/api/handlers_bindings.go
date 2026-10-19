@@ -33,6 +33,14 @@ func unprocessable(code ErrorCode, msg string) UnprocessableEntityJSONResponse {
 	}{{Message: &msg}}}
 }
 
+// unprocessableFields is the code-keyed variant of unprocessable (#67): the UI
+// translates each FieldError code next to its input instead of showing msg.
+func unprocessableFields(msg string, fields ...FieldError) UnprocessableEntityJSONResponse {
+	out := unprocessable(ErrorCodeValidationError, msg)
+	out.Fields = &fields
+	return out
+}
+
 func extraPropsOf(raw []byte) map[string]string {
 	out := map[string]string{}
 	_ = json.Unmarshal(raw, &out)

@@ -336,6 +336,10 @@ func (h *Handlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMe
 		Features:      h.features(ctx),
 		GlobalActions: h.globalActions(ctx, principal),
 	}
+	if user.Locale != nil {
+		locale := Locale(*user.Locale)
+		me.Locale = &locale
+	}
 	if ws, err := h.queries.PersonalWorkspaceID(ctx, user.ID); err == nil {
 		id := openapi_types.UUID(ws.Bytes)
 		me.PersonalWorkspaceId = &id
@@ -763,11 +767,27 @@ func (h *Handlers) UpdateProfile(ctx context.Context, request UpdateProfileReque
 	if request.Body.Email != nil {
 		email = string(*request.Body.Email)
 	}
+	locale := current.Locale
+	if request.Body.Locale != nil {
+		// The generated enum type does not validate on decode; reject anything
+		// outside the supported locales with a translatable field code (#67).
+		switch *request.Body.Locale {
+		case LocaleEn, LocalePtBR:
+			value := string(*request.Body.Locale)
+			locale = &value
+		default:
+			return UpdateProfile422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+				"locale must be en or pt-BR",
+				FieldError{Field: "locale", Code: FieldCodeNotAllowed},
+			)}, nil
+		}
+	}
 
 	updated, err := h.queries.UpdateUser(ctx, db.UpdateUserParams{
-		ID:    uid,
-		Name:  name,
-		Email: email,
+		ID:     uid,
+		Name:   name,
+		Email:  email,
+		Locale: locale,
 	})
 	if err != nil {
 		return nil, err
