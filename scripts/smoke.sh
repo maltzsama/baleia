@@ -50,21 +50,28 @@ fi
 TOKEN=$(jq -r '.token' <<<"$resp")
 [[ -n "$TOKEN" && "$TOKEN" != "null" ]] || { echo "FAIL no token"; exit 1; }
 
-# ── 3. Seed tpch registry row ───────────────────────────────────────────────
+# ── 3. Seed the Trino catalog and a workspace target ────────────────────────
+# The registry row makes `tpch_test` exist in Trino; the target seed exposes it
+# to the smoke admin's personal workspace (catalog + native binding + grant),
+# which POST /executions requires.
 step "seed tpch_test"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ "$STACK" == "k8s" ]]; then
-  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql >/dev/null
+  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -U baleia -d baleia < "$ROOT/db/seed/tpch_test.sql" >/dev/null
+  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -U baleia -d baleia -v email="$EMAIL" < "$ROOT/db/seed/smoke_target.sql" >/dev/null
   # Trino loads catalogs from the registry at boot; restart it so it picks up
   # the row that was just seeded.
   kubectl -n baleia-dev rollout restart deploy/baleia-trino >/dev/null
   kubectl -n baleia-dev rollout status deploy/baleia-trino --timeout=300s >/dev/null
 else
-  (cd "$(dirname "$0")/.." && make seed-tpch >/dev/null)
+  (cd "$ROOT" && make seed-tpch >/dev/null)
+  docker compose -f "$ROOT/docker-compose.yaml" exec -T postgres \
+    psql -U baleia -d baleia -v email="$EMAIL" < "$ROOT/db/seed/smoke_target.sql" >/dev/null
 fi
 
 # ── 4. Personal workspace ───────────────────────────────────────────────────
 step "resolve workspace"
-WS=$(curl -sf -H "Authorization: Bearer $TOKEN" "$API/workspaces" | jq -r '.[0].id')
+WS=$(curl -sf -H "Authorization: Bearer $TOKEN" "$API/auth/me" | jq -r '.personal_workspace_id')
 [[ -n "$WS" && "$WS" != "null" ]] || { echo "FAIL no workspace"; exit 1; }
 
 # ── 5. Run a query through the API ──────────────────────────────────────────
