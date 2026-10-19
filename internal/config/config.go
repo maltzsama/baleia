@@ -159,6 +159,9 @@ type Config struct {
 	AgentMaxConcurrentQueries   int
 	AgentMaxQueriesPerHour      int
 	AgentMaxToolCallsPerMinute  int
+	// MCPAllowedOrigins is the Origin allow-list for /mcp; empty rejects any
+	// request that carries an Origin header (native MCP clients omit it).
+	MCPAllowedOrigins []string
 }
 
 func Load() *Config {
@@ -221,6 +224,7 @@ func Load() *Config {
 		AgentMaxConcurrentQueries:   getEnvInt("BALEIA_AGENT_MAX_CONCURRENT_QUERIES", 10),
 		AgentMaxQueriesPerHour:      getEnvInt("BALEIA_AGENT_MAX_QUERIES_PER_HOUR", 2000),
 		AgentMaxToolCallsPerMinute:  getEnvInt("BALEIA_AGENT_MAX_TOOL_CALLS_PER_MINUTE", 600),
+		MCPAllowedOrigins:           splitList(getEnv("BALEIA_MCP_ALLOWED_ORIGINS", "")),
 		AuditExportURL:              getEnv("BALEIA_AUDIT_EXPORT_URL", ""),
 		AuditExportIndex:            getEnv("BALEIA_AUDIT_EXPORT_INDEX", "baleia-audit"),
 		AuditExportAuth:             getEnv("BALEIA_AUDIT_EXPORT_AUTH", "none"),

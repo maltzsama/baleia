@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/agentpolicy"
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -25,6 +26,7 @@ import (
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/mcp"
 	"github.com/galileostudio/baleia/internal/metrics"
 	_ "github.com/galileostudio/baleia/internal/queryengine/clickhouse"
 	_ "github.com/galileostudio/baleia/internal/queryengine/flightsql"
@@ -40,6 +42,7 @@ import (
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
@@ -181,6 +184,19 @@ func (s *Server) routes() {
 		oidcMiddleware(s.cfg),
 	})
 
+	// The MCP surface is mounted outside /api/v1: agent tokens are valid only
+	// here (#58), and the streamable handler authenticates every request.
+	if s.cfg.AgentsEnabled {
+		gate := agentpolicy.NewGate(s.queries, engineCapabilities{h: h}, h.AgentCeilings())
+		if s.metrics != nil {
+			gate.SetObserver(s.metrics.Agent())
+		}
+		mcpServer := mcp.New(h, gate, s.queries, mcp.NopHooks{}, s.cfg.MCPAllowedOrigins)
+		s.mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+			mcpServer.Handler().ServeHTTP(w, r)
+		})
+	}
+
 	s.mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(audit.Middleware)
 		r.Use(refreshCookieContext)
@@ -209,6 +225,13 @@ func (s *Server) routes() {
 // staticUsers tells the static handler whether the first admin exists.
 type staticUsers interface {
 	ListUsers(ctx context.Context) ([]db.User, error)
+}
+
+// engineCapabilities adapts the API's engine registry to agentpolicy.
+type engineCapabilities struct{ h *baleiaapi.Handlers }
+
+func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (queryengine.ReadOnlySupport, error) {
+	return e.h.EngineReadOnly(ctx, id)
 }
 
 // staticHandler serves the SPA. The root is the app shell, never the directory

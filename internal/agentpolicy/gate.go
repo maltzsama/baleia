@@ -151,22 +151,25 @@ func (g *Gate) Check(ctx context.Context, p authz.Principal, c Call) (dec Decisi
 	if !eff.Tools[c.Tool] {
 		return refuse(ReasonPolicy, fmt.Sprintf("tool %q is not allowed", c.Tool)), nil
 	}
-	if !c.WorkspaceID.Valid {
-		return refuse(ReasonScope, "workspace is required"), nil
-	}
-	bound, err := g.store.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{AgentID: p.AgentID, WorkspaceID: c.WorkspaceID})
-	if err != nil {
-		return Decision{}, err
-	}
-	if !bound {
-		return refuse(ReasonScope, "workspace is not bound to this agent"), nil
-	}
-	member, err := g.store.CheckWorkspaceAccess(ctx, db.CheckWorkspaceAccessParams{ID: c.WorkspaceID, UserID: p.UserID})
-	if err != nil {
-		return Decision{}, err
-	}
-	if !member {
-		return refuse(ReasonScope, "workspace is no longer accessible"), nil
+	// list_workspaces has no workspace argument; every other tool must name one.
+	if c.Tool != ToolListWorkspaces {
+		if !c.WorkspaceID.Valid {
+			return refuse(ReasonScope, "workspace is required"), nil
+		}
+		bound, err := g.store.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{AgentID: p.AgentID, WorkspaceID: c.WorkspaceID})
+		if err != nil {
+			return Decision{}, err
+		}
+		if !bound {
+			return refuse(ReasonScope, "workspace is not bound to this agent"), nil
+		}
+		member, err := g.store.CheckWorkspaceAccess(ctx, db.CheckWorkspaceAccessParams{ID: c.WorkspaceID, UserID: p.UserID})
+		if err != nil {
+			return Decision{}, err
+		}
+		if !member {
+			return refuse(ReasonScope, "workspace is no longer accessible"), nil
+		}
 	}
 	if c.CatalogID != nil && c.CatalogID.Valid {
 		granted, err := g.store.CatalogGrantedToAgent(ctx, db.CatalogGrantedToAgentParams{

@@ -308,6 +308,10 @@ var routeAccess = map[string]access{
 	"GET /metrics": {kind: kindPublic},
 	"ANY /*":       {kind: kindPublic}, // the web app
 
+	// /mcp authenticates every request with an agent token inside the MCP
+	// handler (#58); no JWT, API key or cookie is accepted there.
+	"ANY /mcp": {kind: kindChecked, calls: []string{"Handler"}},
+
 	// The WebSocket authenticates with a single-use ticket issued by
 	// POST /ws-tickets; the JWT never appears in the URL (#26).
 	"GET /api/v1/ws/workspaces/{id}/executions/{execution_id}": {kind: kindChecked, pkg: "../ws", calls: []string{"Consume", "CheckWorkspaceAccess"}},
