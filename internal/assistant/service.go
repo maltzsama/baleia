@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/crypto"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
@@ -219,4 +220,58 @@ func (s *Service) ListMessages(ctx context.Context, conversationID pgtype.UUID, 
 	return s.q.ListMessages(ctx, adb.ListMessagesParams{
 		ConversationID: conversationID, Seq: afterSeq, Limit: limit,
 	})
+}
+
+// ── turn lifecycle ──────────────────────────────────────────────────────────
+
+// Claim starts a turn or returns ErrTurnRunning when one is already in flight.
+func (s *Service) Claim(ctx context.Context, userID, id pgtype.UUID, owner string) (adb.AssistantConversation, error) {
+	row, err := s.q.ClaimConversation(ctx, adb.ClaimConversationParams{
+		ID: id, UserID: userID, TurnOwner: &owner,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return adb.AssistantConversation{}, ErrTurnRunning
+	}
+	return row, err
+}
+
+// Release returns a conversation to idle after a turn.
+func (s *Service) Release(ctx context.Context, id pgtype.UUID) error {
+	return s.q.ReleaseConversation(ctx, id)
+}
+
+// Interrupt marks a conversation interrupted (cancel, crash recovery).
+func (s *Service) Interrupt(ctx context.Context, id pgtype.UUID) error {
+	return s.q.SetConversationInterrupted(ctx, id)
+}
+
+// Heartbeat refreshes the turn lease.
+func (s *Service) Heartbeat(ctx context.Context, id pgtype.UUID) error {
+	return s.q.HeartbeatConversation(ctx, id)
+}
+
+// InterruptStale recovers turns whose replica stopped heartbeating.
+func (s *Service) InterruptStale(ctx context.Context) ([]pgtype.UUID, error) {
+	return s.q.InterruptStaleConversations(ctx)
+}
+
+// SetTitle names a conversation once, from its first user message.
+func (s *Service) SetTitle(ctx context.Context, id pgtype.UUID, title string) error {
+	return s.q.SetConversationTitle(ctx, adb.SetConversationTitleParams{ID: id, Title: title})
+}
+
+// OverBudget reports whether the user's last 24 h of tokens reached the
+// instance budget. A zero budget disables the check.
+func (s *Service) OverBudget(ctx context.Context, userID pgtype.UUID, budget int64) (bool, error) {
+	if budget <= 0 {
+		return false, nil
+	}
+	used, err := s.q.CountUserTokensSince(ctx, adb.CountUserTokensSinceParams{
+		UserID:    userID,
+		CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(-24 * time.Hour), Valid: true},
+	})
+	if err != nil {
+		return false, err
+	}
+	return used >= budget, nil
 }

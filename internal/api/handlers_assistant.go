@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/assistant"
+	"github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
@@ -200,11 +205,15 @@ func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistan
 			// api_key is deliberately absent.
 		},
 	})
+	if h.assistantRunner != nil && row.Enabled && row.Provider != nil && row.Model != nil {
+		key, _ := svc.APIKey(ctx)
+		h.assistantRunner.SetProvider(llm.NewHTTPProvider(*row.Provider, deref(row.BaseUrl), key, *row.Model))
+	}
 	return PutAssistantSettings200JSONResponse(assistantSettingsToPublic(row)), nil
 }
 
-// TestAssistant — POST /admin/assistant/test. The provider adapters land with
-// the turn engine; until then this reports the configuration gap explicitly.
+// TestAssistant — POST /admin/assistant/test. Sends a one-token prompt to the
+// configured provider and reports latency or a sanitized error.
 func (h *Handlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObject) (TestAssistantResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return TestAssistant403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
@@ -217,13 +226,27 @@ func (h *Handlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObje
 	if err != nil {
 		return nil, err
 	}
-	msg := "provider is not configured"
-	if !row.Enabled {
-		msg = "the assistant is disabled"
-	} else if row.Provider == nil || row.Model == nil {
-		msg = "provider and model are not configured"
+	if !row.Enabled || row.Provider == nil || row.Model == nil {
+		msg := "provider and model are not configured"
+		return TestAssistant200JSONResponse(AssistantTestResult{Ok: false, Error: &msg}), nil
 	}
-	return TestAssistant200JSONResponse(AssistantTestResult{Ok: false, Error: &msg}), nil
+	key, err := svc.APIKey(ctx)
+	if err != nil || key == "" {
+		msg := "api key is not configured"
+		return TestAssistant200JSONResponse(AssistantTestResult{Ok: false, Error: &msg}), nil
+	}
+	provider := llm.NewHTTPProvider(*row.Provider, deref(row.BaseUrl), key, *row.Model)
+	start := time.Now()
+	_, err = provider.Stream(ctx, llm.Request{
+		Messages:  []llm.Message{{Role: "user", Content: "reply with the single word ok"}},
+		MaxTokens: 1,
+	}, nil)
+	latency := int(time.Since(start).Milliseconds())
+	if err != nil {
+		msg := "provider rejected the test request"
+		return TestAssistant200JSONResponse(AssistantTestResult{Ok: false, LatencyMs: &latency, Error: &msg}), nil
+	}
+	return TestAssistant200JSONResponse(AssistantTestResult{Ok: true, LatencyMs: &latency}), nil
 }
 
 // ListAssistantConversations — GET /assistant/conversations?workspace_id=…
@@ -314,7 +337,191 @@ func (h *Handlers) GetAssistantConversation(ctx context.Context, request GetAssi
 	return GetAssistantConversation200JSONResponse(out), nil
 }
 
-// DeleteAssistantConversation — DELETE /assistant/conversations/{id}.
+// SendAssistantMessage — POST /assistant/conversations/{id}/messages. The turn
+// runs in the background; the response carries the accepted user seq.
+func (h *Handlers) SendAssistantMessage(ctx context.Context, request SendAssistantMessageRequestObject) (SendAssistantMessageResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return SendAssistantMessage401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	if request.Body == nil {
+		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+	}
+	text := strings.TrimSpace(request.Body.Text)
+	if text == "" {
+		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "text is required")}, nil
+	}
+	if _, err := h.assistantService(); err != nil {
+		return nil, err
+	}
+	if h.assistantRunner == nil {
+		return nil, assistant.ErrRunnerUnavailable
+	}
+	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	seq, err := h.assistantRunner.Start(ctx, p.UserID, id, text)
+	switch {
+	case errors.Is(err, assistant.ErrNotFound):
+		return SendAssistantMessage404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+	case errors.Is(err, assistant.ErrTurnRunning):
+		return SendAssistantMessage409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "turn_running", Message: "a turn is already running"}}, nil
+	case errors.Is(err, assistant.ErrSettingsInvalid):
+		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("assistant_disabled", "the assistant is disabled or not configured")}, nil
+	case err != nil:
+		return nil, err
+	}
+	return SendAssistantMessage202JSONResponse(SendAssistantMessageResponse{Seq: int(seq)}), nil
+}
+
+// CancelAssistantTurn — POST /assistant/conversations/{id}/cancel.
+func (h *Handlers) CancelAssistantTurn(ctx context.Context, request CancelAssistantTurnRequestObject) (CancelAssistantTurnResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return CancelAssistantTurn401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	svc, err := h.assistantService()
+	if err != nil {
+		return nil, err
+	}
+	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
+		if errors.Is(err, assistant.ErrNotFound) {
+			return CancelAssistantTurn404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+		}
+		return nil, err
+	}
+	if h.assistantRunner != nil {
+		h.assistantRunner.Cancel(id)
+	}
+	return CancelAssistantTurn202Response{}, nil
+}
+
+// StreamAssistantConversation — GET /assistant/conversations/{id}/events. The
+// stream replays persisted messages after after_seq and then forwards live
+// messages/deltas. The generated Visit uses io.Copy, so the body implements
+// io.WriterTo to flush each frame through http.Flusher.
+func (h *Handlers) StreamAssistantConversation(ctx context.Context, request StreamAssistantConversationRequestObject) (StreamAssistantConversationResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return StreamAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+	}
+	svc, err := h.assistantService()
+	if err != nil {
+		return nil, err
+	}
+	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
+		if errors.Is(err, assistant.ErrNotFound) {
+			return StreamAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+		}
+		return nil, err
+	}
+	after := int32(0)
+	if request.Params.AfterSeq != nil {
+		after = int32(*request.Params.AfterSeq)
+	}
+	rows, err := svc.ListMessages(ctx, id, after, 500)
+	if err != nil {
+		return nil, err
+	}
+	replay := make([]AssistantMessage, 0, len(rows))
+	for _, row := range rows {
+		replay = append(replay, assistantMessageToPublic(row))
+	}
+	stream := &assistantSSE{ctx: ctx, replay: replay, lastSeq: after, ping: time.NewTicker(15 * time.Second)}
+	if h.assistantRunner != nil {
+		stream.events, stream.unsubscribe = h.assistantRunner.Hub().Subscribe(id.Bytes)
+	}
+	return StreamAssistantConversation200TexteventStreamResponse{Body: stream}, nil
+}
+
+// assistantSSE is the SSE body. WriteTo is what io.Copy uses, which lets each
+// frame flush immediately instead of waiting for the HTTP buffer.
+type assistantSSE struct {
+	ctx         context.Context
+	replay      []AssistantMessage
+	events      <-chan assistant.Event
+	unsubscribe func()
+	ping        *time.Ticker
+	lastSeq     int32
+}
+
+func (s *assistantSSE) Read([]byte) (int, error) { return 0, io.EOF }
+
+func (s *assistantSSE) Close() error {
+	if s.unsubscribe != nil {
+		s.unsubscribe()
+	}
+	if s.ping != nil {
+		s.ping.Stop()
+	}
+	return nil
+}
+
+func (s *assistantSSE) WriteTo(w io.Writer) (int64, error) {
+	var written int64
+	flusher, _ := w.(http.Flusher)
+	write := func(frame string) error {
+		n, err := io.WriteString(w, frame)
+		written += int64(n)
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return err
+	}
+	for _, msg := range s.replay {
+		raw, err := json.Marshal(msg)
+		if err != nil {
+			return written, err
+		}
+		if err := write("event: message\ndata: " + string(raw) + "\n\n"); err != nil {
+			return written, err
+		}
+		if msg.Seq > int(s.lastSeq) {
+			s.lastSeq = int32(msg.Seq)
+		}
+	}
+	var ping <-chan time.Time
+	if s.ping != nil {
+		ping = s.ping.C
+	}
+	for {
+		select {
+		case <-s.ctx.Done():
+			return written, nil
+		case ev := <-s.events:
+			switch ev.Type {
+			case "message":
+				if ev.Seq <= s.lastSeq {
+					continue
+				}
+				s.lastSeq = ev.Seq
+				msg := AssistantMessage{
+					Seq:       int(ev.Seq),
+					Role:      AssistantMessageRole(ev.Role),
+					Content:   json.RawMessage(ev.Content),
+					CreatedAt: ev.CreatedAt,
+				}
+				raw, err := json.Marshal(msg)
+				if err != nil {
+					return written, err
+				}
+				if err := write("event: message\ndata: " + string(raw) + "\n\n"); err != nil {
+					return written, err
+				}
+			case "delta":
+				raw, _ := json.Marshal(map[string]string{"text": ev.Delta})
+				if err := write("event: delta\ndata: " + string(raw) + "\n\n"); err != nil {
+					return written, err
+				}
+			}
+		case <-ping:
+			if err := write(": ping\n\n"); err != nil {
+				return written, err
+			}
+		}
+	}
+}
+
 func (h *Handlers) DeleteAssistantConversation(ctx context.Context, request DeleteAssistantConversationRequestObject) (DeleteAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {

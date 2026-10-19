@@ -908,6 +908,16 @@ components:
       required: [workspace_id]
       properties:
         workspace_id: { type: string, format: uuid }
+    SendAssistantMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 20000 }
+    SendAssistantMessageResponse:
+      type: object
+      required: [seq]
+      properties:
+        seq: { type: integer, minimum: 1 }
 
     # ── Users ──────────────────────────────────────────────────
     UserPublic:
@@ -3584,6 +3594,61 @@ paths:
       summary: "Delete the caller's conversation"
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /assistant/conversations/{id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Assistant]
+      operationId: sendAssistantMessage
+      summary: "Send a user message; the turn runs in the background"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendAssistantMessageRequest" }
+      responses:
+        "202":
+          description: "Turn accepted"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SendAssistantMessageResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /assistant/conversations/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Assistant]
+      operationId: cancelAssistantTurn
+      summary: "Stop the running turn"
+      responses:
+        "202": { description: "Cancel requested" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /assistant/conversations/{id}/events:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Assistant]
+      operationId: streamAssistantConversation
+      summary: "Replay persisted messages and stream the live turn (SSE)"
+      parameters:
+        - name: after_seq
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "SSE stream (message, delta, state)"
+          content:
+            text/event-stream:
+              schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 

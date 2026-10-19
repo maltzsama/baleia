@@ -3173,6 +3173,16 @@ type SemanticTag struct {
 	Tag   string `json:"tag"`
 }
 
+// SendAssistantMessageRequest defines model for SendAssistantMessageRequest.
+type SendAssistantMessageRequest struct {
+	Text string `json:"text"`
+}
+
+// SendAssistantMessageResponse defines model for SendAssistantMessageResponse.
+type SendAssistantMessageResponse struct {
+	Seq int `json:"seq"`
+}
+
 // SetSpaceMemberRequest defines model for SetSpaceMemberRequest.
 type SetSpaceMemberRequest struct {
 	Role SetSpaceMemberRequestRole `json:"role"`
@@ -3866,6 +3876,11 @@ type ListAssistantConversationsParams struct {
 	WorkspaceId openapi_types.UUID `form:"workspace_id" json:"workspace_id"`
 }
 
+// StreamAssistantConversationParams defines parameters for StreamAssistantConversation.
+type StreamAssistantConversationParams struct {
+	AfterSeq *int `form:"after_seq,omitempty" json:"after_seq,omitempty"`
+}
+
 // ListAuditEventsParams defines parameters for ListAuditEvents.
 type ListAuditEventsParams struct {
 	ResourceType *string                       `form:"resource_type,omitempty" json:"resource_type,omitempty"`
@@ -4274,6 +4289,9 @@ type CreateApiKeyJSONRequestBody = CreateApiKeyRequest
 
 // CreateAssistantConversationJSONRequestBody defines body for CreateAssistantConversation for application/json ContentType.
 type CreateAssistantConversationJSONRequestBody = CreateAssistantConversationRequest
+
+// SendAssistantMessageJSONRequestBody defines body for SendAssistantMessage for application/json ContentType.
+type SendAssistantMessageJSONRequestBody = SendAssistantMessageRequest
 
 // ResolveAuditJSONRequestBody defines body for ResolveAudit for application/json ContentType.
 type ResolveAuditJSONRequestBody = AuditResolveRequest

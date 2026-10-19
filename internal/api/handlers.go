@@ -54,6 +54,8 @@ type Handlers struct {
 	content *content.Service
 	// assistant owns assistant settings, agents and conversations (#62).
 	assistant *assistant.Service
+	// assistantRunner runs the MCP-backed turns and owns the SSE hub.
+	assistantRunner *assistant.Runner
 	// wsTickets issues the single-use WebSocket tickets (#26); the WS handler
 	// shares this store.
 	wsTickets *wsticket.Store
@@ -178,6 +180,12 @@ func (h *Handlers) SetDialer(d *connections.Dialer) { h.dialer = d }
 
 // SetAudit wires the audit recorder (#45).
 func (h *Handlers) SetAudit(r audit.Recorder) { h.audit = r }
+
+// SetAssistantRunner wires the turn engine and its SSE hub (#62).
+func (h *Handlers) SetAssistantRunner(r *assistant.Runner) { h.assistantRunner = r }
+
+// AssistantService exposes the persistence service to the wiring site.
+func (h *Handlers) AssistantService() *assistant.Service { return h.assistant }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

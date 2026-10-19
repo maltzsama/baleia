@@ -119,6 +119,9 @@ var operationAccess = map[string]access{
 	"GetAssistantSettings":        {kind: kindAdmin, calls: adminRole},
 	"PutAssistantSettings":        {kind: kindAdmin, calls: adminRole},
 	"TestAssistant":               {kind: kindAdmin, calls: adminRole},
+	"SendAssistantMessage":        {kind: kindSelf, calls: selfPrincipal},
+	"CancelAssistantTurn":         {kind: kindSelf, calls: selfPrincipal},
+	"StreamAssistantConversation": {kind: kindSelf, calls: selfPrincipal},
 
 	// ── global administrators
 	"ListUsers":                     {kind: kindAdmin, calls: adminRole},

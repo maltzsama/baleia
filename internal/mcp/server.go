@@ -96,6 +96,19 @@ func New(h *api.Handlers, gate *agentpolicy.Gate, tokens agentauth.Store, hooks 
 // Handler is the http.Handler mounted at /mcp.
 func (s *Server) Handler() http.Handler { return s.http }
 
+// InProcessClient connects an in-memory MCP client to this server (#62). Tool
+// calls run through the same SDK server, gate and audit hooks as an HTTP agent;
+// the caller must put the assistant principal in the context passed to
+// CallTool.
+func (s *Server) InProcessClient(ctx context.Context) (*mcpsdk.ClientSession, error) {
+	serverTransport, clientTransport := mcpsdk.NewInMemoryTransports()
+	if _, err := s.sdk.Connect(ctx, serverTransport, nil); err != nil {
+		return nil, err
+	}
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "baleia-assistant", Version: version.Version}, nil)
+	return client.Connect(ctx, clientTransport, nil)
+}
+
 // authorize validates the Origin (when present) and the agent bearer token,
 // then puts the agent principal in the request context. The MCP SDK passes the
 // request context to tool handlers, so the in-process API calls see it.

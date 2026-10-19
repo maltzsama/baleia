@@ -114,6 +114,15 @@ type ServerInterface interface {
 	// A conversation and its persisted messages
 	// (GET /assistant/conversations/{id})
 	GetAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId)
+	// Stop the running turn
+	// (POST /assistant/conversations/{id}/cancel)
+	CancelAssistantTurn(w http.ResponseWriter, r *http.Request, id PathId)
+	// Replay persisted messages and stream the live turn (SSE)
+	// (GET /assistant/conversations/{id}/events)
+	StreamAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId, params StreamAssistantConversationParams)
+	// Send a user message; the turn runs in the background
+	// (POST /assistant/conversations/{id}/messages)
+	SendAssistantMessage(w http.ResponseWriter, r *http.Request, id PathId)
 	// Whether the assistant is enabled and what it may share
 	// (GET /assistant/status)
 	GetAssistantStatus(w http.ResponseWriter, r *http.Request)
@@ -828,6 +837,24 @@ func (_ Unimplemented) DeleteAssistantConversation(w http.ResponseWriter, r *htt
 // A conversation and its persisted messages
 // (GET /assistant/conversations/{id})
 func (_ Unimplemented) GetAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop the running turn
+// (POST /assistant/conversations/{id}/cancel)
+func (_ Unimplemented) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replay persisted messages and stream the live turn (SSE)
+// (GET /assistant/conversations/{id}/events)
+func (_ Unimplemented) StreamAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId, params StreamAssistantConversationParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send a user message; the turn runs in the background
+// (POST /assistant/conversations/{id}/messages)
+func (_ Unimplemented) SendAssistantMessage(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2834,6 +2861,116 @@ func (siw *ServerInterfaceWrapper) GetAssistantConversation(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAssistantConversation(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelAssistantTurn operation middleware
+func (siw *ServerInterfaceWrapper) CancelAssistantTurn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelAssistantTurn(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StreamAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) StreamAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StreamAssistantConversationParams
+
+	// ------------- Optional query parameter "after_seq" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after_seq", r.URL.Query(), &params.AfterSeq)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_seq", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StreamAssistantConversation(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendAssistantMessage operation middleware
+func (siw *ServerInterfaceWrapper) SendAssistantMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendAssistantMessage(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10085,6 +10222,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/assistant/conversations/{id}", wrapper.GetAssistantConversation)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assistant/conversations/{id}/cancel", wrapper.CancelAssistantTurn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/assistant/conversations/{id}/events", wrapper.StreamAssistantConversation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assistant/conversations/{id}/messages", wrapper.SendAssistantMessage)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/assistant/status", wrapper.GetAssistantStatus)
 	})
 	r.Group(func(r chi.Router) {
@@ -11944,6 +12090,142 @@ type GetAssistantConversation404JSONResponse struct{ NotFoundJSONResponse }
 func (response GetAssistantConversation404JSONResponse) VisitGetAssistantConversationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelAssistantTurnRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type CancelAssistantTurnResponseObject interface {
+	VisitCancelAssistantTurnResponse(w http.ResponseWriter) error
+}
+
+type CancelAssistantTurn202Response struct {
+}
+
+func (response CancelAssistantTurn202Response) VisitCancelAssistantTurnResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type CancelAssistantTurn401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CancelAssistantTurn401JSONResponse) VisitCancelAssistantTurnResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelAssistantTurn404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CancelAssistantTurn404JSONResponse) VisitCancelAssistantTurnResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type StreamAssistantConversationRequestObject struct {
+	Id     PathId `json:"id"`
+	Params StreamAssistantConversationParams
+}
+
+type StreamAssistantConversationResponseObject interface {
+	VisitStreamAssistantConversationResponse(w http.ResponseWriter) error
+}
+
+type StreamAssistantConversation200TexteventStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response StreamAssistantConversation200TexteventStreamResponse) VisitStreamAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/event-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type StreamAssistantConversation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response StreamAssistantConversation401JSONResponse) VisitStreamAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type StreamAssistantConversation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response StreamAssistantConversation404JSONResponse) VisitStreamAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessageRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *SendAssistantMessageJSONRequestBody
+}
+
+type SendAssistantMessageResponseObject interface {
+	VisitSendAssistantMessageResponse(w http.ResponseWriter) error
+}
+
+type SendAssistantMessage202JSONResponse SendAssistantMessageResponse
+
+func (response SendAssistantMessage202JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SendAssistantMessage401JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SendAssistantMessage404JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SendAssistantMessage409JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SendAssistantMessage422JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -19480,6 +19762,15 @@ type StrictServerInterface interface {
 	// A conversation and its persisted messages
 	// (GET /assistant/conversations/{id})
 	GetAssistantConversation(ctx context.Context, request GetAssistantConversationRequestObject) (GetAssistantConversationResponseObject, error)
+	// Stop the running turn
+	// (POST /assistant/conversations/{id}/cancel)
+	CancelAssistantTurn(ctx context.Context, request CancelAssistantTurnRequestObject) (CancelAssistantTurnResponseObject, error)
+	// Replay persisted messages and stream the live turn (SSE)
+	// (GET /assistant/conversations/{id}/events)
+	StreamAssistantConversation(ctx context.Context, request StreamAssistantConversationRequestObject) (StreamAssistantConversationResponseObject, error)
+	// Send a user message; the turn runs in the background
+	// (POST /assistant/conversations/{id}/messages)
+	SendAssistantMessage(ctx context.Context, request SendAssistantMessageRequestObject) (SendAssistantMessageResponseObject, error)
 	// Whether the assistant is enabled and what it may share
 	// (GET /assistant/status)
 	GetAssistantStatus(ctx context.Context, request GetAssistantStatusRequestObject) (GetAssistantStatusResponseObject, error)
@@ -20909,6 +21200,92 @@ func (sh *strictHandler) GetAssistantConversation(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetAssistantConversationResponseObject); ok {
 		if err := validResponse.VisitGetAssistantConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelAssistantTurn operation middleware
+func (sh *strictHandler) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CancelAssistantTurnRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelAssistantTurn(ctx, request.(CancelAssistantTurnRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelAssistantTurn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelAssistantTurnResponseObject); ok {
+		if err := validResponse.VisitCancelAssistantTurnResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StreamAssistantConversation operation middleware
+func (sh *strictHandler) StreamAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId, params StreamAssistantConversationParams) {
+	var request StreamAssistantConversationRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StreamAssistantConversation(ctx, request.(StreamAssistantConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StreamAssistantConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StreamAssistantConversationResponseObject); ok {
+		if err := validResponse.VisitStreamAssistantConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendAssistantMessage operation middleware
+func (sh *strictHandler) SendAssistantMessage(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request SendAssistantMessageRequestObject
+
+	request.Id = id
+
+	var body SendAssistantMessageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendAssistantMessage(ctx, request.(SendAssistantMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendAssistantMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendAssistantMessageResponseObject); ok {
+		if err := validResponse.VisitSendAssistantMessageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
