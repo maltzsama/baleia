@@ -151,6 +151,14 @@ type Config struct {
 	// accepted when a user mints an agent token (#59).
 	AgentTokenDefaultTTL time.Duration
 	AgentTokenMaxTTL     time.Duration
+	// Agent policy ceilings (#60). A stored policy above a ceiling is rejected
+	// on save and clamped at evaluation time.
+	AgentMaxRows                int
+	AgentMaxResultBytes         int
+	AgentMaxQueryRuntimeSeconds int
+	AgentMaxConcurrentQueries   int
+	AgentMaxQueriesPerHour      int
+	AgentMaxToolCallsPerMinute  int
 }
 
 func Load() *Config {
@@ -194,31 +202,37 @@ func Load() *Config {
 		RateLimitRPS:          getEnvInt("RATE_LIMIT_RPS", 60),
 		RateLimitBurst:        getEnvInt("RATE_LIMIT_BURST", 10),
 
-		ConnectionsDenyCIDRs:       splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
-		ConnectionsAllowCIDRs:      splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
-		ConnectionsAllowLoopback:   getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
-		SQLiteRoot:                 getEnv("BALEIA_SQLITE_ROOT", ""),
-		SQLiteAllowWrite:           getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
-		AllowAmbientAWSCredentials: getEnv("BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS", "false") == "true",
-		MetricsEnabled:             getEnv("BALEIA_METRICS_ENABLED", "true") == "true",
-		MetricsToken:               getEnv("BALEIA_METRICS_TOKEN", ""),
-		WorkerMetricsAddr:          getEnv("BALEIA_WORKER_METRICS_ADDR", ":9090"),
-		TracingEnabled:             getEnv("BALEIA_TRACING_ENABLED", "false") == "true",
-		AgentsEnabled:              getEnv("BALEIA_AGENTS_ENABLED", "false") == "true",
-		AgentTokenDefaultTTL:       getEnvDuration("BALEIA_AGENT_TOKEN_DEFAULT_TTL", 30*24*time.Hour),
-		AgentTokenMaxTTL:           getEnvDuration("BALEIA_AGENT_TOKEN_MAX_TTL", 90*24*time.Hour),
-		AuditExportURL:             getEnv("BALEIA_AUDIT_EXPORT_URL", ""),
-		AuditExportIndex:           getEnv("BALEIA_AUDIT_EXPORT_INDEX", "baleia-audit"),
-		AuditExportAuth:            getEnv("BALEIA_AUDIT_EXPORT_AUTH", "none"),
-		AuditExportUser:            getEnv("BALEIA_AUDIT_EXPORT_USER", ""),
-		AuditExportPassword:        getEnv("BALEIA_AUDIT_EXPORT_PASSWORD", ""),
-		AuditExportToken:           getEnv("BALEIA_AUDIT_EXPORT_TOKEN", ""),
-		AuditExportCAFile:          getEnv("BALEIA_AUDIT_EXPORT_CA_FILE", ""),
-		AuditExportBatch:           getEnvInt("BALEIA_AUDIT_EXPORT_BATCH", 500),
-		AuditExportInterval:        getEnvDuration("BALEIA_AUDIT_EXPORT_INTERVAL", 30*time.Second),
-		DBMaxConns:                 getEnvInt("BALEIA_DB_MAX_CONNS", 0),
-		DBMinConns:                 getEnvInt("BALEIA_DB_MIN_CONNS", 2),
-		DBMaxConnLifetime:          getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
+		ConnectionsDenyCIDRs:        splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
+		ConnectionsAllowCIDRs:       splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
+		ConnectionsAllowLoopback:    getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
+		SQLiteRoot:                  getEnv("BALEIA_SQLITE_ROOT", ""),
+		SQLiteAllowWrite:            getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
+		AllowAmbientAWSCredentials:  getEnv("BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS", "false") == "true",
+		MetricsEnabled:              getEnv("BALEIA_METRICS_ENABLED", "true") == "true",
+		MetricsToken:                getEnv("BALEIA_METRICS_TOKEN", ""),
+		WorkerMetricsAddr:           getEnv("BALEIA_WORKER_METRICS_ADDR", ":9090"),
+		TracingEnabled:              getEnv("BALEIA_TRACING_ENABLED", "false") == "true",
+		AgentsEnabled:               getEnv("BALEIA_AGENTS_ENABLED", "false") == "true",
+		AgentTokenDefaultTTL:        getEnvDuration("BALEIA_AGENT_TOKEN_DEFAULT_TTL", 30*24*time.Hour),
+		AgentTokenMaxTTL:            getEnvDuration("BALEIA_AGENT_TOKEN_MAX_TTL", 90*24*time.Hour),
+		AgentMaxRows:                getEnvInt("BALEIA_AGENT_MAX_ROWS", 5000),
+		AgentMaxResultBytes:         getEnvInt("BALEIA_AGENT_MAX_RESULT_BYTES", 1<<20),
+		AgentMaxQueryRuntimeSeconds: getEnvInt("BALEIA_AGENT_MAX_QUERY_RUNTIME_SECONDS", 900),
+		AgentMaxConcurrentQueries:   getEnvInt("BALEIA_AGENT_MAX_CONCURRENT_QUERIES", 10),
+		AgentMaxQueriesPerHour:      getEnvInt("BALEIA_AGENT_MAX_QUERIES_PER_HOUR", 2000),
+		AgentMaxToolCallsPerMinute:  getEnvInt("BALEIA_AGENT_MAX_TOOL_CALLS_PER_MINUTE", 600),
+		AuditExportURL:              getEnv("BALEIA_AUDIT_EXPORT_URL", ""),
+		AuditExportIndex:            getEnv("BALEIA_AUDIT_EXPORT_INDEX", "baleia-audit"),
+		AuditExportAuth:             getEnv("BALEIA_AUDIT_EXPORT_AUTH", "none"),
+		AuditExportUser:             getEnv("BALEIA_AUDIT_EXPORT_USER", ""),
+		AuditExportPassword:         getEnv("BALEIA_AUDIT_EXPORT_PASSWORD", ""),
+		AuditExportToken:            getEnv("BALEIA_AUDIT_EXPORT_TOKEN", ""),
+		AuditExportCAFile:           getEnv("BALEIA_AUDIT_EXPORT_CA_FILE", ""),
+		AuditExportBatch:            getEnvInt("BALEIA_AUDIT_EXPORT_BATCH", 500),
+		AuditExportInterval:         getEnvDuration("BALEIA_AUDIT_EXPORT_INTERVAL", 30*time.Second),
+		DBMaxConns:                  getEnvInt("BALEIA_DB_MAX_CONNS", 0),
+		DBMinConns:                  getEnvInt("BALEIA_DB_MIN_CONNS", 2),
+		DBMaxConnLifetime:           getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
 	}
 }
 

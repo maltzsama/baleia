@@ -30,9 +30,15 @@ const (
 const (
 	AgentAllowedActionDelete       AgentAllowedAction = "delete"
 	AgentAllowedActionDisable      AgentAllowedAction = "disable"
+	AgentAllowedActionManagePolicy AgentAllowedAction = "manage_policy"
 	AgentAllowedActionManageTokens AgentAllowedAction = "manage_tokens"
 	AgentAllowedActionUpdate       AgentAllowedAction = "update"
 	AgentAllowedActionView         AgentAllowedAction = "view"
+)
+
+// Defines values for AgentPolicyVersion.
+const (
+	N1 AgentPolicyVersion = 1
 )
 
 // Defines values for AttentionKind.
@@ -899,6 +905,40 @@ type AgentStatus string
 
 // AgentAllowedAction defines model for AgentAllowedAction.
 type AgentAllowedAction string
+
+// AgentPolicy defines model for AgentPolicy.
+type AgentPolicy struct {
+	Catalogs               *[]openapi_types.UUID `json:"catalogs"`
+	Engines                *[]openapi_types.UUID `json:"engines"`
+	MaxConcurrentQueries   *int                  `json:"max_concurrent_queries,omitempty"`
+	MaxQueriesPerHour      *int                  `json:"max_queries_per_hour,omitempty"`
+	MaxQueryRuntimeSeconds *int                  `json:"max_query_runtime_seconds,omitempty"`
+	MaxResultBytes         *int                  `json:"max_result_bytes,omitempty"`
+	MaxRowsReturned        *int                  `json:"max_rows_returned,omitempty"`
+	MaxToolCallsPerMinute  *int                  `json:"max_tool_calls_per_minute,omitempty"`
+	Tools                  *[]string             `json:"tools,omitempty"`
+	Version                AgentPolicyVersion    `json:"version"`
+}
+
+// AgentPolicyVersion defines model for AgentPolicy.Version.
+type AgentPolicyVersion int
+
+// AgentPolicyLimits defines model for AgentPolicyLimits.
+type AgentPolicyLimits struct {
+	MaxConcurrentQueries   *int `json:"max_concurrent_queries,omitempty"`
+	MaxQueriesPerHour      *int `json:"max_queries_per_hour,omitempty"`
+	MaxQueryRuntimeSeconds *int `json:"max_query_runtime_seconds,omitempty"`
+	MaxResultBytes         *int `json:"max_result_bytes,omitempty"`
+	MaxRowsReturned        *int `json:"max_rows_returned,omitempty"`
+	MaxToolCallsPerMinute  *int `json:"max_tool_calls_per_minute,omitempty"`
+}
+
+// AgentPolicyResponse defines model for AgentPolicyResponse.
+type AgentPolicyResponse struct {
+	Ceilings AgentPolicyLimits `json:"ceilings"`
+	Policy   AgentPolicy       `json:"policy"`
+	Stored   AgentPolicy       `json:"stored"`
+}
 
 // AgentToken defines model for AgentToken.
 type AgentToken struct {
@@ -4015,6 +4055,9 @@ type CreateAgentJSONRequestBody = CreateAgentRequest
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody = UpdateAgentRequest
+
+// PutAgentPolicyJSONRequestBody defines body for PutAgentPolicy for application/json ContentType.
+type PutAgentPolicyJSONRequestBody = AgentPolicy
 
 // CreateAgentTokenJSONRequestBody defines body for CreateAgentToken for application/json ContentType.
 type CreateAgentTokenJSONRequestBody = CreateAgentTokenRequest

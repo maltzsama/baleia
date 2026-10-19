@@ -66,11 +66,40 @@ func (q *Queries) CountActiveAgentTokens(ctx context.Context, agentID pgtype.UUI
 	return count, err
 }
 
+const countExecutionsByAgentSince = `-- name: CountExecutionsByAgentSince :one
+SELECT count(*) FROM query_executions
+WHERE agent_id = $1 AND started_at > $2
+`
+
+type CountExecutionsByAgentSinceParams struct {
+	AgentID   pgtype.UUID        `json:"agent_id"`
+	StartedAt pgtype.Timestamptz `json:"started_at"`
+}
+
+func (q *Queries) CountExecutionsByAgentSince(ctx context.Context, arg CountExecutionsByAgentSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countExecutionsByAgentSince, arg.AgentID, arg.StartedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countRunningExecutionsByAgent = `-- name: CountRunningExecutionsByAgent :one
+SELECT count(*) FROM query_executions
+WHERE agent_id = $1 AND status = 'running'
+`
+
+func (q *Queries) CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countRunningExecutionsByAgent, agentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAgent = `-- name: CreateAgent :one
 
 INSERT INTO agents (owner_id, kind, name, description)
 VALUES ($1, $2, $3, $4)
-RETURNING id, owner_id, kind, name, description, status, created_at, updated_at
+RETURNING id, owner_id, kind, name, description, status, created_at, updated_at, policy, policy_updated_at, policy_updated_by
 `
 
 type CreateAgentParams struct {
@@ -98,6 +127,9 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Policy,
+		&i.PolicyUpdatedAt,
+		&i.PolicyUpdatedBy,
 	)
 	return i, err
 }
@@ -152,7 +184,7 @@ func (q *Queries) DeleteAgent(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT id, owner_id, kind, name, description, status, created_at, updated_at FROM agents WHERE id = $1
+SELECT id, owner_id, kind, name, description, status, created_at, updated_at, policy, policy_updated_at, policy_updated_by FROM agents WHERE id = $1
 `
 
 func (q *Queries) GetAgentByID(ctx context.Context, id pgtype.UUID) (Agent, error) {
@@ -167,6 +199,9 @@ func (q *Queries) GetAgentByID(ctx context.Context, id pgtype.UUID) (Agent, erro
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Policy,
+		&i.PolicyUpdatedAt,
+		&i.PolicyUpdatedBy,
 	)
 	return i, err
 }
@@ -295,7 +330,7 @@ func (q *Queries) ListAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) 
 }
 
 const listAgentsByOwner = `-- name: ListAgentsByOwner :many
-SELECT id, owner_id, kind, name, description, status, created_at, updated_at FROM agents
+SELECT id, owner_id, kind, name, description, status, created_at, updated_at, policy, policy_updated_at, policy_updated_by FROM agents
 WHERE owner_id = $1 AND kind = 'external'
 ORDER BY created_at DESC
 `
@@ -318,6 +353,9 @@ func (q *Queries) ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Policy,
+			&i.PolicyUpdatedAt,
+			&i.PolicyUpdatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -330,7 +368,7 @@ func (q *Queries) ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([
 }
 
 const listAllAgents = `-- name: ListAllAgents :many
-SELECT id, owner_id, kind, name, description, status, created_at, updated_at FROM agents WHERE kind = 'external' ORDER BY created_at DESC
+SELECT id, owner_id, kind, name, description, status, created_at, updated_at, policy, policy_updated_at, policy_updated_by FROM agents WHERE kind = 'external' ORDER BY created_at DESC
 `
 
 func (q *Queries) ListAllAgents(ctx context.Context) ([]Agent, error) {
@@ -351,6 +389,9 @@ func (q *Queries) ListAllAgents(ctx context.Context) ([]Agent, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Policy,
+			&i.PolicyUpdatedAt,
+			&i.PolicyUpdatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -360,6 +401,25 @@ func (q *Queries) ListAllAgents(ctx context.Context) ([]Agent, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const oldestExecutionByAgentSince = `-- name: OldestExecutionByAgentSince :one
+SELECT started_at FROM query_executions
+WHERE agent_id = $1 AND started_at > $2
+ORDER BY started_at ASC
+LIMIT 1
+`
+
+type OldestExecutionByAgentSinceParams struct {
+	AgentID   pgtype.UUID        `json:"agent_id"`
+	StartedAt pgtype.Timestamptz `json:"started_at"`
+}
+
+func (q *Queries) OldestExecutionByAgentSince(ctx context.Context, arg OldestExecutionByAgentSinceParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, oldestExecutionByAgentSince, arg.AgentID, arg.StartedAt)
+	var started_at pgtype.Timestamptz
+	err := row.Scan(&started_at)
+	return started_at, err
 }
 
 const revokeAgentToken = `-- name: RevokeAgentToken :exec
@@ -382,7 +442,7 @@ const setAgentStatus = `-- name: SetAgentStatus :one
 UPDATE agents
 SET status = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, owner_id, kind, name, description, status, created_at, updated_at
+RETURNING id, owner_id, kind, name, description, status, created_at, updated_at, policy, policy_updated_at, policy_updated_by
 `
 
 type SetAgentStatusParams struct {
@@ -402,6 +462,9 @@ func (q *Queries) SetAgentStatus(ctx context.Context, arg SetAgentStatusParams) 
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Policy,
+		&i.PolicyUpdatedAt,
+		&i.PolicyUpdatedBy,
 	)
 	return i, err
 }
@@ -419,7 +482,7 @@ const updateAgent = `-- name: UpdateAgent :one
 UPDATE agents
 SET name = $2, description = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, owner_id, kind, name, description, status, created_at, updated_at
+RETURNING id, owner_id, kind, name, description, status, created_at, updated_at, policy, policy_updated_at, policy_updated_by
 `
 
 type UpdateAgentParams struct {
@@ -440,6 +503,43 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Policy,
+		&i.PolicyUpdatedAt,
+		&i.PolicyUpdatedBy,
+	)
+	return i, err
+}
+
+const updateAgentPolicy = `-- name: UpdateAgentPolicy :one
+
+UPDATE agents
+SET policy = $2, policy_updated_at = now(), policy_updated_by = $3
+WHERE id = $1
+RETURNING id, owner_id, kind, name, description, status, created_at, updated_at, policy, policy_updated_at, policy_updated_by
+`
+
+type UpdateAgentPolicyParams struct {
+	ID              pgtype.UUID `json:"id"`
+	Policy          []byte      `json:"policy"`
+	PolicyUpdatedBy pgtype.UUID `json:"policy_updated_by"`
+}
+
+// ── policy and quotas (#60) ──────────────────────────────────────────────────
+func (q *Queries) UpdateAgentPolicy(ctx context.Context, arg UpdateAgentPolicyParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, updateAgentPolicy, arg.ID, arg.Policy, arg.PolicyUpdatedBy)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Kind,
+		&i.Name,
+		&i.Description,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Policy,
+		&i.PolicyUpdatedAt,
+		&i.PolicyUpdatedBy,
 	)
 	return i, err
 }

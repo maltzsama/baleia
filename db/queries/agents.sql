@@ -75,3 +75,25 @@ WHERE id = $1 AND agent_id = $2 AND revoked_at IS NULL;
 -- name: CountActiveAgentTokens :one
 SELECT count(*) FROM agent_tokens
 WHERE agent_id = $1 AND revoked_at IS NULL AND expires_at > now();
+
+-- ── policy and quotas (#60) ──────────────────────────────────────────────────
+
+-- name: UpdateAgentPolicy :one
+UPDATE agents
+SET policy = $2, policy_updated_at = now(), policy_updated_by = $3
+WHERE id = $1
+RETURNING *;
+
+-- name: CountRunningExecutionsByAgent :one
+SELECT count(*) FROM query_executions
+WHERE agent_id = $1 AND status = 'running';
+
+-- name: CountExecutionsByAgentSince :one
+SELECT count(*) FROM query_executions
+WHERE agent_id = $1 AND started_at > $2;
+
+-- name: OldestExecutionByAgentSince :one
+SELECT started_at FROM query_executions
+WHERE agent_id = $1 AND started_at > $2
+ORDER BY started_at ASC
+LIMIT 1;

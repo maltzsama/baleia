@@ -60,6 +60,7 @@ const (
 	AgentDelete            Action = "agent.delete"
 	AgentTokenCreate       Action = "agent_token.create"
 	AgentTokenRevoke       Action = "agent_token.revoke"
+	AgentPolicyUpdate      Action = "agent_policy.update"
 	AuthAgentTokenRejected Action = "auth.agent_token_rejected"
 
 	ExecutionCreate Action = "execution.create"
@@ -103,6 +104,7 @@ var allActions = []Action{
 	APIKeyCreate, APIKeyRevoke,
 	AgentCreate, AgentUpdate, AgentDisable, AgentDelete,
 	AgentTokenCreate, AgentTokenRevoke, AuthAgentTokenRejected,
+	AgentPolicyUpdate,
 	ExecutionCreate, ExecutionCancel,
 	ResultsDownload,
 	MaintenanceTrigger,
