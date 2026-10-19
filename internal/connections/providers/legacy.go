@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -16,18 +17,21 @@ import (
 // before the config column existed, the url column. Credential keys the
 // provider's schema declares as values (client_id, realm, username, …) move to
 // Values when config does not set them; keys the schema does not know are
-// dropped.
+// dropped. A stored config or credentials blob that does not parse is stored
+// data that cannot be read, so it carries ErrCredentialsUnreadable like an
+// unopenable envelope does (#349): one errors.Is at the call site covers the
+// lot, and the caller reports 422 rather than a server failure.
 func FromStored(reg *connections.Registry, kind connections.Kind, id pgtype.UUID, rawURL string, config, creds []byte) (connections.Config, error) {
 	values := map[string]string{}
 	if len(config) > 0 {
 		if err := json.Unmarshal(config, &values); err != nil {
-			return connections.Config{}, fmt.Errorf("decode config: %w", err)
+			return connections.Config{}, fmt.Errorf("%w: decode config: %w", catalogs.ErrCredentialsUnreadable, err)
 		}
 	}
 	var secrets map[string]any
 	if len(creds) > 0 {
 		if err := json.Unmarshal(creds, &secrets); err != nil {
-			return connections.Config{}, fmt.Errorf("decode credentials: %w", err)
+			return connections.Config{}, fmt.Errorf("%w: decode credentials: %w", catalogs.ErrCredentialsUnreadable, err)
 		}
 	}
 	return build(reg, kind, id, rawURL, values, secrets, false)
