@@ -57,7 +57,7 @@ jobs:
           # may have created the release first. That is fine: check the tag.
           version=$(gh api "repos/${{ github.repository }}/contents/.release-please-manifest.json?ref=main" \
             -H "Accept: application/vnd.github.raw" | jq -r '.["."]')
-          if gh release view "v$version" >/dev/null 2>&1; then
+          if gh release view "v$version" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "Release v$version already exists; nothing to do."
             exit 0
           fi
