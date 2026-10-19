@@ -50,7 +50,17 @@ jobs:
       # of silently shipping a wrong changelog.
       - name: Verify a merged release PR produced a release
         if: "${{ contains(github.event.head_commit.message, 'chore(main): release') && steps.release.outputs.release_created != 'true' }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # A concurrent run (for the commit immediately before the release PR)
+          # may have created the release first. That is fine: check the tag.
+          version=$(gh api "repos/${{ github.repository }}/contents/.release-please-manifest.json?ref=main" \
+            -H "Accept: application/vnd.github.raw" | jq -r '.["."]')
+          if gh release view "v$version" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release v$version already exists; nothing to do."
+            exit 0
+          fi
           echo "::error::A release PR was merged but release-please did not create a release/tag."
           echo "Check that no bot rewrote the release PR body: release-please needs its marker to recognise the merge."
           exit 1
