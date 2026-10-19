@@ -1,0 +1,29 @@
+meta {
+  name: Agent Eligibility
+  type: http
+  seq: 7.2
+}
+
+get {
+  url: {{base_url}}/agents/{{agent_id}}/eligibility
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("eligibility lists catalogs with engine statuses", function () {
+    expect(res.body).to.be.an("array");
+    if (res.body.length > 0) {
+      expect(res.body[0]).to.have.keys("catalog_id", "catalog_name", "engines");
+      expect(res.body[0].engines).to.be.an("array");
+    }
+  });
+}

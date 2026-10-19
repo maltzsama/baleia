@@ -107,6 +107,8 @@ WHERE ($1::text IS NULL OR resource_type = $1::text)
                   WHERE tm.user_id = $9::uuid AND tm.role = 'owner'
                 )
            ))
+       OR ($9::uuid IS NOT NULL
+           AND on_behalf_of = $9::uuid)
       )
   AND ($10::timestamptz IS NULL OR occurred_at >= $10::timestamptz)
   AND ($11::timestamptz IS NULL OR occurred_at < $11::timestamptz)

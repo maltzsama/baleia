@@ -1,7 +1,7 @@
 // Settings navigation metadata (#262). Each settings slice appends its own
 // entry; access comes from /auth/me's global_actions, never from the role.
 import { canGlobal, type GlobalAction } from '$lib/authz/can';
-import type { AuthUser } from '$lib/stores/auth.svelte';
+import type { AuthUser, Features } from '$lib/stores/auth.svelte';
 
 export type SettingsSection = {
 	href: string;
@@ -9,6 +9,8 @@ export type SettingsSection = {
 	description: string;
 	/** Absent means every authenticated user can open the section. */
 	action?: GlobalAction;
+	/** Feature flag from /auth/me; absent means no feature gating. */
+	feature?: keyof Features;
 };
 
 export const settingsSections: SettingsSection[] = [
@@ -36,6 +38,12 @@ export const settingsSections: SettingsSection[] = [
 		description: 'Team membership and roles for sharing workspaces.'
 	},
 	{
+		href: '/settings/agents',
+		label: 'Agents',
+		description: 'Read-only MCP agents, their tokens and policy ceilings.',
+		feature: 'agents'
+	},
+	{
 		href: '/settings/audit',
 		label: 'Audit trail',
 		description: 'Who changed what, when, and which requests were denied.'
@@ -56,7 +64,11 @@ export function filterSections(
 	sections: SettingsSection[],
 	user: AuthUser | null | undefined
 ): SettingsSection[] {
-	return sections.filter((section) => !section.action || canGlobal(user, section.action));
+	return sections.filter(
+		(section) =>
+			(!section.action || canGlobal(user, section.action)) &&
+			(!section.feature || user?.features?.[section.feature])
+	);
 }
 
 export function visibleSections(user: AuthUser | null | undefined): SettingsSection[] {

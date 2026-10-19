@@ -29,6 +29,8 @@ WHERE (sqlc.narg(resource_type)::text IS NULL OR resource_type = sqlc.narg(resou
                   WHERE tm.user_id = sqlc.narg(scope_owner)::uuid AND tm.role = 'owner'
                 )
            ))
+       OR (sqlc.narg(scope_owner)::uuid IS NOT NULL
+           AND on_behalf_of = sqlc.narg(scope_owner)::uuid)
       )
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR occurred_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR occurred_at < sqlc.narg(to_time)::timestamptz)
