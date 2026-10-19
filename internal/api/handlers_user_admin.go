@@ -19,13 +19,13 @@ func (h *Handlers) SuspendUser(ctx context.Context, request SuspendUserRequestOb
 	ev := audit.Event{Action: audit.UserSuspend, ResourceType: "user", ResourceID: idString(uid)}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return SuspendUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return SuspendUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	user, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return SuspendUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "user not found"}}, nil
+		return SuspendUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
 
 	reason := "admin"
@@ -66,13 +66,13 @@ func (h *Handlers) ReinstateUser(ctx context.Context, request ReinstateUserReque
 	ev := audit.Event{Action: audit.UserReinstate, ResourceType: "user", ResourceID: idString(uid)}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return ReinstateUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return ReinstateUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	user, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return ReinstateUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "user not found"}}, nil
+		return ReinstateUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
 
 	updated, err := h.queries.ReinstateUser(ctx, uid)
@@ -89,16 +89,16 @@ func (h *Handlers) ReinstateUser(ctx context.Context, request ReinstateUserReque
 func (h *Handlers) ListDirectoryReconcileRuns(ctx context.Context, request ListDirectoryReconcileRunsRequestObject) (ListDirectoryReconcileRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListDirectoryReconcileRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListDirectoryReconcileRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if err := p.RequireAdmin(); err != nil {
-		return ListDirectoryReconcileRuns403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "administrator role required"}}, nil
+		return ListDirectoryReconcileRuns403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
 
 	limit := 20
 	if request.Params.Limit != nil {
 		if *request.Params.Limit < 1 || *request.Params.Limit > 100 {
-			return ListDirectoryReconcileRuns422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 100")}, nil
+			return ListDirectoryReconcileRuns422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 100")}, nil
 		}
 		limit = *request.Params.Limit
 	}

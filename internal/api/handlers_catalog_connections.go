@@ -33,7 +33,7 @@ func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatal
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	conns, err := h.queries.ListCatalogConnections(ctx, uid)
@@ -92,7 +92,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return CreateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	// The connection id is generated here, not by the database default: the
@@ -111,7 +111,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	config, connURL, credsEnc, err := storedColumns(h, cfg)
 	if err != nil {
 		slog.Error("encrypt connection credentials", "err", err)
-		return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
+		return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
 	}
 
 	defaultReadonly := true
@@ -153,7 +153,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	// Owner or global admin only; anyone else gets 404 so existence is not
@@ -161,7 +161,7 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+			return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 		}
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return UpdateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
@@ -182,7 +182,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	stored, err := h.authz().Connection(ctx, p, connID, authz.ActWrite)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return UpdateCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+			return UpdateCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 		}
 		return nil, err
 	}
@@ -201,14 +201,14 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 			return UpdateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
 		case errors.Is(err, catalogs.ErrCredentialsUnreadable):
 			slog.Error("open connection credentials", "err", err)
-			return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not open the stored connection credentials"}, nil
+			return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not open the stored connection credentials"}, nil
 		case err != nil:
 			return nil, err
 		}
 		config, connURL, credsEnc, err := storedColumns(h, cfg)
 		if err != nil {
 			slog.Error("encrypt connection credentials", "err", err)
-			return catalogConnectionEncryptionFailedJSONResponse{Code: "encryption_failed", Message: "could not encrypt the connection credentials"}, nil
+			return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
 		}
 		params.Config, params.Url, params.CredentialsEnc = config, &connURL, credsEnc
 	}
@@ -227,7 +227,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DeleteCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
@@ -235,7 +235,7 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 	ctx = audit.WithAction(ctx, ev.Action)
 	if _, err := h.authz().Connection(ctx, p, connID, authz.ActAdmin); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return DeleteCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+			return DeleteCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 		}
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && isFKViolation(pgErr) && pgErr.ConstraintName == "engines_connection_id_fkey" {
 			h.audited(ctx, ev.Failed(audit.ReasonConflict))
-			return DeleteCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "connection_in_use", Message: "an engine runs on this connection; delete the engine first"}}, nil
+			return DeleteCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConnectionInUse, Message: "an engine runs on this connection; delete the engine first"}}, nil
 		}
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return TestCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return TestCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	// Only the owner (or a global admin) may trigger a probe with the stored
@@ -267,7 +267,7 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActWrite)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return TestCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+			return TestCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 		}
 		return nil, err
 	}
@@ -706,8 +706,8 @@ func uuidStr(u pgtype.UUID) string {
 // credentials of a connection cannot be sealed on create or update (no key
 // configured, or a crypto failure). Nothing is stored.
 type catalogConnectionEncryptionFailedJSONResponse struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
 }
 
 func (r catalogConnectionEncryptionFailedJSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {

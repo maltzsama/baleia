@@ -85,7 +85,7 @@ func assistantMessageToPublic(m adb.AssistantMessage) AssistantMessage {
 // settings row or an unconfigured service reports the conservative default.
 func (h *Handlers) GetAssistantStatus(ctx context.Context, _ GetAssistantStatusRequestObject) (GetAssistantStatusResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
-		return GetAssistantStatus401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetAssistantStatus401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	status := AssistantStatus{Enabled: false, DataSharing: AssistantStatusDataSharing("metadata_only")}
 	if h.assistant != nil {
@@ -100,7 +100,7 @@ func (h *Handlers) GetAssistantStatus(ctx context.Context, _ GetAssistantStatusR
 // GetAssistantSettings — GET /admin/assistant/settings (G-admin).
 func (h *Handlers) GetAssistantSettings(ctx context.Context, _ GetAssistantSettingsRequestObject) (GetAssistantSettingsResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
-		return GetAssistantSettings403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return GetAssistantSettings403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -117,10 +117,10 @@ func (h *Handlers) GetAssistantSettings(ctx context.Context, _ GetAssistantSetti
 // write-only: an omitted or empty value keeps the stored key.
 func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistantSettingsRequestObject) (PutAssistantSettingsResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
-		return PutAssistantSettings403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return PutAssistantSettings403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	if request.Body == nil {
-		return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -177,21 +177,21 @@ func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistan
 	}
 
 	if in.MaxTurnSeconds < 1 || in.MaxToolCallsPerTurn < 1 || in.MaxOutputTokensPerTurn < 1 || in.DailyTokenBudgetPerUser < 0 {
-		return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limits must be positive")}, nil
+		return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limits must be positive")}, nil
 	}
 	if in.Enabled {
 		if in.Provider == nil || *in.Provider == "" || in.Model == nil || *in.Model == "" {
-			return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "provider and model are required when the assistant is enabled")}, nil
+			return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "provider and model are required when the assistant is enabled")}, nil
 		}
 		if *in.Provider == "openai_compatible" && (in.BaseURL == nil || *in.BaseURL == "") {
-			return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "base_url is required for an OpenAI-compatible provider")}, nil
+			return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "base_url is required for an OpenAI-compatible provider")}, nil
 		}
 	}
 
 	row, err := svc.UpdateSettings(ctx, in)
 	if err != nil {
 		if errors.Is(err, assistant.ErrKeyringUnavailable) {
-			return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("encryption_unavailable", "BALEIA_ENCRYPTION_KEY is not configured")}, nil
+			return PutAssistantSettings422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEncryptionUnavailable, "BALEIA_ENCRYPTION_KEY is not configured")}, nil
 		}
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistan
 // configured provider and reports latency or a sanitized error.
 func (h *Handlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObject) (TestAssistantResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
-		return TestAssistant403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return TestAssistant403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -253,11 +253,11 @@ func (h *Handlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObje
 func (h *Handlers) ListAssistantConversations(ctx context.Context, request ListAssistantConversationsRequestObject) (ListAssistantConversationsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListAssistantConversations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListAssistantConversations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	wsID := pgtype.UUID{Bytes: [16]byte(request.Params.WorkspaceId), Valid: true}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Params.WorkspaceId); err != nil {
-		return ListAssistantConversations404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+		return ListAssistantConversations404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -278,14 +278,14 @@ func (h *Handlers) ListAssistantConversations(ctx context.Context, request ListA
 func (h *Handlers) CreateAssistantConversation(ctx context.Context, request CreateAssistantConversationRequestObject) (CreateAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if request.Body == nil {
-		return CreateAssistantConversation422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return CreateAssistantConversation422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	wsID := pgtype.UUID{Bytes: [16]byte(request.Body.WorkspaceId), Valid: true}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Body.WorkspaceId); err != nil {
-		return CreateAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+		return CreateAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -303,7 +303,7 @@ func (h *Handlers) CreateAssistantConversation(ctx context.Context, request Crea
 func (h *Handlers) GetAssistantConversation(ctx context.Context, request GetAssistantConversationRequestObject) (GetAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -313,7 +313,7 @@ func (h *Handlers) GetAssistantConversation(ctx context.Context, request GetAssi
 	conv, err := svc.GetConversation(ctx, p.UserID, id)
 	if err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
-			return GetAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+			return GetAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 		}
 		return nil, err
 	}
@@ -342,14 +342,14 @@ func (h *Handlers) GetAssistantConversation(ctx context.Context, request GetAssi
 func (h *Handlers) SendAssistantMessage(ctx context.Context, request SendAssistantMessageRequestObject) (SendAssistantMessageResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return SendAssistantMessage401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return SendAssistantMessage401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if request.Body == nil {
-		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	text := strings.TrimSpace(request.Body.Text)
 	if text == "" {
-		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "text is required")}, nil
+		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "text is required")}, nil
 	}
 	if _, err := h.assistantService(); err != nil {
 		return nil, err
@@ -361,11 +361,11 @@ func (h *Handlers) SendAssistantMessage(ctx context.Context, request SendAssista
 	seq, err := h.assistantRunner.Start(ctx, p.UserID, id, text)
 	switch {
 	case errors.Is(err, assistant.ErrNotFound):
-		return SendAssistantMessage404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+		return SendAssistantMessage404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 	case errors.Is(err, assistant.ErrTurnRunning):
-		return SendAssistantMessage409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "turn_running", Message: "a turn is already running"}}, nil
+		return SendAssistantMessage409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeTurnRunning, Message: "a turn is already running"}}, nil
 	case errors.Is(err, assistant.ErrSettingsInvalid):
-		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("assistant_disabled", "the assistant is disabled or not configured")}, nil
+		return SendAssistantMessage422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeAssistantDisabled, "the assistant is disabled or not configured")}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func (h *Handlers) SendAssistantMessage(ctx context.Context, request SendAssista
 func (h *Handlers) CancelAssistantTurn(ctx context.Context, request CancelAssistantTurnRequestObject) (CancelAssistantTurnResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CancelAssistantTurn401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CancelAssistantTurn401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -385,7 +385,7 @@ func (h *Handlers) CancelAssistantTurn(ctx context.Context, request CancelAssist
 	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
-			return CancelAssistantTurn404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+			return CancelAssistantTurn404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 		}
 		return nil, err
 	}
@@ -402,7 +402,7 @@ func (h *Handlers) CancelAssistantTurn(ctx context.Context, request CancelAssist
 func (h *Handlers) StreamAssistantConversation(ctx context.Context, request StreamAssistantConversationRequestObject) (StreamAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return StreamAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return StreamAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -411,7 +411,7 @@ func (h *Handlers) StreamAssistantConversation(ctx context.Context, request Stre
 	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
-			return StreamAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+			return StreamAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 		}
 		return nil, err
 	}
@@ -525,7 +525,7 @@ func (s *assistantSSE) WriteTo(w io.Writer) (int64, error) {
 func (h *Handlers) DeleteAssistantConversation(ctx context.Context, request DeleteAssistantConversationRequestObject) (DeleteAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DeleteAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	svc, err := h.assistantService()
 	if err != nil {
@@ -534,7 +534,7 @@ func (h *Handlers) DeleteAssistantConversation(ctx context.Context, request Dele
 	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	if err := svc.DeleteConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
-			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "conversation not found"}}, nil
+			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 		}
 		return nil, err
 	}

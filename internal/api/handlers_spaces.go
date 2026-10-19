@@ -92,7 +92,7 @@ func (h *Handlers) ListSpaces(ctx context.Context, request ListSpacesRequestObje
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListSpaces401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListSpaces401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if _, err := h.authz().Workspace(ctx, p, ws, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
@@ -118,7 +118,7 @@ func (h *Handlers) ListSpaces(ctx context.Context, request ListSpacesRequestObje
 func (h *Handlers) CreateSpace(ctx context.Context, request CreateSpaceRequestObject) (CreateSpaceResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	ws := workspaceIDFromRequest(request.Id)
 	ev := audit.Event{Action: audit.SpaceCreate, ResourceType: "space", WorkspaceID: idString(ws)}
@@ -134,18 +134,18 @@ func (h *Handlers) CreateSpace(ctx context.Context, request CreateSpaceRequestOb
 	}
 	name := strings.TrimSpace(request.Body.Name)
 	if name == "" || utf8.RuneCountInString(name) > 120 {
-		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "name must be 1 to 120 characters")}, nil
+		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name must be 1 to 120 characters")}, nil
 	}
 	visibility := string(request.Body.Visibility)
 	if visibility != "workspace" && visibility != "restricted" {
-		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "visibility must be workspace or restricted")}, nil
+		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "visibility must be workspace or restricted")}, nil
 	}
 	defaultRole := "viewer"
 	if request.Body.DefaultRole != nil {
 		defaultRole = string(*request.Body.DefaultRole)
 	}
 	if defaultRole != "viewer" && defaultRole != "editor" {
-		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "default_role must be viewer or editor")}, nil
+		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "default_role must be viewer or editor")}, nil
 	}
 
 	slug, err := uniqueSlug(ctx, name, func(ctx context.Context, s string) (bool, error) {
@@ -179,7 +179,7 @@ func (h *Handlers) CreateSpace(ctx context.Context, request CreateSpaceRequestOb
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return CreateSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "a space with this name already exists in this workspace"}}, nil
+			return CreateSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a space with this name already exists in this workspace"}}, nil
 		}
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func (h *Handlers) GetSpace(ctx context.Context, request GetSpaceRequestObject) 
 	role, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceViewer)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return GetSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return GetSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
@@ -222,14 +222,14 @@ func (h *Handlers) UpdateSpace(ctx context.Context, request UpdateSpaceRequestOb
 	_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceManager)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return UpdateSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return UpdateSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
-			return UpdateSpace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a space manager may change it"}}, nil
+			return UpdateSpace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may change it"}}, nil
 		}
 		return UpdateSpace404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
@@ -255,16 +255,16 @@ func (h *Handlers) UpdateSpace(ctx context.Context, request UpdateSpaceRequestOb
 		defaultRole = string(*request.Body.DefaultRole)
 	}
 	if name == "" || utf8.RuneCountInString(name) > 120 {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "name must be 1 to 120 characters")}, nil
+		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name must be 1 to 120 characters")}, nil
 	}
 	if visibility != "workspace" && visibility != "restricted" {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "visibility must be workspace or restricted")}, nil
+		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "visibility must be workspace or restricted")}, nil
 	}
 	if defaultRole != "viewer" && defaultRole != "editor" {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "default_role must be viewer or editor")}, nil
+		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "default_role must be viewer or editor")}, nil
 	}
 	if current.IsDefault && visibility != "workspace" {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "the default space must stay workspace-visible")}, nil
+		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "the default space must stay workspace-visible")}, nil
 	}
 	space, err := h.queries.UpdateSpace(ctx, db.UpdateSpaceParams{
 		WorkspaceID: ws, ID: spaceID, Name: name, Description: description,
@@ -272,7 +272,7 @@ func (h *Handlers) UpdateSpace(ctx context.Context, request UpdateSpaceRequestOb
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("conflict", "a space with this name already exists in this workspace")}, nil
+			return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, "a space with this name already exists in this workspace")}, nil
 		}
 		return nil, err
 	}
@@ -288,14 +288,14 @@ func (h *Handlers) DeleteSpace(ctx context.Context, request DeleteSpaceRequestOb
 	_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceManager)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return DeleteSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return DeleteSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
-			return DeleteSpace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a space manager may delete it"}}, nil
+			return DeleteSpace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may delete it"}}, nil
 		}
 		return DeleteSpace404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
@@ -305,7 +305,7 @@ func (h *Handlers) DeleteSpace(ctx context.Context, request DeleteSpaceRequestOb
 	}
 	if current.IsDefault {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return DeleteSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "the default space cannot be deleted"}}, nil
+		return DeleteSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "the default space cannot be deleted"}}, nil
 	}
 	n, err := h.queries.CountSpaceContent(ctx, spaceID)
 	if err != nil {
@@ -314,7 +314,7 @@ func (h *Handlers) DeleteSpace(ctx context.Context, request DeleteSpaceRequestOb
 	force := request.Params.Force != nil && *request.Params.Force
 	if n > 0 && !force {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return DeleteSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "the space is not empty; pass force=true to delete it and its content"}}, nil
+		return DeleteSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "the space is not empty; pass force=true to delete it and its content"}}, nil
 	}
 	deleted, err := h.queries.DeleteSpace(ctx, db.DeleteSpaceParams{WorkspaceID: ws, ID: spaceID})
 	if err != nil {
@@ -333,13 +333,13 @@ func (h *Handlers) ListSpaceMembers(ctx context.Context, request ListSpaceMember
 	_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceViewer)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return ListSpaceMembers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return ListSpaceMembers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return ListSpaceMembers403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return ListSpaceMembers403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return ListSpaceMembers404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
@@ -362,7 +362,7 @@ func (h *Handlers) SetSpaceMember(ctx context.Context, request SetSpaceMemberReq
 	ctx = audit.WithAction(ctx, ev.Action)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return SetSpaceMember401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return SetSpaceMember401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceManager)
 	if err != nil {
@@ -371,7 +371,7 @@ func (h *Handlers) SetSpaceMember(ctx context.Context, request SetSpaceMemberReq
 	if se != nil {
 		if se.status == 403 {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
-			return SetSpaceMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a space manager may change its access list"}}, nil
+			return SetSpaceMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may change its access list"}}, nil
 		}
 		return SetSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
@@ -389,11 +389,11 @@ func (h *Handlers) SetSpaceMember(ctx context.Context, request SetSpaceMemberReq
 			return SetSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("team not found")}, nil
 		}
 	default:
-		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "principal_type must be user or team")}, nil
+		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "principal_type must be user or team")}, nil
 	}
 	role := string(request.Body.Role)
 	if role != "viewer" && role != "editor" && role != "manager" {
-		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "role must be viewer, editor or manager")}, nil
+		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "role must be viewer, editor or manager")}, nil
 	}
 	member, err := h.queries.SetSpaceMember(ctx, db.SetSpaceMemberParams{
 		SpaceID: spaceID, PrincipalType: principalType, PrincipalID: principalID, Role: role, GrantedBy: p.UserID,
@@ -414,14 +414,14 @@ func (h *Handlers) DeleteSpaceMember(ctx context.Context, request DeleteSpaceMem
 	_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceManager)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return DeleteSpaceMember401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return DeleteSpaceMember401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
-			return DeleteSpaceMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a space manager may change its access list"}}, nil
+			return DeleteSpaceMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may change its access list"}}, nil
 		}
 		return DeleteSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}

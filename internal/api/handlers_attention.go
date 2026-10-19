@@ -32,7 +32,7 @@ func (h *Handlers) ListAttention(ctx context.Context, _ ListAttentionRequestObje
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListAttention401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{
-			Code: "unauthorized", Message: "invalid user",
+			Code: ErrorCodeUnauthorized, Message: "invalid user",
 		}}, nil
 	}
 

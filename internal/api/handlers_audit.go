@@ -31,13 +31,13 @@ const (
 func (h *Handlers) ListAuditEvents(ctx context.Context, request ListAuditEventsRequestObject) (ListAuditEventsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListAuditEvents401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListAuditEvents401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	q := request.Params
 	limit := defaultAuditPage
 	if q.Limit != nil {
 		if *q.Limit < 1 || *q.Limit > maxAuditPage {
-			return ListAuditEvents422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 200")}, nil
+			return ListAuditEvents422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 200")}, nil
 		}
 		limit = *q.Limit
 	}
@@ -68,7 +68,7 @@ func (h *Handlers) ListAuditEvents(ctx context.Context, request ListAuditEventsR
 	if q.Cursor != nil && *q.Cursor != "" {
 		at, id, ok := decodeAuditCursor(*q.Cursor)
 		if !ok {
-			return ListAuditEvents422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "invalid cursor")}, nil
+			return ListAuditEvents422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "invalid cursor")}, nil
 		}
 		params.CursorAt, params.CursorID = pgtype.Timestamptz{Time: at, Valid: true}, &id
 	}
@@ -114,11 +114,11 @@ func auditWindow(from, to *time.Time, resourceID, actorID *string) *Unprocessabl
 	hasResource := resourceID != nil && *resourceID != ""
 	hasActor := actorID != nil && *actorID != ""
 	if from == nil && !hasResource && !hasActor {
-		r := unprocessable("invalid_time_range", "a time window (from) is required unless resource_id or actor_id is given")
+		r := unprocessable(ErrorCodeInvalidTimeRange, "a time window (from) is required unless resource_id or actor_id is given")
 		return &r
 	}
 	if from != nil && to != nil && to.Sub(*from) > 93*24*time.Hour {
-		r := unprocessable("invalid_time_range", "the window is larger than 93 days")
+		r := unprocessable(ErrorCodeInvalidTimeRange, "the window is larger than 93 days")
 		return &r
 	}
 	return nil
@@ -127,7 +127,7 @@ func auditWindow(from, to *time.Time, resourceID, actorID *string) *Unprocessabl
 // ListAuditActions returns the bounded vocabulary for the action filter.
 func (h *Handlers) ListAuditActions(ctx context.Context, _ ListAuditActionsRequestObject) (ListAuditActionsResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
-		return ListAuditActions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListAuditActions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	actions := audit.Actions()
 	out := make([]string, len(actions))
@@ -141,7 +141,7 @@ func (h *Handlers) ListAuditActions(ctx context.Context, _ ListAuditActionsReque
 func (h *Handlers) ResolveAudit(ctx context.Context, request ResolveAuditRequestObject) (ResolveAuditResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ResolveAudit401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ResolveAudit401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	users := map[string]AuditResolvedUser{}
 	workspaces := map[string]AuditResolvedName{}
@@ -191,10 +191,10 @@ func (h *Handlers) ResolveAudit(ctx context.Context, request ResolveAuditRequest
 func (h *Handlers) ExportAuditCSV(ctx context.Context, request ExportAuditCSVRequestObject) (ExportAuditCSVResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ExportAuditCSV401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ExportAuditCSV401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if !p.IsAdmin() {
-		return ExportAuditCSV403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only administrators may export the audit trail"}}, nil
+		return ExportAuditCSV403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only administrators may export the audit trail"}}, nil
 	}
 	q := request.Params
 	if w := auditWindow(q.From, q.To, q.ResourceId, q.ActorId); w != nil {

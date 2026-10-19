@@ -84,7 +84,7 @@ func ptrLifecycle(s string) *CatalogBindingLifecycleState {
 }
 
 func engineNotFound() NotFoundJSONResponse {
-	return NotFoundJSONResponse{Code: "not_found", Message: "engine not found"}
+	return NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}
 }
 
 // ListEngines returns every engine to an admin, else the engines on the
@@ -92,7 +92,7 @@ func engineNotFound() NotFoundJSONResponse {
 func (h *Handlers) ListEngines(ctx context.Context, _ ListEnginesRequestObject) (ListEnginesResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	var engines []db.Engine
 	if p.IsAdmin() {
@@ -109,7 +109,7 @@ func (h *Handlers) ListEngines(ctx context.Context, _ ListEnginesRequestObject) 
 func (h *Handlers) GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	eng, _, err := h.authz().Engine(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if errors.Is(err, authz.ErrNotFound) {
@@ -127,10 +127,10 @@ func (h *Handlers) GetEngine(ctx context.Context, request GetEngineRequestObject
 func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequestObject) (CreateEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	body := request.Body
-	invalid := func(code, field, msg string) CreateEngineResponseObject {
+	invalid := func(code ErrorCode, field, msg string) CreateEngineResponseObject {
 		return CreateEngine422JSONResponse{UnprocessableEntityJSONResponse: (&configError{code: code, fields: []connections.FieldError{{Key: field, Message: msg}}}).response()}
 	}
 	if !engineNameRe.MatchString(body.Name) {
@@ -139,7 +139,7 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 
 	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: body.ConnectionId, Valid: true}, authz.ActWrite)
 	if errors.Is(err, authz.ErrNotFound) {
-		return CreateEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+		return CreateEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -200,7 +200,7 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 		if pgErr.ConstraintName == "engines_connection_id_key" {
 			msg = "this connection already backs an engine"
 		}
-		return CreateEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: msg}}, nil
+		return CreateEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: msg}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -214,7 +214,7 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return UpdateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	_, _, err = h.authz().Engine(ctx, p, id, authz.ActWrite)
@@ -222,7 +222,7 @@ func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequest
 	case errors.Is(err, authz.ErrNotFound):
 		return UpdateEngine404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return UpdateEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only the connection owner or an admin may change this engine"}}, nil
+		return UpdateEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only the connection owner or an admin may change this engine"}}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequest
 func (h *Handlers) DeleteEngine(ctx context.Context, request DeleteEngineRequestObject) (DeleteEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DeleteEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	_, _, err = h.authz().Engine(ctx, p, id, authz.ActAdmin)
@@ -246,13 +246,13 @@ func (h *Handlers) DeleteEngine(ctx context.Context, request DeleteEngineRequest
 	case errors.Is(err, authz.ErrNotFound):
 		return DeleteEngine404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return DeleteEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only the connection owner or an admin may delete this engine"}}, nil
+		return DeleteEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only the connection owner or an admin may delete this engine"}}, nil
 	case err != nil:
 		return nil, err
 	}
 
 	inUse := func(msg string) DeleteEngineResponseObject {
-		return DeleteEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "engine_in_use", Message: msg}}
+		return DeleteEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeEngineInUse, Message: msg}}
 	}
 	blockers, err := h.queries.CountEngineBlockers(ctx, id)
 	if err != nil {
@@ -283,7 +283,7 @@ func (h *Handlers) DeleteEngine(ctx context.Context, request DeleteEngineRequest
 func (h *Handlers) ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListEngineBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListEngineBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	_, conn, err := h.authz().Engine(ctx, p, id, authz.ActRead)
@@ -317,12 +317,12 @@ func (h *Handlers) ListEngineBindings(ctx context.Context, request ListEngineBin
 func (h *Handlers) ListCatalogBindings(ctx context.Context, request ListCatalogBindingsRequestObject) (ListCatalogBindingsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListCatalogBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListCatalogBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return ListCatalogBindings404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+			return ListCatalogBindings404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
 		return nil, err
 	}

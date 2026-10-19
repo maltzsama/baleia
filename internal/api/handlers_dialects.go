@@ -170,7 +170,7 @@ func (h *Handlers) engineProbeFor(ctx context.Context, e db.Engine, eng queryeng
 }
 
 func dialectNotFound() NotFoundJSONResponse {
-	return NotFoundJSONResponse{Code: "not_found", Message: "dialect not found"}
+	return NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "dialect not found"}
 }
 
 // dialectETag is a strong validator of the dialect's whole document.
@@ -193,7 +193,7 @@ func etagMatches(header, etag string) bool {
 
 func (h *Handlers) GetDialect(ctx context.Context, request GetDialectRequestObject) (GetDialectResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
-		return GetDialect401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetDialect401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	d, ok := dialect.Get(request.Name)
 	if !ok {
@@ -217,26 +217,26 @@ func (h *Handlers) GetDialect(ctx context.Context, request GetDialectRequestObje
 // indices of the editor's JavaScript strings.
 func (h *Handlers) SplitStatements(ctx context.Context, request SplitStatementsRequestObject) (SplitStatementsResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
-		return SplitStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return SplitStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	d, ok := dialect.Get(request.Name)
 	if !ok {
 		return SplitStatements404JSONResponse{NotFoundJSONResponse: dialectNotFound()}, nil
 	}
 	if request.Body == nil {
-		return SplitStatements422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "sql is required"}}, nil
+		return SplitStatements422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "sql is required"}}, nil
 	}
 	sql := request.Body.Sql
 	if utf8.RuneCountInString(sql) > maxSplitSQL {
 		return SplitStatements422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-			Code: "validation_error", Message: fmt.Sprintf("sql is longer than %d characters", maxSplitSQL),
+			Code: ErrorCodeValidationError, Message: fmt.Sprintf("sql is longer than %d characters", maxSplitSQL),
 		}}, nil
 	}
 	spans, err := d.Statements(sql)
 	if err != nil {
-		code := "invalid_sql"
+		code := ErrorCodeInvalidSql
 		if errors.Is(err, dialect.ErrDelimiter) {
-			code = "unsupported_syntax"
+			code = ErrorCodeUnsupportedSyntax
 		}
 		return SplitStatements422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: code, Message: err.Error()}}, nil
 	}
@@ -261,19 +261,19 @@ func (h *Handlers) SplitStatements(ctx context.Context, request SplitStatementsR
 // statement; the client never prefixes EXPLAIN itself.
 func (h *Handlers) ExplainSQL(ctx context.Context, request ExplainSQLRequestObject) (ExplainSQLResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
-		return ExplainSQL401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ExplainSQL401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	d, ok := dialect.Get(request.Name)
 	if !ok {
 		return ExplainSQL404JSONResponse{NotFoundJSONResponse: dialectNotFound()}, nil
 	}
 	if request.Body == nil || strings.TrimSpace(request.Body.Sql) == "" {
-		return ExplainSQL422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "sql is required"}}, nil
+		return ExplainSQL422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "sql is required"}}, nil
 	}
 	sql := request.Body.Sql
 	if utf8.RuneCountInString(sql) > maxSplitSQL {
 		return ExplainSQL422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-			Code: "validation_error", Message: fmt.Sprintf("sql is longer than %d characters", maxSplitSQL),
+			Code: ErrorCodeValidationError, Message: fmt.Sprintf("sql is longer than %d characters", maxSplitSQL),
 		}}, nil
 	}
 	explained, supported := d.ExplainSQL(sql)

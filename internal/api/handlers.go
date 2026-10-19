@@ -259,19 +259,19 @@ func requireWorkspaceAccess(ctx context.Context, queries db.Querier, workspaceID
 }
 
 func errUnauthorized(msg string) Error {
-	return Error{Code: "unauthorized", Message: msg}
+	return Error{Code: ErrorCodeUnauthorized, Message: msg}
 }
 
 func errForbidden(msg string) Error {
-	return Error{Code: "forbidden", Message: msg}
+	return Error{Code: ErrorCodeForbidden, Message: msg}
 }
 
 func errNotFound(msg string) Error {
-	return Error{Code: "not_found", Message: msg}
+	return Error{Code: ErrorCodeNotFound, Message: msg}
 }
 
 func errConflict(msg string) Error {
-	return Error{Code: "conflict", Message: msg}
+	return Error{Code: ErrorCodeConflict, Message: msg}
 }
 
 // respondError is only used by the manual (OIDC) routes.

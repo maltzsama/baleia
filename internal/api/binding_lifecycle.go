@@ -51,13 +51,13 @@ func concurrentChange(b db.CatalogBinding) ConflictJSONResponse {
 	if b.LifecycleState != "" {
 		msg = "the binding is " + b.LifecycleState + "; retry when it settles"
 	}
-	return ConflictJSONResponse{Code: "concurrent_change", Message: msg}
+	return ConflictJSONResponse{Code: ErrorCodeConcurrentChange, Message: msg}
 }
 
 // notManaged is the 422 for catalogs Baleia does not manage (native and
 // adopted catalogs belong to their engine).
 func notManaged() UnprocessableEntityJSONResponse {
-	return unprocessable("catalog_not_managed", "this catalog belongs to its engine; Baleia does not change it")
+	return unprocessable(ErrorCodeCatalogNotManaged, "this catalog belongs to its engine; Baleia does not change it")
 }
 
 // observe records what the engine reports after a procedure; it never fails

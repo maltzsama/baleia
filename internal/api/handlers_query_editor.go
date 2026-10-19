@@ -40,7 +40,7 @@ import (
 
 func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return ListFolders401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return ListFolders401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var parentID pgtype.UUID
@@ -85,7 +85,7 @@ func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestOb
 
 func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequestObject) (CreateFolderResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return CreateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return CreateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	ws := workspaceIDFromRequest(request.Id)
@@ -95,9 +95,9 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 	}
 	if se != nil {
 		if se.status == 403 {
-			return CreateFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return CreateFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
-		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "space not found"}}, nil
+		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "space not found"}}, nil
 	}
 
 	var parentID pgtype.UUID
@@ -105,7 +105,7 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 		parentID = pgtype.UUID{Bytes: *request.Body.ParentId, Valid: true}
 		parent, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: parentID, WorkspaceID: ws})
 		if err != nil || parent.SpaceID != space.ID {
-			return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "parent folder not found"}}, nil
+			return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "parent folder not found"}}, nil
 		}
 	}
 
@@ -121,7 +121,7 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 			return nil, err
 		}
 	} else if !slugRe.MatchString(slug) {
-		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
 	}
 
 	folder, err := h.queries.CreateQueryFolder(ctx, db.CreateQueryFolderParams{
@@ -133,7 +133,7 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("conflict", "a folder with this slug already exists in the space")}, nil
+			return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, "a folder with this slug already exists in the space")}, nil
 		}
 		return nil, err
 	}
@@ -143,27 +143,27 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 
 func (h *Handlers) DeleteFolder(ctx context.Context, request DeleteFolderRequestObject) (DeleteFolderResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	ws := workspaceIDFromRequest(request.Id)
 	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
 	folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
 	if err != nil {
-		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
 	_, se, err := h.requireSpace(ctx, ws, folder.SpaceID, authz.SpaceEditor)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return DeleteFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return DeleteFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
-		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
 
 	deleted, err := h.queries.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{WorkspaceID: ws, ID: folderID})
@@ -171,7 +171,7 @@ func (h *Handlers) DeleteFolder(ctx context.Context, request DeleteFolderRequest
 		return nil, err
 	}
 	if deleted == 0 {
-		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
 
 	return DeleteFolder204Response{}, nil
@@ -181,13 +181,13 @@ func (h *Handlers) DeleteFolder(ctx context.Context, request DeleteFolderRequest
 
 func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQueriesRequestObject) (ListSavedQueriesResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return ListSavedQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return ListSavedQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var lim *int32
 	if request.Params.Limit != nil {
 		if *request.Params.Limit < 1 || *request.Params.Limit > 200 {
-			return ListSavedQueries422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 200")}, nil
+			return ListSavedQueries422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 200")}, nil
 		}
 		v := int32(*request.Params.Limit)
 		lim = &v
@@ -248,7 +248,7 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 
 func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQueryRequestObject) (CreateSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return CreateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return CreateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	userID := auth.UserIDFromContext(ctx)
@@ -264,9 +264,9 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 	}
 	if se != nil {
 		if se.status == 403 {
-			return CreateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return CreateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
-		return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "space not found"}}, nil
+		return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "space not found"}}, nil
 	}
 
 	var folderID pgtype.UUID
@@ -274,7 +274,7 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 		folderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
 		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
 		if err != nil || folder.SpaceID != space.ID {
-			return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+			return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 		}
 	}
 
@@ -290,12 +290,12 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 			return nil, err
 		}
 	} else if !slugRe.MatchString(slug) {
-		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
 	}
 
 	bindingID, targetSchema, te := h.savedQueryTarget(ctx, ws, request.Body.Target)
 	if te != nil {
-		code, message := "target_not_granted", "the target's catalog is not granted to this workspace"
+		code, message := ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
 		if te.code != "" {
 			code, message = te.code, te.message
 		}
@@ -326,7 +326,7 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 
 func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryRequestObject) (GetSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var queryID pgtype.UUID
@@ -336,20 +336,20 @@ func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryReque
 	ws := workspaceIDFromRequest(request.Id)
 	query, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
 	if err != nil {
-		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
 	_, se, err := h.requireSpace(ctx, ws, query.SpaceID, authz.SpaceViewer)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return GetSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return GetSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
-		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
 
 	return GetSavedQuery200JSONResponse(dbSavedQueryToPublic(query, h.savedQueryVersion(ctx, ws, query.ID))), nil
@@ -357,28 +357,28 @@ func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryReque
 
 func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQueryRequestObject) (UpdateSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
 	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
 	if err != nil {
-		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
 
 	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return UpdateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return UpdateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
-		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
 
 	spaceID := current.SpaceID
@@ -388,15 +388,15 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 			_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceEditor)
 			if err != nil {
 				if errors.Is(err, authz.ErrUnauthenticated) {
-					return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+					return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 				}
 				return nil, err
 			}
 			if se != nil {
 				if se.status == 403 {
-					return UpdateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit the destination space"}}, nil
+					return UpdateSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit the destination space"}}, nil
 				}
-				return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "destination space not found"}}, nil
+				return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "destination space not found"}}, nil
 			}
 		}
 	}
@@ -419,7 +419,7 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 	if folderID.Valid {
 		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
 		if err != nil || folder.SpaceID != spaceID {
-			return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+			return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 		}
 	}
 
@@ -427,7 +427,7 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 	if request.Body.Slug != nil {
 		slug = *request.Body.Slug
 		if !slugRe.MatchString(slug) {
-			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
 		}
 	}
 
@@ -436,7 +436,7 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 		var te *targetError
 		bindingID, targetSchema, te = h.savedQueryTarget(ctx, ws, request.Body.Target)
 		if te != nil {
-			code, message := "target_not_granted", "the target's catalog is not granted to this workspace"
+			code, message := ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
 			if te.code != "" {
 				code, message = te.code, te.message
 			}
@@ -480,27 +480,27 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 
 func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQueryRequestObject) (DeleteSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
 	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
 	if err != nil {
-		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
 	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return DeleteSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return DeleteSavedQuery403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
-		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
 
 	actor, err := uuidFromString(auth.UserIDFromContext(ctx))
@@ -509,7 +509,7 @@ func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQuer
 	}
 	if err := h.contentService().DeleteSavedQuery(ctx, actor, ws, queryID); err != nil {
 		if errors.Is(err, content.ErrNotFound) {
-			return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+			return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 		}
 		return nil, err
 	}
@@ -526,20 +526,20 @@ const (
 
 func (h *Handlers) ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	caller := auth.UserIDFromContext(ctx)
 	callerID, err := uuidFromString(caller)
 	if err != nil {
-		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	p := request.Params
 	limit := defaultExecutionPage
 	if p.Limit != nil {
 		if *p.Limit < 1 || *p.Limit > maxExecutionPage {
-			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 100")}, nil
+			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 100")}, nil
 		}
 		limit = *p.Limit
 	}
@@ -565,7 +565,7 @@ func (h *Handlers) ListExecutions(ctx context.Context, request ListExecutionsReq
 		} else {
 			uid, err := uuidFromString(*p.UserId)
 			if err != nil {
-				return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "invalid user_id")}, nil
+				return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "invalid user_id")}, nil
 			}
 			userFilter = uid
 		}
@@ -599,7 +599,7 @@ func (h *Handlers) ListExecutions(ctx context.Context, request ListExecutionsReq
 	if p.Cursor != nil && *p.Cursor != "" {
 		at, id, ok := decodeHistoryCursor(*p.Cursor)
 		if !ok {
-			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "invalid cursor")}, nil
+			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "invalid cursor")}, nil
 		}
 		params.CursorAt = pgtype.Timestamptz{Time: at, Valid: true}
 		params.CursorID = id
@@ -691,7 +691,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	ev := audit.Event{Action: audit.ExecutionCreate, ResourceType: "execution", WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
-		return RunQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return RunQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	userID := auth.UserIDFromContext(ctx)
@@ -708,7 +708,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	if err != nil {
 		return RunQuery422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-				Code:    "validation_error",
+				Code:    ErrorCodeValidationError,
 				Message: "workspace not found",
 			},
 		}, nil
@@ -726,11 +726,11 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		})
 		if err != nil {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
 		if original.UserID.Bytes != uid.Bytes && (!workspace.OwnerUserID.Valid || workspace.OwnerUserID.Bytes != uid.Bytes) {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
-			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
 		rerunExecutionID = openapi_types.UUID(original.ID.Bytes).String()
 		rerunFromPosition = int32(request.Body.Rerun.FromPosition)
@@ -745,7 +745,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	if te, ok := asTargetError(err); ok {
 		if te.notFound {
 			h.audited(ctx, ev.Denied(audit.ReasonNotFound))
-			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: te.message}}, nil
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: te.message}}, nil
 		}
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: te.unprocessable()}, nil
@@ -768,7 +768,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	if !slices.Contains(queryengine.Kinds(), target.EngineKind) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: (&targetError{
-			code:    "engine_unsupported",
+			code:    ErrorCodeEngineUnsupported,
 			message: "queries on " + target.EngineKind + " engines are not available yet",
 		}).unprocessable()}, nil
 	}
@@ -794,16 +794,16 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		})
 		if err != nil {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 		}
 		if _, se, err := h.requireSpace(ctx, workspaceIDFromRequest(request.Id), saved.SpaceID, authz.SpaceViewer); err != nil {
 			if errors.Is(err, authz.ErrUnauthenticated) {
-				return RunQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+				return RunQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 			}
 			return nil, err
 		} else if se != nil {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
-			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "saved query not found"}}, nil
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 		}
 	}
 
@@ -889,7 +889,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 
 func (h *Handlers) GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return GetExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return GetExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var executionID pgtype.UUID
@@ -901,10 +901,10 @@ func (h *Handlers) GetExecution(ctx context.Context, request GetExecutionRequest
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 	})
 	if err != nil {
-		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 	if !agentOwnsExecution(ctx, execution) {
-		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 
 	return GetExecution200JSONResponse(dbExecutionToPublic(execution)), nil
@@ -924,7 +924,7 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 	ev := audit.Event{Action: audit.ExecutionCancel, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
-		return CancelExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return CancelExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var executionID pgtype.UUID
@@ -936,7 +936,7 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 	if p, err := authz.PrincipalFromContext(ctx); err == nil && p.IsAgent() {
 		exec, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{ID: executionID, WorkspaceID: wsID})
 		if err != nil || !agentOwnsExecution(ctx, exec) {
-			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
 	}
 
@@ -973,7 +973,7 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 	})
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 	// Already finished: nothing was cancelled.
 	h.audited(ctx, ev.Failed(audit.ReasonConflict))
@@ -1015,7 +1015,7 @@ func (h *Handlers) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
 
 func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return ListStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return ListStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var executionID pgtype.UUID
@@ -1030,7 +1030,7 @@ func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsReq
 		ID:          executionID,
 		WorkspaceID: wsID,
 	}); err != nil {
-		return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 
 	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, db.ListQueryStatementsByWorkspaceParams{
@@ -1051,7 +1051,7 @@ func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsReq
 
 func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObject) (GetResultsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return GetResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return GetResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var executionID pgtype.UUID
@@ -1063,21 +1063,21 @@ func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObje
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 	})
 	if err != nil {
-		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 	if !agentOwnsExecution(ctx, execution) {
-		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "execution not found"}}, nil
+		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 
 	if execution.Status != "finished" {
 		return GetResults409JSONResponse{
-			Code:    "conflict",
+			Code:    ErrorCodeConflict,
 			Message: "execution not yet completed",
 		}, nil
 	}
 
 	if execution.ResultKey == nil || *execution.ResultKey == "" {
-		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "no results available"}}, nil
+		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "no results available"}}, nil
 	}
 
 	reader, contentType, err := h.s3.GetReader(ctx, *execution.ResultKey)
@@ -1130,7 +1130,7 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 	ev := audit.Event{Action: audit.ResultsDownload, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
-		return GetStatementResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "workspace not found"}}, nil
+		return GetStatementResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
 	var executionID pgtype.UUID
@@ -1144,13 +1144,13 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 	})
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement not found"}}, nil
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
 	}
 
 	if statement.Status != "finished" {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return GetStatementResults409JSONResponse{
-			Code:    "conflict",
+			Code:    ErrorCodeConflict,
 			Message: "statement has no result yet",
 		}, nil
 	}
@@ -1160,14 +1160,14 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 	}
 	if resultIndex < 0 {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "result_index must be zero or greater")}, nil
+		return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "result_index must be zero or greater")}, nil
 	}
 	format := exportArrow
 	if request.Params.Format != nil {
 		parsed, ok := parseExportFormat(*request.Params.Format)
 		if !ok {
 			h.audited(ctx, ev.Failed(audit.ReasonValidation))
-			return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "format must be arrow, csv, tsv or jsonl")}, nil
+			return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "format must be arrow, csv, tsv or jsonl")}, nil
 		}
 		format = parsed
 	}
@@ -1181,13 +1181,13 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 	}
 	if offset < 0 || limit < 0 {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "offset and limit must be zero or greater")}, nil
+		return GetStatementResults422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "offset and limit must be zero or greater")}, nil
 	}
 
 	resultKey := resultKeyFor(statement.ResultSets, statement.ResultKey, resultIndex)
 	if resultKey == "" {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "statement produced no result set"}}, nil
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement produced no result set"}}, nil
 	}
 
 	disposition := fmt.Sprintf("attachment; filename=%q", fmt.Sprintf("%s-%d.%s", request.ExecutionId, request.Position, format.extension()))
@@ -1257,7 +1257,7 @@ func (h *Handlers) pageOf(ctx context.Context, key string, offset, limit int64) 
 func (h *Handlers) IssueWsTicket(ctx context.Context, request IssueWsTicketRequestObject) (IssueWsTicketResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	if userID == "" {
-		return IssueWsTicket401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "not authenticated"}}, nil
+		return IssueWsTicket401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "not authenticated"}}, nil
 	}
 	executionID := ""
 	if request.Body != nil && request.Body.ExecutionId != nil {
@@ -1268,7 +1268,7 @@ func (h *Handlers) IssueWsTicket(ctx context.Context, request IssueWsTicketReque
 }
 
 func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error) {
-	return StreamExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "websocket not yet implemented"}}, nil
+	return StreamExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "websocket not yet implemented"}}, nil
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -1299,17 +1299,17 @@ func (h *Handlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t *Save
 	}
 	workspace, err := h.queries.GetWorkspaceByID(ctx, ws)
 	if err != nil {
-		return pgtype.UUID{}, nil, &targetError{code: "workspace_not_found", message: "workspace not found"}
+		return pgtype.UUID{}, nil, &targetError{code: ErrorCodeWorkspaceNotFound, message: "workspace not found"}
 	}
 	target, err := h.ResolveTarget(ctx, workspace, &TargetRequest{BindingId: t.BindingId, Schema: t.Schema})
 	if err != nil {
 		if te, ok := asTargetError(err); ok {
 			if te.notFound {
-				return pgtype.UUID{}, nil, &targetError{code: "target_not_granted", message: "the target's catalog is not granted to this workspace"}
+				return pgtype.UUID{}, nil, &targetError{code: ErrorCodeTargetNotGranted, message: "the target's catalog is not granted to this workspace"}
 			}
 			return pgtype.UUID{}, nil, te
 		}
-		return pgtype.UUID{}, nil, &targetError{code: "internal", message: err.Error()}
+		return pgtype.UUID{}, nil, &targetError{code: ErrorCodeInternal, message: err.Error()}
 	}
 	return target.BindingID, t.Schema, nil
 }
@@ -1391,7 +1391,7 @@ func (h *Handlers) versionConflictResponse(ctx context.Context, err error) (Conf
 		params["updated_by"] = by
 	}
 	return ConflictJSONResponse{
-		Code:    "version_conflict",
+		Code:    ErrorCodeVersionConflict,
 		Message: "the content changed since you loaded it",
 		Params:  &params,
 	}, true
@@ -1522,8 +1522,8 @@ func dbStatementToPublic(s db.QueryStatement) QueryStatement {
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
 type savedQueryConflictJSONResponse struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
 }
 
 func (r savedQueryConflictJSONResponse) VisitCreateSavedQueryResponse(w http.ResponseWriter) error {
@@ -1539,11 +1539,11 @@ func (r savedQueryConflictJSONResponse) VisitUpdateSavedQueryResponse(w http.Res
 }
 
 func savedQueryConflict(msg string) savedQueryConflictJSONResponse {
-	return savedQueryConflictJSONResponse{Code: "conflict", Message: msg}
+	return savedQueryConflictJSONResponse{Code: ErrorCodeConflict, Message: msg}
 }
 
 func savedQueryUpdateConflict(msg string) savedQueryConflictJSONResponse {
-	return savedQueryConflictJSONResponse{Code: "conflict", Message: msg}
+	return savedQueryConflictJSONResponse{Code: ErrorCodeConflict, Message: msg}
 }
 
 func isUniqueViolation(err error) bool {

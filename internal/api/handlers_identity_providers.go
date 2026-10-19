@@ -31,7 +31,7 @@ type providerConfig struct {
 func (h *Handlers) ListIdentityProviders(ctx context.Context, request ListIdentityProvidersRequestObject) (ListIdentityProvidersResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return ListIdentityProviders403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
-			Code: "forbidden", Message: "admin only",
+			Code: ErrorCodeForbidden, Message: "admin only",
 		}}, nil
 	}
 
@@ -54,14 +54,14 @@ func (h *Handlers) ListIdentityProviders(ctx context.Context, request ListIdenti
 func (h *Handlers) GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return GetIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
-			Code: "forbidden", Message: "admin only",
+			Code: ErrorCodeForbidden, Message: "admin only",
 		}}, nil
 	}
 
 	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if err != nil {
 		return GetIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{
-			Code: "not_found", Message: "identity provider not found",
+			Code: ErrorCodeNotFound, Message: "identity provider not found",
 		}}, nil
 	}
 
@@ -77,22 +77,22 @@ func (h *Handlers) CreateIdentityProvider(ctx context.Context, request CreateIde
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return CreateIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
-			Code: "forbidden", Message: "admin only",
+			Code: ErrorCodeForbidden, Message: "admin only",
 		}}, nil
 	}
 
 	body := request.Body
 	if body == nil {
-		return CreateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "request body is required")}, nil
+		return CreateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 	name := body.Name
 	if len(name) == 0 {
-		return CreateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "name is required")}, nil
+		return CreateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name is required")}, nil
 	}
 
 	cfg, err := parseProviderConfig(body)
 	if err != nil {
-		return CreateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", err.Error())}, nil
+		return CreateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
 
 	enabled := true

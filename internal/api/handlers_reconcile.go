@@ -20,14 +20,14 @@ import (
 func (h *Handlers) ReconcileEngine(ctx context.Context, request ReconcileEngineRequestObject) (ReconcileEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ReconcileEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ReconcileEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if err := p.RequireAdmin(); err != nil {
-		return ReconcileEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "administrator role required"}}, nil
+		return ReconcileEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, err := h.queries.GetEngineByID(ctx, id); errors.Is(err, pgx.ErrNoRows) {
-		return ReconcileEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "engine not found"}}, nil
+		return ReconcileEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -48,14 +48,14 @@ func (h *Handlers) ReconcileEngine(ctx context.Context, request ReconcileEngineR
 func (h *Handlers) ListReconcileRuns(ctx context.Context, request ListReconcileRunsRequestObject) (ListReconcileRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListReconcileRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListReconcileRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if err := p.RequireAdmin(); err != nil {
-		return ListReconcileRuns403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "administrator role required"}}, nil
+		return ListReconcileRuns403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, err := h.queries.GetEngineByID(ctx, id); errors.Is(err, pgx.ErrNoRows) {
-		return ListReconcileRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "engine not found"}}, nil
+		return ListReconcileRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -86,12 +86,12 @@ func (h *Handlers) reconcile(ctx context.Context, engineID pgtype.UUID, dryRun b
 		return ReconcileRun{}, nil, err
 	}
 	if eng.Kind != h.binder.EngineKind() {
-		u := unprocessable("engine_unsupported", "engine kind "+eng.Kind+" has no binder: only federated engines with bindings are reconciled")
+		u := unprocessable(ErrorCodeEngineUnsupported, "engine kind "+eng.Kind+" has no binder: only federated engines with bindings are reconciled")
 		return ReconcileRun{}, &u, nil
 	}
 	cluster, err := h.queries.GetTrinoClusterByEngine(ctx, eng.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		u := unprocessable("engine_unsupported", "the engine has no Trino cluster")
+		u := unprocessable(ErrorCodeEngineUnsupported, "the engine has no Trino cluster")
 		return ReconcileRun{}, &u, nil
 	}
 	if err != nil {

@@ -16,7 +16,7 @@ import (
 func (h *Handlers) ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error) {
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
-		return ListUsers403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return ListUsers403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	users, err := h.queries.ListUsers(ctx)
@@ -59,13 +59,13 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return InviteUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return InviteUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	_, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
 	if err == nil {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return InviteUser409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "email already exists"}}, nil
+		return InviteUser409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "email already exists"}}, nil
 	}
 
 	tempPassword := randomState()
@@ -115,7 +115,7 @@ func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleReq
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return UpdateUserRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return UpdateUserRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	var uid pgtype.UUID
@@ -125,7 +125,7 @@ func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleReq
 	before, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return UpdateUserRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "user not found"}}, nil
+		return UpdateUserRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
 
 	if err := h.queries.UpdateUserRole(ctx, db.UpdateUserRoleParams{
@@ -154,7 +154,7 @@ func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObje
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return RemoveUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return RemoveUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	var uid pgtype.UUID
@@ -164,7 +164,7 @@ func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObje
 	_, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return RemoveUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "user not found"}}, nil
+		return RemoveUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
 
 	if err := h.queries.DeleteUser(ctx, uid); err != nil {
@@ -192,7 +192,7 @@ func removeUserConflict(err error) (ConflictJSONResponse, bool) {
 		return ConflictJSONResponse{}, false
 	}
 	if pg.ConstraintName == "workspaces_owner_user_id_fkey" {
-		return ConflictJSONResponse{Code: "user_owns_workspace", Message: "the user owns a workspace; removing the user would delete its content"}, true
+		return ConflictJSONResponse{Code: ErrorCodeUserOwnsWorkspace, Message: "the user owns a workspace; removing the user would delete its content"}, true
 	}
-	return ConflictJSONResponse{Code: "user_in_use", Message: "the user is still referenced (" + pg.TableName + ")"}, true
+	return ConflictJSONResponse{Code: ErrorCodeUserInUse, Message: "the user is still referenced (" + pg.TableName + ")"}, true
 }

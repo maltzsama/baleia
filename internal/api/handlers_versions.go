@@ -101,13 +101,13 @@ func (h *Handlers) ListSavedQueryVersions(ctx context.Context, request ListSaved
 	se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceViewer)
 	if err != nil {
 		if unauthorized(err) {
-			return ListSavedQueryVersions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return ListSavedQueryVersions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return ListSavedQueryVersions403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return ListSavedQueryVersions403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return ListSavedQueryVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("saved query not found")}, nil
 	}
@@ -140,13 +140,13 @@ func (h *Handlers) GetSavedQueryVersion(ctx context.Context, request GetSavedQue
 	se, err := h.contentSpace(ctx, ws, v.SpaceID, authz.SpaceViewer)
 	if err != nil {
 		if unauthorized(err) {
-			return GetSavedQueryVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return GetSavedQueryVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return GetSavedQueryVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return GetSavedQueryVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return GetSavedQueryVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
@@ -171,12 +171,12 @@ func (h *Handlers) RestoreSavedQueryVersion(ctx context.Context, request Restore
 	}
 	if se, err := h.contentSpace(ctx, ws, v.SpaceID, authz.SpaceEditor); err != nil {
 		if unauthorized(err) {
-			return RestoreSavedQueryVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return RestoreSavedQueryVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	} else if se != nil {
 		if se.status == 403 {
-			return RestoreSavedQueryVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return RestoreSavedQueryVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
 		return RestoreSavedQueryVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
@@ -188,7 +188,7 @@ func (h *Handlers) RestoreSavedQueryVersion(ctx context.Context, request Restore
 			return nil, err
 		} else if se != nil {
 			if se.status == 403 {
-				return RestoreSavedQueryVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit the destination space"}}, nil
+				return RestoreSavedQueryVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit the destination space"}}, nil
 			}
 			return RestoreSavedQueryVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("destination space not found")}, nil
 		}
@@ -206,9 +206,9 @@ func (h *Handlers) RestoreSavedQueryVersion(ctx context.Context, request Restore
 	q, err := h.contentService().RestoreSavedQuery(ctx, actor, ws, id, int32(request.Version), newName, spaceID)
 	switch {
 	case errors.Is(err, content.ErrNameConflict):
-		return RestoreSavedQueryVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "name_conflict", Message: "another saved query already uses this name or slug"}}, nil
+		return RestoreSavedQueryVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeNameConflict, Message: "another saved query already uses this name or slug"}}, nil
 	case errors.Is(err, content.ErrSpaceMissing):
-		return RestoreSavedQueryVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "space_missing", Message: "the version's space no longer exists; pass space_id"}}, nil
+		return RestoreSavedQueryVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeSpaceMissing, Message: "the version's space no longer exists; pass space_id"}}, nil
 	case errors.Is(err, content.ErrNotFound):
 		return RestoreSavedQueryVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	case err != nil:
@@ -232,13 +232,13 @@ func (h *Handlers) ListSemanticMetricVersions(ctx context.Context, request ListS
 	se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceViewer)
 	if err != nil {
 		if unauthorized(err) {
-			return ListSemanticMetricVersions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return ListSemanticMetricVersions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return ListSemanticMetricVersions403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return ListSemanticMetricVersions403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return ListSemanticMetricVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
@@ -271,13 +271,13 @@ func (h *Handlers) GetSemanticMetricVersion(ctx context.Context, request GetSema
 	se, err := h.contentSpace(ctx, ws, v.SpaceID, authz.SpaceViewer)
 	if err != nil {
 		if unauthorized(err) {
-			return GetSemanticMetricVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return GetSemanticMetricVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return GetSemanticMetricVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return GetSemanticMetricVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return GetSemanticMetricVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
@@ -302,12 +302,12 @@ func (h *Handlers) RestoreSemanticMetricVersion(ctx context.Context, request Res
 	}
 	if se, err := h.contentSpace(ctx, ws, v.SpaceID, authz.SpaceEditor); err != nil {
 		if unauthorized(err) {
-			return RestoreSemanticMetricVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return RestoreSemanticMetricVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	} else if se != nil {
 		if se.status == 403 {
-			return RestoreSemanticMetricVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return RestoreSemanticMetricVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
 		return RestoreSemanticMetricVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
@@ -318,7 +318,7 @@ func (h *Handlers) RestoreSemanticMetricVersion(ctx context.Context, request Res
 			return nil, err
 		} else if se != nil {
 			if se.status == 403 {
-				return RestoreSemanticMetricVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit the destination space"}}, nil
+				return RestoreSemanticMetricVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit the destination space"}}, nil
 			}
 			return RestoreSemanticMetricVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("destination space not found")}, nil
 		}
@@ -329,11 +329,11 @@ func (h *Handlers) RestoreSemanticMetricVersion(ctx context.Context, request Res
 	// written.
 	snap, err := content.ParseMetricSnapshot(v.Snapshot)
 	if err != nil {
-		return RestoreSemanticMetricVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return RestoreSemanticMetricVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	def, _, err := parseDefinitionRaw(snap.Definition)
 	if err != nil {
-		return RestoreSemanticMetricVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return RestoreSemanticMetricVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	actor, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -354,9 +354,9 @@ func (h *Handlers) RestoreSemanticMetricVersion(ctx context.Context, request Res
 	m, err := h.contentService().RestoreSemanticMetric(ctx, actor, ws, id, int32(request.Version), newSlug, spaceID)
 	switch {
 	case errors.Is(err, content.ErrNameConflict):
-		return RestoreSemanticMetricVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "name_conflict", Message: "another metric already uses this slug"}}, nil
+		return RestoreSemanticMetricVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeNameConflict, Message: "another metric already uses this slug"}}, nil
 	case errors.Is(err, content.ErrSpaceMissing):
-		return RestoreSemanticMetricVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "space_missing", Message: "the version's space no longer exists; pass space_id"}}, nil
+		return RestoreSemanticMetricVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeSpaceMissing, Message: "the version's space no longer exists; pass space_id"}}, nil
 	case errors.Is(err, content.ErrNotFound):
 		return RestoreSemanticMetricVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	case err != nil:

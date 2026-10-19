@@ -46,7 +46,7 @@ func (h *Handlers) SearchContent(ctx context.Context, request SearchContentReque
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return SearchContent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return SearchContent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if _, err := h.authz().Workspace(ctx, p, ws, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
@@ -186,7 +186,7 @@ func (h *Handlers) ListWorkspacePrincipals(ctx context.Context, request ListWork
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListWorkspacePrincipals401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListWorkspacePrincipals401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if _, err := h.authz().Workspace(ctx, p, ws, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
@@ -258,29 +258,29 @@ func (h *Handlers) UpdateFolder(ctx context.Context, request UpdateFolderRequest
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return UpdateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if _, err := h.authz().Workspace(ctx, p, ws, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return UpdateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+			return UpdateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 		}
 		return nil, err
 	}
 	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
 	folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return UpdateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "folder not found"}}, nil
+		return UpdateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	if request.Body == nil {
-		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	if _, se, err := h.spaceForWrite(ctx, ws, uuidPtr(folder.SpaceID), authz.SpaceEditor); err != nil {
 		return nil, err
 	} else if se != nil {
-		return UpdateFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+		return UpdateFolder403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 	}
 
 	destSpace := folder.SpaceID
@@ -290,7 +290,7 @@ func (h *Handlers) UpdateFolder(ctx context.Context, request UpdateFolderRequest
 			if _, se, err := h.spaceForWrite(ctx, ws, uuidPtr(destSpace), authz.SpaceEditor); err != nil {
 				return nil, err
 			} else if se != nil {
-				return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("space_not_found", "destination space not found")}, nil
+				return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeSpaceNotFound, "destination space not found")}, nil
 			}
 		}
 	}
@@ -300,21 +300,21 @@ func (h *Handlers) UpdateFolder(ctx context.Context, request UpdateFolderRequest
 		name = strings.TrimSpace(*request.Body.Name)
 	}
 	if name == "" {
-		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "name cannot be empty")}, nil
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name cannot be empty")}, nil
 	}
 	slug := folder.Slug
 	if request.Body.Slug != nil {
 		slug = *request.Body.Slug
 	}
 	if !folderSlugRe.MatchString(slug) {
-		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "slug must match "+folderSlugRe.String())}, nil
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match "+folderSlugRe.String())}, nil
 	}
 	exists, err := h.queries.FolderSlugExists(ctx, db.FolderSlugExistsParams{SpaceID: destSpace, Slug: slug})
 	if err != nil {
 		return nil, err
 	}
 	if exists && destSpace != folder.SpaceID {
-		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("slug_conflict", "another folder in the destination space uses this slug")}, nil
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeSlugConflict, "another folder in the destination space uses this slug")}, nil
 	}
 
 	parent := folder.ParentID
@@ -326,12 +326,12 @@ func (h *Handlers) UpdateFolder(ctx context.Context, request UpdateFolderRequest
 	}
 	if parent.Valid {
 		if parent == folderID {
-			return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("folder_cycle", "a folder cannot be its own parent")}, nil
+			return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeFolderCycle, "a folder cannot be its own parent")}, nil
 		}
 		cur := parent
 		for depth := 0; depth < 128 && cur.Valid; depth++ {
 			if cur == folderID {
-				return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("folder_cycle", "cannot move a folder under its own descendant")}, nil
+				return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeFolderCycle, "cannot move a folder under its own descendant")}, nil
 			}
 			next, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: cur, WorkspaceID: ws})
 			if err != nil {

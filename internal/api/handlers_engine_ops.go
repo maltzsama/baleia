@@ -18,7 +18,7 @@ import (
 func (h *Handlers) TestEngine(ctx context.Context, request TestEngineRequestObject) (TestEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return TestEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return TestEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	_, _, err = h.authz().Engine(ctx, p, id, authz.ActWrite)
@@ -29,7 +29,7 @@ func (h *Handlers) TestEngine(ctx context.Context, request TestEngineRequestObje
 		return nil, err
 	}
 	if !connectionTests.allow(p.UserID.String(), time.Now()) {
-		return TestEngine429JSONResponse{Code: "rate_limited", Message: "too many tests; wait a minute"}, nil
+		return TestEngine429JSONResponse{Code: ErrorCodeRateLimited, Message: "too many tests; wait a minute"}, nil
 	}
 	if h.engines == nil {
 		res := failedTest("engine_unavailable", "no adapter for this engine kind is available")
@@ -125,7 +125,7 @@ func failedTest(code, message string) TestCatalogConnectionResult {
 func (h *Handlers) ListEngineObservations(ctx context.Context, request ListEngineObservationsRequestObject) (ListEngineObservationsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListEngineObservations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListEngineObservations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, _, err := h.authz().Engine(ctx, p, id, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
@@ -155,7 +155,7 @@ func (h *Handlers) ListEngineObservations(ctx context.Context, request ListEngin
 func (h *Handlers) GetEngineImpact(ctx context.Context, request GetEngineImpactRequestObject) (GetEngineImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetEngineImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetEngineImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, _, err := h.authz().Engine(ctx, p, id, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
@@ -183,7 +183,7 @@ func (h *Handlers) GetEngineImpact(ctx context.Context, request GetEngineImpactR
 func (h *Handlers) DiscoverEngineCatalogs(ctx context.Context, request DiscoverEngineCatalogsRequestObject) (DiscoverEngineCatalogsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DiscoverEngineCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DiscoverEngineCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	eng, conn, err := h.authz().Engine(ctx, p, id, authz.ActWrite)
@@ -191,22 +191,22 @@ func (h *Handlers) DiscoverEngineCatalogs(ctx context.Context, request DiscoverE
 	case errors.Is(err, authz.ErrNotFound):
 		return DiscoverEngineCatalogs404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return DiscoverEngineCatalogs403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only the connection owner or an admin may discover catalogs"}}, nil
+		return DiscoverEngineCatalogs403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only the connection owner or an admin may discover catalogs"}}, nil
 	case err != nil:
 		return nil, err
 	}
 	if eng.Class != "direct" {
-		return DiscoverEngineCatalogs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("not_direct", "only direct engines expose native catalogs")}, nil
+		return DiscoverEngineCatalogs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotDirect, "only direct engines expose native catalogs")}, nil
 	}
 	provider, cfg, err := h.connectionConfig(conn)
 	if err != nil {
-		return DiscoverEngineCatalogs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("engine_unavailable", connectionTestError(err))}, nil
+		return DiscoverEngineCatalogs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnavailable, connectionTestError(err))}, nil
 	}
 	dctx, cancel := context.WithTimeout(ctx, enginePingTimeout)
 	defer cancel()
 	names, err := catalogs.NativeNames(dctx, provider, cfg, conn.Name)
 	if err != nil {
-		return DiscoverEngineCatalogs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("engine_unreachable", connectionTestError(err))}, nil
+		return DiscoverEngineCatalogs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnreachable, connectionTestError(err))}, nil
 	}
 
 	existing, err := h.queries.ListBindingsByEngine(ctx, id)
@@ -269,10 +269,10 @@ func (h *Handlers) DiscoverEngineCatalogs(ctx context.Context, request DiscoverE
 func (h *Handlers) GetReconcileRun(ctx context.Context, request GetReconcileRunRequestObject) (GetReconcileRunResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetReconcileRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetReconcileRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if err := p.RequireAdmin(); err != nil {
-		return GetReconcileRun403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "administrator role required"}}, nil
+		return GetReconcileRun403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, err := h.queries.GetEngineByID(ctx, engineID); errors.Is(err, pgx.ErrNoRows) {
@@ -284,7 +284,7 @@ func (h *Handlers) GetReconcileRun(ctx context.Context, request GetReconcileRunR
 		EngineID: engineID, ID: pgtype.UUID{Bytes: request.RunId, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return GetReconcileRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "reconcile run not found"}}, nil
+		return GetReconcileRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "reconcile run not found"}}, nil
 	}
 	if err != nil {
 		return nil, err

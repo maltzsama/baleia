@@ -65,7 +65,7 @@ func (h *Handlers) GetAgentsMeta(ctx context.Context, _ GetAgentsMetaRequestObje
 		return GetAgentsMeta404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
-		return GetAgentsMeta401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetAgentsMeta401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	tools := make([]AgentTool, 0, len(agentpolicy.AllTools))
 	for _, name := range agentpolicy.AllTools {
@@ -93,7 +93,7 @@ func (h *Handlers) GetAgentEligibility(ctx context.Context, request GetAgentElig
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetAgentEligibility401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetAgentEligibility401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {

@@ -52,12 +52,12 @@ func (h *Handlers) ExportSpaceBundle(ctx context.Context, request ExportSpaceBun
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceViewer); err != nil {
 		if unauthorized(err) {
-			return ExportSpaceBundle401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return ExportSpaceBundle401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	} else if se != nil {
 		if se.status == 403 {
-			return ExportSpaceBundle403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return ExportSpaceBundle403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return ExportSpaceBundle404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
@@ -77,27 +77,27 @@ func (h *Handlers) ImportSpaceBundle(ctx context.Context, request ImportSpaceBun
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err != nil {
 		if unauthorized(err) {
-			return ImportSpaceBundle401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return ImportSpaceBundle401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	} else if se != nil {
 		if se.status == 403 {
-			return ImportSpaceBundle403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return ImportSpaceBundle403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
 		return ImportSpaceBundle404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
 	if request.Body == nil {
-		return ImportSpaceBundle422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_bundle", "missing bundle body")}, nil
+		return ImportSpaceBundle422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidBundle, "missing bundle body")}, nil
 	}
 	raw, err := json.Marshal(request.Body)
 	if err != nil {
-		return ImportSpaceBundle422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_bundle", "the bundle is not valid JSON")}, nil
+		return ImportSpaceBundle422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidBundle, "the bundle is not valid JSON")}, nil
 	}
 	var bundle content.Bundle
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&bundle); err != nil {
-		return ImportSpaceBundle422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_bundle", err.Error())}, nil
+		return ImportSpaceBundle422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidBundle, err.Error())}, nil
 	}
 
 	mode := content.ImportDryRun

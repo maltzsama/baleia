@@ -26,7 +26,7 @@ var maintenanceOperations = []string{"optimize", "expire_snapshots", "remove_orp
 func (h *Handlers) ListMonitoringEngines(ctx context.Context, _ ListMonitoringEnginesRequestObject) (ListMonitoringEnginesResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListMonitoringEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListMonitoringEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engines, err := h.queries.ListEngines(ctx)
 	if err != nil {
@@ -70,11 +70,11 @@ func (h *Handlers) engineForMonitoring(ctx context.Context, p authz.Principal, i
 func (h *Handlers) GetEngineCluster(ctx context.Context, request GetEngineClusterRequestObject) (GetEngineClusterResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetEngineCluster401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetEngineCluster401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
-		return GetEngineCluster404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "engine not found"}}, nil
+		return GetEngineCluster404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}
 
 	window := "1h"
@@ -132,11 +132,11 @@ func clusterPoint(s db.ClusterSnapshot) ClusterPoint {
 func (h *Handlers) ListMonitoringQueries(ctx context.Context, request ListMonitoringQueriesRequestObject) (ListMonitoringQueriesResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListMonitoringQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListMonitoringQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
-		return ListMonitoringQueries404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "engine not found"}}, nil
+		return ListMonitoringQueries404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}
 
 	scope := "mine"
@@ -146,7 +146,7 @@ func (h *Handlers) ListMonitoringQueries(ctx context.Context, request ListMonito
 	var userName *string
 	if scope == "all" {
 		if !p.IsAdmin() {
-			return ListMonitoringQueries403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only administrators may see every query"}}, nil
+			return ListMonitoringQueries403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only administrators may see every query"}}, nil
 		}
 	} else {
 		identity, err := h.trinoIdentityFor(ctx, p.UserID)
@@ -235,20 +235,20 @@ func firstSQLine(sql string) string {
 func (h *Handlers) GetMonitoringQuery(ctx context.Context, request GetMonitoringQueryRequestObject) (GetMonitoringQueryResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
-		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "query not found"}}, nil
+		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	snapshot, err := h.queries.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: engineID, TrinoQueryID: request.QueryId,
 	})
 	if err != nil {
-		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "query not found"}}, nil
+		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	if !h.maySeeQuery(ctx, p, snapshot) {
-		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "query not found"}}, nil
+		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	first := firstSQLine(snapshot.Sql)
 	detail := MonitoringQueryDetail{
@@ -282,27 +282,27 @@ func (h *Handlers) maySeeQuery(ctx context.Context, p authz.Principal, snapshot 
 func (h *Handlers) KillMonitoringQuery(ctx context.Context, request KillMonitoringQueryRequestObject) (KillMonitoringQueryResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return KillMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return KillMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
-		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "query not found"}}, nil
+		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	snapshot, err := h.queries.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: engineID, TrinoQueryID: request.QueryId,
 	})
 	if err != nil || !h.maySeeQuery(ctx, p, snapshot) {
-		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "query not found"}}, nil
+		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	if snapshot.State != "running" {
-		return KillMonitoringQuery409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "not_running", Message: "the query is no longer running"}}, nil
+		return KillMonitoringQuery409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeNotRunning, Message: "the query is no longer running"}}, nil
 	}
 	eng, err := h.engines.Get(ctx, engineID)
 	if err != nil {
 		return nil, err
 	}
 	if err := eng.Cancel(ctx, queryengine.QueryHandle{QueryID: request.QueryId}); err != nil {
-		return KillMonitoringQuery409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "cancel_failed", Message: "the engine did not cancel the query"}}, nil
+		return KillMonitoringQuery409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeCancelFailed, Message: "the engine did not cancel the query"}}, nil
 	}
 	return KillMonitoringQuery202Response{}, nil
 }
@@ -322,12 +322,12 @@ func (h *Handlers) catalogForMonitoring(ctx context.Context, p authz.Principal, 
 func (h *Handlers) ListTableHealth(ctx context.Context, request ListTableHealthRequestObject) (ListTableHealthResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListTableHealth401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListTableHealth401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	catalog, ok := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead)
 	if !ok {
-		return ListTableHealth404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return ListTableHealth404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
 	limit, offset := 50, 0
 	if request.Params.Limit != nil {
@@ -393,24 +393,24 @@ func tableHealth(catalog db.Catalog, s db.TableHealthSnapshot) TableHealth {
 func (h *Handlers) CreateMaintenanceRun(ctx context.Context, request CreateMaintenanceRunRequestObject) (CreateMaintenanceRunResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateMaintenanceRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateMaintenanceRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	catalog, ok := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
 	if !ok {
-		return CreateMaintenanceRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return CreateMaintenanceRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
 	if request.Body == nil {
-		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	ops := request.Body.Operations
 	if len(ops) == 0 {
-		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "operations are required")}, nil
+		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "operations are required")}, nil
 	}
 	selected := map[string]bool{}
 	for _, op := range ops {
 		if !containsString(maintenanceOperations, op) {
-			return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "unknown operation "+op)}, nil
+			return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "unknown operation "+op)}, nil
 		}
 		selected[op] = true
 	}
@@ -420,7 +420,7 @@ func (h *Handlers) CreateMaintenanceRun(ctx context.Context, request CreateMaint
 	}
 	needsRetention := selected["expire_snapshots"] || selected["remove_orphan_files"]
 	if needsRetention && !maintenanceRetentionRe.MatchString(retention) {
-		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "retention must match ^[1-9][0-9]{0,4}[dhm]$ for expire_snapshots and remove_orphan_files")}, nil
+		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "retention must match ^[1-9][0-9]{0,4}[dhm]$ for expire_snapshots and remove_orphan_files")}, nil
 	}
 
 	var bindingID pgtype.UUID
@@ -440,7 +440,7 @@ func (h *Handlers) CreateMaintenanceRun(ctx context.Context, request CreateMaint
 		}
 	}
 	if !bindingID.Valid {
-		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("not_supported", "no enabled binding of this catalog supports Iceberg maintenance")}, nil
+		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotSupported, "no enabled binding of this catalog supports Iceberg maintenance")}, nil
 	}
 
 	runID := uuid.New()
@@ -483,11 +483,11 @@ func (h *Handlers) CreateMaintenanceRun(ctx context.Context, request CreateMaint
 func (h *Handlers) ListMaintenanceRuns(ctx context.Context, request ListMaintenanceRunsRequestObject) (ListMaintenanceRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListMaintenanceRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListMaintenanceRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	if _, ok := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead); !ok {
-		return ListMaintenanceRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return ListMaintenanceRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
 	limit, offset := 20, 0
 	if request.Params.Limit != nil {

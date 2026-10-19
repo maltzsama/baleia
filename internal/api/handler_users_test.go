@@ -54,7 +54,7 @@ func TestRemoveUserConflict(t *testing.T) {
 				t.Errorf("%s: 204, want %s", tc.name, tc.wantCode)
 			}
 		case RemoveUser409JSONResponse:
-			if r.Code != tc.wantCode {
+			if string(r.Code) != tc.wantCode {
 				t.Errorf("%s: code %q, want %q", tc.name, r.Code, tc.wantCode)
 			}
 		default:

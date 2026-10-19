@@ -590,7 +590,7 @@ func TestBindingErrorsAre422(t *testing.T) {
 		&bindings.PropertyError{Key: "connection-url", Err: bindings.ErrPropertyNotOverridable}: "property_not_overridable",
 	}
 	for err, want := range cases {
-		if !bindingInvalid(err) || bindingUnprocessable(err).Code != want {
+		if !bindingInvalid(err) || string(bindingUnprocessable(err).Code) != want {
 			t.Errorf("%v: %v %q", err, bindingInvalid(err), bindingUnprocessable(err).Code)
 		}
 	}

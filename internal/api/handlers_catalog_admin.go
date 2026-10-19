@@ -19,7 +19,7 @@ import (
 func (h *Handlers) ListAllCatalogs(ctx context.Context, request ListAllCatalogsRequestObject) (ListAllCatalogsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListAllCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListAllCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	rows, err := h.queries.ListVisibleCatalogs(ctx, db.ListVisibleCatalogsParams{IsAdmin: p.IsAdmin(), UserID: p.UserID})
 	if err != nil {
@@ -85,11 +85,11 @@ func (h *Handlers) ListAllCatalogs(ctx context.Context, request ListAllCatalogsR
 func (h *Handlers) GetCatalogDetail(ctx context.Context, request GetCatalogDetailRequestObject) (GetCatalogDetailResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	cat, _, err := h.authz().Catalog(ctx, p, pgtype.UUID{Bytes: request.CatalogId, Valid: true}, authz.ActRead)
 	if errors.Is(err, authz.ErrNotFound) {
-		return GetCatalogDetail404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return GetCatalogDetail404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -113,27 +113,27 @@ func (h *Handlers) GetCatalogDetail(ctx context.Context, request GetCatalogDetai
 func (h *Handlers) UpdateCatalogDetail(ctx context.Context, request UpdateCatalogDetailRequestObject) (UpdateCatalogDetailResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return UpdateCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	cat, _, err := h.authz().Catalog(ctx, p, id, authz.ActWrite)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
-		return UpdateCatalogDetail404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return UpdateCatalogDetail404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return UpdateCatalogDetail403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to modify this catalog"}}, nil
+		return UpdateCatalogDetail403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to modify this catalog"}}, nil
 	case err != nil:
 		return nil, err
 	}
 	if request.Body == nil {
-		return UpdateCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return UpdateCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	name := cat.Name
 	if request.Body.Name != nil {
 		name = strings.TrimSpace(*request.Body.Name)
 	}
 	if name == "" {
-		return UpdateCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "name cannot be empty")}, nil
+		return UpdateCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name cannot be empty")}, nil
 	}
 	description := cat.Description
 	if request.Body.Description != nil {
@@ -156,7 +156,7 @@ func (h *Handlers) UpdateCatalogDetail(ctx context.Context, request UpdateCatalo
 func (h *Handlers) DeleteCatalogDetail(ctx context.Context, request DeleteCatalogDetailRequestObject) (DeleteCatalogDetailResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DeleteCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogDelete, ResourceType: "catalog", ResourceID: idString(id)}
@@ -164,9 +164,9 @@ func (h *Handlers) DeleteCatalogDetail(ctx context.Context, request DeleteCatalo
 	cat, _, err := h.authz().Catalog(ctx, p, id, authz.ActWrite)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
-		return DeleteCatalogDetail404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return DeleteCatalogDetail404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return DeleteCatalogDetail403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to delete this catalog"}}, nil
+		return DeleteCatalogDetail403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to delete this catalog"}}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (h *Handlers) DeleteCatalogDetail(ctx context.Context, request DeleteCatalo
 	for _, b := range bindingRows {
 		if b.LifecycleState == "provisioning" || b.LifecycleState == "updating" {
 			h.audited(ctx, ev.Failed(audit.ReasonConflict))
-			return DeleteCatalogDetail409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "binding_busy", Message: "a binding of this catalog is provisioning or updating"}}, nil
+			return DeleteCatalogDetail409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeBindingBusy, Message: "a binding of this catalog is provisioning or updating"}}, nil
 		}
 	}
 	if err := h.inTx(ctx, func(q db.Querier) error {
@@ -218,11 +218,11 @@ func (h *Handlers) DeleteCatalogDetail(ctx context.Context, request DeleteCatalo
 func (h *Handlers) GetCatalogImpact(ctx context.Context, request GetCatalogImpactRequestObject) (GetCatalogImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetCatalogImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetCatalogImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
-		return GetCatalogImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return GetCatalogImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -244,11 +244,11 @@ func (h *Handlers) GetCatalogImpact(ctx context.Context, request GetCatalogImpac
 func (h *Handlers) GetCatalogConnectionImpact(ctx context.Context, request GetCatalogConnectionImpactRequestObject) (GetCatalogConnectionImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetCatalogConnectionImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetCatalogConnectionImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, err := h.authz().Connection(ctx, p, id, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
-		return GetCatalogConnectionImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+		return GetCatalogConnectionImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -277,11 +277,11 @@ func (h *Handlers) GetCatalogConnectionImpact(ctx context.Context, request GetCa
 func (h *Handlers) ListCatalogGrants(ctx context.Context, request ListCatalogGrantsRequestObject) (ListCatalogGrantsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListCatalogGrants401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListCatalogGrants401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
-		return ListCatalogGrants404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+		return ListCatalogGrants404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -312,17 +312,17 @@ func (h *Handlers) ListCatalogGrants(ctx context.Context, request ListCatalogGra
 func (h *Handlers) GetCatalogBinding(ctx context.Context, request GetCatalogBindingRequestObject) (GetCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	b, err := h.queries.GetBinding(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return GetCatalogBinding404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "binding not found"}}, nil
+		return GetCatalogBinding404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	if _, _, err := h.authz().Catalog(ctx, p, b.CatalogID, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
-		return GetCatalogBinding404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "binding not found"}}, nil
+		return GetCatalogBinding404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -334,11 +334,11 @@ func (h *Handlers) GetCatalogBinding(ctx context.Context, request GetCatalogBind
 func (h *Handlers) GetCatalogBindingProjection(ctx context.Context, request GetCatalogBindingProjectionRequestObject) (GetCatalogBindingProjectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetCatalogBindingProjection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetCatalogBindingProjection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	b, err := h.queries.GetBinding(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return GetCatalogBindingProjection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "binding not found"}}, nil
+		return GetCatalogBindingProjection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -346,9 +346,9 @@ func (h *Handlers) GetCatalogBindingProjection(ctx context.Context, request GetC
 	cat, _, err := h.authz().Catalog(ctx, p, b.CatalogID, authz.ActWrite)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
-		return GetCatalogBindingProjection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "binding not found"}}, nil
+		return GetCatalogBindingProjection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return GetCatalogBindingProjection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to see this binding's projection"}}, nil
+		return GetCatalogBindingProjection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to see this binding's projection"}}, nil
 	case err != nil:
 		return nil, err
 	}

@@ -49,7 +49,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 	}
 	if len(users) > 0 {
 		return CreateFirstAdmin409JSONResponse{
-			ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "already set up"},
+			ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "already set up"},
 		}, nil
 	}
 	if len(request.Body.Password) < minPasswordLength {
@@ -108,7 +108,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 const minPasswordLength = 8
 
 func shortPassword() UnprocessableEntityJSONResponse {
-	return unprocessable("validation_error", "password must be at least 8 characters")
+	return unprocessable(ErrorCodeValidationError, "password must be at least 8 characters")
 }
 
 func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp LoginResponseObject, err error) {
@@ -121,7 +121,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	defer func() { h.metrics.auth.Attempt(kind, authOutcome(resp, err)) }()
 
 	if request.Body.ProviderId == nil && request.Body.Email == nil {
-		return Login422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "email is required for local login")}, nil
+		return Login422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "email is required for local login")}, nil
 	}
 
 	identifier := loginIdentifier(request.Body)
@@ -171,7 +171,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 	if err := auth.RequireActive(user.Status); err != nil {
 		failed("account_suspended")
 		return Login403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
-			Code: "account_suspended", Message: "account suspended",
+			Code: ErrorCodeAccountSuspended, Message: "account suspended",
 		}}, nil
 	}
 	h.loginDelay().Success(identifier)
@@ -179,7 +179,7 @@ func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp 
 }
 
 func invalidCredentialsLogin() LoginResponseObject {
-	return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "invalid_credentials", Message: "invalid credentials"}}
+	return Login401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeInvalidCredentials, Message: "invalid credentials"}}
 }
 
 // loginIdentifier keys the progressive delay and the audit fingerprint. LDAP
@@ -316,12 +316,12 @@ func (h *Handlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMe
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	user, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
-		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"}}, nil
+		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
 	}
 
 	principal, _ := authz.PrincipalFromContext(ctx)
@@ -416,7 +416,7 @@ func (h *Handlers) OidcRedirect(ctx context.Context, request OidcRedirectRequest
 	provider, _, err := h.cachedOIDCProvider(ctx, providerID)
 	if err != nil {
 		return OidcRedirect503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
-			Code: "idp_unavailable", Message: "identity provider unavailable",
+			Code: ErrorCodeIdpUnavailable, Message: "identity provider unavailable",
 		}}, nil
 	}
 
@@ -479,7 +479,7 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 	if err != nil {
 		outcome = metrics.OutcomeError
 		return OidcCallback503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
-			Code: "idp_unavailable", Message: "identity provider unavailable",
+			Code: ErrorCodeIdpUnavailable, Message: "identity provider unavailable",
 		}}, nil
 	}
 
@@ -560,7 +560,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	token := refreshTokenFromBody(bodyToken, ctx)
 	if token == "" {
 		return RefreshToken401JSONResponse{
-			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "missing refresh token"},
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "missing refresh token"},
 		}, nil
 	}
 	hash := auth.HashRefreshToken(token)
@@ -584,14 +584,14 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 			h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("invalid_token"))
 		}
 		return RefreshToken401JSONResponse{
-			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid or expired refresh token"},
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid or expired refresh token"},
 		}, nil
 	}
 
 	user, err := h.queries.GetUserByID(ctx, rt.UserID)
 	if err != nil {
 		return RefreshToken401JSONResponse{
-			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"},
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"},
 		}, nil
 	}
 	// A suspension ends every session and blocks a refresh even if a token
@@ -600,7 +600,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 		h.revokeUserRefreshTokens(ctx, user.ID)
 		h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("account_suspended"))
 		return RefreshToken401JSONResponse{
-			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "account_suspended", Message: "account suspended"},
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeAccountSuspended, Message: "account suspended"},
 		}, nil
 	}
 
@@ -646,7 +646,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 
 	if h.cfg.SMTPHost == "" || h.cfg.SMTPPort == "" {
 		return RequestPasswordReset503JSONResponse{
-			Code:    "service_unavailable",
+			Code:    ErrorCodeServiceUnavailable,
 			Message: "email service not configured",
 		}, nil
 	}
@@ -693,7 +693,7 @@ func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPass
 	if err != nil {
 		h.audited(ctx, ev.Denied("invalid_token"))
 		return ConfirmPasswordReset401JSONResponse{
-			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid or expired token"},
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid or expired token"},
 		}, nil
 	}
 
@@ -732,12 +732,12 @@ func (h *Handlers) GetProfile(ctx context.Context, request GetProfileRequestObje
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return GetProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	user, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
-		return GetProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"}}, nil
+		return GetProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
 	}
 
 	return GetProfile200JSONResponse(dbUserToPublic(user)), nil
@@ -747,12 +747,12 @@ func (h *Handlers) UpdateProfile(ctx context.Context, request UpdateProfileReque
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	current, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
-		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"}}, nil
+		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
 	}
 
 	name := current.Name
@@ -780,17 +780,17 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return UpdatePassword401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdatePassword401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	user, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
-		return UpdatePassword401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "user not found"}}, nil
+		return UpdatePassword401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
 	}
 
 	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, request.Body.CurrentPassword) {
 		return UpdatePassword422JSONResponse{
-			UnprocessableEntityJSONResponse: unprocessable("validation_error", "current password is incorrect"),
+			UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "current password is incorrect"),
 		}, nil
 	}
 	if len(request.Body.NewPassword) < minPasswordLength {

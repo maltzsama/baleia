@@ -19,15 +19,15 @@ var errConfigInvalid = errors.New("invalid connection config")
 
 // configError is a 422 answer: a code and the invalid fields.
 type configError struct {
-	code   string
+	code   ErrorCode
 	fields []connections.FieldError
 }
 
-func (e *configError) Error() string { return e.code }
+func (e *configError) Error() string { return string(e.code) }
 func (e *configError) Unwrap() error { return errConfigInvalid }
 
 func (e *configError) response() UnprocessableEntityJSONResponse {
-	messages := map[string]string{
+	messages := map[ErrorCode]string{
 		"provider_unsupported": "no provider is available for this connection type",
 		"engine_unsupported":   "this connection cannot back an engine",
 		"engine_unreachable":   "Baleia could not reach the engine",
@@ -56,10 +56,10 @@ func (e *configError) response() UnprocessableEntityJSONResponse {
 func (h *Handlers) provider(kind string) (connections.Provider, error) {
 	p, err := h.connections.Get(connections.Kind(kind))
 	if err != nil {
-		return nil, &configError{code: "provider_unsupported", fields: []connections.FieldError{{Key: "type", Message: fmt.Sprintf("%q has no provider", kind)}}}
+		return nil, &configError{code: ErrorCodeProviderUnsupported, fields: []connections.FieldError{{Key: "type", Message: fmt.Sprintf("%q has no provider", kind)}}}
 	}
 	if st := p.Status(); st.State == connections.StateUnsupported {
-		return nil, &configError{code: "provider_unsupported", fields: []connections.FieldError{{Key: "type", Message: st.Reason}}}
+		return nil, &configError{code: ErrorCodeProviderUnsupported, fields: []connections.FieldError{{Key: "type", Message: st.Reason}}}
 	}
 	return p, nil
 }
@@ -69,7 +69,7 @@ func validate(p connections.Provider, cfg connections.Config) (connections.Confi
 	out, err := p.Validate(cfg)
 	var ve *connections.ValidationError
 	if errors.As(err, &ve) {
-		return connections.Config{}, &configError{code: "validation_error", fields: ve.Fields}
+		return connections.Config{}, &configError{code: ErrorCodeValidationError, fields: ve.Fields}
 	}
 	return out, err
 }
@@ -78,7 +78,7 @@ func validate(p connections.Provider, cfg connections.Config) (connections.Confi
 func asConfigError(err error) error {
 	var ve *connections.ValidationError
 	if errors.As(err, &ve) {
-		return &configError{code: "validation_error", fields: ve.Fields}
+		return &configError{code: ErrorCodeValidationError, fields: ve.Fields}
 	}
 	return err
 }
