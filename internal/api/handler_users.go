@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -100,7 +101,11 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 	}
 
 	inviteURL := h.cfg.PublicURL + "/accept-invite?token=" + token
-	if err := h.sendMail(user.Email, inviteURL); err != nil {
+	locale := mail.LocaleOrDefault(user.Locale, h.cfg.DefaultLocale)
+	if err := h.mailSender().Send(ctx, user.Email, locale, mail.TemplateInvite, map[string]any{
+		"Name":      user.Name,
+		"InviteURL": inviteURL,
+	}); err != nil {
 		slog.Warn("failed to send invite email", "err", err, "url", inviteURL)
 	}
 

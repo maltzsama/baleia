@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/google/uuid"
@@ -678,7 +679,11 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 	}
 
 	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
-	if err := h.sendMail(user.Email, resetURL); err != nil {
+	locale := mail.LocaleOrDefault(user.Locale, h.cfg.DefaultLocale)
+	if err := h.mailSender().Send(ctx, user.Email, locale, mail.TemplatePasswordReset, map[string]any{
+		"Name":     user.Name,
+		"ResetURL": resetURL,
+	}); err != nil {
 		slog.Error("sendResetEmail failed", "err", err)
 		return nil, err
 	}
