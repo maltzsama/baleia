@@ -56,6 +56,6 @@ describe('savedQueries store', () => {
 			http.get('/workspaces/{id}/folders', ({ response }) => response(200).json([]))
 		);
 		await savedQueries.reload('w1');
-		expect(savedQueries.error).toContain('boom');
+		expect(savedQueries.error).toContain('The resource was not found.');
 	});
 });

@@ -3084,19 +3084,33 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "rate_limited" | "refused" | "reserved_name" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "target_not_granted" | "target_required" | "target_unavailable" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
+        /** @enum {string} */
+        Locale: "en" | "pt-BR";
+        /** @enum {string} */
+        FieldCode: "required" | "too_long" | "invalid_format" | "out_of_range" | "not_unique" | "not_allowed";
+        FieldError: {
+            field: string;
+            code: components["schemas"]["FieldCode"];
+            params?: {
+                [key: string]: string;
+            };
+        };
         Error: {
-            /** @example not_found */
-            code: string;
+            code: components["schemas"]["ErrorCode"];
+            /** @description English, for logs and non-UI clients; never shown translated */
             message: string;
             /** @description Structured details (for version_conflict: current_version, updated_by, updated_at) */
             params?: {
                 [key: string]: unknown;
             };
+            fields?: components["schemas"]["FieldError"][];
         };
         ValidationError: {
-            /** @example validation_error */
-            code: string;
+            code: components["schemas"]["ErrorCode"];
             message: string;
+            fields?: components["schemas"]["FieldError"][];
             errors: {
                 field?: string;
                 message?: string;
@@ -3692,6 +3706,8 @@ export interface components {
             status: "active" | "suspended";
             /** Format: date-time */
             created_at: string;
+            /** @description UI language preference; null follows the browser (#67). */
+            locale?: components["schemas"]["Locale"] | null;
         };
         /** @enum {string} */
         CatalogConnectionAllowedAction: "view" | "update" | "delete" | "test" | "register_engine" | "create_catalog";
@@ -3720,6 +3736,7 @@ export interface components {
             name?: string;
             /** Format: email */
             email?: string;
+            locale?: components["schemas"]["Locale"];
         };
         UpdatePasswordRequest: {
             current_password: string;
@@ -6950,6 +6967,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     updatePassword: {

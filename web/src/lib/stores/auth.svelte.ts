@@ -1,6 +1,7 @@
 // src/lib/stores/auth.svelte.ts
 import { clearSession, client } from '$lib/api/client';
 import { logout as endSession } from '$lib/auth/session';
+import { applyUserLocale } from '$lib/i18n/locale.svelte';
 import { clearDrafts } from '$lib/workbench/drafts';
 
 export type Features = {
@@ -16,6 +17,8 @@ export type AuthUser = {
 	role: string;
 	auth_provider: string;
 	created_at: string;
+	// UI language preference (#67); null/undefined follows the browser.
+	locale?: 'en' | 'pt-BR' | null;
 	// Feature flags and actions outside any resource (#104). Optional because
 	// login responses carry only the user; /auth/me fills them.
 	personal_workspace_id?: string | null;
@@ -42,6 +45,7 @@ function createAuthStore() {
 		try {
 			const { data } = await client.GET('/auth/me');
 			user = (data as AuthUser | undefined) ?? null;
+			applyUserLocale(user?.locale);
 			if (!data) clearSession();
 		} catch {
 			user = null;
@@ -53,6 +57,7 @@ function createAuthStore() {
 
 	function set(u: AuthUser | null) {
 		user = u;
+		applyUserLocale(u?.locale);
 	}
 
 	function clear() {
