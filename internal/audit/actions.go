@@ -64,6 +64,8 @@ const (
 	AgentPolicyUpdate      Action = "agent_policy.update"
 	AuthAgentTokenRejected Action = "auth.agent_token_rejected"
 
+	AssistantSettingsUpdate Action = "assistant.settings_update"
+
 	ExecutionCreate Action = "execution.create"
 	ExecutionCancel Action = "execution.cancel"
 
@@ -106,6 +108,7 @@ var allActions = []Action{
 	AgentCreate, AgentUpdate, AgentDisable, AgentDelete,
 	AgentTokenCreate, AgentTokenRevoke, AuthAgentTokenRejected,
 	AgentToolCall, AgentPolicyUpdate,
+	AssistantSettingsUpdate,
 	ExecutionCreate, ExecutionCancel,
 	ResultsDownload,
 	MaintenanceTrigger,

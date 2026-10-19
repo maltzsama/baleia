@@ -12,6 +12,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	baleiaapi "github.com/galileostudio/baleia/internal/api"
+	baleiaassistant "github.com/galileostudio/baleia/internal/assistant"
+	assistantllm "github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
@@ -195,6 +197,22 @@ func (s *Server) routes() {
 		s.mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 			mcpServer.Handler().ServeHTTP(w, r)
 		})
+
+		// The assistant (#62) runs turns through an in-memory MCP client, so
+		// the same gate and audit hooks apply. It is provisioned only when the
+		// agents feature is on.
+		if svc := h.AssistantService(); svc != nil {
+			if session, err := mcpServer.InProcessClient(context.Background()); err == nil {
+				runner := baleiaassistant.NewRunner(svc, nil, baleiaassistant.NewMCPToolCaller(session))
+				if settings, err := svc.Settings(context.Background()); err == nil && settings.Enabled && settings.Provider != nil && settings.Model != nil {
+					if key, err := svc.APIKey(context.Background()); err == nil {
+						runner.SetProvider(assistantllm.NewHTTPProvider(*settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
+					}
+				}
+				h.SetAssistantRunner(runner)
+				go runner.RunSweeper(context.Background(), 30*time.Second)
+			}
+		}
 	}
 
 	s.mux.Route("/api/v1", func(r chi.Router) {
@@ -439,4 +457,11 @@ func (s *Server) Run(ctx context.Context) error {
 		srv.Shutdown(context.Background())
 	}()
 	return srv.ListenAndServe()
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

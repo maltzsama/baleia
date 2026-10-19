@@ -18,6 +18,15 @@ import (
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Assistant provider and data-sharing settings (G-admin)
+	// (GET /admin/assistant/settings)
+	GetAssistantSettings(w http.ResponseWriter, r *http.Request)
+	// Update assistant settings; the API key is write-only (G-admin)
+	// (PUT /admin/assistant/settings)
+	PutAssistantSettings(w http.ResponseWriter, r *http.Request)
+	// Send a one-token prompt to the configured provider (G-admin)
+	// (POST /admin/assistant/test)
+	TestAssistant(w http.ResponseWriter, r *http.Request)
 	// Directory reconciliation runs — admin only
 	// (GET /admin/directory-reconcile-runs)
 	ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request, params ListDirectoryReconcileRunsParams)
@@ -93,6 +102,30 @@ type ServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId)
+	// The caller's conversations in a workspace
+	// (GET /assistant/conversations)
+	ListAssistantConversations(w http.ResponseWriter, r *http.Request, params ListAssistantConversationsParams)
+	// Start a conversation in a workspace
+	// (POST /assistant/conversations)
+	CreateAssistantConversation(w http.ResponseWriter, r *http.Request)
+	// Delete the caller's conversation
+	// (DELETE /assistant/conversations/{id})
+	DeleteAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId)
+	// A conversation and its persisted messages
+	// (GET /assistant/conversations/{id})
+	GetAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId)
+	// Stop the running turn
+	// (POST /assistant/conversations/{id}/cancel)
+	CancelAssistantTurn(w http.ResponseWriter, r *http.Request, id PathId)
+	// Replay persisted messages and stream the live turn (SSE)
+	// (GET /assistant/conversations/{id}/events)
+	StreamAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId, params StreamAssistantConversationParams)
+	// Send a user message; the turn runs in the background
+	// (POST /assistant/conversations/{id}/messages)
+	SendAssistantMessage(w http.ResponseWriter, r *http.Request, id PathId)
+	// Whether the assistant is enabled and what it may share
+	// (GET /assistant/status)
+	GetAssistantStatus(w http.ResponseWriter, r *http.Request)
 	// Items that need the caller's attention
 	// (GET /attention)
 	ListAttention(w http.ResponseWriter, r *http.Request)
@@ -615,6 +648,24 @@ type ServerInterface interface {
 
 type Unimplemented struct{}
 
+// Assistant provider and data-sharing settings (G-admin)
+// (GET /admin/assistant/settings)
+func (_ Unimplemented) GetAssistantSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update assistant settings; the API key is write-only (G-admin)
+// (PUT /admin/assistant/settings)
+func (_ Unimplemented) PutAssistantSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send a one-token prompt to the configured provider (G-admin)
+// (POST /admin/assistant/test)
+func (_ Unimplemented) TestAssistant(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Directory reconciliation runs — admin only
 // (GET /admin/directory-reconcile-runs)
 func (_ Unimplemented) ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request, params ListDirectoryReconcileRunsParams) {
@@ -762,6 +813,54 @@ func (_ Unimplemented) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 // Remove an API key
 // (DELETE /api-keys/{id})
 func (_ Unimplemented) DeleteApiKey(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The caller's conversations in a workspace
+// (GET /assistant/conversations)
+func (_ Unimplemented) ListAssistantConversations(w http.ResponseWriter, r *http.Request, params ListAssistantConversationsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Start a conversation in a workspace
+// (POST /assistant/conversations)
+func (_ Unimplemented) CreateAssistantConversation(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete the caller's conversation
+// (DELETE /assistant/conversations/{id})
+func (_ Unimplemented) DeleteAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A conversation and its persisted messages
+// (GET /assistant/conversations/{id})
+func (_ Unimplemented) GetAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop the running turn
+// (POST /assistant/conversations/{id}/cancel)
+func (_ Unimplemented) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replay persisted messages and stream the live turn (SSE)
+// (GET /assistant/conversations/{id}/events)
+func (_ Unimplemented) StreamAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId, params StreamAssistantConversationParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send a user message; the turn runs in the background
+// (POST /assistant/conversations/{id}/messages)
+func (_ Unimplemented) SendAssistantMessage(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Whether the assistant is enabled and what it may share
+// (GET /assistant/status)
+func (_ Unimplemented) GetAssistantStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1806,6 +1905,72 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// GetAssistantSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetAssistantSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAssistantSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutAssistantSettings operation middleware
+func (siw *ServerInterfaceWrapper) PutAssistantSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutAssistantSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestAssistant operation middleware
+func (siw *ServerInterfaceWrapper) TestAssistant(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestAssistant(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListDirectoryReconcileRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -2566,6 +2731,268 @@ func (siw *ServerInterfaceWrapper) DeleteApiKey(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteApiKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAssistantConversations operation middleware
+func (siw *ServerInterfaceWrapper) ListAssistantConversations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAssistantConversationsParams
+
+	// ------------- Required query parameter "workspace_id" -------------
+
+	if paramValue := r.URL.Query().Get("workspace_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workspace_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "workspace_id", r.URL.Query(), &params.WorkspaceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAssistantConversations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) CreateAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAssistantConversation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAssistantConversation(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) GetAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAssistantConversation(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelAssistantTurn operation middleware
+func (siw *ServerInterfaceWrapper) CancelAssistantTurn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelAssistantTurn(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StreamAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) StreamAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StreamAssistantConversationParams
+
+	// ------------- Optional query parameter "after_seq" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after_seq", r.URL.Query(), &params.AfterSeq)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_seq", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StreamAssistantConversation(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendAssistantMessage operation middleware
+func (siw *ServerInterfaceWrapper) SendAssistantMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendAssistantMessage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAssistantStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetAssistantStatus(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAssistantStatus(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9699,6 +10126,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/assistant/settings", wrapper.GetAssistantSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/assistant/settings", wrapper.PutAssistantSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/assistant/test", wrapper.TestAssistant)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/directory-reconcile-runs", wrapper.ListDirectoryReconcileRuns)
 	})
 	r.Group(func(r chi.Router) {
@@ -9772,6 +10208,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api-keys/{id}", wrapper.DeleteApiKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/assistant/conversations", wrapper.ListAssistantConversations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assistant/conversations", wrapper.CreateAssistantConversation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/assistant/conversations/{id}", wrapper.DeleteAssistantConversation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/assistant/conversations/{id}", wrapper.GetAssistantConversation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assistant/conversations/{id}/cancel", wrapper.CancelAssistantTurn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/assistant/conversations/{id}/events", wrapper.StreamAssistantConversation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assistant/conversations/{id}/messages", wrapper.SendAssistantMessage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/assistant/status", wrapper.GetAssistantStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/attention", wrapper.ListAttention)
@@ -10327,6 +10787,131 @@ type TooManyRequestsJSONResponse struct {
 type UnauthorizedJSONResponse Error
 
 type UnprocessableEntityJSONResponse ValidationError
+
+type GetAssistantSettingsRequestObject struct {
+}
+
+type GetAssistantSettingsResponseObject interface {
+	VisitGetAssistantSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetAssistantSettings200JSONResponse AssistantSettings
+
+func (response GetAssistantSettings200JSONResponse) VisitGetAssistantSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAssistantSettings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAssistantSettings401JSONResponse) VisitGetAssistantSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAssistantSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetAssistantSettings403JSONResponse) VisitGetAssistantSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAssistantSettingsRequestObject struct {
+	Body *PutAssistantSettingsJSONRequestBody
+}
+
+type PutAssistantSettingsResponseObject interface {
+	VisitPutAssistantSettingsResponse(w http.ResponseWriter) error
+}
+
+type PutAssistantSettings200JSONResponse AssistantSettings
+
+func (response PutAssistantSettings200JSONResponse) VisitPutAssistantSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAssistantSettings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PutAssistantSettings401JSONResponse) VisitPutAssistantSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAssistantSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutAssistantSettings403JSONResponse) VisitPutAssistantSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutAssistantSettings422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PutAssistantSettings422JSONResponse) VisitPutAssistantSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestAssistantRequestObject struct {
+}
+
+type TestAssistantResponseObject interface {
+	VisitTestAssistantResponse(w http.ResponseWriter) error
+}
+
+type TestAssistant200JSONResponse AssistantTestResult
+
+func (response TestAssistant200JSONResponse) VisitTestAssistantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestAssistant401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TestAssistant401JSONResponse) VisitTestAssistantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestAssistant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TestAssistant403JSONResponse) VisitTestAssistantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestAssistant422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response TestAssistant422JSONResponse) VisitTestAssistantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
 
 type ListDirectoryReconcileRunsRequestObject struct {
 	Params ListDirectoryReconcileRunsParams
@@ -11356,6 +11941,316 @@ type DeleteApiKey404JSONResponse struct{ NotFoundJSONResponse }
 func (response DeleteApiKey404JSONResponse) VisitDeleteApiKeyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAssistantConversationsRequestObject struct {
+	Params ListAssistantConversationsParams
+}
+
+type ListAssistantConversationsResponseObject interface {
+	VisitListAssistantConversationsResponse(w http.ResponseWriter) error
+}
+
+type ListAssistantConversations200JSONResponse []AssistantConversation
+
+func (response ListAssistantConversations200JSONResponse) VisitListAssistantConversationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAssistantConversations401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAssistantConversations401JSONResponse) VisitListAssistantConversationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListAssistantConversations404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListAssistantConversations404JSONResponse) VisitListAssistantConversationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAssistantConversationRequestObject struct {
+	Body *CreateAssistantConversationJSONRequestBody
+}
+
+type CreateAssistantConversationResponseObject interface {
+	VisitCreateAssistantConversationResponse(w http.ResponseWriter) error
+}
+
+type CreateAssistantConversation201JSONResponse AssistantConversation
+
+func (response CreateAssistantConversation201JSONResponse) VisitCreateAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAssistantConversation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateAssistantConversation401JSONResponse) VisitCreateAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAssistantConversation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateAssistantConversation404JSONResponse) VisitCreateAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateAssistantConversation422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateAssistantConversation422JSONResponse) VisitCreateAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteAssistantConversationRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DeleteAssistantConversationResponseObject interface {
+	VisitDeleteAssistantConversationResponse(w http.ResponseWriter) error
+}
+
+type DeleteAssistantConversation204Response = NoContentResponse
+
+func (response DeleteAssistantConversation204Response) VisitDeleteAssistantConversationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAssistantConversation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteAssistantConversation401JSONResponse) VisitDeleteAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteAssistantConversation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteAssistantConversation404JSONResponse) VisitDeleteAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAssistantConversationRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetAssistantConversationResponseObject interface {
+	VisitGetAssistantConversationResponse(w http.ResponseWriter) error
+}
+
+type GetAssistantConversation200JSONResponse AssistantConversationDetail
+
+func (response GetAssistantConversation200JSONResponse) VisitGetAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAssistantConversation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAssistantConversation401JSONResponse) VisitGetAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAssistantConversation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAssistantConversation404JSONResponse) VisitGetAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelAssistantTurnRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type CancelAssistantTurnResponseObject interface {
+	VisitCancelAssistantTurnResponse(w http.ResponseWriter) error
+}
+
+type CancelAssistantTurn202Response struct {
+}
+
+func (response CancelAssistantTurn202Response) VisitCancelAssistantTurnResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type CancelAssistantTurn401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CancelAssistantTurn401JSONResponse) VisitCancelAssistantTurnResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelAssistantTurn404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CancelAssistantTurn404JSONResponse) VisitCancelAssistantTurnResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type StreamAssistantConversationRequestObject struct {
+	Id     PathId `json:"id"`
+	Params StreamAssistantConversationParams
+}
+
+type StreamAssistantConversationResponseObject interface {
+	VisitStreamAssistantConversationResponse(w http.ResponseWriter) error
+}
+
+type StreamAssistantConversation200TexteventStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response StreamAssistantConversation200TexteventStreamResponse) VisitStreamAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/event-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type StreamAssistantConversation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response StreamAssistantConversation401JSONResponse) VisitStreamAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type StreamAssistantConversation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response StreamAssistantConversation404JSONResponse) VisitStreamAssistantConversationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessageRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *SendAssistantMessageJSONRequestBody
+}
+
+type SendAssistantMessageResponseObject interface {
+	VisitSendAssistantMessageResponse(w http.ResponseWriter) error
+}
+
+type SendAssistantMessage202JSONResponse SendAssistantMessageResponse
+
+func (response SendAssistantMessage202JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SendAssistantMessage401JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SendAssistantMessage404JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SendAssistantMessage409JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SendAssistantMessage422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SendAssistantMessage422JSONResponse) VisitSendAssistantMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAssistantStatusRequestObject struct {
+}
+
+type GetAssistantStatusResponseObject interface {
+	VisitGetAssistantStatusResponse(w http.ResponseWriter) error
+}
+
+type GetAssistantStatus200JSONResponse AssistantStatus
+
+func (response GetAssistantStatus200JSONResponse) VisitGetAssistantStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAssistantStatus401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAssistantStatus401JSONResponse) VisitGetAssistantStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -18771,6 +19666,15 @@ func (response StreamExecution401JSONResponse) VisitStreamExecutionResponse(w ht
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Assistant provider and data-sharing settings (G-admin)
+	// (GET /admin/assistant/settings)
+	GetAssistantSettings(ctx context.Context, request GetAssistantSettingsRequestObject) (GetAssistantSettingsResponseObject, error)
+	// Update assistant settings; the API key is write-only (G-admin)
+	// (PUT /admin/assistant/settings)
+	PutAssistantSettings(ctx context.Context, request PutAssistantSettingsRequestObject) (PutAssistantSettingsResponseObject, error)
+	// Send a one-token prompt to the configured provider (G-admin)
+	// (POST /admin/assistant/test)
+	TestAssistant(ctx context.Context, request TestAssistantRequestObject) (TestAssistantResponseObject, error)
 	// Directory reconciliation runs — admin only
 	// (GET /admin/directory-reconcile-runs)
 	ListDirectoryReconcileRuns(ctx context.Context, request ListDirectoryReconcileRunsRequestObject) (ListDirectoryReconcileRunsResponseObject, error)
@@ -18846,6 +19750,30 @@ type StrictServerInterface interface {
 	// Remove an API key
 	// (DELETE /api-keys/{id})
 	DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error)
+	// The caller's conversations in a workspace
+	// (GET /assistant/conversations)
+	ListAssistantConversations(ctx context.Context, request ListAssistantConversationsRequestObject) (ListAssistantConversationsResponseObject, error)
+	// Start a conversation in a workspace
+	// (POST /assistant/conversations)
+	CreateAssistantConversation(ctx context.Context, request CreateAssistantConversationRequestObject) (CreateAssistantConversationResponseObject, error)
+	// Delete the caller's conversation
+	// (DELETE /assistant/conversations/{id})
+	DeleteAssistantConversation(ctx context.Context, request DeleteAssistantConversationRequestObject) (DeleteAssistantConversationResponseObject, error)
+	// A conversation and its persisted messages
+	// (GET /assistant/conversations/{id})
+	GetAssistantConversation(ctx context.Context, request GetAssistantConversationRequestObject) (GetAssistantConversationResponseObject, error)
+	// Stop the running turn
+	// (POST /assistant/conversations/{id}/cancel)
+	CancelAssistantTurn(ctx context.Context, request CancelAssistantTurnRequestObject) (CancelAssistantTurnResponseObject, error)
+	// Replay persisted messages and stream the live turn (SSE)
+	// (GET /assistant/conversations/{id}/events)
+	StreamAssistantConversation(ctx context.Context, request StreamAssistantConversationRequestObject) (StreamAssistantConversationResponseObject, error)
+	// Send a user message; the turn runs in the background
+	// (POST /assistant/conversations/{id}/messages)
+	SendAssistantMessage(ctx context.Context, request SendAssistantMessageRequestObject) (SendAssistantMessageResponseObject, error)
+	// Whether the assistant is enabled and what it may share
+	// (GET /assistant/status)
+	GetAssistantStatus(ctx context.Context, request GetAssistantStatusRequestObject) (GetAssistantStatusResponseObject, error)
 	// Items that need the caller's attention
 	// (GET /attention)
 	ListAttention(ctx context.Context, request ListAttentionRequestObject) (ListAttentionResponseObject, error)
@@ -19391,6 +20319,85 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetAssistantSettings operation middleware
+func (sh *strictHandler) GetAssistantSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetAssistantSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAssistantSettings(ctx, request.(GetAssistantSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAssistantSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAssistantSettingsResponseObject); ok {
+		if err := validResponse.VisitGetAssistantSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutAssistantSettings operation middleware
+func (sh *strictHandler) PutAssistantSettings(w http.ResponseWriter, r *http.Request) {
+	var request PutAssistantSettingsRequestObject
+
+	var body PutAssistantSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutAssistantSettings(ctx, request.(PutAssistantSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutAssistantSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutAssistantSettingsResponseObject); ok {
+		if err := validResponse.VisitPutAssistantSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestAssistant operation middleware
+func (sh *strictHandler) TestAssistant(w http.ResponseWriter, r *http.Request) {
+	var request TestAssistantRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestAssistant(ctx, request.(TestAssistantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestAssistant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestAssistantResponseObject); ok {
+		if err := validResponse.VisitTestAssistantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListDirectoryReconcileRuns operation middleware
@@ -20084,6 +21091,225 @@ func (sh *strictHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteApiKeyResponseObject); ok {
 		if err := validResponse.VisitDeleteApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAssistantConversations operation middleware
+func (sh *strictHandler) ListAssistantConversations(w http.ResponseWriter, r *http.Request, params ListAssistantConversationsParams) {
+	var request ListAssistantConversationsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAssistantConversations(ctx, request.(ListAssistantConversationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAssistantConversations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAssistantConversationsResponseObject); ok {
+		if err := validResponse.VisitListAssistantConversationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAssistantConversation operation middleware
+func (sh *strictHandler) CreateAssistantConversation(w http.ResponseWriter, r *http.Request) {
+	var request CreateAssistantConversationRequestObject
+
+	var body CreateAssistantConversationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAssistantConversation(ctx, request.(CreateAssistantConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAssistantConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAssistantConversationResponseObject); ok {
+		if err := validResponse.VisitCreateAssistantConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAssistantConversation operation middleware
+func (sh *strictHandler) DeleteAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DeleteAssistantConversationRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAssistantConversation(ctx, request.(DeleteAssistantConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAssistantConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAssistantConversationResponseObject); ok {
+		if err := validResponse.VisitDeleteAssistantConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAssistantConversation operation middleware
+func (sh *strictHandler) GetAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetAssistantConversationRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAssistantConversation(ctx, request.(GetAssistantConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAssistantConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAssistantConversationResponseObject); ok {
+		if err := validResponse.VisitGetAssistantConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelAssistantTurn operation middleware
+func (sh *strictHandler) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CancelAssistantTurnRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelAssistantTurn(ctx, request.(CancelAssistantTurnRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelAssistantTurn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelAssistantTurnResponseObject); ok {
+		if err := validResponse.VisitCancelAssistantTurnResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StreamAssistantConversation operation middleware
+func (sh *strictHandler) StreamAssistantConversation(w http.ResponseWriter, r *http.Request, id PathId, params StreamAssistantConversationParams) {
+	var request StreamAssistantConversationRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StreamAssistantConversation(ctx, request.(StreamAssistantConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StreamAssistantConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StreamAssistantConversationResponseObject); ok {
+		if err := validResponse.VisitStreamAssistantConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendAssistantMessage operation middleware
+func (sh *strictHandler) SendAssistantMessage(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request SendAssistantMessageRequestObject
+
+	request.Id = id
+
+	var body SendAssistantMessageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendAssistantMessage(ctx, request.(SendAssistantMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendAssistantMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendAssistantMessageResponseObject); ok {
+		if err := validResponse.VisitSendAssistantMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAssistantStatus operation middleware
+func (sh *strictHandler) GetAssistantStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetAssistantStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAssistantStatus(ctx, request.(GetAssistantStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAssistantStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAssistantStatusResponseObject); ok {
+		if err := validResponse.VisitGetAssistantStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
