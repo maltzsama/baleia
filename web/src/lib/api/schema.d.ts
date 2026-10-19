@@ -447,6 +447,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistant/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the assistant is enabled and what it may share */
+        get: operations["getAssistantStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's conversations in a workspace */
+        get: operations["listAssistantConversations"];
+        put?: never;
+        /** Start a conversation in a workspace */
+        post: operations["createAssistantConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** A conversation and its persisted messages */
+        get: operations["getAssistantConversation"];
+        put?: never;
+        post?: never;
+        /** Delete the caller's conversation */
+        delete: operations["deleteAssistantConversation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assistant/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assistant provider and data-sharing settings (G-admin) */
+        get: operations["getAssistantSettings"];
+        /** Update assistant settings; the API key is write-only (G-admin) */
+        put: operations["putAssistantSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assistant/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a one-token prompt to the configured provider (G-admin) */
+        post: operations["testAssistant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/identity-providers": {
         parameters: {
             query?: never;
@@ -3454,6 +3544,77 @@ export interface components {
             catalog_name: string;
             engines: components["schemas"]["AgentEngineEligibility"][];
         };
+        AssistantStatus: {
+            enabled: boolean;
+            /** @enum {string} */
+            data_sharing: "metadata_only" | "metadata_and_samples";
+        };
+        AssistantSettings: {
+            enabled: boolean;
+            /** @enum {string|null} */
+            provider?: "anthropic" | "openai_compatible" | null;
+            base_url?: string | null;
+            model?: string | null;
+            /** @description The key is write-only; GET never returns it */
+            api_key_set: boolean;
+            /** @enum {string} */
+            data_sharing: "metadata_only" | "metadata_and_samples";
+            max_turn_seconds: number;
+            max_tool_calls_per_turn: number;
+            max_output_tokens_per_turn: number;
+            daily_token_budget_per_user: number;
+        };
+        UpdateAssistantSettingsRequest: {
+            enabled?: boolean;
+            /** @enum {string} */
+            provider?: "anthropic" | "openai_compatible";
+            base_url?: string;
+            model?: string;
+            /** @description Write-only; omit or leave empty to keep the stored key */
+            api_key?: string;
+            /** @enum {string} */
+            data_sharing?: "metadata_only" | "metadata_and_samples";
+            max_turn_seconds?: number;
+            max_tool_calls_per_turn?: number;
+            max_output_tokens_per_turn?: number;
+            daily_token_budget_per_user?: number;
+        };
+        AssistantTestResult: {
+            ok: boolean;
+            latency_ms?: number;
+            error?: string | null;
+        };
+        AssistantConversation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            title: string;
+            /** @enum {string} */
+            state: "idle" | "running" | "interrupted";
+            last_seq: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AssistantMessage: {
+            seq: number;
+            /** @enum {string} */
+            role: "user" | "assistant" | "tool_call" | "tool_result" | "notice";
+            content: unknown;
+            input_tokens?: number | null;
+            output_tokens?: number | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AssistantConversationDetail: components["schemas"]["AssistantConversation"] & {
+            messages: components["schemas"]["AssistantMessage"][];
+        };
+        CreateAssistantConversationRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+        };
         UserPublic: {
             /** Format: uuid */
             id: string;
@@ -6057,6 +6218,190 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getAssistantStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assistant status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listAssistantConversations: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversations, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConversation"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createAssistantConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAssistantConversationRequest"];
+            };
+        };
+        responses: {
+            /** @description Conversation created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConversation"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getAssistantConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversation detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConversationDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAssistantConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAssistantSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putAssistantSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAssistantSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Settings updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    testAssistant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listIdentityProviders: {

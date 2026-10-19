@@ -48,6 +48,47 @@ const (
 	N1 AgentPolicyVersion = 1
 )
 
+// Defines values for AssistantConversationState.
+const (
+	AssistantConversationStateIdle        AssistantConversationState = "idle"
+	AssistantConversationStateInterrupted AssistantConversationState = "interrupted"
+	AssistantConversationStateRunning     AssistantConversationState = "running"
+)
+
+// Defines values for AssistantConversationDetailState.
+const (
+	AssistantConversationDetailStateIdle        AssistantConversationDetailState = "idle"
+	AssistantConversationDetailStateInterrupted AssistantConversationDetailState = "interrupted"
+	AssistantConversationDetailStateRunning     AssistantConversationDetailState = "running"
+)
+
+// Defines values for AssistantMessageRole.
+const (
+	AssistantMessageRoleAssistant  AssistantMessageRole = "assistant"
+	AssistantMessageRoleNotice     AssistantMessageRole = "notice"
+	AssistantMessageRoleToolCall   AssistantMessageRole = "tool_call"
+	AssistantMessageRoleToolResult AssistantMessageRole = "tool_result"
+	AssistantMessageRoleUser       AssistantMessageRole = "user"
+)
+
+// Defines values for AssistantSettingsDataSharing.
+const (
+	AssistantSettingsDataSharingMetadataAndSamples AssistantSettingsDataSharing = "metadata_and_samples"
+	AssistantSettingsDataSharingMetadataOnly       AssistantSettingsDataSharing = "metadata_only"
+)
+
+// Defines values for AssistantSettingsProvider.
+const (
+	AssistantSettingsProviderAnthropic        AssistantSettingsProvider = "anthropic"
+	AssistantSettingsProviderOpenaiCompatible AssistantSettingsProvider = "openai_compatible"
+)
+
+// Defines values for AssistantStatusDataSharing.
+const (
+	AssistantStatusDataSharingMetadataAndSamples AssistantStatusDataSharing = "metadata_and_samples"
+	AssistantStatusDataSharingMetadataOnly       AssistantStatusDataSharing = "metadata_only"
+)
+
 // Defines values for AttentionKind.
 const (
 	AgentTokenExpiring AttentionKind = "agent_token_expiring"
@@ -711,6 +752,18 @@ const (
 	UpdateAgentRequestStatusDisabled UpdateAgentRequestStatus = "disabled"
 )
 
+// Defines values for UpdateAssistantSettingsRequestDataSharing.
+const (
+	MetadataAndSamples UpdateAssistantSettingsRequestDataSharing = "metadata_and_samples"
+	MetadataOnly       UpdateAssistantSettingsRequestDataSharing = "metadata_only"
+)
+
+// Defines values for UpdateAssistantSettingsRequestProvider.
+const (
+	UpdateAssistantSettingsRequestProviderAnthropic        UpdateAssistantSettingsRequestProvider = "anthropic"
+	UpdateAssistantSettingsRequestProviderOpenaiCompatible UpdateAssistantSettingsRequestProvider = "openai_compatible"
+)
+
 // Defines values for UpdateLDAPConfigDefaultRole.
 const (
 	UpdateLDAPConfigDefaultRoleAdmin  UpdateLDAPConfigDefaultRole = "admin"
@@ -1031,6 +1084,85 @@ type ApiKeyCreated struct {
 
 	// Secret Displayed only once upon creation
 	Secret string `json:"secret"`
+}
+
+// AssistantConversation defines model for AssistantConversation.
+type AssistantConversation struct {
+	CreatedAt   time.Time                  `json:"created_at"`
+	Id          openapi_types.UUID         `json:"id"`
+	LastSeq     int                        `json:"last_seq"`
+	State       AssistantConversationState `json:"state"`
+	Title       string                     `json:"title"`
+	UpdatedAt   time.Time                  `json:"updated_at"`
+	WorkspaceId openapi_types.UUID         `json:"workspace_id"`
+}
+
+// AssistantConversationState defines model for AssistantConversation.State.
+type AssistantConversationState string
+
+// AssistantConversationDetail defines model for AssistantConversationDetail.
+type AssistantConversationDetail struct {
+	CreatedAt   time.Time                        `json:"created_at"`
+	Id          openapi_types.UUID               `json:"id"`
+	LastSeq     int                              `json:"last_seq"`
+	Messages    []AssistantMessage               `json:"messages"`
+	State       AssistantConversationDetailState `json:"state"`
+	Title       string                           `json:"title"`
+	UpdatedAt   time.Time                        `json:"updated_at"`
+	WorkspaceId openapi_types.UUID               `json:"workspace_id"`
+}
+
+// AssistantConversationDetailState defines model for AssistantConversationDetail.State.
+type AssistantConversationDetailState string
+
+// AssistantMessage defines model for AssistantMessage.
+type AssistantMessage struct {
+	Content      interface{}          `json:"content"`
+	CreatedAt    time.Time            `json:"created_at"`
+	InputTokens  *int                 `json:"input_tokens"`
+	OutputTokens *int                 `json:"output_tokens"`
+	Role         AssistantMessageRole `json:"role"`
+	Seq          int                  `json:"seq"`
+}
+
+// AssistantMessageRole defines model for AssistantMessage.Role.
+type AssistantMessageRole string
+
+// AssistantSettings defines model for AssistantSettings.
+type AssistantSettings struct {
+	// ApiKeySet The key is write-only; GET never returns it
+	ApiKeySet               bool                         `json:"api_key_set"`
+	BaseUrl                 *string                      `json:"base_url"`
+	DailyTokenBudgetPerUser int                          `json:"daily_token_budget_per_user"`
+	DataSharing             AssistantSettingsDataSharing `json:"data_sharing"`
+	Enabled                 bool                         `json:"enabled"`
+	MaxOutputTokensPerTurn  int                          `json:"max_output_tokens_per_turn"`
+	MaxToolCallsPerTurn     int                          `json:"max_tool_calls_per_turn"`
+	MaxTurnSeconds          int                          `json:"max_turn_seconds"`
+	Model                   *string                      `json:"model"`
+	Provider                *AssistantSettingsProvider   `json:"provider"`
+}
+
+// AssistantSettingsDataSharing defines model for AssistantSettings.DataSharing.
+type AssistantSettingsDataSharing string
+
+// AssistantSettingsProvider defines model for AssistantSettings.Provider.
+type AssistantSettingsProvider string
+
+// AssistantStatus defines model for AssistantStatus.
+type AssistantStatus struct {
+	DataSharing AssistantStatusDataSharing `json:"data_sharing"`
+	Enabled     bool                       `json:"enabled"`
+}
+
+// AssistantStatusDataSharing defines model for AssistantStatus.DataSharing.
+type AssistantStatusDataSharing string
+
+// AssistantTestResult defines model for AssistantTestResult.
+type AssistantTestResult struct {
+	Error     *string `json:"error"`
+	LatencyMs *int    `json:"latency_ms,omitempty"`
+	Ok        bool    `json:"ok"`
 }
 
 // AttentionItem defines model for AttentionItem.
@@ -1583,6 +1715,11 @@ type CreateAgentTokenRequest struct {
 type CreateApiKeyRequest struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 	Name      string     `json:"name"`
+}
+
+// CreateAssistantConversationRequest defines model for CreateAssistantConversationRequest.
+type CreateAssistantConversationRequest struct {
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
 // CreateBindingRequest defines model for CreateBindingRequest.
@@ -3329,6 +3466,27 @@ type UpdateAgentRequest struct {
 // UpdateAgentRequestStatus defines model for UpdateAgentRequest.Status.
 type UpdateAgentRequestStatus string
 
+// UpdateAssistantSettingsRequest defines model for UpdateAssistantSettingsRequest.
+type UpdateAssistantSettingsRequest struct {
+	// ApiKey Write-only; omit or leave empty to keep the stored key
+	ApiKey                  *string                                    `json:"api_key,omitempty"`
+	BaseUrl                 *string                                    `json:"base_url,omitempty"`
+	DailyTokenBudgetPerUser *int                                       `json:"daily_token_budget_per_user,omitempty"`
+	DataSharing             *UpdateAssistantSettingsRequestDataSharing `json:"data_sharing,omitempty"`
+	Enabled                 *bool                                      `json:"enabled,omitempty"`
+	MaxOutputTokensPerTurn  *int                                       `json:"max_output_tokens_per_turn,omitempty"`
+	MaxToolCallsPerTurn     *int                                       `json:"max_tool_calls_per_turn,omitempty"`
+	MaxTurnSeconds          *int                                       `json:"max_turn_seconds,omitempty"`
+	Model                   *string                                    `json:"model,omitempty"`
+	Provider                *UpdateAssistantSettingsRequestProvider    `json:"provider,omitempty"`
+}
+
+// UpdateAssistantSettingsRequestDataSharing defines model for UpdateAssistantSettingsRequest.DataSharing.
+type UpdateAssistantSettingsRequestDataSharing string
+
+// UpdateAssistantSettingsRequestProvider defines model for UpdateAssistantSettingsRequest.Provider.
+type UpdateAssistantSettingsRequestProvider string
+
 // UpdateBindingRequest defines model for UpdateBindingRequest.
 type UpdateBindingRequest struct {
 	Enabled           *bool   `json:"enabled,omitempty"`
@@ -3701,6 +3859,11 @@ type TestIdentityProviderParams struct {
 type ListAgentsParams struct {
 	// All Admin only: list every user's agents
 	All *bool `form:"all,omitempty" json:"all,omitempty"`
+}
+
+// ListAssistantConversationsParams defines parameters for ListAssistantConversations.
+type ListAssistantConversationsParams struct {
+	WorkspaceId openapi_types.UUID `form:"workspace_id" json:"workspace_id"`
 }
 
 // ListAuditEventsParams defines parameters for ListAuditEvents.
@@ -4079,6 +4242,9 @@ type StreamExecutionParams struct {
 	Ticket string `form:"ticket" json:"ticket"`
 }
 
+// PutAssistantSettingsJSONRequestBody defines body for PutAssistantSettings for application/json ContentType.
+type PutAssistantSettingsJSONRequestBody = UpdateAssistantSettingsRequest
+
 // CreateIdentityProviderJSONRequestBody defines body for CreateIdentityProvider for application/json ContentType.
 type CreateIdentityProviderJSONRequestBody = CreateIdentityProviderRequest
 
@@ -4105,6 +4271,9 @@ type CreateAgentTokenJSONRequestBody = CreateAgentTokenRequest
 
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
 type CreateApiKeyJSONRequestBody = CreateApiKeyRequest
+
+// CreateAssistantConversationJSONRequestBody defines body for CreateAssistantConversation for application/json ContentType.
+type CreateAssistantConversationJSONRequestBody = CreateAssistantConversationRequest
 
 // ResolveAuditJSONRequestBody defines body for ResolveAudit for application/json ContentType.
 type ResolveAuditJSONRequestBody = AuditResolveRequest

@@ -54,6 +54,46 @@ type ApiKey struct {
 	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
 }
 
+type AssistantConversation struct {
+	ID              pgtype.UUID        `json:"id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	AgentID         pgtype.UUID        `json:"agent_id"`
+	Title           string             `json:"title"`
+	State           string             `json:"state"`
+	TurnOwner       *string            `json:"turn_owner"`
+	TurnHeartbeatAt pgtype.Timestamptz `json:"turn_heartbeat_at"`
+	LastSeq         int32              `json:"last_seq"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssistantMessage struct {
+	ConversationID pgtype.UUID        `json:"conversation_id"`
+	Seq            int32              `json:"seq"`
+	Role           string             `json:"role"`
+	Content        []byte             `json:"content"`
+	InputTokens    *int32             `json:"input_tokens"`
+	OutputTokens   *int32             `json:"output_tokens"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type AssistantSetting struct {
+	ID                      bool               `json:"id"`
+	Enabled                 bool               `json:"enabled"`
+	Provider                *string            `json:"provider"`
+	BaseUrl                 *string            `json:"base_url"`
+	Model                   *string            `json:"model"`
+	ApiKeyEnc               *string            `json:"api_key_enc"`
+	DataSharing             string             `json:"data_sharing"`
+	MaxTurnSeconds          int32              `json:"max_turn_seconds"`
+	MaxToolCallsPerTurn     int32              `json:"max_tool_calls_per_turn"`
+	MaxOutputTokensPerTurn  int32              `json:"max_output_tokens_per_turn"`
+	DailyTokenBudgetPerUser int64              `json:"daily_token_budget_per_user"`
+	UpdatedBy               pgtype.UUID        `json:"updated_by"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AuditEvent struct {
 	ID           int64              `json:"id"`
 	OccurredAt   pgtype.Timestamptz `json:"occurred_at"`

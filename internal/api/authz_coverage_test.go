@@ -110,6 +110,16 @@ var operationAccess = map[string]access{
 	"GetAgentsMeta":           {kind: kindSelf, calls: selfPrincipal}, // any authenticated user; static metadata
 	"GetAgentEligibility":     {kind: kindSelf, calls: selfPrincipal}, // owner or admin
 
+	// ── assistant (#62)
+	"GetAssistantStatus":          {kind: kindSelf, calls: selfPrincipal},
+	"ListAssistantConversations":  checked("PrincipalFromContext", "requireWorkspaceAccess"),
+	"CreateAssistantConversation": checked("PrincipalFromContext", "requireWorkspaceAccess"),
+	"GetAssistantConversation":    {kind: kindSelf, calls: selfPrincipal}, // service scopes to the caller
+	"DeleteAssistantConversation": {kind: kindSelf, calls: selfPrincipal}, // service scopes to the caller
+	"GetAssistantSettings":        {kind: kindAdmin, calls: adminRole},
+	"PutAssistantSettings":        {kind: kindAdmin, calls: adminRole},
+	"TestAssistant":               {kind: kindAdmin, calls: adminRole},
+
 	// ── global administrators
 	"ListUsers":                     {kind: kindAdmin, calls: adminRole},
 	"InviteUser":                    {kind: kindAdmin, calls: adminRole},

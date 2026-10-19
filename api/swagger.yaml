@@ -830,6 +830,85 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AgentEngineEligibility" }
 
+    # ── Assistant (#62) ────────────────────────────────────────
+    AssistantStatus:
+      type: object
+      required: [enabled, data_sharing]
+      properties:
+        enabled: { type: boolean }
+        data_sharing: { type: string, enum: [metadata_only, metadata_and_samples] }
+    AssistantSettings:
+      type: object
+      required:
+        [enabled, data_sharing, api_key_set, max_turn_seconds, max_tool_calls_per_turn,
+         max_output_tokens_per_turn, daily_token_budget_per_user]
+      properties:
+        enabled: { type: boolean }
+        provider: { type: string, enum: [anthropic, openai_compatible], nullable: true }
+        base_url: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        api_key_set: { type: boolean, description: "The key is write-only; GET never returns it" }
+        data_sharing: { type: string, enum: [metadata_only, metadata_and_samples] }
+        max_turn_seconds: { type: integer, minimum: 1 }
+        max_tool_calls_per_turn: { type: integer, minimum: 1 }
+        max_output_tokens_per_turn: { type: integer, minimum: 1 }
+        daily_token_budget_per_user: { type: integer, minimum: 0 }
+    UpdateAssistantSettingsRequest:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        provider: { type: string, enum: [anthropic, openai_compatible] }
+        base_url: { type: string }
+        model: { type: string }
+        api_key: { type: string, description: "Write-only; omit or leave empty to keep the stored key" }
+        data_sharing: { type: string, enum: [metadata_only, metadata_and_samples] }
+        max_turn_seconds: { type: integer, minimum: 1 }
+        max_tool_calls_per_turn: { type: integer, minimum: 1 }
+        max_output_tokens_per_turn: { type: integer, minimum: 1 }
+        daily_token_budget_per_user: { type: integer, minimum: 0 }
+    AssistantTestResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        latency_ms: { type: integer, minimum: 0 }
+        error: { type: string, nullable: true }
+    AssistantConversation:
+      type: object
+      required: [id, workspace_id, title, state, last_seq, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        title: { type: string }
+        state: { type: string, enum: [idle, running, interrupted] }
+        last_seq: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AssistantMessage:
+      type: object
+      required: [seq, role, content, created_at]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        role: { type: string, enum: [user, assistant, tool_call, tool_result, notice] }
+        content: {}
+        input_tokens: { type: integer, nullable: true }
+        output_tokens: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+    AssistantConversationDetail:
+      allOf:
+        - $ref: "#/components/schemas/AssistantConversation"
+        - type: object
+          required: [messages]
+          properties:
+            messages:
+              type: array
+              items: { $ref: "#/components/schemas/AssistantMessage" }
+    CreateAssistantConversationRequest:
+      type: object
+      required: [workspace_id]
+      properties:
+        workspace_id: { type: string, format: uuid }
+
     # ── Users ──────────────────────────────────────────────────
     UserPublic:
       type: object
@@ -3430,6 +3509,130 @@ paths:
                 items: { $ref: "#/components/schemas/AgentCatalogEligibility" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  # ── Assistant (#62) ─────────────────────────────────────────
+  /assistant/status:
+    get:
+      tags: [Assistant]
+      operationId: getAssistantStatus
+      summary: "Whether the assistant is enabled and what it may share"
+      responses:
+        "200":
+          description: "Assistant status"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistantStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /assistant/conversations:
+    get:
+      tags: [Assistant]
+      operationId: listAssistantConversations
+      summary: "The caller's conversations in a workspace"
+      parameters:
+        - name: workspace_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "Conversations, newest first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssistantConversation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Assistant]
+      operationId: createAssistantConversation
+      summary: "Start a conversation in a workspace"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAssistantConversationRequest" }
+      responses:
+        "201":
+          description: "Conversation created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistantConversation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /assistant/conversations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Assistant]
+      operationId: getAssistantConversation
+      summary: "A conversation and its persisted messages"
+      responses:
+        "200":
+          description: "Conversation detail"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistantConversationDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Assistant]
+      operationId: deleteAssistantConversation
+      summary: "Delete the caller's conversation"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/assistant/settings:
+    get:
+      tags: [Assistant]
+      operationId: getAssistantSettings
+      summary: "Assistant provider and data-sharing settings (G-admin)"
+      responses:
+        "200":
+          description: "Settings"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistantSettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [Assistant]
+      operationId: putAssistantSettings
+      summary: "Update assistant settings; the API key is write-only (G-admin)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAssistantSettingsRequest" }
+      responses:
+        "200":
+          description: "Settings updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistantSettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /admin/assistant/test:
+    post:
+      tags: [Assistant]
+      operationId: testAssistant
+      summary: "Send a one-token prompt to the configured provider (G-admin)"
+      responses:
+        "200":
+          description: "Test result"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistantTestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Identity providers (admin) ────────────────────────────────
   /admin/identity-providers:
