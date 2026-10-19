@@ -36,6 +36,13 @@ const (
 	AgentAllowedActionView         AgentAllowedAction = "view"
 )
 
+// Defines values for AgentEngineEligibilityStatus.
+const (
+	AgentEngineEligibilityStatusExcludedByPolicy    AgentEngineEligibilityStatus = "excluded_by_policy"
+	AgentEngineEligibilityStatusOk                  AgentEngineEligibilityStatus = "ok"
+	AgentEngineEligibilityStatusReadOnlyNotEnforced AgentEngineEligibilityStatus = "read_only_not_enforced"
+)
+
 // Defines values for AgentPolicyVersion.
 const (
 	N1 AgentPolicyVersion = 1
@@ -832,10 +839,10 @@ const (
 
 // Defines values for ListExecutionsParamsStatus.
 const (
-	Cancelled ListExecutionsParamsStatus = "cancelled"
-	Failed    ListExecutionsParamsStatus = "failed"
-	Finished  ListExecutionsParamsStatus = "finished"
-	Running   ListExecutionsParamsStatus = "running"
+	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
+	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
+	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
+	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
 )
 
 // Defines values for SearchMetadataParamsKind.
@@ -906,6 +913,24 @@ type AgentStatus string
 // AgentAllowedAction defines model for AgentAllowedAction.
 type AgentAllowedAction string
 
+// AgentCatalogEligibility defines model for AgentCatalogEligibility.
+type AgentCatalogEligibility struct {
+	CatalogId   openapi_types.UUID       `json:"catalog_id"`
+	CatalogName string                   `json:"catalog_name"`
+	Engines     []AgentEngineEligibility `json:"engines"`
+}
+
+// AgentEngineEligibility defines model for AgentEngineEligibility.
+type AgentEngineEligibility struct {
+	EngineId   openapi_types.UUID           `json:"engine_id"`
+	EngineName string                       `json:"engine_name"`
+	Kind       string                       `json:"kind"`
+	Status     AgentEngineEligibilityStatus `json:"status"`
+}
+
+// AgentEngineEligibilityStatus defines model for AgentEngineEligibility.Status.
+type AgentEngineEligibilityStatus string
+
 // AgentPolicy defines model for AgentPolicy.
 type AgentPolicy struct {
 	Catalogs               *[]openapi_types.UUID `json:"catalogs"`
@@ -965,10 +990,26 @@ type AgentTokenCreated struct {
 	Token string `json:"token"`
 }
 
+// AgentTool defines model for AgentTool.
+type AgentTool struct {
+	Description string `json:"description"`
+	Label       string `json:"label"`
+	Name        string `json:"name"`
+	ReadOnly    bool   `json:"read_only"`
+}
+
 // AgentWorkspace defines model for AgentWorkspace.
 type AgentWorkspace struct {
 	Id   openapi_types.UUID `json:"id"`
 	Name string             `json:"name"`
+}
+
+// AgentsMeta defines model for AgentsMeta.
+type AgentsMeta struct {
+	McpUrl              string      `json:"mcp_url"`
+	TokenDefaultTtlDays int         `json:"token_default_ttl_days"`
+	TokenMaxTtlDays     int         `json:"token_max_ttl_days"`
+	Tools               []AgentTool `json:"tools"`
 }
 
 // ApiKey defines model for ApiKey.

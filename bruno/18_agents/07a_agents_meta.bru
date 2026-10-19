@@ -1,0 +1,27 @@
+meta {
+  name: Agents Meta
+  type: http
+  seq: 7.1
+}
+
+get {
+  url: {{base_url}}/agents/meta
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the meta carries the MCP URL and the tool registry", function () {
+    expect(res.body.mcp_url).to.be.a("string");
+    expect(res.body.tools).to.be.an("array").that.is.not.empty;
+    expect(res.body.tools[0]).to.have.keys("name", "label", "description", "read_only");
+  });
+}

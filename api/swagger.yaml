@@ -792,6 +792,44 @@ components:
         stored: { $ref: "#/components/schemas/AgentPolicy" }
         ceilings: { $ref: "#/components/schemas/AgentPolicyLimits" }
 
+    AgentTool:
+      type: object
+      required: [name, label, description, read_only]
+      properties:
+        name: { type: string }
+        label: { type: string }
+        description: { type: string }
+        read_only: { type: boolean }
+    AgentsMeta:
+      type: object
+      required: [mcp_url, token_default_ttl_days, token_max_ttl_days, tools]
+      properties:
+        mcp_url: { type: string }
+        token_default_ttl_days: { type: integer, minimum: 1 }
+        token_max_ttl_days: { type: integer, minimum: 1 }
+        tools:
+          type: array
+          items: { $ref: "#/components/schemas/AgentTool" }
+    AgentEngineEligibility:
+      type: object
+      required: [engine_id, engine_name, kind, status]
+      properties:
+        engine_id: { type: string, format: uuid }
+        engine_name: { type: string }
+        kind: { type: string }
+        status:
+          type: string
+          enum: [ok, read_only_not_enforced, excluded_by_policy]
+    AgentCatalogEligibility:
+      type: object
+      required: [catalog_id, catalog_name, engines]
+      properties:
+        catalog_id: { type: string, format: uuid }
+        catalog_name: { type: string }
+        engines:
+          type: array
+          items: { $ref: "#/components/schemas/AgentEngineEligibility" }
+
     # ── Users ──────────────────────────────────────────────────
     UserPublic:
       type: object
@@ -3233,6 +3271,20 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  /agents/meta:
+    get:
+      tags: [Agents]
+      operationId: getAgentsMeta
+      summary: "MCP URL, token TTLs and the tool registry the agents UI needs"
+      responses:
+        "200":
+          description: "Agent metadata"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentsMeta" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /agents/{agent_id}:
     parameters:
       - $ref: "#/components/parameters/PathAgentId"
@@ -3360,6 +3412,24 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{agent_id}/eligibility:
+    parameters:
+      - $ref: "#/components/parameters/PathAgentId"
+    get:
+      tags: [Agents]
+      operationId: getAgentEligibility
+      summary: "Where an agent may run, per granted catalog and hosting engine"
+      responses:
+        "200":
+          description: "Catalog and engine eligibility"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentCatalogEligibility" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Identity providers (admin) ────────────────────────────────
   /admin/identity-providers:

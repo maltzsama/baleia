@@ -54,6 +54,9 @@ type ServerInterface interface {
 	// Create an agent owned by the caller
 	// (POST /agents)
 	CreateAgent(w http.ResponseWriter, r *http.Request)
+	// MCP URL, token TTLs and the tool registry the agents UI needs
+	// (GET /agents/meta)
+	GetAgentsMeta(w http.ResponseWriter, r *http.Request)
 	// Delete an agent (owner or admin)
 	// (DELETE /agents/{agent_id})
 	DeleteAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
@@ -63,6 +66,9 @@ type ServerInterface interface {
 	// Update an agent (owner; an admin may only disable it)
 	// (PATCH /agents/{agent_id})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
+	// Where an agent may run, per granted catalog and hosting engine
+	// (GET /agents/{agent_id}/eligibility)
+	GetAgentEligibility(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
 	// Effective, stored and ceiling values of an agent's policy
 	// (GET /agents/{agent_id}/policy)
 	GetAgentPolicy(w http.ResponseWriter, r *http.Request, agentId PathAgentId)
@@ -681,6 +687,12 @@ func (_ Unimplemented) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// MCP URL, token TTLs and the tool registry the agents UI needs
+// (GET /agents/meta)
+func (_ Unimplemented) GetAgentsMeta(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Delete an agent (owner or admin)
 // (DELETE /agents/{agent_id})
 func (_ Unimplemented) DeleteAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
@@ -696,6 +708,12 @@ func (_ Unimplemented) GetAgent(w http.ResponseWriter, r *http.Request, agentId 
 // Update an agent (owner; an admin may only disable it)
 // (PATCH /agents/{agent_id})
 func (_ Unimplemented) UpdateAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Where an agent may run, per granted catalog and hosting engine
+// (GET /agents/{agent_id}/eligibility)
+func (_ Unimplemented) GetAgentEligibility(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2152,6 +2170,28 @@ func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetAgentsMeta operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentsMeta(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentsMeta(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteAgent operation middleware
 func (siw *ServerInterfaceWrapper) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 
@@ -2242,6 +2282,39 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, agentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentEligibility operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentEligibility(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "agent_id" -------------
+	var agentId PathAgentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", chi.URLParam(r, "agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentEligibility(w, r, agentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9662,6 +9735,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/agents", wrapper.CreateAgent)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/agents/meta", wrapper.GetAgentsMeta)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/agents/{agent_id}", wrapper.DeleteAgent)
 	})
 	r.Group(func(r chi.Router) {
@@ -9669,6 +9745,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/agents/{agent_id}", wrapper.UpdateAgent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/agents/{agent_id}/eligibility", wrapper.GetAgentEligibility)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/agents/{agent_id}/policy", wrapper.GetAgentPolicy)
@@ -10788,6 +10867,40 @@ func (response CreateAgent422JSONResponse) VisitCreateAgentResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetAgentsMetaRequestObject struct {
+}
+
+type GetAgentsMetaResponseObject interface {
+	VisitGetAgentsMetaResponse(w http.ResponseWriter) error
+}
+
+type GetAgentsMeta200JSONResponse AgentsMeta
+
+func (response GetAgentsMeta200JSONResponse) VisitGetAgentsMetaResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentsMeta401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAgentsMeta401JSONResponse) VisitGetAgentsMetaResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentsMeta404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAgentsMeta404JSONResponse) VisitGetAgentsMetaResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteAgentRequestObject struct {
 	AgentId PathAgentId `json:"agent_id"`
 }
@@ -10917,6 +11030,41 @@ type UpdateAgent422JSONResponse struct {
 func (response UpdateAgent422JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentEligibilityRequestObject struct {
+	AgentId PathAgentId `json:"agent_id"`
+}
+
+type GetAgentEligibilityResponseObject interface {
+	VisitGetAgentEligibilityResponse(w http.ResponseWriter) error
+}
+
+type GetAgentEligibility200JSONResponse []AgentCatalogEligibility
+
+func (response GetAgentEligibility200JSONResponse) VisitGetAgentEligibilityResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentEligibility401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAgentEligibility401JSONResponse) VisitGetAgentEligibilityResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAgentEligibility404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAgentEligibility404JSONResponse) VisitGetAgentEligibilityResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -18659,6 +18807,9 @@ type StrictServerInterface interface {
 	// Create an agent owned by the caller
 	// (POST /agents)
 	CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error)
+	// MCP URL, token TTLs and the tool registry the agents UI needs
+	// (GET /agents/meta)
+	GetAgentsMeta(ctx context.Context, request GetAgentsMetaRequestObject) (GetAgentsMetaResponseObject, error)
 	// Delete an agent (owner or admin)
 	// (DELETE /agents/{agent_id})
 	DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error)
@@ -18668,6 +18819,9 @@ type StrictServerInterface interface {
 	// Update an agent (owner; an admin may only disable it)
 	// (PATCH /agents/{agent_id})
 	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
+	// Where an agent may run, per granted catalog and hosting engine
+	// (GET /agents/{agent_id}/eligibility)
+	GetAgentEligibility(ctx context.Context, request GetAgentEligibilityRequestObject) (GetAgentEligibilityResponseObject, error)
 	// Effective, stored and ceiling values of an agent's policy
 	// (GET /agents/{agent_id}/policy)
 	GetAgentPolicy(ctx context.Context, request GetAgentPolicyRequestObject) (GetAgentPolicyResponseObject, error)
@@ -19576,6 +19730,30 @@ func (sh *strictHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetAgentsMeta operation middleware
+func (sh *strictHandler) GetAgentsMeta(w http.ResponseWriter, r *http.Request) {
+	var request GetAgentsMetaRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgentsMeta(ctx, request.(GetAgentsMetaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgentsMeta")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentsMetaResponseObject); ok {
+		if err := validResponse.VisitGetAgentsMetaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteAgent operation middleware
 func (sh *strictHandler) DeleteAgent(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
 	var request DeleteAgentRequestObject
@@ -19654,6 +19832,32 @@ func (sh *strictHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, age
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateAgentResponseObject); ok {
 		if err := validResponse.VisitUpdateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgentEligibility operation middleware
+func (sh *strictHandler) GetAgentEligibility(w http.ResponseWriter, r *http.Request, agentId PathAgentId) {
+	var request GetAgentEligibilityRequestObject
+
+	request.AgentId = agentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgentEligibility(ctx, request.(GetAgentEligibilityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgentEligibility")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentEligibilityResponseObject); ok {
+		if err := validResponse.VisitGetAgentEligibilityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
