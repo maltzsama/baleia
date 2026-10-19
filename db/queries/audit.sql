@@ -1,7 +1,7 @@
 -- name: InsertAuditEvent :exec
 INSERT INTO audit_events (actor_kind, actor_id, auth_method, action, resource_type, resource_id, workspace_id,
-                          outcome, reason, request_id, trace_id, client_ip, user_agent, changes)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+                          outcome, reason, request_id, trace_id, client_ip, user_agent, changes, on_behalf_of)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);
 
 -- name: ListAuditEvents :many
 -- Newest first, keyset-paginated on (occurred_at, id): the cursor is the

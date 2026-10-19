@@ -71,6 +71,7 @@ type AuditEvent struct {
 	ClientIp     *netip.Addr        `json:"client_ip"`
 	UserAgent    *string            `json:"user_agent"`
 	Changes      []byte             `json:"changes"`
+	OnBehalfOf   pgtype.UUID        `json:"on_behalf_of"`
 }
 
 type AuditExportCursor struct {

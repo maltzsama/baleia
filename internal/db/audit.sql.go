@@ -41,8 +41,8 @@ func (q *Queries) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) 
 
 const insertAuditEvent = `-- name: InsertAuditEvent :exec
 INSERT INTO audit_events (actor_kind, actor_id, auth_method, action, resource_type, resource_id, workspace_id,
-                          outcome, reason, request_id, trace_id, client_ip, user_agent, changes)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                          outcome, reason, request_id, trace_id, client_ip, user_agent, changes, on_behalf_of)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 `
 
 type InsertAuditEventParams struct {
@@ -60,6 +60,7 @@ type InsertAuditEventParams struct {
 	ClientIp     *netip.Addr `json:"client_ip"`
 	UserAgent    *string     `json:"user_agent"`
 	Changes      []byte      `json:"changes"`
+	OnBehalfOf   pgtype.UUID `json:"on_behalf_of"`
 }
 
 func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error {
@@ -78,6 +79,7 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 		arg.ClientIp,
 		arg.UserAgent,
 		arg.Changes,
+		arg.OnBehalfOf,
 	)
 	return err
 }
@@ -131,10 +133,29 @@ type ListAuditEventsParams struct {
 	Lim          int32              `json:"lim"`
 }
 
+type ListAuditEventsRow struct {
+	ID           int64              `json:"id"`
+	OccurredAt   pgtype.Timestamptz `json:"occurred_at"`
+	ActorKind    string             `json:"actor_kind"`
+	ActorID      *string            `json:"actor_id"`
+	AuthMethod   *string            `json:"auth_method"`
+	Action       string             `json:"action"`
+	ResourceType string             `json:"resource_type"`
+	ResourceID   *string            `json:"resource_id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	Outcome      string             `json:"outcome"`
+	Reason       *string            `json:"reason"`
+	RequestID    *string            `json:"request_id"`
+	TraceID      *string            `json:"trace_id"`
+	ClientIp     *netip.Addr        `json:"client_ip"`
+	UserAgent    *string            `json:"user_agent"`
+	Changes      []byte             `json:"changes"`
+}
+
 // Newest first, keyset-paginated on (occurred_at, id): the cursor is the
 // last row of the previous page. Every filter is optional. A non-admin is
 // scoped to their own events and to events of workspaces they own (#49).
-func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
+func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]ListAuditEventsRow, error) {
 	rows, err := q.db.Query(ctx, listAuditEvents,
 		arg.ResourceType,
 		arg.ResourceID,
@@ -155,9 +176,9 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AuditEvent
+	var items []ListAuditEventsRow
 	for rows.Next() {
-		var i AuditEvent
+		var i ListAuditEventsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OccurredAt,

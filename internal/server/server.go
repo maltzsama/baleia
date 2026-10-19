@@ -191,7 +191,7 @@ func (s *Server) routes() {
 		if s.metrics != nil {
 			gate.SetObserver(s.metrics.Agent())
 		}
-		mcpServer := mcp.New(h, gate, s.queries, mcp.NopHooks{}, s.cfg.MCPAllowedOrigins)
+		mcpServer := mcp.New(h, gate, s.queries, mcp.NewAuditHooks(auditRec), s.cfg.MCPAllowedOrigins)
 		s.mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 			mcpServer.Handler().ServeHTTP(w, r)
 		})

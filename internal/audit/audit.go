@@ -171,6 +171,15 @@ func actor(ctx context.Context) (kind, id, method string) {
 		return "service", s, ""
 	}
 	method, _ = ctx.Value(keyAuthMethod).(string)
+	// An agent acts with its own identity and its owner in on_behalf_of (#61).
+	if auth.ActorKindFromContext(ctx) == auth.ActorAgent {
+		if agentID := auth.AgentIDFromContext(ctx); agentID != "" {
+			if method == "" {
+				method = AuthAgentToken
+			}
+			return "agent", agentID, method
+		}
+	}
 	if uid := auth.UserIDFromContext(ctx); uid != "" {
 		if method == "" {
 			method = AuthAccessToken

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -81,6 +82,15 @@ func (p *Postgres) record(ctx context.Context, e Event) error {
 			return fmt.Errorf("audit workspace id: %w", err)
 		}
 		row.WorkspaceID = pgtype.UUID{Bytes: id, Valid: true}
+	}
+	// Agent-caused events carry the owner (#61); human and service events leave
+	// on_behalf_of NULL.
+	if auth.ActorKindFromContext(ctx) == auth.ActorAgent {
+		if owner := auth.UserIDFromContext(ctx); owner != "" {
+			if id, err := uuid.Parse(owner); err == nil {
+				row.OnBehalfOf = pgtype.UUID{Bytes: id, Valid: true}
+			}
+		}
 	}
 	if changes := redact(e.Changes, p.secret); changes != nil {
 		raw, err := json.Marshal(changes)
