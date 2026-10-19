@@ -163,11 +163,7 @@
 							bind:value={apiKey}
 							placeholder={settings?.api_key_set ? 'Set — leave empty to keep' : 'Not set'}
 						/>
-						<Select
-							label="Data sharing"
-							bind:value={dataSharing}
-							options={sharingOptions}
-						/>
+						<Select label="Data sharing" bind:value={dataSharing} options={sharingOptions} />
 					</div>
 				</section>
 
@@ -185,7 +181,9 @@
 				</section>
 
 				{#if saveError}
-					<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
+					<p
+						class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger"
+					>
 						{saveError}
 					</p>
 				{/if}
