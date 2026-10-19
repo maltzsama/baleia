@@ -13,6 +13,7 @@ import (
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -353,6 +354,29 @@ func TestFromStored(t *testing.T) {
 
 	if _, err := FromStored(reg, connections.Kind("duckdb"), pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
 		t.Errorf("duckdb: want ErrUnknownKind, got %v", err)
+	}
+}
+
+// TestFromStoredParseFailureIsUnreadable: a stored config or credentials blob
+// that does not parse is a read failure of stored data, not a server bug —
+// one errors.Is covers it, the way an unopenable envelope already does (#349).
+func TestFromStoredParseFailureIsUnreadable(t *testing.T) {
+	reg := registry(t, connections.DialerOptions{})
+
+	cases := map[string]struct {
+		config, creds []byte
+	}{
+		"corrupt config": {config: []byte(`[1,2,3]`)}, // valid JSON, not an object
+		"corrupt creds":  {config: []byte(`{}`), creds: []byte(`not json`)},
+	}
+	for name, tc := range cases {
+		got, err := FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://polaris:8181/", tc.config, tc.creds)
+		if !errors.Is(err, catalogs.ErrCredentialsUnreadable) {
+			t.Errorf("%s: err = %v, want ErrCredentialsUnreadable", name, err)
+		}
+		if len(got.Values) > 0 || len(got.Secrets) > 0 {
+			t.Errorf("%s: returned a config alongside an error: %+v", name, got)
+		}
 	}
 }
 
