@@ -44,6 +44,27 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
+// TestForEngineKind covers the kind → dialect translation: every engine kind
+// the API can carry resolves, and a miss is (nil, false) explicitly rather
+// than through a lookup of the empty name.
+func TestForEngineKind(t *testing.T) {
+	for kind, want := range map[string]string{
+		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
+		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
+		"flightsql": FlightSQL, "fake": FlightSQL, // the test fake shares the ANSI subset
+	} {
+		d, ok := ForEngineKind(kind)
+		if !ok || d == nil || d.Name() != want {
+			t.Errorf("ForEngineKind(%q) = (%v, %v), want %q", kind, d, ok, want)
+		}
+	}
+	for _, kind := range []string{"", "nope", "postgres", "sql-server"} {
+		if d, ok := ForEngineKind(kind); ok || d != nil {
+			t.Errorf("ForEngineKind(%q) = (%v, %v), want (nil, false)", kind, d, ok)
+		}
+	}
+}
+
 func TestQuoteIdent(t *testing.T) {
 	want := map[string]string{
 		Trino: `"a""b"`, PostgreSQL: `"a""b"`, SQLite: `"a""b"`, FlightSQL: `"a""b"`,
@@ -237,6 +258,42 @@ func TestPreviewAndLimit(t *testing.T) {
 	}
 	if got, ok := MustGet(SQLite).ExplainSQL("SELECT 1;"); !ok || got != "EXPLAIN QUERY PLAN SELECT 1" {
 		t.Errorf("sqlite explain: %q", got)
+	}
+}
+
+// TestDecimal pins decimal()'s ok/err contract. The shape-vs-range hint is
+// asserted by message because it is the only observable difference between
+// the two malformed-decimal paths; both are ErrInvalid.
+func TestDecimal(t *testing.T) {
+	for _, typ := range []LogicalType{"", "uuid", "integer", "decimal", "decimals(10,2)", "numeric"} {
+		if p, s, ok, err := typ.decimal(); ok || err != nil {
+			t.Errorf("%q: (%d,%d,%v,%v), want ok=false, err=nil", typ, p, s, ok, err)
+		}
+	}
+	for _, c := range []struct {
+		typ  LogicalType
+		p, s int
+	}{
+		{Decimal(18, 2), 18, 2},
+		{LogicalType("decimal(10,2)"), 10, 2},  // typemap spelling, no space
+		{LogicalType("decimal(38, 0)"), 38, 0}, // typemap spelling, space
+	} {
+		p, s, ok, err := c.typ.decimal()
+		if !ok || err != nil || p != c.p || s != c.s {
+			t.Errorf("%q: (%d,%d,%v,%v), want (%d,%d,true,nil)", c.typ, p, s, ok, err, c.p, c.s)
+		}
+	}
+	for _, typ := range []LogicalType{"decimal(10", "decimal()", "decimal(10,2,3)"} {
+		_, _, ok, err := typ.decimal()
+		if !ok || !errors.Is(err, ErrInvalid) || strings.Contains(err.Error(), "precision 1-38") {
+			t.Errorf("%q: shape error without the range hint, got %v", typ, err)
+		}
+	}
+	for _, typ := range []LogicalType{"decimal(0,1)", "decimal(39,2)", "decimal(10,11)", "decimal(x,2)", "decimal(1,)"} {
+		_, _, ok, err := typ.decimal()
+		if !ok || !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "precision 1-38") {
+			t.Errorf("%q: want the range hint, got %v", typ, err)
+		}
 	}
 }
 
