@@ -2,18 +2,28 @@ package dialect
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
-var all = []string{Trino, PostgreSQL, MySQL, MariaDB, TSQL, Oracle, SQLite, ClickHouse, FlightSQL}
+// TestAllDialectsMatchRegistry keeps allDialects (which decides the embedded
+// word lists) in sync with the registry, so a new dialect cannot ship silently
+// empty autocomplete.
+func TestAllDialectsMatchRegistry(t *testing.T) {
+	got := slices.Clone(allDialects)
+	slices.Sort(got)
+	if want := Names(); !slices.Equal(got, want) {
+		t.Errorf("allDialects = %v, registered = %v", got, want)
+	}
+}
 
 func TestRegistry(t *testing.T) {
 	if got := strings.Join(Names(), ","); got != "clickhouse,flightsql-generic,mariadb,mysql,oracle,postgresql,sqlite,trino,tsql" {
 		t.Errorf("names = %s", got)
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		d := MustGet(n)
 		if d.Name() != n || d.FormatterLanguage() == "" || d.CodeMirrorBase() == "" {
 			t.Errorf("%s: incomplete", n)
@@ -34,12 +44,33 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
+// TestForEngineKind covers the kind → dialect translation: every engine kind
+// the API can carry resolves, and a miss is (nil, false) explicitly rather
+// than through a lookup of the empty name.
+func TestForEngineKind(t *testing.T) {
+	for kind, want := range map[string]string{
+		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
+		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
+		"flightsql": FlightSQL, "fake": FlightSQL, // the test fake shares the ANSI subset
+	} {
+		d, ok := ForEngineKind(kind)
+		if !ok || d == nil || d.Name() != want {
+			t.Errorf("ForEngineKind(%q) = (%v, %v), want %q", kind, d, ok, want)
+		}
+	}
+	for _, kind := range []string{"", "nope", "postgres", "sql-server"} {
+		if d, ok := ForEngineKind(kind); ok || d != nil {
+			t.Errorf("ForEngineKind(%q) = (%v, %v), want (nil, false)", kind, d, ok)
+		}
+	}
+}
+
 func TestQuoteIdent(t *testing.T) {
 	want := map[string]string{
 		Trino: `"a""b"`, PostgreSQL: `"a""b"`, SQLite: `"a""b"`, FlightSQL: `"a""b"`,
 		MySQL: "`a\"b`", MariaDB: "`a\"b`", ClickHouse: "`a\"b`", TSQL: `[a"b]`,
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		d := MustGet(n)
 		got, err := d.QuoteIdent(`a"b`)
 		if n == Oracle {
@@ -112,7 +143,7 @@ func TestQuoteString(t *testing.T) {
 		MySQL: `'it''s a \\ test'`, MariaDB: `'it''s a \\ test'`, ClickHouse: `'it''s a \\ test'`,
 		TSQL: `N'it''s a \ test'`,
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		if got := MustGet(n).QuoteString(in); got != want[n] {
 			t.Errorf("%s: %s", n, got)
 		}
@@ -129,7 +160,7 @@ func split(t *testing.T, name, sql string) []string {
 }
 
 func TestSplitStatements_common(t *testing.T) {
-	for _, n := range all {
+	for _, n := range allDialects {
 		got := split(t, n, "SELECT 1; SELECT 'a;b' -- c;d\n; /* x;y */ SELECT 2;;\n  -- only a comment\n")
 		if len(got) != 3 || got[0] != "SELECT 1" || got[1] != "SELECT 'a;b' -- c;d" || got[2] != "/* x;y */ SELECT 2" {
 			t.Errorf("%s: %q", n, got)
@@ -230,6 +261,42 @@ func TestPreviewAndLimit(t *testing.T) {
 	}
 }
 
+// TestDecimal pins decimal()'s ok/err contract. The shape-vs-range hint is
+// asserted by message because it is the only observable difference between
+// the two malformed-decimal paths; both are ErrInvalid.
+func TestDecimal(t *testing.T) {
+	for _, typ := range []LogicalType{"", "uuid", "integer", "decimal", "decimals(10,2)", "numeric"} {
+		if p, s, ok, err := typ.decimal(); ok || err != nil {
+			t.Errorf("%q: (%d,%d,%v,%v), want ok=false, err=nil", typ, p, s, ok, err)
+		}
+	}
+	for _, c := range []struct {
+		typ  LogicalType
+		p, s int
+	}{
+		{Decimal(18, 2), 18, 2},
+		{LogicalType("decimal(10,2)"), 10, 2},  // typemap spelling, no space
+		{LogicalType("decimal(38, 0)"), 38, 0}, // typemap spelling, space
+	} {
+		p, s, ok, err := c.typ.decimal()
+		if !ok || err != nil || p != c.p || s != c.s {
+			t.Errorf("%q: (%d,%d,%v,%v), want (%d,%d,true,nil)", c.typ, p, s, ok, err, c.p, c.s)
+		}
+	}
+	for _, typ := range []LogicalType{"decimal(10", "decimal()", "decimal(10,2,3)"} {
+		_, _, ok, err := typ.decimal()
+		if !ok || !errors.Is(err, ErrInvalid) || strings.Contains(err.Error(), "precision 1-38") {
+			t.Errorf("%q: shape error without the range hint, got %v", typ, err)
+		}
+	}
+	for _, typ := range []LogicalType{"decimal(0,1)", "decimal(39,2)", "decimal(10,11)", "decimal(x,2)", "decimal(1,)"} {
+		_, _, ok, err := typ.decimal()
+		if !ok || !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "precision 1-38") {
+			t.Errorf("%q: want the range hint, got %v", typ, err)
+		}
+	}
+}
+
 func TestLiteral(t *testing.T) {
 	ts := time.Date(2024, 3, 5, 10, 20, 30, 123456000, time.FixedZone("x", 3600))
 	cases := []struct {
@@ -316,7 +383,7 @@ func TestGenerationGolden(t *testing.T) {
 		FlightSQL: {"COUNT(DISTINCT x)", "date_trunc('month', ts)", "date_trunc('week', ts)",
 			"CAST(x AS DECIMAL(18,2))", "(CAST(a AS DOUBLE PRECISION)) / NULLIF(b, 0)"},
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		d, w := MustGet(n), want[n]
 		approx, err1 := d.Aggregate(AggApproxCountDistinct, "x", false)
 		month, err2 := d.TimeTrunc("ts", GrainMonth)

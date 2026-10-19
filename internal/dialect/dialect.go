@@ -57,20 +57,26 @@ func Decimal(precision, scale int) LogicalType {
 	return LogicalType(fmt.Sprintf("decimal(%d,%d)", precision, scale))
 }
 
-// decimal parses decimal(p,s); ok is false for any other type.
+// decimal parses decimal(p,s). ok reports whether t is a decimal type at
+// all; when ok is true, err reports a decimal that is malformed (bad shape
+// or out-of-range precision/scale). Callers switch on other types when ok
+// is false and must reject the type when ok is true with err != nil.
 func (t LogicalType) decimal() (p, s int, ok bool, err error) {
-	inner, found := strings.CutPrefix(string(t), "decimal(")
-	if !found {
+	inner, isDecimal := strings.CutPrefix(string(t), "decimal(")
+	if !isDecimal {
 		return 0, 0, false, nil
 	}
-	inner, found = strings.CutSuffix(inner, ")")
-	ps := strings.Split(inner, ",")
-	if !found || len(ps) != 2 {
+	inner, closed := strings.CutSuffix(inner, ")")
+	pStr, sStr, hasComma := strings.Cut(inner, ",")
+	// Cut only splits on the first comma, so a decimal with three parts
+	// (decimal(10,2,3)) would reach Atoi and be misreported as a range
+	// error; the shape check runs first.
+	if !closed || !hasComma || strings.Contains(sStr, ",") {
 		return 0, 0, true, fmt.Errorf("%w: type %q", ErrInvalid, t)
 	}
-	p, err1 := strconv.Atoi(strings.TrimSpace(ps[0]))
-	s, err2 := strconv.Atoi(strings.TrimSpace(ps[1]))
-	if err1 != nil || err2 != nil || p < 1 || p > 38 || s < 0 || s > p {
+	p, errP := strconv.Atoi(strings.TrimSpace(pStr))
+	s, errS := strconv.Atoi(strings.TrimSpace(sStr))
+	if errP != nil || errS != nil || p < 1 || p > 38 || s < 0 || s > p {
 		return 0, 0, true, fmt.Errorf("%w: type %q (precision 1-38, scale 0-precision)", ErrInvalid, t)
 	}
 	return p, s, true, nil
@@ -181,13 +187,21 @@ type Dialect interface {
 	CodeMirrorBase() string    // @codemirror/lang-sql base dialect
 }
 
+// kindToName is the single place that translates engine kinds (the API
+// vocabulary) into dialect names (this package's vocabulary): "sqlserver"
+// runs T-SQL; "flightsql" and the test fake share the generic dialect.
+var kindToName = map[string]string{
+	"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
+	"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
+	"flightsql": FlightSQL, "fake": FlightSQL,
+}
+
 // ForEngineKind returns the dialect of a query-engine kind.
 func ForEngineKind(kind string) (Dialect, bool) {
-	name := map[string]string{
-		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
-		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
-		"flightsql": FlightSQL, "fake": FlightSQL,
-	}[kind]
+	name, ok := kindToName[kind]
+	if !ok {
+		return nil, false
+	}
 	return Get(name)
 }
 
