@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import type { components } from '$lib/api/schema';
 	import type { EditorTab } from '$lib/stores/editor.svelte';
@@ -51,7 +52,10 @@
 				body
 			});
 			if (err || !data) {
-				error = apiErrorMessage(err, 'Could not overwrite the query');
+				error = apiErrorMessage(
+					err,
+					m.workbench_saveconflictdialog_could_not_overwrite_the_query()
+				);
 				return;
 			}
 			savedQueries.onSaved(data);
@@ -63,7 +67,7 @@
 	}
 </script>
 
-<Modal bind:open title="This query changed elsewhere">
+<Modal bind:open title={m.workbench_saveconflictdialog_this_query_changed_elsewhere()}>
 	<div class="flex flex-col gap-3 text-[13px]">
 		<p class="text-slate-600 dark:text-slate-300">
 			{#if conflict.updatedBy?.name}
@@ -71,14 +75,17 @@
 			{:else}
 				Someone
 			{/if}
-			saved version {conflict.currentVersion}
+			{m.workbench_saveconflictdialog_saved_version()}
+			{conflict.currentVersion}
 			{#if conflict.updatedAt}
 				<RelativeTime at={conflict.updatedAt} />
 			{/if}
-			while you were editing.
+			{m.workbench_saveconflictdialog_while_you_were_editing()}
 		</p>
 		<Button size="sm" onclick={() => (compare = !compare)}>
-			{compare ? 'Hide comparison' : 'Compare'}
+			{compare
+				? m.workbench_saveconflictdialog_hide_comparison()
+				: m.workbench_saveconflictdialog_compare()}
 		</Button>
 		{#if compare}
 			<DiffView before={conflict.theirs.sql} after={tab.sql} language="sql" />
@@ -89,7 +96,7 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex flex-wrap justify-end gap-2">
-			<Button onclick={() => (open = false)} disabled={busy}>Cancel</Button>
+			<Button onclick={() => (open = false)} disabled={busy}>{m.common_cancel()}</Button>
 			<Button
 				onclick={() => {
 					open = false;
@@ -97,9 +104,11 @@
 				}}
 				disabled={busy}
 			>
-				Save mine as a copy
+				{m.workbench_saveconflictdialog_save_mine_as_a_copy()}
 			</Button>
-			<Button variant="danger" loading={busy} disabled={busy} onclick={overwrite}>Overwrite</Button>
+			<Button variant="danger" loading={busy} disabled={busy} onclick={overwrite}
+				>{m.common_overwrite()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import type { FullAutoFill } from 'svelte/elements';
 
 	let {
@@ -71,8 +72,10 @@
 			type="button"
 			onclick={toggle}
 			aria-pressed={revealed}
-			aria-label={revealed ? 'Hide password' : 'Show password'}
-			title={revealed ? 'Hide password' : 'Show password'}
+			aria-label={revealed
+				? m.ui_passwordinput_hide_password()
+				: m.ui_passwordinput_show_password()}
+			title={revealed ? m.ui_passwordinput_hide_password() : m.ui_passwordinput_show_password()}
 			class="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-md text-text-muted transition-colors hover:text-text-main focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 		>
 			{#if revealed}

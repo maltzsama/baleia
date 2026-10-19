@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onDestroy } from 'svelte';
 	import { apiErrorMessage, apiFetch, client } from '$lib/api/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -59,7 +60,10 @@
 			})
 			.then(({ data, error }) => {
 				if (cancelled) return;
-				if (error || !data) throw new Error(apiErrorMessage(error, 'Failed to load statements'));
+				if (error || !data)
+					throw new Error(
+						apiErrorMessage(error, m.components_resultspanel_failed_to_load_statements())
+					);
 				statements = data;
 				const withResults = data.filter((statement) => (statement.result_sets?.length ?? 0) > 0);
 				activePosition =
@@ -130,7 +134,7 @@
 			link.remove();
 			URL.revokeObjectURL(href);
 		} catch (e) {
-			toasts.error('Export failed: ' + errorMessage(e));
+			toasts.error(m.components_resultspanel_export_failed() + errorMessage(e));
 		} finally {
 			exporting = false;
 		}
@@ -139,7 +143,7 @@
 
 <div class="flex min-h-0 flex-1 flex-col" data-testid="results-panel">
 	{#if !enabled}
-		<div class="space-y-2 p-4" aria-label="Waiting for results">
+		<div class="space-y-2 p-4" aria-label={m.components_resultspanel_waiting_for_results()}>
 			<Skeleton class="h-4 w-1/3" />
 			<Skeleton class="h-4 w-2/3" />
 		</div>
@@ -198,7 +202,7 @@
 					disabled={activePosition == null || exporting}
 					onclick={download}
 				>
-					{exporting ? 'Exporting…' : 'Export'}
+					{exporting ? m.components_resultspanel_exporting() : m.components_resultspanel_export()}
 				</button>
 			</div>
 		</div>

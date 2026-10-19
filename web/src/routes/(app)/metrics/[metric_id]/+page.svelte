@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -138,7 +139,7 @@
 			<div class="flex flex-wrap gap-2">
 				{#if canCertify}
 					<Button onclick={() => (metric?.certified ? (certifyOpen = true) : setCertified(true))}>
-						{metric.certified ? 'Remove certification' : 'Certify'}
+						{metric.certified ? m.metrics_remove_certification() : m.metrics_certify()}
 					</Button>
 				{/if}
 				{#if canEdit}
@@ -194,7 +195,7 @@
 								label="Grain"
 								bind:value={grain}
 								options={[
-									{ value: '', label: 'No grouping' },
+									{ value: '', label: m.metrics_no_grouping() },
 									...(definition.time_grains ?? []).map((g) => ({ value: g, label: g }))
 								]}
 								onchange={loadSQL}
@@ -231,19 +232,19 @@
 
 <ConfirmDialog
 	bind:open={deleteOpen}
-	title="Delete metric"
+	title={m.metrics_delete_metric()}
 	resourceName={metric?.label ?? ''}
 	confirmLabel="Delete metric"
 	consequences={[
 		'Queries and links that reference this metric stop resolving.',
-		'The metric can be restored from Trash.'
+		m.metrics_the_metric_can_be_restored_from_trash()
 	]}
 	onconfirm={remove}
 />
 
 <ConfirmDialog
 	bind:open={certifyOpen}
-	title="Remove certification"
+	title={m.metrics_remove_certification()}
 	resourceName={metric?.label ?? ''}
 	confirmLabel="Remove certification"
 	danger={false}

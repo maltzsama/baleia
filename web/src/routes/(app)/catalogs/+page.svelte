@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -49,46 +50,46 @@
 
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4">
-		<h1 class="text-xl font-semibold tracking-[-0.3px]">Catalogs</h1>
+		<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_catalogs()}</h1>
 		<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-			Logical catalogs, where they are bound, and whether their metadata is fresh.
+			{m.catalogs_logical_catalogs_where_they_are_bound_and()}
 		</p>
 	</div>
 
 	<div
 		class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
 	>
-		<Input label="Search" bind:value={q} placeholder="orders" />
+		<Input label={m.common_search()} bind:value={q} placeholder={m.common_orders()} />
 		<Select
-			label="Origin"
+			label={m.catalogs_origin()}
 			bind:value={origin}
 			options={[
-				{ value: '', label: 'Any' },
-				{ value: 'source', label: 'Source' },
+				{ value: '', label: m.monitoring_any() },
+				{ value: 'source', label: m.catalogs_source() },
 				{ value: 'native', label: 'Native' }
 			]}
 		/>
 		<Select
-			label="Engine"
+			label={m.common_engine()}
 			bind:value={engineId}
 			options={[
-				{ value: '', label: 'Any' },
+				{ value: '', label: m.monitoring_any() },
 				...engines.map((engine) => ({ value: engine.id, label: engine.name }))
 			]}
 		/>
 		<label class="flex items-end gap-2 pb-1 text-[12px]">
 			<input type="checkbox" bind:checked={attention} onchange={() => load()} />
-			Needs attention only
+			{m.catalogs_needs_attention_only()}
 		</label>
 	</div>
 	<div class="mb-3 flex justify-end">
 		<button type="button" class="text-[12px] text-primary hover:underline" onclick={() => load()}>
-			Apply filters
+			{m.catalogs_apply_filters()}
 		</button>
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label="Loading catalogs">
+		<div class="flex flex-col gap-2" aria-label={m.catalogs_loading_catalogs()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-12 w-full" />
 			{/each}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { resolve } from '$app/paths';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { visibleSections, type SettingsSection } from '$lib/settings/sections';
@@ -14,10 +15,12 @@
 </script>
 
 <nav
-	aria-label="Settings"
+	aria-label={m.common_settings()}
 	class="w-[220px] shrink-0 border-r border-border bg-bg-panel overflow-y-auto p-4"
 >
-	<p class="mb-3 text-[10px] font-semibold uppercase tracking-wide text-text-muted">Settings</p>
+	<p class="mb-3 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+		{m.common_settings()}
+	</p>
 	<ul class="flex flex-col gap-1">
 		{#each sections as section (section.href)}
 			<li>

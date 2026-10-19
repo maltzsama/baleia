@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -62,26 +63,30 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Content</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_content()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				Spaces, folders, saved queries and metrics. Access follows each space.
+				{m.content_spaces_folders_saved_queries_and_metrics_a()}
 			</p>
 		</div>
-		<Button variant="primary" onclick={() => (spaceOpen = true)}>New space</Button>
+		<Button variant="primary" onclick={() => (spaceOpen = true)}>{m.content_new_space()}</Button>
 	</div>
 
 	<div class="mb-4 flex flex-wrap items-end gap-2">
 		<div class="min-w-64 flex-1">
-			<Input label="Search content" bind:value={query} placeholder="orders" />
+			<Input
+				label={m.content_search_content()}
+				bind:value={query}
+				placeholder={m.common_orders()}
+			/>
 		</div>
-		<Button loading={searching} disabled={searching} onclick={search}>Search</Button>
+		<Button loading={searching} disabled={searching} onclick={search}>{m.common_search()}</Button>
 	</div>
 	{#if searchError}
 		<p class="mb-3 text-[11px] text-danger" role="alert">{searchError}</p>
 	{/if}
 	{#if results.length > 0}
 		<div class="mb-5 rounded-lg border border-border bg-bg-panel p-3">
-			<h2 class="text-[12px] font-semibold">Results</h2>
+			<h2 class="text-[12px] font-semibold">{m.common_results()}</h2>
 			<ul class="mt-2 flex flex-col gap-1 text-[11px]">
 				{#each results as item (item.kind + item.id)}
 					<li>
@@ -100,7 +105,7 @@
 	{/if}
 
 	{#if loading}
-		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading spaces">
+		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={m.content_loading_spaces()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-28 w-full" />
 			{/each}
@@ -127,11 +132,13 @@
 						{#if space.is_default}<Badge tone="neutral">Default</Badge>{/if}
 					</div>
 					<p class="line-clamp-2 text-[11px] text-slate-600 dark:text-slate-300">
-						{space.description ?? 'No description.'}
+						{space.description ?? m.content_no_description()}
 					</p>
 					<div class="flex flex-wrap gap-1">
 						<Badge tone={space.visibility === 'workspace' ? 'info' : 'warning'}>
-							{space.visibility === 'workspace' ? 'Everyone in the workspace' : 'Restricted'}
+							{space.visibility === 'workspace'
+								? m.content_everyone_in_the_workspace()
+								: m.content_restricted()}
 						</Badge>
 						{#if space.my_role}<Badge tone="success">{space.my_role}</Badge>{/if}
 					</div>

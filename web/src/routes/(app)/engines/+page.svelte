@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -79,7 +80,7 @@
 
 	async function submitRegister() {
 		if (!registerName.trim() || !registerConnectionId) {
-			registerError = 'Choose a connection and name the engine.';
+			registerError = m.engines_choose_a_connection_and_name_the_engine();
 			return;
 		}
 		registering = true;
@@ -104,18 +105,18 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Engines</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_engines()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				What runs your SQL, what it guarantees, and which catalogs it exposes.
+				{m.engines_what_runs_your_sql_what_it_guarantees_and()}
 			</p>
 		</div>
 		{#if canRegister}
-			<Button variant="primary" onclick={openRegister}>Register engine</Button>
+			<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
 		{/if}
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label="Loading engines">
+		<div class="flex flex-col gap-2" aria-label={m.engines_loading_engines()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-12 w-full" />
 			{/each}
@@ -135,7 +136,7 @@
 				label="Class"
 				bind:value={classFilter}
 				options={[
-					{ value: '', label: 'Any' },
+					{ value: '', label: m.monitoring_any() },
 					{ value: 'federated', label: 'Federated' },
 					{ value: 'direct', label: 'Direct' }
 				]}
@@ -144,7 +145,7 @@
 				label="Kind"
 				bind:value={kindFilter}
 				options={[
-					{ value: '', label: 'Any' },
+					{ value: '', label: m.monitoring_any() },
 					...kinds.map((kind) => ({ value: kind, label: kind }))
 				]}
 			/>
@@ -152,8 +153,8 @@
 				label="Health"
 				bind:value={healthFilter}
 				options={[
-					{ value: '', label: 'Any' },
-					{ value: 'ok', label: 'Healthy' },
+					{ value: '', label: m.monitoring_any() },
+					{ value: 'ok', label: m.statusbadge_healthy() },
 					{ value: 'unreachable', label: 'Unreachable' },
 					{ value: 'unknown', label: 'Unknown' }
 				]}
@@ -162,7 +163,7 @@
 				label="State"
 				bind:value={enabledFilter}
 				options={[
-					{ value: '', label: 'Any' },
+					{ value: '', label: m.monitoring_any() },
 					{ value: 'enabled', label: 'Enabled' },
 					{ value: 'disabled', label: 'Disabled' }
 				]}
@@ -239,35 +240,41 @@
 	{/if}
 </div>
 
-<Modal bind:open={registerOpen} title="Register engine">
+<Modal bind:open={registerOpen} title={m.engines_register_engine()}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<p class="text-slate-600 dark:text-slate-300">
-			Registering probes the connection and discovers its native catalogs. The connection must have
-			the direct-engine role.
+			{m.engines_registering_probes_the_connection_and_disc()}
 		</p>
 		<Select
-			label="Connection"
+			label={m.engines_connection()}
 			bind:value={registerConnectionId}
 			options={connections.map((connection) => ({
 				value: connection.id,
 				label: `${connection.name} (${connection.type})`
 			}))}
 		/>
-		<Input label="Name" bind:value={registerName} placeholder="analytics_pg" class="font-mono" />
+		<Input
+			label={m.common_name()}
+			bind:value={registerName}
+			placeholder={m.engines_analytics_pg()}
+			class="font-mono"
+		/>
 		{#if registerError}
 			<p class="text-danger" role="alert">{registerError}</p>
 		{/if}
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (registerOpen = false)} disabled={registering}>Cancel</Button>
+			<Button onclick={() => (registerOpen = false)} disabled={registering}
+				>{m.common_cancel()}</Button
+			>
 			<Button
 				variant="primary"
 				loading={registering}
 				disabled={registering}
 				onclick={submitRegister}
 			>
-				Register
+				{m.common_register()}
 			</Button>
 		</div>
 	{/snippet}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -61,7 +62,7 @@
 		try {
 			const { data, error: err } = await client.GET('/teams');
 			if (err || !data) {
-				error = apiErrorMessage(err, 'Could not load teams.');
+				error = apiErrorMessage(err, m.settings_teams_could_not_load_teams());
 				return;
 			}
 			teams = data;
@@ -71,14 +72,14 @@
 					params: { path: { id: team.id } }
 				});
 				if (listErr || !list) {
-					error = apiErrorMessage(listErr, 'Could not load team members.');
+					error = apiErrorMessage(listErr, m.settings_teams_could_not_load_team_members());
 					return;
 				}
 				next[team.id] = list;
 			}
 			members = next;
 		} catch {
-			error = 'Could not load teams.';
+			error = m.settings_teams_could_not_load_teams();
 		} finally {
 			loading = false;
 		}
@@ -100,7 +101,7 @@
 				body: { name: createName, description: createDescription }
 			});
 			if (err) {
-				createError = apiErrorMessage(err, 'Could not create the team.');
+				createError = apiErrorMessage(err, m.settings_teams_could_not_create_the_team());
 				return;
 			}
 			createOpen = false;
@@ -132,7 +133,7 @@
 				body: { user_id: addUserId, role: addRole }
 			});
 			if (err) {
-				addError = apiErrorMessage(err, 'Could not add the member.');
+				addError = apiErrorMessage(err, m.settings_teams_could_not_add_the_member());
 				return;
 			}
 			addOpen = false;
@@ -195,15 +196,17 @@
 	<div class="max-w-4xl">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold tracking-[-0.3px]">Teams</h1>
+				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_teams_teams()}</h1>
 				<p class="mt-1 text-[13px] text-text-muted">
 					{isAdmin
-						? 'Every team, its members and their roles.'
-						: 'The teams you belong to and your role in each.'}
+						? m.settings_teams_every_team_its_members_and_their_roles()
+						: m.settings_teams_the_teams_you_belong_to_and_your_role_in_e()}
 				</p>
 			</div>
 			{#if isAdmin}
-				<Button variant="primary" onclick={() => (createOpen = true)}>New team</Button>
+				<Button variant="primary" onclick={() => (createOpen = true)}
+					>{m.settings_teams_new_team()}</Button
+				>
 			{/if}
 		</div>
 
@@ -221,8 +224,8 @@
 				<EmptyState
 					title="No teams"
 					description={isAdmin
-						? 'Create a team to share workspaces and content.'
-						: 'You do not belong to a team yet.'}
+						? m.settings_teams_create_a_team_to_share_workspaces_and_cont()
+						: m.settings_teams_you_do_not_belong_to_a_team_yet()}
 				/>
 			</div>
 		{:else}
@@ -261,7 +264,9 @@
 										</Badge>
 										{#if isAdmin}
 											<Button size="sm" onclick={() => askRole(team, member)}>
-												{member.role === 'owner' ? 'Make member' : 'Make owner'}
+												{member.role === 'owner'
+													? m.settings_teams_make_member()
+													: m.settings_teams_make_owner()}
 											</Button>
 											<Button size="sm" variant="ghost" onclick={() => askRemove(team, member)}
 												>Remove</Button
@@ -281,25 +286,35 @@
 	</div>
 </div>
 
-<Modal bind:open={createOpen} title="New team">
+<Modal bind:open={createOpen} title={m.settings_teams_new_team()}>
 	<div class="flex flex-col gap-3">
 		{#if createError}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
 				{createError}
 			</p>
 		{/if}
-		<Input label="Name" bind:value={createName} placeholder="Engineering" />
-		<Input label="Description" bind:value={createDescription} placeholder="Optional" />
+		<Input
+			label={m.common_name()}
+			bind:value={createName}
+			placeholder={m.settings_teams_engineering()}
+		/>
+		<Input
+			label={m.common_description()}
+			bind:value={createDescription}
+			placeholder={m.common_optional()}
+		/>
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (createOpen = false)}>Cancel</Button>
-			<Button variant="primary" loading={createBusy} onclick={createTeam}>Create team</Button>
+			<Button onclick={() => (createOpen = false)}>{m.common_cancel()}</Button>
+			<Button variant="primary" loading={createBusy} onclick={createTeam}
+				>{m.settings_teams_create_team()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={addOpen} title="Add team member">
+<Modal bind:open={addOpen} title={m.settings_teams_add_team_member()}>
 	<div class="flex flex-col gap-3">
 		{#if addError}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
@@ -307,28 +322,30 @@
 			</p>
 		{/if}
 		<Select
-			label="User"
+			label={m.common_user()}
 			bind:value={addUserId}
-			placeholder="Choose a user"
+			placeholder={m.settings_teams_choose_a_user()}
 			options={users.map((u) => ({ value: u.id, label: `${u.name} (${u.email})` }))}
 		/>
-		<Select label="Role" bind:value={addRole} options={teamRoleOptions} />
+		<Select label={m.common_role()} bind:value={addRole} options={teamRoleOptions} />
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (addOpen = false)}>Cancel</Button>
-			<Button variant="primary" loading={addBusy} onclick={addMember}>Add member</Button>
+			<Button onclick={() => (addOpen = false)}>{m.common_cancel()}</Button>
+			<Button variant="primary" loading={addBusy} onclick={addMember}
+				>{m.settings_teams_add_member()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>
 
 <ConfirmDialog
 	bind:open={removeOpen}
-	title="Remove team member"
+	title={m.settings_teams_remove_team_member()}
 	resourceName={removeTarget?.member.user.name ?? ''}
 	consequences={[
 		'They immediately lose access to workspaces owned by this team.',
-		'Their account and other team memberships are unaffected.'
+		m.settings_teams_their_account_and_other_team_memberships_a()
 	]}
 	confirmLabel="Remove member"
 	onconfirm={confirmRemove}
@@ -336,11 +353,11 @@
 
 <ConfirmDialog
 	bind:open={roleOpen}
-	title="Change team role"
+	title={m.settings_teams_change_team_role()}
 	resourceName={roleTarget?.member.user.name ?? ''}
 	consequences={[
 		'Owners can manage the team and its workspaces; members cannot.',
-		'The change applies immediately.'
+		m.settings_teams_the_change_applies_immediately()
 	]}
 	confirmLabel="Change role"
 	onconfirm={confirmRole}
@@ -348,11 +365,11 @@
 
 <ConfirmDialog
 	bind:open={deleteOpen}
-	title="Delete team"
+	title={m.settings_teams_delete_team()}
 	resourceName={deleteTarget?.name ?? ''}
 	consequences={[
 		'Members lose access to the workspaces this team owns.',
-		'The team is removed; its workspaces and content are kept.'
+		m.settings_teams_the_team_is_removed_its_workspaces_and_con()
 	]}
 	confirmLabel="Delete team"
 	onconfirm={confirmDelete}

@@ -16,9 +16,15 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const messagesDir = join(root, 'messages');
 const locales = ['en', 'pt-BR'];
 
-// Directories extracted so far. Each PR that extracts a page adds its path.
-// Example: 'src/routes/login', 'src/lib/components/GlobalNav.svelte'.
-const GUARDED = [];
+// Every product surface is extracted (#67). Dev-only galleries stay out: they
+// exist to show literal examples and are never shipped.
+const GUARDED = ['src'];
+const SKIP_FILES = [/patterns\.examples\.svelte$/, /\/routes\/_dev\//];
+
+// Code samples are not translated: SQL, identifiers and product names.
+const SKIP_TAGS = new Set(['code', 'pre']);
+const SKIP_COMPONENTS =
+	/^(CodeBlock|MarkdownView|MarkdownEditor|DiffView|JsonView|SqlEditor|CodeMirror)$/;
 
 // Intentional literals: product names and SQL/code vocabulary.
 const ALLOWED = new Set(['Baleia', 'SQL', 'Trino', 'Iceberg']);
@@ -78,7 +84,8 @@ function walkFiles(path, out = []) {
 const TEXT_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'alt', 'label']);
 
 function hasLetters(value) {
-	return /[A-Za-zÀ-ÿ]/.test(value);
+	// Unicode letters only: "×", "→" and "·" are decorative, not copy.
+	return /\p{L}/u.test(value);
 }
 
 function attributeText(attribute) {
@@ -88,23 +95,28 @@ function attributeText(attribute) {
 	return parts[0].data;
 }
 
-function walk(node, file, report) {
+function walk(node, file, report, skip = false) {
 	if (!node || typeof node !== 'object') return;
 
-	if (node.type === 'Text' && typeof node.data === 'string') {
+	const tag = node.name ?? '';
+	const nextSkip = skip || SKIP_TAGS.has(tag) || SKIP_COMPONENTS.test(tag);
+
+	if (!nextSkip && node.type === 'Text' && typeof node.data === 'string') {
 		const text = node.data.trim();
 		if (hasLetters(text) && !ALLOWED.has(text)) report(file, text);
 	}
 
-	for (const attribute of node.attributes ?? []) {
-		const text = attributeText(attribute);
-		if (text && hasLetters(text) && !ALLOWED.has(text)) report(file, text);
+	if (!nextSkip) {
+		for (const attribute of node.attributes ?? []) {
+			const text = attributeText(attribute);
+			if (text && hasLetters(text) && !ALLOWED.has(text)) report(file, text);
+		}
 	}
 
 	for (const key of ['children', 'nodes']) {
-		for (const child of node[key] ?? []) walk(child, file, report);
+		for (const child of node[key] ?? []) walk(child, file, report, nextSkip);
 	}
-	if (node.fragment) walk(node.fragment, file, report);
+	if (node.fragment) walk(node.fragment, file, report, nextSkip);
 }
 
 function checkHardCodedStrings() {
@@ -116,7 +128,9 @@ function checkHardCodedStrings() {
 			fail(`guarded path does not exist: ${entry}`);
 			return [];
 		}
-	}).filter((file) => file.endsWith('.svelte'));
+	})
+		.filter((file) => file.endsWith('.svelte'))
+		.filter((file) => !SKIP_FILES.some((pattern) => pattern.test(relative(root, file))));
 
 	for (const file of files) {
 		const source = readFileSync(file, 'utf8');

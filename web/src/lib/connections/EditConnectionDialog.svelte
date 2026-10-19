@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import Input from '$lib/ui/Input.svelte';
@@ -93,7 +94,7 @@
 
 <Modal bind:open title={`Edit ${connection.name}`}>
 	<div class="flex flex-col gap-3">
-		<Input label="Connection name" bind:value={name} />
+		<Input label={m.connections_editconnectiondialog_connection_name()} bind:value={name} />
 		{#if provider}
 			<ProviderForm
 				{provider}
@@ -107,9 +108,12 @@
 			<p class="text-[12px] text-danger">No provider is registered for {connection.type}.</p>
 		{/if}
 		<div class="rounded-md border border-border bg-bg-toolbar px-3 py-2.5">
-			<Checkbox label="These credentials cannot modify data" bind:checked={credentialsReadOnly} />
+			<Checkbox
+				label={m.connections_editconnectiondialog_these_credentials_cannot_modify_data()}
+				bind:checked={credentialsReadOnly}
+			/>
 			<p class="mt-1 text-[10px] text-text-muted">
-				Required for read grants and agents on engines that cannot enforce read-only sessions.
+				{m.connections_editconnectiondialog_required_for_read_grants_and_agents_on_eng()}
 			</p>
 		</div>
 		{#if error}
@@ -126,17 +130,17 @@
 	{#snippet footer()}
 		<div class="flex items-center justify-between gap-2">
 			<Button size="sm" loading={testing} disabled={testing} onclick={test}
-				>Test saved settings</Button
+				>{m.connections_editconnectiondialog_test_saved_settings()}</Button
 			>
 			<div class="flex gap-2">
-				<Button onclick={() => (open = false)} disabled={saving}>Cancel</Button>
+				<Button onclick={() => (open = false)} disabled={saving}>{m.common_cancel()}</Button>
 				<Button
 					variant="primary"
 					loading={saving}
 					disabled={saving || missing.length > 0 || !name.trim()}
 					onclick={save}
 				>
-					Save
+					{m.common_save()}
 				</Button>
 			</div>
 		</div>

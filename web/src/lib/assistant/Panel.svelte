@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import Badge from '$lib/ui/Badge.svelte';
@@ -67,16 +68,16 @@
 	<div class="flex items-center gap-1.5 border-b border-border bg-bg-toolbar px-2 py-1.5">
 		<select
 			class="min-w-0 flex-1 rounded border border-border bg-bg-panel px-1.5 py-1 text-[11px]"
-			aria-label="Conversation"
+			aria-label={m.assistant_panel_conversation()}
 			value={assistantStore.active?.id ?? ''}
 			onchange={(event) => assistantStore.open((event.currentTarget as HTMLSelectElement).value)}
 		>
 			{#if assistantStore.conversations.length === 0}
-				<option value="">No conversations</option>
+				<option value="">{m.assistant_panel_no_conversations()}</option>
 			{/if}
 			{#each assistantStore.conversations as conversation (conversation.id)}
 				<option value={conversation.id}>
-					{conversation.title || 'New conversation'}
+					{conversation.title || m.assistant_panel_new_conversation()}
 				</option>
 			{/each}
 		</select>
@@ -92,14 +93,14 @@
 	</div>
 	<p class="border-b border-border px-2.5 py-1 text-[10px] text-text-muted">
 		{assistantStore.dataSharing === 'metadata_and_samples'
-			? 'Model sees: metadata + samples'
-			: 'Model sees: metadata only'}
+			? m.assistant_panel_model_sees_metadata_samples()
+			: m.assistant_panel_model_sees_metadata_only()}
 	</p>
 
 	{#if !assistantStore.enabled}
 		<div class="p-3">
 			<EmptyState
-				title="Assistant is off"
+				title={m.assistant_panel_assistant_is_off()}
 				description="An administrator can enable the assistant and configure a provider in Settings → Assistant."
 			/>
 		</div>
@@ -141,7 +142,9 @@
 					<div
 						class="mb-2 rounded-md border border-warning/40 bg-warning/5 px-2 py-1.5 text-[11px] text-text-muted"
 					>
-						{String(field(message.content, 'detail') ?? 'The turn was interrupted.')}
+						{String(
+							field(message.content, 'detail') ?? m.assistant_panel_the_turn_was_interrupted()
+						)}
 					</div>
 				{:else if message.role === 'tool_call'}
 					<details class="mb-1 rounded-md border border-border bg-bg-panel px-2 py-1 text-[11px]">

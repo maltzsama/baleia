@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onDestroy, onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -223,7 +224,7 @@
 			.filter(([, enabled]) => enabled)
 			.map(([operation]) => operation);
 		if (selected.length === 0) {
-			maintainError = 'Choose at least one operation.';
+			maintainError = m.monitoring_choose_at_least_one_operation();
 			return;
 		}
 		maintaining = true;
@@ -257,8 +258,8 @@
 	function needsLabels(row: TableHealth): string[] {
 		const out: string[] = [];
 		if (row.needs_compaction) out.push('compaction');
-		if (row.needs_snapshot_expiry) out.push('snapshot expiry');
-		if (row.needs_orphan_cleanup) out.push('orphan cleanup');
+		if (row.needs_snapshot_expiry) out.push(m.monitoring_snapshot_expiry());
+		if (row.needs_orphan_cleanup) out.push(m.monitoring_orphan_cleanup());
 		return out;
 	}
 
@@ -278,15 +279,15 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Monitoring</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_monitoring()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				Cluster load, running queries and Iceberg table health, per engine.
+				{m.monitoring_cluster_load_running_queries_and_iceberg_t()}
 			</p>
 		</div>
 		{#if engines.length > 1}
 			<div class="w-56">
 				<Select
-					label="Engine"
+					label={m.common_engine()}
 					bind:value={engineId}
 					options={engines.map((engine) => ({ value: engine.id, label: engine.name }))}
 					onchange={() => loadActive()}
@@ -296,7 +297,7 @@
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label="Loading monitoring engines">
+		<div class="flex flex-col gap-2" aria-label={m.monitoring_loading_monitoring_engines()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-14 w-full" />
 			{/each}
@@ -310,7 +311,7 @@
 		/>
 	{:else}
 		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Monitoring tabs">
-			{#each [['cluster', 'Cluster'], ['queries', 'Queries'], ['tables', 'Table health']] as [value, label] (value)}
+			{#each [['cluster', m.monitoring_cluster()], ['queries', 'Queries'], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -332,9 +333,9 @@
 						label="Window"
 						bind:value={clusterWindow}
 						options={[
-							{ value: '1h', label: 'Last hour' },
-							{ value: '6h', label: 'Last 6 hours' },
-							{ value: '24h', label: 'Last 24 hours' }
+							{ value: '1h', label: m.monitoring_last_hour() },
+							{ value: '6h', label: m.monitoring_last_6_hours() },
+							{ value: '24h', label: m.monitoring_last_24_hours() }
 						]}
 						onchange={() => loadCluster()}
 					/>
@@ -416,7 +417,7 @@
 					bind:value={scope}
 					options={[
 						{ value: 'mine', label: 'Mine' },
-						...(isAdmin ? [{ value: 'all', label: 'Everyone' }] : [])
+						...(isAdmin ? [{ value: 'all', label: m.monitoring_everyone() }] : [])
 					]}
 					onchange={() => loadQueries()}
 				/>
@@ -424,7 +425,7 @@
 					label="State"
 					bind:value={queryState}
 					options={[
-						{ value: '', label: 'Any' },
+						{ value: '', label: m.monitoring_any() },
 						{ value: 'running', label: 'Running' },
 						{ value: 'finished', label: 'Finished' },
 						{ value: 'failed', label: 'Failed' },
@@ -530,10 +531,10 @@
 					label="Needs"
 					bind:value={needs}
 					options={[
-						{ value: '', label: 'Any' },
-						{ value: 'compaction', label: 'Compaction' },
-						{ value: 'snapshot_expiry', label: 'Snapshot expiry' },
-						{ value: 'orphan_cleanup', label: 'Orphan cleanup' }
+						{ value: '', label: m.monitoring_any() },
+						{ value: 'compaction', label: m.monitoring_compaction() },
+						{ value: 'snapshot_expiry', label: m.monitoring_snapshot_expiry_2() },
+						{ value: 'orphan_cleanup', label: m.monitoring_orphan_cleanup_2() }
 					]}
 					onchange={() => loadHealth()}
 				/>
@@ -686,19 +687,19 @@
 	{/if}
 </div>
 
-<Drawer bind:open={queryDrawer} title="Query detail">
+<Drawer bind:open={queryDrawer} title={m.monitoring_query_detail()}>
 	{#if selectedQuery}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
-			<dt class="text-slate-600 dark:text-slate-300">State</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.monitoring_state()}</dt>
 			<dd>{selectedQuery.state}</dd>
-			<dt class="text-slate-600 dark:text-slate-300">User</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.common_user()}</dt>
 			<dd class="font-mono">{selectedQuery.user}</dd>
-			<dt class="text-slate-600 dark:text-slate-300">Catalog</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.common_catalog()}</dt>
 			<dd class="font-mono">{selectedQuery.catalog}</dd>
-			<dt class="text-slate-600 dark:text-slate-300">Started</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.monitoring_started()}</dt>
 			<dd><RelativeTime at={selectedQuery.created_at} live /></dd>
 			{#if selectedQuery.execution_id}
-				<dt class="text-slate-600 dark:text-slate-300">Execution</dt>
+				<dt class="text-slate-600 dark:text-slate-300">{m.monitoring_execution()}</dt>
 				<dd>
 					<button
 						type="button"
@@ -713,15 +714,15 @@
 					</button>
 				</dd>
 			{/if}
-			<dt class="text-slate-600 dark:text-slate-300">Query id</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.monitoring_query_id()}</dt>
 			<dd class="flex items-center gap-1 break-all font-mono">
 				{selectedQuery.trino_query_id}<CopyButton
 					value={selectedQuery.trino_query_id}
-					label="query id"
+					label={m.monitoring_query_id_2()}
 				/>
 			</dd>
 		</dl>
-		<h3 class="mt-4 text-[12px] font-semibold">SQL</h3>
+		<h3 class="mt-4 text-[12px] font-semibold">{m.common_sql()}</h3>
 		<pre
 			class="mt-1 overflow-x-auto rounded-lg border border-border bg-bg-toolbar p-3 font-mono text-[11px]">{selectedQuery.sql}</pre>
 		{#if selectedQuery.error_message}
@@ -732,20 +733,23 @@
 	{/if}
 </Drawer>
 
-<Modal bind:open={maintainOpen} title="Run Iceberg maintenance">
+<Modal bind:open={maintainOpen} title={m.monitoring_run_iceberg_maintenance()}>
 	{#if maintainTarget}
 		<div class="flex flex-col gap-3 text-[12px]">
 			<p class="font-mono">{maintainTarget.namespace}.{maintainTarget.table_name}</p>
-			<Checkbox label="Optimize (rewrite small files)" bind:checked={operations.optimize} />
 			<Checkbox
-				label="Expire snapshots (time travel to them stops working)"
+				label={m.monitoring_optimize_rewrite_small_files()}
+				bind:checked={operations.optimize}
+			/>
+			<Checkbox
+				label={m.monitoring_expire_snapshots_time_travel_to_them_stops()}
 				bind:checked={operations.expire_snapshots}
 			/>
 			<Checkbox
-				label="Remove orphan files (files no snapshot references)"
+				label={m.monitoring_remove_orphan_files_files_no_snapshot_refe()}
 				bind:checked={operations.remove_orphan_files}
 			/>
-			<Input label="Retention (e.g. 7d, 30d)" bind:value={retention} class="font-mono" />
+			<Input label={m.monitoring_retention_e_g_7d_30d()} bind:value={retention} class="font-mono" />
 			{#if maintainError}
 				<p class="text-danger" role="alert">{maintainError}</p>
 			{/if}
@@ -753,14 +757,16 @@
 	{/if}
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (maintainOpen = false)} disabled={maintaining}>Cancel</Button>
+			<Button onclick={() => (maintainOpen = false)} disabled={maintaining}
+				>{m.common_cancel()}</Button
+			>
 			<Button
 				variant="primary"
 				loading={maintaining}
 				disabled={maintaining}
 				onclick={submitMaintenance}
 			>
-				Run maintenance
+				{m.monitoring_run_maintenance()}
 			</Button>
 		</div>
 	{/snippet}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import { cellText, formatCell, fullJson, type ColumnMeta } from '$lib/results/format';
 	import { RESULT_PAGE_SIZE, type ResultsStore } from '$lib/results/store.svelte';
@@ -110,9 +111,9 @@
 	async function copy(text: string) {
 		try {
 			await navigator.clipboard.writeText(text);
-			toasts.success('Copied to clipboard');
+			toasts.success(m.components_resultgrid_copied_to_clipboard());
 		} catch {
-			toasts.error('Could not copy to the clipboard');
+			toasts.error(m.components_resultgrid_could_not_copy_to_the_clipboard());
 		}
 	}
 
@@ -178,13 +179,13 @@
 	<div
 		class="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[11px] text-text-muted"
 	>
-		<span>{store.rowCount.toLocaleString()} rows</span>
+		<span>{store.rowCount.toLocaleString()} {m.common_rows()}</span>
 		{#if store.loading && !store.done}
 			<span class="flex items-center gap-1">
 				<span class="h-2 w-2 animate-pulse rounded-full bg-primary"></span>
 				{formatBytes(store.bytes)}
 				{#if store.totalBytes > 0}
-					of {formatBytes(store.totalBytes)}
+					{m.components_resultgrid_of()} {formatBytes(store.totalBytes)}
 				{/if}
 			</span>
 		{/if}
@@ -193,19 +194,19 @@
 			type="button"
 			class="rounded px-1.5 py-0.5 hover:bg-bg-toolbar disabled:opacity-40"
 			disabled={!selected}
-			onclick={copyCell}>Copy cell</button
+			onclick={copyCell}>{m.components_resultgrid_copy_cell()}</button
 		>
 		<button
 			type="button"
 			class="rounded px-1.5 py-0.5 hover:bg-bg-toolbar disabled:opacity-40"
 			disabled={!selected}
-			onclick={copyRow}>Copy row</button
+			onclick={copyRow}>{m.components_resultgrid_copy_row()}</button
 		>
 		<button
 			type="button"
 			class="rounded px-1.5 py-0.5 hover:bg-bg-toolbar disabled:opacity-40"
 			disabled={!selected}
-			onclick={copyColumn}>Copy column</button
+			onclick={copyColumn}>{m.components_resultgrid_copy_column()}</button
 		>
 		{#if selected && store.columns[selected.col]?.nested}
 			<button
@@ -213,7 +214,7 @@
 				class="rounded px-1.5 py-0.5 text-primary hover:bg-bg-toolbar"
 				onclick={() => {
 					if (selected) void expandAt(selected.row, selected.col);
-				}}>Expand</button
+				}}>{m.common_expand()}</button
 			>
 		{/if}
 	</div>
@@ -223,9 +224,11 @@
 			class="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1 text-[11px] text-amber-700 dark:border-[#4d3600] dark:bg-[#241a06] dark:text-amber-300"
 			role="status"
 		>
-			<span class="flex-1">Could not load some rows: {store.pageError}</span>
+			<span class="flex-1"
+				>{m.components_resultgrid_could_not_load_some_rows()} {store.pageError}</span
+			>
 			<button type="button" class="font-semibold underline" onclick={() => retryTick++}
-				>Retry</button
+				>{m.common_retry()}</button
 			>
 		</div>
 	{/if}
@@ -237,7 +240,7 @@
 		class="relative min-h-0 flex-1 overflow-auto outline-none"
 		role="grid"
 		tabindex="0"
-		aria-label="Result rows"
+		aria-label={m.components_resultgrid_result_rows()}
 		onscroll={onScroll}
 	>
 		<div style="position: relative; width: {totalWidth}px; height: {totalHeight}px;">
@@ -322,7 +325,7 @@
 				<button
 					type="button"
 					class="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-bg-toolbar hover:text-text-main"
-					aria-label="Close"
+					aria-label={m.common_close()}
 					onclick={() => (expanded = null)}>×</button
 				>
 			</header>

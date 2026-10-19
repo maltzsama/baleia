@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Button from '../Button.svelte';
 	import Checkbox from '../Checkbox.svelte';
 	import Modal from '../Modal.svelte';
@@ -7,7 +8,7 @@
 	let {
 		open = $bindable(false),
 		secret,
-		title = 'Copy this secret now',
+		title = m.onetimesecret_copy_this_secret_now(),
 		onacknowledge
 	}: {
 		open?: boolean;
@@ -27,16 +28,16 @@
 
 <Modal bind:open {title}>
 	<div class="flex flex-col gap-3 text-[13px]">
-		<p class="text-text-muted">This value is shown once and is never stored by the UI.</p>
+		<p class="text-text-muted">{m.common_this_value_is_shown_once_and_is_never_stor()}</p>
 		<div
 			class="flex items-center gap-2 rounded-md border border-border bg-bg-toolbar px-3 py-2 font-mono text-xs"
 		>
 			<span class="flex-1 break-all">{secret}</span>
-			<CopyButton value={secret} label="secret" />
+			<CopyButton value={secret} label={m.onetimesecret_secret()} />
 		</div>
-		<Checkbox bind:checked={acknowledged} label="I have copied this value" />
+		<Checkbox bind:checked={acknowledged} label={m.common_i_have_copied_this_value()} />
 	</div>
 	{#snippet footer()}
-		<Button variant="primary" onclick={close} disabled={!acknowledged}>Done</Button>
+		<Button variant="primary" onclick={close} disabled={!acknowledged}>{m.common_done()}</Button>
 	{/snippet}
 </Modal>

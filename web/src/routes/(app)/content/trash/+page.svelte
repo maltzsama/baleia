@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import HistoryDrawer from '$lib/content/HistoryDrawer.svelte';
@@ -64,14 +65,14 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Trash</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.content_trash_trash()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				Deleted queries and metrics can be restored with their history.
+				{m.content_trash_deleted_queries_and_metrics_can_be_restore()}
 			</p>
 		</div>
 		<div class="w-44">
 			<Select
-				label="Kind"
+				label={m.common_kind()}
 				bind:value={kind}
 				options={[
 					{ value: '', label: 'All' },

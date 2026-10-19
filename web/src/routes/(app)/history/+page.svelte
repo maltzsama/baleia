@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -80,7 +81,7 @@
 			});
 			if (seq !== requestSeq) return;
 			if (readError || !data) {
-				throw new Error(apiErrorMessage(readError, 'Failed to load the history'));
+				throw new Error(apiErrorMessage(readError, m.history_failed_to_load_the_history()));
 			}
 			items = cursor ? [...items, ...data.data] : data.data;
 			nextCursor = data.next_cursor ?? null;
@@ -121,7 +122,7 @@
 				{ params: { path: { id: workspaceId, execution_id: execution.id } } }
 			);
 			if (readError || !data) {
-				throw new Error(apiErrorMessage(readError, 'Failed to load the statements'));
+				throw new Error(apiErrorMessage(readError, m.history_failed_to_load_the_statements()));
 			}
 			statements = data;
 		} catch (e) {
@@ -132,7 +133,7 @@
 	}
 
 	function firstLine(sql: string): string {
-		return sql.trim().split('\n')[0]?.slice(0, 60) || 'Untitled';
+		return sql.trim().split('\n')[0]?.slice(0, 60) || m.history_untitled();
 	}
 
 	function openInEditor(run: boolean) {
@@ -141,7 +142,7 @@
 		const name = `History · ${firstLine(selected.sql)}`;
 		if (run) {
 			if (!target?.binding_id) {
-				toasts.error('This execution has no target to re-run on');
+				toasts.error(m.history_this_execution_has_no_target_to_re_run_on());
 				return;
 			}
 			editor.openExecution({
@@ -171,9 +172,9 @@
 	<div class="mx-auto max-w-6xl">
 		<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold tracking-[-0.3px]">Query history</h1>
+				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.history_query_history()}</h1>
 				<p class="mt-1 text-[13px] text-text-muted">
-					Every execution in this workspace, searchable by SQL and filterable by status and time.
+					{m.history_every_execution_in_this_workspace_searchab()}
 				</p>
 			</div>
 		</div>
@@ -182,35 +183,35 @@
 			class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-bg-panel p-3"
 		>
 			<label class="flex flex-col gap-1 text-[11px] font-medium text-text-muted">
-				<span>Status</span>
+				<span>{m.history_status()}</span>
 				<select
-					aria-label="Status"
+					aria-label={m.history_status()}
 					value={status}
 					onchange={(e) => setParam('status', (e.currentTarget as HTMLSelectElement).value)}
 					class="rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-main"
 				>
-					<option value="">All</option>
-					<option value="running">Running</option>
-					<option value="finished">Finished</option>
-					<option value="failed">Failed</option>
-					<option value="cancelled">Cancelled</option>
+					<option value="">{m.history_all()}</option>
+					<option value="running">{m.history_running()}</option>
+					<option value="finished">{m.history_finished()}</option>
+					<option value="failed">{m.history_failed()}</option>
+					<option value="cancelled">{m.history_cancelled()}</option>
 				</select>
 			</label>
 			<label class="flex flex-col gap-1 text-[11px] font-medium text-text-muted">
-				<span>From</span>
+				<span>{m.common_from()}</span>
 				<input
 					type="datetime-local"
-					aria-label="From"
+					aria-label={m.common_from()}
 					value={from}
 					onchange={(e) => setParam('from', (e.currentTarget as HTMLInputElement).value)}
 					class="rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-main"
 				/>
 			</label>
 			<label class="flex flex-col gap-1 text-[11px] font-medium text-text-muted">
-				<span>To</span>
+				<span>{m.common_to()}</span>
 				<input
 					type="datetime-local"
-					aria-label="To"
+					aria-label={m.common_to()}
 					value={to}
 					onchange={(e) => setParam('to', (e.currentTarget as HTMLInputElement).value)}
 					class="rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-main"
@@ -219,11 +220,11 @@
 			<label
 				class="flex min-w-[220px] flex-1 flex-col gap-1 text-[11px] font-medium text-text-muted"
 			>
-				<span>SQL contains</span>
+				<span>{m.history_sql_contains()}</span>
 				<input
 					type="search"
-					aria-label="SQL contains"
-					placeholder="orders, revenue, …"
+					aria-label={m.history_sql_contains()}
+					placeholder={m.history_orders_revenue()}
 					value={q}
 					oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)}
 					class="rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-main"
@@ -233,7 +234,7 @@
 
 		<div class="rounded-lg border border-border bg-bg-panel">
 			{#if loading}
-				<div class="space-y-2 p-4" aria-label="Loading history">
+				<div class="space-y-2 p-4" aria-label={m.history_loading_history()}>
 					<Skeleton class="h-5 w-full" />
 					<Skeleton class="h-5 w-5/6" />
 					<Skeleton class="h-5 w-4/5" />
@@ -336,7 +337,7 @@
 				{#if nextCursor}
 					<div class="flex justify-center border-t border-border p-3">
 						<Button variant="secondary" size="sm" disabled={loadingMore} onclick={loadMore}>
-							{loadingMore ? 'Loading…' : 'Load more'}
+							{loadingMore ? m.common_loading_2() : m.datatable_load_more()}
 						</Button>
 					</div>
 				{/if}
@@ -345,20 +346,20 @@
 	</div>
 </div>
 
-<Drawer bind:open={drawerOpen} title="Execution details">
+<Drawer bind:open={drawerOpen} title={m.history_execution_details()}>
 	{#if selected}
 		<div class="flex flex-col gap-4 p-5">
 			<div class="flex flex-wrap items-center gap-2 text-xs text-text-muted">
 				<StatusBadge kind="execution" status={selected.status} />
-				{#if selected.user_name}<span>by {selected.user_name}</span>{/if}
+				{#if selected.user_name}<span>{m.history_by()} {selected.user_name}</span>{/if}
 				{#if selected.started_at}
-					<span>started <RelativeTime at={selected.started_at} /></span>
+					<span>{m.history_started()} <RelativeTime at={selected.started_at} /></span>
 				{/if}
 				{#if selected.duration_ms != null}
 					<Duration ms={selected.duration_ms} />
 				{/if}
 				{#if selected.rows_returned != null}
-					<span>{selected.rows_returned.toLocaleString()} rows</span>
+					<span>{selected.rows_returned.toLocaleString()} {m.common_rows()}</span>
 				{/if}
 			</div>
 
@@ -366,14 +367,14 @@
 				<div
 					class="rounded-md border border-border bg-bg-toolbar px-3 py-2 text-[11px] text-text-muted"
 				>
-					ran on
+					{m.common_ran_on()}
 					<span class="font-medium text-text-main">{selected.target.engine_name}</span> ·
 					<span class="font-mono"
 						>{selected.target.catalog_name}{selected.target.schema
 							? `.${selected.target.schema}`
 							: ''}</span
 					>
-					{#if selected.target.read_only}<Badge tone="warning">read-only</Badge>{/if}
+					{#if selected.target.read_only}<Badge tone="warning">{m.common_read_only()}</Badge>{/if}
 				</div>
 			{/if}
 
@@ -381,23 +382,23 @@
 
 			<div class="flex flex-wrap gap-2">
 				<Button variant="secondary" size="sm" onclick={() => openInEditor(false)}
-					>Open in editor</Button
+					>{m.history_open_in_editor()}</Button
 				>
 				<Button
 					variant="primary"
 					size="sm"
 					disabled={!selected.target?.binding_id}
-					onclick={() => openInEditor(true)}>Re-run</Button
+					onclick={() => openInEditor(true)}>{m.history_re_run()}</Button
 				>
-				<CopyButton value={selected.sql} label="SQL" />
+				<CopyButton value={selected.sql} label={m.common_sql()} />
 			</div>
 
 			<div>
 				<h3 class="mb-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-					Statements
+					{m.history_statements()}
 				</h3>
 				{#if statementsLoading}
-					<div class="space-y-2" aria-label="Loading statements">
+					<div class="space-y-2" aria-label={m.history_loading_statements()}>
 						<Skeleton class="h-4 w-full" />
 						<Skeleton class="h-4 w-2/3" />
 					</div>
@@ -453,18 +454,18 @@
 		class="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-6"
 		role="dialog"
 		aria-modal="true"
-		aria-label="Execution results"
+		aria-label={m.history_execution_results()}
 		tabindex="-1"
 	>
 		<div
 			class="flex h-[80vh] w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border border-border bg-bg-panel"
 		>
 			<header class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-				<h2 class="flex-1 text-sm font-semibold">Results</h2>
+				<h2 class="flex-1 text-sm font-semibold">{m.common_results()}</h2>
 				<button
 					type="button"
 					class="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-bg-toolbar hover:text-text-main"
-					aria-label="Close results"
+					aria-label={m.history_close_results()}
 					onclick={() => (resultsOpen = false)}>×</button
 				>
 			</header>

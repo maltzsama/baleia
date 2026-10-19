@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
@@ -231,7 +232,7 @@
 
 <div class="flex-1 overflow-y-auto p-7">
 	{#if loading && !engine}
-		<div class="flex flex-col gap-2" aria-label="Loading the engine">
+		<div class="flex flex-col gap-2" aria-label={m.engines_loading_the_engine()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-14 w-full" />
 			{/each}
@@ -265,7 +266,7 @@
 		</div>
 
 		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Engine tabs">
-			{#each [['overview', 'Overview'], ['catalogs', 'Catalogs'], ...(federated ? [['observed', 'Observed'], ['reconcile', 'Reconcile']] : []), ['activity', 'Activity']] as [value, label] (value)}
+			{#each [['overview', 'Overview'], ['catalogs', 'Catalogs'], ...(federated ? [['observed', m.engines_observed()], ['reconcile', m.settings_system_reconcile()]] : []), ['activity', 'Activity']] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -331,8 +332,8 @@
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
 					{engine.class === 'direct'
-						? 'Native catalogs discovered on this engine.'
-						: 'Catalogs hosted by this engine: managed by Baleia or adopted.'}
+						? m.engines_native_catalogs_discovered_on_this_engine()
+						: m.engines_catalogs_hosted_by_this_engine_managed_by()}
 				</p>
 				{#if engine.class === 'direct'}
 					<Button loading={discovering} disabled={discovering} onclick={discover}
@@ -451,7 +452,11 @@
 				<Button loading={driftLoading} disabled={driftLoading} onclick={checkDrift}
 					>Check drift</Button
 				>
-				<span title={mutating.length === 0 ? 'Run a drift check with changes first' : undefined}>
+				<span
+					title={mutating.length === 0
+						? m.engines_run_a_drift_check_with_changes_first()
+						: undefined}
+				>
 					<Button
 						variant="primary"
 						disabled={mutating.length === 0}
@@ -467,7 +472,8 @@
 			{#if report}
 				<div class="mb-4 rounded-lg border border-border bg-bg-panel p-3">
 					<p class="text-[12px] font-semibold">
-						{report.dry_run ? 'Dry run' : 'Applied'} · {counts(report) || 'no actions'}
+						{report.dry_run ? m.engines_dry_run() : m.engines_applied()} · {counts(report) ||
+							m.engines_no_actions()}
 						{#if report.max_actions != null}
 							· cap {report.max_actions}
 						{/if}
@@ -540,7 +546,8 @@
 									tabindex="0"
 								>
 									<td class="px-3 py-1.5"><RelativeTime at={run.started_at} /></td>
-									<td class="px-3 py-1.5">{run.dry_run ? 'Dry run' : 'Apply'}</td>
+									<td class="px-3 py-1.5">{run.dry_run ? m.engines_dry_run() : m.common_apply()}</td
+									>
 									<td class="px-3 py-1.5">{counts(run) || '—'}</td>
 									<td class="px-3 py-1.5">{run.error ?? '—'}</td>
 								</tr>
@@ -555,13 +562,13 @@
 	{/if}
 </div>
 
-<Modal bind:open={testOpen} title="Engine test">
+<Modal bind:open={testOpen} title={m.engines_engine_test()}>
 	{#if testError}
 		<p class="text-[12px] text-danger" role="alert">{testError}</p>
 	{:else if testResult}
 		<div class="flex flex-col gap-2 text-[12px]">
 			<p class="font-semibold">
-				{testResult.success ? 'All checks passed' : 'Checks failed'}
+				{testResult.success ? m.connections_all_checks_passed() : m.connections_checks_failed()}
 				<span class="ml-1 font-normal text-slate-600 dark:text-slate-300"
 					>{testResult.latency_ms} ms</span
 				>
@@ -573,7 +580,7 @@
 				{#each testResult.checks ?? [] as check (check.name)}
 					<li class="flex items-start gap-2">
 						<Badge tone={check.skipped ? 'neutral' : check.ok ? 'success' : 'danger'}>
-							{check.skipped ? 'Skipped' : check.ok ? 'OK' : 'Failed'}
+							{check.skipped ? m.statusbadge_skipped() : check.ok ? 'OK' : 'Failed'}
 						</Badge>
 						<span class="font-mono">{check.name}</span>
 						<span class="text-slate-600 dark:text-slate-300"
@@ -589,13 +596,13 @@
 <ConfirmDialog
 	bind:open={confirmOpen}
 	title={pending === 'delete'
-		? 'Delete engine'
+		? m.engines_delete_engine()
 		: pending === 'disable'
-			? 'Disable engine'
-			: 'Enable engine'}
+			? m.engines_disable_engine()
+			: m.engines_enable_engine()}
 	resourceName={engine?.name ?? ''}
 	confirmLabel={pending === 'delete'
-		? 'Delete engine'
+		? m.engines_delete_engine()
 		: pending === 'disable'
 			? 'Disable'
 			: 'Enable'}
@@ -607,23 +614,23 @@
 
 <ConfirmDialog
 	bind:open={applyOpen}
-	title="Apply reconcile"
+	title={m.engines_apply_reconcile()}
 	resourceName={engine?.name ?? ''}
 	confirmLabel="Apply changes"
 	consequences={[
 		...mutating.map((a) => `${a.kind} ${a.catalog} (${a.reason})`),
-		`At most ${report?.max_actions ?? 'the configured cap'} changes run; the rest are reported.`,
+		`At most ${report?.max_actions ?? m.engines_the_configured_cap()} changes run; the rest are reported.`,
 		'Catalogs Baleia does not manage are adopted and never changed.'
 	]}
 	onconfirm={applyDrift}
 />
 
-<Drawer bind:open={runDrawer} title="Reconcile run">
+<Drawer bind:open={runDrawer} title={m.engines_reconcile_run()}>
 	{#if selectedRun}
 		<p class="text-[11px] text-slate-600 dark:text-slate-300">
-			{selectedRun.dry_run ? 'Dry run' : 'Apply'} · started <RelativeTime
-				at={selectedRun.started_at}
-			/> · {counts(selectedRun)}
+			{selectedRun.dry_run ? m.engines_dry_run() : m.common_apply()}
+			{m.engines_started()}
+			<RelativeTime at={selectedRun.started_at} /> · {counts(selectedRun)}
 		</p>
 		{#if selectedRun.error}
 			<p class="mt-2 text-[11px] text-danger">{selectedRun.error}</p>
@@ -631,10 +638,10 @@
 		<table class="mt-3 w-full text-left text-[11px]">
 			<thead class="text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300">
 				<tr>
-					<th class="py-1">Catalog</th>
-					<th class="py-1">Action</th>
-					<th class="py-1">Reason</th>
-					<th class="py-1">Result</th>
+					<th class="py-1">{m.common_catalog()}</th>
+					<th class="py-1">{m.common_action()}</th>
+					<th class="py-1">{m.common_reason()}</th>
+					<th class="py-1">{m.engines_result()}</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -651,7 +658,7 @@
 		</table>
 		{#if selectedRun.adopted.length > 0}
 			<p class="mt-2 text-[11px]">
-				Adopted: <span class="font-mono">{selectedRun.adopted.join(', ')}</span>
+				{m.engines_adopted()} <span class="font-mono">{selectedRun.adopted.join(', ')}</span>
 			</p>
 		{/if}
 	{/if}

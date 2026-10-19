@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { apiFetch, client } from '$lib/api/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
@@ -90,7 +91,7 @@
 	function insertName() {
 		if (!detail?.qualified_name) return;
 		editor.insert(detail.qualified_name);
-		toasts.success('Inserted into the editor');
+		toasts.success(m.components_tabledetail_inserted_into_the_editor());
 	}
 
 	// ── Preview ──────────────────────────────────────────────────────────
@@ -135,10 +136,14 @@
 			);
 			const execution = await controller.done;
 			if (!execution || typeof execution === 'string') {
-				throw new Error('The preview did not finish in time');
+				throw new Error(m.components_tabledetail_the_preview_did_not_finish_in_time());
 			}
 			if (execution.status !== 'finished') {
-				throw new Error(execution.status === 'cancelled' ? 'Preview cancelled' : 'Preview failed');
+				throw new Error(
+					execution.status === 'cancelled'
+						? m.components_tabledetail_preview_cancelled()
+						: m.components_tabledetail_preview_failed()
+				);
 			}
 
 			const response = await apiFetch(
@@ -186,7 +191,7 @@
 <div class="flex h-full flex-col overflow-hidden" data-testid="table-detail">
 	{#if !table}
 		<EmptyState
-			title="Select a table"
+			title={m.components_tabledetail_select_a_table()}
 			description="Browse the catalogs to inspect a table, its columns and its documentation."
 		/>
 	{:else if loading && !detail}
@@ -397,7 +402,7 @@
 		class="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-6 backdrop-blur-[2px]"
 		role="dialog"
 		aria-modal="true"
-		aria-label="Table preview"
+		aria-label={m.components_tabledetail_table_preview()}
 		tabindex="-1"
 		onclick={(e) => e.target === e.currentTarget && (previewOpen = false)}
 	>
@@ -405,17 +410,20 @@
 			class="flex max-h-[85vh] w-full max-w-[900px] flex-col rounded-xl border border-border bg-bg-panel shadow-[0_24px_64px_rgba(0,0,0,.2)]"
 		>
 			<div class="flex items-center gap-2 border-b border-border px-5 py-[14px]">
-				<h2 class="flex-1 text-sm font-semibold">Preview · {detail?.name}</h2>
+				<h2 class="flex-1 text-sm font-semibold">
+					{m.components_tabledetail_preview()}
+					{detail?.name}
+				</h2>
 				<button
 					type="button"
 					class="flex h-[26px] w-[26px] items-center justify-center rounded-md text-text-muted hover:bg-bg-toolbar hover:text-text-main"
-					aria-label="Close preview"
+					aria-label={m.components_tabledetail_close_preview()}
 					onclick={() => (previewOpen = false)}>×</button
 				>
 			</div>
 			<div class="flex-1 overflow-auto p-4">
 				{#if previewLoading}
-					<div class="space-y-2" aria-label="Running preview">
+					<div class="space-y-2" aria-label={m.components_tabledetail_running_preview()}>
 						<Loader class="h-4 w-2/3" />
 						<Loader class="h-4 w-3/4" />
 						<Loader class="h-4 w-1/2" />

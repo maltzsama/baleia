@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Tabs from '../Tabs.svelte';
 	import Textarea from '../Textarea.svelte';
 	import MarkdownView from './MarkdownView.svelte';
@@ -18,7 +19,7 @@
 	<Tabs
 		tabs={[
 			{ id: 'write', label: 'Write' },
-			{ id: 'preview', label: 'Preview' }
+			{ id: 'preview', label: m.identity_identityproviderform_preview() }
 		]}
 		bind:active={tab}
 	/>

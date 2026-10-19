@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { toasts } from '../toast.svelte';
 
 	let { value, label = 'value' }: { value: string; label?: string } = $props();
@@ -9,10 +10,10 @@
 		try {
 			await navigator.clipboard.writeText(value);
 			copied = true;
-			toasts.success('Copied to clipboard');
+			toasts.success(m.components_resultgrid_copied_to_clipboard());
 			setTimeout(() => (copied = false), 1500);
 		} catch {
-			toasts.error('Could not copy to the clipboard');
+			toasts.error(m.components_resultgrid_could_not_copy_to_the_clipboard());
 		}
 	}
 </script>

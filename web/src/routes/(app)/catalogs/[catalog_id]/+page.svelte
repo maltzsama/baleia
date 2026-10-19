@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
@@ -190,7 +191,7 @@
 
 	async function submitAdd() {
 		if (!catalog || !addEngineId || !addName || !addConnector) {
-			addError = 'Choose an engine, connector and name.';
+			addError = m.catalogs_choose_an_engine_connector_and_name();
 			return;
 		}
 		if (!engineNameRe.test(addName)) {
@@ -198,7 +199,7 @@
 			return;
 		}
 		if (reservedNames.includes(addName)) {
-			addError = 'That name is reserved by the engine.';
+			addError = m.catalogs_that_name_is_reserved_by_the_engine();
 			return;
 		}
 		adding = true;
@@ -413,7 +414,7 @@
 
 <div class="flex-1 overflow-y-auto p-7">
 	{#if loading && !catalog}
-		<div class="flex flex-col gap-2" aria-label="Loading the catalog">
+		<div class="flex flex-col gap-2" aria-label={m.catalogs_loading_the_catalog()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-14 w-full" />
 			{/each}
@@ -426,7 +427,7 @@
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{catalog.name ?? catalogId}</h1>
 				<p class="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
 					{catalog.origin} · {catalog.provider_kind ?? '—'} · {catalog.connection?.name ??
-						'connection hidden'}
+						m.catalogs_connection_hidden()}
 					{#if catalog.needs_attention}
 						· <Badge tone="warning">Needs attention</Badge>
 					{/if}
@@ -439,7 +440,7 @@
 		</div>
 
 		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Catalog tabs">
-			{#each [['overview', 'Overview'], ['bindings', 'Bindings'], ['metadata', 'Metadata'], ['access', 'Access'], ['activity', 'Activity']] as [value, label] (value)}
+			{#each [['overview', 'Overview'], ['bindings', 'Bindings'], ['metadata', 'Metadata'], ['access', m.catalogs_access()], ['activity', 'Activity']] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -546,10 +547,10 @@
 										</span>
 										<span
 											title={binding.mode === 'managed'
-												? 'Created and maintained by Baleia'
+												? m.catalogs_created_and_maintained_by_baleia()
 												: binding.mode === 'adopted'
-													? 'Exists in the engine, not created by Baleia; Baleia never changes or drops it'
-													: 'A catalog of a direct engine'}
+													? m.catalogs_exists_in_the_engine_not_created_by_baleia()
+													: m.catalogs_a_catalog_of_a_direct_engine()}
 										>
 											<Badge tone={binding.mode === 'managed' ? 'info' : 'neutral'}>
 												{binding.mode}
@@ -663,8 +664,8 @@
 									<td
 										class="px-3 py-1.5"
 										title={run.source_path === 'provider'
-											? 'Read from the catalog source'
-											: 'Introspected through a binding'}
+											? m.catalogs_read_from_the_catalog_source()
+											: m.catalogs_introspected_through_a_binding()}
 									>
 										{run.source_path}
 									</td>
@@ -727,41 +728,41 @@
 	{/if}
 </div>
 
-<Modal bind:open={editOpen} title="Edit catalog">
+<Modal bind:open={editOpen} title={m.catalogs_edit_catalog()}>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label="Name" bind:value={editName} />
-		<Input label="Description" bind:value={editDescription} />
+		<Input label={m.common_name()} bind:value={editName} />
+		<Input label={m.common_description()} bind:value={editDescription} />
 		<p class="text-[11px] text-amber-700 dark:text-amber-300">
-			Bundles and metrics reference catalogs by name; renaming affects them.
+			{m.catalogs_bundles_and_metrics_reference_catalogs_by()}
 		</p>
 		{#if editError}<p class="text-danger" role="alert">{editError}</p>{/if}
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (editOpen = false)} disabled={saving}>Cancel</Button>
+			<Button onclick={() => (editOpen = false)} disabled={saving}>{m.common_cancel()}</Button>
 			<Button variant="primary" loading={saving} disabled={saving} onclick={submitEditCatalog}
-				>Save</Button
+				>{m.common_save()}</Button
 			>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={addOpen} title="Add binding">
+<Modal bind:open={addOpen} title={m.catalogs_add_binding()}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<Select
-			label="Engine"
+			label={m.common_engine()}
 			bind:value={addEngineId}
 			options={bindableEngines.map((engine) => ({ value: engine.id, label: engine.name }))}
 			onchange={() => (addConnector = support[providerKind]?.connectors[0] ?? '')}
 		/>
 		<Select
-			label="Connector"
+			label={m.common_connector()}
 			bind:value={addConnector}
 			options={connectors.map((connector) => ({ value: connector, label: connector }))}
 		/>
-		<Input label="Name in the engine" bind:value={addName} class="font-mono" />
+		<Input label={m.catalogs_name_in_the_engine()} bind:value={addName} class="font-mono" />
 		<div>
-			<p class="mb-1 text-[11px] font-semibold">Extra properties</p>
+			<p class="mb-1 text-[11px] font-semibold">{m.catalogs_extra_properties()}</p>
 			<KeyValueEditor
 				bind:value={addProps}
 				protectedKeys={providerKind
@@ -773,21 +774,27 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (addOpen = false)} disabled={adding}>Cancel</Button>
-			<Button variant="primary" loading={adding} disabled={adding} onclick={submitAdd}>Bind</Button>
+			<Button onclick={() => (addOpen = false)} disabled={adding}>{m.common_cancel()}</Button>
+			<Button variant="primary" loading={adding} disabled={adding} onclick={submitAdd}
+				>{m.catalogs_bind()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={editBindingOpen} title="Edit binding" onclose={() => (editBinding = null)}>
+<Modal
+	bind:open={editBindingOpen}
+	title={m.catalogs_edit_binding()}
+	onclose={() => (editBinding = null)}
+>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label="Name in the engine" bind:value={bindingName} class="font-mono" />
+		<Input label={m.catalogs_name_in_the_engine()} bind:value={bindingName} class="font-mono" />
 		<label class="flex items-center gap-2">
 			<input type="checkbox" bind:checked={bindingEnabled} />
-			Enabled
+			{m.common_enabled()}
 		</label>
 		<div>
-			<p class="mb-1 text-[11px] font-semibold">Extra properties</p>
+			<p class="mb-1 text-[11px] font-semibold">{m.catalogs_extra_properties()}</p>
 			<KeyValueEditor
 				bind:value={bindingProps}
 				protectedKeys={providerKind
@@ -804,27 +811,27 @@
 					editBinding = null;
 					editBindingOpen = false;
 				}}
-				disabled={bindingSaving}>Cancel</Button
+				disabled={bindingSaving}>{m.common_cancel()}</Button
 			>
 			<Button
 				variant="primary"
 				loading={bindingSaving}
 				disabled={bindingSaving}
-				onclick={submitEdit}>Save</Button
+				onclick={submitEdit}>{m.common_save()}</Button
 			>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={grantOpen} title="Grant catalog access">
+<Modal bind:open={grantOpen} title={m.common_grant_catalog_access()}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<Select
-			label="Workspace"
+			label={m.common_workspace()}
 			bind:value={grantWorkspaceId}
 			options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))}
 		/>
 		<Select
-			label="Permission"
+			label={m.common_permission()}
 			bind:value={grantPermission}
 			options={[
 				{ value: 'read', label: 'Read' },
@@ -835,15 +842,15 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (grantOpen = false)} disabled={granting}>Cancel</Button>
+			<Button onclick={() => (grantOpen = false)} disabled={granting}>{m.common_cancel()}</Button>
 			<Button variant="primary" loading={granting} disabled={granting} onclick={submitGrant}
-				>Grant</Button
+				>{m.common_grant()}</Button
 			>
 		</div>
 	{/snippet}
 </Modal>
 
-<Drawer bind:open={projectionOpen} title="Binding projection">
+<Drawer bind:open={projectionOpen} title={m.catalogs_binding_projection()}>
 	{#if projectionLoading}
 		<Skeleton class="h-24 w-full" />
 	{:else if projection}
@@ -869,7 +876,7 @@
 
 <ConfirmDialog
 	bind:open={revokeOpen}
-	title="Revoke catalog access"
+	title={m.common_revoke_catalog_access()}
 	resourceName={revokeWorkspace?.name ?? ''}
 	confirmLabel="Revoke"
 	consequences={['Members of this workspace lose access to the catalog.']}
@@ -880,7 +887,7 @@
 
 <ConfirmDialog
 	bind:open={deleteOpen}
-	title="Delete catalog"
+	title={m.catalogs_delete_catalog()}
 	resourceName={catalog?.name ?? ''}
 	confirmLabel="Delete catalog"
 	typeToConfirm

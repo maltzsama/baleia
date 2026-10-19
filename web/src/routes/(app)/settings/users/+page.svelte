@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -68,7 +69,7 @@
 					params: { query: { page: serverPage, per_page: 200 } }
 				});
 				if (err || !data) {
-					error = apiErrorMessage(err, 'Could not load users.');
+					error = apiErrorMessage(err, m.settings_users_could_not_load_users());
 					return;
 				}
 				all.push(...(data.data ?? []));
@@ -77,7 +78,7 @@
 			} while (serverPage <= serverPages);
 			users = all;
 		} catch {
-			error = 'Could not load users.';
+			error = m.settings_users_could_not_load_users();
 		} finally {
 			loading = false;
 		}
@@ -93,7 +94,7 @@
 				body: { email: inviteEmail, role: inviteRole }
 			});
 			if (err) {
-				inviteError = apiErrorMessage(err, 'Could not send the invitation.');
+				inviteError = apiErrorMessage(err, m.settings_users_could_not_send_the_invitation());
 				return;
 			}
 			inviteOpen = false;
@@ -101,7 +102,8 @@
 			toasts.success('Invitation sent.');
 			await load();
 		} catch (err) {
-			inviteError = err instanceof Error ? err.message : 'Could not send the invitation.';
+			inviteError =
+				err instanceof Error ? err.message : m.settings_users_could_not_send_the_invitation();
 		} finally {
 			inviteBusy = false;
 		}
@@ -146,13 +148,15 @@
 				params: { path: { id: user.id } }
 			});
 			if (err) {
-				toasts.error(apiErrorMessage(err, 'Could not reinstate the user.'));
+				toasts.error(apiErrorMessage(err, m.settings_users_could_not_reinstate_the_user()));
 				return;
 			}
 			toasts.success('User reinstated.');
 			await load();
 		} catch (err) {
-			toasts.error(err instanceof Error ? err.message : 'Could not reinstate the user.');
+			toasts.error(
+				err instanceof Error ? err.message : m.settings_users_could_not_reinstate_the_user()
+			);
 		}
 	}
 </script>
@@ -161,23 +165,24 @@
 	<div class="max-w-5xl">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold tracking-[-0.3px]">Users</h1>
+				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_users_users()}</h1>
 				<p class="mt-1 text-[13px] text-text-muted">
-					Invite people, change roles, and suspend or reinstate accounts. Suspension is reversible;
-					users are never deleted here.
+					{m.settings_users_invite_people_change_roles_and_suspend_or()}
 				</p>
 			</div>
-			<Button variant="primary" onclick={() => (inviteOpen = true)}>Invite user</Button>
+			<Button variant="primary" onclick={() => (inviteOpen = true)}
+				>{m.settings_users_invite_user()}</Button
+			>
 		</div>
 
 		<div class="mt-4 flex flex-wrap items-end gap-2">
 			<Input
-				label="Search"
+				label={m.common_search()}
 				bind:value={search}
-				placeholder="Name, e-mail or status"
+				placeholder={m.settings_users_name_e_mail_or_status()}
 				oninput={() => (page = 1)}
 			/>
-			<Button variant="ghost" onclick={() => (search = '')}>Clear</Button>
+			<Button variant="ghost" onclick={() => (search = '')}>{m.common_clear()}</Button>
 		</div>
 
 		{#if loading}
@@ -193,10 +198,10 @@
 		{:else if filtered.length === 0}
 			<div class="mt-6">
 				<EmptyState
-					title={search ? 'No matching users' : 'No users yet'}
+					title={search ? m.settings_users_no_matching_users() : m.settings_users_no_users_yet()}
 					description={search
-						? 'Try another name, e-mail or status.'
-						: 'Invite the first teammate to get started.'}
+						? m.settings_users_try_another_name_e_mail_or_status()
+						: m.settings_users_invite_the_first_teammate_to_get_started()}
 				/>
 			</div>
 		{:else}
@@ -233,7 +238,9 @@
 											size="sm"
 											onclick={() => askRole(user, user.role === 'admin' ? 'member' : 'admin')}
 										>
-											{user.role === 'admin' ? 'Make member' : 'Make admin'}
+											{user.role === 'admin'
+												? m.settings_teams_make_member()
+												: m.settings_users_make_admin()}
 										</Button>
 										{#if user.status === 'suspended'}
 											<Button size="sm" onclick={() => reinstate(user)}>Reinstate</Button>
@@ -262,7 +269,7 @@
 	</div>
 </div>
 
-<Modal bind:open={inviteOpen} title="Invite a user">
+<Modal bind:open={inviteOpen} title={m.settings_users_invite_a_user()}>
 	<div class="flex flex-col gap-3">
 		{#if inviteError}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
@@ -270,28 +277,30 @@
 			</p>
 		{/if}
 		<Input
-			label="E-mail"
+			label={m.settings_users_e_mail()}
 			type="email"
 			bind:value={inviteEmail}
-			placeholder="teammate@example.com"
+			placeholder={m.settings_users_teammate_example_com()}
 		/>
-		<Select label="Role" bind:value={inviteRole} options={roleOptions} />
+		<Select label={m.common_role()} bind:value={inviteRole} options={roleOptions} />
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (inviteOpen = false)}>Cancel</Button>
-			<Button variant="primary" loading={inviteBusy} onclick={sendInvite}>Send invitation</Button>
+			<Button onclick={() => (inviteOpen = false)}>{m.common_cancel()}</Button>
+			<Button variant="primary" loading={inviteBusy} onclick={sendInvite}
+				>{m.settings_users_send_invitation()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>
 
 <ConfirmDialog
 	bind:open={roleOpen}
-	title="Change user role"
+	title={m.settings_users_change_user_role()}
 	resourceName={roleTarget?.name ?? ''}
 	consequences={[
 		'The change takes effect on the next sign-in; existing sessions are revoked.',
-		'Administrators can manage users, identity providers and system settings.'
+		m.settings_users_administrators_can_manage_users_identity_p()
 	]}
 	confirmLabel="Change role"
 	danger={roleValue === 'admin'}
@@ -300,12 +309,12 @@
 
 <ConfirmDialog
 	bind:open={suspendOpen}
-	title="Suspend user"
+	title={m.settings_users_suspend_user()}
 	resourceName={suspendTarget?.name ?? ''}
 	consequences={[
 		'The user is signed out everywhere and cannot sign in again.',
-		'All API keys are revoked immediately.',
-		'The account is kept and can be reinstated at any time.'
+		m.settings_users_all_api_keys_are_revoked_immediately(),
+		m.settings_users_the_account_is_kept_and_can_be_reinstated()
 	]}
 	confirmLabel="Suspend user"
 	onconfirm={confirmSuspend}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Badge from '../Badge.svelte';
 
 	type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -19,9 +20,9 @@
 	const mappings: Record<Kind, Record<string, Look>> = {
 		binding: {
 			active: { tone: 'success', label: 'Active' },
-			provisioning: { tone: 'info', label: 'Provisioning', spinning: true },
-			updating: { tone: 'info', label: 'Updating', spinning: true },
-			deprovisioning: { tone: 'warning', label: 'Deprovisioning', spinning: true },
+			provisioning: { tone: 'info', label: m.statusbadge_provisioning(), spinning: true },
+			updating: { tone: 'info', label: m.statusbadge_updating(), spinning: true },
+			deprovisioning: { tone: 'warning', label: m.statusbadge_deprovisioning(), spinning: true },
 			error: { tone: 'danger', label: 'Error' },
 			pending: { tone: 'neutral', label: 'Pending' },
 			disabled: { tone: 'neutral', label: 'Disabled' }
@@ -39,19 +40,19 @@
 			finished: { tone: 'success', label: 'Finished' },
 			failed: { tone: 'danger', label: 'Failed' },
 			cancelled: { tone: 'warning', label: 'Cancelled' },
-			skipped: { tone: 'neutral', label: 'Skipped' }
+			skipped: { tone: 'neutral', label: m.statusbadge_skipped() }
 		},
 		sync: {
 			ok: { tone: 'success', label: 'Synced' },
-			running: { tone: 'info', label: 'Syncing', spinning: true },
+			running: { tone: 'info', label: m.statusbadge_syncing(), spinning: true },
 			failed: { tone: 'danger', label: 'Failed' },
 			stale: { tone: 'warning', label: 'Stale' }
 		},
 		reconcile: {
-			ok: { tone: 'success', label: 'In sync' },
-			drift: { tone: 'warning', label: 'Drift' },
+			ok: { tone: 'success', label: m.statusbadge_in_sync() },
+			drift: { tone: 'warning', label: m.statusbadge_drift() },
 			failed: { tone: 'danger', label: 'Failed' },
-			running: { tone: 'info', label: 'Reconciling', spinning: true }
+			running: { tone: 'info', label: m.statusbadge_reconciling(), spinning: true }
 		},
 		retriever: {
 			active: { tone: 'success', label: 'Active' },
@@ -66,12 +67,12 @@
 		},
 		agent: {
 			active: { tone: 'success', label: 'Active' },
-			expired: { tone: 'warning', label: 'Expired' },
-			revoked: { tone: 'danger', label: 'Revoked' },
+			expired: { tone: 'warning', label: m.statusbadge_expired() },
+			revoked: { tone: 'danger', label: m.statusbadge_revoked() },
 			pending: { tone: 'neutral', label: 'Pending' }
 		},
 		engine: {
-			ok: { tone: 'success', label: 'Healthy' },
+			ok: { tone: 'success', label: m.statusbadge_healthy() },
 			unreachable: { tone: 'danger', label: 'Unreachable' },
 			unknown: { tone: 'neutral', label: 'Unknown' },
 			disabled: { tone: 'neutral', label: 'Disabled' }

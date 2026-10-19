@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
@@ -82,7 +83,7 @@
 	async function add() {
 		if (!space || busy) return;
 		if (!principalId) {
-			error = 'Choose a person or team';
+			error = m.components_spaceaccessdialog_choose_a_person_or_team();
 			return;
 		}
 		busy = true;
@@ -106,7 +107,7 @@
 <Modal bind:open title={`Access — ${space?.name ?? 'space'}`}>
 	<div class="flex flex-col gap-4">
 		{#if loading}
-			<p class="text-xs text-text-muted">Loading...</p>
+			<p class="text-xs text-text-muted">{m.common_loading()}</p>
 		{:else if error}
 			<p class="text-[11px] text-danger" role="alert">{error}</p>
 		{:else if members.length === 0}
@@ -139,7 +140,7 @@
 
 		<div class="flex flex-col gap-2 border-t border-border pt-3">
 			<Select
-				label="Kind"
+				label={m.common_kind()}
 				bind:value={principalType}
 				options={[
 					{ value: 'user', label: 'User' },
@@ -157,17 +158,17 @@
 			{#if principalsError}
 				<p class="text-[11px] text-danger" role="alert">{principalsError}</p>
 			{/if}
-			<Select label="Role" bind:value={newRole} options={roleOptions} />
+			<Select label={m.common_role()} bind:value={newRole} options={roleOptions} />
 			<div class="flex justify-end">
 				<Button variant="primary" size="sm" onclick={add} loading={busy} disabled={busy}>
-					Add
+					{m.common_add()}
 				</Button>
 			</div>
 		</div>
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end">
-			<Button onclick={() => (open = false)}>Close</Button>
+			<Button onclick={() => (open = false)}>{m.common_close()}</Button>
 		</div>
 	{/snippet}
 </Modal>

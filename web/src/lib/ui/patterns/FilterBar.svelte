@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Button from '../Button.svelte';
 	import Input from '../Input.svelte';
 	import Select from '../Select.svelte';
@@ -164,8 +165,8 @@
 
 	<div class="ml-auto flex items-center gap-2">
 		{#if activeCount > 0}
-			<span class="text-[11px] text-text-muted">{activeCount} active</span>
-			<Button size="sm" onclick={clearAll}>Clear all</Button>
+			<span class="text-[11px] text-text-muted">{activeCount} {m.filterbar_active()}</span>
+			<Button size="sm" onclick={clearAll}>{m.filterbar_clear_all()}</Button>
 		{/if}
 	</div>
 </div>

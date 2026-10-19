@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -15,12 +16,12 @@
 	type TestResult = components['schemas']['AssistantTestResult'];
 
 	const providerOptions = [
-		{ value: 'anthropic', label: 'Anthropic' },
-		{ value: 'openai_compatible', label: 'OpenAI-compatible' }
+		{ value: 'anthropic', label: m.settings_assistant_anthropic() },
+		{ value: 'openai_compatible', label: m.settings_assistant_openai_compatible() }
 	];
 	const sharingOptions = [
-		{ value: 'metadata_only', label: 'Metadata only (recommended)' },
-		{ value: 'metadata_and_samples', label: 'Metadata + result samples' }
+		{ value: 'metadata_only', label: m.settings_assistant_metadata_only_recommended() },
+		{ value: 'metadata_and_samples', label: m.settings_assistant_metadata_result_samples() }
 	];
 
 	let loading = $state(true);
@@ -49,7 +50,7 @@
 		try {
 			const { data, error: err } = await client.GET('/admin/assistant/settings');
 			if (err || !data) {
-				error = apiErrorMessage(err, 'Could not load assistant settings.');
+				error = apiErrorMessage(err, m.settings_assistant_could_not_load_assistant_settings());
 				return;
 			}
 			settings = data;
@@ -63,7 +64,7 @@
 			maxOutputTokens = String(data.max_output_tokens_per_turn);
 			dailyBudget = String(data.daily_token_budget_per_user);
 		} catch {
-			error = 'Could not load assistant settings.';
+			error = m.settings_assistant_could_not_load_assistant_settings();
 		} finally {
 			loading = false;
 		}
@@ -90,7 +91,7 @@
 				}
 			});
 			if (err || !data) {
-				saveError = apiErrorMessage(err, 'Could not save the settings.');
+				saveError = apiErrorMessage(err, m.settings_assistant_could_not_save_the_settings());
 				return;
 			}
 			settings = data;
@@ -115,10 +116,9 @@
 
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="max-w-3xl">
-		<h1 class="text-xl font-semibold tracking-[-0.3px]">Assistant</h1>
+		<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_assistant_assistant()}</h1>
 		<p class="mt-1 text-[13px] text-text-muted">
-			The assistant is off by default. It answers only through the read-only MCP tools, under a
-			per-user agent and the instance budgets.
+			{m.settings_assistant_the_assistant_is_off_by_default_it_answers()}
 		</p>
 
 		{#if loading}
@@ -161,7 +161,9 @@
 							label="API key"
 							type="password"
 							bind:value={apiKey}
-							placeholder={settings?.api_key_set ? 'Set — leave empty to keep' : 'Not set'}
+							placeholder={settings?.api_key_set
+								? m.settings_assistant_set_leave_empty_to_keep()
+								: m.settings_assistant_not_set()}
 						/>
 						<Select label="Data sharing" bind:value={dataSharing} options={sharingOptions} />
 					</div>

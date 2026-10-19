@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -77,7 +78,7 @@
 		await deleteRetriever(workspaceId, target.id);
 		retrievers = retrievers.filter((item) => item.id !== target.id);
 		deleting = null;
-		toasts.success('Retriever removed');
+		toasts.success(m.retrievers_retriever_removed());
 	}
 
 	onMount(() => {
@@ -92,21 +93,21 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-5 flex items-end justify-between">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Retrievers</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_retrievers()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				Run a SELECT on a schedule and keep the result as an Iceberg table.
+				{m.common_run_a_select_on_a_schedule_and_keep_the_re()}
 			</p>
 		</div>
 		{#if enabled}
 			<Button variant="primary" onclick={() => goto(resolve('/retrievers/new'))}>
-				New retriever
+				{m.common_new_retriever()}
 			</Button>
 		{/if}
 	</div>
 
 	{#if !enabled}
 		<EmptyState
-			title="Retrievers are disabled"
+			title={m.retrievers_retrievers_are_disabled()}
 			description="An administrator can enable the retrievers feature flag for this instance."
 		/>
 	{:else if loading}
@@ -215,7 +216,7 @@
 										disabled={busyId === retriever.id}
 										onclick={() => togglePause(retriever)}
 									>
-										{retriever.status === 'paused' ? 'Resume' : 'Pause'}
+										{retriever.status === 'paused' ? m.retrievers_resume() : m.retrievers_pause()}
 									</Button>
 									<Button size="sm" onclick={() => goto(resolve(`/retrievers/${retriever.id}`))}>
 										Edit
@@ -243,9 +244,12 @@
 {#if deleting}
 	<ConfirmDialog
 		bind:open={deleteOpen}
-		title="Remove retriever"
+		title={m.retrievers_remove_retriever()}
 		resourceName={deleting.name}
-		consequences={['The destination table is not dropped.', 'Refresh history is removed.']}
+		consequences={[
+			'The destination table is not dropped.',
+			m.retrievers_refresh_history_is_removed()
+		]}
 		confirmLabel="Remove retriever"
 		onconfirm={remove}
 	/>

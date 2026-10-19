@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { describeError } from '$lib/errors/catalog';
 	import CopyButton from './CopyButton.svelte';
 
@@ -23,21 +24,21 @@
 		onclick={() => (details = !details)}
 		aria-expanded={details}
 	>
-		{details ? 'Hide details' : 'Details'}
+		{details ? m.errorpanel_hide_details() : m.errorpanel_details()}
 	</button>
 	{#if details}
 		<dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono text-[11px]">
-			<dt class="opacity-70">code</dt>
+			<dt class="opacity-70">{m.errorpanel_code()}</dt>
 			<dd>{described.code}</dd>
 			{#if described.native}
-				<dt class="opacity-70">native</dt>
+				<dt class="opacity-70">{m.errorpanel_native()}</dt>
 				<dd class="break-all">{described.native}</dd>
 			{/if}
 			{#if described.requestId}
-				<dt class="opacity-70">request</dt>
+				<dt class="opacity-70">{m.errorpanel_request()}</dt>
 				<dd class="flex items-center gap-1 break-all">
 					{described.requestId}
-					<CopyButton value={described.requestId} label="request id" />
+					<CopyButton value={described.requestId} label={m.common_request_id()} />
 				</dd>
 			{/if}
 		</dl>

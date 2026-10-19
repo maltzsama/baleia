@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Modal from '$lib/ui/Modal.svelte';
 	import { providersList, type PaletteItem } from '$lib/palette/registry';
 
@@ -71,19 +72,30 @@
 	}
 </script>
 
-<Modal bind:open title={mode === 'quick' ? 'Quick open' : 'Command palette'}>
+<Modal
+	bind:open
+	title={mode === 'quick'
+		? m.workbench_commandpalette_quick_open()
+		: m.workbench_commandpalette_command_palette()}
+>
 	<div class="flex flex-col gap-2">
 		<input
 			bind:this={input}
 			bind:value={query}
 			{onkeydown}
 			class="h-9 w-full rounded-md border border-border bg-bg-toolbar px-2.5 text-xs outline-none focus:border-primary"
-			placeholder={mode === 'quick' ? 'Find a saved query…' : 'Type a command or search…'}
-			aria-label={mode === 'quick' ? 'Quick open' : 'Command palette'}
+			placeholder={mode === 'quick'
+				? m.workbench_commandpalette_find_a_saved_query()
+				: m.workbench_commandpalette_type_a_command_or_search()}
+			aria-label={mode === 'quick'
+				? m.workbench_commandpalette_quick_open()
+				: m.workbench_commandpalette_command_palette()}
 		/>
-		<div class="max-h-[50vh] overflow-y-auto" role="listbox" aria-label="Results">
+		<div class="max-h-[50vh] overflow-y-auto" role="listbox" aria-label={m.common_results()}>
 			{#if loading}
-				<p class="px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300">Searching…</p>
+				<p class="px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300">
+					{m.common_searching()}
+				</p>
 			{:else if items.length === 0}
 				<p class="px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300">No matches.</p>
 			{:else}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
@@ -182,7 +183,7 @@
 		if (!tab || targets.length === 0) return;
 		if (tab.bindingId && targets.some((t) => t.binding_id === tab.bindingId)) return;
 		if (tab.savedBindingId && !targets.some((t) => t.binding_id === tab.savedBindingId)) {
-			targetFallback = 'Saved target is not available in this workspace — using the default.';
+			targetFallback = m.components_queryeditor_saved_target_is_not_available_in_this_work();
 		}
 		const ws = workspaceStore.current;
 		const pick = targets.find((t) => t.binding_id === ws?.default_binding_id) ?? targets[0];
@@ -340,13 +341,25 @@
 			search: (query) => {
 				const q = query.toLowerCase();
 				return [
-					{ id: 'run-all', label: 'Run', run: () => void runAll() },
-					{ id: 'run-current', label: 'Run current statement', run: () => void runCurrent() },
-					{ id: 'format', label: 'Format SQL', run: formatSQL },
-					{ id: 'explain', label: 'Explain current query', run: () => void explainQuery() },
-					{ id: 'new-tab', label: 'New tab', run: newTab },
+					{ id: 'run-all', label: m.components_queryeditor_run(), run: () => void runAll() },
+					{
+						id: 'run-current',
+						label: m.components_queryeditor_run_current_statement(),
+						run: () => void runCurrent()
+					},
+					{ id: 'format', label: m.components_queryeditor_format_sql(), run: formatSQL },
+					{
+						id: 'explain',
+						label: m.components_queryeditor_explain_current_query(),
+						run: () => void explainQuery()
+					},
+					{ id: 'new-tab', label: m.components_queryeditor_new_tab(), run: newTab },
 					{ id: 'save', label: 'Save', run: () => openSave('save') },
-					{ id: 'save-copy', label: 'Save as a copy', run: () => openSave('copy') },
+					{
+						id: 'save-copy',
+						label: m.components_queryeditor_save_as_a_copy(),
+						run: () => openSave('copy')
+					},
 					{
 						id: 'quick-open',
 						label: 'Quick open a saved query',
@@ -355,7 +368,11 @@
 							paletteOpen = true;
 						}
 					},
-					{ id: 'shortcuts', label: 'Keyboard shortcuts', run: () => (shortcutsOpen = true) }
+					{
+						id: 'shortcuts',
+						label: m.components_queryeditor_keyboard_shortcuts(),
+						run: () => (shortcutsOpen = true)
+					}
 				]
 					.filter((action) => action.label.toLowerCase().includes(q))
 					.map((action) => ({ ...action, group: 'Actions' }));
@@ -619,7 +636,7 @@
 			),
 			readOnlyCompartment.of(EditorState.readOnly.of(false)),
 			autocompletion({ override: [complete] }),
-			EditorView.contentAttributes.of({ 'aria-label': 'SQL editor' }),
+			EditorView.contentAttributes.of({ 'aria-label': m.components_queryeditor_sql_editor() }),
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of((update) => {
 				if (update.docChanged) {
@@ -702,14 +719,14 @@
 		const idx = activeIdx;
 		const tab = tabs[idx];
 		if (!tab.bindingId) {
-			tab.errorMsg = 'Choose an engine and catalog to run on';
-			tab.statusText = 'No target';
+			tab.errorMsg = m.components_queryeditor_choose_an_engine_and_catalog_to_run_on();
+			tab.statusText = m.components_queryeditor_no_target();
 			return;
 		}
 		executing = true;
 		tab.errorMsg = '';
 		tab.results = [];
-		tab.statusText = 'Running...';
+		tab.statusText = m.components_queryeditor_running();
 		try {
 			const { data, error } = await client.POST('/workspaces/{id}/executions', {
 				params: { path: { id: workspaceId } },
@@ -723,7 +740,9 @@
 				}
 			});
 			if (error || !data) {
-				throw new Error(apiErrorMessage(error, 'Failed to start execution'));
+				throw new Error(
+					apiErrorMessage(error, m.components_queryeditor_failed_to_start_execution())
+				);
 			}
 			tab.runTarget = data.target ?? null;
 			editor.setExecution(tab.id, data.id);
@@ -732,7 +751,7 @@
 		} catch (e) {
 			tab.errorMsg = errorMessage(e);
 			executing = false;
-			tab.statusText = 'Error';
+			tab.statusText = m.components_queryeditor_error();
 		}
 	}
 
@@ -773,7 +792,7 @@
 		const tab = activeTab;
 		if (!tab?.executionId) return;
 		try {
-			tab.statusText = 'Cancelling...';
+			tab.statusText = m.components_queryeditor_cancelling();
 			const { error } = await client.POST('/workspaces/{id}/executions/{execution_id}/cancel', {
 				params: { path: { id: workspaceId, execution_id: tab.executionId } }
 			});
@@ -788,13 +807,13 @@
 	function executionStatusText(status: string): string {
 		switch (status) {
 			case 'finished':
-				return 'Complete';
+				return m.components_queryeditor_complete();
 			case 'failed':
 				return 'Failed';
 			case 'cancelled':
 				return 'Cancelled';
 			default:
-				return 'Running...';
+				return m.components_queryeditor_running();
 		}
 	}
 
@@ -832,7 +851,7 @@
 			},
 			onGaveUp: () => {
 				executing = false;
-				tab.statusText = 'Connection lost';
+				tab.statusText = m.components_queryeditor_connection_lost();
 			}
 		});
 	}
@@ -852,7 +871,7 @@
 			if (error || !data) throw new Error(apiErrorMessage(error, 'Could not re-run'));
 			tab.results = [];
 			tab.errorMsg = '';
-			tab.statusText = 'Running...';
+			tab.statusText = m.components_queryeditor_running();
 			executing = true;
 			editor.setExecution(tab.id, data.id);
 			runState = initialRunState(data.id);
@@ -893,11 +912,14 @@
 				body: { sql: sqlText }
 			});
 			if (error || !data) {
-				activeTab.errorMsg = apiErrorMessage(error, 'Could not explain the query');
+				activeTab.errorMsg = apiErrorMessage(
+					error,
+					m.components_queryeditor_could_not_explain_the_query()
+				);
 				return;
 			}
 			if (!data.supported || !data.sql) {
-				activeTab.errorMsg = 'This engine does not support EXPLAIN.';
+				activeTab.errorMsg = m.components_queryeditor_this_engine_does_not_support_explain();
 				return;
 			}
 			await submit(data.sql);
@@ -948,7 +970,7 @@
 				{#if tabs.length > 1}
 					<button
 						type="button"
-						aria-label="Close tab"
+						aria-label={m.components_queryeditor_close_tab()}
 						class="mr-1.5 rounded-[3px] px-1 py-px text-sm text-text-muted hover:bg-border hover:text-text-main"
 						onclick={() => closeTab(i)}>×</button
 					>
@@ -970,20 +992,22 @@
 			<svg viewBox="0 0 24 24" class="w-2.5 h-2.5 fill-white stroke-none"
 				><polygon points="5 3 19 12 5 21 5 3" /></svg
 			>
-			{executing ? 'Running...' : 'Run'}
+			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
 		</button>
 		{#if executing && canCancel}
 			<button
 				onclick={cancelExecution}
 				class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-red-600 border border-transparent bg-transparent hover:bg-border whitespace-nowrap"
-				>Cancel</button
+				>{m.common_cancel()}</button
 			>
 		{/if}
 		<button
 			onclick={explainQuery}
 			disabled={!canExplain}
-			title={canExplain ? 'Run an explain plan' : 'This engine does not support EXPLAIN'}
+			title={canExplain
+				? m.components_queryeditor_run_an_explain_plan()
+				: m.components_queryeditor_this_engine_does_not_support_explain_2()}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 		>
 			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
@@ -994,18 +1018,18 @@
 					y2="17"
 				/></svg
 			>
-			Explain
+			{m.components_queryeditor_explain()}
 		</button>
 		<div class="w-px h-[18px] bg-border mx-1"></div>
 		<button
 			onclick={formatSQL}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
-			>Format</button
+			>{m.components_queryeditor_format()}</button
 		>
 		<button
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{activeTab.readOnly ? 'Save a copy' : 'Save'}</button
+			>{activeTab.readOnly ? m.components_queryeditor_save_a_copy() : 'Save'}</button
 		>
 		<button
 			onclick={() => {
@@ -1013,20 +1037,20 @@
 				paletteOpen = true;
 			}}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
-			>Commands</button
+			>{m.components_queryeditor_commands()}</button
 		>
 		<div class="flex-1"></div>
 
-		<div class="flex items-center gap-1.5" aria-label="Query target">
+		<div class="flex items-center gap-1.5" aria-label={m.components_queryeditor_query_target()}>
 			<select
 				data-testid="engine-select"
-				aria-label="Engine"
+				aria-label={m.common_engine()}
 				value={activeEngineId}
 				onchange={(e) => selectEngine((e.currentTarget as HTMLSelectElement).value)}
 				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[150px]"
 			>
 				{#if engineChoices.length === 0}
-					<option value="">No engine available</option>
+					<option value="">{m.components_queryeditor_no_engine_available()}</option>
 				{/if}
 				{#each engineChoices as choice (choice.id)}
 					<option value={choice.id}>{choice.name}</option>
@@ -1035,17 +1059,19 @@
 
 			<select
 				data-testid="catalog-select"
-				aria-label="Catalog"
+				aria-label={m.common_catalog()}
 				value={selectedTarget?.binding_id ?? ''}
 				onchange={(e) => selectCatalog((e.currentTarget as HTMLSelectElement).value)}
 				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[170px]"
 			>
 				{#if catalogChoices.length === 0}
-					<option value="">No catalog</option>
+					<option value="">{m.components_queryeditor_no_catalog()}</option>
 				{/if}
 				{#each catalogChoices as target (target.binding_id)}
 					<option value={target.binding_id}>
-						{target.catalog_name}{target.permission === 'read' ? ' (read-only)' : ''}
+						{target.catalog_name}{target.permission === 'read'
+							? m.components_queryeditor_read_only()
+							: ''}
 					</option>
 				{/each}
 			</select>
@@ -1053,12 +1079,12 @@
 			{#if canChooseSchema}
 				<select
 					data-testid="schema-select"
-					aria-label="Schema"
+					aria-label={m.components_queryeditor_schema()}
 					value={activeTab.schema}
 					onchange={(e) => selectSchema((e.currentTarget as HTMLSelectElement).value)}
 					class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[150px]"
 				>
-					<option value="">Default schema</option>
+					<option value="">{m.components_queryeditor_default_schema()}</option>
 					{#each namespaces as path (path.join('.'))}
 						<option value={path.join('.')}>{path.join('.')}</option>
 					{/each}
@@ -1066,8 +1092,8 @@
 				{#if !sessionSchema}
 					<span
 						class="text-[10px] text-text-muted"
-						title="This engine does not keep a session schema; the schema is part of the SQL"
-						>no session schema</span
+						title={m.components_queryeditor_this_engine_does_not_keep_a_session_schema()}
+						>{m.components_queryeditor_no_session_schema()}</span
 					>
 				{/if}
 			{/if}
@@ -1084,8 +1110,10 @@
 		<div
 			class="flex items-center gap-2 border-b border-border bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800 dark:bg-[#241a06] dark:text-amber-300"
 		>
-			<span>View only — you can run this query or save a copy.</span>
-			<button class="font-semibold underline" onclick={() => openSave('copy')}>Save a copy</button>
+			<span>{m.components_queryeditor_view_only_you_can_run_this_query_or_save_a()}</span>
+			<button class="font-semibold underline" onclick={() => openSave('copy')}
+				>{m.components_queryeditor_save_a_copy()}</button
+			>
 		</div>
 	{/if}
 	{#if targetFallback}
@@ -1097,7 +1125,7 @@
 	{/if}
 	{#if activeTab.sql.length > MAX_DRAFT_SQL}
 		<p class="border-b border-border bg-bg-toolbar px-3 py-1 text-[11px] text-amber-700">
-			Too large to keep as a draft.
+			{m.components_queryeditor_too_large_to_keep_as_a_draft()}
 		</p>
 	{/if}
 
@@ -1109,8 +1137,12 @@
 		<span class="text-primary font-semibold">
 			{selectedEngine ? `${selectedEngine.name} · ${selectedEngine.kind}` : 'No engine'}
 		</span>
-		<span>{selectedEngine?.version ?? 'version unknown'}</span>
-		<span>Ln {cursorLine}, Col {cursorCol}</span>
+		<span>{selectedEngine?.version ?? m.components_queryeditor_version_unknown()}</span>
+		<span
+			>{m.components_queryeditor_ln()}
+			{cursorLine}{m.components_queryeditor_col()}
+			{cursorCol}</span
+		>
 		<span>{activeTab.statusText}</span>
 		{#if activeTab.errorMsg}<span class="text-red-600">{activeTab.errorMsg}</span>{/if}
 	</div>
@@ -1159,20 +1191,20 @@
 
 	<CommandPalette bind:open={paletteOpen} mode={paletteMode} />
 
-	<Modal bind:open={closeOpen} title="Close this tab?">
+	<Modal bind:open={closeOpen} title={m.components_queryeditor_close_this_tab()}>
 		<p class="text-[13px] text-slate-600 dark:text-slate-300">
-			This tab has unsaved changes. Save them before closing?
+			{m.components_queryeditor_this_tab_has_unsaved_changes_save_them_bef()}
 		</p>
 		{#snippet footer()}
 			<div class="flex justify-end gap-2">
-				<Button onclick={() => (closeOpen = false)}>Cancel</Button>
-				<Button onclick={discardAndClose}>Discard</Button>
-				<Button variant="primary" onclick={saveAndClose}>Save</Button>
+				<Button onclick={() => (closeOpen = false)}>{m.common_cancel()}</Button>
+				<Button onclick={discardAndClose}>{m.components_queryeditor_discard()}</Button>
+				<Button variant="primary" onclick={saveAndClose}>{m.common_save()}</Button>
 			</div>
 		{/snippet}
 	</Modal>
 
-	<Modal bind:open={shortcutsOpen} title="Keyboard shortcuts">
+	<Modal bind:open={shortcutsOpen} title={m.components_queryeditor_keyboard_shortcuts()}>
 		<ul class="grid gap-1 text-[12px] text-slate-600 dark:text-slate-300">
 			{#each [['Run current statement', 'Mod-Enter'], ['Run all', 'Shift-Mod-Enter'], ['Save', 'Mod-S'], ['Save as a copy', 'Shift-Mod-S'], ['Quick open', 'Mod-P'], ['Command palette', 'Mod-K'], ['Format', 'Shift-Alt-F'], ['Explain', 'Mod-E'], ['New tab', 'Alt-N'], ['Close tab', 'Alt-W']] as [label, keys] (label)}
 				<li class="flex justify-between gap-4">

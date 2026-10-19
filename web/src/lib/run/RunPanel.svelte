@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
@@ -49,26 +50,31 @@
 	}
 </script>
 
-<section class="flex flex-col border-t border-border bg-bg-panel" aria-label="Run progress">
+<section
+	class="flex flex-col border-t border-border bg-bg-panel"
+	aria-label={m.run_runpanel_run_progress()}
+>
 	<header
 		class="flex flex-wrap items-center gap-3 border-b border-border px-3.5 py-1.5 text-[11px]"
 	>
 		<StatusBadge kind="execution" status={state.status} />
 		{#if state.target}
 			<span class="text-slate-600 dark:text-slate-300">
-				ran on {state.target.engine_name} · {state.target.catalog_name}{state.target.schema
+				{m.common_ran_on()}
+				{state.target.engine_name} · {state.target.catalog_name}{state.target.schema
 					? `.${state.target.schema}`
 					: ''}
 			</span>
 		{/if}
 		{#if state.readOnly}
-			<Badge tone="warning">read-only</Badge>
+			<Badge tone="warning">{m.common_read_only()}</Badge>
 		{/if}
 		<span class="text-slate-600 dark:text-slate-300">
-			{statements.length} statement{statements.length === 1 ? '' : 's'}
+			{statements.length}
+			{m.run_runpanel_statement()}{statements.length === 1 ? '' : 's'}
 		</span>
 		{#if executing && canCancel}
-			<Button size="sm" onclick={oncancel}>Cancel</Button>
+			<Button size="sm" onclick={oncancel}>{m.common_cancel()}</Button>
 		{/if}
 	</header>
 
@@ -77,15 +83,18 @@
 			class="border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] text-amber-900 dark:border-[#4d3600] dark:bg-[#241a06] dark:text-amber-300"
 		>
 			<p>
-				The run stopped because the Baleia worker stopped. Statement {interrupted.position} may or may
-				not have completed on the engine — check before re-running statements that modify data.
+				{m.run_runpanel_the_run_stopped_because_the_baleia_worker()}
+				{interrupted.position}
+				{m.run_runpanel_may_or_may_not_have_completed_on_the_engin()}
 			</p>
 			<div class="mt-1 flex gap-2">
 				<Button size="sm" onclick={() => onrerun(interrupted.position)}>
-					Re-run from statement {interrupted.position}
+					{m.run_runpanel_re_run_from_statement()}
+					{interrupted.position}
 				</Button>
 				<Button size="sm" onclick={() => onrerun(interrupted.position + 1)}>
-					Re-run from statement {interrupted.position + 1}
+					{m.run_runpanel_re_run_from_statement()}
+					{interrupted.position + 1}
 				</Button>
 			</div>
 		</div>
@@ -111,8 +120,8 @@
 		<div
 			class="border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] text-amber-900 dark:border-[#4d3600] dark:bg-[#241a06] dark:text-amber-300"
 		>
-			This workspace has read access to {state.target?.catalog_name ?? 'this catalog'}; statements
-			that modify data are rejected.
+			This workspace has read access to {state.target?.catalog_name ??
+				m.run_runpanel_this_catalog()}; statements that modify data are rejected.
 		</div>
 	{/if}
 
@@ -133,7 +142,7 @@
 						{firstLine(statement.sql)}
 					</button>
 					{#if statement.truncated}
-						<Badge tone="warning">truncated</Badge>
+						<Badge tone="warning">{m.run_runpanel_truncated()}</Badge>
 					{/if}
 					{#if statement.durationMs != null}
 						<span class="shrink-0 text-slate-600 dark:text-slate-300">
@@ -154,7 +163,9 @@
 			</li>
 		{/each}
 		{#if statements.length === 0}
-			<li class="py-2 text-slate-600 dark:text-slate-300">Waiting for the first statement…</li>
+			<li class="py-2 text-slate-600 dark:text-slate-300">
+				{m.run_runpanel_waiting_for_the_first_statement()}
+			</li>
 		{/if}
 	</ol>
 </section>

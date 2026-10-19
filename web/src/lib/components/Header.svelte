@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { resolve } from '$app/paths';
 	import { client } from '$lib/api/client';
 	import { canGlobal } from '$lib/authz/can';
@@ -80,7 +81,7 @@
 	async function doCreate() {
 		if (!createName.trim()) return;
 		if (createType === 'shared' && !createTeamId) {
-			createError = 'Choose the team that owns the workspace.';
+			createError = m.components_header_choose_the_team_that_owns_the_workspace();
 			return;
 		}
 		creating = true;
@@ -106,7 +107,7 @@
 <header
 	class="h-12 bg-bg-panel flex items-center px-4 border-b border-border gap-3 shrink-0 relative z-40"
 >
-	<span class="font-semibold text-sm">SQL Editor</span>
+	<span class="font-semibold text-sm">{m.common_sql_editor()}</span>
 
 	<div class="relative">
 		{#if workspaceStore.current}
@@ -116,7 +117,7 @@
 			>
 				<div class="w-2 h-2 rounded-full bg-success shrink-0"></div>
 				<span>{workspaceStore.current.name}</span>
-				<span class="text-text-muted font-normal">· Workspace</span>
+				<span class="text-text-muted font-normal">{m.components_header_workspace()}</span>
 				<svg viewBox="0 0 24 24" class="w-3 h-3"><path d="M6 9l6 6 6-6" /></svg>
 			</button>
 		{:else}
@@ -127,7 +128,9 @@
 				<svg viewBox="0 0 24 24" class="w-3 h-3"
 					><circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" /></svg
 				>
-				{workspaceStore.workspaces.length > 0 ? 'Select workspace' : 'Create workspace'}
+				{workspaceStore.workspaces.length > 0
+					? m.components_header_select_workspace()
+					: m.components_header_create_workspace()}
 			</button>
 		{/if}
 
@@ -139,7 +142,7 @@
 					<div class="px-2 pb-1">
 						<input
 							class="w-full h-8 rounded-md border border-border bg-bg-toolbar px-2 text-xs outline-none focus:border-primary"
-							placeholder="Search workspaces"
+							placeholder={m.components_header_search_workspaces()}
 							bind:value={search}
 						/>
 					</div>
@@ -148,7 +151,7 @@
 					<p
 						class="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-wide text-text-muted"
 					>
-						Personal
+						{m.components_header_personal()}
 					</p>
 					{#each personal as ws (ws.id)}
 						<button
@@ -168,7 +171,7 @@
 					<p
 						class="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-wide text-text-muted"
 					>
-						Shared
+						{m.components_header_shared()}
 					</p>
 					{#each shared as ws (ws.id)}
 						<button
@@ -181,12 +184,16 @@
 									: 'bg-transparent border border-border'}"
 							></span>
 							<span class="font-medium">{ws.name}</span>
-							<span class="ml-auto text-[10px] text-text-muted">shared</span>
+							<span class="ml-auto text-[10px] text-text-muted"
+								>{m.components_header_shared_2()}</span
+							>
 						</button>
 					{/each}
 				{/if}
 				{#if personal.length === 0 && shared.length === 0}
-					<div class="px-3 py-3 text-xs text-text-muted text-center">No workspaces</div>
+					<div class="px-3 py-3 text-xs text-text-muted text-center">
+						{m.components_header_no_workspaces()}
+					</div>
 				{/if}
 				<div class="border-t border-border my-1"></div>
 				{#if canUpdateCurrent}
@@ -194,7 +201,7 @@
 						onclick={openSettings}
 						class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit"
 					>
-						Workspace settings
+						{m.components_header_workspace_settings()}
 					</button>
 				{/if}
 				<a
@@ -202,14 +209,14 @@
 					class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-inherit no-underline"
 					onclick={() => (wsOpen = false)}
 				>
-					Settings
+					{m.common_settings()}
 				</a>
 				<button
 					onclick={openCreate}
 					class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit text-primary font-medium"
 				>
 					<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M12 5v14M5 12h14" /></svg>
-					Create workspace
+					{m.components_header_create_workspace()}
 				</button>
 			</div>
 		{/if}
@@ -223,7 +230,7 @@
 		>
 		<div
 			role="switch"
-			aria-label="Dark mode"
+			aria-label={m.components_header_dark_mode()}
 			aria-checked={dark}
 			tabindex="0"
 			onclick={onToggleDark}
@@ -255,7 +262,7 @@
 			onclick={(e) => e.stopPropagation()}
 		>
 			<div class="flex items-center px-5 py-[18px] border-b border-border">
-				<h2 class="text-sm font-semibold flex-1">Create workspace</h2>
+				<h2 class="text-sm font-semibold flex-1">{m.components_header_create_workspace()}</h2>
 				<button
 					class="w-[26px] h-[26px] rounded-md border-none bg-transparent cursor-pointer flex items-center justify-center text-text-muted hover:bg-bg-toolbar"
 					onclick={closeCreate}>×</button
@@ -265,14 +272,14 @@
 				<input
 					class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
 					type="text"
-					placeholder="Workspace name"
+					placeholder={m.components_header_workspace_name()}
 					bind:value={createName}
 					onkeydown={(e) => e.key === 'Enter' && doCreate()}
 				/>
 				<input
 					class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
 					type="text"
-					placeholder="Description (optional)"
+					placeholder={m.components_header_description_optional()}
 					bind:value={createDescription}
 				/>
 				{#if canShare}
@@ -280,15 +287,15 @@
 						class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
 						bind:value={createType}
 					>
-						<option value="personal">Personal</option>
-						<option value="shared">Shared</option>
+						<option value="personal">{m.components_header_personal()}</option>
+						<option value="shared">{m.components_header_shared()}</option>
 					</select>
 					{#if createType === 'shared'}
 						<select
 							class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
 							bind:value={createTeamId}
 						>
-							<option value="">Choose the owning team</option>
+							<option value="">{m.components_header_choose_the_owning_team()}</option>
 							{#each teams as team (team.id)}
 								<option value={team.id}>{team.name}</option>
 							{/each}
@@ -299,14 +306,14 @@
 				<div class="flex justify-end gap-1.5">
 					<button
 						class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer hover:border-border-hover"
-						onclick={closeCreate}>Cancel</button
+						onclick={closeCreate}>{m.common_cancel()}</button
 					>
 					<button
 						class="h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
 						disabled={!createName.trim() || creating}
 						onclick={doCreate}
 					>
-						{creating ? 'Creating...' : 'Create'}
+						{creating ? m.components_header_creating() : 'Create'}
 					</button>
 				</div>
 			</div>

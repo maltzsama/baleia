@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { client } from '$lib/api/client';
@@ -37,7 +38,7 @@
 			return;
 		}
 		if (newPassword !== confirmPassword) {
-			error = "Passwords don't match.";
+			error = m.reset_password_passwords_don_t_match();
 			return;
 		}
 		busy = true;
@@ -59,7 +60,7 @@
 				error = `Could not change the password (HTTP ${response.status}). Try again.`;
 			}
 		} catch {
-			error = 'Connection error. Is the server running?';
+			error = m.setup_connection_error_is_the_server_running();
 		} finally {
 			busy = false;
 		}
@@ -67,7 +68,7 @@
 </script>
 
 <svelte:head>
-	<title>Reset password · Baleia</title>
+	<title>{m.reset_password_reset_password_baleia()}</title>
 	<meta name="referrer" content="no-referrer" />
 </svelte:head>
 
@@ -78,10 +79,12 @@
 		{#if ready}
 			{#if !token || invalidLink}
 				<div class="flex flex-col animate-[fadeIn_.2s_ease]">
-					<div class="text-xl font-bold tracking-[-.4px] mb-1">Reset link problem</div>
+					<div class="text-xl font-bold tracking-[-.4px] mb-1">
+						{m.reset_password_reset_link_problem()}
+					</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
 						{#if !token}
-							This reset link is incomplete. Request a new one.
+							{m.reset_password_this_reset_link_is_incomplete_request_a_ne()}
 						{:else}
 							This reset link is invalid or has expired.
 						{/if}
@@ -90,7 +93,7 @@
 						href={resolve('/login')}
 						class="w-full h-10 rounded-[7px] text-[13px] font-semibold flex items-center justify-center bg-primary text-white no-underline hover:bg-primary-hover"
 					>
-						Request a new link
+						{m.reset_password_request_a_new_link()}
 					</a>
 				</div>
 			{:else}
@@ -153,7 +156,7 @@
 						class="w-full h-10 border-none rounded-[7px] text-[13px] font-semibold cursor-pointer transition-colors duration-150 flex items-center justify-center gap-[7px] bg-primary text-white mb-2.5
 							hover:enabled:bg-primary-hover disabled:bg-blue-300 disabled:cursor-not-allowed"
 					>
-						{busy ? 'Updating…' : 'Update password'}
+						{busy ? m.reset_password_updating() : m.reset_password_update_password()}
 					</button>
 				</div>
 			{/if}

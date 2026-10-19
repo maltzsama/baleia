@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { API_ROOT, client } from '$lib/api/client';
@@ -27,7 +28,7 @@
 	const ldapProviders = $derived(providers.filter((p) => p.type === 'ldap'));
 	const ldapProvider = $derived(ldapProviders.find((p) => p.id === authMode) ?? null);
 	const signInOptions = $derived([
-		{ value: 'local', label: 'Email and password' },
+		{ value: 'local', label: m.login_email_and_password() },
 		...ldapProviders.map((p) => ({ value: p.id, label: p.name }))
 	]);
 
@@ -47,7 +48,7 @@
 		const params = new SvelteURLSearchParams(window.location.search);
 		let cleanUrl = false;
 		if (params.get('reset') === '1') {
-			notice = 'Password changed. Sign in with your new password.';
+			notice = m.login_password_changed_sign_in_with_your_new_pas();
 			params.delete('reset');
 			cleanUrl = true;
 		}
@@ -114,7 +115,7 @@
 	async function doLogin() {
 		if (busy || retryIn > 0) return;
 		if (!email || !password) {
-			showError('Please fill all fields.', 'password');
+			showError(m.login_please_fill_all_fields(), 'password');
 			return;
 		}
 		busy = true;
@@ -181,14 +182,12 @@
 				// Same screen whether or not the account exists.
 				screen = 'sent';
 			} else if (response.status === 503) {
-				showError(
-					'Password reset by e-mail is not configured on this server. Ask an administrator to reset your password.'
-				);
+				showError(m.login_password_reset_by_e_mail_is_not_configured());
 			} else {
 				showError(`Could not request a reset link (HTTP ${response.status}). Try again.`);
 			}
 		} catch {
-			showError('Connection error. Is the server running?');
+			showError(m.setup_connection_error_is_the_server_running());
 		} finally {
 			busy = false;
 		}
@@ -239,14 +238,14 @@
 					><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
 				>
 			</div>
-			<div class="text-[32px] font-bold tracking-[-1px] text-slate-100">Baleia</div>
+			<div class="text-[32px] font-bold tracking-[-1px] text-slate-100">{m.common_baleia()}</div>
 			<div class="text-[13px] text-slate-500 leading-[1.6] max-w-[260px]">
-				A powerful SQL client for your self-hosted data infrastructure.
+				{m.login_a_powerful_sql_client_for_your_self_hosted()}
 			</div>
 			<div
 				class="font-mono text-[11px] text-slate-700 bg-white/[.04] border border-slate-800 py-1 px-3 rounded-[20px]"
 			>
-				v1.0.0-beta
+				{m.login_v1_0_0_beta()}
 			</div>
 		</div>
 	</div>
@@ -278,9 +277,9 @@
 		<div class="w-full max-w-[360px]">
 			{#if screen === 'login'}
 				<div class="flex flex-col animate-[fadeIn_.2s_ease]">
-					<div class="text-xl font-bold tracking-[-.4px] mb-1">Sign in</div>
+					<div class="text-xl font-bold tracking-[-.4px] mb-1">{m.login_sign_in()}</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
-						Welcome back. Enter your credentials to continue.
+						{m.login_welcome_back_enter_your_credentials_to_con()}
 					</div>
 					{#if notice}
 						<div
@@ -298,12 +297,16 @@
 					{/if}
 					{#if ldapProviders.length > 0}
 						<div class="mb-3.5">
-							<Select label="Sign in with" bind:value={authMode} options={signInOptions} />
+							<Select
+								label={m.login_sign_in_with()}
+								bind:value={authMode}
+								options={signInOptions}
+							/>
 						</div>
 					{/if}
 					<div class="mb-3.5">
 						<Input
-							label={ldapProvider ? 'Username' : 'Email'}
+							label={ldapProvider ? m.login_username() : m.common_email()}
 							type={ldapProvider ? 'text' : 'email'}
 							autocomplete={ldapProvider ? 'username' : 'email'}
 							bind:value={email}
@@ -313,7 +316,7 @@
 					</div>
 					<div class="mb-3.5">
 						<PasswordInput
-							label="Password"
+							label={m.common_password()}
 							autocomplete="current-password"
 							bind:value={password}
 							placeholder="••••••••"
@@ -326,7 +329,7 @@
 							<button
 								type="button"
 								class="cursor-pointer border-none bg-transparent p-0 text-[11px] font-semibold text-primary hover:text-primary-hover"
-								onclick={() => go('forgot')}>Forgot password?</button
+								onclick={() => go('forgot')}>{m.login_forgot_password()}</button
 							>
 						</div>
 					{:else}
@@ -343,7 +346,11 @@
 								points="10 17 15 12 10 7"
 							/><line x1="15" y1="12" x2="3" y2="12" /></svg
 						>
-						{busy ? (checking ? 'Checking credentials…' : 'Signing in…') : 'Sign in'}
+						{busy
+							? checking
+								? m.login_checking_credentials()
+								: m.login_signing_in()
+							: m.login_sign_in()}
 					</button>
 					{#if oidcProviders.length > 0}
 						<div
@@ -351,7 +358,7 @@
 							before:content-[''] before:flex-1 before:h-px before:bg-border
 							after:content-[''] after:flex-1 after:h-px after:bg-border"
 						>
-							or
+							{m.login_or()}
 						</div>
 						<div class="flex flex-col gap-2">
 							{#each oidcProviders as p (p.id)}
@@ -359,7 +366,8 @@
 									onclick={() => doSSO(p.id)}
 									class="w-full h-10 bg-transparent border border-border rounded-[7px] text-[13px] font-medium text-text-main cursor-pointer transition-all duration-150 flex items-center justify-center gap-[9px] hover:border-border-hover hover:bg-bg-app"
 								>
-									Continue with {p.name}
+									{m.login_continue_with()}
+									{p.name}
 								</button>
 							{/each}
 						</div>
@@ -377,11 +385,11 @@
 						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
 							><polyline points="15 18 9 12 15 6" /></svg
 						>
-						Back to sign in
+						{m.login_back_to_sign_in()}
 					</button>
-					<div class="text-xl font-bold tracking-[-.4px] mb-1">Forgot password?</div>
+					<div class="text-xl font-bold tracking-[-.4px] mb-1">{m.login_forgot_password()}</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
-						Enter your email and we'll send a link to reset your password.
+						{m.login_enter_your_email_and_we_ll_send_a_link_to()}
 					</div>
 					{#if error}
 						<div
@@ -392,11 +400,11 @@
 					{/if}
 					<div class="mb-3.5">
 						<Input
-							label="Email"
+							label={m.common_email()}
 							type="email"
 							autocomplete="email"
 							bind:value={email}
-							placeholder="you@company.com"
+							placeholder={m.login_you_company_com()}
 							onkeydown={(e) => e.key === 'Enter' && sendReset()}
 						/>
 					</div>
@@ -411,23 +419,22 @@
 								points="22 2 15 22 11 13 2 9 22 2"
 							/></svg
 						>
-						{busy ? 'Sending…' : 'Send reset link'}
+						{busy ? m.login_sending() : m.login_send_reset_link()}
 					</button>
 				</div>
 			{/if}
 
 			{#if screen === 'sent'}
 				<div class="flex flex-col animate-[fadeIn_.2s_ease]">
-					<div class="text-xl font-bold tracking-[-.4px] mb-1">Check your email</div>
+					<div class="text-xl font-bold tracking-[-.4px] mb-1">{m.login_check_your_email()}</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
-						If an account exists for this address, we sent a link to reset the password. The link
-						expires in 30 minutes.
+						{m.login_if_an_account_exists_for_this_address_we_s()}
 					</div>
 					<button
 						onclick={() => go('login')}
 						class="w-full h-10 border-none rounded-[7px] text-[13px] font-semibold cursor-pointer transition-colors duration-150 flex items-center justify-center gap-[7px] bg-primary text-white mb-2.5 hover:bg-primary-hover"
 					>
-						Back to sign in
+						{m.login_back_to_sign_in()}
 					</button>
 				</div>
 			{/if}

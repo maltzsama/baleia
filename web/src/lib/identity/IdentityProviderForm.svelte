@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import Button from '$lib/ui/Button.svelte';
@@ -206,7 +207,7 @@
 			}
 			open = false;
 		} catch (err) {
-			error = apiErrorMessage(err, 'Could not save the provider.');
+			error = apiErrorMessage(err, m.identity_identityproviderform_could_not_save_the_provider());
 		} finally {
 			busy = false;
 		}
@@ -229,19 +230,27 @@
 				}
 			});
 			if (err || !data) {
-				previewError = apiErrorMessage(err, 'Could not preview the mapping.');
+				previewError = apiErrorMessage(
+					err,
+					m.identity_identityproviderform_could_not_preview_the_mapping()
+				);
 				return;
 			}
 			preview = data;
 		} catch {
-			previewError = 'Could not preview the mapping.';
+			previewError = m.identity_identityproviderform_could_not_preview_the_mapping();
 		} finally {
 			previewing = false;
 		}
 	}
 </script>
 
-<Modal bind:open title={provider ? 'Edit identity provider' : 'Add identity provider'}>
+<Modal
+	bind:open
+	title={provider
+		? m.identity_identityproviderform_edit_identity_provider()
+		: m.identity_identityproviderform_add_identity_provider()}
+>
 	<div class="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1">
 		{#if error}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
@@ -250,10 +259,14 @@
 		{/if}
 
 		<div class="grid grid-cols-2 gap-3">
-			<Input label="Name" bind:value={name} placeholder="Okta" />
+			<Input
+				label={m.common_name()}
+				bind:value={name}
+				placeholder={m.identity_identityproviderform_okta()}
+			/>
 			{#if !provider}
 				<Select
-					label="Type"
+					label={m.identity_identityproviderform_type()}
 					bind:value={type}
 					options={[
 						{ value: 'oidc', label: 'OIDC' },
@@ -265,25 +278,34 @@
 			{/if}
 		</div>
 
-		<Checkbox label="Enabled" bind:checked={enabled} />
+		<Checkbox label={m.common_enabled()} bind:checked={enabled} />
 
 		{#if type === 'oidc'}
 			<div class="grid grid-cols-2 gap-3">
-				<Input label="Issuer URL" bind:value={issuerUrl} placeholder="https://idp.example.com" />
-				<Input label="Client ID" bind:value={clientId} />
+				<Input
+					label={m.identity_identityproviderform_issuer_url()}
+					bind:value={issuerUrl}
+					placeholder={m.identity_identityproviderform_https_idp_example_com()}
+				/>
+				<Input label={m.identity_identityproviderform_client_id()} bind:value={clientId} />
 			</div>
 			<Input
-				label={provider ? 'Client secret (leave blank to keep)' : 'Client secret'}
+				label={provider
+					? m.identity_identityproviderform_client_secret_leave_blank_to_keep()
+					: m.identity_identityproviderform_client_secret()}
 				type="password"
 				bind:value={clientSecret}
 			/>
-			<Checkbox label="Auto-create users from allowed domains" bind:checked={autoCreate} />
-			<Input
-				label="Allowed e-mail domains (comma separated)"
-				bind:value={allowedDomains}
-				placeholder="example.com, corp.example.com"
+			<Checkbox
+				label={m.identity_identityproviderform_auto_create_users_from_allowed_domains()}
+				bind:checked={autoCreate}
 			/>
-			<Select label="Default role" bind:value={oidcDefaultRole} options={roleOptions} />
+			<Input
+				label={m.identity_identityproviderform_allowed_e_mail_domains_comma_separated()}
+				bind:value={allowedDomains}
+				placeholder={m.identity_identityproviderform_example_com_corp_example_com()}
+			/>
+			<Select label={m.common_default_role()} bind:value={oidcDefaultRole} options={roleOptions} />
 		{:else}
 			<div class="grid grid-cols-2 gap-3">
 				<Input label="URL" bind:value={url} placeholder="ldaps://ldap.example.com:636" />
@@ -293,7 +315,9 @@
 			<div class="grid grid-cols-2 gap-3">
 				<Input label="Bind DN" bind:value={bindDn} />
 				<Input
-					label={provider ? 'Bind password (leave blank to keep)' : 'Bind password'}
+					label={provider
+						? m.identity_identityproviderform_bind_password_leave_blank_to_keep()
+						: m.identity_identityproviderform_bind_password()}
 					type="password"
 					bind:value={bindPassword}
 				/>
@@ -315,55 +339,83 @@
 		<div class="rounded-md border border-border p-3">
 			<div class="mb-2 flex items-center justify-between">
 				<p class="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-					Role mapping
+					{m.identity_identityproviderform_role_mapping()}
 				</p>
-				<Button size="sm" variant="ghost" onclick={addRole}>Add rule</Button>
+				<Button size="sm" variant="ghost" onclick={addRole}
+					>{m.identity_identityproviderform_add_rule()}</Button
+				>
 			</div>
 			{#each roleMappings as rule, index (index)}
 				<div class="mb-2 grid grid-cols-[1fr_140px_32px] items-end gap-2">
-					<Input label="Directory group" bind:value={rule.group} />
-					<Select label="Role" bind:value={rule.role} options={roleOptions} />
-					<IconButton label="Remove rule" onclick={() => removeRole(index)}>×</IconButton>
+					<Input
+						label={m.identity_identityproviderform_directory_group()}
+						bind:value={rule.group}
+					/>
+					<Select label={m.common_role()} bind:value={rule.role} options={roleOptions} />
+					<IconButton
+						label={m.identity_identityproviderform_remove_rule()}
+						onclick={() => removeRole(index)}>×</IconButton
+					>
 				</div>
 			{/each}
 			{#if roleMappings.length === 0}
-				<p class="text-[11px] text-text-muted">No rules: the default role applies.</p>
+				<p class="text-[11px] text-text-muted">
+					{m.identity_identityproviderform_no_rules_the_default_role_applies()}
+				</p>
 			{/if}
 		</div>
 
 		<div class="rounded-md border border-border p-3">
 			<div class="mb-2 flex items-center justify-between">
 				<p class="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-					Team mapping
+					{m.identity_identityproviderform_team_mapping()}
 				</p>
-				<Button size="sm" variant="ghost" onclick={addTeam}>Add rule</Button>
+				<Button size="sm" variant="ghost" onclick={addTeam}
+					>{m.identity_identityproviderform_add_rule()}</Button
+				>
 			</div>
 			{#each teamMappings as rule, index (index)}
 				<div class="mb-2 grid grid-cols-[1fr_1fr_120px_32px] items-end gap-2">
-					<Input label="Directory group" bind:value={rule.group} />
-					<Input label="Team id" bind:value={rule.team_id} />
-					<Select label="Team role" bind:value={rule.team_role} options={teamRoleOptions} />
-					<IconButton label="Remove rule" onclick={() => removeTeam(index)}>×</IconButton>
+					<Input
+						label={m.identity_identityproviderform_directory_group()}
+						bind:value={rule.group}
+					/>
+					<Input label={m.identity_identityproviderform_team_id()} bind:value={rule.team_id} />
+					<Select
+						label={m.identity_identityproviderform_team_role()}
+						bind:value={rule.team_role}
+						options={teamRoleOptions}
+					/>
+					<IconButton
+						label={m.identity_identityproviderform_remove_rule()}
+						onclick={() => removeTeam(index)}>×</IconButton
+					>
 				</div>
 			{/each}
 		</div>
 
 		<div class="rounded-md border border-border p-3">
 			<p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-				Preview mapping
+				{m.identity_identityproviderform_preview_mapping()}
 			</p>
 			<div class="flex items-end gap-2">
-				<Input label="Test groups (comma separated)" bind:value={previewGroups} />
-				<Button size="sm" loading={previewing} onclick={runPreview}>Preview</Button>
+				<Input
+					label={m.identity_identityproviderform_test_groups_comma_separated()}
+					bind:value={previewGroups}
+				/>
+				<Button size="sm" loading={previewing} onclick={runPreview}
+					>{m.identity_identityproviderform_preview()}</Button
+				>
 			</div>
 			{#if previewError}
 				<p class="mt-2 text-[11px] text-danger">{previewError}</p>
 			{/if}
 			{#if preview}
 				<p class="mt-2 text-[12px]">
-					Role: <strong>{preview.role}</strong>
+					{m.identity_identityproviderform_role()} <strong>{preview.role}</strong>
 					{#if preview.teams.length > 0}
-						· Teams: {preview.teams.map((t) => `${t.team_id} (${t.team_role})`).join(', ')}
+						{m.identity_identityproviderform_teams()}
+						{preview.teams.map((t) => `${t.team_id} (${t.team_role})`).join(', ')}
 					{/if}
 				</p>
 			{/if}
@@ -372,9 +424,11 @@
 
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (open = false)}>Cancel</Button>
+			<Button onclick={() => (open = false)}>{m.common_cancel()}</Button>
 			<Button variant="primary" loading={busy} onclick={submit}>
-				{provider ? 'Save changes' : 'Create provider'}
+				{provider
+					? m.retrievers_retrieverform_save_changes()
+					: m.identity_identityproviderform_create_provider()}
 			</Button>
 		</div>
 	{/snippet}

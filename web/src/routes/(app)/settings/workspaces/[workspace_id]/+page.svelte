@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { client } from '$lib/api/client';
@@ -74,7 +75,7 @@
 				ws = data ?? null;
 			}
 			if (!ws) {
-				error = 'Workspace not found.';
+				error = m.settings_workspaces_workspace_not_found();
 				return;
 			}
 			name = ws.name;
@@ -228,13 +229,15 @@
 		<div class="mb-4">
 			<h1 class="text-xl font-semibold tracking-[-0.3px]">{ws.name}</h1>
 			<p class="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
-				{ws.type === 'personal' ? 'Personal workspace' : 'Shared workspace'} · created
+				{ws.type === 'personal'
+					? m.settings_workspaces_personal_workspace()
+					: m.settings_workspaces_shared_workspace()} · created
 				<RelativeTime at={ws.created_at} />
 			</p>
 		</div>
 
 		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Workspace tabs">
-			{#each [['general', 'General'], ['target', 'Default target'], ['catalogs', 'Catalogs'], ['members', 'Members'], ['activity', 'Activity']] as [value, label] (value)}
+			{#each [['general', 'General'], ['target', m.settings_workspaces_default_target()], ['catalogs', 'Catalogs'], ['members', 'Members'], ['activity', 'Activity']] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -300,7 +303,7 @@
 						label="Default target"
 						bind:value={targetBindingId}
 						options={[
-							{ value: '', label: 'No default (the only target applies)' },
+							{ value: '', label: m.settings_workspaces_no_default_the_only_target_applies() },
 							...targets.map((target) => ({
 								value: target.binding_id,
 								label: `${target.catalog_name} · ${target.engine_name} (${target.permission})`
@@ -415,30 +418,33 @@
 	{/if}
 </div>
 
-<Modal bind:open={grantOpen} title="Grant catalog access">
+<Modal bind:open={grantOpen} title={m.common_grant_catalog_access()}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<Select
-			label="Catalog"
+			label={m.common_catalog()}
 			bind:value={grantCatalogId}
 			options={grantCatalogs
 				.filter((catalog) => !!catalog.id)
 				.map((catalog) => ({ value: catalog.id!, label: catalog.name ?? catalog.id! }))}
 		/>
 		<Select
-			label="Permission"
+			label={m.common_permission()}
 			bind:value={grantPermission}
 			options={[
-				{ value: 'read', label: 'Read — read-only sessions where the engine enforces it' },
-				{ value: 'write', label: 'Write — queries may modify data' }
+				{
+					value: 'read',
+					label: m.settings_workspaces_read_read_only_sessions_where_the_engine_e()
+				},
+				{ value: 'write', label: m.settings_workspaces_write_queries_may_modify_data() }
 			]}
 		/>
 		{#if grantError}<p class="text-danger" role="alert">{grantError}</p>{/if}
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (grantOpen = false)} disabled={granting}>Cancel</Button>
+			<Button onclick={() => (grantOpen = false)} disabled={granting}>{m.common_cancel()}</Button>
 			<Button variant="primary" loading={granting} disabled={granting} onclick={submitGrant}
-				>Grant</Button
+				>{m.common_grant()}</Button
 			>
 		</div>
 	{/snippet}
@@ -446,7 +452,7 @@
 
 <ConfirmDialog
 	bind:open={revokeOpen}
-	title="Revoke catalog access"
+	title={m.common_revoke_catalog_access()}
 	resourceName={revokeCatalog?.catalog_name ?? ''}
 	confirmLabel="Revoke"
 	consequences={[
@@ -462,7 +468,7 @@
 
 <ConfirmDialog
 	bind:open={deleteOpen}
-	title="Delete workspace"
+	title={m.settings_workspaces_delete_workspace()}
 	resourceName={ws?.name ?? ''}
 	confirmLabel="Delete workspace"
 	typeToConfirm

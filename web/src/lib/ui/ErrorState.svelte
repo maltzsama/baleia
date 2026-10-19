@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	let {
-		title = 'Something went wrong',
+		title = m.ui_errorstate_something_went_wrong(),
 		message,
 		onretry
 	}: {
@@ -22,7 +23,7 @@
 			class="mt-1 h-7 rounded-md border border-red-300 px-2.5 text-[11px] font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-[#4d1111] dark:text-red-300 dark:hover:bg-[#2a1212]"
 			onclick={onretry}
 		>
-			Try again
+			{m.ui_errorstate_try_again()}
 		</button>
 	{/if}
 </div>
