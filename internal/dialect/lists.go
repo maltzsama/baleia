@@ -14,25 +14,41 @@ var listFiles embed.FS
 
 type wordLists struct{ keywords, functions []string }
 
+// allDialects is the list of dialects that ship word lists: it must match the
+// registry (see TestAllDialectsMatchRegistry). Adding a dialect here requires
+// regenerating lists/<name>.keywords.txt and lists/<name>.functions.txt.
+var allDialects = []string{
+	Trino, PostgreSQL, MySQL, MariaDB, TSQL, Oracle, SQLite, ClickHouse, FlightSQL,
+}
+
 var lists = loadLists()
 
 func loadLists() map[string]wordLists {
-	read := func(name string) []string {
-		b, err := listFiles.ReadFile("lists/" + name)
-		if err != nil {
-			return []string{}
+	out := make(map[string]wordLists, len(allDialects))
+	for _, name := range allDialects {
+		out[name] = wordLists{
+			keywords:  readWordList(name + ".keywords.txt"),
+			functions: readWordList(name + ".functions.txt"),
 		}
-		out := []string{}
-		for _, line := range strings.Split(string(b), "\n") {
-			if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
-				out = append(out, line)
-			}
-		}
-		return out
 	}
-	out := map[string]wordLists{}
-	for _, n := range []string{Trino, PostgreSQL, MySQL, MariaDB, TSQL, Oracle, SQLite, ClickHouse, FlightSQL} {
-		out[n] = wordLists{keywords: read(n + ".keywords.txt"), functions: read(n + ".functions.txt")}
+	return out
+}
+
+func readWordList(file string) []string {
+	b, err := listFiles.ReadFile("lists/" + file)
+	if err != nil {
+		// Embedded files are fixed at compile time, so a missing list means the
+		// repo is out of sync with allDialects. Fail loudly at startup rather
+		// than shipping silently empty autocomplete.
+		panic("dialect: missing embedded word list " + file + ": " + err.Error())
+	}
+	lines := strings.Split(string(b), "\n")
+	// len(lines) is a free upper bound: no reallocation while filtering.
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			out = append(out, line)
+		}
 	}
 	return out
 }

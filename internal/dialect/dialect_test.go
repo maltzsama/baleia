@@ -2,18 +2,28 @@ package dialect
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
-var all = []string{Trino, PostgreSQL, MySQL, MariaDB, TSQL, Oracle, SQLite, ClickHouse, FlightSQL}
+// TestAllDialectsMatchRegistry keeps allDialects (which decides the embedded
+// word lists) in sync with the registry, so a new dialect cannot ship silently
+// empty autocomplete.
+func TestAllDialectsMatchRegistry(t *testing.T) {
+	got := slices.Clone(allDialects)
+	slices.Sort(got)
+	if want := Names(); !slices.Equal(got, want) {
+		t.Errorf("allDialects = %v, registered = %v", got, want)
+	}
+}
 
 func TestRegistry(t *testing.T) {
 	if got := strings.Join(Names(), ","); got != "clickhouse,flightsql-generic,mariadb,mysql,oracle,postgresql,sqlite,trino,tsql" {
 		t.Errorf("names = %s", got)
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		d := MustGet(n)
 		if d.Name() != n || d.FormatterLanguage() == "" || d.CodeMirrorBase() == "" {
 			t.Errorf("%s: incomplete", n)
@@ -39,7 +49,7 @@ func TestQuoteIdent(t *testing.T) {
 		Trino: `"a""b"`, PostgreSQL: `"a""b"`, SQLite: `"a""b"`, FlightSQL: `"a""b"`,
 		MySQL: "`a\"b`", MariaDB: "`a\"b`", ClickHouse: "`a\"b`", TSQL: `[a"b]`,
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		d := MustGet(n)
 		got, err := d.QuoteIdent(`a"b`)
 		if n == Oracle {
@@ -112,7 +122,7 @@ func TestQuoteString(t *testing.T) {
 		MySQL: `'it''s a \\ test'`, MariaDB: `'it''s a \\ test'`, ClickHouse: `'it''s a \\ test'`,
 		TSQL: `N'it''s a \ test'`,
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		if got := MustGet(n).QuoteString(in); got != want[n] {
 			t.Errorf("%s: %s", n, got)
 		}
@@ -129,7 +139,7 @@ func split(t *testing.T, name, sql string) []string {
 }
 
 func TestSplitStatements_common(t *testing.T) {
-	for _, n := range all {
+	for _, n := range allDialects {
 		got := split(t, n, "SELECT 1; SELECT 'a;b' -- c;d\n; /* x;y */ SELECT 2;;\n  -- only a comment\n")
 		if len(got) != 3 || got[0] != "SELECT 1" || got[1] != "SELECT 'a;b' -- c;d" || got[2] != "/* x;y */ SELECT 2" {
 			t.Errorf("%s: %q", n, got)
@@ -316,7 +326,7 @@ func TestGenerationGolden(t *testing.T) {
 		FlightSQL: {"COUNT(DISTINCT x)", "date_trunc('month', ts)", "date_trunc('week', ts)",
 			"CAST(x AS DECIMAL(18,2))", "(CAST(a AS DOUBLE PRECISION)) / NULLIF(b, 0)"},
 	}
-	for _, n := range all {
+	for _, n := range allDialects {
 		d, w := MustGet(n), want[n]
 		approx, err1 := d.Aggregate(AggApproxCountDistinct, "x", false)
 		month, err2 := d.TimeTrunc("ts", GrainMonth)
