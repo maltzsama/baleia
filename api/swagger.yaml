@@ -164,7 +164,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeRateLimited, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -177,6 +177,7 @@ components:
         - binding_not_managed
         - binding_unsupported
         - cancel_failed
+        - cancelled
         - catalog_not_managed
         - concurrent_change
         - conflict
@@ -214,20 +215,25 @@ components:
         - not_found
         - not_running
         - not_supported
+        - permission_denied
         - property_not_overridable
         - provider_in_use
         - provider_unsupported
         - rate_limited
+        - read_only_unsupported
         - refused
         - reserved_name
+        - resource_exhausted
         - service_unavailable
         - slug_conflict
         - space_missing
         - space_not_found
         - sync_in_progress
+        - syntax
         - target_not_granted
         - target_required
         - target_unavailable
+        - timeout
         - turn_running
         - unauthorized
         - unsupported_bundle_version

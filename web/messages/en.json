@@ -77,5 +77,11 @@
 	"field_invalid_format": "This value has an invalid format.",
 	"field_out_of_range": "This value is out of range.",
 	"field_not_unique": "This value is already in use.",
-	"field_not_allowed": "This value is not allowed."
+	"field_not_allowed": "This value is not allowed.",
+	"error_cancelled": "The query was cancelled.",
+	"error_permission_denied": "The engine denied permission for this operation.",
+	"error_read_only_unsupported": "The engine cannot enforce a read-only session.",
+	"error_resource_exhausted": "The engine ran out of resources.",
+	"error_syntax": "The SQL has a syntax error.",
+	"error_timeout": "The operation timed out."
 }

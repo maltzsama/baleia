@@ -77,5 +77,11 @@
 	"field_invalid_format": "Este valor tem um formato inválido.",
 	"field_out_of_range": "Este valor está fora do intervalo.",
 	"field_not_unique": "Este valor já está em uso.",
-	"field_not_allowed": "Este valor não é permitido."
+	"field_not_allowed": "Este valor não é permitido.",
+	"error_cancelled": "A consulta foi cancelada.",
+	"error_permission_denied": "O motor negou permissão para esta operação.",
+	"error_read_only_unsupported": "O motor não consegue impor uma sessão somente leitura.",
+	"error_resource_exhausted": "O motor ficou sem recursos.",
+	"error_syntax": "O SQL tem um erro de sintaxe.",
+	"error_timeout": "A operação expirou."
 }
