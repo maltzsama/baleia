@@ -1,0 +1,57 @@
+name: K8s Smoke
+
+# The API-level smoke test from #64, run on the same minikube dev stack as the
+# Playwright suite. Not per-PR: the chart job validates the manifests on every
+# PR, while this proves a real cluster can boot, seed and answer a query.
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: API smoke on minikube
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install minikube, kubectl and helm
+        run: |
+          curl -fsSLo /tmp/minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          sudo install -m 0755 /tmp/minikube /usr/local/bin/minikube
+          curl -fsSLo /tmp/kubectl "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Bring the stack up
+        run: make k8s-up
+        env:
+          K8S_CPUS: "4"
+          K8S_MEMORY: "10g"
+          K8S_DRIVER: docker
+
+      - name: Run the smoke test
+        run: |
+          make k8s-forward &
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          STACK=k8s ./scripts/smoke.sh
+        env:
+          K8S_CPUS: "4"
+          K8S_MEMORY: "10g"
+          K8S_DRIVER: docker
+
+      - name: Dump cluster state on failure
+        if: failure()
+        run: |
+          kubectl -n baleia-dev get pods -o wide || true
+          kubectl -n baleia-dev get events --sort-by=.lastTimestamp || true
+          kubectl -n baleia-dev logs -l app.kubernetes.io/name=baleia --all-containers --tail=200 || true
