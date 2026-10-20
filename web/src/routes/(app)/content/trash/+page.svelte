@@ -16,12 +16,12 @@
 	let items = $state<TrashItem[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let kind = $state<'' | 'saved_query' | 'semantic_metric'>('');
+	let kind = $state<'' | 'saved_query' | 'semantic_metric' | 'semantic_model'>('');
 	let busy = $state('');
 	let actionError = $state('');
 
 	let historyOpen = $state(false);
-	let historyKind = $state<'saved_query' | 'semantic_metric'>('saved_query');
+	let historyKind = $state<'saved_query' | 'semantic_metric' | 'semantic_model'>('saved_query');
 	let historyId = $state('');
 
 	async function load() {
@@ -77,7 +77,8 @@
 				options={[
 					{ value: '', label: 'All' },
 					{ value: 'saved_query', label: 'Queries' },
-					{ value: 'semantic_metric', label: 'Metrics' }
+					{ value: 'semantic_metric', label: 'Metrics' },
+					{ value: 'semantic_model', label: 'Models' }
 				]}
 				onchange={() => load()}
 			/>
@@ -116,7 +117,11 @@
 						<tr class="border-b border-border/60 last:border-b-0">
 							<td class="px-3 py-1.5">
 								<Badge tone="neutral"
-									>{item.entity_type === 'saved_query' ? 'Query' : 'Metric'}</Badge
+									>{item.entity_type === 'saved_query'
+										? 'Query'
+										: item.entity_type === 'semantic_model'
+											? 'Model'
+											: 'Metric'}</Badge
 								>
 							</td>
 							<td class="px-3 py-1.5">{item.name ?? item.slug}</td>

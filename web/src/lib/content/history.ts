@@ -26,6 +26,14 @@ function fail(error: unknown, status: number | undefined, fallback: string): nev
 }
 
 function paths(kind: string) {
+	if (kind === 'semantic_model') {
+		return {
+			list: '/workspaces/{id}/semantic/models/{model_id}/versions' as const,
+			get: '/workspaces/{id}/semantic/models/{model_id}/versions/{version}' as const,
+			restore: '/workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore' as const,
+			param: 'model_id' as const
+		};
+	}
 	if (kind === 'semantic_metric') {
 		return {
 			list: '/workspaces/{id}/semantic/metrics/{metric_id}/versions' as const,
@@ -82,7 +90,7 @@ export async function restoreVersion(
 
 export async function listTrash(
 	workspaceId: string,
-	entityType?: 'saved_query' | 'semantic_metric'
+	entityType?: 'saved_query' | 'semantic_metric' | 'semantic_model'
 ): Promise<TrashItem[]> {
 	const { data, error, response } = await client.GET('/workspaces/{id}/trash', {
 		params: { path: { id: workspaceId }, query: { entity_type: entityType } }
