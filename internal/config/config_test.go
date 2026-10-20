@@ -45,6 +45,31 @@ func TestValidateEncryptionKeys(t *testing.T) {
 	}
 }
 
+func TestValidateRegistryKey(t *testing.T) {
+	const jwt = "a-long-random-value-not-the-default"
+	key := "r-0123456789abcdef0123456789abcdef"
+	cases := []struct {
+		name string
+		cfg  Config
+		ok   bool
+	}{
+		{"unset is allowed (Phase A)", Config{JWTSecret: jwt}, true},
+		{"valid", Config{JWTSecret: jwt, RegistryKey: key}, true},
+		{"valid with previous", Config{JWTSecret: jwt, RegistryKey: key, RegistryKeyPrevious: key + "-old"}, true},
+		{"too short", Config{JWTSecret: jwt, RegistryKey: "short"}, false},
+		{"equals the JWT secret", Config{JWTSecret: key, RegistryKey: key}, false},
+		{"equals the encryption key", Config{JWTSecret: jwt, EncryptionKey: key, RegistryKey: key}, false},
+		{"previous without current", Config{JWTSecret: jwt, RegistryKeyPrevious: key}, false},
+		{"previous too short", Config{JWTSecret: jwt, RegistryKey: key, RegistryKeyPrevious: "short"}, false},
+	}
+	for _, tc := range cases {
+		err := tc.cfg.Validate()
+		if (err == nil) != tc.ok {
+			t.Errorf("%s: Validate() = %v, want ok=%v", tc.name, err, tc.ok)
+		}
+	}
+}
+
 func TestConfig_TokenTTLDefaults(t *testing.T) {
 	// A Config built without Load still gets safe defaults.
 	c := &Config{}

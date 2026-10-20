@@ -50,25 +50,27 @@ import (
 )
 
 type Server struct {
-	cfg      *config.Config
-	mux      *chi.Mux
-	pool     *pgxpool.Pool
-	queries  *db.Queries
-	rl       *RateLimiter
-	keyring  *crypto.Keyring
-	temporal client.Client
-	metrics  *metrics.Registry
+	cfg             *config.Config
+	mux             *chi.Mux
+	pool            *pgxpool.Pool
+	queries         *db.Queries
+	rl              *RateLimiter
+	keyring         *crypto.Keyring
+	registryKeyring *crypto.Keyring
+	temporal        client.Client
+	metrics         *metrics.Registry
 }
 
 // New builds the API server. The Temporal client is dialed by the caller
-// (with retries, internal/temporal/dial); metrics may be nil.
-func New(cfg *config.Config, pool *pgxpool.Pool, keyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) *Server {
+// (with retries, internal/temporal/dial); metrics may be nil. registryKeyring
+// is nil when Phase B registry encryption is disabled.
+func New(cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) *Server {
 	queries := db.New(pool)
 	rl := NewRateLimiter(RateLimiterConfig{
 		RequestsPerSecond: cfg.RateLimitRPS,
 		Burst:             cfg.RateLimitBurst,
 	})
-	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring, temporal: temporal, metrics: reg}
+	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring, registryKeyring: registryKeyring, temporal: temporal, metrics: reg}
 	s.routes()
 	return s
 }
@@ -141,7 +143,7 @@ func (s *Server) routes() {
 	// identity (docs/adr/0005). Both dial through the connections dialer.
 	engines := queryengine.NewManager(s.queries, s.keyring, conns, dialer)
 	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, obs.WrapHTTPClient(dialer.HTTPClient(60*time.Second)))
-	binder := bindtrino.New(trinoAdmin, s.queries)
+	binder := bindtrino.New(trinoAdmin, s.queries).WithRegistryKeyring(s.registryKeyring)
 
 	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
 	// The audit trail is best-effort: a failed write is counted, never fatal.

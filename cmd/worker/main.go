@@ -147,7 +147,12 @@ func main() {
 	// The dispatcher observes federated engines' catalogs (adopting the ones
 	// Baleia did not create) with the binder, as the catalog DDL identity.
 	trinoAdmin := trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, dialer.HTTPClient(60*time.Second))
-	binder := bindtrino.New(trinoAdmin, db.New(pool))
+	registryKeyring, err := bootstrap.LoadRegistryKeyring(cfg)
+	if err != nil {
+		slog.Error("registry keyring", "err", err)
+		os.Exit(1)
+	}
+	binder := bindtrino.New(trinoAdmin, db.New(pool)).WithRegistryKeyring(registryKeyring)
 	act.SetEngineObserver(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID) error {
 		q := db.New(pool)
 		l := bindings.Lifecycle{Store: q, Binder: binder.WithStore(q), Engine: bindings.EngineRef{ID: eng.ID, ClusterID: clusterID}, ConnectionID: eng.ConnectionID}

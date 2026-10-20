@@ -9,7 +9,9 @@ data:
   config.properties: |
 {{ .Files.Get "files/trino/config.properties" | indent 4 }}
   catalog-store.properties: |
-{{ .Files.Get "files/trino/catalog-store.properties" | indent 4 }}
+{{ .Files.Get "files/trino/catalog-store.properties" | indent 4 }}{{ if .Values.trino.registryEncryption }}
+    baleia.registry-key=${ENV:BALEIA_REGISTRY_KEY}{{ if .Values.secrets.values.BALEIA_REGISTRY_KEY_PREVIOUS }}
+    baleia.registry-key-previous=${ENV:BALEIA_REGISTRY_KEY_PREVIOUS}{{ end }}{{ end }}
   baleia-base-access-control.properties: |
 {{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}
   baleia-catalog-guard.properties: |
@@ -90,6 +92,21 @@ spec:
                 secretKeyRef:
                   name: {{ include "baleia.secretName" . }}
                   key: BALEIA_TRINO_DB_PASSWORD
+            # Phase B (#200): the plugin decrypts @baleia-enc[...] values with
+            # this key. Optional so Phase A deployments keep booting; enable the
+            # matching property in catalog-store.properties when set.
+            - name: BALEIA_REGISTRY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_REGISTRY_KEY
+                  optional: true
+            - name: BALEIA_REGISTRY_KEY_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_REGISTRY_KEY_PREVIOUS
+                  optional: true
             - name: JAVA_OPTS
               value: "-Xmx{{ .Values.trino.jvmHeap }}"
             # Trino's S3 filesystem auto-detects the region through the EC2

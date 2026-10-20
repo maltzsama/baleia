@@ -63,6 +63,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 - name: BALEIA_ENCRYPTION_KEY_PREVIOUS
   valueFrom:
     secretKeyRef: { name: {{ $name }}, key: BALEIA_ENCRYPTION_KEY_PREVIOUS, optional: true }
+- name: BALEIA_REGISTRY_KEY
+  valueFrom:
+    secretKeyRef: { name: {{ $name }}, key: BALEIA_REGISTRY_KEY, optional: true }
+- name: BALEIA_REGISTRY_KEY_PREVIOUS
+  valueFrom:
+    secretKeyRef: { name: {{ $name }}, key: BALEIA_REGISTRY_KEY_PREVIOUS, optional: true }
 - name: DATABASE_URL
   valueFrom:
     secretKeyRef: { name: {{ $name }}, key: DATABASE_URL }

@@ -28,9 +28,14 @@ import (
 const MinKeyLen = 32
 
 const (
-	hkdfInfo      = "baleia/credentials/v1"
-	envelopeV1    = "v1"
-	keyIDHexChars = 8
+	// hkdfInfo domain-separates credential envelopes.
+	hkdfInfo = "baleia/credentials/v1"
+	// registryHKDFInfo domain-separates catalog-registry envelopes (Phase B of
+	// #31 / D4): a credential key can never open a registry value, even if an
+	// operator reuses the same secret by mistake.
+	registryHKDFInfo = "baleia/registry/v1"
+	envelopeV1       = "v1"
+	keyIDHexChars    = 8
 )
 
 var (
@@ -57,15 +62,28 @@ type Keyring struct {
 	previous *derivedKey
 }
 
-// NewKeyring derives the keys. current is required; previous may be empty.
+// NewKeyring derives the credential keys. current is required; previous may be
+// empty.
 func NewKeyring(current, previous string) (*Keyring, error) {
-	cur, err := deriveKey(current)
+	return newKeyring(current, previous, hkdfInfo)
+}
+
+// NewRegistryKeyring derives the catalog-registry keys (Phase B of #31 / D4).
+// It uses a derivation domain distinct from credentials so the two keyrings
+// never open each other's envelopes. The Trino plugin must mirror this
+// derivation (HKDF-SHA256, info "baleia/registry/v1") to decrypt values.
+func NewRegistryKeyring(current, previous string) (*Keyring, error) {
+	return newKeyring(current, previous, registryHKDFInfo)
+}
+
+func newKeyring(current, previous, info string) (*Keyring, error) {
+	cur, err := deriveKey(current, info)
 	if err != nil {
 		return nil, fmt.Errorf("encryption key: %w", err)
 	}
 	k := &Keyring{current: cur}
 	if previous != "" {
-		prev, err := deriveKey(previous)
+		prev, err := deriveKey(previous, info)
 		if err != nil {
 			return nil, fmt.Errorf("previous encryption key: %w", err)
 		}
@@ -77,11 +95,11 @@ func NewKeyring(current, previous string) (*Keyring, error) {
 	return k, nil
 }
 
-func deriveKey(secret string) (derivedKey, error) {
+func deriveKey(secret, info string) (derivedKey, error) {
 	if len(secret) < MinKeyLen {
 		return derivedKey{}, fmt.Errorf("must be at least %d characters", MinKeyLen)
 	}
-	raw, err := hkdf.Key(sha256.New, []byte(secret), nil, hkdfInfo, 32)
+	raw, err := hkdf.Key(sha256.New, []byte(secret), nil, info, 32)
 	if err != nil {
 		return derivedKey{}, err
 	}
