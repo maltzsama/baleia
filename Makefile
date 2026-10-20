@@ -180,6 +180,13 @@ k8s-up:
 		--set trino.plugin.image=$(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) \
 		--set trino.plugin.version=$(K8S_PLUGIN_VERSION) \
 		--wait --timeout 10m
+	# The image tag is mutable ("dev") and the chart has no checksum
+	# annotation, so the upgrade leaves the pod spec unchanged and the API
+	# and the worker keep running the previous image. Restart them so a
+	# rebuilt image is actually deployed.
+	kubectl -n $(K8S_NS) rollout restart deploy/baleia-api deploy/baleia-worker
+	kubectl -n $(K8S_NS) rollout status deploy/baleia-api --timeout=5m
+	kubectl -n $(K8S_NS) rollout status deploy/baleia-worker --timeout=5m
 	@echo ">>> api:   kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080"
 	@echo ">>> usage: make k8s-forward && scripts/smoke.sh"
 
