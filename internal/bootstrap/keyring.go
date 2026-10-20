@@ -39,3 +39,17 @@ func LoadKeyring(ctx context.Context, cfg *config.Config, count CredentialCounte
 	}
 	return crypto.NewKeyring(cfg.EncryptionKey, cfg.EncryptionKeyPrevious)
 }
+
+// LoadRegistryKeyring builds the catalog-registry keyring from configuration
+// (Phase B of #31 / D4). An absent key returns a nil keyring and keeps Phase B
+// disabled: registry rows stay plaintext.
+func LoadRegistryKeyring(cfg *config.Config) (*crypto.Keyring, error) {
+	if cfg.RegistryKey == "" {
+		return nil, nil
+	}
+	kr, err := crypto.NewRegistryKeyring(cfg.RegistryKey, cfg.RegistryKeyPrevious)
+	if err != nil {
+		return nil, fmt.Errorf("registry key: %w", err)
+	}
+	return kr, nil
+}

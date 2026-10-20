@@ -69,12 +69,18 @@ type Config struct {
 	// credentials. EncryptionKeyPrevious is set only during a key rotation.
 	EncryptionKey         string
 	EncryptionKeyPrevious string
-	PublicURL             string
-	SMTPHost              string
-	SMTPPort              string
-	SMTPUser              string
-	SMTPPassword          string
-	SMTPFrom              string
+	// RegistryKey seals catalog-registry values at rest (Phase B of #31 / D4).
+	// A dedicated key, never derived from JWTSecret or EncryptionKey. Empty
+	// disables Phase B encryption (rows stay plaintext); RegistryKeyPrevious is
+	// set only during a key rotation.
+	RegistryKey         string
+	RegistryKeyPrevious string
+	PublicURL           string
+	SMTPHost            string
+	SMTPPort            string
+	SMTPUser            string
+	SMTPPassword        string
+	SMTPFrom            string
 	// DefaultLocale is the fallback for localized e-mails when the recipient
 	// has no users.locale (#67).
 	DefaultLocale string
@@ -186,6 +192,8 @@ func Load() *Config {
 		BcryptCost:            getEnvInt("BALEIA_BCRYPT_COST", DefaultBcryptCost),
 		EncryptionKey:         getEnv("BALEIA_ENCRYPTION_KEY", ""),
 		EncryptionKeyPrevious: getEnv("BALEIA_ENCRYPTION_KEY_PREVIOUS", ""),
+		RegistryKey:           getEnv("BALEIA_REGISTRY_KEY", ""),
+		RegistryKeyPrevious:   getEnv("BALEIA_REGISTRY_KEY_PREVIOUS", ""),
 		PublicURL:             getEnv("PUBLIC_URL", "http://localhost:8080"),
 		SMTPHost:              getEnv("SMTP_HOST", ""),
 		SMTPPort:              getEnv("SMTP_PORT", ""),
@@ -281,12 +289,40 @@ func (c *Config) ValidateEncryptionKeys() error {
 	return nil
 }
 
+// ValidateRegistryKey checks the catalog-registry encryption keys when set.
+// An absent key is valid: Phase B (#200) is opt-in, and rows stay plaintext
+// until an operator enables it.
+func (c *Config) ValidateRegistryKey() error {
+	if c.RegistryKey == "" {
+		if c.RegistryKeyPrevious != "" {
+			return errors.New("BALEIA_REGISTRY_KEY_PREVIOUS is set without BALEIA_REGISTRY_KEY")
+		}
+		return nil
+	}
+	if len(c.RegistryKey) < MinEncryptionKeyLen {
+		return fmt.Errorf("BALEIA_REGISTRY_KEY must be at least %d characters", MinEncryptionKeyLen)
+	}
+	if c.RegistryKey == c.JWTSecret {
+		return errors.New("BALEIA_REGISTRY_KEY must differ from JWT_SECRET")
+	}
+	if c.RegistryKey == c.EncryptionKey {
+		return errors.New("BALEIA_REGISTRY_KEY must differ from BALEIA_ENCRYPTION_KEY")
+	}
+	if c.RegistryKeyPrevious != "" && len(c.RegistryKeyPrevious) < MinEncryptionKeyLen {
+		return fmt.Errorf("BALEIA_REGISTRY_KEY_PREVIOUS must be at least %d characters", MinEncryptionKeyLen)
+	}
+	return nil
+}
+
 // Validate rejects configuration that must not reach production.
 func (c *Config) Validate() error {
 	if err := ValidateSecret(c.JWTSecret); err != nil {
 		return err
 	}
 	if err := c.ValidateEncryptionKeys(); err != nil {
+		return err
+	}
+	if err := c.ValidateRegistryKey(); err != nil {
 		return err
 	}
 	if c.ReconcileInterval != 0 && c.ReconcileInterval < 5*time.Minute {

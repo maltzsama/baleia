@@ -40,6 +40,33 @@ func TestNewKeyringRejectsWeakKeys(t *testing.T) {
 	}
 }
 
+// TestRegistryKeyringIsDomainSeparated proves the registry keyring never opens
+// a credential envelope and vice versa, even with the same secret.
+func TestRegistryKeyringIsDomainSeparated(t *testing.T) {
+	cred := mustKeyring(t, keyA, "")
+	reg, err := NewRegistryKeyring(keyA, "")
+	if err != nil {
+		t.Fatalf("NewRegistryKeyring: %v", err)
+	}
+	env, err := cred.Seal([]byte("secret"), "aad")
+	if err != nil {
+		t.Fatalf("Seal: %v", err)
+	}
+	if _, err := reg.Open(env, "aad"); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("registry keyring opened a credential envelope: %v", err)
+	}
+	regEnv, err := reg.Seal([]byte("secret"), "")
+	if err != nil {
+		t.Fatalf("registry Seal: %v", err)
+	}
+	if _, err := cred.Open(regEnv, ""); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("credential keyring opened a registry envelope: %v", err)
+	}
+	if !reg.IsCurrent(regEnv) {
+		t.Error("registry envelope is not current under its own keyring")
+	}
+}
+
 func TestSealOpen_RoundTrip(t *testing.T) {
 	k := mustKeyring(t, keyA, "")
 	env, err := k.Seal([]byte(`{"password":"s3cr3t"}`), "catalog_connections:1")
