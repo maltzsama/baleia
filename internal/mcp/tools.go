@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -28,6 +29,9 @@ func (s *Server) registerTools() {
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolSearchMetadata, Description: "Search tables, columns and metrics visible in a workspace."}, s.searchMetadata)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListMetrics, Description: "List the semantic metrics of a workspace."}, s.listMetrics)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolRenderMetric, Description: "Render a metric's SQL for a binding; run it with run_query."}, s.renderMetric)
+	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListModels, Description: "List the semantic models visible in a workspace."}, s.listModels)
+	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolDescribeModel, Description: "Describe a semantic model: source, dimensions, metrics and joins."}, s.describeModel)
+	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolQuerySemantic, Description: "Compile an explore query over a semantic model to SQL; run it with run_query."}, s.querySemantic)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolRunQuery, Description: "Run one read-only SQL statement and wait for the result."}, s.runQuery)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolGetExecution, Description: "Get the state of an execution this agent created."}, s.getExecution)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolGetResults, Description: "Read stored rows of a finished execution, with caps."}, s.getResults)
@@ -74,6 +78,31 @@ type renderIn struct {
 	Grain       string `json:"grain,omitempty" jsonschema:"time grain"`
 	From        string `json:"from,omitempty" jsonschema:"ISO-8601 start"`
 	To          string `json:"to,omitempty" jsonschema:"ISO-8601 end"`
+}
+type modelIn struct {
+	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
+	ModelID     string `json:"model_id,omitempty" jsonschema:"model UUID from list_models"`
+	Slug        string `json:"slug,omitempty" jsonschema:"model slug, alternative to model_id"`
+}
+type semanticIn struct {
+	WorkspaceID string             `json:"workspace_id" jsonschema:"workspace UUID"`
+	Model       string             `json:"model" jsonschema:"base model slug"`
+	Dimensions  []string           `json:"dimensions,omitempty" jsonschema:"dimension fields"`
+	Metrics     []string           `json:"metrics,omitempty" jsonschema:"metric fields"`
+	Filters     []semanticFilterIn `json:"filters,omitempty" jsonschema:"filters on dimensions (WHERE) or metrics (HAVING)"`
+	Sorts       []semanticSortIn   `json:"sorts,omitempty" jsonschema:"sorts on selected fields"`
+	Limit       int                `json:"limit,omitempty" jsonschema:"row cap"`
+	TimeGrain   string             `json:"time_grain,omitempty" jsonschema:"time grain for a selected time dimension"`
+	BindingID   string             `json:"binding_id,omitempty" jsonschema:"binding UUID (defaults to the model's)"`
+}
+type semanticFilterIn struct {
+	Field  string `json:"field"`
+	Op     string `json:"op" jsonschema:"one of = != > >= < <= in not_in is_null is_not_null"`
+	Values []any  `json:"values,omitempty"`
+}
+type semanticSortIn struct {
+	Field string `json:"field"`
+	Desc  bool   `json:"desc,omitempty"`
 }
 type runIn struct {
 	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
@@ -375,6 +404,129 @@ func (s *Server) renderMetric(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 			return nil, fmt.Errorf("unmapped response %T", got)
 		}
 	})
+}
+
+func (s *Server) listModels(ctx context.Context, _ *mcpsdk.CallToolRequest, in workspaceIn) (*mcpsdk.CallToolResult, any, error) {
+	ws, err := id(in.WorkspaceID)
+	if err != nil {
+		return toolError("invalid_argument", "workspace_id must be a UUID")
+	}
+	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolListModels, WorkspaceID: pgUUID(ws)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
+		got, err := s.handlers.ListSemanticModels(ctx, api.ListSemanticModelsRequestObject{Id: pathOf(ws)})
+		if err != nil {
+			return nil, err
+		}
+		switch r := got.(type) {
+		case api.ListSemanticModels200JSONResponse:
+			return r, nil
+		case api.ListSemanticModels401JSONResponse, api.ListSemanticModels404JSONResponse:
+			return nil, errNotFound
+		default:
+			return nil, fmt.Errorf("unmapped response %T", got)
+		}
+	})
+}
+
+func (s *Server) describeModel(ctx context.Context, _ *mcpsdk.CallToolRequest, in modelIn) (*mcpsdk.CallToolResult, any, error) {
+	ws, err := id(in.WorkspaceID)
+	if err != nil {
+		return toolError("invalid_argument", "workspace_id must be a UUID")
+	}
+	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolDescribeModel, WorkspaceID: pgUUID(ws)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
+		var modelID openapi_types.UUID
+		switch {
+		case in.ModelID != "":
+			modelID, err = id(in.ModelID)
+			if err != nil {
+				return nil, errInvalid
+			}
+		case in.Slug != "":
+			got, err := s.handlers.ListSemanticModels(ctx, api.ListSemanticModelsRequestObject{Id: pathOf(ws)})
+			if err != nil {
+				return nil, err
+			}
+			list, ok := got.(api.ListSemanticModels200JSONResponse)
+			if !ok {
+				return nil, errNotFound
+			}
+			for _, m := range list {
+				if m.Slug == in.Slug {
+					modelID = m.Id
+					break
+				}
+			}
+			if modelID == (openapi_types.UUID{}) {
+				return nil, errNotFound
+			}
+		default:
+			return nil, errInvalid
+		}
+		got, err := s.handlers.GetSemanticModel(ctx, api.GetSemanticModelRequestObject{Id: pathOf(ws), ModelId: modelID})
+		if err != nil {
+			return nil, err
+		}
+		switch r := got.(type) {
+		case api.GetSemanticModel200JSONResponse:
+			return r, nil
+		case api.GetSemanticModel401JSONResponse, api.GetSemanticModel403JSONResponse, api.GetSemanticModel404JSONResponse:
+			return nil, errNotFound
+		default:
+			return nil, fmt.Errorf("unmapped response %T", got)
+		}
+	})
+}
+
+func (s *Server) querySemantic(ctx context.Context, _ *mcpsdk.CallToolRequest, in semanticIn) (*mcpsdk.CallToolResult, any, error) {
+	ws, err := id(in.WorkspaceID)
+	if err != nil {
+		return toolError("invalid_argument", "workspace_id must be a UUID")
+	}
+	q, err := semanticQueryFromInput(in)
+	if err != nil {
+		return toolError("invalid_argument", "invalid explore query")
+	}
+	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolQuerySemantic, WorkspaceID: pgUUID(ws)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
+		body := &api.CompileExploreQueryJSONRequestBody{Query: q}
+		if in.BindingID != "" {
+			b, err := id(in.BindingID)
+			if err != nil {
+				return nil, errInvalid
+			}
+			body.BindingId = &b
+		}
+		got, err := s.handlers.CompileExploreQuery(ctx, api.CompileExploreQueryRequestObject{Id: pathOf(ws), Body: body})
+		if err != nil {
+			return nil, err
+		}
+		switch r := got.(type) {
+		case api.CompileExploreQuery200JSONResponse:
+			return r, nil
+		case api.CompileExploreQuery401JSONResponse, api.CompileExploreQuery403JSONResponse, api.CompileExploreQuery404JSONResponse:
+			return nil, errNotFound
+		case api.CompileExploreQuery422JSONResponse:
+			return nil, errInvalid
+		default:
+			return nil, fmt.Errorf("unmapped response %T", got)
+		}
+	})
+}
+
+// semanticQueryFromInput maps the flat MCP arguments onto the API's explore
+// query shape; the compiler still validates every field.
+func semanticQueryFromInput(in semanticIn) (api.ExploreQuery, error) {
+	payload := map[string]any{
+		"model": in.Model, "dimensions": in.Dimensions, "metrics": in.Metrics,
+		"filters": in.Filters, "sorts": in.Sorts, "limit": in.Limit, "time_grain": in.TimeGrain,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return api.ExploreQuery{}, err
+	}
+	var q api.ExploreQuery
+	if err := json.Unmarshal(raw, &q); err != nil {
+		return api.ExploreQuery{}, err
+	}
+	return q, nil
 }
 
 func (s *Server) runQuery(ctx context.Context, _ *mcpsdk.CallToolRequest, in runIn) (*mcpsdk.CallToolResult, any, error) {

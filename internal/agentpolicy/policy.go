@@ -22,6 +22,9 @@ const (
 	ToolSearchMetadata  = "search_metadata"
 	ToolListMetrics     = "list_metrics"
 	ToolRenderMetric    = "render_metric"
+	ToolListModels      = "list_models"
+	ToolDescribeModel   = "describe_model"
+	ToolQuerySemantic   = "query_semantic"
 	ToolRunQuery        = "run_query"
 	ToolGetExecution    = "get_execution"
 	ToolGetResults      = "get_results"
@@ -39,6 +42,9 @@ var AllTools = []string{
 	ToolSearchMetadata,
 	ToolListMetrics,
 	ToolRenderMetric,
+	ToolListModels,
+	ToolDescribeModel,
+	ToolQuerySemantic,
 	ToolRunQuery,
 	ToolGetExecution,
 	ToolGetResults,

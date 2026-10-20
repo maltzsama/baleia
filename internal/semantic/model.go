@@ -91,6 +91,7 @@ type Metric struct {
 	SQL         string          `json:"sql,omitempty"`
 	Filters     []Filter        `json:"filters,omitempty"`
 	Derived     *DerivedMetric  `json:"derived,omitempty"`
+	Format      *Format         `json:"format,omitempty"`
 }
 
 // DerivedMetric is arithmetic over two metrics, rendered with SafeDivide for
