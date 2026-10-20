@@ -74,6 +74,10 @@ trino:
     image: ""             # optional small image with /baleia-catalog-store (air-gapped)
     imagePullPolicy: ""
   jvmHeap: 2G
+  # Phase B (#200): when true, the Trino plugin decrypts @baleia-enc[...]
+  # registry values. Requires secrets.values.BALEIA_REGISTRY_KEY (or an
+  # existing secret carrying that key) and a plugin release that supports it.
+  registryEncryption: false
   awsRegion: us-east-1    # set explicitly: S3 region auto-detection hangs without EC2 metadata
   catalogGuard:
     # The in-chart Trino has no authentication, so the guard cannot verify who
