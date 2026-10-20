@@ -87,7 +87,7 @@ func MigrateV1(in MigrateV1Input) (Model, Metric, error) {
 		dims = append(dims, dim)
 	}
 
-	out := Metric{Name: in.MetricSlug, Format: in.Metric.Format}
+	out := Metric{Name: in.MetricSlug, Format: in.Metric.Format, Filters: in.Metric.Filters}
 	if in.Metric.CustomSQL != nil {
 		out.SQL = strings.TrimSpace(*in.Metric.CustomSQL)
 	} else {
@@ -95,7 +95,6 @@ func MigrateV1(in MigrateV1Input) (Model, Metric, error) {
 		if in.Metric.Column != nil {
 			out.Dimension = *in.Metric.Column
 		}
-		out.Filters = in.Metric.Filters
 	}
 
 	label := in.Label

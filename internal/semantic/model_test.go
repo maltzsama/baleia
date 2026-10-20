@@ -68,6 +68,9 @@ func TestModelValidate(t *testing.T) {
 		{"unknown dimension type", func(m *Model) { m.Dimensions[0].Type = "blob" }},
 		{"grains on non-time", func(m *Model) { m.Dimensions[0].Grains = []dialect.TimeGrain{dialect.GrainDay} }},
 		{"metric references unknown dimension", func(m *Model) { m.Metrics[0].Dimension = "nope" }},
+		{"metric filters unknown dimension", func(m *Model) {
+			m.Metrics[0].Filters = []Filter{{Column: "nope", Op: OpEq, Values: []any{1}}}
+		}},
 		{"aggregation without dimension", func(m *Model) { m.Metrics[0].Dimension = "" }},
 		{"derived with bad op", func(m *Model) { m.Metrics[2].Derived.Op = "%" }},
 		{"derived also aggregates", func(m *Model) { m.Metrics[2].Aggregation = dialect.AggSum }},

@@ -184,10 +184,22 @@ LIMIT @lim::int;
 -- ── Models (v2, #91) ───────────────────────────────────────────────────────────
 
 -- name: ListVisibleSemanticModels :many
--- Only models of spaces the caller can see (#40); space_id narrows it.
+-- Model visibility is space role (#40) AND a catalog grant (#16); space_id
+-- narrows it.
+WITH visible AS (
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = @workspace_id::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+)
 SELECT m.* FROM semantic_models m
 WHERE m.workspace_id = @workspace_id::uuid
   AND baleia_effective_space_role(m.workspace_id, m.space_id, @user_id::uuid) IS NOT NULL
+  AND m.catalog_id IN (SELECT id FROM visible)
   AND (sqlc.narg(space_id)::uuid IS NULL OR m.space_id = sqlc.narg(space_id)::uuid)
 ORDER BY m.label;
 

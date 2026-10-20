@@ -524,6 +524,7 @@ func (h *Handlers) UpdateSemanticModel(ctx context.Context, request UpdateSemant
 	if err != nil {
 		return nil, err
 	}
+	delete(models, current.Slug)
 	def.Slug = slug
 	def.CatalogID = uuid.UUID(catalogID.Bytes).String()
 	if bindingID.Valid {
@@ -801,12 +802,22 @@ func (h *Handlers) RestoreSemanticModelVersion(ctx context.Context, request Rest
 	}
 	def.CatalogID = snap.CatalogID.String()
 	def.Slug = snap.Slug
-	if err := def.Validate(nil); err != nil {
-		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
-	}
 	actor, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
+	}
+	models, err := h.visibleModels(ctx, ws, actor)
+	if err != nil {
+		return nil, err
+	}
+	// The model being restored is not a join target for itself: drop both the
+	// snapshot slug and the live row's current slug.
+	delete(models, def.Slug)
+	if cur, cerr := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id}); cerr == nil {
+		delete(models, cur.Slug)
+	}
+	if err := def.Validate(models); err != nil {
+		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	var newSlug *string
 	if request.Body != nil {

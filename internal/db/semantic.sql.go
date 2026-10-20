@@ -688,9 +688,20 @@ func (q *Queries) ListVisibleSemanticMetrics(ctx context.Context, arg ListVisibl
 
 const listVisibleSemanticModels = `-- name: ListVisibleSemanticModels :many
 
+WITH visible AS (
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = $1::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = $1::uuid AND c.enabled
+)
 SELECT m.id, m.workspace_id, m.space_id, m.slug, m.label, m.description, m.certified, m.certified_by, m.certified_at, m.catalog_id, m.binding_id, m.definition, m.format_version, m.owner_user_id, m.updated_by, m.updated_at FROM semantic_models m
 WHERE m.workspace_id = $1::uuid
   AND baleia_effective_space_role(m.workspace_id, m.space_id, $2::uuid) IS NOT NULL
+  AND m.catalog_id IN (SELECT id FROM visible)
   AND ($3::uuid IS NULL OR m.space_id = $3::uuid)
 ORDER BY m.label
 `
@@ -702,7 +713,8 @@ type ListVisibleSemanticModelsParams struct {
 }
 
 // ── Models (v2, #91) ───────────────────────────────────────────────────────────
-// Only models of spaces the caller can see (#40); space_id narrows it.
+// Model visibility is space role (#40) AND a catalog grant (#16); space_id
+// narrows it.
 func (q *Queries) ListVisibleSemanticModels(ctx context.Context, arg ListVisibleSemanticModelsParams) ([]SemanticModel, error) {
 	rows, err := q.db.Query(ctx, listVisibleSemanticModels, arg.WorkspaceID, arg.UserID, arg.SpaceID)
 	if err != nil {

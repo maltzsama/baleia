@@ -504,7 +504,7 @@ func (s *Server) querySemantic(ctx context.Context, _ *mcpsdk.CallToolRequest, i
 		case api.CompileExploreQuery401JSONResponse, api.CompileExploreQuery403JSONResponse, api.CompileExploreQuery404JSONResponse:
 			return nil, errNotFound
 		case api.CompileExploreQuery422JSONResponse:
-			return nil, errInvalid
+			return nil, fmt.Errorf("%w: %s", errInvalid, r.Message)
 		default:
 			return nil, fmt.Errorf("unmapped response %T", got)
 		}

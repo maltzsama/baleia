@@ -86,6 +86,10 @@ func (h *Handlers) ImportSpaceBundle(ctx context.Context, request ImportSpaceBun
 		}
 		return ImportSpaceBundle404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
+	isManager := false
+	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceManager); err == nil && se == nil {
+		isManager = true
+	}
 	if request.Body == nil {
 		return ImportSpaceBundle422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidBundle, "missing bundle body")}, nil
 	}
@@ -109,11 +113,12 @@ func (h *Handlers) ImportSpaceBundle(ctx context.Context, request ImportSpaceBun
 		return nil, err
 	}
 	report, err := h.contentService().Import(ctx, content.ImportOptions{
-		WorkspaceID: ws,
-		SpaceID:     spaceID,
-		Actor:       actor,
-		Bundle:      bundle,
-		Mode:        mode,
+		WorkspaceID:        ws,
+		SpaceID:            spaceID,
+		Actor:              actor,
+		Bundle:             bundle,
+		Mode:               mode,
+		AllowCertification: isManager,
 		ValidateMetric: func(catalogID pgtype.UUID, namespace []string, table string, definition json.RawMessage, bindingID pgtype.UUID) error {
 			def, _, err := parseDefinitionRaw(definition)
 			if err != nil {

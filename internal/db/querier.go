@@ -415,7 +415,8 @@ type Querier interface {
 	// Only metrics of spaces the caller can see (#40); space_id narrows it.
 	ListVisibleSemanticMetrics(ctx context.Context, arg ListVisibleSemanticMetricsParams) ([]SemanticMetric, error)
 	// ── Models (v2, #91) ───────────────────────────────────────────────────────────
-	// Only models of spaces the caller can see (#40); space_id narrows it.
+	// Model visibility is space role (#40) AND a catalog grant (#16); space_id
+	// narrows it.
 	ListVisibleSemanticModels(ctx context.Context, arg ListVisibleSemanticModelsParams) ([]SemanticModel, error)
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.

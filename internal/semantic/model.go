@@ -59,7 +59,10 @@ type Model struct {
 	PrimaryKey  []string    `json:"primary_key,omitempty"`
 	Dimensions  []Dimension `json:"dimensions,omitempty"`
 	Metrics     []Metric    `json:"metrics,omitempty"`
-	Joins       []Join      `json:"joins,omitempty"`
+	// CalculatedFields are outer-query expressions over dimension/metric
+	// aliases; they are not raw input from an agent.
+	CalculatedFields []CalculatedField `json:"calculated_fields,omitempty"`
+	Joins            []Join            `json:"joins,omitempty"`
 }
 
 // ModelSource is a table reference or a SQL query in the binding's dialect.
@@ -92,6 +95,15 @@ type Metric struct {
 	Filters     []Filter        `json:"filters,omitempty"`
 	Derived     *DerivedMetric  `json:"derived,omitempty"`
 	Format      *Format         `json:"format,omitempty"`
+}
+
+// CalculatedField is an expression over the query result (dimension/metric
+// aliases), evaluated in the outer query. The model author owns the SQL; an
+// explore query only selects the field by name.
+type CalculatedField struct {
+	Name  string `json:"name"`
+	Label string `json:"label,omitempty"`
+	SQL   string `json:"sql"`
 }
 
 // DerivedMetric is arithmetic over two metrics, rendered with SafeDivide for
@@ -216,6 +228,24 @@ func (m Model) Validate(modelSet map[string]Model) error {
 				return fmt.Errorf("%w: metric %q needs a dimension (only count may omit it)", ErrInvalidExplore, mt.Name)
 			}
 		}
+		for _, f := range mt.Filters {
+			if !dimensions[f.Column] {
+				return fmt.Errorf("%w: metric %q filters on unknown dimension %q", ErrInvalidExplore, mt.Name, f.Column)
+			}
+		}
+	}
+	calculated := map[string]bool{}
+	for _, cf := range m.CalculatedFields {
+		if strings.TrimSpace(cf.Name) == "" {
+			return fmt.Errorf("%w: model %q has a calculated field without a name", ErrInvalidExplore, m.Slug)
+		}
+		if dimensions[cf.Name] || metrics[cf.Name] || calculated[cf.Name] {
+			return fmt.Errorf("%w: calculated field %q collides with another field", ErrInvalidExplore, cf.Name)
+		}
+		if strings.TrimSpace(cf.SQL) == "" {
+			return fmt.Errorf("%w: calculated field %q needs SQL", ErrInvalidExplore, cf.Name)
+		}
+		calculated[cf.Name] = true
 	}
 
 	for _, j := range m.Joins {
@@ -319,7 +349,7 @@ func (q ExploreQuery) Validate(models map[string]Model) error {
 		}
 		seenMetric[name] = true
 		f, ok := fields[name]
-		if !ok || f.metric == nil {
+		if !ok || (f.metric == nil && f.calculated == nil) {
 			return fmt.Errorf("%w: unknown metric %q", ErrInvalidExplore, name)
 		}
 	}
@@ -367,10 +397,11 @@ func RenderFilter(d dialect.Dialect, expr string, op FilterOp, values []any) (st
 // resolvedField is a dimension or metric reachable from the base model. model
 // is the model that owns it (the base, or a joined one).
 type resolvedField struct {
-	name      string
-	model     *Model
-	dimension *Dimension
-	metric    *Metric
+	name       string
+	model      *Model
+	dimension  *Dimension
+	metric     *Metric
+	calculated *CalculatedField
 }
 
 // resolveFields maps every dimension/metric name reachable through the base
@@ -392,6 +423,13 @@ func (q ExploreQuery) resolveFields(models map[string]Model, base Model) (map[st
 				return fmt.Errorf("%w: field %q is not unique across the join tree", ErrInvalidExplore, mt.Name)
 			}
 			out[mt.Name] = &resolvedField{name: mt.Name, model: &m, metric: mt}
+		}
+		for i := range m.CalculatedFields {
+			cf := &m.CalculatedFields[i]
+			if _, dup := out[cf.Name]; dup {
+				return fmt.Errorf("%w: field %q is not unique across the join tree", ErrInvalidExplore, cf.Name)
+			}
+			out[cf.Name] = &resolvedField{name: cf.Name, model: &m, calculated: cf}
 		}
 		return nil
 	}

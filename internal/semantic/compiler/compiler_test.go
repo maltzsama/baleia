@@ -73,9 +73,9 @@ func TestCompileSingleModel(t *testing.T) {
 	}
 	for _, want := range []string{
 		`SELECT "status" AS "status", SUM("order_id") AS "revenue"`,
-		`FROM "sales"."orders" AS "orders"`,
+		`FROM "sales"."orders" "orders"`,
 		`WHERE "status" = 'paid'`,
-		`GROUP BY 1`,
+		`GROUP BY "status"`,
 		`ORDER BY 2 DESC`,
 		`LIMIT 10`,
 	} {
@@ -138,8 +138,8 @@ func TestCompileJoinDimension(t *testing.T) {
 	}
 	for _, want := range []string{
 		`SELECT "orders"."status" AS "status", "customers"."segment" AS "segment", SUM("orders"."order_id") AS "revenue"`,
-		`FROM "sales"."orders" AS "orders" LEFT JOIN "sales"."customers" AS "customers" ON "orders"."customer_id" = "customers"."customer_id"`,
-		`GROUP BY 1, 2`,
+		`FROM "sales"."orders" "orders" LEFT JOIN "sales"."customers" "customers" ON "orders"."customer_id" = "customers"."customer_id"`,
+		`GROUP BY "orders"."status", "customers"."segment"`,
 		`ORDER BY 2`,
 		`LIMIT 20`,
 	} {
@@ -214,7 +214,7 @@ func TestCompileDerivedMetric(t *testing.T) {
 	for _, want := range []string{
 		`SUM("order_id") AS "revenue"`,
 		`COUNT(*) AS "orders"`,
-		`AS baleia_explore`,
+		`baleia_explore`,
 		wantOuter,
 	} {
 		if !strings.Contains(got.SQL, want) {
@@ -285,5 +285,88 @@ func TestCompileEveryDialect(t *testing.T) {
 		if _, err := Compile(q, models(), d, Options{Catalog: "lake"}); err != nil {
 			t.Errorf("%s: Compile: %v", name, err)
 		}
+	}
+}
+
+func TestCompileMetricFiltersAreConditionalAggregates(t *testing.T) {
+	m := models()
+	orders := m["orders"]
+	orders.Metrics[0].Filters = []semantic.Filter{{Column: "status", Op: semantic.OpEq, Values: []any{"paid"}}}
+	m["orders"] = orders
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"revenue"}}
+	got, err := Compile(q, m, pg(t), Options{})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	want := `SUM(CASE WHEN "status" = 'paid' THEN "order_id" END) AS "revenue"`
+	if !strings.Contains(got.SQL, want) {
+		t.Errorf("SQL missing conditional aggregate %q:\n%s", want, got.SQL)
+	}
+}
+
+func TestCompileMigratedV1MetricWithFilter(t *testing.T) {
+	model, _, err := semantic.MigrateV1(semantic.MigrateV1Input{
+		CatalogID:  "cat",
+		ModelSlug:  "orders",
+		PrimaryKey: []string{"id"},
+		MetricSlug: "revenue",
+		Source:     semantic.ModelSource{Kind: semantic.SourceTable, Namespace: []string{"sales"}, Table: "orders"},
+		Metric: semantic.SimpleMetricV1{
+			Type:        semantic.DefinitionType,
+			Aggregation: dialect.AggSum,
+			Column:      strPtr("amount"),
+			Filters:     []semantic.Filter{{Column: "status", Op: semantic.OpEq, Values: []any{"paid"}}},
+		},
+		Columns: []semantic.ColumnType{
+			{Name: "amount", Type: dialect.TypeInt64},
+			{Name: "status", Type: dialect.TypeString},
+		},
+	})
+	if err != nil {
+		t.Fatalf("MigrateV1: %v", err)
+	}
+	got, err := Compile(semantic.ExploreQuery{Model: "orders", Metrics: []string{"revenue"}}, map[string]semantic.Model{model.Slug: model}, pg(t), Options{})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	if !strings.Contains(got.SQL, `SUM(CASE WHEN "status" = 'paid' THEN "amount" END) AS "revenue"`) {
+		t.Errorf("migrated filter lost:\n%s", got.SQL)
+	}
+}
+
+func TestCompilePortableGroupBy(t *testing.T) {
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"orders"}}
+	for _, name := range []string{dialect.TSQL, dialect.Oracle, dialect.PostgreSQL} {
+		d, ok := dialect.Get(name)
+		if !ok {
+			continue
+		}
+		got, err := Compile(q, models(), d, Options{})
+		if err != nil {
+			t.Fatalf("%s: Compile: %v", name, err)
+		}
+		if strings.Contains(strings.ToUpper(got.SQL), "GROUP BY 1") {
+			t.Errorf("%s: GROUP BY still positional:\n%s", name, got.SQL)
+		}
+	}
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestCompileCalculatedField(t *testing.T) {
+	m := models()
+	orders := m["orders"]
+	orders.CalculatedFields = []semantic.CalculatedField{{Name: "margin", SQL: `"revenue" / 2`}}
+	m["orders"] = orders
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"margin"}}
+	got, err := Compile(q, m, pg(t), Options{})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	if !strings.Contains(got.SQL, `"revenue" / 2 AS "margin"`) {
+		t.Errorf("calculated field not rendered in the outer query:\n%s", got.SQL)
+	}
+	if !strings.Contains(got.SQL, `SUM("order_id") AS "revenue"`) {
+		t.Errorf("base metrics needed by the calculated field are missing:\n%s", got.SQL)
 	}
 }

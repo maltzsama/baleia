@@ -13,9 +13,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -203,6 +205,7 @@ func modelSnapshot(m db.SemanticModel) ([]byte, error) {
 	return json.Marshal(s)
 }
 
+// ParseModelSnapshot decodes a stored model version and rejects unknown fields.
 func ParseModelSnapshot(raw []byte) (SemanticModelSnapshot, error) {
 	var s SemanticModelSnapshot
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -855,8 +858,19 @@ func modelDiffers(cur db.SemanticModel, in db.UpdateSemanticModelParams) bool {
 	return cur.Slug != in.Slug || cur.Label != in.Label || cur.Description != in.Description ||
 		cur.Certified != in.Certified || !sameUUID(cur.SpaceID, in.SpaceID) ||
 		!sameUUID(cur.CatalogID, in.CatalogID) || !sameUUID(cur.BindingID, in.BindingID) ||
-		!bytes.Equal(cur.Definition, in.Definition) || cur.FormatVersion != in.FormatVersion ||
+		!sameModelDefinition(cur.Definition, in.Definition) || cur.FormatVersion != in.FormatVersion ||
 		!sameUUID(cur.OwnerUserID, in.OwnerUserID)
+}
+
+// sameModelDefinition compares two stored model definitions semantically:
+// PostgreSQL returns jsonb with its own key order and spacing, so a byte
+// comparison would report a change for an unchanged definition.
+func sameModelDefinition(a, b []byte) bool {
+	var ma, mb semantic.Model
+	if json.Unmarshal(a, &ma) != nil || json.Unmarshal(b, &mb) != nil {
+		return false
+	}
+	return reflect.DeepEqual(ma, mb)
 }
 
 func sameUUID(a, b pgtype.UUID) bool {

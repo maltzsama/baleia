@@ -29,6 +29,10 @@ const (
 	KindSavedQuery     = "saved_query"
 	KindSemanticMetric = "semantic_metric"
 	KindModel          = "semantic_model"
+
+	// maxFormatVersion bounds a bundle's per-item format version before it is
+	// narrowed to the int32 stored in the database.
+	maxFormatVersion = 1<<31 - 1
 )
 
 // Bundle is the portable envelope.
@@ -218,6 +222,10 @@ type ImportOptions struct {
 	Actor       pgtype.UUID
 	Bundle      Bundle
 	Mode        ImportMode
+	// AllowCertification lets the importer honor an item's certified flag.
+	// Only a space manager may certify, so an editor's import preserves the
+	// existing row's certification (and creates uncertified rows).
+	AllowCertification bool
 	// ValidateMetric runs #33's engine probe in apply mode; nil skips it.
 	ValidateMetric func(catalogID pgtype.UUID, namespace []string, table string, definition json.RawMessage, bindingID pgtype.UUID) error
 }
@@ -276,6 +284,7 @@ type planItem struct {
 	target     *BundleTarget
 	catalogID  pgtype.UUID
 	definition []byte
+	certified  bool
 	message    string
 	warnings   []string
 }
@@ -453,6 +462,10 @@ func (im *importer) planMetric(ctx context.Context, p *planItem) {
 		p.action, p.message = ActionError, "incomplete_metric"
 		return
 	}
+	if item.MetricFormatVersion < 0 || item.MetricFormatVersion > maxFormatVersion {
+		p.action, p.message = ActionError, "invalid_format_version"
+		return
+	}
 	catID, err := im.q.GetGrantedCatalogByName(ctx, db.GetGrantedCatalogByNameParams{
 		WorkspaceID: im.opts.WorkspaceID, Name: item.Catalog,
 	})
@@ -478,7 +491,10 @@ func (im *importer) planMetric(ctx context.Context, p *planItem) {
 	p.definition = normalized
 
 	existing, err := im.q.GetSemanticMetricBySlug(ctx, db.GetSemanticMetricBySlugParams{WorkspaceID: im.opts.WorkspaceID, Slug: item.Slug})
+	effective := item
 	if errors.Is(err, pgx.ErrNoRows) {
+		p.certified = item.Certified && im.opts.AllowCertification
+		effective.Certified = p.certified
 		p.action = ActionCreate
 	} else if err != nil {
 		p.action, p.message = ActionError, "lookup_failed"
@@ -488,7 +504,13 @@ func (im *importer) planMetric(ctx context.Context, p *planItem) {
 		return
 	} else {
 		p.existingID = existing.ID
-		if metricBundleEqual(existing, item, p.definition) {
+		if im.opts.AllowCertification {
+			p.certified = item.Certified
+		} else {
+			p.certified = existing.Certified
+		}
+		effective.Certified = p.certified
+		if metricBundleEqual(existing, effective, p.definition) {
 			p.action = ActionNoChanges
 			return
 		}
@@ -506,6 +528,10 @@ func (im *importer) planModel(ctx context.Context, p *planItem) {
 	item := p.item
 	if item.Label == "" || item.Catalog == "" || len(item.Definition) == 0 {
 		p.action, p.message = ActionError, "incomplete_model"
+		return
+	}
+	if item.ModelFormatVersion < 0 || item.ModelFormatVersion > maxFormatVersion {
+		p.action, p.message = ActionError, "invalid_format_version"
 		return
 	}
 	catID, err := im.q.GetGrantedCatalogByName(ctx, db.GetGrantedCatalogByNameParams{
@@ -533,7 +559,10 @@ func (im *importer) planModel(ctx context.Context, p *planItem) {
 	p.definition = normalized
 
 	existing, err := im.q.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: im.opts.WorkspaceID, Slug: item.Slug})
+	effective := item
 	if errors.Is(err, pgx.ErrNoRows) {
+		p.certified = item.Certified && im.opts.AllowCertification
+		effective.Certified = p.certified
 		p.action = ActionCreate
 	} else if err != nil {
 		p.action, p.message = ActionError, "lookup_failed"
@@ -541,12 +570,18 @@ func (im *importer) planModel(ctx context.Context, p *planItem) {
 	} else if existing.SpaceID.Bytes != im.opts.SpaceID.Bytes {
 		p.action, p.message = ActionError, "slug_conflict_other_space"
 		return
-	} else if modelBundleEqual(existing, item, p.definition, catID) {
-		p.existingID = existing.ID
-		p.action = ActionNoChanges
-		return
 	} else {
 		p.existingID = existing.ID
+		if im.opts.AllowCertification {
+			p.certified = item.Certified
+		} else {
+			p.certified = existing.Certified
+		}
+		effective.Certified = p.certified
+		if modelBundleEqual(existing, effective, p.definition, catID) {
+			p.action = ActionNoChanges
+			return
+		}
 		p.action = ActionUpdate
 	}
 }
@@ -571,7 +606,7 @@ func modelBundleEqual(cur db.SemanticModel, item BundleItem, definition []byte, 
 	return cur.Slug == item.Slug && cur.Label == item.Label && cur.Description == item.Description &&
 		cur.Certified == item.Certified && cur.CatalogID.Bytes == catalogID.Bytes &&
 		cur.FormatVersion == int32(item.ModelFormatVersion) &&
-		bytes.Equal(cur.Definition, definition)
+		sameModelDefinition(cur.Definition, definition)
 }
 
 func (im *importer) resolveTarget(t *BundleTarget) (pgtype.UUID, *string, string, bool) {
@@ -655,7 +690,7 @@ func (im *importer) apply(ctx context.Context) error {
 			if p.action == ActionCreate {
 				if _, err := im.svc.CreateSemanticMetric(ctx, im.opts.Actor, db.CreateSemanticMetricParams{
 					WorkspaceID: im.opts.WorkspaceID, SpaceID: im.opts.SpaceID, Slug: p.item.Slug,
-					Label: p.item.Label, Description: p.item.Description, Certified: p.item.Certified,
+					Label: p.item.Label, Description: p.item.Description, Certified: p.certified,
 					CatalogID: p.catalogID, Namespace: p.item.Namespace, TableName: p.item.Table,
 					Definition: p.definition, FormatVersion: int32(p.item.MetricFormatVersion),
 					UpdatedBy: im.opts.Actor,
@@ -666,7 +701,7 @@ func (im *importer) apply(ctx context.Context) error {
 				if _, err := im.svc.ImportSemanticMetric(ctx, im.opts.Actor, db.UpdateSemanticMetricParams{
 					WorkspaceID: im.opts.WorkspaceID, ID: p.existingID, SpaceID: im.opts.SpaceID,
 					Slug: p.item.Slug, Label: p.item.Label, Description: p.item.Description,
-					Certified: p.item.Certified, CatalogID: p.catalogID, Namespace: p.item.Namespace,
+					Certified: p.certified, CatalogID: p.catalogID, Namespace: p.item.Namespace,
 					TableName: p.item.Table, Definition: p.definition,
 					FormatVersion: int32(p.item.MetricFormatVersion), UpdatedBy: im.opts.Actor,
 				}); err != nil {
@@ -677,7 +712,7 @@ func (im *importer) apply(ctx context.Context) error {
 			if p.action == ActionCreate {
 				if _, err := im.svc.CreateSemanticModel(ctx, im.opts.Actor, db.CreateSemanticModelParams{
 					WorkspaceID: im.opts.WorkspaceID, SpaceID: im.opts.SpaceID, Slug: p.item.Slug,
-					Label: p.item.Label, Description: p.item.Description, Certified: p.item.Certified,
+					Label: p.item.Label, Description: p.item.Description, Certified: p.certified,
 					CatalogID: p.catalogID, Definition: p.definition,
 					FormatVersion: int32(p.item.ModelFormatVersion), UpdatedBy: im.opts.Actor,
 				}); err != nil {
@@ -687,7 +722,7 @@ func (im *importer) apply(ctx context.Context) error {
 				if _, err := im.svc.ImportSemanticModel(ctx, im.opts.Actor, db.UpdateSemanticModelParams{
 					WorkspaceID: im.opts.WorkspaceID, ID: p.existingID, SpaceID: im.opts.SpaceID,
 					Slug: p.item.Slug, Label: p.item.Label, Description: p.item.Description,
-					Certified: p.item.Certified, CatalogID: p.catalogID, Definition: p.definition,
+					Certified: p.certified, CatalogID: p.catalogID, Definition: p.definition,
 					FormatVersion: int32(p.item.ModelFormatVersion), UpdatedBy: im.opts.Actor,
 				}); err != nil {
 					return err

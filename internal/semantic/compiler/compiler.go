@@ -126,6 +126,28 @@ func neededBaseMetrics(q semantic.ExploreQuery, base semantic.Model, models map[
 		}
 		return nil
 	}
+	calcSelected := false
+	for _, name := range q.Metrics {
+		if calculatedOf(ownerModel(owners[name], base, models), name) != nil {
+			calcSelected = true
+		}
+	}
+	for _, f := range q.Filters {
+		if calculatedOf(ownerModel(owners[f.Field], base, models), f.Field) != nil {
+			calcSelected = true
+		}
+	}
+	if calcSelected {
+		// A calculated field's SQL may reference any base metric; include them
+		// all so its aliases exist in the inner query.
+		for i := range base.Metrics {
+			if base.Metrics[i].Derived == nil {
+				if err := add(base.Metrics[i].Name); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	for _, name := range q.Metrics {
 		owner := owners[name]
 		mt := metricOf(ownerModel(owner, base, models), name)
@@ -169,7 +191,7 @@ func planSingle(q semantic.ExploreQuery, base semantic.Model, needed []string, d
 		}
 		p.selects = append(p.selects, expr+" AS "+alias)
 		p.innerPos[name] = len(p.selects)
-		p.groupBy = append(p.groupBy, fmt.Sprintf("%d", len(p.selects)))
+		p.groupBy = append(p.groupBy, expr)
 	}
 	for _, name := range needed {
 		expr, err := metricExpr(d, *metricOf(base, name), base.Dimensions, "")
@@ -191,6 +213,9 @@ func planSingle(q semantic.ExploreQuery, base semantic.Model, needed []string, d
 	for _, f := range q.Filters {
 		if metricOf(base, f.Field) != nil {
 			continue // HAVING, below
+		}
+		if calculatedOf(base, f.Field) != nil {
+			continue // outer query
 		}
 		expr, err := dimensionExpr(d, *dimensionOf(base, f.Field), "")
 		if err != nil {
@@ -246,6 +271,11 @@ func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]
 		}
 		if _, ok := joins[slug]; !ok {
 			return nil, fmt.Errorf("%w: chained join to %q", ErrUnsupported, slug)
+		}
+		// A query compiles against one binding/engine (#91): a joined model on a
+		// different explicit binding cannot be reached safely.
+		if base.BindingID != "" && models[slug].BindingID != "" && models[slug].BindingID != base.BindingID {
+			return nil, fmt.Errorf("%w: joined model %q is on a different binding", ErrUnsupported, slug)
 		}
 	}
 
@@ -303,7 +333,7 @@ func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]
 		}
 		p.selects = append(p.selects, expr+" AS "+alias)
 		p.innerPos[name] = len(p.selects)
-		p.groupBy = append(p.groupBy, fmt.Sprintf("%d", len(p.selects)))
+		p.groupBy = append(p.groupBy, expr)
 	}
 	for _, name := range needed {
 		expr, err := metricExpr(d, *metricOf(base, name), base.Dimensions, baseAlias)
@@ -338,6 +368,9 @@ func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]
 			p.having = append(p.having, cond)
 			continue
 		}
+		if calculatedOf(owner, f.Field) != nil {
+			continue // outer query
+		}
 		expr, err := dimensionExprIn(d, ownerAlias, *dimensionOf(owner, f.Field), "")
 		if err != nil {
 			return nil, err
@@ -359,12 +392,17 @@ func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]
 // otherwise an outer query over the aggregated rows.
 func render(q semantic.ExploreQuery, base semantic.Model, models map[string]semantic.Model, owners map[string]string, p *plan, d dialect.Dialect) (Result, error) {
 	derived := map[string]semantic.Metric{}
+	calculated := map[string]semantic.CalculatedField{}
 	for _, name := range q.Metrics {
-		if mt := metricOf(ownerModel(owners[name], base, models), name); mt != nil && mt.Derived != nil {
+		owner := ownerModel(owners[name], base, models)
+		if mt := metricOf(owner, name); mt != nil && mt.Derived != nil {
 			derived[name] = *mt
 		}
+		if cf := calculatedOf(owner, name); cf != nil {
+			calculated[name] = *cf
+		}
 	}
-	if len(derived) == 0 && !hasDerivedFilter(q, base, models, owners) {
+	if len(derived) == 0 && len(calculated) == 0 && !hasOuterFilter(q, base, models, owners) {
 		return assemble(d, q, p.selects, p.groupBy, p.from, p.where, p.having, p.innerPos, p.notes)
 	}
 
@@ -384,26 +422,34 @@ func render(q semantic.ExploreQuery, base semantic.Model, models map[string]sema
 		if err != nil {
 			return Result{}, err
 		}
-		if mt, ok := derived[name]; ok {
-			expr, err := derivedExpr(d, mt)
+		switch {
+		case derived[name].Derived != nil:
+			expr, err := derivedExpr(d, derived[name])
 			if err != nil {
 				return Result{}, err
 			}
 			outerSelects = append(outerSelects, expr+" AS "+alias)
-		} else {
+		case calculated[name].SQL != "":
+			outerSelects = append(outerSelects, strings.TrimSpace(calculated[name].SQL)+" AS "+alias)
+		default:
 			outerSelects = append(outerSelects, alias+" AS "+alias)
 		}
 		outerPos[name] = len(outerSelects)
 	}
 	var outerWhere []string
 	for _, f := range q.Filters {
-		mt := metricOf(ownerModel(owners[f.Field], base, models), f.Field)
-		if mt == nil || mt.Derived == nil {
+		owner := ownerModel(owners[f.Field], base, models)
+		var expr string
+		if mt := metricOf(owner, f.Field); mt != nil && mt.Derived != nil {
+			e, err := derivedExpr(d, *mt)
+			if err != nil {
+				return Result{}, err
+			}
+			expr = e
+		} else if cf := calculatedOf(owner, f.Field); cf != nil {
+			expr = strings.TrimSpace(cf.SQL)
+		} else {
 			continue
-		}
-		expr, err := derivedExpr(d, *mt)
-		if err != nil {
-			return Result{}, err
 		}
 		cond, err := semantic.RenderFilter(d, expr, f.Op, f.Values)
 		if err != nil {
@@ -429,7 +475,7 @@ func render(q semantic.ExploreQuery, base semantic.Model, models map[string]sema
 	b.WriteString(strings.Join(outerSelects, ", "))
 	b.WriteString(" FROM (")
 	b.WriteString(inner)
-	b.WriteString(") AS baleia_explore")
+	b.WriteString(") baleia_explore")
 	if len(outerWhere) > 0 {
 		b.WriteString(" WHERE ")
 		b.WriteString(strings.Join(outerWhere, " AND "))
@@ -445,9 +491,13 @@ func render(q semantic.ExploreQuery, base semantic.Model, models map[string]sema
 	return Result{SQL: sql, Notes: p.notes}, nil
 }
 
-func hasDerivedFilter(q semantic.ExploreQuery, base semantic.Model, models map[string]semantic.Model, owners map[string]string) bool {
+func hasOuterFilter(q semantic.ExploreQuery, base semantic.Model, models map[string]semantic.Model, owners map[string]string) bool {
 	for _, f := range q.Filters {
-		if mt := metricOf(ownerModel(owners[f.Field], base, models), f.Field); mt != nil && mt.Derived != nil {
+		owner := ownerModel(owners[f.Field], base, models)
+		if mt := metricOf(owner, f.Field); mt != nil && mt.Derived != nil {
+			return true
+		}
+		if calculatedOf(owner, f.Field) != nil {
 			return true
 		}
 	}
@@ -561,6 +611,11 @@ func dimensionExprIn(d dialect.Dialect, alias string, dim semantic.Dimension, gr
 // metricExpr renders a base metric's aggregation.
 func metricExpr(d dialect.Dialect, mt semantic.Metric, dims []semantic.Dimension, alias string) (string, error) {
 	if strings.TrimSpace(mt.SQL) != "" {
+		if len(mt.Filters) > 0 {
+			// A raw aggregate cannot be wrapped in CASE; a per-metric subquery is
+			// needed to apply the filters without changing sibling metrics.
+			return "", fmt.Errorf("%w: custom_sql metric %q with filters needs a per-metric subquery", ErrUnsupported, mt.Name)
+		}
 		return strings.TrimSpace(mt.SQL), nil
 	}
 	expr := ""
@@ -574,6 +629,28 @@ func metricExpr(d dialect.Dialect, mt semantic.Metric, dims []semantic.Dimension
 			return "", err
 		}
 		expr = e
+	}
+	if len(mt.Filters) > 0 {
+		conds := make([]string, 0, len(mt.Filters))
+		for _, f := range mt.Filters {
+			dim := findDimension(dims, f.Column)
+			if dim == nil {
+				return "", fmt.Errorf("%w: metric %q filters on unknown dimension %q", semantic.ErrInvalidExplore, mt.Name, f.Column)
+			}
+			col, err := dimensionExprIn(d, alias, *dim, "")
+			if err != nil {
+				return "", err
+			}
+			cond, err := semantic.RenderFilter(d, col, f.Op, f.Values)
+			if err != nil {
+				return "", err
+			}
+			conds = append(conds, cond)
+		}
+		if expr == "" {
+			expr = "1"
+		}
+		expr = "CASE WHEN " + strings.Join(conds, " AND ") + " THEN " + expr + " END"
 	}
 	return d.Aggregate(mt.Aggregation, expr, false)
 }
@@ -590,9 +667,9 @@ func sourceExpr(d dialect.Dialect, m semantic.Model, opts Options) (string, erro
 		if err != nil {
 			return "", err
 		}
-		return rel + " AS " + alias, nil
+		return rel + " " + alias, nil
 	case semantic.SourceSQL:
-		return "(" + strings.TrimSpace(m.Source.SQL) + ") AS " + alias, nil
+		return "(" + strings.TrimSpace(m.Source.SQL) + ") " + alias, nil
 	}
 	return "", fmt.Errorf("%w: model %q has unknown source kind %q", semantic.ErrInvalidExplore, m.Slug, m.Source.Kind)
 }
@@ -606,6 +683,9 @@ func fieldOwners(base semantic.Model, models map[string]semantic.Model) (map[str
 		}
 		for _, mt := range m.Metrics {
 			out[mt.Name] = m.Slug
+		}
+		for _, cf := range m.CalculatedFields {
+			out[cf.Name] = m.Slug
 		}
 	}
 	add(base)
@@ -644,6 +724,15 @@ func metricOf(m semantic.Model, name string) *semantic.Metric {
 	for i := range m.Metrics {
 		if m.Metrics[i].Name == name {
 			return &m.Metrics[i]
+		}
+	}
+	return nil
+}
+
+func calculatedOf(m semantic.Model, name string) *semantic.CalculatedField {
+	for i := range m.CalculatedFields {
+		if m.CalculatedFields[i].Name == name {
+			return &m.CalculatedFields[i]
 		}
 	}
 	return nil
