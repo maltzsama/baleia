@@ -354,6 +354,15 @@ func (q ExploreQuery) Validate(models map[string]Model) error {
 	return nil
 }
 
+// RenderFilter renders one explore predicate on an already-quoted expression.
+// It reuses the v1 filter renderer so values are always dialect literals.
+func RenderFilter(d dialect.Dialect, expr string, op FilterOp, values []any) (string, error) {
+	if len(values) == 0 && op != OpIsNull && op != OpIsNotNull {
+		return "", fmt.Errorf("%w: filter has no values", ErrInvalidExplore)
+	}
+	return renderFilter(d, expr, Filter{Op: op, Values: values})
+}
+
 // resolvedField is a dimension or metric reachable from the base model. model
 // is the model that owns it (the base, or a joined one).
 type resolvedField struct {
