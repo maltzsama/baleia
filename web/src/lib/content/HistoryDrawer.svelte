@@ -25,7 +25,7 @@
 		onrestored
 	}: {
 		open?: boolean;
-		kind: 'saved_query' | 'semantic_metric';
+		kind: 'saved_query' | 'semantic_metric' | 'semantic_model';
 		entityId: string;
 		workspaceId: string;
 		onrestored?: () => void;

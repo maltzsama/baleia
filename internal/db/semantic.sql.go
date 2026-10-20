@@ -84,6 +84,71 @@ func (q *Queries) CreateSemanticMetric(ctx context.Context, arg CreateSemanticMe
 	return i, err
 }
 
+const createSemanticModel = `-- name: CreateSemanticModel :one
+INSERT INTO semantic_models (
+    workspace_id, space_id, slug, label, description, certified,
+    catalog_id, binding_id, definition, format_version, owner_user_id, updated_by
+)
+VALUES (
+    $1::uuid, $2::uuid, $3::text, $4::text, $5::text, $6::boolean,
+    $7::uuid, $8::uuid, $9::jsonb, $10::int,
+    $11::uuid, $12::uuid
+)
+RETURNING id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+`
+
+type CreateSemanticModelParams struct {
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	SpaceID       pgtype.UUID `json:"space_id"`
+	Slug          string      `json:"slug"`
+	Label         string      `json:"label"`
+	Description   string      `json:"description"`
+	Certified     bool        `json:"certified"`
+	CatalogID     pgtype.UUID `json:"catalog_id"`
+	BindingID     pgtype.UUID `json:"binding_id"`
+	Definition    []byte      `json:"definition"`
+	FormatVersion int32       `json:"format_version"`
+	OwnerUserID   pgtype.UUID `json:"owner_user_id"`
+	UpdatedBy     pgtype.UUID `json:"updated_by"`
+}
+
+func (q *Queries) CreateSemanticModel(ctx context.Context, arg CreateSemanticModelParams) (SemanticModel, error) {
+	row := q.db.QueryRow(ctx, createSemanticModel,
+		arg.WorkspaceID,
+		arg.SpaceID,
+		arg.Slug,
+		arg.Label,
+		arg.Description,
+		arg.Certified,
+		arg.CatalogID,
+		arg.BindingID,
+		arg.Definition,
+		arg.FormatVersion,
+		arg.OwnerUserID,
+		arg.UpdatedBy,
+	)
+	var i SemanticModel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SpaceID,
+		&i.Slug,
+		&i.Label,
+		&i.Description,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Definition,
+		&i.FormatVersion,
+		&i.OwnerUserID,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteSemanticDoc = `-- name: DeleteSemanticDoc :execrows
 DELETE FROM semantic_docs
 WHERE workspace_id = $1::uuid
@@ -127,6 +192,24 @@ type DeleteSemanticMetricParams struct {
 
 func (q *Queries) DeleteSemanticMetric(ctx context.Context, arg DeleteSemanticMetricParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteSemanticMetric, arg.WorkspaceID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSemanticModel = `-- name: DeleteSemanticModel :execrows
+DELETE FROM semantic_models
+WHERE workspace_id = $1::uuid AND id = $2::uuid
+`
+
+type DeleteSemanticModelParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ID          pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteSemanticModel(ctx context.Context, arg DeleteSemanticModelParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSemanticModel, arg.WorkspaceID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -250,6 +333,74 @@ func (q *Queries) GetSemanticMetricBySlug(ctx context.Context, arg GetSemanticMe
 	return i, err
 }
 
+const getSemanticModel = `-- name: GetSemanticModel :one
+SELECT id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_models
+WHERE workspace_id = $1::uuid AND id = $2::uuid
+`
+
+type GetSemanticModelParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ID          pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) GetSemanticModel(ctx context.Context, arg GetSemanticModelParams) (SemanticModel, error) {
+	row := q.db.QueryRow(ctx, getSemanticModel, arg.WorkspaceID, arg.ID)
+	var i SemanticModel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SpaceID,
+		&i.Slug,
+		&i.Label,
+		&i.Description,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Definition,
+		&i.FormatVersion,
+		&i.OwnerUserID,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getSemanticModelBySlug = `-- name: GetSemanticModelBySlug :one
+SELECT id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_models
+WHERE workspace_id = $1::uuid AND slug = $2::text
+`
+
+type GetSemanticModelBySlugParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Slug        string      `json:"slug"`
+}
+
+func (q *Queries) GetSemanticModelBySlug(ctx context.Context, arg GetSemanticModelBySlugParams) (SemanticModel, error) {
+	row := q.db.QueryRow(ctx, getSemanticModelBySlug, arg.WorkspaceID, arg.Slug)
+	var i SemanticModel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SpaceID,
+		&i.Slug,
+		&i.Label,
+		&i.Description,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Definition,
+		&i.FormatVersion,
+		&i.OwnerUserID,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listSemanticDocsForTable = `-- name: ListSemanticDocsForTable :many
 
 
@@ -350,6 +501,39 @@ func (q *Queries) ListSemanticMetricVersions(ctx context.Context, workspaceID pg
 	return items, nil
 }
 
+const listSemanticModelVersions = `-- name: ListSemanticModelVersions :many
+SELECT entity_id, max(version)::int AS version
+FROM content_versions
+WHERE workspace_id = $1::uuid AND entity_type = 'semantic_model'
+GROUP BY entity_id
+`
+
+type ListSemanticModelVersionsRow struct {
+	EntityID pgtype.UUID `json:"entity_id"`
+	Version  int32       `json:"version"`
+}
+
+// Latest content version of every model in the workspace, in one query.
+func (q *Queries) ListSemanticModelVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticModelVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listSemanticModelVersions, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSemanticModelVersionsRow
+	for rows.Next() {
+		var i ListSemanticModelVersionsRow
+		if err := rows.Scan(&i.EntityID, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSemanticTags = `-- name: ListSemanticTags :many
 WITH visible AS (
     SELECT c.id FROM catalogs c
@@ -394,6 +578,48 @@ func (q *Queries) ListSemanticTags(ctx context.Context, arg ListSemanticTagsPara
 	for rows.Next() {
 		var i ListSemanticTagsRow
 		if err := rows.Scan(&i.Tag, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSpaceModels = `-- name: ListSpaceModels :many
+SELECT id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_models WHERE space_id = $1::uuid ORDER BY label
+`
+
+// Every model of one space, for bundles (#34/#91).
+func (q *Queries) ListSpaceModels(ctx context.Context, spaceID pgtype.UUID) ([]SemanticModel, error) {
+	rows, err := q.db.Query(ctx, listSpaceModels, spaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SemanticModel
+	for rows.Next() {
+		var i SemanticModel
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.SpaceID,
+			&i.Slug,
+			&i.Label,
+			&i.Description,
+			&i.Certified,
+			&i.CertifiedBy,
+			&i.CertifiedAt,
+			&i.CatalogID,
+			&i.BindingID,
+			&i.Definition,
+			&i.FormatVersion,
+			&i.OwnerUserID,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -449,6 +675,72 @@ func (q *Queries) ListVisibleSemanticMetrics(ctx context.Context, arg ListVisibl
 			&i.SpaceID,
 			&i.CertifiedBy,
 			&i.CertifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVisibleSemanticModels = `-- name: ListVisibleSemanticModels :many
+
+WITH visible AS (
+    SELECT c.id FROM catalogs c
+    JOIN catalog_connections cc ON cc.id = c.connection_id
+    JOIN workspaces w ON w.id = $1::uuid
+    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
+    UNION
+    SELECT g.catalog_id FROM workspace_catalog_grants g
+    JOIN catalogs c ON c.id = g.catalog_id
+    WHERE g.workspace_id = $1::uuid AND c.enabled
+)
+SELECT m.id, m.workspace_id, m.space_id, m.slug, m.label, m.description, m.certified, m.certified_by, m.certified_at, m.catalog_id, m.binding_id, m.definition, m.format_version, m.owner_user_id, m.updated_by, m.updated_at FROM semantic_models m
+WHERE m.workspace_id = $1::uuid
+  AND baleia_effective_space_role(m.workspace_id, m.space_id, $2::uuid) IS NOT NULL
+  AND m.catalog_id IN (SELECT id FROM visible)
+  AND ($3::uuid IS NULL OR m.space_id = $3::uuid)
+ORDER BY m.label
+`
+
+type ListVisibleSemanticModelsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	SpaceID     pgtype.UUID `json:"space_id"`
+}
+
+// ── Models (v2, #91) ───────────────────────────────────────────────────────────
+// Model visibility is space role (#40) AND a catalog grant (#16); space_id
+// narrows it.
+func (q *Queries) ListVisibleSemanticModels(ctx context.Context, arg ListVisibleSemanticModelsParams) ([]SemanticModel, error) {
+	rows, err := q.db.Query(ctx, listVisibleSemanticModels, arg.WorkspaceID, arg.UserID, arg.SpaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SemanticModel
+	for rows.Next() {
+		var i SemanticModel
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.SpaceID,
+			&i.Slug,
+			&i.Label,
+			&i.Description,
+			&i.Certified,
+			&i.CertifiedBy,
+			&i.CertifiedAt,
+			&i.CatalogID,
+			&i.BindingID,
+			&i.Definition,
+			&i.FormatVersion,
+			&i.OwnerUserID,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -611,6 +903,51 @@ func (q *Queries) SetSemanticMetricCertification(ctx context.Context, arg SetSem
 	return i, err
 }
 
+const setSemanticModelCertification = `-- name: SetSemanticModelCertification :one
+UPDATE semantic_models
+SET certified = $1::boolean,
+    certified_by = CASE WHEN $1::boolean THEN $2::uuid ELSE NULL END,
+    certified_at = CASE WHEN $1::boolean THEN now() ELSE NULL END
+WHERE workspace_id = $3::uuid AND id = $4::uuid
+RETURNING id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+`
+
+type SetSemanticModelCertificationParams struct {
+	Certified   bool        `json:"certified"`
+	Actor       pgtype.UUID `json:"actor"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ID          pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) SetSemanticModelCertification(ctx context.Context, arg SetSemanticModelCertificationParams) (SemanticModel, error) {
+	row := q.db.QueryRow(ctx, setSemanticModelCertification,
+		arg.Certified,
+		arg.Actor,
+		arg.WorkspaceID,
+		arg.ID,
+	)
+	var i SemanticModel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SpaceID,
+		&i.Slug,
+		&i.Label,
+		&i.Description,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Definition,
+		&i.FormatVersion,
+		&i.OwnerUserID,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateSemanticMetric = `-- name: UpdateSemanticMetric :one
 UPDATE semantic_metrics
 SET space_id = $1::uuid,
@@ -687,6 +1024,78 @@ func (q *Queries) UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMe
 		&i.SpaceID,
 		&i.CertifiedBy,
 		&i.CertifiedAt,
+	)
+	return i, err
+}
+
+const updateSemanticModel = `-- name: UpdateSemanticModel :one
+UPDATE semantic_models
+SET space_id = $1::uuid,
+    slug = $2::text,
+    label = $3::text,
+    description = $4::text,
+    certified = $5::boolean,
+    catalog_id = $6::uuid,
+    binding_id = $7::uuid,
+    definition = $8::jsonb,
+    format_version = $9::int,
+    owner_user_id = $10::uuid,
+    updated_by = $11::uuid,
+    updated_at = now()
+WHERE workspace_id = $12::uuid AND id = $13::uuid
+RETURNING id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+`
+
+type UpdateSemanticModelParams struct {
+	SpaceID       pgtype.UUID `json:"space_id"`
+	Slug          string      `json:"slug"`
+	Label         string      `json:"label"`
+	Description   string      `json:"description"`
+	Certified     bool        `json:"certified"`
+	CatalogID     pgtype.UUID `json:"catalog_id"`
+	BindingID     pgtype.UUID `json:"binding_id"`
+	Definition    []byte      `json:"definition"`
+	FormatVersion int32       `json:"format_version"`
+	OwnerUserID   pgtype.UUID `json:"owner_user_id"`
+	UpdatedBy     pgtype.UUID `json:"updated_by"`
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	ID            pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateSemanticModel(ctx context.Context, arg UpdateSemanticModelParams) (SemanticModel, error) {
+	row := q.db.QueryRow(ctx, updateSemanticModel,
+		arg.SpaceID,
+		arg.Slug,
+		arg.Label,
+		arg.Description,
+		arg.Certified,
+		arg.CatalogID,
+		arg.BindingID,
+		arg.Definition,
+		arg.FormatVersion,
+		arg.OwnerUserID,
+		arg.UpdatedBy,
+		arg.WorkspaceID,
+		arg.ID,
+	)
+	var i SemanticModel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SpaceID,
+		&i.Slug,
+		&i.Label,
+		&i.Description,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Definition,
+		&i.FormatVersion,
+		&i.OwnerUserID,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

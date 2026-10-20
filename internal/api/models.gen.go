@@ -475,6 +475,20 @@ const (
 	ExecutionStatusRunning   ExecutionStatus = "running"
 )
 
+// Defines values for ExploreQueryFiltersOp.
+const (
+	Empty            ExploreQueryFiltersOp = "!="
+	Equal            ExploreQueryFiltersOp = "="
+	GreaterThan      ExploreQueryFiltersOp = ">"
+	GreaterThanEqual ExploreQueryFiltersOp = ">="
+	In               ExploreQueryFiltersOp = "in"
+	IsNotNull        ExploreQueryFiltersOp = "is_not_null"
+	IsNull           ExploreQueryFiltersOp = "is_null"
+	LessThan         ExploreQueryFiltersOp = "<"
+	LessThanEqual    ExploreQueryFiltersOp = "<="
+	NotIn            ExploreQueryFiltersOp = "not_in"
+)
+
 // Defines values for FieldCode.
 const (
 	FieldCodeInvalidFormat FieldCode = "invalid_format"
@@ -842,6 +856,7 @@ const (
 const (
 	TrashItemEntityTypeSavedQuery     TrashItemEntityType = "saved_query"
 	TrashItemEntityTypeSemanticMetric TrashItemEntityType = "semantic_metric"
+	TrashItemEntityTypeSemanticModel  TrashItemEntityType = "semantic_model"
 )
 
 // Defines values for UpdateAgentRequestStatus.
@@ -1031,6 +1046,7 @@ const (
 const (
 	ListTrashParamsEntityTypeSavedQuery     ListTrashParamsEntityType = "saved_query"
 	ListTrashParamsEntityTypeSemanticMetric ListTrashParamsEntityType = "semantic_metric"
+	ListTrashParamsEntityTypeSemanticModel  ListTrashParamsEntityType = "semantic_model"
 )
 
 // AddTeamMemberRequest defines model for AddTeamMemberRequest.
@@ -2275,6 +2291,45 @@ type ExplainResult struct {
 	Supported bool    `json:"supported"`
 }
 
+// ExploreCompileRequest defines model for ExploreCompileRequest.
+type ExploreCompileRequest struct {
+	// BindingId Defaults to the base model's binding
+	BindingId *openapi_types.UUID `json:"binding_id"`
+
+	// Query The only input the semantic compiler accepts. Never carries raw SQL.
+	Query ExploreQuery `json:"query"`
+}
+
+// ExploreCompileResult defines model for ExploreCompileResult.
+type ExploreCompileResult struct {
+	Dialect string    `json:"dialect"`
+	Notes   *[]string `json:"notes,omitempty"`
+	Sql     string    `json:"sql"`
+}
+
+// ExploreQuery The only input the semantic compiler accepts. Never carries raw SQL.
+type ExploreQuery struct {
+	Dimensions *[]string `json:"dimensions,omitempty"`
+	Filters    *[]struct {
+		Field  string                `json:"field"`
+		Op     ExploreQueryFiltersOp `json:"op"`
+		Values *[]interface{}        `json:"values,omitempty"`
+	} `json:"filters,omitempty"`
+	Limit   *int      `json:"limit,omitempty"`
+	Metrics *[]string `json:"metrics,omitempty"`
+
+	// Model Base model slug
+	Model string `json:"model"`
+	Sorts *[]struct {
+		Desc  *bool  `json:"desc,omitempty"`
+		Field string `json:"field"`
+	} `json:"sorts,omitempty"`
+	TimeGrain *string `json:"time_grain"`
+}
+
+// ExploreQueryFiltersOp defines model for ExploreQuery.Filters.Op.
+type ExploreQueryFiltersOp string
+
 // Features defines model for Features.
 type Features struct {
 	Agents     bool `json:"agents"`
@@ -3052,6 +3107,13 @@ type RestoreSemanticMetricRequest struct {
 	SpaceId *openapi_types.UUID `json:"space_id"`
 }
 
+// RestoreSemanticModelRequest defines model for RestoreSemanticModelRequest.
+type RestoreSemanticModelRequest struct {
+	// NewSlug Retry a slug conflict with this slug
+	NewSlug *string             `json:"new_slug"`
+	SpaceId *openapi_types.UUID `json:"space_id"`
+}
+
 // Retriever defines model for Retriever.
 type Retriever struct {
 	AllowedActions    *[]string             `json:"allowed_actions,omitempty"`
@@ -3285,6 +3347,62 @@ type SemanticMetricUpdate struct {
 // SemanticMetricValidateResult defines model for SemanticMetricValidateResult.
 type SemanticMetricValidateResult struct {
 	Ok bool `json:"ok"`
+}
+
+// SemanticModel defines model for SemanticModel.
+type SemanticModel struct {
+	AllowedActions *[]string           `json:"allowed_actions,omitempty"`
+	BindingId      *openapi_types.UUID `json:"binding_id"`
+	CatalogId      openapi_types.UUID  `json:"catalog_id"`
+	Certified      bool                `json:"certified"`
+	CertifiedAt    *time.Time          `json:"certified_at"`
+	CertifiedBy    *openapi_types.UUID `json:"certified_by"`
+
+	// Definition Semantic model v2: source (table or SQL), primary_key, dimensions, metrics and joins. Validated with DisallowUnknownFields.
+	Definition    map[string]interface{} `json:"definition"`
+	Description   *string                `json:"description,omitempty"`
+	FormatVersion int                    `json:"format_version"`
+	Id            openapi_types.UUID     `json:"id"`
+	Label         string                 `json:"label"`
+	OwnerUserId   *openapi_types.UUID    `json:"owner_user_id"`
+	Slug          string                 `json:"slug"`
+	SpaceId       *openapi_types.UUID    `json:"space_id"`
+	UpdatedAt     time.Time              `json:"updated_at"`
+	UpdatedBy     *openapi_types.UUID    `json:"updated_by,omitempty"`
+
+	// Version Latest content version (#34)
+	Version     int                `json:"version"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+}
+
+// SemanticModelCreate defines model for SemanticModelCreate.
+type SemanticModelCreate struct {
+	BindingId   *openapi_types.UUID    `json:"binding_id"`
+	CatalogId   openapi_types.UUID     `json:"catalog_id"`
+	Certified   *bool                  `json:"certified,omitempty"`
+	Definition  map[string]interface{} `json:"definition"`
+	Description *string                `json:"description,omitempty"`
+	Label       string                 `json:"label"`
+	OwnerUserId *openapi_types.UUID    `json:"owner_user_id"`
+	Slug        string                 `json:"slug"`
+
+	// SpaceId Omitted: the workspace's default space
+	SpaceId *openapi_types.UUID `json:"space_id"`
+}
+
+// SemanticModelUpdate defines model for SemanticModelUpdate.
+type SemanticModelUpdate struct {
+	BindingId   *openapi_types.UUID     `json:"binding_id"`
+	CatalogId   *openapi_types.UUID     `json:"catalog_id,omitempty"`
+	Certified   *bool                   `json:"certified,omitempty"`
+	Definition  *map[string]interface{} `json:"definition,omitempty"`
+	Description *string                 `json:"description,omitempty"`
+
+	// ExpectedVersion Reject with 409 version_conflict when the latest content version differs
+	ExpectedVersion *int                `json:"expected_version"`
+	Label           *string             `json:"label,omitempty"`
+	OwnerUserId     *openapi_types.UUID `json:"owner_user_id"`
+	Slug            *string             `json:"slug,omitempty"`
 }
 
 // SemanticTag defines model for SemanticTag.
@@ -4344,6 +4462,17 @@ type ListSemanticMetricVersionsParams struct {
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListSemanticModelsParams defines parameters for ListSemanticModels.
+type ListSemanticModelsParams struct {
+	SpaceId *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
+}
+
+// ListSemanticModelVersionsParams defines parameters for ListSemanticModelVersions.
+type ListSemanticModelVersionsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListSemanticTagsParams defines parameters for ListSemanticTags.
 type ListSemanticTagsParams struct {
 	Q     *string `form:"q,omitempty" json:"q,omitempty"`
@@ -4550,6 +4679,9 @@ type TriggerRetrieverRefreshJSONRequestBody TriggerRetrieverRefreshJSONBody
 // UpsertSemanticDocJSONRequestBody defines body for UpsertSemanticDoc for application/json ContentType.
 type UpsertSemanticDocJSONRequestBody = SemanticDocUpsert
 
+// CompileExploreQueryJSONRequestBody defines body for CompileExploreQuery for application/json ContentType.
+type CompileExploreQueryJSONRequestBody = ExploreCompileRequest
+
 // CreateSemanticMetricJSONRequestBody defines body for CreateSemanticMetric for application/json ContentType.
 type CreateSemanticMetricJSONRequestBody = SemanticMetricCreate
 
@@ -4564,6 +4696,15 @@ type UpdateSemanticMetricJSONRequestBody = SemanticMetricUpdate
 
 // RestoreSemanticMetricVersionJSONRequestBody defines body for RestoreSemanticMetricVersion for application/json ContentType.
 type RestoreSemanticMetricVersionJSONRequestBody = RestoreSemanticMetricRequest
+
+// CreateSemanticModelJSONRequestBody defines body for CreateSemanticModel for application/json ContentType.
+type CreateSemanticModelJSONRequestBody = SemanticModelCreate
+
+// UpdateSemanticModelJSONRequestBody defines body for UpdateSemanticModel for application/json ContentType.
+type UpdateSemanticModelJSONRequestBody = SemanticModelUpdate
+
+// RestoreSemanticModelVersionJSONRequestBody defines body for RestoreSemanticModelVersion for application/json ContentType.
+type RestoreSemanticModelVersionJSONRequestBody = RestoreSemanticModelRequest
 
 // CreateSpaceJSONRequestBody defines body for CreateSpace for application/json ContentType.
 type CreateSpaceJSONRequestBody = CreateSpaceRequest

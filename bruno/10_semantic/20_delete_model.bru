@@ -1,0 +1,19 @@
+meta {
+  name: Delete Model
+  type: http
+  seq: 20
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/models/{{model_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}

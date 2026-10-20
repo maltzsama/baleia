@@ -413,6 +413,12 @@ func (h *Handlers) ListTrash(ctx context.Context, request ListTrashRequestObject
 				continue
 			}
 			item.Slug, item.Name = s.Slug, &s.Label
+		case content.EntitySemanticModel:
+			s, err := content.ParseModelSnapshot(r.Snapshot)
+			if err != nil {
+				continue
+			}
+			item.Slug, item.Name = s.Slug, &s.Label
 		default:
 			continue
 		}

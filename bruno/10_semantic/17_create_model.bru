@@ -1,0 +1,46 @@
+meta {
+  name: Create Model
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/models
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "slug": "events_model",
+    "label": "Events",
+    "description": "Every tracked event.",
+    "catalog_id": "{{explorer_catalog_id}}",
+    "definition": {
+      "source": { "kind": "table", "namespace": ["analytics"], "table": "events" },
+      "primary_key": ["id"],
+      "dimensions": [
+        { "name": "id", "type": "int64" },
+        { "name": "event_name", "type": "string" }
+      ],
+      "metrics": [
+        { "name": "event_count", "aggregation": "count" }
+      ]
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.slug: eq events_model
+  res.body.format_version: eq 1
+  res.body.version: eq 1
+}
+
+vars:post-response {
+  model_id: res.body.id
+}

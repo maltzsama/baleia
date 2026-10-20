@@ -13,9 +13,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,9 +29,11 @@ import (
 const (
 	SavedQueryV1     = "saved_query/v1"
 	SemanticMetricV1 = "semantic_metric/v1"
+	SemanticModelV1  = "semantic_model/v1"
 
 	EntitySavedQuery     = "saved_query"
 	EntitySemanticMetric = "semantic_metric"
+	EntitySemanticModel  = "semantic_model"
 )
 
 var (
@@ -114,6 +118,21 @@ type SemanticMetricSnapshot struct {
 	OwnerUserID   *uuid.UUID      `json:"owner_user_id"`
 }
 
+// SemanticModelSnapshot is the on-disk shape of a model version.
+type SemanticModelSnapshot struct {
+	Schema        string          `json:"schema"`
+	Slug          string          `json:"slug"`
+	Label         string          `json:"label"`
+	Description   string          `json:"description"`
+	Certified     bool            `json:"certified"`
+	SpaceID       uuid.UUID       `json:"space_id"`
+	CatalogID     uuid.UUID       `json:"catalog_id"`
+	BindingID     *uuid.UUID      `json:"binding_id"`
+	Definition    json.RawMessage `json:"definition"`
+	FormatVersion int             `json:"format_version"`
+	OwnerUserID   *uuid.UUID      `json:"owner_user_id"`
+}
+
 func savedQuerySnapshot(q db.SavedQuery) ([]byte, error) {
 	s := SavedQuerySnapshot{
 		Schema: SavedQueryV1, Slug: q.Slug, Name: q.Name, SQL: q.Sql,
@@ -164,6 +183,35 @@ func ParseMetricSnapshot(raw []byte) (SemanticMetricSnapshot, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&s); err != nil {
 		return SemanticMetricSnapshot{}, fmt.Errorf("semantic_metric snapshot: %w", err)
+	}
+	return s, nil
+}
+
+func modelSnapshot(m db.SemanticModel) ([]byte, error) {
+	s := SemanticModelSnapshot{
+		Schema: SemanticModelV1, Slug: m.Slug, Label: m.Label, Description: m.Description,
+		Certified: m.Certified, SpaceID: uuid.UUID(m.SpaceID.Bytes),
+		CatalogID: uuid.UUID(m.CatalogID.Bytes), Definition: m.Definition,
+		FormatVersion: int(m.FormatVersion),
+	}
+	if m.BindingID.Valid {
+		id := uuid.UUID(m.BindingID.Bytes)
+		s.BindingID = &id
+	}
+	if m.OwnerUserID.Valid {
+		id := uuid.UUID(m.OwnerUserID.Bytes)
+		s.OwnerUserID = &id
+	}
+	return json.Marshal(s)
+}
+
+// ParseModelSnapshot decodes a stored model version and rejects unknown fields.
+func ParseModelSnapshot(raw []byte) (SemanticModelSnapshot, error) {
+	var s SemanticModelSnapshot
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&s); err != nil {
+		return SemanticModelSnapshot{}, fmt.Errorf("semantic_model snapshot: %w", err)
 	}
 	return s, nil
 }
@@ -555,6 +603,199 @@ func (s *Service) RestoreSemanticMetric(ctx context.Context, actor pgtype.UUID, 
 	return out, err
 }
 
+// ── semantic models ────────────────────────────────────────────────────────────
+
+// CreateSemanticModel creates a model and its version 1.
+func (s *Service) CreateSemanticModel(ctx context.Context, actor pgtype.UUID, in db.CreateSemanticModelParams) (db.SemanticModel, error) {
+	var out db.SemanticModel
+	err := s.inTx(ctx, func(q db.Querier) error {
+		var err error
+		out, err = q.CreateSemanticModel(ctx, in)
+		if err != nil {
+			return err
+		}
+		snap, err := modelSnapshot(out)
+		if err != nil {
+			return err
+		}
+		_, err = q.InsertContentVersion(ctx, db.InsertContentVersionParams{
+			WorkspaceID: out.WorkspaceID, SpaceID: out.SpaceID, EntityType: EntitySemanticModel,
+			EntityID: out.ID, Version: 1, ChangeKind: "create", Snapshot: snap, AuthorID: actor,
+		})
+		return err
+	})
+	return out, err
+}
+
+// UpdateSemanticModel writes the change and one update version (none for a
+// no-op). A non-nil expectedVersion rejects a stale edit.
+func (s *Service) UpdateSemanticModel(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticModelParams, expectedVersion *int32) (db.SemanticModel, bool, error) {
+	var out db.SemanticModel
+	changed := false
+	err := s.inTx(ctx, func(q db.Querier) error {
+		current, err := q.GetSemanticModelForUpdate(ctx, db.GetSemanticModelForUpdateParams{ID: in.ID, WorkspaceID: in.WorkspaceID})
+		if err != nil {
+			return err
+		}
+		if expectedVersion != nil {
+			latest, err := q.LatestContentVersion(ctx, db.LatestContentVersionParams{
+				WorkspaceID: in.WorkspaceID, EntityType: EntitySemanticModel, EntityID: in.ID,
+			})
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			currentVersion := int32(0)
+			if err == nil {
+				currentVersion = latest.Version
+			}
+			if currentVersion != *expectedVersion {
+				return &VersionConflict{Current: currentVersion, UpdatedBy: current.UpdatedBy, UpdatedAt: current.UpdatedAt.Time}
+			}
+		}
+		if !modelDiffers(current, in) {
+			out = current
+			return nil
+		}
+		out, err = q.UpdateSemanticModel(ctx, in)
+		if err != nil {
+			return err
+		}
+		next, err := q.NextContentVersion(ctx, db.NextContentVersionParams{EntityType: EntitySemanticModel, EntityID: in.ID})
+		if err != nil {
+			return err
+		}
+		snap, err := modelSnapshot(out)
+		if err != nil {
+			return err
+		}
+		_, err = q.InsertContentVersion(ctx, db.InsertContentVersionParams{
+			WorkspaceID: out.WorkspaceID, SpaceID: out.SpaceID, EntityType: EntitySemanticModel,
+			EntityID: out.ID, Version: next, ChangeKind: "update", Snapshot: snap, AuthorID: actor,
+		})
+		changed = true
+		return err
+	})
+	return out, changed, err
+}
+
+// ImportSemanticModel updates an existing model from a bundle and records an
+// 'import' version.
+func (s *Service) ImportSemanticModel(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticModelParams) (db.SemanticModel, error) {
+	var out db.SemanticModel
+	err := s.inTx(ctx, func(q db.Querier) error {
+		var err error
+		out, err = q.UpdateSemanticModel(ctx, in)
+		if err != nil {
+			return err
+		}
+		return s.writeVersion(ctx, q, out.WorkspaceID, out.SpaceID, EntitySemanticModel, out.ID, "import", actor, nil, func() ([]byte, error) {
+			return modelSnapshot(out)
+		})
+	})
+	return out, err
+}
+
+// DeleteSemanticModel records the last state and deletes the row.
+func (s *Service) DeleteSemanticModel(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID) error {
+	return s.inTx(ctx, func(q db.Querier) error {
+		current, err := q.GetSemanticModelForUpdate(ctx, db.GetSemanticModelForUpdateParams{ID: id, WorkspaceID: workspaceID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		next, err := q.NextContentVersion(ctx, db.NextContentVersionParams{EntityType: EntitySemanticModel, EntityID: id})
+		if err != nil {
+			return err
+		}
+		snap, err := modelSnapshot(current)
+		if err != nil {
+			return err
+		}
+		if _, err := q.InsertContentVersion(ctx, db.InsertContentVersionParams{
+			WorkspaceID: workspaceID, SpaceID: current.SpaceID, EntityType: EntitySemanticModel,
+			EntityID: id, Version: next, ChangeKind: "delete", Snapshot: snap, AuthorID: actor,
+		}); err != nil {
+			return err
+		}
+		n, err := q.DeleteSemanticModel(ctx, db.DeleteSemanticModelParams{WorkspaceID: workspaceID, ID: id})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+// RestoreSemanticModel writes a version's snapshot back or recreates a deleted
+// model with its original id.
+func (s *Service) RestoreSemanticModel(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID, version int32, newSlug *string, spaceID *pgtype.UUID) (db.SemanticModel, error) {
+	var out db.SemanticModel
+	err := s.inTx(ctx, func(q db.Querier) error {
+		v, err := q.GetContentVersion(ctx, db.GetContentVersionParams{
+			WorkspaceID: workspaceID, EntityType: EntitySemanticModel, EntityID: id, Version: version,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		snap, err := ParseModelSnapshot(v.Snapshot)
+		if err != nil {
+			return err
+		}
+		targetSpace := spaceIDValue(spaceID, snap.SpaceID)
+		if _, err := q.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: workspaceID, ID: targetSpace}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrSpaceMissing
+			}
+			return err
+		}
+		slug := snap.Slug
+		if newSlug != nil && *newSlug != "" {
+			slug = *newSlug
+		}
+		binding := uuidValue(snap.BindingID)
+		owner := uuidValue(snap.OwnerUserID)
+
+		if _, err := q.GetSemanticModelForUpdate(ctx, db.GetSemanticModelForUpdateParams{ID: id, WorkspaceID: workspaceID}); err == nil {
+			out, err = q.UpdateSemanticModel(ctx, db.UpdateSemanticModelParams{
+				WorkspaceID: workspaceID, ID: id, SpaceID: targetSpace, Slug: slug, Label: snap.Label,
+				Description: snap.Description, Certified: snap.Certified, CatalogID: uuidValue(&snap.CatalogID),
+				BindingID: binding, Definition: snap.Definition, FormatVersion: int32(snap.FormatVersion),
+				OwnerUserID: owner, UpdatedBy: actor,
+			})
+			if err != nil {
+				return uniqueAsConflict(err)
+			}
+		} else if errors.Is(err, pgx.ErrNoRows) {
+			updatedBy := actor
+			if !updatedBy.Valid {
+				updatedBy = v.AuthorID
+			}
+			out, err = q.RestoreSemanticModel(ctx, db.RestoreSemanticModelParams{
+				ID: id, WorkspaceID: workspaceID, SpaceID: targetSpace, Slug: slug, Label: snap.Label,
+				Description: snap.Description, Certified: snap.Certified, CatalogID: uuidValue(&snap.CatalogID),
+				BindingID: binding, Definition: snap.Definition, FormatVersion: int32(snap.FormatVersion),
+				OwnerUserID: owner, UpdatedBy: updatedBy,
+			})
+			if err != nil {
+				return uniqueAsConflict(err)
+			}
+		} else {
+			return err
+		}
+		return s.writeVersion(ctx, q, out.WorkspaceID, out.SpaceID, EntitySemanticModel, id, "restore", actor, &version, func() ([]byte, error) {
+			return modelSnapshot(out)
+		})
+	})
+	return out, err
+}
+
 // ── helpers ─────────────────────────────────────────────────────────────────────
 
 func (s *Service) writeVersion(ctx context.Context, q db.Querier, workspaceID, spaceID pgtype.UUID, entityType string, entityID pgtype.UUID, kind string, actor pgtype.UUID, restoredFrom *int32, snap func() ([]byte, error)) error {
@@ -611,6 +852,25 @@ func metricDiffers(cur db.SemanticMetric, in db.UpdateSemanticMetricParams) bool
 		cur.TableName != in.TableName || !sameUUID(cur.BindingID, in.BindingID) ||
 		!bytes.Equal(cur.Definition, in.Definition) || cur.FormatVersion != in.FormatVersion ||
 		!sameUUID(cur.OwnerUserID, in.OwnerUserID)
+}
+
+func modelDiffers(cur db.SemanticModel, in db.UpdateSemanticModelParams) bool {
+	return cur.Slug != in.Slug || cur.Label != in.Label || cur.Description != in.Description ||
+		cur.Certified != in.Certified || !sameUUID(cur.SpaceID, in.SpaceID) ||
+		!sameUUID(cur.CatalogID, in.CatalogID) || !sameUUID(cur.BindingID, in.BindingID) ||
+		!sameModelDefinition(cur.Definition, in.Definition) || cur.FormatVersion != in.FormatVersion ||
+		!sameUUID(cur.OwnerUserID, in.OwnerUserID)
+}
+
+// sameModelDefinition compares two stored model definitions semantically:
+// PostgreSQL returns jsonb with its own key order and spacing, so a byte
+// comparison would report a change for an unchanged definition.
+func sameModelDefinition(a, b []byte) bool {
+	var ma, mb semantic.Model
+	if json.Unmarshal(a, &ma) != nil || json.Unmarshal(b, &mb) != nil {
+		return false
+	}
+	return reflect.DeepEqual(ma, mb)
 }
 
 func sameUUID(a, b pgtype.UUID) bool {

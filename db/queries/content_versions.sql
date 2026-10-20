@@ -95,3 +95,20 @@ VALUES (
     @format_version::int, sqlc.narg(owner_user_id)::uuid, @updated_by::uuid, now()
 )
 RETURNING *;
+
+-- name: GetSemanticModelForUpdate :one
+SELECT * FROM semantic_models WHERE id = @id::uuid AND workspace_id = @workspace_id::uuid FOR UPDATE;
+
+-- name: RestoreSemanticModel :one
+-- Recreate a deleted model with its old id, so versions and links still line up.
+INSERT INTO semantic_models (
+    id, workspace_id, space_id, slug, label, description, certified, catalog_id,
+    binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+)
+VALUES (
+    @id::uuid, @workspace_id::uuid, @space_id::uuid, @slug::text, @label::text,
+    @description::text, @certified::boolean, @catalog_id::uuid,
+    sqlc.narg(binding_id)::uuid, @definition::jsonb,
+    @format_version::int, sqlc.narg(owner_user_id)::uuid, @updated_by::uuid, now()
+)
+RETURNING *;
