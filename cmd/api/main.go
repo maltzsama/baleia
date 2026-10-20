@@ -91,6 +91,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	registryKeyring, err := bootstrap.LoadRegistryKeyring(cfg)
+	if err != nil {
+		slog.Error("registry keyring", "err", err)
+		os.Exit(1)
+	}
+
 	reg.WatchPool(pool)
 	temporalMetrics, flushTemporal := reg.TemporalHandler()
 	defer func() { _ = flushTemporal() }()
@@ -101,7 +107,7 @@ func main() {
 	}
 	defer temporalClient.Close()
 
-	srv := server.New(cfg, pool, keyring, temporalClient, reg)
+	srv := server.New(cfg, pool, keyring, registryKeyring, temporalClient, reg)
 	if err := srv.Run(ctx); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5"
@@ -30,6 +32,10 @@ type RegistryStore interface {
 type Binder struct {
 	admin *trinoclient.Client
 	store RegistryStore
+	// registry seals catalog-origin secret values before they are written to
+	// trino_catalog_registry (Phase B of #31 / D4). Nil keeps Phase A: rows
+	// carry plaintext.
+	registry *crypto.Keyring
 }
 
 var _ bindings.Binder = (*Binder)(nil)
@@ -39,10 +45,16 @@ func New(admin *trinoclient.Client, store RegistryStore) *Binder {
 	return &Binder{admin: admin, store: store}
 }
 
+// WithRegistryKeyring enables Phase B encryption of registry values. A nil
+// keyring is a no-op.
+func (b *Binder) WithRegistryKeyring(kr *crypto.Keyring) *Binder {
+	return &Binder{admin: b.admin, store: b.store, registry: kr}
+}
+
 // WithStore is the binder writing the registry through store, e.g. a
 // transaction that also writes the catalog row.
 func (b *Binder) WithStore(store RegistryStore) *Binder {
-	return &Binder{admin: b.admin, store: store}
+	return &Binder{admin: b.admin, store: store, registry: b.registry}
 }
 
 func (*Binder) EngineKind() string { return "trino" }
@@ -116,12 +128,49 @@ func (b *Binder) Project(spec bindings.BindingSpec, src connections.Config) (bin
 	}, nil
 }
 
+// registryEnvelopePrefix marks a registry property sealed at rest (Phase B of
+// #31 / D4). The value has the form @baleia-enc[v1:<key-id>:<b64>], which the
+// plugin's SecretResolver decrypts at boot as another secret origin.
+const registryEnvelopePrefix = "@baleia-enc["
+
+// sealedProperties returns the properties to persist, sealing the value of
+// every secret key when a registry keyring is configured. It never mutates p
+// (the DDL path still needs the plaintext), and leaves external references and
+// already-sealed values untouched. The catalog_version is unaffected: Project
+// hashes the resolved values before this runs, and the plugin hashes the
+// decrypted values it loads.
+func (b *Binder) sealedProperties(p bindings.Projection) (map[string]string, error) {
+	if b.registry == nil || len(p.SecretKeys) == 0 {
+		return p.Properties, nil
+	}
+	props := make(map[string]string, len(p.Properties))
+	for k, v := range p.Properties {
+		props[k] = v
+	}
+	for _, key := range p.SecretKeys {
+		v, ok := props[key]
+		if !ok || v == "" || strings.HasPrefix(v, "@baleia-secret[") || strings.HasPrefix(v, registryEnvelopePrefix) {
+			continue
+		}
+		sealed, err := b.registry.Seal([]byte(v), "")
+		if err != nil {
+			return nil, fmt.Errorf("seal registry property %q: %w", key, err)
+		}
+		props[key] = registryEnvelopePrefix + sealed + "]"
+	}
+	return props, nil
+}
+
 // Stage writes the registry row; Apply sends CREATE CATALOG. Create is both.
 // Callers that write the catalog row in the same transaction Stage through
 // WithStore(tx) and Apply after commit: the plugin resolves placeholders from
 // an enabled row, so the row always exists before the DDL.
 func (b *Binder) Stage(ctx context.Context, eng bindings.EngineRef, p bindings.Projection) error {
-	props, err := json.Marshal(p.Properties)
+	props, err := b.sealedProperties(p)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(props)
 	if err != nil {
 		return fmt.Errorf("marshal properties: %w", err)
 	}
@@ -130,7 +179,7 @@ func (b *Binder) Stage(ctx context.Context, eng bindings.EngineRef, p bindings.P
 		ClusterID:      eng.ClusterID,
 		CatalogName:    p.EngineCatalog,
 		ConnectorName:  p.Connector,
-		Column4:        props,
+		Column4:        raw,
 		CatalogVersion: &version,
 	}); err != nil {
 		return fmt.Errorf("upsert registry: %w", err)
