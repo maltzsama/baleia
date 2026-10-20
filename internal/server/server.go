@@ -208,7 +208,8 @@ func (s *Server) routes() {
 				runner := baleiaassistant.NewRunner(svc, nil, baleiaassistant.NewMCPToolCaller(session))
 				if settings, err := svc.Settings(context.Background()); err == nil && settings.Enabled && settings.Provider != nil && settings.Model != nil {
 					if key, err := svc.APIKey(context.Background()); err == nil {
-						runner.SetProvider(assistantllm.NewHTTPProvider(*settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
+						client := obs.WrapHTTPClient(dialer.HTTPClient(120 * time.Second))
+						runner.SetProvider(assistantllm.NewHTTPProvider(*settings.Provider, derefString(settings.BaseUrl), key, *settings.Model, client))
 					}
 				}
 				h.SetAssistantRunner(runner)

@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // Message is one provider-visible turn. Tool results carry ToolCallID.
@@ -92,8 +92,8 @@ type HTTPProvider struct {
 	Client   *http.Client
 }
 
-// NewHTTPProvider builds a provider from the stored settings.
-func NewHTTPProvider(provider, baseURL, apiKey, model string) *HTTPProvider {
+// NewHTTPProvider builds a provider from the stored settings and HTTP client.
+func NewHTTPProvider(provider, baseURL, apiKey, model string, client *http.Client) *HTTPProvider {
 	if baseURL == "" {
 		if provider == "anthropic" {
 			baseURL = "https://api.anthropic.com"
@@ -103,7 +103,7 @@ func NewHTTPProvider(provider, baseURL, apiKey, model string) *HTTPProvider {
 	}
 	return &HTTPProvider{
 		Provider: provider, BaseURL: strings.TrimRight(baseURL, "/"), APIKey: apiKey, Model: model,
-		Client: &http.Client{Timeout: 120 * time.Second},
+		Client: client,
 	}
 }
 
@@ -128,6 +128,9 @@ func (p *HTTPProvider) Stream(ctx context.Context, req Request, onDelta func(str
 }
 
 func (p *HTTPProvider) post(ctx context.Context, path string, body any, headers map[string]string) ([]byte, error) {
+	if p.Client == nil {
+		return nil, errors.New("assistant HTTP client is not configured")
+	}
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
