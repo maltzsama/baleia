@@ -1536,6 +1536,68 @@ export interface paths {
         patch: operations["updateSemanticModel"];
         trace?: never;
     };
+    "/workspaces/{id}/semantic/models/{model_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        /** Version history of a model — viewer */
+        get: operations["listSemanticModelVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/models/{model_id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        /** One model version with its snapshot — viewer */
+        get: operations["getSemanticModelVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a model to a version — editor */
+        post: operations["restoreSemanticModelVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/explore/compile": {
         parameters: {
             query?: never;
@@ -5175,9 +5237,15 @@ export interface components {
             /** Format: uuid */
             space_id?: string | null;
         };
+        RestoreSemanticModelRequest: {
+            /** @description Retry a slug conflict with this slug */
+            new_slug?: string | null;
+            /** Format: uuid */
+            space_id?: string | null;
+        };
         TrashItem: {
             /** @enum {string} */
-            entity_type: "saved_query" | "semantic_metric";
+            entity_type: "saved_query" | "semantic_metric" | "semantic_model";
             /** Format: uuid */
             entity_id: string;
             slug: string;
@@ -8489,6 +8557,95 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    listSemanticModelVersions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentVersion"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSemanticModelVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentVersionDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreSemanticModelVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreSemanticModelRequest"];
+            };
+        };
+        responses: {
+            /** @description The restored model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticModel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     compileExploreQuery: {
         parameters: {
             query?: never;
@@ -8522,7 +8679,7 @@ export interface operations {
     listTrash: {
         parameters: {
             query?: {
-                entity_type?: "saved_query" | "semantic_metric";
+                entity_type?: "saved_query" | "semantic_metric" | "semantic_model";
                 limit?: number;
                 offset?: number;
             };

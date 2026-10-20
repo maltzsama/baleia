@@ -615,6 +615,15 @@ type ServerInterface interface {
 	// Update and revalidate a model — space editor
 	// (PATCH /workspaces/{id}/semantic/models/{model_id})
 	UpdateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID)
+	// Version history of a model — viewer
+	// (GET /workspaces/{id}/semantic/models/{model_id}/versions)
+	ListSemanticModelVersions(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, params ListSemanticModelVersionsParams)
+	// One model version with its snapshot — viewer
+	// (GET /workspaces/{id}/semantic/models/{model_id}/versions/{version})
+	GetSemanticModelVersion(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, version int)
+	// Restore a model to a version — editor
+	// (POST /workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore)
+	RestoreSemanticModelVersion(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, version int)
 	// Tags used by docs on catalogs the workspace may use
 	// (GET /workspaces/{id}/semantic/tags)
 	ListSemanticTags(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticTagsParams)
@@ -1857,6 +1866,24 @@ func (_ Unimplemented) GetSemanticModel(w http.ResponseWriter, r *http.Request, 
 // Update and revalidate a model — space editor
 // (PATCH /workspaces/{id}/semantic/models/{model_id})
 func (_ Unimplemented) UpdateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Version history of a model — viewer
+// (GET /workspaces/{id}/semantic/models/{model_id}/versions)
+func (_ Unimplemented) ListSemanticModelVersions(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, params ListSemanticModelVersionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One model version with its snapshot — viewer
+// (GET /workspaces/{id}/semantic/models/{model_id}/versions/{version})
+func (_ Unimplemented) GetSemanticModelVersion(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, version int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Restore a model to a version — editor
+// (POST /workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore)
+func (_ Unimplemented) RestoreSemanticModelVersion(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, version int) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9615,6 +9642,169 @@ func (siw *ServerInterfaceWrapper) UpdateSemanticModel(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListSemanticModelVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListSemanticModelVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model_id" -------------
+	var modelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model_id", chi.URLParam(r, "model_id"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSemanticModelVersionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "offset", r.URL.Query(), &params.Offset)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSemanticModelVersions(w, r, id, modelId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSemanticModelVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetSemanticModelVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model_id" -------------
+	var modelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model_id", chi.URLParam(r, "model_id"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSemanticModelVersion(w, r, id, modelId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreSemanticModelVersion operation middleware
+func (siw *ServerInterfaceWrapper) RestoreSemanticModelVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model_id" -------------
+	var modelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model_id", chi.URLParam(r, "model_id"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreSemanticModelVersion(w, r, id, modelId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSemanticTags operation middleware
 func (siw *ServerInterfaceWrapper) ListSemanticTags(w http.ResponseWriter, r *http.Request) {
 
@@ -11011,6 +11201,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}", wrapper.UpdateSemanticModel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}/versions", wrapper.ListSemanticModelVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}/versions/{version}", wrapper.GetSemanticModelVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore", wrapper.RestoreSemanticModelVersion)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/semantic/tags", wrapper.ListSemanticTags)
@@ -19656,6 +19855,165 @@ func (response UpdateSemanticModel422JSONResponse) VisitUpdateSemanticModelRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListSemanticModelVersionsRequestObject struct {
+	Id      PathId             `json:"id"`
+	ModelId openapi_types.UUID `json:"model_id"`
+	Params  ListSemanticModelVersionsParams
+}
+
+type ListSemanticModelVersionsResponseObject interface {
+	VisitListSemanticModelVersionsResponse(w http.ResponseWriter) error
+}
+
+type ListSemanticModelVersions200JSONResponse []ContentVersion
+
+func (response ListSemanticModelVersions200JSONResponse) VisitListSemanticModelVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticModelVersions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSemanticModelVersions401JSONResponse) VisitListSemanticModelVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticModelVersions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListSemanticModelVersions403JSONResponse) VisitListSemanticModelVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSemanticModelVersions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSemanticModelVersions404JSONResponse) VisitListSemanticModelVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticModelVersionRequestObject struct {
+	Id      PathId             `json:"id"`
+	ModelId openapi_types.UUID `json:"model_id"`
+	Version int                `json:"version"`
+}
+
+type GetSemanticModelVersionResponseObject interface {
+	VisitGetSemanticModelVersionResponse(w http.ResponseWriter) error
+}
+
+type GetSemanticModelVersion200JSONResponse ContentVersionDetail
+
+func (response GetSemanticModelVersion200JSONResponse) VisitGetSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticModelVersion401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSemanticModelVersion401JSONResponse) VisitGetSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticModelVersion403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSemanticModelVersion403JSONResponse) VisitGetSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSemanticModelVersion404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSemanticModelVersion404JSONResponse) VisitGetSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticModelVersionRequestObject struct {
+	Id      PathId             `json:"id"`
+	ModelId openapi_types.UUID `json:"model_id"`
+	Version int                `json:"version"`
+	Body    *RestoreSemanticModelVersionJSONRequestBody
+}
+
+type RestoreSemanticModelVersionResponseObject interface {
+	VisitRestoreSemanticModelVersionResponse(w http.ResponseWriter) error
+}
+
+type RestoreSemanticModelVersion200JSONResponse SemanticModel
+
+func (response RestoreSemanticModelVersion200JSONResponse) VisitRestoreSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticModelVersion401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RestoreSemanticModelVersion401JSONResponse) VisitRestoreSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticModelVersion403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestoreSemanticModelVersion403JSONResponse) VisitRestoreSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticModelVersion404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestoreSemanticModelVersion404JSONResponse) VisitRestoreSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticModelVersion409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RestoreSemanticModelVersion409JSONResponse) VisitRestoreSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RestoreSemanticModelVersion422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response RestoreSemanticModelVersion422JSONResponse) VisitRestoreSemanticModelVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListSemanticTagsRequestObject struct {
 	Id     PathId `json:"id"`
 	Params ListSemanticTagsParams
@@ -20904,6 +21262,15 @@ type StrictServerInterface interface {
 	// Update and revalidate a model — space editor
 	// (PATCH /workspaces/{id}/semantic/models/{model_id})
 	UpdateSemanticModel(ctx context.Context, request UpdateSemanticModelRequestObject) (UpdateSemanticModelResponseObject, error)
+	// Version history of a model — viewer
+	// (GET /workspaces/{id}/semantic/models/{model_id}/versions)
+	ListSemanticModelVersions(ctx context.Context, request ListSemanticModelVersionsRequestObject) (ListSemanticModelVersionsResponseObject, error)
+	// One model version with its snapshot — viewer
+	// (GET /workspaces/{id}/semantic/models/{model_id}/versions/{version})
+	GetSemanticModelVersion(ctx context.Context, request GetSemanticModelVersionRequestObject) (GetSemanticModelVersionResponseObject, error)
+	// Restore a model to a version — editor
+	// (POST /workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore)
+	RestoreSemanticModelVersion(ctx context.Context, request RestoreSemanticModelVersionRequestObject) (RestoreSemanticModelVersionResponseObject, error)
 	// Tags used by docs on catalogs the workspace may use
 	// (GET /workspaces/{id}/semantic/tags)
 	ListSemanticTags(ctx context.Context, request ListSemanticTagsRequestObject) (ListSemanticTagsResponseObject, error)
@@ -26588,6 +26955,97 @@ func (sh *strictHandler) UpdateSemanticModel(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateSemanticModelResponseObject); ok {
 		if err := validResponse.VisitUpdateSemanticModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSemanticModelVersions operation middleware
+func (sh *strictHandler) ListSemanticModelVersions(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, params ListSemanticModelVersionsParams) {
+	var request ListSemanticModelVersionsRequestObject
+
+	request.Id = id
+	request.ModelId = modelId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSemanticModelVersions(ctx, request.(ListSemanticModelVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSemanticModelVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSemanticModelVersionsResponseObject); ok {
+		if err := validResponse.VisitListSemanticModelVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSemanticModelVersion operation middleware
+func (sh *strictHandler) GetSemanticModelVersion(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, version int) {
+	var request GetSemanticModelVersionRequestObject
+
+	request.Id = id
+	request.ModelId = modelId
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSemanticModelVersion(ctx, request.(GetSemanticModelVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSemanticModelVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSemanticModelVersionResponseObject); ok {
+		if err := validResponse.VisitGetSemanticModelVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreSemanticModelVersion operation middleware
+func (sh *strictHandler) RestoreSemanticModelVersion(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID, version int) {
+	var request RestoreSemanticModelVersionRequestObject
+
+	request.Id = id
+	request.ModelId = modelId
+	request.Version = version
+
+	var body RestoreSemanticModelVersionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreSemanticModelVersion(ctx, request.(RestoreSemanticModelVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreSemanticModelVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreSemanticModelVersionResponseObject); ok {
+		if err := validResponse.VisitRestoreSemanticModelVersionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

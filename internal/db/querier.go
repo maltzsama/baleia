@@ -379,6 +379,8 @@ type Querier interface {
 	ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]QueryFolder, error)
 	ListSpaceMembers(ctx context.Context, spaceID pgtype.UUID) ([]SpaceMember, error)
 	ListSpaceMetrics(ctx context.Context, spaceID pgtype.UUID) ([]SemanticMetric, error)
+	// Every model of one space, for bundles (#34/#91).
+	ListSpaceModels(ctx context.Context, spaceID pgtype.UUID) ([]SemanticModel, error)
 	ListSpaceSavedQueries(ctx context.Context, spaceID pgtype.UUID) ([]SavedQuery, error)
 	// Every space of the workspace where the caller has at least viewer, with the
 	// role. A space with no role is invisible (absent), never 403.

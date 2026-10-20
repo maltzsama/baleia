@@ -246,3 +246,7 @@ SET certified = @certified::boolean,
     certified_at = CASE WHEN @certified::boolean THEN now() ELSE NULL END
 WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid
 RETURNING *;
+
+-- name: ListSpaceModels :many
+-- Every model of one space, for bundles (#34/#91).
+SELECT * FROM semantic_models WHERE space_id = @space_id::uuid ORDER BY label;

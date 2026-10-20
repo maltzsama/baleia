@@ -2634,11 +2634,17 @@ components:
         new_slug: { type: string, nullable: true, description: "Retry a slug conflict with this slug" }
         space_id: { type: string, format: uuid, nullable: true }
 
+    RestoreSemanticModelRequest:
+      type: object
+      properties:
+        new_slug: { type: string, nullable: true, description: "Retry a slug conflict with this slug" }
+        space_id: { type: string, format: uuid, nullable: true }
+
     TrashItem:
       type: object
       required: [entity_type, entity_id, slug, deleted_at, version, restore_version]
       properties:
-        entity_type: { type: string, enum: [saved_query, semantic_metric] }
+        entity_type: { type: string, enum: [saved_query, semantic_metric, semantic_model] }
         entity_id: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
@@ -5337,6 +5343,93 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /workspaces/{id}/semantic/models/{model_id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: model_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Semantic]
+      operationId: listSemanticModelVersions
+      summary: "Version history of a model — viewer"
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: "Newest first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContentVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/models/{model_id}/versions/{version}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: model_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Semantic]
+      operationId: getSemanticModelVersion
+      summary: "One model version with its snapshot — viewer"
+      responses:
+        "200":
+          description: "The version"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContentVersionDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: model_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [Semantic]
+      operationId: restoreSemanticModelVersion
+      summary: "Restore a model to a version — editor"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestoreSemanticModelRequest" }
+      responses:
+        "200":
+          description: "The restored model"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticModel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /workspaces/{id}/semantic/explore/compile:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -5374,7 +5467,7 @@ paths:
       parameters:
         - name: entity_type
           in: query
-          schema: { type: string, enum: [saved_query, semantic_metric] }
+          schema: { type: string, enum: [saved_query, semantic_metric, semantic_model] }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }

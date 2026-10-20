@@ -150,8 +150,8 @@ func (m Model) Validate(modelSet map[string]Model) error {
 	if strings.TrimSpace(m.Slug) == "" {
 		return fmt.Errorf("%w: model slug is required", ErrInvalidExplore)
 	}
-	if m.CatalogID == "" || m.BindingID == "" {
-		return fmt.Errorf("%w: model %q needs catalog_id and binding_id", ErrInvalidExplore, m.Slug)
+	if m.CatalogID == "" {
+		return fmt.Errorf("%w: model %q needs catalog_id", ErrInvalidExplore, m.Slug)
 	}
 	switch m.Source.Kind {
 	case SourceTable:

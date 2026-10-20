@@ -856,6 +856,7 @@ const (
 const (
 	TrashItemEntityTypeSavedQuery     TrashItemEntityType = "saved_query"
 	TrashItemEntityTypeSemanticMetric TrashItemEntityType = "semantic_metric"
+	TrashItemEntityTypeSemanticModel  TrashItemEntityType = "semantic_model"
 )
 
 // Defines values for UpdateAgentRequestStatus.
@@ -1045,6 +1046,7 @@ const (
 const (
 	ListTrashParamsEntityTypeSavedQuery     ListTrashParamsEntityType = "saved_query"
 	ListTrashParamsEntityTypeSemanticMetric ListTrashParamsEntityType = "semantic_metric"
+	ListTrashParamsEntityTypeSemanticModel  ListTrashParamsEntityType = "semantic_model"
 )
 
 // AddTeamMemberRequest defines model for AddTeamMemberRequest.
@@ -3105,6 +3107,13 @@ type RestoreSemanticMetricRequest struct {
 	SpaceId *openapi_types.UUID `json:"space_id"`
 }
 
+// RestoreSemanticModelRequest defines model for RestoreSemanticModelRequest.
+type RestoreSemanticModelRequest struct {
+	// NewSlug Retry a slug conflict with this slug
+	NewSlug *string             `json:"new_slug"`
+	SpaceId *openapi_types.UUID `json:"space_id"`
+}
+
 // Retriever defines model for Retriever.
 type Retriever struct {
 	AllowedActions    *[]string             `json:"allowed_actions,omitempty"`
@@ -4458,6 +4467,12 @@ type ListSemanticModelsParams struct {
 	SpaceId *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
 }
 
+// ListSemanticModelVersionsParams defines parameters for ListSemanticModelVersions.
+type ListSemanticModelVersionsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListSemanticTagsParams defines parameters for ListSemanticTags.
 type ListSemanticTagsParams struct {
 	Q     *string `form:"q,omitempty" json:"q,omitempty"`
@@ -4687,6 +4702,9 @@ type CreateSemanticModelJSONRequestBody = SemanticModelCreate
 
 // UpdateSemanticModelJSONRequestBody defines body for UpdateSemanticModel for application/json ContentType.
 type UpdateSemanticModelJSONRequestBody = SemanticModelUpdate
+
+// RestoreSemanticModelVersionJSONRequestBody defines body for RestoreSemanticModelVersion for application/json ContentType.
+type RestoreSemanticModelVersionJSONRequestBody = RestoreSemanticModelRequest
 
 // CreateSpaceJSONRequestBody defines body for CreateSpace for application/json ContentType.
 type CreateSpaceJSONRequestBody = CreateSpaceRequest

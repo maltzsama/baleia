@@ -663,3 +663,168 @@ func validateModelFields(slug, label string) (string, bool) {
 	}
 	return "", true
 }
+
+// ── model versions (#34) ────────────────────────────────────────────────────────
+
+func (h *Handlers) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
+	m, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id})
+	if err == nil {
+		return m.SpaceID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return pgtype.UUID{}, err
+	}
+	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
+		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id,
+	})
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	return v.SpaceID, nil
+}
+
+// ListSemanticModelVersions — GET /workspaces/{id}/semantic/models/{model_id}/versions
+func (h *Handlers) ListSemanticModelVersions(ctx context.Context, request ListSemanticModelVersionsRequestObject) (ListSemanticModelVersionsResponseObject, error) {
+	ws := workspaceIDFromRequest(request.Id)
+	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	spaceID, err := h.modelSpaceForHistory(ctx, ws, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ListSemanticModelVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceViewer)
+	if err != nil {
+		if unauthorized(err) {
+			return ListSemanticModelVersions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+		}
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return ListSemanticModelVersions403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
+		}
+		return ListSemanticModelVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
+	}
+	lim, off := versionPage(request.Params.Limit, request.Params.Offset)
+	rows, err := h.queries.ListContentVersions(ctx, db.ListContentVersionsParams{
+		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Lim: lim, Off: off,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(ListSemanticModelVersions200JSONResponse, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, contentVersionToPublic(r.Version, r.ChangeKind, r.AuthorID, r.AuthorName, r.RestoredFrom, r.CreatedAt))
+	}
+	return out, nil
+}
+
+// GetSemanticModelVersion — GET /workspaces/{id}/semantic/models/{model_id}/versions/{version}
+func (h *Handlers) GetSemanticModelVersion(ctx context.Context, request GetSemanticModelVersionRequestObject) (GetSemanticModelVersionResponseObject, error) {
+	ws := workspaceIDFromRequest(request.Id)
+	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
+		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Version: int32(request.Version),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return GetSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	se, err := h.contentSpace(ctx, ws, v.SpaceID, authz.SpaceViewer)
+	if err != nil {
+		if unauthorized(err) {
+			return GetSemanticModelVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+		}
+		return nil, err
+	}
+	if se != nil {
+		if se.status == 403 {
+			return GetSemanticModelVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
+		}
+		return GetSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
+	}
+	detail, err := contentVersionDetail(v.Version, v.ChangeKind, v.AuthorID, v.AuthorName, v.RestoredFrom, v.CreatedAt, v.Snapshot)
+	if err != nil {
+		return nil, err
+	}
+	return GetSemanticModelVersion200JSONResponse(detail), nil
+}
+
+// RestoreSemanticModelVersion — POST /workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore
+func (h *Handlers) RestoreSemanticModelVersion(ctx context.Context, request RestoreSemanticModelVersionRequestObject) (RestoreSemanticModelVersionResponseObject, error) {
+	ws := workspaceIDFromRequest(request.Id)
+	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
+		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Version: int32(request.Version),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if se, err := h.contentSpace(ctx, ws, v.SpaceID, authz.SpaceEditor); err != nil {
+		if unauthorized(err) {
+			return RestoreSemanticModelVersion401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+		}
+		return nil, err
+	} else if se != nil {
+		if se.status == 403 {
+			return RestoreSemanticModelVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
+		}
+		return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
+	}
+	var spaceID *pgtype.UUID
+	if request.Body != nil && request.Body.SpaceId != nil {
+		dest := pgtype.UUID{Bytes: *request.Body.SpaceId, Valid: true}
+		if se, err := h.contentSpace(ctx, ws, dest, authz.SpaceEditor); err != nil {
+			return nil, err
+		} else if se != nil {
+			if se.status == 403 {
+				return RestoreSemanticModelVersion403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit the destination space"}}, nil
+			}
+			return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("destination space not found")}, nil
+		}
+		spaceID = &dest
+	}
+	snap, err := content.ParseModelSnapshot(v.Snapshot)
+	if err != nil {
+		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
+	}
+	def, err := parseSemanticModel(snap.Definition)
+	if err != nil {
+		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
+	}
+	def.CatalogID = snap.CatalogID.String()
+	def.Slug = snap.Slug
+	if err := def.Validate(nil); err != nil {
+		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
+	}
+	actor, err := uuidFromString(auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	var newSlug *string
+	if request.Body != nil {
+		newSlug = request.Body.NewSlug
+	}
+	model, err := h.contentService().RestoreSemanticModel(ctx, actor, ws, id, int32(request.Version), newSlug, spaceID)
+	switch {
+	case errors.Is(err, content.ErrNameConflict):
+		return RestoreSemanticModelVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeNameConflict, Message: "another model already uses this slug"}}, nil
+	case errors.Is(err, content.ErrSpaceMissing):
+		return RestoreSemanticModelVersion409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeSpaceMissing, Message: "the version's space no longer exists; pass space_id"}}, nil
+	case errors.Is(err, content.ErrNotFound):
+		return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
+	case err != nil:
+		return nil, err
+	}
+	out := dbSemanticModelToPublic(model, h.semanticModelVersion(ctx, ws, model.ID))
+	acts := h.semanticModelActions(ctx, ws, model.SpaceID)
+	out.AllowedActions = &acts
+	return RestoreSemanticModelVersion200JSONResponse(out), nil
+}

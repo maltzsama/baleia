@@ -588,6 +588,48 @@ func (q *Queries) ListSemanticTags(ctx context.Context, arg ListSemanticTagsPara
 	return items, nil
 }
 
+const listSpaceModels = `-- name: ListSpaceModels :many
+SELECT id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_models WHERE space_id = $1::uuid ORDER BY label
+`
+
+// Every model of one space, for bundles (#34/#91).
+func (q *Queries) ListSpaceModels(ctx context.Context, spaceID pgtype.UUID) ([]SemanticModel, error) {
+	rows, err := q.db.Query(ctx, listSpaceModels, spaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SemanticModel
+	for rows.Next() {
+		var i SemanticModel
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.SpaceID,
+			&i.Slug,
+			&i.Label,
+			&i.Description,
+			&i.Certified,
+			&i.CertifiedBy,
+			&i.CertifiedAt,
+			&i.CatalogID,
+			&i.BindingID,
+			&i.Definition,
+			&i.FormatVersion,
+			&i.OwnerUserID,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVisibleSemanticMetrics = `-- name: ListVisibleSemanticMetrics :many
 
 SELECT m.id, m.workspace_id, m.slug, m.label, m.description, m.certified, m.catalog_id, m.namespace, m.table_name, m.binding_id, m.definition, m.format_version, m.owner_user_id, m.updated_by, m.updated_at, m.space_id, m.certified_by, m.certified_at FROM semantic_metrics m
