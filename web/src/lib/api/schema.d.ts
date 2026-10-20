@@ -1491,6 +1491,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/semantic/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Models of the workspace — workspace members */
+        get: operations["listSemanticModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/models/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        /** Return a model — space viewer */
+        get: operations["getSemanticModel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/semantic/explore/compile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compile an explore query to SQL — space viewer
+         * @description Resolves the base model and its joined models by slug, validates the explore query, and renders SQL for the binding's dialect. The query never carries raw SQL.
+         */
+        post: operations["compileExploreQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/trash": {
         parameters: {
             query?: never;
@@ -4668,6 +4729,72 @@ export interface components {
             sql: string;
             /** @description False when the metric uses custom_sql */
             portable: boolean;
+        };
+        SemanticModel: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            space_id?: string | null;
+            slug: string;
+            label: string;
+            description?: string;
+            certified: boolean;
+            /** Format: uuid */
+            catalog_id: string;
+            /** Format: uuid */
+            binding_id?: string | null;
+            /** @description Semantic model v2: source (table or SQL), primary_key, dimensions, metrics and joins. Validated with DisallowUnknownFields. */
+            definition: {
+                [key: string]: unknown;
+            };
+            format_version: number;
+            /** Format: uuid */
+            owner_user_id?: string | null;
+            /** Format: uuid */
+            updated_by?: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: uuid */
+            certified_by?: string | null;
+            /** Format: date-time */
+            certified_at?: string | null;
+            readonly allowed_actions?: string[];
+            /** @description Latest content version (#34) */
+            version: number;
+        };
+        /** @description The only input the semantic compiler accepts. Never carries raw SQL. */
+        ExploreQuery: {
+            /** @description Base model slug */
+            model: string;
+            dimensions?: string[];
+            metrics?: string[];
+            filters?: {
+                field: string;
+                /** @enum {string} */
+                op: "=" | "!=" | ">" | ">=" | "<" | "<=" | "in" | "not_in" | "is_null" | "is_not_null";
+                values?: unknown[];
+            }[];
+            sorts?: {
+                field: string;
+                desc?: boolean;
+            }[];
+            limit?: number;
+            time_grain?: string | null;
+        };
+        ExploreCompileRequest: {
+            query: components["schemas"]["ExploreQuery"];
+            /**
+             * Format: uuid
+             * @description Defaults to the base model's binding
+             */
+            binding_id?: string | null;
+        };
+        ExploreCompileResult: {
+            sql: string;
+            notes?: string[];
+            dialect: string;
         };
         MetadataSyncStarted: {
             /** Format: uuid */
@@ -8182,6 +8309,89 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSemanticModels: {
+        parameters: {
+            query?: {
+                space_id?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Models, ordered by label */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticModel"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getSemanticModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticModel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    compileExploreQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExploreCompileRequest"];
+            };
+        };
+        responses: {
+            /** @description The compiled SQL and compiler notes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExploreCompileResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
