@@ -15255,6 +15255,17 @@ func (response UpdateProfile401JSONResponse) VisitUpdateProfileResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateProfile422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateProfile422JSONResponse) VisitUpdateProfileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type UpdatePasswordRequestObject struct {
 	Body *UpdatePasswordJSONRequestBody
 }

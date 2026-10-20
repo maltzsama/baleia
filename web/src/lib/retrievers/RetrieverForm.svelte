@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -28,10 +29,10 @@
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const presets = [
-		{ label: 'Every hour', expression: '0 * * * *' },
-		{ label: 'Every 6 hours', expression: '0 */6 * * *' },
-		{ label: 'Every day at 03:00', expression: '0 3 * * *' },
-		{ label: 'Every Monday at 03:00', expression: '0 3 * * 1' }
+		{ label: m.retrievers_retrieverform_every_hour(), expression: '0 * * * *' },
+		{ label: m.retrievers_retrieverform_every_6_hours(), expression: '0 */6 * * *' },
+		{ label: m.retrievers_retrieverform_every_day_at_03_00(), expression: '0 3 * * *' },
+		{ label: m.retrievers_retrieverform_every_monday_at_03_00(), expression: '0 3 * * 1' }
 	];
 
 	let destinations = $state<RetrieverDestination[]>([]);
@@ -150,7 +151,9 @@
 
 <div class="flex flex-col gap-4">
 	{#if loading}
-		<p class="text-[12px] text-slate-600 dark:text-slate-300">Loading destinations…</p>
+		<p class="text-[12px] text-slate-600 dark:text-slate-300">
+			{m.retrievers_retrieverform_loading_destinations()}
+		</p>
 	{:else if destinations.length === 0}
 		<div class="rounded-lg border border-border bg-bg-panel p-4 text-[13px]">
 			<p class="font-semibold">No writable destination</p>
@@ -207,7 +210,7 @@
 			{:else if preview}
 				{#if !preview.valid}
 					<p class="mt-2 text-[11px] text-danger" role="alert">
-						{preview.error ?? 'Invalid schedule'}
+						{preview.error ?? m.retrievers_retrieverform_invalid_schedule()}
 					</p>
 				{:else}
 					{#if !preview.min_interval_ok}
@@ -229,7 +232,9 @@
 		{/if}
 		<div class="flex justify-end gap-2">
 			<Button variant="primary" loading={saving} disabled={saving} onclick={save}>
-				{retriever ? 'Save changes' : 'Create retriever'}
+				{retriever
+					? m.retrievers_retrieverform_save_changes()
+					: m.retrievers_retrieverform_create_retriever()}
 			</Button>
 		</div>
 	{/if}

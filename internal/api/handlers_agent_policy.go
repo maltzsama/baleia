@@ -183,7 +183,7 @@ func (h *Handlers) GetAgentPolicy(ctx context.Context, request GetAgentPolicyReq
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetAgentPolicy401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetAgentPolicy401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -215,10 +215,10 @@ func (h *Handlers) PutAgentPolicy(ctx context.Context, request PutAgentPolicyReq
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return PutAgentPolicy401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return PutAgentPolicy401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if request.Body == nil {
-		return PutAgentPolicy422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return PutAgentPolicy422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -235,7 +235,7 @@ func (h *Handlers) PutAgentPolicy(ctx context.Context, request PutAgentPolicyReq
 	stored := policyFromAPI(*request.Body)
 	ceilings := h.agentCeilings()
 	if err := stored.Validate(ceilings); err != nil {
-		return PutAgentPolicy422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", err.Error())}, nil
+		return PutAgentPolicy422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
 	raw, err := json.Marshal(stored)
 	if err != nil {

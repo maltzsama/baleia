@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -27,7 +28,7 @@
 
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4">
-		<h1 class="text-xl font-semibold tracking-[-0.3px]">Edit metric</h1>
+		<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.metrics_edit_edit_metric()}</h1>
 	</div>
 	{#if loading}
 		<Skeleton class="h-32 w-full" />

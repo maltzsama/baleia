@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -55,7 +56,7 @@
 					type="button"
 					class="flex h-[26px] w-[26px] items-center justify-center rounded-md text-text-muted hover:bg-bg-toolbar hover:text-text-main"
 					onclick={close}
-					aria-label="Close"
+					aria-label={m.common_close()}
 				>
 					×
 				</button>

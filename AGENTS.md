@@ -69,6 +69,10 @@ Workspace/catalog/namespace/table/tab selection is URL-backed through
 - Authorization comes from `allowed_actions` on resources and
   `global_actions` on `/auth/me` (helpers in `src/lib/authz/can.ts`). Never
   compare roles in the client.
+- User-facing text goes through Paraglide: `import { m } from
+  '$lib/paraglide/messages'`. `npm run check` enforces key parity between
+  `messages/en.json` and `messages/pt-BR.json`; the generated
+  `src/lib/paraglide/` is never edited or committed.
 
 ### UI layers
 
@@ -148,3 +152,8 @@ server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWor
 - Every outbound connection goes through `connections.Dialer`.
 - Audit events are best-effort and append-only; versions are transactional.
 - No raw SQL in commands: use the generated queries or the service layer.
+- API errors use the closed `ErrorCode` enum in `api/swagger.yaml`. A new code
+  must be added there and as `error_<code>` in `web/messages/{en,pt-BR}.json`;
+  `TestErrorCodesClosed` fails otherwise. Field errors use `FieldCode`
+  (`field_<code>`). The server sends a stable `code` + `params`; only e-mail is
+  localized server-side.

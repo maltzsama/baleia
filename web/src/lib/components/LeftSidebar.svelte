@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import DataSourceTree from './DataSourceTree.svelte';
 	import SavedQueriesList from './SavedQueriesList.svelte';
 	import type { TableRef } from '$lib/metadata/client';
@@ -24,7 +25,7 @@
 		<div class="flex flex-col items-center py-2.5 gap-2.5 flex-1">
 			<button
 				onclick={() => (collapsed = false)}
-				title="Expand"
+				title={m.common_expand()}
 				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted transition-all duration-150 bg-none border-none
 					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
 			>
@@ -36,7 +37,7 @@
 			</button>
 			<span
 				class="[writing-mode:vertical-rl] text-[10px] font-semibold tracking-wide uppercase text-text-muted rotate-180 mt-1"
-				>Datasources</span
+				>{m.components_leftsidebar_datasources()}</span
 			>
 		</div>
 	{:else}

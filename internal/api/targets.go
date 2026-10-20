@@ -14,11 +14,11 @@ import (
 // the workspace (no existence oracle), else 422 with a code.
 type targetError struct {
 	notFound bool
-	code     string
+	code     ErrorCode
 	message  string
 }
 
-func (e *targetError) Error() string { return e.code + ": " + e.message }
+func (e *targetError) Error() string { return string(e.code) + ": " + e.message }
 
 func (e *targetError) unprocessable() UnprocessableEntityJSONResponse {
 	field, msg := "target", e.message
@@ -32,7 +32,7 @@ func (e *targetError) unprocessable() UnprocessableEntityJSONResponse {
 	}
 }
 
-var errTargetNotFound = &targetError{notFound: true, code: "not_found", message: "target not found"}
+var errTargetNotFound = &targetError{notFound: true, code: ErrorCodeNotFound, message: "target not found"}
 
 func usable(r db.ListWorkspaceTargetsRow) bool {
 	return r.BindingEnabled && r.EngineEnabled && r.CatalogEnabled
@@ -73,7 +73,7 @@ func (h *Handlers) ResolveTarget(ctx context.Context, ws db.Workspace, req *Targ
 	if req != nil && req.Schema != nil {
 		schema = *req.Schema
 	}
-	unavailable := &targetError{code: "target_unavailable", message: "the target's binding, engine or catalog is disabled"}
+	unavailable := &targetError{code: ErrorCodeTargetUnavailable, message: "the target's binding, engine or catalog is disabled"}
 
 	switch {
 	case req != nil && req.BindingId != nil:
@@ -107,7 +107,7 @@ func (h *Handlers) ResolveTarget(ctx context.Context, ws db.Workspace, req *Targ
 		case len(live) == 0:
 			return queryengine.Target{}, unavailable
 		case len(live) > 1:
-			return queryengine.Target{}, &targetError{code: "engine_required", message: "the catalog is bound to several engines; set engine_id or binding_id"}
+			return queryengine.Target{}, &targetError{code: ErrorCodeEngineRequired, message: "the catalog is bound to several engines; set engine_id or binding_id"}
 		}
 		return rowTarget(live[0], schema), nil
 	}
@@ -121,7 +121,7 @@ func (h *Handlers) ResolveTarget(ctx context.Context, ws db.Workspace, req *Targ
 				return rowTarget(r, schema), nil
 			}
 		}
-		return queryengine.Target{}, &targetError{code: "target_unavailable", message: "the workspace default target is no longer available"}
+		return queryengine.Target{}, &targetError{code: ErrorCodeTargetUnavailable, message: "the workspace default target is no longer available"}
 	}
 
 	var live []db.ListWorkspaceTargetsRow
@@ -135,13 +135,13 @@ func (h *Handlers) ResolveTarget(ctx context.Context, ws db.Workspace, req *Targ
 	if len(live) == 1 && len(catalogs) == 1 {
 		return rowTarget(live[0], schema), nil
 	}
-	return queryengine.Target{}, &targetError{code: "target_required", message: "choose a target: the workspace has no default and more than one, or no, target"}
+	return queryengine.Target{}, &targetError{code: ErrorCodeTargetRequired, message: "choose a target: the workspace has no default and more than one, or no, target"}
 }
 
 // ListWorkspaceTargets returns the usable targets of a workspace to its members.
 func (h *Handlers) ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
-		return ListWorkspaceTargets404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "workspace not found"}}, nil
+		return ListWorkspaceTargets404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
 	wsID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	ws, err := h.queries.GetWorkspaceByID(ctx, wsID)

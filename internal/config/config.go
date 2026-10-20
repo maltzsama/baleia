@@ -75,11 +75,14 @@ type Config struct {
 	SMTPUser              string
 	SMTPPassword          string
 	SMTPFrom              string
-	S3Endpoint            string
-	S3AccessKey           string
-	S3SecretKey           string
-	S3Bucket              string
-	S3UseSSL              bool
+	// DefaultLocale is the fallback for localized e-mails when the recipient
+	// has no users.locale (#67).
+	DefaultLocale string
+	S3Endpoint    string
+	S3AccessKey   string
+	S3SecretKey   string
+	S3Bucket      string
+	S3UseSSL      bool
 	// StatementTimeout bounds a single statement execution. The script
 	// activity enforces it per statement and passes it to the engine (Trino:
 	// query_max_execution_time) so the engine enforces it too.
@@ -189,6 +192,7 @@ func Load() *Config {
 		SMTPUser:              getEnv("SMTP_USER", ""),
 		SMTPPassword:          getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:              getEnv("SMTP_FROM", ""),
+		DefaultLocale:         getEnv("BALEIA_DEFAULT_LOCALE", "en"),
 		S3Endpoint:            getEnv("S3_ENDPOINT", "localhost:9000"),
 		S3AccessKey:           getEnv("S3_ACCESS_KEY", "rustfsadmin"),
 		S3SecretKey:           getEnv("S3_SECRET_KEY", "rustfsadmin"),

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import type { components } from '$lib/api/schema';
 	import { savedQueries, type QueryFolder, type Space } from '$lib/stores/savedQueries.svelte';
@@ -147,9 +148,14 @@
 					}
 				}
 				if (err?.code === 'name_conflict' || err?.code === 'slug_conflict_other_space') {
-					fieldError = { name: apiErrorMessage(saved.error, 'Name already in use') };
+					fieldError = {
+						name: apiErrorMessage(saved.error, m.workbench_savequerydialog_name_already_in_use())
+					};
 				} else {
-					error = apiErrorMessage(saved.error, 'Could not save the query');
+					error = apiErrorMessage(
+						saved.error,
+						m.workbench_savequerydialog_could_not_save_the_query()
+					);
 				}
 				return;
 			}
@@ -162,16 +168,21 @@
 	}
 </script>
 
-<Modal bind:open title={mode === 'copy' ? 'Save as a copy' : 'Save query'}>
+<Modal
+	bind:open
+	title={mode === 'copy'
+		? m.components_queryeditor_save_as_a_copy()
+		: m.workbench_savequerydialog_save_query()}
+>
 	<div class="flex flex-col gap-3">
 		<Input
-			label="Name *"
+			label={m.workbench_savequerydialog_name()}
 			value={name}
 			error={fieldError.name}
 			oninput={(e) => onName((e.target as HTMLInputElement).value)}
 		/>
 		<Input
-			label="Slug *"
+			label={m.workbench_savequerydialog_slug()}
 			value={slug}
 			error={fieldError.slug}
 			oninput={(e) => {
@@ -182,34 +193,37 @@
 		/>
 		<div class="grid gap-2 sm:grid-cols-2">
 			<Select
-				label="Space"
+				label={m.common_space()}
 				bind:value={spaceId}
 				options={editableSpaces.map((space) => ({ value: space.id, label: space.name }))}
 			/>
 			<Select
-				label="Folder"
+				label={m.workbench_savequerydialog_folder()}
 				bind:value={folderId}
 				options={[
-					{ value: '', label: 'Space root' },
+					{ value: '', label: m.workbench_savequerydialog_space_root() },
 					...spaceFolders.map((folder) => ({ value: folder.id, label: folder.name }))
 				]}
 			/>
 		</div>
-		<Checkbox label="Remember where this runs" bind:checked={rememberTarget} />
+		<Checkbox
+			label={m.workbench_savequerydialog_remember_where_this_runs()}
+			bind:checked={rememberTarget}
+		/>
 		{#if error}
 			<p class="text-[12px] text-danger" role="alert">{error}</p>
 		{/if}
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (open = false)} disabled={saving}>Cancel</Button>
+			<Button onclick={() => (open = false)} disabled={saving}>{m.common_cancel()}</Button>
 			<Button
 				variant="primary"
 				loading={saving}
 				disabled={saving || !name.trim() || !slug.trim()}
 				onclick={save}
 			>
-				Save
+				{m.common_save()}
 			</Button>
 		</div>
 	{/snippet}

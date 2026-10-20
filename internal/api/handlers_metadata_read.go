@@ -43,7 +43,7 @@ func (h *Handlers) metadataWorkspace(ctx context.Context, id openapi_types.UUID)
 }
 
 func metadataNotFound(msg string) NotFoundJSONResponse {
-	return NotFoundJSONResponse{Code: "not_found", Message: msg}
+	return NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: msg}
 }
 
 func freshness(t pgtype.Timestamptz) MetadataFreshness {
@@ -154,7 +154,7 @@ func (h *Handlers) ListMetadataTables(ctx context.Context, request ListMetadataT
 	limit := defaultTablesPage
 	if l := request.Params.Limit; l != nil {
 		if *l < 1 || *l > maxTablesPage {
-			return ListMetadataTables422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 500")}, nil
+			return ListMetadataTables422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 500")}, nil
 		}
 		limit = *l
 	}
@@ -162,7 +162,7 @@ func (h *Handlers) ListMetadataTables(ctx context.Context, request ListMetadataT
 	if c := request.Params.Cursor; c != nil && *c != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(*c)
 		if err != nil || !utf8.Valid(raw) {
-			return ListMetadataTables422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "invalid cursor")}, nil
+			return ListMetadataTables422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "invalid cursor")}, nil
 		}
 		after = string(raw)
 	}
@@ -288,7 +288,7 @@ func (h *Handlers) SearchMetadata(ctx context.Context, request SearchMetadataReq
 	}
 	p := request.Params
 	if n := utf8.RuneCountInString(p.Q); n < minSearchQuery || n > maxSearchQuery {
-		return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "q must be 2 to 200 characters")}, nil
+		return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "q must be 2 to 200 characters")}, nil
 	}
 	kind := "all"
 	if p.Kind != nil {
@@ -296,13 +296,13 @@ func (h *Handlers) SearchMetadata(ctx context.Context, request SearchMetadataReq
 		case Table, Column, All:
 			kind = string(*p.Kind)
 		default:
-			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "kind must be table, column or all")}, nil
+			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "kind must be table, column or all")}, nil
 		}
 	}
 	limit := defaultSearch
 	if p.Limit != nil {
 		if *p.Limit < 1 || *p.Limit > maxSearch {
-			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 200")}, nil
+			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 200")}, nil
 		}
 		limit = *p.Limit
 	}

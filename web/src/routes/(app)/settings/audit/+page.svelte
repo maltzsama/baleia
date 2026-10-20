@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { authStore } from '$lib/stores/auth.svelte';
@@ -31,10 +32,10 @@
 	};
 
 	const ranges = [
-		{ value: '1h', label: 'Last hour' },
-		{ value: '24h', label: 'Last 24 hours' },
-		{ value: '7d', label: 'Last 7 days' },
-		{ value: '30d', label: 'Last 30 days' }
+		{ value: '1h', label: m.monitoring_last_hour() },
+		{ value: '24h', label: m.monitoring_last_24_hours() },
+		{ value: '7d', label: m.settings_audit_last_7_days() },
+		{ value: '30d', label: m.settings_audit_last_30_days() }
 	];
 
 	let range = $state('7d');
@@ -220,52 +221,67 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Audit</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_audit_audit()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
 				{isAdmin
-					? 'Every security and data operation on this instance.'
-					: 'Your events and the events of workspaces you own.'}
+					? m.settings_audit_every_security_and_data_operation_on_this()
+					: m.settings_audit_your_events_and_the_events_of_workspaces_y()}
 			</p>
 		</div>
 		{#if isAdmin}
-			<Button onclick={exportCsv}>Export CSV</Button>
+			<Button onclick={exportCsv}>{m.settings_audit_export_csv()}</Button>
 		{/if}
 	</div>
 
 	<div
 		class="mb-4 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
 	>
-		<Select label="Window" bind:value={range} options={ranges} onchange={() => load()} />
 		<Select
-			label="Action"
+			label={m.settings_audit_window()}
+			bind:value={range}
+			options={ranges}
+			onchange={() => load()}
+		/>
+		<Select
+			label={m.common_action()}
 			bind:value={action}
 			options={[
-				{ value: '', label: 'Any' },
+				{ value: '', label: m.monitoring_any() },
 				...actions.map((item) => ({ value: item, label: item }))
 			]}
 		/>
 		<Input
-			label="Resource type"
+			label={m.settings_audit_resource_type()}
 			bind:value={resourceType}
-			placeholder="connection"
+			placeholder={m.common_connection()}
 			class="font-mono"
 		/>
 		<Select
-			label="Outcome"
+			label={m.settings_audit_outcome()}
 			bind:value={outcome}
 			options={[
-				{ value: '', label: 'Any' },
-				{ value: 'allowed', label: 'Allowed' },
-				{ value: 'denied', label: 'Denied' },
+				{ value: '', label: m.monitoring_any() },
+				{ value: 'allowed', label: m.settings_audit_allowed() },
+				{ value: 'denied', label: m.settings_audit_denied() },
 				{ value: 'error', label: 'Error' }
 			]}
 		/>
 		{#if isAdmin}
-			<Input label="Actor id" bind:value={actorId} placeholder="UUID" class="font-mono" />
+			<Input
+				label={m.settings_audit_actor_id()}
+				bind:value={actorId}
+				placeholder={m.settings_audit_uuid()}
+				class="font-mono"
+			/>
 		{/if}
-		<Input label="Request id" bind:value={requestId} placeholder="request id" class="font-mono" />
+		<Input
+			label={m.settings_audit_request_id()}
+			bind:value={requestId}
+			placeholder={m.common_request_id()}
+			class="font-mono"
+		/>
 		<div class="flex items-end gap-2">
-			<Button variant="primary" {loading} onclick={load}>Search</Button>
+			<Button variant="primary" {loading} onclick={load}>{m.common_search()}</Button>
 			<Button
 				onclick={() => {
 					actorId = '';
@@ -277,13 +293,13 @@
 					void load();
 				}}
 			>
-				Clear
+				{m.common_clear()}
 			</Button>
 		</div>
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label="Loading audit events">
+		<div class="flex flex-col gap-2" aria-label={m.settings_audit_loading_audit_events()}>
 			{#each [0, 1, 2, 3, 4] as item (item)}
 				<Skeleton class="h-9 w-full" />
 			{/each}
@@ -341,57 +357,63 @@
 	{/if}
 </div>
 
-<Drawer bind:open={drawerOpen} title="Audit event">
+<Drawer bind:open={drawerOpen} title={m.settings_audit_audit_event()}>
 	{#if selected}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
-			<dt class="text-slate-600 dark:text-slate-300">Time</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.common_time()}</dt>
 			<dd><RelativeTime at={selected.occurred_at} live /></dd>
-			<dt class="text-slate-600 dark:text-slate-300">Outcome</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_outcome()}</dt>
 			<dd><Badge tone={outcomeTone(selected.outcome)}>{selected.outcome}</Badge></dd>
-			<dt class="text-slate-600 dark:text-slate-300">Action</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.common_action()}</dt>
 			<dd class="font-mono">{selected.action}</dd>
-			<dt class="text-slate-600 dark:text-slate-300">Actor</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_actor()}</dt>
 			<dd>
 				{actorLabel(selected)}
 				<span class="text-slate-600 dark:text-slate-300">({selected.actor_kind})</span>
 			</dd>
-			<dt class="text-slate-600 dark:text-slate-300">Resource</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_resource()}</dt>
 			<dd>{resourceLabel(selected)}</dd>
-			<dt class="text-slate-600 dark:text-slate-300">Workspace</dt>
+			<dt class="text-slate-600 dark:text-slate-300">{m.common_workspace()}</dt>
 			<dd>{workspaceLabel(selected)}</dd>
 			{#if selected.reason}
-				<dt class="text-slate-600 dark:text-slate-300">Reason</dt>
+				<dt class="text-slate-600 dark:text-slate-300">{m.common_reason()}</dt>
 				<dd>{selected.reason}</dd>
 			{/if}
 			{#if selected.client_ip}
-				<dt class="text-slate-600 dark:text-slate-300">Client IP</dt>
+				<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_client_ip()}</dt>
 				<dd class="font-mono">{selected.client_ip}</dd>
 			{/if}
 			{#if selected.user_agent}
-				<dt class="text-slate-600 dark:text-slate-300">User agent</dt>
+				<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_user_agent()}</dt>
 				<dd class="break-all">{selected.user_agent}</dd>
 			{/if}
 			{#if selected.request_id}
-				<dt class="text-slate-600 dark:text-slate-300">Request</dt>
+				<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_request()}</dt>
 				<dd class="flex items-center gap-1 break-all font-mono">
-					{selected.request_id}<CopyButton value={selected.request_id} label="request id" />
+					{selected.request_id}<CopyButton
+						value={selected.request_id}
+						label={m.common_request_id()}
+					/>
 				</dd>
 			{/if}
 			{#if selected.trace_id}
-				<dt class="text-slate-600 dark:text-slate-300">Trace</dt>
+				<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_trace()}</dt>
 				<dd class="flex items-center gap-1 break-all font-mono">
-					{selected.trace_id}<CopyButton value={selected.trace_id} label="trace id" />
+					{selected.trace_id}<CopyButton
+						value={selected.trace_id}
+						label={m.settings_audit_trace_id()}
+					/>
 				</dd>
 			{/if}
 		</dl>
 		{#if selected.changes && Object.keys(selected.changes).length > 0}
-			<h3 class="mt-4 text-[12px] font-semibold">Changes</h3>
+			<h3 class="mt-4 text-[12px] font-semibold">{m.settings_audit_changes()}</h3>
 			<table class="mt-1 w-full text-left text-[11px]">
 				<thead class="text-[10px] uppercase text-slate-600 dark:text-slate-300">
 					<tr>
-						<th class="py-1">Field</th>
-						<th class="py-1">From</th>
-						<th class="py-1">To</th>
+						<th class="py-1">{m.settings_audit_field()}</th>
+						<th class="py-1">{m.common_from()}</th>
+						<th class="py-1">{m.common_to()}</th>
 					</tr>
 				</thead>
 				<tbody>

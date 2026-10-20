@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -34,11 +35,11 @@
 	const core = $derived(
 		status
 			? [
-					{ label: 'Baleia', section: status.baleia },
-					{ label: 'Database', section: status.database },
-					{ label: 'Temporal', section: status.temporal },
-					{ label: 'Object storage', section: status.object_storage },
-					{ label: 'SMTP', section: status.smtp }
+					{ label: m.common_baleia(), section: status.baleia },
+					{ label: m.settings_system_database(), section: status.database },
+					{ label: m.settings_system_temporal(), section: status.temporal },
+					{ label: m.settings_system_object_storage(), section: status.object_storage },
+					{ label: m.settings_system_smtp(), section: status.smtp }
 				]
 			: []
 	);
@@ -46,13 +47,13 @@
 	const resources = $derived(
 		status
 			? [
-					{ label: 'Schedules', resource: status.schedules },
+					{ label: m.settings_system_schedules(), resource: status.schedules },
 					{ label: 'Engines', resource: status.engines },
 					{ label: 'Bindings', resource: status.bindings },
 					{ label: 'Metadata', resource: status.metadata },
-					{ label: 'Reconcile', resource: status.reconcile },
-					{ label: 'Audit export', resource: status.audit_export },
-					{ label: 'Plugin', resource: status.plugin }
+					{ label: m.settings_system_reconcile(), resource: status.reconcile },
+					{ label: m.settings_system_audit_export(), resource: status.audit_export },
+					{ label: m.settings_system_plugin(), resource: status.plugin }
 				]
 			: []
 	);
@@ -63,13 +64,13 @@
 		try {
 			const { data, error: err } = await client.GET('/admin/system/status');
 			if (err || !data) {
-				error = apiErrorMessage(err, 'Could not load the system status.');
+				error = apiErrorMessage(err, m.settings_system_could_not_load_the_system_status());
 				return;
 			}
 			status = data;
 			checkedAt = new Date();
 		} catch {
-			error = 'Could not load the system status.';
+			error = m.settings_system_could_not_load_the_system_status();
 		} finally {
 			loading = false;
 		}
@@ -82,19 +83,19 @@
 	<div class="max-w-5xl">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold tracking-[-0.3px]">System status</h1>
+				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_system_system_status()}</h1>
 				<p class="mt-1 text-[13px] text-text-muted">
-					Every platform component, each probed independently. A slow dependency is shown as
-					unknown, never as a failed page.
+					{m.settings_system_every_platform_component_each_probed_indep()}
 				</p>
 			</div>
 			<div class="flex items-center gap-3">
 				{#if checkedAt}
 					<span class="text-[11px] text-text-muted">
-						Checked <RelativeTime at={checkedAt} />
+						{m.settings_system_checked()}
+						<RelativeTime at={checkedAt} />
 					</span>
 				{/if}
-				<Button {loading} onclick={load}>Refresh</Button>
+				<Button {loading} onclick={load}>{m.settings_system_refresh()}</Button>
 			</div>
 		</div>
 

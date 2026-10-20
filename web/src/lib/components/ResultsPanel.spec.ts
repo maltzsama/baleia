@@ -104,7 +104,8 @@ describe('ResultsPanel', () => {
 		render(ResultsPanel, { props: { executionId: EXEC, enabled: true } });
 
 		expect(await screen.findByText('Could not load the results')).toBeTruthy();
-		expect(await screen.findByText('execution not found')).toBeTruthy();
+		// The UI translates the closed code instead of showing the raw body (#67).
+		expect(await screen.findByText('The resource was not found.')).toBeTruthy();
 	});
 
 	it('exports the active result set in the chosen format', async () => {

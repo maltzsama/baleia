@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { apiErrorMessage } from '$lib/api/client';
 	import Button from '../Button.svelte';
 	import Input from '../Input.svelte';
@@ -9,7 +10,7 @@
 		title,
 		resourceName,
 		consequences = [],
-		confirmLabel = 'Confirm',
+		confirmLabel = m.confirmdialog_confirm(),
 		typeToConfirm = false,
 		danger = true,
 		onconfirm
@@ -39,7 +40,7 @@
 			open = false;
 			typed = '';
 		} catch (e) {
-			error = apiErrorMessage(e, 'The action failed');
+			error = apiErrorMessage(e, m.confirmdialog_the_action_failed());
 		} finally {
 			busy = false;
 		}
@@ -64,7 +65,7 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (open = false)} disabled={busy}>Cancel</Button>
+			<Button onclick={() => (open = false)} disabled={busy}>{m.common_cancel()}</Button>
 			<Button
 				variant={danger ? 'danger' : 'primary'}
 				onclick={confirm}

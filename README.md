@@ -198,6 +198,7 @@ All settings are environment variables. Defaults work for local development with
 | `S3_BUCKET` | `baleia` | S3 bucket for query results |
 | `S3_USE_SSL` | `false` | Enable TLS for S3 connections |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outbound email (password reset, invites) |
+| `BALEIA_DEFAULT_LOCALE` | `en` | Fallback language for transactional e-mails when the recipient has no `users.locale` (`en` or `pt-BR`) |
 | `RATE_LIMIT_RPS` | `60` | Max requests per second (rate limiter) |
 | `RATE_LIMIT_BURST` | `10` | Rate limiter burst size |
 | `BALEIA_STATEMENT_TIMEOUT` | `30m` | Per-statement execution timeout; enforced by the worker and by the engine (Trino: `query_max_execution_time`) |

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import type { Snippet } from 'svelte';
 	import Button from '../Button.svelte';
 	import Table from '../Table.svelte';
@@ -40,7 +41,7 @@
 	{#if hasMore}
 		<div class="flex justify-center">
 			<Button size="sm" onclick={() => onloadmore?.()} disabled={loading} {loading}>
-				Load more
+				{m.datatable_load_more()}
 			</Button>
 		</div>
 	{/if}

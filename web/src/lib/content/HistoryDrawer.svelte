@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Drawer from '$lib/ui/Drawer.svelte';
 	import Input from '$lib/ui/Input.svelte';
@@ -108,7 +109,7 @@
 	}
 </script>
 
-<Drawer bind:open title="History">
+<Drawer bind:open title={m.content_historydrawer_history()}>
 	{#if loading}
 		<Skeleton class="h-40 w-full" />
 	{:else if error}
@@ -125,13 +126,15 @@
 							: 'hover:bg-bg-toolbar'}"
 						onclick={() => select(version)}
 					>
-						<span class="block">v{version.version} · {version.change_kind}</span>
+						<span class="block"
+							>{m.content_historydrawer_v()}{version.version} · {version.change_kind}</span
+						>
 						<span class="block text-[10px] text-slate-600 dark:text-slate-300">
 							{version.author?.name ?? 'Unknown'} · <RelativeTime at={version.created_at} />
 						</span>
 						{#if version.restored_from != null}
 							<span class="block text-[10px] text-slate-600 dark:text-slate-300">
-								from v{version.restored_from}
+								{m.content_historydrawer_from_v()}{version.restored_from}
 							</span>
 						{/if}
 					</button>
@@ -144,16 +147,22 @@
 			{#if selected && detail}
 				<div class="mb-2 flex items-center justify-between gap-2">
 					<p class="text-[11px] text-slate-600 dark:text-slate-300">
-						v{selected.version} vs v{selected.version > 1 ? selected.version - 1 : selected.version}
+						{m.content_historydrawer_v()}{selected.version}
+						{m.content_historydrawer_vs_v()}{selected.version > 1
+							? selected.version - 1
+							: selected.version}
 					</p>
 					<Button size="sm" loading={restoring} disabled={restoring} onclick={restore}>
-						Restore this version
+						{m.content_historydrawer_restore_this_version()}
 					</Button>
 				</div>
 				{#if conflict}
 					<div class="mb-2 flex items-end gap-2">
-						<Input label="Name conflict — restore as" bind:value={newName} />
-						<Button size="sm" onclick={restore} disabled={restoring}>Retry</Button>
+						<Input
+							label={m.content_historydrawer_name_conflict_restore_as()}
+							bind:value={newName}
+						/>
+						<Button size="sm" onclick={restore} disabled={restoring}>{m.common_retry()}</Button>
 					</div>
 				{/if}
 				{#if kind === 'saved_query'}
@@ -168,7 +177,7 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end">
-			<Button onclick={() => (open = false)}>Close</Button>
+			<Button onclick={() => (open = false)}>{m.common_close()}</Button>
 		</div>
 	{/snippet}
 </Drawer>

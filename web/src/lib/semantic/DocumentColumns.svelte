@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { normalizeTags, tagValid, upsertDoc, type MetadataColumn } from '$lib/semantic/docs';
 	import Button from '$lib/ui/Button.svelte';
@@ -93,10 +94,10 @@
 	}
 </script>
 
-<Modal bind:open title="Document columns">
+<Modal bind:open title={m.semantic_documentcolumns_document_columns()}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<p class="text-[11px] text-slate-600 dark:text-slate-300">
-			Only changed columns are saved. Failures are listed per column; successful ones are kept.
+			{m.semantic_documentcolumns_only_changed_columns_are_saved_failures_ar()}
 		</p>
 		<div class="max-h-[60vh] overflow-y-auto">
 			<table class="w-full text-left text-[11px]">
@@ -104,9 +105,9 @@
 					class="sticky top-0 bg-bg-panel text-[10px] uppercase text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th class="w-32 px-1 py-1">Column</th>
-						<th class="px-1 py-1">Description</th>
-						<th class="w-40 px-1 py-1">Tags</th>
+						<th class="w-32 px-1 py-1">{m.common_column()}</th>
+						<th class="px-1 py-1">{m.common_description()}</th>
+						<th class="w-40 px-1 py-1">{m.semantic_documentcolumns_tags()}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -117,7 +118,7 @@
 								<Textarea bind:value={row.description} rows={2} />
 							</td>
 							<td class="px-1 py-1">
-								<Input bind:value={row.tags} placeholder="tag, tag" />
+								<Input bind:value={row.tags} placeholder={m.semantic_documentcolumns_tag_tag()} />
 							</td>
 						</tr>
 					{/each}
@@ -135,9 +136,9 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (open = false)} disabled={saving}>Cancel</Button>
+			<Button onclick={() => (open = false)} disabled={saving}>{m.common_cancel()}</Button>
 			<Button variant="primary" loading={saving} disabled={saving} onclick={saveAll}
-				>Save all</Button
+				>{m.semantic_documentcolumns_save_all()}</Button
 			>
 		</div>
 	{/snippet}

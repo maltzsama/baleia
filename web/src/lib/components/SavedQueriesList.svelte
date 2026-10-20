@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { savedQueries, type SavedQuery, type Space } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -89,14 +90,17 @@
 
 <div class="flex min-h-0 flex-1 flex-col">
 	<div class="flex items-center gap-2 border-b border-border px-2 py-1.5">
-		<span class="flex-1 text-[10px] font-bold tracking-wide text-text-muted uppercase">Content</span
+		<span class="flex-1 text-[10px] font-bold tracking-wide text-text-muted uppercase"
+			>{m.common_content()}</span
 		>
-		<Button variant="ghost" size="sm" onclick={startSpaceCreate}>+ Space</Button>
+		<Button variant="ghost" size="sm" onclick={startSpaceCreate}
+			>{m.components_savedquerieslist_space()}</Button
+		>
 	</div>
 
 	<div class="flex-1 overflow-y-auto px-1.5 pt-1.5 pb-2">
 		{#if loading}
-			<p class="px-2 py-4 text-xs text-text-muted">Loading...</p>
+			<p class="px-2 py-4 text-xs text-text-muted">{m.common_loading()}</p>
 		{:else if loadError || actionError}
 			<p class="px-2 py-4 text-xs text-red-500" role="alert">{loadError || actionError}</p>
 		{:else if spaces.length === 0}
@@ -313,23 +317,23 @@
 <MoveToSpaceDialog bind:open={movingQueryOpen} query={movingQuery} />
 <ConfirmDialog
 	bind:open={deleteQueryOpen}
-	title="Delete saved query"
+	title={m.components_savedquerieslist_delete_saved_query()}
 	resourceName={deletingQuery?.name ?? ''}
 	consequences={[
 		'The query and its edit history are removed.',
-		'Executions already run keep their history.'
+		m.components_savedquerieslist_executions_already_run_keep_their_history()
 	]}
 	confirmLabel="Delete query"
 	onconfirm={deleteQuery}
 />
 <ConfirmDialog
 	bind:open={deleteSpaceOpen}
-	title="Delete space"
+	title={m.components_savedquerieslist_delete_space()}
 	resourceName={deletingSpace?.name ?? ''}
 	consequences={[
 		'The space and its access list are removed.',
-		'Every folder and saved query in it is deleted too.',
-		'This cannot be undone.'
+		m.components_savedquerieslist_every_folder_and_saved_query_in_it_is_dele(),
+		m.components_savedquerieslist_this_cannot_be_undone()
 	]}
 	confirmLabel="Delete space"
 	onconfirm={deleteSpace}

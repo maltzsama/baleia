@@ -133,7 +133,7 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 		return nil, errors.New("semantic doc: missing body")
 	}
 	if utf8.RuneCountInString(request.Body.Description) > maxDocDescription {
-		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "description must be at most 20000 characters")}, nil
+		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "description must be at most 20000 characters")}, nil
 	}
 
 	updatedBy, err := uuidFromString(auth.UserIDFromContext(ctx))
@@ -146,7 +146,7 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 	}
 	tags, tagErr := normalizeSemanticTags(request.Body.Tags)
 	if tagErr != "" {
-		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", tagErr)}, nil
+		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, tagErr)}, nil
 	}
 
 	params := db.GetSemanticDocParams{
@@ -167,7 +167,7 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 		at := current.UpdatedAt.Time.Format(time.RFC3339Nano)
 		fields := map[string]interface{}{"updated_by": by, "updated_at": at}
 		return UpsertSemanticDoc409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
-			Code: "version_conflict", Message: "the doc changed since you loaded it", Params: &fields,
+			Code: ErrorCodeVersionConflict, Message: "the doc changed since you loaded it", Params: &fields,
 		}}, nil
 	}
 
@@ -175,7 +175,7 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 	certified := exists && current.Certified
 	if request.Body.Certified != nil {
 		if *request.Body.Certified && !canCertify {
-			return UpsertSemanticDoc403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a workspace owner or admin may certify docs"}}, nil
+			return UpsertSemanticDoc403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner or admin may certify docs"}}, nil
 		}
 		certified = *request.Body.Certified
 	} else if exists && current.Certified && current.Description != request.Body.Description && !canCertify {
@@ -296,12 +296,12 @@ func (h *Handlers) SearchSemanticDocs(ctx context.Context, request SearchSemanti
 	p := request.Params
 	n := utf8.RuneCountInString(p.Q)
 	if n < minSearchQuery || n > maxSearchQuery {
-		return SearchSemanticDocs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "q must be 2 to 200 characters")}, nil
+		return SearchSemanticDocs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "q must be 2 to 200 characters")}, nil
 	}
 	limit := defaultSearch
 	if p.Limit != nil {
 		if *p.Limit < 1 || *p.Limit > maxSearch {
-			return SearchSemanticDocs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 200")}, nil
+			return SearchSemanticDocs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 200")}, nil
 		}
 		limit = *p.Limit
 	}
@@ -347,7 +347,7 @@ func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemantic
 	limit := 0
 	if request.Params.Limit != nil {
 		if *request.Params.Limit < 1 || *request.Params.Limit > 200 {
-			return ListSemanticMetrics422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "limit must be between 1 and 200")}, nil
+			return ListSemanticMetrics422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 200")}, nil
 		}
 		limit = *request.Params.Limit
 	}
@@ -431,13 +431,13 @@ func (h *Handlers) GetSemanticMetric(ctx context.Context, request GetSemanticMet
 	se, err := h.contentSpace(ctx, ws, metric.SpaceID, authz.SpaceViewer)
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return GetSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return GetSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	}
 	if se != nil {
 		if se.status == 403 {
-			return GetSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return GetSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return GetSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
@@ -469,10 +469,10 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 
 	def, raw, err := parseDefinition(request.Body.Definition)
 	if err != nil {
-		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	if msg, ok := validateMetricFields(request.Body.Slug, request.Body.Label, request.Body.Table); !ok {
-		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", msg)}, nil
+		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, msg)}, nil
 	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -505,13 +505,13 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 		space, se, err = h.spaceForWrite(ctx, ws, request.Body.SpaceId, authz.SpaceEditor)
 		if err != nil {
 			if errors.Is(err, authz.ErrUnauthenticated) {
-				return CreateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+				return CreateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 			}
 			return nil, err
 		}
 		if se != nil {
 			if se.status == 403 {
-				return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+				return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 			}
 			return CreateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 		}
@@ -522,12 +522,12 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 		}
 		if se, err := h.contentSpace(ctx, ws, space.ID, authz.SpaceEditor); err != nil {
 			if errors.Is(err, authz.ErrUnauthenticated) {
-				return CreateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+				return CreateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 			}
 			return nil, err
 		} else if se != nil {
 			if se.status == 403 {
-				return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+				return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 			}
 			return CreateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 		}
@@ -537,7 +537,7 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 		isManager = true
 	}
 	if certified && !isManager {
-		return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a space manager may certify a metric"}}, nil
+		return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a metric"}}, nil
 	}
 	metric, err := h.contentService().CreateSemanticMetric(ctx, userID, db.CreateSemanticMetricParams{
 		WorkspaceID:   ws,
@@ -557,7 +557,7 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return CreateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "a metric with this slug already exists in this workspace"}}, nil
+			return CreateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a metric with this slug already exists in this workspace"}}, nil
 		}
 		return nil, err
 	}
@@ -596,12 +596,12 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 	}
 	if se, err := h.contentSpace(ctx, ws, current.SpaceID, authz.SpaceEditor); err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return UpdateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return UpdateSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	} else if se != nil {
 		if se.status == 403 {
-			return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
 		return UpdateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
@@ -612,7 +612,7 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 	}
 	body := request.Body
 	if body.Certified != nil && *body.Certified != current.Certified && !isManager {
-		return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "only a space manager may certify a metric"}}, nil
+		return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a metric"}}, nil
 	}
 	if body.Certified != nil {
 		// Handled after the update so certified_by/at stay consistent.
@@ -657,17 +657,17 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 	}
 	if body.Definition != nil {
 		if _, b, err := parseDefinition(*body.Definition); err != nil {
-			return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+			return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 		} else {
 			raw = b
 		}
 	}
 	def, _, err := parseDefinitionRaw(raw)
 	if err != nil {
-		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	if msg, ok := validateMetricFields(slug, label, tableName); !ok {
-		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", msg)}, nil
+		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, msg)}, nil
 	}
 
 	nf, err = h.semanticCatalog(ctx, ws, openapi_types.UUID(catalogID.Bytes))
@@ -716,7 +716,7 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 	}, expected)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "a metric with this slug already exists in this workspace"}}, nil
+			return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a metric with this slug already exists in this workspace"}}, nil
 		}
 		if c, ok := h.versionConflictResponse(ctx, err); ok {
 			return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: c}, nil
@@ -755,12 +755,12 @@ func (h *Handlers) DeleteSemanticMetric(ctx context.Context, request DeleteSeman
 	}
 	if se, err := h.contentSpace(ctx, ws, current.SpaceID, authz.SpaceEditor); err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return DeleteSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return DeleteSemanticMetric401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	} else if se != nil {
 		if se.status == 403 {
-			return DeleteSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "you may not edit this space"}}, nil
+			return DeleteSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "you may not edit this space"}}, nil
 		}
 		return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
@@ -804,18 +804,18 @@ func (h *Handlers) GetSemanticMetricSql(ctx context.Context, request GetSemantic
 	}
 	if se, err := h.contentSpace(ctx, ws, metric.SpaceID, authz.SpaceViewer); err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) {
-			return GetSemanticMetricSql401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+			return GetSemanticMetricSql401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 		}
 		return nil, err
 	} else if se != nil {
 		if se.status == 403 {
-			return GetSemanticMetricSql403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to read this space"}}, nil
+			return GetSemanticMetricSql403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to read this space"}}, nil
 		}
 		return GetSemanticMetricSql404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
 	def, _, err := parseDefinitionRaw(metric.Definition)
 	if err != nil {
-		return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 
 	bindingID := metric.BindingID
@@ -826,11 +826,11 @@ func (h *Handlers) GetSemanticMetricSql(ctx context.Context, request GetSemantic
 	if request.Params.Grain != nil {
 		opts.Grain = dialect.TimeGrain(*request.Params.Grain)
 		if len(def.TimeGrains) > 0 && !slices.Contains(def.TimeGrains, opts.Grain) {
-			return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("grain_not_allowed", "grain is not one of the metric's time_grains")}, nil
+			return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeGrainNotAllowed, "grain is not one of the metric's time_grains")}, nil
 		}
 	}
 	if request.Params.From != nil && request.Params.To != nil && !request.Params.From.Before(*request.Params.To) {
-		return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "from must be before to")}, nil
+		return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "from must be before to")}, nil
 	}
 
 	target, engine, err := h.semanticTarget(ctx, ws, metric.CatalogID, bindingID)
@@ -846,7 +846,7 @@ func (h *Handlers) GetSemanticMetricSql(ctx context.Context, request GetSemantic
 	opts.Alias = metric.Slug
 	sql, err := semantic.Render(def, semantic.TableRef{Catalog: target.EngineCatalog, Schema: metric.Namespace, Table: metric.TableName}, engine.Dialect(), opts)
 	if err != nil {
-		return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	return GetSemanticMetricSql200JSONResponse(SemanticMetricSQL{Sql: sql, Portable: def.CustomSQL == nil}), nil
 }
@@ -914,14 +914,14 @@ func (h *Handlers) semanticTarget(ctx context.Context, ws pgtype.UUID, catalogID
 		return queryengine.Target{}, nil, err
 	}
 	if target.CatalogID.Bytes != catalogID.Bytes {
-		return queryengine.Target{}, nil, &targetError{notFound: true, code: "not_found", message: "binding not found"}
+		return queryengine.Target{}, nil, &targetError{notFound: true, code: ErrorCodeNotFound, message: "binding not found"}
 	}
 	if h.engines == nil {
-		return queryengine.Target{}, nil, &targetError{code: "engine_unavailable", message: "no engine is available"}
+		return queryengine.Target{}, nil, &targetError{code: ErrorCodeEngineUnavailable, message: "no engine is available"}
 	}
 	engine, err := h.engines.Get(ctx, target.EngineID)
 	if err != nil {
-		return queryengine.Target{}, nil, &targetError{code: "engine_unavailable", message: "the metric's engine is not available"}
+		return queryengine.Target{}, nil, &targetError{code: ErrorCodeEngineUnavailable, message: "the metric's engine is not available"}
 	}
 	return target, engine, nil
 }
@@ -935,15 +935,15 @@ func (h *Handlers) validateSemanticMetric(ctx context.Context, ws pgtype.UUID, c
 	}
 	if def.CustomSQL != nil {
 		if engine.Capabilities().ReadOnly != queryengine.ReadOnlyEnforced && !h.connectionReadOnly(ctx, target.EngineID) {
-			return &targetError{code: "custom_sql_requires_read_only", message: "custom_sql needs an engine that enforces read-only sessions or read-only credentials"}
+			return &targetError{code: ErrorCodeCustomSqlRequiresReadOnly, message: "custom_sql needs an engine that enforces read-only sessions or read-only credentials"}
 		}
 		if policy.ForbiddenInEditor(engine.Dialect(), *def.CustomSQL) {
-			return &targetError{code: "custom_sql_forbidden", message: "custom_sql may not contain catalog DDL or multiple statements"}
+			return &targetError{code: ErrorCodeCustomSqlForbidden, message: "custom_sql may not contain catalog DDL or multiple statements"}
 		}
 	}
 	sql, err := semantic.Render(def, semantic.TableRef{Catalog: target.EngineCatalog, Schema: namespace, Table: table}, engine.Dialect(), semantic.RenderOptions{Alias: slug})
 	if err != nil {
-		return &targetError{code: "invalid_definition", message: err.Error()}
+		return &targetError{code: ErrorCodeInvalidDefinition, message: err.Error()}
 	}
 	trinoUser, err := h.trinoIdentityFor(ctx, userID)
 	if err != nil {
@@ -956,7 +956,7 @@ func (h *Handlers) validateSemanticMetric(ctx context.Context, ws pgtype.UUID, c
 		Tags:     queryengine.Tags{Source: "semantic", RequestID: middleware.GetReqID(ctx)},
 	}
 	if _, err := queryengine.Collect(ctx, engine, spec, engine.Dialect().Limit(sql, 0), 1); err != nil {
-		return &targetError{code: string(queryengine.CodeOf(err)), message: "the engine rejected the metric definition"}
+		return &targetError{code: ErrorCode(queryengine.CodeOf(err)), message: "the engine rejected the metric definition"}
 	}
 	return nil
 }
@@ -1124,11 +1124,11 @@ func (h *Handlers) RenderSemanticMetric(ctx context.Context, request RenderSeman
 		return RenderSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
 	if request.Body == nil {
-		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	def, _, err := parseDefinition(request.Body.Definition)
 	if err != nil {
-		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	var bindingID pgtype.UUID
 	if request.Body.BindingId != nil {
@@ -1148,7 +1148,7 @@ func (h *Handlers) RenderSemanticMetric(ctx context.Context, request RenderSeman
 	}
 	sql, err := semantic.Render(def, semantic.TableRef{Catalog: target.EngineCatalog, Schema: request.Body.Namespace, Table: request.Body.Table}, engine.Dialect(), opts)
 	if err != nil {
-		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	return RenderSemanticMetric200JSONResponse{Sql: sql}, nil
 }
@@ -1163,11 +1163,11 @@ func (h *Handlers) ValidateSemanticMetricDefinition(ctx context.Context, request
 		return ValidateSemanticMetricDefinition404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
 	if request.Body == nil {
-		return ValidateSemanticMetricDefinition422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return ValidateSemanticMetricDefinition422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	def, _, err := parseDefinition(request.Body.Definition)
 	if err != nil {
-		return ValidateSemanticMetricDefinition422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("invalid_definition", err.Error())}, nil
+		return ValidateSemanticMetricDefinition422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {

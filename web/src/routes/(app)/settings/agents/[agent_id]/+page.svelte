@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -114,7 +115,7 @@
 		error = '';
 		try {
 			const path = { agent_id: agentId };
-			const [a, t, m, e, p] = await Promise.all([
+			const [a, t, metaRes, e, p] = await Promise.all([
 				client.GET('/agents/{agent_id}', { params: { path } }),
 				client.GET('/agents/{agent_id}/tokens', { params: { path } }),
 				client.GET('/agents/meta'),
@@ -122,17 +123,17 @@
 				client.GET('/agents/{agent_id}/policy', { params: { path } })
 			]);
 			if (a.error || !a.data) {
-				error = apiErrorMessage(a.error, 'Could not load the agent.');
+				error = apiErrorMessage(a.error, m.settings_agents_could_not_load_the_agent());
 				return;
 			}
 			agent = a.data;
 			tokens = t.data ?? [];
-			meta = m.data ?? null;
+			meta = metaRes.data ?? null;
 			eligibility = e.data ?? [];
 			policyResponse = p.data ?? null;
 			initPolicy();
 		} catch {
-			error = 'Could not load the agent.';
+			error = m.settings_agents_could_not_load_the_agent();
 		} finally {
 			loading = false;
 		}
@@ -206,7 +207,7 @@
 				body
 			});
 			if (err || !data) {
-				policyError = apiErrorMessage(err, 'Could not save the policy.');
+				policyError = apiErrorMessage(err, m.settings_agents_could_not_save_the_policy());
 				return;
 			}
 			policyResponse = data;
@@ -227,7 +228,7 @@
 				body: { name: tokenName, expires_in_days: tokenDays ? Number(tokenDays) : undefined }
 			});
 			if (err || !data) {
-				tokenError = apiErrorMessage(err, 'Could not create the token.');
+				tokenError = apiErrorMessage(err, m.settings_agents_could_not_create_the_token());
 				return;
 			}
 			tokenOpen = false;
@@ -259,7 +260,7 @@
 			body: { status }
 		});
 		if (err) {
-			statusError = apiErrorMessage(err, 'Could not change the status.');
+			statusError = apiErrorMessage(err, m.settings_agents_could_not_change_the_status());
 			return;
 		}
 		statusOpen = false;
@@ -273,7 +274,7 @@
 			params: { path: { agent_id: agentId } }
 		});
 		if (err) {
-			deleteError = apiErrorMessage(err, 'Could not delete the agent.');
+			deleteError = apiErrorMessage(err, m.settings_agents_could_not_delete_the_agent());
 			return;
 		}
 		toasts.success('Agent deleted.');
@@ -314,7 +315,9 @@
 					{/if}
 					<p class="mt-1 text-[11px] text-text-muted">
 						Created <RelativeTime at={agent.created_at} /> ·
-						{agent.allowed_actions?.includes('manage_tokens') ? 'you own this agent' : 'admin view'}
+						{agent.allowed_actions?.includes('manage_tokens')
+							? m.settings_agents_you_own_this_agent()
+							: m.settings_agents_admin_view()}
 					</p>
 				</div>
 				<div class="flex gap-2">
@@ -349,7 +352,8 @@
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
 						<h2 class="text-[13px] font-semibold">Workspaces</h2>
 						<p class="mt-1 text-[13px] text-text-muted">
-							{agent.workspaces.map((ws) => ws.name).join(', ') || 'No workspace bound.'}
+							{agent.workspaces.map((ws) => ws.name).join(', ') ||
+								m.settings_agents_no_workspace_bound()}
 						</p>
 					</div>
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
@@ -547,7 +551,8 @@
 								<Input
 									label={`${label} (max ${ceiling(field) ?? '—'})`}
 									type="number"
-									placeholder={displayLimit(field)?.toString() ?? 'Default'}
+									placeholder={displayLimit(field)?.toString() ??
+										m.connections_providerform_default()}
 									value={policy.limits[field]?.toString() ?? ''}
 									oninput={(event) => {
 										const value = (event.currentTarget as HTMLInputElement).value;
@@ -603,16 +608,16 @@
 	</div>
 </div>
 
-<Modal bind:open={tokenOpen} title="Create token">
+<Modal bind:open={tokenOpen} title={m.settings_agents_create_token()}>
 	<div class="flex flex-col gap-3">
 		{#if tokenError}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
 				{tokenError}
 			</p>
 		{/if}
-		<Input label="Name" bind:value={tokenName} placeholder="ci-pipeline" />
+		<Input label={m.common_name()} bind:value={tokenName} placeholder={m.common_ci_pipeline()} />
 		<Input
-			label="Expires in days"
+			label={m.settings_agents_expires_in_days()}
 			type="number"
 			bind:value={tokenDays}
 			placeholder={`Default ${meta?.token_default_ttl_days ?? 30}`}
@@ -620,30 +625,32 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (tokenOpen = false)}>Cancel</Button>
-			<Button variant="primary" loading={tokenBusy} onclick={createToken}>Create token</Button>
+			<Button onclick={() => (tokenOpen = false)}>{m.common_cancel()}</Button>
+			<Button variant="primary" loading={tokenBusy} onclick={createToken}
+				>{m.settings_agents_create_token()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={secretOpen} title="Copy this token now">
+<Modal bind:open={secretOpen} title={m.settings_agents_copy_this_token_now()}>
 	<div class="flex flex-col gap-3 text-[13px]">
-		<p class="text-text-muted">This value is shown once and is never stored by the UI.</p>
+		<p class="text-text-muted">{m.common_this_value_is_shown_once_and_is_never_stor()}</p>
 		<div
 			class="flex items-center gap-2 rounded-md border border-border bg-bg-toolbar px-3 py-2 font-mono text-xs"
 		>
 			<span class="flex-1 break-all">{secret}</span>
-			<CopyButton value={secret} label="token" />
+			<CopyButton value={secret} label={m.settings_agents_token()} />
 		</div>
 		<div>
 			<div class="flex items-center justify-between">
-				<span class="text-[12px] font-medium">MCP client snippet</span>
-				<CopyButton value={mcpSnippet} label="snippet" />
+				<span class="text-[12px] font-medium">{m.settings_agents_mcp_client_snippet()}</span>
+				<CopyButton value={mcpSnippet} label={m.settings_agents_snippet()} />
 			</div>
 			<pre
 				class="mt-1 overflow-auto rounded-md border border-border bg-bg-toolbar p-3 text-[11px]">{mcpSnippet}</pre>
 		</div>
-		<Checkbox bind:checked={acknowledged} label="I have copied this value" />
+		<Checkbox bind:checked={acknowledged} label={m.common_i_have_copied_this_value()} />
 	</div>
 	{#snippet footer()}
 		<Button
@@ -654,24 +661,27 @@
 				secret = '';
 			}}
 		>
-			Done
+			{m.common_done()}
 		</Button>
 	{/snippet}
 </Modal>
 
 <ConfirmDialog
 	bind:open={revokeOpen}
-	title="Revoke token"
+	title={m.settings_agents_revoke_token()}
 	resourceName={revokeTarget?.name ?? ''}
 	consequences={[
 		'Clients using this token stop working immediately.',
-		'The token cannot be restored; create a new one instead.'
+		m.settings_agents_the_token_cannot_be_restored_create_a_new()
 	]}
 	confirmLabel="Revoke token"
 	onconfirm={confirmRevoke}
 />
 
-<Modal bind:open={statusOpen} title={isDisabled ? 'Enable agent' : 'Disable agent'}>
+<Modal
+	bind:open={statusOpen}
+	title={isDisabled ? m.settings_agents_enable_agent() : m.settings_agents_disable_agent()}
+>
 	<div class="flex flex-col gap-3 text-[13px]">
 		{#if statusError}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
@@ -680,13 +690,13 @@
 		{/if}
 		<p class="text-text-muted">
 			{isDisabled
-				? 'The agent and its tokens can be used again immediately.'
-				: 'Every token stops working immediately. The agent and its history stay.'}
+				? m.settings_agents_the_agent_and_its_tokens_can_be_used_again()
+				: m.settings_agents_every_token_stops_working_immediately_the()}
 		</p>
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (statusOpen = false)}>Cancel</Button>
+			<Button onclick={() => (statusOpen = false)}>{m.common_cancel()}</Button>
 			<Button variant="primary" onclick={() => setStatus(isDisabled ? 'active' : 'disabled')}>
 				{isDisabled ? 'Enable' : 'Disable'}
 			</Button>
@@ -694,7 +704,7 @@
 	{/snippet}
 </Modal>
 
-<Modal bind:open={deleteOpen} title="Delete agent">
+<Modal bind:open={deleteOpen} title={m.settings_agents_delete_agent()}>
 	<div class="flex flex-col gap-3 text-[13px]">
 		{#if deleteError}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
@@ -702,16 +712,17 @@
 			</p>
 		{/if}
 		<p class="text-text-muted">
-			Tokens stop working immediately and the agent is removed. Type
-			<strong>{agent?.name}</strong> to confirm.
+			{m.settings_agents_tokens_stop_working_immediately_and_the_ag()}
+			<strong>{agent?.name}</strong>
+			{m.settings_agents_to_confirm()}
 		</p>
-		<Input label="Agent name" bind:value={deleteName} />
+		<Input label={m.settings_agents_agent_name()} bind:value={deleteName} />
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (deleteOpen = false)}>Cancel</Button>
+			<Button onclick={() => (deleteOpen = false)}>{m.common_cancel()}</Button>
 			<Button variant="danger" disabled={deleteName !== agent?.name} onclick={confirmDelete}>
-				Delete agent
+				{m.settings_agents_delete_agent()}
 			</Button>
 		</div>
 	{/snippet}

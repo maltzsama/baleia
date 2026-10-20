@@ -65,7 +65,7 @@ func TestResolveTarget(t *testing.T) {
 			got, err := h.ResolveTarget(context.Background(), c.ws, c.req)
 			if c.code != "" {
 				te, ok := asTargetError(err)
-				if !ok || te.code != c.code {
+				if !ok || string(te.code) != c.code {
 					t.Fatalf("err = %v, want %s", err, c.code)
 				}
 				return

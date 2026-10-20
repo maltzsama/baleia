@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -159,7 +160,9 @@
 			if (result.success) {
 				toasts.success(`${connection.name}: reachable (${result.latency_ms} ms)`);
 			} else {
-				toasts.error(`${connection.name}: ${result.error_message ?? 'the test failed'}`);
+				toasts.error(
+					`${connection.name}: ${result.error_message ?? m.connections_the_test_failed()}`
+				);
 			}
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : String(e));
@@ -217,7 +220,7 @@
 
 	function onSaved(updated: CatalogConnection) {
 		connections = connections.map((c) => (c.id === updated.id ? updated : c));
-		toasts.success('Connection saved');
+		toasts.success(m.connections_connection_saved());
 	}
 
 	function consequences(connection: CatalogConnection): string[] {
@@ -244,7 +247,7 @@
 		await deleteConnection(target.id);
 		connections = connections.filter((c) => c.id !== target.id);
 		deleting = null;
-		toasts.success('Connection removed');
+		toasts.success(m.connections_connection_removed());
 	}
 
 	onMount(() => {
@@ -255,27 +258,30 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-5 flex items-end justify-between">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Connections</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_connections()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				Providers, engines, catalogs and the engines each catalog is bound to.
+				{m.connections_providers_engines_catalogs_and_the_engines()}
 			</p>
 		</div>
 		<Button variant="primary" onclick={() => (window.location.href = '/connections/new')}>
-			New connection
+			{m.connections_new_connection()}
 		</Button>
 	</div>
 
 	<div class="mb-5 flex items-center gap-2.5">
 		<div class="w-64">
-			<Input bind:value={search} placeholder="Search connections…" />
+			<Input bind:value={search} placeholder={m.connections_search_connections()} />
 		</div>
 		<span class="ml-auto font-mono text-xs text-slate-600 dark:text-slate-300"
-			>{filtered.length} connection{filtered.length === 1 ? '' : 's'}</span
+			>{filtered.length} {m.common_connection()}{filtered.length === 1 ? '' : 's'}</span
 		>
 	</div>
 
 	{#if loading}
-		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading connections">
+		<div
+			class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+			aria-label={m.connections_loading_connections()}
+		>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-40 w-full" />
 			{/each}
@@ -400,7 +406,7 @@
 							Activity
 						</Button>
 						<span
-							title={ownEngines.length > 0 ? 'Delete the engine first' : ''}
+							title={ownEngines.length > 0 ? m.connections_delete_the_engine_first() : ''}
 							class="inline-flex"
 						>
 							<Button
@@ -437,7 +443,7 @@
 {#if deleting}
 	<ConfirmDialog
 		bind:open={deleteOpen}
-		title="Remove connection"
+		title={m.connections_remove_connection()}
 		resourceName={deleting.name}
 		consequences={consequences(deleting)}
 		confirmLabel="Remove connection"
@@ -456,13 +462,17 @@
 		}}
 	>
 		<div class="flex flex-col gap-3">
-			<Input label="Catalog or warehouse name" bind:value={addName} placeholder="e.g. analytics" />
+			<Input
+				label={m.connections_catalog_or_warehouse_name()}
+				bind:value={addName}
+				placeholder={m.connections_e_g_analytics()}
+			/>
 			<p class="text-[10px] text-slate-600 dark:text-slate-300">
-				It becomes the name used in SQL on the federated engine.
+				{m.connections_it_becomes_the_name_used_in_sql_on_the_fed()}
 			</p>
 			{#if connectors.length > 1}
 				<Select
-					label="Connector"
+					label={m.common_connector()}
 					bind:value={addConnector}
 					options={connectors.map((item) => ({ value: item, label: item }))}
 				/>
@@ -470,14 +480,14 @@
 		</div>
 		{#snippet footer()}
 			<div class="flex justify-end gap-2">
-				<Button onclick={() => (adding = null)} disabled={addingBusy}>Cancel</Button>
+				<Button onclick={() => (adding = null)} disabled={addingBusy}>{m.common_cancel()}</Button>
 				<Button
 					variant="primary"
 					loading={addingBusy}
 					disabled={addingBusy || !addName.trim()}
 					onclick={addCatalog}
 				>
-					Add catalog
+					{m.common_add_catalog()}
 				</Button>
 			</div>
 		{/snippet}

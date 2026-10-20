@@ -16,7 +16,7 @@ func (h *Handlers) ListApiKeys(ctx context.Context, request ListApiKeysRequestOb
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return ListApiKeys401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListApiKeys401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	keys, err := h.queries.ListAPIKeysByUser(ctx, uid)
@@ -35,7 +35,7 @@ func (h *Handlers) CreateApiKey(ctx context.Context, request CreateApiKeyRequest
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return CreateApiKey401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateApiKey401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	secret := generateAPIKey()
@@ -76,14 +76,14 @@ func (h *Handlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequest
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
-		return DeleteApiKey401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteApiKey401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	ev := audit.Event{Action: audit.APIKeyRevoke, ResourceType: "api_key", ResourceID: request.Id.String()}
 	keyID, err := uuidFromString(request.Id.String())
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "api key not found"}}, nil
+		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "api key not found"}}, nil
 	}
 
 	if err := h.queries.DeleteAPIKey(ctx, db.DeleteAPIKeyParams{
@@ -91,7 +91,7 @@ func (h *Handlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequest
 		UserID: uid,
 	}); err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "api key not found"}}, nil
+		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "api key not found"}}, nil
 	}
 
 	h.audited(ctx, ev.Allowed())

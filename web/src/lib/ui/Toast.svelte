@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	type Tone = 'info' | 'success' | 'error';
 
 	let {
@@ -29,7 +30,7 @@
 		type="button"
 		class="rounded px-1 text-current opacity-60 hover:opacity-100"
 		onclick={ondismiss}
-		aria-label="Dismiss notification"
+		aria-label={m.ui_toast_dismiss_notification()}
 	>
 		×
 	</button>

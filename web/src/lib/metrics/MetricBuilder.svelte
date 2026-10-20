@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
@@ -220,7 +221,7 @@
 
 	async function save() {
 		if (!workspaceId || !table) {
-			saveError = 'Choose a table first.';
+			saveError = m.metrics_metricbuilder_choose_a_table_first();
 			return;
 		}
 		saving = true;
@@ -275,9 +276,9 @@
 			{ value: '=', label: '=' },
 			{ value: '!=', label: '!=' },
 			{ value: 'in', label: 'in' },
-			{ value: 'not_in', label: 'not in' },
-			{ value: 'is_null', label: 'is null' },
-			{ value: 'is_not_null', label: 'is not null' }
+			{ value: 'not_in', label: m.metrics_metricbuilder_not_in() },
+			{ value: 'is_null', label: m.metrics_metricbuilder_is_null() },
+			{ value: 'is_not_null', label: m.metrics_metricbuilder_is_not_null() }
 		];
 		if (['int64', 'decimal', 'float64', 'date', 'timestamp', 'timestamptz'].includes(logical)) {
 			return [
@@ -296,21 +297,33 @@
 
 <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
 	<div class="flex flex-col gap-3 rounded-lg border border-border bg-bg-panel p-4 text-[12px]">
-		<h2 class="text-[13px] font-semibold">Identity</h2>
-		<Input label="Label" bind:value={label} />
-		<Input label="Slug" bind:value={slug} class="font-mono" oninput={() => (slugEdited = true)} />
-		<Input label="Description" bind:value={description} />
+		<h2 class="text-[13px] font-semibold">{m.metrics_metricbuilder_identity()}</h2>
+		<Input label={m.metrics_metricbuilder_label()} bind:value={label} />
+		<Input
+			label={m.metrics_metricbuilder_slug()}
+			bind:value={slug}
+			class="font-mono"
+			oninput={() => (slugEdited = true)}
+		/>
+		<Input label={m.common_description()} bind:value={description} />
 		<Select
-			label="Space"
+			label={m.common_space()}
 			bind:value={spaceId}
 			options={spaces
 				.filter((space) => space.allowed_actions?.includes('edit_content'))
 				.map((space) => ({ value: space.id, label: space.name }))}
 		/>
 
-		<h2 class="mt-2 text-[13px] font-semibold">Table</h2>
-		<Input label="Search a table" bind:value={tableQuery} placeholder="orders" oninput={search} />
-		{#if searching}<p class="text-[11px] text-slate-600 dark:text-slate-300">Searching…</p>{/if}
+		<h2 class="mt-2 text-[13px] font-semibold">{m.metrics_metricbuilder_table()}</h2>
+		<Input
+			label={m.metrics_metricbuilder_search_a_table()}
+			bind:value={tableQuery}
+			placeholder={m.common_orders()}
+			oninput={search}
+		/>
+		{#if searching}<p class="text-[11px] text-slate-600 dark:text-slate-300">
+				{m.common_searching()}
+			</p>{/if}
 		{#if results.length > 0}
 			<ul class="flex max-h-40 flex-col gap-1 overflow-y-auto rounded border border-border p-1">
 				{#each results as result (result.table_id)}
@@ -328,39 +341,45 @@
 		{/if}
 		{#if table}
 			<p class="font-mono text-[11px]">{table.namespace.join('.')}.{table.name}</p>
-			{#if tableLoading}<p class="text-[11px]">Loading columns…</p>{/if}
+			{#if tableLoading}<p class="text-[11px]">{m.metrics_metricbuilder_loading_columns()}</p>{/if}
 		{/if}
 
-		<h2 class="mt-2 text-[13px] font-semibold">Measure</h2>
+		<h2 class="mt-2 text-[13px] font-semibold">{m.metrics_metricbuilder_measure()}</h2>
 		<div class="flex flex-wrap gap-2">
 			<label class="flex items-center gap-1 text-[11px]">
-				<input type="checkbox" bind:checked={useCustom} /> Custom SQL expression
+				<input type="checkbox" bind:checked={useCustom} />
+				{m.metrics_metricbuilder_custom_sql_expression()}
 			</label>
 		</div>
 		{#if useCustom}
-			<Textarea label="Custom aggregate (dialect only)" bind:value={customSql} class="font-mono" />
+			<Textarea
+				label={m.metrics_metricbuilder_custom_aggregate_dialect_only()}
+				bind:value={customSql}
+				class="font-mono"
+			/>
 			<p class="text-[11px] text-amber-700 dark:text-amber-300">
-				Non-portable: renders only on engines with enforced read-only or asserted read-only
-				credentials.
+				{m.metrics_metricbuilder_non_portable_renders_only_on_engines_with()}
 			</p>
 		{:else}
 			<Select
 				label="Aggregation"
 				bind:value={aggregation}
 				options={[
-					{ value: 'sum', label: 'Sum' },
-					{ value: 'count', label: 'Count' },
-					{ value: 'count_distinct', label: 'Distinct count' },
-					{ value: 'avg', label: 'Average' },
-					{ value: 'min', label: 'Minimum' },
-					{ value: 'max', label: 'Maximum' }
+					{ value: 'sum', label: m.metrics_metricbuilder_sum() },
+					{ value: 'count', label: m.metrics_metricbuilder_count() },
+					{ value: 'count_distinct', label: m.metrics_metricbuilder_distinct_count() },
+					{ value: 'avg', label: m.metrics_metricbuilder_average() },
+					{ value: 'min', label: m.metrics_metricbuilder_minimum() },
+					{ value: 'max', label: m.metrics_metricbuilder_maximum() }
 				]}
 			/>
 			<Select
 				label="Column"
 				bind:value={column}
 				options={[
-					...(aggregation === 'count' ? [{ value: '', label: 'All rows' }] : []),
+					...(aggregation === 'count'
+						? [{ value: '', label: m.metrics_metricbuilder_all_rows() }]
+						: []),
 					...measureColumns.map((c) => ({
 						value: c.name,
 						label: `${c.name} (${c.logical_type ?? c.native_type})`
@@ -369,31 +388,41 @@
 			/>
 		{/if}
 
-		<h2 class="mt-2 text-[13px] font-semibold">Filters</h2>
+		<h2 class="mt-2 text-[13px] font-semibold">{m.metrics_metricbuilder_filters()}</h2>
 		{#each filters as filter, index (index)}
 			<div class="flex flex-wrap items-end gap-1">
 				<Select
-					label="Column"
+					label={m.common_column()}
 					bind:value={filter.column}
 					options={columns.map((c) => ({ value: c.name, label: c.name }))}
 				/>
-				<Select label="Operator" bind:value={filter.op} options={opOptions(filter.column)} />
+				<Select
+					label={m.metrics_metricbuilder_operator()}
+					bind:value={filter.op}
+					options={opOptions(filter.column)}
+				/>
 				{#if filter.op !== 'is_null' && filter.op !== 'is_not_null'}
-					<Input label="Value(s)" bind:value={filter.value} placeholder="paid, shipped" />
+					<Input
+						label={m.metrics_metricbuilder_value_s()}
+						bind:value={filter.value}
+						placeholder={m.metrics_metricbuilder_paid_shipped()}
+					/>
 				{/if}
-				<Button size="sm" variant="danger" onclick={() => removeFilter(index)}>Remove</Button>
+				<Button size="sm" variant="danger" onclick={() => removeFilter(index)}
+					>{m.metrics_metricbuilder_remove()}</Button
+				>
 			</div>
 		{/each}
 		<div>
-			<Button size="sm" onclick={addFilter}>Add filter</Button>
+			<Button size="sm" onclick={addFilter}>{m.metrics_metricbuilder_add_filter()}</Button>
 		</div>
 
-		<h2 class="mt-2 text-[13px] font-semibold">Time</h2>
+		<h2 class="mt-2 text-[13px] font-semibold">{m.common_time()}</h2>
 		<Select
-			label="Time column"
+			label={m.metrics_metricbuilder_time_column()}
 			bind:value={timeColumn}
 			options={[
-				{ value: '', label: 'No time grouping' },
+				{ value: '', label: m.metrics_metricbuilder_no_time_grouping() },
 				...timeColumns.map((c) => ({ value: c.name, label: c.name }))
 			]}
 		/>
@@ -417,7 +446,7 @@
 
 		{#if bindings.length > 0}
 			<Select
-				label="Validation binding"
+				label={m.metrics_metricbuilder_validation_binding()}
 				bind:value={bindingId}
 				options={bindings.map((binding) => ({ value: binding.id, label: binding.label }))}
 			/>
@@ -428,23 +457,22 @@
 		{/if}
 		{#if metric?.certified}
 			<p class="text-[11px] text-amber-700 dark:text-amber-300">
-				This metric is certified. Changing the definition without the certify action removes the
-				certification.
+				{m.metrics_metricbuilder_this_metric_is_certified_changing_the_defi()}
 			</p>
 		{/if}
 		<div class="flex justify-end gap-2">
 			<Button loading={validating} disabled={validating || !table} onclick={doValidate}
-				>Validate</Button
+				>{m.metrics_metricbuilder_validate()}</Button
 			>
 			<Button variant="primary" loading={saving} disabled={saving || !table} onclick={save}
-				>Save</Button
+				>{m.common_save()}</Button
 			>
 		</div>
 	</div>
 
 	<div class="flex flex-col gap-2">
 		<div class="rounded-lg border border-border bg-bg-panel p-4">
-			<p class="text-[12px] font-semibold">Definition</p>
+			<p class="text-[12px] font-semibold">{m.metrics_metricbuilder_definition()}</p>
 			<p class="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
 				{#if table}
 					{describeDefinition(definition, {
@@ -459,8 +487,9 @@
 		</div>
 		<div class="rounded-lg border border-border bg-bg-panel p-4">
 			<div class="flex items-center justify-between">
-				<p class="text-[12px] font-semibold">SQL preview</p>
-				{#if rendering}<span class="text-[10px] text-slate-600 dark:text-slate-300">rendering…</span
+				<p class="text-[12px] font-semibold">{m.metrics_metricbuilder_sql_preview()}</p>
+				{#if rendering}<span class="text-[10px] text-slate-600 dark:text-slate-300"
+						>{m.metrics_metricbuilder_rendering()}</span
 					>{/if}
 			</div>
 			{#if previewError}

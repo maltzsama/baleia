@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -311,7 +312,7 @@
 			const workspace = grantable.find((item) => item.id === grantWorkspace);
 			grants = [
 				...grants,
-				`${workspace?.name ?? 'Workspace'} can ${permission} ${catalog?.name ?? 'the catalog'}`
+				`${workspace?.name ?? 'Workspace'} can ${permission} ${catalog?.name ?? m.connections_connectionwizard_the_catalog()}`
 			];
 			grantPermission = permission;
 		} catch (e) {
@@ -331,7 +332,7 @@
 	}
 
 	function providerBadge(p: ConnectionProvider) {
-		if (p.status.state === 'preview') return 'Preview';
+		if (p.status.state === 'preview') return m.identity_identityproviderform_preview();
 		if (p.status.state === 'unsupported') return 'Unsupported';
 		return '';
 	}
@@ -339,7 +340,10 @@
 
 <div class="mx-auto flex w-full max-w-[880px] flex-col gap-5">
 	{#if loading}
-		<div class="flex flex-col gap-3" aria-label="Loading providers">
+		<div
+			class="flex flex-col gap-3"
+			aria-label={m.connections_connectionwizard_loading_providers()}
+		>
 			<Skeleton class="h-8 w-1/3" />
 			<Skeleton class="h-24 w-full" />
 			<Skeleton class="h-24 w-full" />
@@ -499,14 +503,16 @@
 					<p class="text-[13px] font-semibold">Catalogs to create</p>
 					<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
 						{isDatabase
-							? 'Each database becomes one catalog.'
-							: 'Each warehouse or catalog name from the source becomes one catalog.'}
+							? m.connections_connectionwizard_each_database_becomes_one_catalog()
+							: m.connections_connectionwizard_each_warehouse_or_catalog_name_from_the_so()}
 					</p>
 					{#each catalogNames as catalogName, index (index)}
 						<div class="mb-2 flex items-end gap-2">
 							<div class="flex-1">
 								<Input
-									label={isDatabase ? 'Database name' : 'Warehouse or catalog name'}
+									label={isDatabase
+										? m.connections_connectionwizard_database_name()
+										: m.connections_connectionwizard_warehouse_or_catalog_name()}
 									value={catalogName}
 									placeholder={isDatabase ? 'postgres' : 'warehouse'}
 									oninput={(e) => setCatalog(index, (e.target as HTMLInputElement).value)}
@@ -550,7 +556,9 @@
 		<div class="rounded-lg border border-border bg-bg-panel p-4">
 			<div class="flex items-center gap-2">
 				<Button variant="primary" loading={testing} disabled={testing} onclick={runTest}>
-					{testing ? 'Testing…' : 'Test connection'}
+					{testing
+						? m.connections_connectionwizard_testing()
+						: m.connections_connectionwizard_test_connection()}
 				</Button>
 				{#if tested}
 					<Badge tone="success">Tested</Badge>

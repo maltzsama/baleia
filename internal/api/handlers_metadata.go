@@ -23,7 +23,7 @@ import (
 func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogMetadataRequestObject) (SyncCatalogMetadataResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return SyncCatalogMetadata401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return SyncCatalogMetadata401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.MetadataSync, ResourceType: "catalog", ResourceID: idString(id)}
@@ -32,9 +32,9 @@ func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogM
 		nf, fb := catalogAccessError(err)
 		switch {
 		case nf:
-			return SyncCatalogMetadata404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+			return SyncCatalogMetadata404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		case fb:
-			return SyncCatalogMetadata403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to sync this catalog"}}, nil
+			return SyncCatalogMetadata403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to sync this catalog"}}, nil
 		}
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogM
 	var running *serviceerror.WorkflowExecutionAlreadyStarted
 	if errors.As(err, &running) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return SyncCatalogMetadata409JSONResponse{Code: "sync_in_progress", Message: "a metadata pass of this catalog is already running"}, nil
+		return SyncCatalogMetadata409JSONResponse{Code: ErrorCodeSyncInProgress, Message: "a metadata pass of this catalog is already running"}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -63,12 +63,12 @@ func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogM
 func (h *Handlers) ListCatalogMetadataSyncRuns(ctx context.Context, request ListCatalogMetadataSyncRunsRequestObject) (ListCatalogMetadataSyncRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListCatalogMetadataSyncRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListCatalogMetadataSyncRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActRead); err != nil {
 		if nf, _ := catalogAccessError(err); nf {
-			return ListCatalogMetadataSyncRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+			return ListCatalogMetadataSyncRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
 		return nil, err
 	}

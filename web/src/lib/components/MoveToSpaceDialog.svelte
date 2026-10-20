@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
@@ -36,13 +37,16 @@
 	}
 </script>
 
-<Modal bind:open title="Move to space">
+<Modal bind:open title={m.components_movetospacedialog_move_to_space()}>
 	<div class="flex flex-col gap-3">
 		<p class="text-xs text-text-muted">
-			Move <strong>{query?.name}</strong> to another space where you can edit.
+			{m.common_move()} <strong>{query?.name}</strong>
+			{m.components_movetospacedialog_to_another_space_where_you_can_edit()}
 		</p>
 		{#if options.length === 0}
-			<p class="text-xs text-text-muted">There is no other space you can edit.</p>
+			<p class="text-xs text-text-muted">
+				{m.components_movetospacedialog_there_is_no_other_space_you_can_edit()}
+			</p>
 		{:else}
 			<Select
 				label="Destination space"
@@ -57,9 +61,9 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (open = false)} disabled={busy}>Cancel</Button>
+			<Button onclick={() => (open = false)} disabled={busy}>{m.common_cancel()}</Button>
 			<Button variant="primary" onclick={move} disabled={!target || busy} loading={busy}>
-				Move
+				{m.common_move()}
 			</Button>
 		</div>
 	{/snippet}

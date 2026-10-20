@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { apiErrorMessage, client, setAccessToken } from '$lib/api/client';
 	import { PasswordInput } from '$lib/ui';
 	import ConnectionWizard from '$lib/connections/ConnectionWizard.svelte';
@@ -14,9 +15,9 @@
 	let busy = $state(false);
 
 	const steps = [
-		{ label: 'Admin account', sub: 'Name, email & password' },
-		{ label: 'First connection', sub: 'Connect a datasource', optional: true },
-		{ label: 'Done', sub: 'Open the editor' }
+		{ label: m.setup_admin_account(), sub: m.setup_name_email_password() },
+		{ label: m.setup_first_connection(), sub: m.setup_connect_a_datasource(), optional: true },
+		{ label: m.common_done(), sub: m.setup_open_the_editor() }
 	];
 
 	const inputBase =
@@ -33,11 +34,11 @@
 	async function createAdmin() {
 		error = '';
 		if (!firstName || !email || !password || password !== confirmPass) {
-			error = 'Fill in the required fields and make sure the passwords match.';
+			error = m.setup_fill_in_the_required_fields_and_make_sure();
 			return;
 		}
 		if (password.length < 8) {
-			error = 'Password must be at least 8 characters.';
+			error = m.setup_password_must_be_at_least_8_characters();
 			return;
 		}
 		busy = true;
@@ -46,13 +47,13 @@
 				body: { name: `${firstName} ${lastName}`.trim(), email, password }
 			});
 			if (err || !data) {
-				error = apiErrorMessage(err, 'Failed to create the admin account.');
+				error = apiErrorMessage(err, m.setup_failed_to_create_the_admin_account());
 				return;
 			}
 			setAccessToken(data.token);
 			step = 2;
 		} catch {
-			error = 'Connection error. Is the server running?';
+			error = m.setup_connection_error_is_the_server_running();
 		} finally {
 			busy = false;
 		}
@@ -78,7 +79,7 @@
 						><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
 					>
 				</div>
-				<span class="text-base font-bold text-slate-100 tracking-[-.3px]">Baleia</span>
+				<span class="text-base font-bold text-slate-100 tracking-[-.3px]">{m.common_baleia()}</span>
 			</div>
 
 			<div class="flex flex-col gap-1 flex-1">
@@ -109,7 +110,8 @@
 								{active ? 'text-slate-100' : done ? 'text-slate-400' : 'text-slate-600'}"
 							>
 								{s.label}{#if s.optional}
-									<span class="text-[10px] font-semibold text-slate-700">(optional)</span>{/if}
+									<span class="text-[10px] font-semibold text-slate-700">{m.setup_optional()}</span
+									>{/if}
 							</div>
 							<div class="text-[11px] text-slate-700 mt-px">{s.sub}</div>
 						</div>
@@ -118,9 +120,9 @@
 			</div>
 
 			<div class="relative z-[1] text-[11px] text-slate-700 leading-relaxed">
-				Baleia is open-source.<br />
+				{m.setup_baleia_is_open_source()}<br />
 				<a href="https://github.com" target="_blank" class="text-primary no-underline"
-					>github.com/baleia</a
+					>{m.setup_github_com_baleia()}</a
 				>
 			</div>
 		</div>
@@ -131,11 +133,13 @@
 			<div class="w-full max-w-[480px] animate-[fadeIn_.2s_ease]">
 				<div class="mb-7">
 					<div class="text-[11px] font-bold uppercase tracking-[.7px] text-primary mb-1.5">
-						Step 1 of 3
+						{m.setup_step_1_of_3()}
 					</div>
-					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">Create admin account</div>
+					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">
+						{m.setup_create_admin_account()}
+					</div>
 					<div class="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.6]">
-						This will be the first administrator of your Baleia instance.
+						{m.setup_this_will_be_the_first_administrator_of_yo()}
 					</div>
 				</div>
 				{#if error}
@@ -147,40 +151,41 @@
 				{/if}
 				<div class="grid grid-cols-2 gap-3 mb-3.5">
 					<div class="flex flex-col gap-[5px]">
-						<label class="text-[11px] font-semibold" for="setup-first">First name</label>
+						<label class="text-[11px] font-semibold" for="setup-first">{m.setup_first_name()}</label
+						>
 						<input
 							id="setup-first"
 							class={inputBase}
 							type="text"
 							bind:value={firstName}
-							placeholder="John"
+							placeholder={m.setup_john()}
 						/>
 					</div>
 					<div class="flex flex-col gap-[5px]">
-						<label class="text-[11px] font-semibold" for="setup-last">Last name</label>
+						<label class="text-[11px] font-semibold" for="setup-last">{m.setup_last_name()}</label>
 						<input
 							id="setup-last"
 							class={inputBase}
 							type="text"
 							bind:value={lastName}
-							placeholder="Doe"
+							placeholder={m.setup_doe()}
 						/>
 					</div>
 				</div>
 				<div class="flex flex-col gap-[5px] mb-3.5">
-					<label class="text-[11px] font-semibold" for="setup-email">Email</label>
+					<label class="text-[11px] font-semibold" for="setup-email">{m.common_email()}</label>
 					<input
 						id="setup-email"
 						class="{inputBase} font-mono text-xs"
 						type="email"
 						bind:value={email}
-						placeholder="admin@company.com"
+						placeholder={m.setup_admin_company_com()}
 					/>
 				</div>
 				<div class="mb-3.5">
 					<PasswordInput
 						id="setup-password"
-						label="Password"
+						label={m.common_password()}
 						autocomplete="new-password"
 						bind:value={password}
 						placeholder="••••••••"
@@ -204,7 +209,7 @@
 				<div class="mb-3.5">
 					<PasswordInput
 						id="setup-confirm"
-						label="Confirm password"
+						label={m.setup_confirm_password()}
 						autocomplete="new-password"
 						bind:value={confirmPass}
 						placeholder="••••••••"
@@ -216,7 +221,7 @@
 						disabled={busy}
 						class="h-10 px-5 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
 					>
-						{busy ? 'Creating…' : 'Continue'}
+						{busy ? m.setup_creating() : m.setup_continue()}
 						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
 							><polyline points="9 18 15 12 9 6" /></svg
 						>

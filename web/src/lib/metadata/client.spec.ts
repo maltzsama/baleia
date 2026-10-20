@@ -43,7 +43,7 @@ describe('metadata client', () => {
 			})
 		);
 
-		await expect(loadCatalogs(WS)).rejects.toThrow('boom');
+		await expect(loadCatalogs(WS)).rejects.toThrow('The resource was not found.');
 		await expect(loadCatalogs(WS)).resolves.toHaveLength(1);
 		expect(calls).toBe(2);
 	});

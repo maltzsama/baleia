@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { listPrincipals } from '$lib/content/client';
@@ -97,43 +98,45 @@
 
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4">
-		<h1 class="text-xl font-semibold tracking-[-0.3px]">Docs</h1>
+		<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_docs()}</h1>
 		<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-			Search table and column documentation by text, tag, owner or certification.
+			{m.data_docs_search_table_and_column_documentation_by_t()}
 		</p>
 	</div>
 
 	<div
 		class="mb-4 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-5"
 	>
-		<Input label="Search" bind:value={q} placeholder="revenue" />
+		<Input label={m.common_search()} bind:value={q} placeholder={m.data_docs_revenue()} />
 		<Select
-			label="Tag"
+			label={m.data_docs_tag()}
 			bind:value={tag}
 			options={[
-				{ value: '', label: 'Any' },
+				{ value: '', label: m.monitoring_any() },
 				...tags.map((item) => ({ value: item.tag, label: `${item.tag} (${item.count})` }))
 			]}
 		/>
 		<Select
-			label="Owner"
+			label={m.common_owner()}
 			bind:value={ownerId}
 			options={[
-				{ value: '', label: 'Any' },
+				{ value: '', label: m.monitoring_any() },
 				...owners.map((owner) => ({ value: owner.id, label: owner.name }))
 			]}
 		/>
 		<label class="flex items-end gap-2 pb-1 text-[12px]">
 			<input type="checkbox" bind:checked={certified} />
-			Certified only
+			{m.data_docs_certified_only()}
 		</label>
 		<div class="flex items-end">
-			<Button variant="primary" {loading} disabled={loading} onclick={search}>Search</Button>
+			<Button variant="primary" {loading} disabled={loading} onclick={search}
+				>{m.common_search()}</Button
+			>
 		</div>
 	</div>
 
 	{#if error}
-		<ErrorState title="Could not search docs" message={error} onretry={search} />
+		<ErrorState title={m.data_docs_could_not_search_docs()} message={error} onretry={search} />
 	{:else if loading}
 		<Skeleton class="h-32 w-full" />
 	{:else if searched && results.length === 0}

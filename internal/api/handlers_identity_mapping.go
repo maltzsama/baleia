@@ -14,12 +14,12 @@ import (
 func (h *Handlers) PreviewIdentityMapping(ctx context.Context, request PreviewIdentityMappingRequestObject) (PreviewIdentityMappingResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return PreviewIdentityMapping403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
-			Code: "forbidden", Message: "admin only",
+			Code: ErrorCodeForbidden, Message: "admin only",
 		}}, nil
 	}
 	body := request.Body
 	if body == nil {
-		return PreviewIdentityMapping422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "request body is required")}, nil
+		return PreviewIdentityMapping422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 
 	input := identity.MappingInput{Groups: body.Groups}
@@ -35,7 +35,7 @@ func (h *Handlers) PreviewIdentityMapping(ctx context.Context, request PreviewId
 
 	mapped, err := identity.MapIdentity(input)
 	if err != nil {
-		return PreviewIdentityMapping422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", err.Error())}, nil
+		return PreviewIdentityMapping422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
 
 	out := IdentityMappingPreview{

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import TableDetail from './TableDetail.svelte';
 	import AssistantPanel from '$lib/assistant/Panel.svelte';
@@ -39,8 +40,8 @@
 		<div class="flex flex-col items-center py-2.5 gap-2.5 flex-1">
 			<button
 				onclick={() => (collapsed = false)}
-				title="Expand"
-				aria-label="Expand the inspector"
+				title={m.common_expand()}
+				aria-label={m.components_rightsidebar_expand_the_inspector()}
 				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted bg-none border-none
 					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
 			>
@@ -55,7 +56,7 @@
 			</button>
 			<span
 				class="[writing-mode:vertical-rl] text-[10px] font-semibold tracking-wide uppercase text-text-muted rotate-180 mt-1"
-				>Inspector</span
+				>{m.components_rightsidebar_inspector()}</span
 			>
 		</div>
 	{:else}

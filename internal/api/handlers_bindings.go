@@ -23,14 +23,22 @@ import (
 // step, which the explorer, Lens and retrievers still read.
 
 func bindingNotFound() NotFoundJSONResponse {
-	return NotFoundJSONResponse{Code: "not_found", Message: "binding not found"}
+	return NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}
 }
 
-func unprocessable(code, msg string) UnprocessableEntityJSONResponse {
+func unprocessable(code ErrorCode, msg string) UnprocessableEntityJSONResponse {
 	return UnprocessableEntityJSONResponse{Code: code, Message: msg, Errors: []struct {
 		Field   *string `json:"field,omitempty"`
 		Message *string `json:"message,omitempty"`
 	}{{Message: &msg}}}
+}
+
+// unprocessableFields is the code-keyed variant of unprocessable (#67): the UI
+// translates each FieldError code next to its input instead of showing msg.
+func unprocessableFields(msg string, fields ...FieldError) UnprocessableEntityJSONResponse {
+	out := unprocessable(ErrorCodeValidationError, msg)
+	out.Fields = &fields
+	return out
 }
 
 func extraPropsOf(raw []byte) map[string]string {
@@ -71,16 +79,16 @@ func (h *Handlers) bindingAccess(ctx context.Context, p authz.Principal, catalog
 		return bindingTarget{}, nil, nil, err
 	}
 	if cat.Origin != "source" {
-		u := unprocessable("binding_unsupported", "native catalogs belong to their engine and are not bound")
+		u := unprocessable(ErrorCodeBindingUnsupported, "native catalogs belong to their engine and are not bound")
 		return bindingTarget{}, nil, &u, nil
 	}
 	if eng.Kind != h.binder.EngineKind() {
-		u := unprocessable("binding_unsupported", "engine kind "+eng.Kind+" has no binder")
+		u := unprocessable(ErrorCodeBindingUnsupported, "engine kind "+eng.Kind+" has no binder")
 		return bindingTarget{}, nil, &u, nil
 	}
 	cluster, err := h.queries.GetTrinoClusterByEngine(ctx, eng.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		u := unprocessable("binding_unsupported", "the engine has no Trino cluster")
+		u := unprocessable(ErrorCodeBindingUnsupported, "the engine has no Trino cluster")
 		return bindingTarget{}, nil, &u, nil
 	}
 	if err != nil {
@@ -95,11 +103,11 @@ type notFoundOrForbidden struct {
 }
 
 func (e *notFoundOrForbidden) notFoundResponse() NotFoundJSONResponse {
-	return NotFoundJSONResponse{Code: "not_found", Message: e.what + " not found"}
+	return NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: e.what + " not found"}
 }
 
 func (e *notFoundOrForbidden) forbiddenResponse() ForbiddenJSONResponse {
-	return ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to bind this " + e.what}
+	return ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to bind this " + e.what}
 }
 
 // bindingConflict maps a unique violation of catalog_bindings to a 409.
@@ -109,9 +117,9 @@ func bindingConflict(err error) (ConflictJSONResponse, bool) {
 		return ConflictJSONResponse{}, false
 	}
 	if pg.ConstraintName == "catalog_bindings_catalog_id_engine_id_key" {
-		return ConflictJSONResponse{Code: "binding_exists", Message: "the catalog is already bound to this engine"}, true
+		return ConflictJSONResponse{Code: ErrorCodeBindingExists, Message: "the catalog is already bound to this engine"}, true
 	}
-	return ConflictJSONResponse{Code: "name_in_use", Message: "the engine already has a catalog of that name"}, true
+	return ConflictJSONResponse{Code: ErrorCodeNameInUse, Message: "the engine already has a catalog of that name"}, true
 }
 
 // syncPrimaryCatalog keeps the catalog's Trino columns in step with its
@@ -145,13 +153,13 @@ func (h *Handlers) bindingSpec(t bindingTarget, name, connector string, extra ma
 func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatalogBindingRequestObject) (CreateCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	ev := audit.Event{Action: audit.BindingCreate, ResourceType: "binding"}
 	ctx = audit.WithAction(ctx, ev.Action)
 	if request.Body == nil {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	body := *request.Body
 	t, denied, invalid, err := h.bindingAccess(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, pgtype.UUID{Bytes: body.EngineId, Valid: true})
@@ -235,7 +243,7 @@ func (h *Handlers) managedBinding(ctx context.Context, p authz.Principal, id pgt
 		return b, t, denied, invalid, err
 	}
 	if b.Mode != "managed" {
-		u := unprocessable("binding_not_managed", "only managed bindings are changed through Baleia; this one is "+b.Mode)
+		u := unprocessable(ErrorCodeBindingNotManaged, "only managed bindings are changed through Baleia; this one is "+b.Mode)
 		return b, t, nil, &u, nil
 	}
 	return b, t, nil, nil, nil
@@ -244,7 +252,7 @@ func (h *Handlers) managedBinding(ctx context.Context, p authz.Principal, id pgt
 func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatalogBindingRequestObject) (UpdateCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return UpdateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	ev := audit.Event{Action: audit.BindingUpdate, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	ctx = audit.WithAction(ctx, ev.Action)
@@ -262,7 +270,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	}
 	if request.Body == nil {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	body := *request.Body
 	name, extra, enabled := cur.EngineCatalogName, extraPropsOf(cur.ExtraProps), cur.Enabled
@@ -314,7 +322,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	if errors.Is(txErr, pgx.ErrNoRows) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
-			Code: "concurrent_change", Message: "the binding is " + cur.LifecycleState + "; retry when it settles",
+			Code: ErrorCodeConcurrentChange, Message: "the binding is " + cur.LifecycleState + "; retry when it settles",
 		}}, nil
 	}
 	if c, ok := bindingConflict(txErr); ok {
@@ -357,7 +365,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatalogBindingRequestObject) (DeleteCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DeleteCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	ev := audit.Event{Action: audit.BindingDelete, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	ctx = audit.WithAction(ctx, ev.Action)
@@ -376,7 +384,7 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 	if t.primary() {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
-			Code: "binding_is_primary", Message: "this is the catalog's own binding on its Trino cluster; delete the catalog instead",
+			Code: ErrorCodeBindingIsPrimary, Message: "this is the catalog's own binding on its Trino cluster; delete the catalog instead",
 		}}, nil
 	}
 	l := h.lifecycleOn(t.cluster, t.engine)
@@ -386,7 +394,7 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 	}
 	if errors.Is(err, bindings.ErrConcurrentChange) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "concurrent_change", Message: "the binding changed; retry"}}, nil
+		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConcurrentChange, Message: "the binding changed; retry"}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -398,7 +406,7 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 			msg += ": " + *gone.LastErrorMessage
 		}
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "drop_failed", Message: msg}}, nil
+		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeDropFailed, Message: msg}}, nil
 	}
 	if err := h.queries.DeleteBinding(ctx, cur.ID); err != nil {
 		return nil, err
@@ -411,7 +419,7 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBindingRequestObject) (SyncCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return SyncCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return SyncCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	ev := audit.Event{Action: audit.BindingSync, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	ctx = audit.WithAction(ctx, ev.Action)
@@ -429,7 +437,7 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	}
 	if !cur.Enabled {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("binding_disabled", "enable the binding to apply it")}, nil
+		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeBindingDisabled, "enable the binding to apply it")}, nil
 	}
 	connector := ""
 	if cur.Connector != nil {
@@ -472,7 +480,7 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 func (h *Handlers) GetEngineBindingSupport(ctx context.Context, request GetEngineBindingSupportRequestObject) (GetEngineBindingSupportResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetEngineBindingSupport401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetEngineBindingSupport401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	eng, _, err := h.authz().Engine(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if errors.Is(err, authz.ErrNotFound) {

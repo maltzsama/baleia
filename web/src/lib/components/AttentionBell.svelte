@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { components } from '$lib/api/schema';
@@ -25,7 +26,7 @@
 			error = '';
 			return data;
 		} catch (err) {
-			error = 'Could not load attention items.';
+			error = m.components_attentionbell_could_not_load_attention_items();
 			throw err;
 		}
 	}
@@ -84,7 +85,7 @@
 		aria-label={count > 0 ? `Attention: ${count} items` : 'Attention'}
 		aria-expanded={open}
 		aria-haspopup="dialog"
-		title="Attention"
+		title={m.components_attentionbell_attention()}
 		class="relative w-9 h-9 flex items-center justify-center rounded-[10px] border-none bg-transparent cursor-pointer text-slate-400 transition-all duration-150 hover:bg-slate-800 hover:text-white"
 	>
 		<svg viewBox="0 0 24 24" class="w-4 h-4"
@@ -104,17 +105,17 @@
 	{#if open}
 		<div
 			role="dialog"
-			aria-label="Attention"
+			aria-label={m.components_attentionbell_attention()}
 			tabindex="-1"
 			{onkeydown}
 			class="absolute left-full top-0 z-50 ml-2 flex max-h-[70vh] w-80 flex-col overflow-y-auto rounded-lg border border-border bg-bg-panel p-3 shadow-xl"
 		>
 			<div class="mb-2 flex items-center justify-between">
-				<h2 class="text-[13px] font-semibold">Needs attention</h2>
+				<h2 class="text-[13px] font-semibold">{m.components_attentionbell_needs_attention()}</h2>
 				<button
 					type="button"
 					onclick={close}
-					aria-label="Close attention"
+					aria-label={m.components_attentionbell_close_attention()}
 					class="cursor-pointer border-none bg-transparent text-text-muted hover:text-text-main"
 				>
 					×
@@ -130,11 +131,15 @@
 			{/if}
 
 			{#if items.length === 0 && !error}
-				<p class="text-[12px] text-text-muted">Nothing needs your attention.</p>
+				<p class="text-[12px] text-text-muted">
+					{m.components_attentionbell_nothing_needs_your_attention()}
+				</p>
 			{/if}
 
 			{#if failures.length > 0}
-				<h3 class="mt-1 text-[10px] font-semibold uppercase tracking-wide text-danger">Errors</h3>
+				<h3 class="mt-1 text-[10px] font-semibold uppercase tracking-wide text-danger">
+					{m.components_attentionbell_errors()}
+				</h3>
 				<ul class="mb-2 flex flex-col gap-1">
 					{#each failures as item (item.resource.type + item.resource.id)}
 						<li class="text-[12px]">
@@ -159,7 +164,7 @@
 
 			{#if warnings.length > 0}
 				<h3 class="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
-					Warnings
+					{m.components_attentionbell_warnings()}
 				</h3>
 				<ul class="flex flex-col gap-1">
 					{#each warnings as item (item.resource.type + item.resource.id)}

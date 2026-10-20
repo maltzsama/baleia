@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
@@ -58,22 +59,22 @@
 <div class="flex-1 overflow-y-auto p-7">
 	<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Metrics</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.common_metrics()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				Named aggregations over one table, rendered for whichever engine you run on.
+				{m.metrics_named_aggregations_over_one_table_rendered()}
 			</p>
 		</div>
 		<Button variant="primary" onclick={() => (window.location.href = '/metrics/new')}
-			>New metric</Button
+			>{m.common_new_metric()}</Button
 		>
 	</div>
 
 	<div
 		class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
 	>
-		<Input label="Search" bind:value={q} placeholder="orders" />
+		<Input label={m.common_search()} bind:value={q} placeholder={m.common_orders()} />
 		<Select
-			label="Space"
+			label={m.common_space()}
 			bind:value={spaceId}
 			options={[
 				{ value: '', label: 'All' },
@@ -81,21 +82,21 @@
 			]}
 		/>
 		<Select
-			label="Certified"
+			label={m.common_certified()}
 			bind:value={certified}
 			options={[
-				{ value: '', label: 'Any' },
-				{ value: 'yes', label: 'Certified only' },
-				{ value: 'no', label: 'Not certified' }
+				{ value: '', label: m.monitoring_any() },
+				{ value: 'yes', label: m.data_docs_certified_only() },
+				{ value: 'no', label: m.metrics_not_certified() }
 			]}
 		/>
 		<div class="flex items-end">
-			<Button onclick={load}>Apply</Button>
+			<Button onclick={load}>{m.common_apply()}</Button>
 		</div>
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label="Loading metrics">
+		<div class="flex flex-col gap-2" aria-label={m.metrics_loading_metrics()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-12 w-full" />
 			{/each}

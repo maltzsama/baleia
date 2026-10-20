@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
@@ -113,7 +114,7 @@
 
 	async function submitRegister() {
 		if (!engineName) {
-			registerError = 'Name the engine.';
+			registerError = m.connections_name_the_engine();
 			return;
 		}
 		registering = true;
@@ -143,7 +144,7 @@
 
 	async function submitCatalog() {
 		if (!catalogName || !catalogTrinoName || !catalogWarehouse) {
-			catalogError = 'Name, engine name and warehouse are required.';
+			catalogError = m.connections_name_engine_name_and_warehouse_are_require();
 			return;
 		}
 		catalogSaving = true;
@@ -221,14 +222,14 @@
 						<dd>—</dd>
 					{/each}
 					<dt class="text-slate-600 dark:text-slate-300">Credentials</dt>
-					<dd>{conn.has_credentials ? 'Stored' : 'None'}</dd>
+					<dd>{conn.has_credentials ? m.connections_stored() : 'None'}</dd>
 					<dt class="text-slate-600 dark:text-slate-300">Default read-only</dt>
 					<dd>{conn.default_readonly ? 'Yes' : 'No'}</dd>
 				</dl>
 				<p class="mt-3 text-[11px] text-slate-600 dark:text-slate-300">
 					{readOnly
-						? 'An administrator asserts these credentials cannot modify data: read-only grants and agents may use this engine.'
-						: 'Read-only grants and agents need an administrator to assert read-only credentials on engines that cannot enforce read-only sessions.'}
+						? m.connections_an_administrator_asserts_these_credentials()
+						: m.connections_read_only_grants_and_agents_need_an_admini()}
 				</p>
 			</div>
 
@@ -281,13 +282,13 @@
 	{/if}
 </div>
 
-<Modal bind:open={testOpen} title="Connection test">
+<Modal bind:open={testOpen} title={m.connections_connection_test()}>
 	{#if testError}
 		<p class="text-[12px] text-danger" role="alert">{testError}</p>
 	{:else if testResult}
 		<div class="flex flex-col gap-2 text-[12px]">
 			<p class="font-semibold">
-				{testResult.success ? 'All checks passed' : 'Checks failed'}
+				{testResult.success ? m.connections_all_checks_passed() : m.connections_checks_failed()}
 				<span class="ml-1 font-normal text-slate-600 dark:text-slate-300"
 					>{testResult.latency_ms} ms</span
 				>
@@ -297,7 +298,7 @@
 				{#each testResult.checks ?? [] as check (check.name)}
 					<li class="flex items-start gap-2">
 						<Badge tone={check.skipped ? 'neutral' : check.ok ? 'success' : 'danger'}>
-							{check.skipped ? 'Skipped' : check.ok ? 'OK' : 'Failed'}
+							{check.skipped ? m.statusbadge_skipped() : check.ok ? 'OK' : 'Failed'}
 						</Badge>
 						<span class="font-mono">{check.name}</span>
 						<span class="text-slate-600 dark:text-slate-300"
@@ -310,36 +311,42 @@
 	{/if}
 </Modal>
 
-<Modal bind:open={registerOpen} title="Register as engine">
+<Modal bind:open={registerOpen} title={m.connections_register_as_engine()}>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label="Engine name" bind:value={engineName} class="font-mono" />
+		<Input label={m.connections_engine_name()} bind:value={engineName} class="font-mono" />
 		<p class="text-[11px] text-slate-600 dark:text-slate-300">
-			The engine probes this connection and discovers its native catalogs.
+			{m.connections_the_engine_probes_this_connection_and_disc()}
 		</p>
 		{#if registerError}<p class="text-danger" role="alert">{registerError}</p>{/if}
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (registerOpen = false)} disabled={registering}>Cancel</Button>
+			<Button onclick={() => (registerOpen = false)} disabled={registering}
+				>{m.common_cancel()}</Button
+			>
 			<Button
 				variant="primary"
 				loading={registering}
 				disabled={registering}
 				onclick={submitRegister}
 			>
-				Register
+				{m.common_register()}
 			</Button>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={catalogOpen} title="Add catalog">
+<Modal bind:open={catalogOpen} title={m.common_add_catalog()}>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label="Name" bind:value={catalogName} />
-		<Input label="Engine name" bind:value={catalogTrinoName} class="font-mono" />
-		<Input label="Warehouse / database" bind:value={catalogWarehouse} class="font-mono" />
+		<Input label={m.common_name()} bind:value={catalogName} />
+		<Input label={m.connections_engine_name()} bind:value={catalogTrinoName} class="font-mono" />
+		<Input
+			label={m.connections_warehouse_database()}
+			bind:value={catalogWarehouse}
+			class="font-mono"
+		/>
 		<Select
-			label="Connector"
+			label={m.common_connector()}
 			bind:value={catalogConnector}
 			options={(support?.connectors ?? []).map((connector) => ({
 				value: connector,
@@ -350,14 +357,16 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (catalogOpen = false)} disabled={catalogSaving}>Cancel</Button>
+			<Button onclick={() => (catalogOpen = false)} disabled={catalogSaving}
+				>{m.common_cancel()}</Button
+			>
 			<Button
 				variant="primary"
 				loading={catalogSaving}
 				disabled={catalogSaving}
 				onclick={submitCatalog}
 			>
-				Add
+				{m.common_add()}
 			</Button>
 		</div>
 	{/snippet}
@@ -365,7 +374,7 @@
 
 <ConfirmDialog
 	bind:open={deleteOpen}
-	title="Delete connection"
+	title={m.connections_delete_connection()}
 	resourceName={conn?.name ?? ''}
 	confirmLabel="Delete connection"
 	typeToConfirm

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	let {
 		value = $bindable({}),
 		protectedKeys = [],
@@ -66,7 +67,7 @@
 		<div class="flex items-center gap-2">
 			<input
 				class="h-8 w-40 rounded-md border border-border bg-bg-toolbar px-2 font-mono text-xs outline-none focus:border-primary read-only:opacity-70"
-				placeholder="key"
+				placeholder={m.keyvalueeditor_key()}
 				bind:value={row.key}
 				readonly={locked}
 				onblur={() => {
@@ -76,13 +77,14 @@
 			/>
 			<input
 				class="h-8 flex-1 rounded-md border border-border bg-bg-toolbar px-2 font-mono text-xs outline-none focus:border-primary"
-				placeholder="value"
+				placeholder={m.keyvalueeditor_value()}
 				bind:value={row.value}
 				onblur={sync}
 			/>
 			{#if locked}
-				<span class="text-[10px] text-text-muted" title="Set by Baleia; cannot be overridden"
-					>🔒</span
+				<span
+					class="text-[10px] text-text-muted"
+					title={m.keyvalueeditor_set_by_baleia_cannot_be_overridden()}>🔒</span
 				>
 			{:else}
 				<button
@@ -102,7 +104,7 @@
 			class="rounded-md border border-border px-2.5 py-1 text-[11px] font-semibold text-text-muted hover:border-border-hover hover:text-text-main"
 			onclick={add}
 		>
-			Add row
+			{m.keyvalueeditor_add_row()}
 		</button>
 		{#if error}<span class="text-[11px] text-danger">{error}</span>{/if}
 	</div>

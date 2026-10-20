@@ -16,7 +16,7 @@ import (
 func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListTeams401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListTeams401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	// A global admin sees every team; anyone else sees only the teams they belong to.
 	var teams []db.Team
@@ -39,7 +39,7 @@ func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject
 func (h *Handlers) CreateTeam(ctx context.Context, request CreateTeamRequestObject) (CreateTeamResponseObject, error) {
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
-		return CreateTeam403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return CreateTeam403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	userID := auth.UserIDFromContext(ctx)
@@ -63,12 +63,12 @@ func (h *Handlers) CreateTeam(ctx context.Context, request CreateTeamRequestObje
 func (h *Handlers) GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetTeam401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetTeam401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	team, err := h.authz().Team(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return GetTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+			return GetTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
 		}
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (h *Handlers) GetTeam(ctx context.Context, request GetTeamRequestObject) (G
 func (h *Handlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObject) (DeleteTeamResponseObject, error) {
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
-		return DeleteTeam403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return DeleteTeam403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	var uid pgtype.UUID
@@ -88,7 +88,7 @@ func (h *Handlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObje
 
 	_, err := h.queries.GetTeamByID(ctx, uid)
 	if err != nil {
-		return DeleteTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+		return DeleteTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
 	}
 
 	if err := h.queries.DeleteTeam(ctx, uid); err != nil {
@@ -101,12 +101,12 @@ func (h *Handlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObje
 func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersRequestObject) (ListTeamMembersResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListTeamMembers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListTeamMembers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	uid := pgtype.UUID{Bytes: request.Id, Valid: true}
 	if _, err := h.authz().Team(ctx, p, uid, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			return ListTeamMembers404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+			return ListTeamMembers404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
 		}
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return AddTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return AddTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	var teamID pgtype.UUID
@@ -150,7 +150,7 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 	_, err := h.queries.GetTeamByID(ctx, teamID)
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
 	}
 
 	var userID pgtype.UUID
@@ -166,7 +166,7 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 	})
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return AddTeamMember409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: "conflict", Message: "user already in team"}}, nil
+		return AddTeamMember409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "user already in team"}}, nil
 	}
 	// Team membership decides who is a member of the team's workspaces.
 	h.catalogCache.Clear()
@@ -191,24 +191,24 @@ func (h *Handlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamM
 		Changes: map[string]audit.Change{"member": {To: idString(pgtype.UUID{Bytes: request.UserId, Valid: true})}}}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return UpdateTeamMemberRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return UpdateTeamMemberRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	if request.Body == nil {
-		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "request body is required")}, nil
+		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 
 	teamID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	userID := pgtype.UUID{Bytes: request.UserId, Valid: true}
 	if _, err := h.queries.GetTeamByID(ctx, teamID); err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "team not found"}}, nil
+		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
 	}
 
 	memberRole := string(request.Body.Role)
 	// The generated enum is not validated at decode time; reject anything
 	// outside the team role vocabulary before touching the database.
 	if memberRole != "owner" && memberRole != "member" {
-		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "role must be owner or member")}, nil
+		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "role must be owner or member")}, nil
 	}
 
 	member, err := h.queries.UpdateTeamMemberRole(ctx, db.UpdateTeamMemberRoleParams{
@@ -216,7 +216,7 @@ func (h *Handlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamM
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "member not found"}}, nil
+		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "member not found"}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -245,7 +245,7 @@ func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMembe
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return RemoveTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return RemoveTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	var teamID pgtype.UUID
@@ -261,7 +261,7 @@ func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMembe
 		UserID: userID,
 	}); err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return RemoveTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "member not found"}}, nil
+		return RemoveTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "member not found"}}, nil
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())

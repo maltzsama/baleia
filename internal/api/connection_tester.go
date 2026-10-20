@@ -375,13 +375,13 @@ func (l *testLimiter) allow(user string, now time.Time) bool {
 func (h *Handlers) TestConnectionDraft(ctx context.Context, request TestConnectionDraftRequestObject) (TestConnectionDraftResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return TestConnectionDraft401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return TestConnectionDraft401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if !connectionTests.allow(p.UserID.String(), time.Now()) {
-		return TestConnectionDraft429JSONResponse{Code: "rate_limited", Message: "too many connection tests; try again in a minute"}, nil
+		return TestConnectionDraft429JSONResponse{Code: ErrorCodeRateLimited, Message: "too many connection tests; try again in a minute"}, nil
 	}
 	if request.Body == nil {
-		return TestConnectionDraft422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "missing body")}, nil
+		return TestConnectionDraft422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	// The draft is a create payload; its id only seals nothing.
 	raw, err := json.Marshal(request.Body)
@@ -410,9 +410,9 @@ func (h *Handlers) TestConnectionDraft(ctx context.Context, request TestConnecti
 	}
 	if refused != nil {
 		if strings.HasPrefix(*refused, "unknown intent") {
-			return TestConnectionDraft422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", *refused)}, nil
+			return TestConnectionDraft422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, *refused)}, nil
 		}
-		return TestConnectionDraft404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: *refused}}, nil
+		return TestConnectionDraft404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: *refused}}, nil
 	}
 	return TestConnectionDraft200JSONResponse(t.run(ctx)), nil
 }

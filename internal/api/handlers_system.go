@@ -26,10 +26,10 @@ var processStartedAt = time.Now().UTC()
 func (h *Handlers) GetSystemStatus(ctx context.Context, _ GetSystemStatusRequestObject) (GetSystemStatusResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetSystemStatus401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetSystemStatus401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if err := p.RequireAdmin(); err != nil {
-		return GetSystemStatus403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "administrator role required"}}, nil
+		return GetSystemStatus403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
 
 	status := SystemStatus{

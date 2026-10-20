@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { listPrincipals } from '$lib/content/client';
 	import {
@@ -66,7 +67,7 @@
 	async function save() {
 		const parsed = normalizeTags(tags);
 		if (parsed.length > 20) {
-			error = 'At most 20 tags are allowed.';
+			error = m.semantic_doceditor_at_most_20_tags_are_allowed();
 			return;
 		}
 		const invalid = parsed.find((tag) => !tagValid(tag));
@@ -104,13 +105,17 @@
 <Modal bind:open title={column ? `Document column ${column}` : 'About this table'}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<MarkdownEditor bind:value={description} />
-		<Input label="Tags (comma separated)" bind:value={tags} placeholder="sales, revenue" />
+		<Input
+			label={m.semantic_doceditor_tags_comma_separated()}
+			bind:value={tags}
+			placeholder={m.semantic_doceditor_sales_revenue()}
+		/>
 		{#if users.length > 0}
 			<Select
-				label="Owner"
+				label={m.common_owner()}
 				bind:value={ownerId}
 				options={[
-					{ value: '', label: 'No owner' },
+					{ value: '', label: m.semantic_doceditor_no_owner() },
 					...users.map((user) => ({ value: user.id, label: user.name }))
 				]}
 			/>
@@ -118,7 +123,7 @@
 			<Input label="Owner user id" bind:value={ownerId} class="font-mono" />
 		{/if}
 		{#if canCertify}
-			<Checkbox label="Certified" bind:checked={certified} />
+			<Checkbox label={m.common_certified()} bind:checked={certified} />
 		{:else if doc?.certified}
 			<p class="text-[11px] text-amber-700 dark:text-amber-300">
 				This doc is certified. Changing the description removes the certification.
@@ -126,7 +131,7 @@
 		{/if}
 		{#if conflict}
 			<p class="text-[11px] text-amber-700 dark:text-amber-300">
-				Someone else changed this doc. Reload to see their version, or overwrite it.
+				{m.semantic_doceditor_someone_else_changed_this_doc_reload_to_se()}
 			</p>
 			<div class="flex gap-2">
 				<Button
@@ -138,7 +143,7 @@
 						error = '';
 					}}
 				>
-					Reload
+					{m.semantic_doceditor_reload()}
 				</Button>
 				<Button
 					size="sm"
@@ -147,7 +152,7 @@
 						void save();
 					}}
 				>
-					Overwrite
+					{m.common_overwrite()}
 				</Button>
 			</div>
 		{/if}
@@ -155,8 +160,10 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (open = false)} disabled={saving}>Cancel</Button>
-			<Button variant="primary" loading={saving} disabled={saving} onclick={save}>Save</Button>
+			<Button onclick={() => (open = false)} disabled={saving}>{m.common_cancel()}</Button>
+			<Button variant="primary" loading={saving} disabled={saving} onclick={save}
+				>{m.common_save()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import type { Snippet } from 'svelte';
 
 	type Column = {
@@ -74,7 +75,7 @@
 			{#if loading}
 				<tr>
 					<td colspan={columns.length} class="px-3.5 py-8 text-center text-xs text-text-muted"
-						>Loading…</td
+						>{m.common_loading_2()}</td
 					>
 				</tr>
 			{:else if rows.length === 0}

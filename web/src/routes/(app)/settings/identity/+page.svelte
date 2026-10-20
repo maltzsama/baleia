@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -32,12 +33,12 @@
 		try {
 			const { data, error: err } = await client.GET('/admin/identity-providers');
 			if (err || !data) {
-				error = apiErrorMessage(err, 'Could not load identity providers.');
+				error = apiErrorMessage(err, m.settings_identity_could_not_load_identity_providers());
 				return;
 			}
 			providers = data;
 		} catch {
-			error = 'Could not load identity providers.';
+			error = m.settings_identity_could_not_load_identity_providers();
 		} finally {
 			loading = false;
 		}
@@ -55,7 +56,7 @@
 			params: { path: { id: provider.id } }
 		});
 		if (err || !data) {
-			error = apiErrorMessage(err, 'Could not load the provider.');
+			error = apiErrorMessage(err, m.settings_identity_could_not_load_the_provider());
 			return;
 		}
 		editing = data;
@@ -84,7 +85,7 @@
 			body: { enabled: !provider.enabled }
 		});
 		if (err) {
-			error = apiErrorMessage(err, 'Could not update the provider.');
+			error = apiErrorMessage(err, m.settings_identity_could_not_update_the_provider());
 			return;
 		}
 		await load();
@@ -105,7 +106,7 @@
 							{
 								name: 'request',
 								status: 'failed',
-								message: apiErrorMessage(err, 'probe failed')
+								message: apiErrorMessage(err, m.settings_identity_probe_failed())
 							}
 						]
 					}
@@ -138,13 +139,14 @@
 	<div class="max-w-4xl">
 		<div class="flex items-start justify-between gap-4">
 			<div>
-				<h1 class="text-xl font-semibold tracking-[-0.3px]">Identity providers</h1>
+				<h1 class="text-xl font-semibold tracking-[-0.3px]">
+					{m.settings_identity_identity_providers()}
+				</h1>
 				<p class="mt-1 text-[13px] text-text-muted">
-					OIDC and LDAP providers that can authenticate users. Secrets are written once and never
-					shown again.
+					{m.settings_identity_oidc_and_ldap_providers_that_can_authentic()}
 				</p>
 			</div>
-			<Button variant="primary" onclick={openCreate}>Add provider</Button>
+			<Button variant="primary" onclick={openCreate}>{m.settings_identity_add_provider()}</Button>
 		</div>
 
 		{#if loading}
@@ -180,7 +182,9 @@
 								</div>
 								<p class="mt-1 text-[12px] text-text-muted">
 									{provider.linked_users}
-									{provider.linked_users === 1 ? 'linked user' : 'linked users'}
+									{provider.linked_users === 1
+										? m.settings_identity_linked_user()
+										: m.settings_identity_linked_users()}
 									{#if provider.has_client_secret || provider.has_bind_password}
 										· secret stored
 									{/if}
@@ -232,12 +236,12 @@
 
 <ConfirmDialog
 	bind:open={deleteOpen}
-	title="Delete identity provider"
+	title={m.settings_identity_delete_identity_provider()}
 	resourceName={deleting?.name ?? ''}
 	consequences={[
 		'Users linked to this provider are suspended and detached; they are never deleted.',
-		'Their refresh tokens and API keys are revoked immediately.',
-		'The provider configuration and stored secret are removed.'
+		m.settings_identity_their_refresh_tokens_and_api_keys_are_revo(),
+		m.settings_identity_the_provider_configuration_and_stored_secr()
 	]}
 	confirmLabel="Delete provider"
 	onconfirm={confirmDelete}

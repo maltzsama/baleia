@@ -53,7 +53,7 @@ func (h *Handlers) authz() *authz.Checker {
 func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
 	if _, err := h.authz().Connection(ctx, p, connID, authz.ActRead); err != nil {
@@ -67,7 +67,7 @@ func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequest
 			return nil, gerr
 		}
 		if len(granted) == 0 {
-			return ListCatalogs404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+			return ListCatalogs404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 		}
 		out := make([]Catalog, 0, len(granted))
 		for _, r := range granted {
@@ -94,7 +94,7 @@ func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequest
 func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogRequestObject) (CreateCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogCreate, ResourceType: "catalog"}
@@ -103,20 +103,20 @@ func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogReque
 	if err != nil {
 		switch {
 		case errors.Is(err, authz.ErrNotFound):
-			return CreateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog connection not found"}}, nil
+			return CreateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 		case errors.Is(err, authz.ErrForbidden):
-			return CreateCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to create catalogs on this connection"}}, nil
+			return CreateCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to create catalogs on this connection"}}, nil
 		}
 		return nil, err
 	}
 	if request.Body == nil {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "missing body"}}, nil
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
 	body := *request.Body
 	if body.TrinoCatalogName == "" || body.Name == "" || body.Warehouse == "" {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "trino_catalog_name, name and warehouse are required"}}, nil
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "trino_catalog_name, name and warehouse are required"}}, nil
 	}
 
 	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
@@ -251,16 +251,16 @@ func bindingInvalid(err error) bool {
 }
 
 func bindingUnprocessable(err error) UnprocessableEntityJSONResponse {
-	code := "validation_error"
+	code := ErrorCodeValidationError
 	switch {
 	case errors.Is(err, bindings.ErrPropertyNotOverridable):
-		code = "property_not_overridable"
+		code = ErrorCodePropertyNotOverridable
 	case errors.Is(err, bindings.ErrReservedName):
-		code = "reserved_name"
+		code = ErrorCodeReservedName
 	case errors.Is(err, bindings.ErrUnsupportedSource):
-		code = "binding_unsupported"
+		code = ErrorCodeBindingUnsupported
 	case errors.Is(err, catalogs.ErrCredentialsUnreadable):
-		code = "credentials_unreadable"
+		code = ErrorCodeCredentialsUnreadable
 	}
 	field, msg := "", err.Error()
 	var pe *bindings.PropertyError
@@ -287,14 +287,14 @@ func catalogAccessError(err error) (notFound, forbidden bool) {
 func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObject) (GetCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	cat, _, err := h.authz().CatalogOfConnection(ctx, p, connID, id, authz.ActRead)
 	if err != nil {
 		if nf, _ := catalogAccessError(err); nf {
-			return GetCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+			return GetCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObje
 func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return UpdateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
@@ -319,14 +319,14 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 		nf, fb := catalogAccessError(err)
 		switch {
 		case nf:
-			return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+			return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		case fb:
-			return UpdateCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to modify this catalog"}}, nil
+			return UpdateCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to modify this catalog"}}, nil
 		}
 		return nil, err
 	}
 	if request.Body == nil {
-		return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "missing body"}}, nil
+		return UpdateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "missing body"}}, nil
 	}
 	if existing.Origin != "source" {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -442,7 +442,7 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogRequestObject) (DeleteCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DeleteCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
@@ -453,9 +453,9 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 		nf, fb := catalogAccessError(err)
 		switch {
 		case nf:
-			return DeleteCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+			return DeleteCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		case fb:
-			return DeleteCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to delete this catalog"}}, nil
+			return DeleteCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to delete this catalog"}}, nil
 		}
 		return nil, err
 	}
@@ -496,7 +496,7 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestObject) (SyncCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return SyncCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return SyncCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogSync, ResourceType: "catalog", ResourceID: idString(id)}
@@ -506,9 +506,9 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 		nf, fb := catalogAccessError(err)
 		switch {
 		case nf:
-			return SyncCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "catalog not found"}}, nil
+			return SyncCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		case fb:
-			return SyncCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "not allowed to sync this catalog"}}, nil
+			return SyncCatalog403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "not allowed to sync this catalog"}}, nil
 		}
 		return nil, err
 	}
@@ -563,17 +563,17 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 func (h *Handlers) ReconcileTrino(ctx context.Context, request ReconcileTrinoRequestObject) (ReconcileTrinoResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ReconcileTrino401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ReconcileTrino401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if err := p.RequireAdmin(); err != nil {
-		return ReconcileTrino403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "administrator role required"}}, nil
+		return ReconcileTrino403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
 	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("default trino cluster: %w", err)
 	}
 	if !cluster.EngineID.Valid {
-		return ReconcileTrino422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("engine_unsupported", "the default Trino cluster has no engine")}, nil
+		return ReconcileTrino422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnsupported, "the default Trino cluster has no engine")}, nil
 	}
 	run, unsupported, err := h.reconcile(ctx, cluster.EngineID, request.Params.DryRun == nil || *request.Params.DryRun)
 	if err != nil {

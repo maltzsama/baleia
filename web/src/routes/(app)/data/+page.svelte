@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import DataSourceTree from '$lib/components/DataSourceTree.svelte';
 	import TableDetail from '$lib/components/TableDetail.svelte';
@@ -62,8 +63,8 @@
 				>
 				<input
 					type="text"
-					placeholder="Search tables and columns..."
-					aria-label="Search tables and columns"
+					placeholder={m.data_search_tables_and_columns_2()}
+					aria-label={m.data_search_tables_and_columns()}
 					bind:value={search}
 					onkeydown={(event) => tree?.handleSearchKey(event)}
 					class="w-full border-none bg-transparent text-xs text-text-main outline-none placeholder:text-text-muted"

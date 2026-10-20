@@ -40,7 +40,7 @@ func (h *Handlers) agentTokenMaxTTL() time.Duration {
 
 // agentNotFound is the single answer for a missing, foreign or assistant agent.
 func agentNotFound() NotFoundJSONResponse {
-	return NotFoundJSONResponse{Code: "not_found", Message: "agent not found"}
+	return NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "agent not found"}
 }
 
 // agentScope loads an external agent the caller may see: its owner or a global
@@ -217,12 +217,12 @@ func (h *Handlers) ListAgents(ctx context.Context, request ListAgentsRequestObje
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListAgents401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListAgents401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
 	all := request.Params.All != nil && *request.Params.All
 	if all && !p.IsAdmin() {
-		return ListAgents403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return ListAgents403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	var agents []db.Agent
@@ -252,14 +252,14 @@ func (h *Handlers) CreateAgent(ctx context.Context, request CreateAgentRequestOb
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if request.Body == nil {
-		return CreateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "missing body"}}, nil
+		return CreateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
 	name := strings.TrimSpace(request.Body.Name)
 	if name == "" || len(name) > 80 {
-		return CreateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "name must be 1-80 characters"}}, nil
+		return CreateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "name must be 1-80 characters"}}, nil
 	}
 	description := ""
 	if request.Body.Description != nil {
@@ -305,7 +305,7 @@ func (h *Handlers) GetAgent(ctx context.Context, request GetAgentRequestObject) 
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return GetAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return GetAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -331,10 +331,10 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return UpdateAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return UpdateAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if request.Body == nil {
-		return UpdateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "missing body"}}, nil
+		return UpdateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -354,7 +354,7 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 		onlyDisable := request.Body.Status != nil && *request.Body.Status == UpdateAgentRequestStatusDisabled &&
 			request.Body.Name == nil && request.Body.Description == nil && request.Body.WorkspaceIds == nil
 		if !onlyDisable {
-			return UpdateAgent403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "an admin may only disable an agent"}}, nil
+			return UpdateAgent403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "an admin may only disable an agent"}}, nil
 		}
 	}
 
@@ -362,7 +362,7 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 	if request.Body.Name != nil {
 		name = strings.TrimSpace(*request.Body.Name)
 		if name == "" || len(name) > 80 {
-			return UpdateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "name must be 1-80 characters"}}, nil
+			return UpdateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "name must be 1-80 characters"}}, nil
 		}
 	}
 	description := agent.Description
@@ -441,7 +441,7 @@ func (h *Handlers) DeleteAgent(ctx context.Context, request DeleteAgentRequestOb
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return DeleteAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return DeleteAgent401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -467,7 +467,7 @@ func (h *Handlers) ListAgentTokens(ctx context.Context, request ListAgentTokensR
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return ListAgentTokens401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return ListAgentTokens401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -497,14 +497,14 @@ func (h *Handlers) CreateAgentToken(ctx context.Context, request CreateAgentToke
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return CreateAgentToken401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return CreateAgentToken401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	if request.Body == nil {
-		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "missing body"}}, nil
+		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
 	name := strings.TrimSpace(request.Body.Name)
 	if name == "" || len(name) > 80 {
-		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "name must be 1-80 characters"}}, nil
+		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "name must be 1-80 characters"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -522,11 +522,11 @@ func (h *Handlers) CreateAgentToken(ctx context.Context, request CreateAgentToke
 	if request.Body.ExpiresInDays != nil {
 		days := *request.Body.ExpiresInDays
 		if days < 1 {
-			return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "expires_in_days must be at least 1"}}, nil
+			return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "expires_in_days must be at least 1"}}, nil
 		}
 		ttl = time.Duration(days) * 24 * time.Hour
 		if ttl > h.agentTokenMaxTTL() {
-			return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: "validation_error", Message: "expires_in_days exceeds the server maximum"}}, nil
+			return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "expires_in_days exceeds the server maximum"}}, nil
 		}
 	}
 
@@ -565,7 +565,7 @@ func (h *Handlers) RevokeAgentToken(ctx context.Context, request RevokeAgentToke
 	}
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return RevokeAgentToken401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: "unauthorized", Message: "invalid user"}}, nil
+		return RevokeAgentToken401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -580,11 +580,11 @@ func (h *Handlers) RevokeAgentToken(ctx context.Context, request RevokeAgentToke
 	}
 	tokenID, err := uuidFromString(request.TokenId.String())
 	if err != nil {
-		return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "agent token not found"}}, nil
+		return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "agent token not found"}}, nil
 	}
 	if _, err := h.queries.GetAgentTokenByID(ctx, db.GetAgentTokenByIDParams{ID: tokenID, AgentID: agent.ID}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "agent token not found"}}, nil
+			return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "agent token not found"}}, nil
 		}
 		return nil, err
 	}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { savedQueries, type QueryFolder, type SavedQuery } from '$lib/stores/savedQueries.svelte';
@@ -252,13 +253,13 @@
 		importBundle = null;
 		importName = file.name;
 		if (file.size > 10 * 1024 * 1024) {
-			importError = 'The bundle is larger than 10 MiB.';
+			importError = m.content_spaces_the_bundle_is_larger_than_10_mib();
 			return;
 		}
 		try {
 			const parsed = JSON.parse(await file.text());
 			if (parsed.format !== 'baleia.bundle' || parsed.format_version !== 1) {
-				importError = 'Unsupported bundle format or version.';
+				importError = m.content_spaces_unsupported_bundle_format_or_version();
 				return;
 			}
 			importBundle = parsed;
@@ -319,9 +320,9 @@
 				</p>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{space.name}</h1>
 				<p class="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
-					{space.description ?? 'No description.'} · {space.visibility === 'workspace'
-						? 'Everyone in the workspace'
-						: 'Restricted'} · {space.my_role}
+					{space.description ?? m.content_no_description()} · {space.visibility === 'workspace'
+						? m.content_everyone_in_the_workspace()
+						: m.content_restricted()} · {space.my_role}
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
@@ -419,8 +420,8 @@
 					<EmptyState
 						title="Nothing here"
 						description={canEdit
-							? 'Create a query in the workbench or a metric in the metrics catalog.'
-							: 'This folder is empty.'}
+							? m.content_spaces_create_a_query_in_the_workbench_or_a_metri()
+							: m.content_spaces_this_folder_is_empty()}
 					/>
 				{:else}
 					<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -528,29 +529,35 @@
 	{/if}
 </div>
 
-<Modal bind:open={folderOpen} title="New folder">
+<Modal bind:open={folderOpen} title={m.content_spaces_new_folder()}>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label="Name" bind:value={folderName} />
+		<Input label={m.common_name()} bind:value={folderName} />
 		{#if folderError}<p class="text-danger" role="alert">{folderError}</p>{/if}
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (folderOpen = false)} disabled={folderSaving}>Cancel</Button>
+			<Button onclick={() => (folderOpen = false)} disabled={folderSaving}
+				>{m.common_cancel()}</Button
+			>
 			<Button
 				variant="primary"
 				loading={folderSaving}
 				disabled={folderSaving}
 				onclick={submitFolder}
 			>
-				Create
+				{m.content_spaces_create()}
 			</Button>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={renameFolderOpen} title="Rename folder" onclose={() => (renameFolder = null)}>
+<Modal
+	bind:open={renameFolderOpen}
+	title={m.content_spaces_rename_folder()}
+	onclose={() => (renameFolder = null)}
+>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label="Name" bind:value={renameFolderName} />
+		<Input label={m.common_name()} bind:value={renameFolderName} />
 		{#if folderError}<p class="text-danger" role="alert">{folderError}</p>{/if}
 	</div>
 	{#snippet footer()}
@@ -560,7 +567,7 @@
 					renameFolder = null;
 					renameFolderOpen = false;
 				}}
-				disabled={folderBusy}>Cancel</Button
+				disabled={folderBusy}>{m.common_cancel()}</Button
 			>
 			<Button
 				variant="primary"
@@ -568,19 +575,23 @@
 				disabled={folderBusy}
 				onclick={submitRenameFolder}
 			>
-				Save
+				{m.common_save()}
 			</Button>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={moveFolderOpen} title="Move folder" onclose={() => (moveFolder = null)}>
+<Modal
+	bind:open={moveFolderOpen}
+	title={m.content_spaces_move_folder()}
+	onclose={() => (moveFolder = null)}
+>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<p class="text-slate-600 dark:text-slate-300">
-			The folder and its subtree move to the destination space root.
+			{m.content_spaces_the_folder_and_its_subtree_move_to_the_des()}
 		</p>
 		<Select
-			label="Destination space"
+			label={m.content_spaces_destination_space()}
 			bind:value={moveFolderTarget}
 			options={savedQueries.spaces
 				.filter((item) => item.id !== spaceId && savedQueries.canEdit(item.id))
@@ -595,7 +606,7 @@
 					moveFolder = null;
 					moveFolderOpen = false;
 				}}
-				disabled={folderBusy}>Cancel</Button
+				disabled={folderBusy}>{m.common_cancel()}</Button
 			>
 			<Button
 				variant="primary"
@@ -603,15 +614,19 @@
 				disabled={folderBusy}
 				onclick={submitMoveFolder}
 			>
-				Move
+				{m.common_move()}
 			</Button>
 		</div>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={renameQueryOpen} title="Rename query" onclose={() => (renameQuery = null)}>
+<Modal
+	bind:open={renameQueryOpen}
+	title={m.content_spaces_rename_query()}
+	onclose={() => (renameQuery = null)}
+>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label="Name" bind:value={renameQueryName} />
+		<Input label={m.common_name()} bind:value={renameQueryName} />
 		{#if folderError}<p class="text-danger" role="alert">{folderError}</p>{/if}
 	</div>
 	{#snippet footer()}
@@ -621,7 +636,7 @@
 					renameQuery = null;
 					renameQueryOpen = false;
 				}}
-				disabled={folderBusy}>Cancel</Button
+				disabled={folderBusy}>{m.common_cancel()}</Button
 			>
 			<Button
 				variant="primary"
@@ -629,7 +644,7 @@
 				disabled={folderBusy}
 				onclick={submitRenameQuery}
 			>
-				Save
+				{m.common_save()}
 			</Button>
 		</div>
 	{/snippet}
@@ -647,7 +662,7 @@
 	onrestored={() => savedQueries.reload(workspaceId)}
 />
 
-<Modal bind:open={importOpen} title="Import space bundle">
+<Modal bind:open={importOpen} title={m.content_spaces_import_space_bundle()}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<input
 			type="file"
@@ -659,14 +674,16 @@
 			<p class="font-mono text-[11px]">{importName}</p>
 		{/if}
 		{#if importBusy}
-			<p class="text-[11px] text-slate-600 dark:text-slate-300">Running the dry run…</p>
+			<p class="text-[11px] text-slate-600 dark:text-slate-300">
+				{m.content_spaces_running_the_dry_run()}
+			</p>
 		{/if}
 		{#if importError}
 			<p class="text-danger" role="alert">{importError}</p>
 		{/if}
 		{#if importReport}
 			<div class="flex flex-wrap gap-1">
-				{#each ['CREATE', 'UPDATE', 'NO_CHANGES', 'ERROR'] as action (action)}
+				{#each ['CREATE', 'UPDATE', m.content_spaces_no_changes(), 'ERROR'] as action (action)}
 					<Badge tone={action === 'ERROR' ? 'danger' : action === 'CREATE' ? 'success' : 'neutral'}>
 						{importReport.items.filter((item) => item.action === action).length}
 						{action}
@@ -677,10 +694,10 @@
 				<table class="w-full text-left text-[11px]">
 					<thead class="text-[10px] uppercase text-slate-600 dark:text-slate-300">
 						<tr>
-							<th class="px-2 py-1">Kind</th>
-							<th class="px-2 py-1">Title</th>
-							<th class="px-2 py-1">Action</th>
-							<th class="px-2 py-1">Message</th>
+							<th class="px-2 py-1">{m.common_kind()}</th>
+							<th class="px-2 py-1">{m.content_spaces_title()}</th>
+							<th class="px-2 py-1">{m.common_action()}</th>
+							<th class="px-2 py-1">{m.content_spaces_message()}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -706,14 +723,15 @@
 				</table>
 			</div>
 			<p class="text-[10px] text-slate-600 dark:text-slate-300">
-				Items in this space that are not in the file are left unchanged. Metrics are validated when
-				you apply.
+				{m.content_spaces_items_in_this_space_that_are_not_in_the_fi()}
 			</p>
 		{/if}
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (importOpen = false)} disabled={importApplying}>Cancel</Button>
+			<Button onclick={() => (importOpen = false)} disabled={importApplying}
+				>{m.common_cancel()}</Button
+			>
 			<Button
 				variant="primary"
 				loading={importApplying}
@@ -722,7 +740,7 @@
 					importReport.items.some((item) => item.action === 'ERROR')}
 				onclick={applyImport}
 			>
-				Apply
+				{m.common_apply()}
 			</Button>
 		</div>
 	{/snippet}
@@ -731,18 +749,18 @@
 <ConfirmDialog
 	bind:open={deleteOpen}
 	title={pending?.kind === 'space'
-		? 'Delete space'
+		? m.components_savedquerieslist_delete_space()
 		: pending?.kind === 'folder'
-			? 'Delete folder'
-			: 'Delete query'}
+			? m.content_spaces_delete_folder()
+			: m.content_spaces_delete_query()}
 	resourceName={pending?.name ?? ''}
 	confirmLabel="Delete"
 	consequences={[
 		pending?.kind === 'space'
-			? 'The space content and its access list are deleted.'
+			? m.content_spaces_the_space_content_and_its_access_list_are()
 			: pending?.kind === 'folder'
-				? 'Subfolders are deleted and their items move to the space root.'
-				: 'Deleted items can be restored from Trash.'
+				? m.content_spaces_subfolders_are_deleted_and_their_items_mov()
+				: m.content_spaces_deleted_items_can_be_restored_from_trash()
 	]}
 	onconfirm={confirmDelete}
 />

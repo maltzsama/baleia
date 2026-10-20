@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -70,9 +71,10 @@ type Handlers struct {
 	// loginDelay slows repeated login failures per account (#51).
 	loginDelayStore *LoginDelay
 	loginDelayOnce  sync.Once
-	// mailer sends password-reset and invite e-mails (#51). Tests inject a
-	// fake so the reset-request path runs without an SMTP server.
-	mailer func(to, resetURL string) error
+	// mailer sends password-reset and invite e-mails (#51) localized by the
+	// recipient's preference (#67). Tests inject a fake so the paths run
+	// without an SMTP server.
+	mailer MailSender
 	// oidcCache holds discovered providers keyed by id + config version (#280).
 	oidcCache sync.Map
 	// attentionCache caches the computed attention items for 30 s per user (#261).
@@ -86,15 +88,27 @@ type Handlers struct {
 	idpProbe func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
 }
 
-// SetMailer injects the password-reset/invite mailer (tests).
-func (h *Handlers) SetMailer(f func(to, resetURL string) error) { h.mailer = f }
+// MailSender is the transactional e-mail surface (#67).
+type MailSender interface {
+	Send(ctx context.Context, to, locale string, template mail.Template, data map[string]any) error
+}
 
-// sendMail uses the injected mailer, or SMTP from the configuration.
-func (h *Handlers) sendMail(to, resetURL string) error {
+// SetMailer injects the password-reset/invite mailer (tests).
+func (h *Handlers) SetMailer(m MailSender) { h.mailer = m }
+
+// mailSender uses the injected mailer, or SMTP from the configuration.
+func (h *Handlers) mailSender() MailSender {
 	if h.mailer != nil {
-		return h.mailer(to, resetURL)
+		return h.mailer
 	}
-	return sendResetEmail(h.cfg, to, resetURL)
+	return mail.New(mail.Config{
+		Host:          h.cfg.SMTPHost,
+		Port:          h.cfg.SMTPPort,
+		User:          h.cfg.SMTPUser,
+		Password:      h.cfg.SMTPPassword,
+		From:          h.cfg.SMTPFrom,
+		DefaultLocale: h.cfg.DefaultLocale,
+	})
 }
 
 // SetWSTickets wires the shared WebSocket ticket store (#26).
@@ -192,7 +206,7 @@ func (h *Handlers) AssistantService() *assistant.Service { return h.assistant }
 func dbUserToPublic(u db.User) UserPublic {
 	id := openapi_types.UUID(u.ID.Bytes)
 	email := openapi_types.Email(u.Email)
-	return UserPublic{
+	out := UserPublic{
 		Id:           id,
 		Name:         u.Name,
 		Email:        email,
@@ -201,6 +215,11 @@ func dbUserToPublic(u db.User) UserPublic {
 		Status:       UserPublicStatus(u.Status),
 		CreatedAt:    pgTimestampToTime(u.CreatedAt),
 	}
+	if u.Locale != nil {
+		locale := Locale(*u.Locale)
+		out.Locale = &locale
+	}
+	return out
 }
 
 func pgTimestampToTime(ts pgtype.Timestamptz) time.Time {
@@ -259,19 +278,19 @@ func requireWorkspaceAccess(ctx context.Context, queries db.Querier, workspaceID
 }
 
 func errUnauthorized(msg string) Error {
-	return Error{Code: "unauthorized", Message: msg}
+	return Error{Code: ErrorCodeUnauthorized, Message: msg}
 }
 
 func errForbidden(msg string) Error {
-	return Error{Code: "forbidden", Message: msg}
+	return Error{Code: ErrorCodeForbidden, Message: msg}
 }
 
 func errNotFound(msg string) Error {
-	return Error{Code: "not_found", Message: msg}
+	return Error{Code: ErrorCodeNotFound, Message: msg}
 }
 
 func errConflict(msg string) Error {
-	return Error{Code: "conflict", Message: msg}
+	return Error{Code: ErrorCodeConflict, Message: msg}
 }
 
 // respondError is only used by the manual (OIDC) routes.

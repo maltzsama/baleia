@@ -2,11 +2,14 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { configureSession } from '$lib/auth/session';
+	import { initLocale } from '$lib/i18n/locale.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 
 	let { children } = $props();
 
 	onMount(() => {
+		// Keep <html lang> in sync with the resolved locale (#67).
+		initLocale();
 		// A logout in another tab clears this tab too (#263).
 		configureSession({
 			onLogout: () => {

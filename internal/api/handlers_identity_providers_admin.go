@@ -20,23 +20,23 @@ func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIde
 	ev := audit.Event{Action: audit.IdentityProviderUpdate, ResourceType: "identity_provider", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return UpdateIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return UpdateIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	if request.Body == nil {
-		return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "request body is required")}, nil
+		return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 
 	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return UpdateIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "identity provider not found"}}, nil
+		return UpdateIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
 	}
 
 	name := ap.Name
 	if request.Body.Name != nil {
 		name = strings.TrimSpace(*request.Body.Name)
 		if name == "" {
-			return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "name must not be empty")}, nil
+			return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name must not be empty")}, nil
 		}
 	}
 	enabled := ap.Enabled
@@ -48,7 +48,7 @@ func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIde
 	switch ap.Type {
 	case "oidc":
 		if request.Body.Ldap != nil {
-			return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "ldap configuration does not belong to an oidc provider")}, nil
+			return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "ldap configuration does not belong to an oidc provider")}, nil
 		}
 		if request.Body.Oidc != nil {
 			current, err := auth.OpenOIDCConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
@@ -57,7 +57,7 @@ func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIde
 			}
 			merged := mergeOIDCConfig(current, request.Body.Oidc)
 			if err := merged.Validate(); err != nil {
-				return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", err.Error())}, nil
+				return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 			}
 			sealed, err = auth.SealOIDCConfig(h.keyring, idString(ap.ID), merged)
 			if err != nil {
@@ -66,7 +66,7 @@ func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIde
 		}
 	case "ldap":
 		if request.Body.Oidc != nil {
-			return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "oidc configuration does not belong to an ldap provider")}, nil
+			return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "oidc configuration does not belong to an ldap provider")}, nil
 		}
 		if request.Body.Ldap != nil {
 			current, err := identityldap.OpenConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
@@ -75,7 +75,7 @@ func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIde
 			}
 			merged := mergeLDAPConfig(current, request.Body.Ldap)
 			if err := merged.Validate(); err != nil {
-				return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", err.Error())}, nil
+				return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 			}
 			sealed, err = identityldap.SealConfig(h.keyring, idString(ap.ID), merged)
 			if err != nil {
@@ -108,13 +108,13 @@ func (h *Handlers) DeleteIdentityProvider(ctx context.Context, request DeleteIde
 	ev := audit.Event{Action: audit.IdentityProviderDelete, ResourceType: "identity_provider", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return DeleteIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return DeleteIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
 	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return DeleteIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "identity provider not found"}}, nil
+		return DeleteIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
 	}
 
 	linked, err := h.queries.CountUsersByAuthProvider(ctx, ap.ID)
@@ -125,7 +125,7 @@ func (h *Handlers) DeleteIdentityProvider(ctx context.Context, request DeleteIde
 	if linked > 0 && !suspend {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return DeleteIdentityProvider409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
-			Code:    "provider_in_use",
+			Code:    ErrorCodeProviderInUse,
 			Message: "users are still linked to this provider; pass suspend_users=true to suspend and detach them",
 		}}, nil
 	}
@@ -155,11 +155,11 @@ func (h *Handlers) DeleteIdentityProvider(ctx context.Context, request DeleteIde
 // TestIdentityProvider — POST /admin/identity-providers/{id}/test (#286).
 func (h *Handlers) TestIdentityProvider(ctx context.Context, request TestIdentityProviderRequestObject) (TestIdentityProviderResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
-		return TestIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return TestIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if err != nil {
-		return TestIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: "not_found", Message: "identity provider not found"}}, nil
+		return TestIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
 	}
 
 	var cfg providerConfig
@@ -191,16 +191,16 @@ func (h *Handlers) TestIdentityProvider(ctx context.Context, request TestIdentit
 // It validates and probes an unsaved configuration and writes nothing.
 func (h *Handlers) TestIdentityProviderTransient(ctx context.Context, request TestIdentityProviderTransientRequestObject) (TestIdentityProviderTransientResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
-		return TestIdentityProviderTransient403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: "forbidden", Message: "admin only"}}, nil
+		return TestIdentityProviderTransient403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	body := request.Body
 	if body == nil {
-		return TestIdentityProviderTransient422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", "request body is required")}, nil
+		return TestIdentityProviderTransient422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 
 	cfg, err := parseProviderConfigParts(body.Type, body.Oidc, body.Ldap)
 	if err != nil {
-		return TestIdentityProviderTransient422JSONResponse{UnprocessableEntityJSONResponse: unprocessable("validation_error", err.Error())}, nil
+		return TestIdentityProviderTransient422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
 	username := ""
 	if body.TestUsername != nil {

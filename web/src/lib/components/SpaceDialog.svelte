@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
@@ -57,24 +58,33 @@
 	}
 </script>
 
-<Modal bind:open title={editing ? 'Rename space' : 'New space'}>
+<Modal bind:open title={editing ? m.components_spacedialog_rename_space() : m.content_new_space()}>
 	<div class="flex flex-col gap-3">
-		<Input label="Name" bind:value={name} placeholder="Finance" />
-		<Textarea label="Description" bind:value={description} rows={2} placeholder="Optional" />
+		<Input
+			label={m.common_name()}
+			bind:value={name}
+			placeholder={m.components_spacedialog_finance()}
+		/>
+		<Textarea
+			label={m.common_description()}
+			bind:value={description}
+			rows={2}
+			placeholder={m.common_optional()}
+		/>
 		<Select
-			label="Visibility"
+			label={m.components_spacedialog_visibility()}
 			bind:value={visibility}
 			options={[
-				{ value: 'workspace', label: 'Workspace — every member can see it' },
-				{ value: 'restricted', label: 'Restricted — only the access list' }
+				{ value: 'workspace', label: m.components_spacedialog_workspace_every_member_can_see_it() },
+				{ value: 'restricted', label: m.components_spacedialog_restricted_only_the_access_list() }
 			]}
 		/>
 		<Select
-			label="Default role"
+			label={m.common_default_role()}
 			bind:value={defaultRole}
 			options={[
-				{ value: 'viewer', label: 'Viewer — read and run' },
-				{ value: 'editor', label: 'Editor — create and change content' }
+				{ value: 'viewer', label: m.components_spacedialog_viewer_read_and_run() },
+				{ value: 'editor', label: m.components_spacedialog_editor_create_and_change_content() }
 			]}
 		/>
 		{#if error}
@@ -83,7 +93,7 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (open = false)} disabled={busy}>Cancel</Button>
+			<Button onclick={() => (open = false)} disabled={busy}>{m.common_cancel()}</Button>
 			<Button variant="primary" onclick={save} disabled={!name.trim() || busy} loading={busy}>
 				{editing ? 'Save' : 'Create'}
 			</Button>

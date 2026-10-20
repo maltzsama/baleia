@@ -1,10 +1,18 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { apiErrorMessage, client } from '$lib/api/client';
+	import { localeStore } from '$lib/i18n/locale.svelte';
 	import { authStore, type AuthUser } from '$lib/stores/auth.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import PasswordInput from '$lib/ui/PasswordInput.svelte';
+	import Select from '$lib/ui/Select.svelte';
+
+	const languageOptions = [
+		{ value: 'en', label: m.settings_profile_english() },
+		{ value: 'pt-BR', label: m.settings_profile_portugues_brasil() }
+	];
 
 	let saving = $state(false);
 	let changingPassword = $state(false);
@@ -13,6 +21,7 @@
 
 	let name = $state('');
 	let email = $state('');
+	let locale = $state(authStore.user?.locale ?? localeStore.current);
 
 	let currentPassword = $state('');
 	let newPassword = $state('');
@@ -22,25 +31,28 @@
 		await authStore.load();
 		name = authStore.user?.name ?? '';
 		email = authStore.user?.email ?? '';
+		locale = authStore.user?.locale ?? localeStore.current;
 	});
 
 	async function saveProfile() {
 		saving = true;
 		error = '';
 		successMsg = '';
-		const { data, error: err } = await client.PATCH('/me', { body: { name, email } });
+		const { data, error: err } = await client.PATCH('/me', {
+			body: { name, email, locale: locale as 'en' | 'pt-BR' }
+		});
 		saving = false;
 		if (data) {
 			authStore.set(data as AuthUser);
-			successMsg = 'Profile updated.';
+			successMsg = m.settings_profile_profile_updated();
 		} else {
-			error = apiErrorMessage(err, 'Failed to save profile.');
+			error = apiErrorMessage(err, m.settings_profile_failed_to_save_profile());
 		}
 	}
 
 	async function changePassword() {
 		if (newPassword !== confirmPassword) {
-			error = 'Passwords do not match.';
+			error = m.settings_profile_passwords_do_not_match();
 			return;
 		}
 		changingPassword = true;
@@ -51,12 +63,12 @@
 		});
 		changingPassword = false;
 		if (response.ok) {
-			successMsg = 'Password changed.';
+			successMsg = m.settings_profile_password_changed();
 			currentPassword = '';
 			newPassword = '';
 			confirmPassword = '';
 		} else {
-			error = apiErrorMessage(err, 'Failed to change password.');
+			error = apiErrorMessage(err, m.settings_profile_failed_to_change_password());
 		}
 	}
 </script>
@@ -96,14 +108,14 @@
 
 		<section class="bg-slate-50 border border-border rounded-lg pt-5 px-5 pb-4 mb-4">
 			<h2 class="text-[13px] font-semibold text-text-muted uppercase tracking-[0.04em] mb-4">
-				Personal info
+				{m.settings_profile_personal_info()}
 			</h2>
 			<div class="mb-3">
-				<Input label="Name" bind:value={name} />
+				<Input label={m.common_name()} bind:value={name} />
 			</div>
 			<div class="mb-3">
 				<Input
-					label="Email"
+					label={m.common_email()}
 					type="email"
 					bind:value={email}
 					disabled={authStore.user?.auth_provider !== 'password'}
@@ -111,29 +123,48 @@
 			</div>
 			<div class="flex justify-end mt-2">
 				<Button variant="primary" onclick={saveProfile} disabled={saving} loading={saving}>
-					{saving ? 'Saving...' : 'Save'}
+					{saving ? m.settings_profile_saving() : 'Save'}
 				</Button>
 			</div>
+		</section>
+
+		<section class="bg-slate-50 border border-border rounded-lg pt-5 px-5 pb-4 mb-4">
+			<h2 class="text-[13px] font-semibold text-text-muted uppercase tracking-[0.04em] mb-4">
+				{m.settings_profile_language()}
+			</h2>
+			<div class="mb-3">
+				<Select
+					label={m.settings_profile_interface_language()}
+					bind:value={locale}
+					options={languageOptions}
+				/>
+			</div>
+			<p class="text-[11px] text-text-muted">
+				{m.settings_profile_the_change_applies_after_saving_and_follow()}
+			</p>
 		</section>
 
 		{#if authStore.user?.auth_provider === 'password'}
 			<section class="bg-slate-50 border border-border rounded-lg pt-5 px-5 pb-4 mb-4">
 				<h2 class="text-[13px] font-semibold text-text-muted uppercase tracking-[0.04em] mb-4">
-					Change password
+					{m.settings_profile_change_password()}
 				</h2>
 				<div class="mb-3">
-					<PasswordInput label="Current password" bind:value={currentPassword} />
+					<PasswordInput
+						label={m.settings_profile_current_password()}
+						bind:value={currentPassword}
+					/>
 				</div>
 				<div class="mb-3">
 					<PasswordInput
-						label="New password"
+						label={m.settings_profile_new_password()}
 						autocomplete="new-password"
 						bind:value={newPassword}
 					/>
 				</div>
 				<div class="mb-3">
 					<PasswordInput
-						label="Confirm new password"
+						label={m.settings_profile_confirm_new_password()}
 						autocomplete="new-password"
 						bind:value={confirmPassword}
 					/>
@@ -145,7 +176,9 @@
 						disabled={changingPassword}
 						loading={changingPassword}
 					>
-						{changingPassword ? 'Changing...' : 'Change password'}
+						{changingPassword
+							? m.settings_profile_changing()
+							: m.settings_profile_change_password()}
 					</Button>
 				</div>
 			</section>

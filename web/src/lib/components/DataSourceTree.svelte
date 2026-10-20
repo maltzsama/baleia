@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import {
@@ -331,7 +332,9 @@
 
 <div class="overflow-y-auto flex-1 px-1.5 pb-2 text-[13px]" data-testid="metadata-tree">
 	{#if !workspaceStore.current}
-		<p class="text-text-muted text-xs px-2 py-4">Select a workspace to browse catalogs.</p>
+		<p class="text-text-muted text-xs px-2 py-4">
+			{m.components_datasourcetree_select_a_workspace_to_browse_catalogs()}
+		</p>
 	{:else if loading}
 		<div class="space-y-2 px-2 py-3" aria-label="Loading catalogs">
 			<Skeleton class="h-4 w-3/4" />
@@ -477,7 +480,7 @@
 	{@const node = nodes[nodeKey(refKey, path)]}
 	<div class="pl-4">
 		{#if !node || node.status === 'loading'}
-			<p class="py-1 pl-2 text-[11px] text-text-muted">Loading…</p>
+			<p class="py-1 pl-2 text-[11px] text-text-muted">{m.common_loading_2()}</p>
 		{:else if node.status === 'error'}
 			<ErrorState
 				title="Could not load this level"
@@ -561,7 +564,7 @@
 					disabled={node.tablesLoading}
 					onclick={() => loadMoreTables(refKey, catalog, path)}
 				>
-					{node.tablesLoading ? 'Loading…' : 'Load more'}
+					{node.tablesLoading ? m.common_loading_2() : m.datatable_load_more()}
 				</button>
 			{/if}
 

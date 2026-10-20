@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -378,7 +379,16 @@ func TestReset_RequestStoresHash(t *testing.T) {
 	f := newAuthFixture(t)
 	f.h.cfg.SMTPHost, f.h.cfg.SMTPPort = "smtp.example.test", "25"
 	var sentURL string
-	f.h.SetMailer(func(_, resetURL string) error { sentURL = resetURL; return nil })
+	f.h.SetMailer(mailerFunc(func(_ context.Context, _, locale string, template mail.Template, data map[string]any) error {
+		if template != mail.TemplatePasswordReset {
+			t.Fatalf("template = %q, want %q", template, mail.TemplatePasswordReset)
+		}
+		if locale != "en" {
+			t.Errorf("locale = %q, want en (the fixture has no preference)", locale)
+		}
+		sentURL, _ = data["ResetURL"].(string)
+		return nil
+	}))
 
 	resp, err := f.h.RequestPasswordReset(context.Background(), RequestPasswordResetRequestObject{
 		Body: &PasswordResetRequestBody{Email: "owner@x.io"},

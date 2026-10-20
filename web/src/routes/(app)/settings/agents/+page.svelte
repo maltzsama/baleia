@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { components } from '$lib/api/schema';
@@ -45,13 +46,13 @@
 				client.GET('/workspaces')
 			]);
 			if (agentRes.error || !agentRes.data) {
-				error = apiErrorMessage(agentRes.error, 'Could not load agents.');
+				error = apiErrorMessage(agentRes.error, m.settings_agents_could_not_load_agents());
 				return;
 			}
 			agents = agentRes.data;
 			workspaces = wsRes.data ?? [];
 		} catch {
-			error = 'Could not load agents.';
+			error = m.settings_agents_could_not_load_agents();
 		} finally {
 			loading = false;
 		}
@@ -90,7 +91,7 @@
 				}
 			});
 			if (err || !data) {
-				createError = apiErrorMessage(err, 'Could not create the agent.');
+				createError = apiErrorMessage(err, m.settings_agents_could_not_create_the_agent());
 				return;
 			}
 			createOpen = false;
@@ -104,12 +105,12 @@
 	const rows = $derived(agents.map((agent) => ({ ...agent, key: agent.id })));
 
 	const columns = [
-		{ key: 'name', label: 'Name', sortable: true },
-		{ key: 'status', label: 'Status' },
-		{ key: 'workspaces', label: 'Workspaces' },
+		{ key: 'name', label: m.common_name(), sortable: true },
+		{ key: 'status', label: m.history_status() },
+		{ key: 'workspaces', label: m.settings_agents_workspaces() },
 		{ key: 'tokens', label: 'Tokens' },
-		{ key: 'last_used', label: 'Last used' },
-		{ key: 'created', label: 'Created' }
+		{ key: 'last_used', label: m.settings_agents_last_used() },
+		{ key: 'created', label: m.settings_agents_created() }
 	];
 </script>
 
@@ -117,20 +118,19 @@
 	<div class="max-w-5xl">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold tracking-[-0.3px]">Agents</h1>
+				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_agents_agents()}</h1>
 				<p class="mt-1 text-[13px] text-text-muted">
-					Read-only MCP clients that act in your workspaces. Tokens are shown once and are always
-					scoped to read tools.
+					{m.settings_agents_read_only_mcp_clients_that_act_in_your_wor()}
 				</p>
 			</div>
-			<Button variant="primary" onclick={openCreate}>New agent</Button>
+			<Button variant="primary" onclick={openCreate}>{m.settings_agents_new_agent()}</Button>
 		</div>
 
 		{#if isAdmin}
 			<label class="mt-4 inline-flex items-center gap-2 text-[12px] text-text-muted">
 				<Checkbox
 					checked={showAll}
-					label="Show all agents"
+					label={m.settings_agents_show_all_agents()}
 					onchange={(event) => toggleAll((event.currentTarget as HTMLInputElement).checked)}
 				/>
 			</label>
@@ -171,7 +171,9 @@
 						{:else if column.key === 'tokens'}
 							{String(row.active_token_count ?? 0)}
 						{:else if column.key === 'last_used'}
-							{row.last_used_at ? new Date(String(row.last_used_at)).toLocaleString() : 'Never'}
+							{row.last_used_at
+								? new Date(String(row.last_used_at)).toLocaleString()
+								: m.settings_agents_never()}
 						{:else if column.key === 'created'}
 							<RelativeTime at={String(row.created_at)} />
 						{/if}
@@ -182,17 +184,27 @@
 	</div>
 </div>
 
-<Modal bind:open={createOpen} title="New agent">
+<Modal bind:open={createOpen} title={m.settings_agents_new_agent()}>
 	<div class="flex flex-col gap-3">
 		{#if createError}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
 				{createError}
 			</p>
 		{/if}
-		<Input label="Name" bind:value={name} placeholder="etl-pipeline" />
-		<Input label="Description" bind:value={description} placeholder="Optional" />
+		<Input
+			label={m.common_name()}
+			bind:value={name}
+			placeholder={m.settings_agents_etl_pipeline()}
+		/>
+		<Input
+			label={m.common_description()}
+			bind:value={description}
+			placeholder={m.common_optional()}
+		/>
 		<fieldset class="flex flex-col gap-2">
-			<legend class="text-[12px] font-medium text-text-muted">Workspaces</legend>
+			<legend class="text-[12px] font-medium text-text-muted"
+				>{m.settings_agents_workspaces()}</legend
+			>
 			{#each workspaces as workspace (workspace.id)}
 				<Checkbox
 					checked={selectedWorkspaces.includes(workspace.id)}
@@ -202,14 +214,16 @@
 				/>
 			{/each}
 			{#if workspaces.length === 0}
-				<p class="text-[12px] text-text-muted">You have no workspaces yet.</p>
+				<p class="text-[12px] text-text-muted">{m.settings_agents_you_have_no_workspaces_yet()}</p>
 			{/if}
 		</fieldset>
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (createOpen = false)}>Cancel</Button>
-			<Button variant="primary" loading={createBusy} onclick={createAgent}>Create agent</Button>
+			<Button onclick={() => (createOpen = false)}>{m.common_cancel()}</Button>
+			<Button variant="primary" loading={createBusy} onclick={createAgent}
+				>{m.settings_agents_create_agent()}</Button
+			>
 		</div>
 	{/snippet}
 </Modal>

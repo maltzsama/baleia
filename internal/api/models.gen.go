@@ -385,12 +385,104 @@ const (
 	EngineCapabilitiesReadOnlyNone     EngineCapabilitiesReadOnly = "none"
 )
 
+// Defines values for ErrorCode.
+const (
+	ErrorCodeAccountSuspended          ErrorCode = "account_suspended"
+	ErrorCodeAgentTokenNotAllowed      ErrorCode = "agent_token_not_allowed"
+	ErrorCodeAssistantDisabled         ErrorCode = "assistant_disabled"
+	ErrorCodeBadRequest                ErrorCode = "bad_request"
+	ErrorCodeBindingBusy               ErrorCode = "binding_busy"
+	ErrorCodeBindingDisabled           ErrorCode = "binding_disabled"
+	ErrorCodeBindingExists             ErrorCode = "binding_exists"
+	ErrorCodeBindingIsPrimary          ErrorCode = "binding_is_primary"
+	ErrorCodeBindingNotManaged         ErrorCode = "binding_not_managed"
+	ErrorCodeBindingUnsupported        ErrorCode = "binding_unsupported"
+	ErrorCodeCancelFailed              ErrorCode = "cancel_failed"
+	ErrorCodeCancelled                 ErrorCode = "cancelled"
+	ErrorCodeCatalogNotManaged         ErrorCode = "catalog_not_managed"
+	ErrorCodeConcurrentChange          ErrorCode = "concurrent_change"
+	ErrorCodeConflict                  ErrorCode = "conflict"
+	ErrorCodeConnectionError           ErrorCode = "connection_error"
+	ErrorCodeConnectionInUse           ErrorCode = "connection_in_use"
+	ErrorCodeCredentialsUnreadable     ErrorCode = "credentials_unreadable"
+	ErrorCodeCustomSqlForbidden        ErrorCode = "custom_sql_forbidden"
+	ErrorCodeCustomSqlRequiresReadOnly ErrorCode = "custom_sql_requires_read_only"
+	ErrorCodeDestinationNotEligible    ErrorCode = "destination_not_eligible"
+	ErrorCodeDropFailed                ErrorCode = "drop_failed"
+	ErrorCodeEncryptionFailed          ErrorCode = "encryption_failed"
+	ErrorCodeEncryptionUnavailable     ErrorCode = "encryption_unavailable"
+	ErrorCodeEngineError               ErrorCode = "engine_error"
+	ErrorCodeEngineInUse               ErrorCode = "engine_in_use"
+	ErrorCodeEngineRequired            ErrorCode = "engine_required"
+	ErrorCodeEngineUnavailable         ErrorCode = "engine_unavailable"
+	ErrorCodeEngineUnreachable         ErrorCode = "engine_unreachable"
+	ErrorCodeEngineUnsupported         ErrorCode = "engine_unsupported"
+	ErrorCodeExecutionsRunning         ErrorCode = "executions_running"
+	ErrorCodeFolderCycle               ErrorCode = "folder_cycle"
+	ErrorCodeForbidden                 ErrorCode = "forbidden"
+	ErrorCodeGrainNotAllowed           ErrorCode = "grain_not_allowed"
+	ErrorCodeIdpUnavailable            ErrorCode = "idp_unavailable"
+	ErrorCodeInternal                  ErrorCode = "internal"
+	ErrorCodeInternalError             ErrorCode = "internal_error"
+	ErrorCodeInvalidBundle             ErrorCode = "invalid_bundle"
+	ErrorCodeInvalidCredentials        ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidDefinition         ErrorCode = "invalid_definition"
+	ErrorCodeInvalidIdentifier         ErrorCode = "invalid_identifier"
+	ErrorCodeInvalidSql                ErrorCode = "invalid_sql"
+	ErrorCodeInvalidTimeRange          ErrorCode = "invalid_time_range"
+	ErrorCodeNameConflict              ErrorCode = "name_conflict"
+	ErrorCodeNameInUse                 ErrorCode = "name_in_use"
+	ErrorCodeNotDirect                 ErrorCode = "not_direct"
+	ErrorCodeNotFound                  ErrorCode = "not_found"
+	ErrorCodeNotRunning                ErrorCode = "not_running"
+	ErrorCodeNotSupported              ErrorCode = "not_supported"
+	ErrorCodePermissionDenied          ErrorCode = "permission_denied"
+	ErrorCodePropertyNotOverridable    ErrorCode = "property_not_overridable"
+	ErrorCodeProviderInUse             ErrorCode = "provider_in_use"
+	ErrorCodeProviderUnsupported       ErrorCode = "provider_unsupported"
+	ErrorCodeRateLimited               ErrorCode = "rate_limited"
+	ErrorCodeReadOnlyUnsupported       ErrorCode = "read_only_unsupported"
+	ErrorCodeRefused                   ErrorCode = "refused"
+	ErrorCodeReservedName              ErrorCode = "reserved_name"
+	ErrorCodeResourceExhausted         ErrorCode = "resource_exhausted"
+	ErrorCodeServiceUnavailable        ErrorCode = "service_unavailable"
+	ErrorCodeSlugConflict              ErrorCode = "slug_conflict"
+	ErrorCodeSpaceMissing              ErrorCode = "space_missing"
+	ErrorCodeSpaceNotFound             ErrorCode = "space_not_found"
+	ErrorCodeSyncInProgress            ErrorCode = "sync_in_progress"
+	ErrorCodeSyntax                    ErrorCode = "syntax"
+	ErrorCodeTargetNotGranted          ErrorCode = "target_not_granted"
+	ErrorCodeTargetRequired            ErrorCode = "target_required"
+	ErrorCodeTargetUnavailable         ErrorCode = "target_unavailable"
+	ErrorCodeTimeout                   ErrorCode = "timeout"
+	ErrorCodeTurnRunning               ErrorCode = "turn_running"
+	ErrorCodeUnauthorized              ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedBundleVersion  ErrorCode = "unsupported_bundle_version"
+	ErrorCodeUnsupportedSyntax         ErrorCode = "unsupported_syntax"
+	ErrorCodeUserInUse                 ErrorCode = "user_in_use"
+	ErrorCodeUserOwnsWorkspace         ErrorCode = "user_owns_workspace"
+	ErrorCodeValidationError           ErrorCode = "validation_error"
+	ErrorCodeVersionConflict           ErrorCode = "version_conflict"
+	ErrorCodeWorkspaceNotFound         ErrorCode = "workspace_not_found"
+	ErrorCodeWorkspacePersonal         ErrorCode = "workspace_personal"
+)
+
 // Defines values for ExecutionStatus.
 const (
 	ExecutionStatusCancelled ExecutionStatus = "cancelled"
 	ExecutionStatusFailed    ExecutionStatus = "failed"
 	ExecutionStatusFinished  ExecutionStatus = "finished"
 	ExecutionStatusRunning   ExecutionStatus = "running"
+)
+
+// Defines values for FieldCode.
+const (
+	FieldCodeInvalidFormat FieldCode = "invalid_format"
+	FieldCodeNotAllowed    FieldCode = "not_allowed"
+	FieldCodeNotUnique     FieldCode = "not_unique"
+	FieldCodeOutOfRange    FieldCode = "out_of_range"
+	FieldCodeRequired      FieldCode = "required"
+	FieldCodeTooLong       FieldCode = "too_long"
 )
 
 // Defines values for GlobalAction.
@@ -484,6 +576,12 @@ const (
 const (
 	LDAPConfigAdminDefaultRoleAdmin  LDAPConfigAdminDefaultRole = "admin"
 	LDAPConfigAdminDefaultRoleMember LDAPConfigAdminDefaultRole = "member"
+)
+
+// Defines values for Locale.
+const (
+	LocaleEn   Locale = "en"
+	LocalePtBR Locale = "pt-BR"
 )
 
 // Defines values for MeAuthProvider.
@@ -2093,12 +2191,18 @@ type EngineObservation struct {
 
 // Error defines model for Error.
 type Error struct {
-	Code    string `json:"code"`
+	Code   ErrorCode     `json:"code"`
+	Fields *[]FieldError `json:"fields,omitempty"`
+
+	// Message English, for logs and non-UI clients; never shown translated
 	Message string `json:"message"`
 
 	// Params Structured details (for version_conflict: current_version, updated_by, updated_at)
 	Params *map[string]interface{} `json:"params,omitempty"`
 }
+
+// ErrorCode defines model for ErrorCode.
+type ErrorCode string
 
 // Execution defines model for Execution.
 type Execution struct {
@@ -2176,6 +2280,16 @@ type Features struct {
 	Agents     bool `json:"agents"`
 	Assistant  bool `json:"assistant"`
 	Retrievers bool `json:"retrievers"`
+}
+
+// FieldCode defines model for FieldCode.
+type FieldCode string
+
+// FieldError defines model for FieldError.
+type FieldError struct {
+	Code   FieldCode          `json:"code"`
+	Field  string             `json:"field"`
+	Params *map[string]string `json:"params,omitempty"`
 }
 
 // GlobalAction defines model for GlobalAction.
@@ -2406,6 +2520,9 @@ type LDAPConfigAdmin struct {
 // LDAPConfigAdminDefaultRole defines model for LDAPConfigAdmin.DefaultRole.
 type LDAPConfigAdminDefaultRole string
 
+// Locale defines model for Locale.
+type Locale string
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	// Email Local login. Ignored when `provider_id` is set.
@@ -2454,12 +2571,15 @@ type MaintenanceRun struct {
 
 // Me defines model for Me.
 type Me struct {
-	AuthProvider        MeAuthProvider      `json:"auth_provider"`
-	CreatedAt           time.Time           `json:"created_at"`
-	Email               openapi_types.Email `json:"email"`
-	Features            Features            `json:"features"`
-	GlobalActions       []GlobalAction      `json:"global_actions"`
-	Id                  openapi_types.UUID  `json:"id"`
+	AuthProvider  MeAuthProvider      `json:"auth_provider"`
+	CreatedAt     time.Time           `json:"created_at"`
+	Email         openapi_types.Email `json:"email"`
+	Features      Features            `json:"features"`
+	GlobalActions []GlobalAction      `json:"global_actions"`
+	Id            openapi_types.UUID  `json:"id"`
+
+	// Locale UI language preference; null follows the browser (#67).
+	Locale              *Locale             `json:"locale"`
 	Name                string              `json:"name"`
 	PersonalWorkspaceId *openapi_types.UUID `json:"personal_workspace_id"`
 	Role                MeRole              `json:"role"`
@@ -3603,8 +3723,9 @@ type UpdatePasswordRequest struct {
 
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
-	Email *openapi_types.Email `json:"email,omitempty"`
-	Name  *string              `json:"name,omitempty"`
+	Email  *openapi_types.Email `json:"email,omitempty"`
+	Locale *Locale              `json:"locale,omitempty"`
+	Name   *string              `json:"name,omitempty"`
 }
 
 // UpdateRetrieverRequest defines model for UpdateRetrieverRequest.
@@ -3688,9 +3809,12 @@ type UserPublic struct {
 	CreatedAt    time.Time              `json:"created_at"`
 	Email        openapi_types.Email    `json:"email"`
 	Id           openapi_types.UUID     `json:"id"`
-	Name         string                 `json:"name"`
-	Role         UserPublicRole         `json:"role"`
-	Status       UserPublicStatus       `json:"status"`
+
+	// Locale UI language preference; null follows the browser (#67).
+	Locale *Locale          `json:"locale"`
+	Name   string           `json:"name"`
+	Role   UserPublicRole   `json:"role"`
+	Status UserPublicStatus `json:"status"`
 }
 
 // UserPublicAuthProvider defines model for UserPublic.AuthProvider.
@@ -3715,12 +3839,13 @@ type ValidateRetrieverResult struct {
 
 // ValidationError defines model for ValidationError.
 type ValidationError struct {
-	Code   string `json:"code"`
+	Code   ErrorCode `json:"code"`
 	Errors []struct {
 		Field   *string `json:"field,omitempty"`
 		Message *string `json:"message,omitempty"`
 	} `json:"errors"`
-	Message string `json:"message"`
+	Fields  *[]FieldError `json:"fields,omitempty"`
+	Message string        `json:"message"`
 }
 
 // Workspace defines model for Workspace.
