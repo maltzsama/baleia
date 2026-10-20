@@ -203,10 +203,52 @@ func TestCompileRejectsChainedJoin(t *testing.T) {
 	}
 }
 
-func TestCompileRejectsDerivedMetrics(t *testing.T) {
-	q := semantic.ExploreQuery{Model: "orders", Metrics: []string{"aov"}}
-	_, err := Compile(q, models(), pg(t), Options{})
-	if !errors.Is(err, ErrUnsupported) {
+func TestCompileDerivedMetric(t *testing.T) {
+	d := pg(t)
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"aov"}}
+	got, err := Compile(q, models(), d, Options{})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	wantOuter := d.SafeDivide(`"revenue"`, `"orders"`) + ` AS "aov"`
+	for _, want := range []string{
+		`SUM("order_id") AS "revenue"`,
+		`COUNT(*) AS "orders"`,
+		`AS baleia_explore`,
+		wantOuter,
+	} {
+		if !strings.Contains(got.SQL, want) {
+			t.Errorf("SQL missing %q:\n%s", want, got.SQL)
+		}
+	}
+}
+
+func TestCompileDerivedMetricFilter(t *testing.T) {
+	d := pg(t)
+	q := semantic.ExploreQuery{
+		Model:   "orders",
+		Metrics: []string{"revenue"},
+		Filters: []semantic.ExploreFilter{{Field: "aov", Op: semantic.OpGt, Values: []any{10}}},
+	}
+	got, err := Compile(q, models(), d, Options{})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	want := "WHERE " + d.SafeDivide(`"revenue"`, `"orders"`) + " > 10"
+	if !strings.Contains(got.SQL, want) {
+		t.Errorf("SQL missing derived filter %q:\n%s", want, got.SQL)
+	}
+}
+
+func TestCompileRejectsNestedDerived(t *testing.T) {
+	m := models()
+	orders := m["orders"]
+	orders.Metrics = append(orders.Metrics, semantic.Metric{
+		Name: "aov2", Derived: &semantic.DerivedMetric{Left: "aov", Op: "*", Right: "revenue"},
+	})
+	m["orders"] = orders
+	q := semantic.ExploreQuery{Model: "orders", Metrics: []string{"aov2"}}
+	if _, err := Compile(q, m, pg(t), Options{}); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("Compile = %v, want ErrUnsupported", err)
 	}
 }
@@ -230,7 +272,7 @@ func TestCompileEveryDialect(t *testing.T) {
 	q := semantic.ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"status", "segment"},
-		Metrics:    []string{"revenue", "orders"},
+		Metrics:    []string{"revenue", "orders", "aov"},
 		Filters:    []semantic.ExploreFilter{{Field: "status", Op: semantic.OpEq, Values: []any{"paid"}}},
 		Sorts:      []semantic.Sort{{Field: "revenue", Desc: true}},
 		Limit:      25,
