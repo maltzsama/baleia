@@ -94,6 +94,7 @@ type Querier interface {
 	CreateRetrieverRefreshHistory(ctx context.Context, arg CreateRetrieverRefreshHistoryParams) (RetrieverRefreshHistory, error)
 	CreateSavedQuery(ctx context.Context, arg CreateSavedQueryParams) (SavedQuery, error)
 	CreateSemanticMetric(ctx context.Context, arg CreateSemanticMetricParams) (SemanticMetric, error)
+	CreateSemanticModel(ctx context.Context, arg CreateSemanticModelParams) (SemanticModel, error)
 	// Spaces (#40): named containers inside a workspace with their own access list.
 	// The effective role is computed by baleia_effective_space_role so listing and
 	// single-space checks share one rule (#16 matrix).
@@ -126,6 +127,7 @@ type Querier interface {
 	DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryParams) (int64, error)
 	DeleteSemanticDoc(ctx context.Context, arg DeleteSemanticDocParams) (int64, error)
 	DeleteSemanticMetric(ctx context.Context, arg DeleteSemanticMetricParams) (int64, error)
+	DeleteSemanticModel(ctx context.Context, arg DeleteSemanticModelParams) (int64, error)
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
@@ -229,6 +231,8 @@ type Querier interface {
 	GetSemanticMetric(ctx context.Context, arg GetSemanticMetricParams) (SemanticMetric, error)
 	GetSemanticMetricBySlug(ctx context.Context, arg GetSemanticMetricBySlugParams) (SemanticMetric, error)
 	GetSemanticMetricForUpdate(ctx context.Context, arg GetSemanticMetricForUpdateParams) (SemanticMetric, error)
+	GetSemanticModel(ctx context.Context, arg GetSemanticModelParams) (SemanticModel, error)
+	GetSemanticModelBySlug(ctx context.Context, arg GetSemanticModelBySlugParams) (SemanticModel, error)
 	GetSpace(ctx context.Context, arg GetSpaceParams) (Space, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
 	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
@@ -364,6 +368,8 @@ type Querier interface {
 	ListSemanticDocsForTable(ctx context.Context, arg ListSemanticDocsForTableParams) ([]SemanticDoc, error)
 	// Latest content version of every metric in the workspace, in one query.
 	ListSemanticMetricVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticMetricVersionsRow, error)
+	// Latest content version of every model in the workspace, in one query.
+	ListSemanticModelVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticModelVersionsRow, error)
 	// Distinct tags of docs on catalogs the workspace may use (#116). Prefix
 	// matches rank first.
 	ListSemanticTags(ctx context.Context, arg ListSemanticTagsParams) ([]ListSemanticTagsRow, error)
@@ -405,6 +411,9 @@ type Querier interface {
 	// ── Metrics ─────────────────────────────────────────────────────────────────────
 	// Only metrics of spaces the caller can see (#40); space_id narrows it.
 	ListVisibleSemanticMetrics(ctx context.Context, arg ListVisibleSemanticMetricsParams) ([]SemanticMetric, error)
+	// ── Models (v2, #91) ───────────────────────────────────────────────────────────
+	// Only models of spaces the caller can see (#40); space_id narrows it.
+	ListVisibleSemanticModels(ctx context.Context, arg ListVisibleSemanticModelsParams) ([]SemanticModel, error)
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
@@ -477,6 +486,7 @@ type Querier interface {
 	// context for history and carries no secret.
 	SetExecutionTarget(ctx context.Context, arg SetExecutionTargetParams) error
 	SetSemanticMetricCertification(ctx context.Context, arg SetSemanticMetricCertificationParams) (SemanticMetric, error)
+	SetSemanticModelCertification(ctx context.Context, arg SetSemanticModelCertificationParams) (SemanticModel, error)
 	SetSpaceMember(ctx context.Context, arg SetSpaceMemberParams) (SpaceMember, error)
 	// Persists the engine's handle of a running statement as soon as it is known,
 	// so the API can cancel it from another process.
@@ -547,6 +557,7 @@ type Querier interface {
 	UpdateRetrieverRefreshHistory(ctx context.Context, arg UpdateRetrieverRefreshHistoryParams) error
 	UpdateSavedQuery(ctx context.Context, arg UpdateSavedQueryParams) (SavedQuery, error)
 	UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMetricParams) (SemanticMetric, error)
+	UpdateSemanticModel(ctx context.Context, arg UpdateSemanticModelParams) (SemanticModel, error)
 	UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) (TeamMember, error)

@@ -525,6 +525,25 @@ type SemanticMetric struct {
 	CertifiedAt   pgtype.Timestamptz `json:"certified_at"`
 }
 
+type SemanticModel struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	SpaceID       pgtype.UUID        `json:"space_id"`
+	Slug          string             `json:"slug"`
+	Label         string             `json:"label"`
+	Description   string             `json:"description"`
+	Certified     bool               `json:"certified"`
+	CertifiedBy   pgtype.UUID        `json:"certified_by"`
+	CertifiedAt   pgtype.Timestamptz `json:"certified_at"`
+	CatalogID     pgtype.UUID        `json:"catalog_id"`
+	BindingID     pgtype.UUID        `json:"binding_id"`
+	Definition    []byte             `json:"definition"`
+	FormatVersion int32              `json:"format_version"`
+	OwnerUserID   pgtype.UUID        `json:"owner_user_id"`
+	UpdatedBy     pgtype.UUID        `json:"updated_by"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Space struct {
 	ID          pgtype.UUID        `json:"id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`

@@ -180,3 +180,69 @@ WHERE d.workspace_id = @workspace_id::uuid
 GROUP BY tag
 ORDER BY (tag ILIKE @q::text || '%') DESC, count DESC, tag
 LIMIT @lim::int;
+
+-- ── Models (v2, #91) ───────────────────────────────────────────────────────────
+
+-- name: ListVisibleSemanticModels :many
+-- Only models of spaces the caller can see (#40); space_id narrows it.
+SELECT m.* FROM semantic_models m
+WHERE m.workspace_id = @workspace_id::uuid
+  AND baleia_effective_space_role(m.workspace_id, m.space_id, @user_id::uuid) IS NOT NULL
+  AND (sqlc.narg(space_id)::uuid IS NULL OR m.space_id = sqlc.narg(space_id)::uuid)
+ORDER BY m.label;
+
+-- name: ListSemanticModelVersions :many
+-- Latest content version of every model in the workspace, in one query.
+SELECT entity_id, max(version)::int AS version
+FROM content_versions
+WHERE workspace_id = @workspace_id::uuid AND entity_type = 'semantic_model'
+GROUP BY entity_id;
+
+-- name: GetSemanticModel :one
+SELECT * FROM semantic_models
+WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid;
+
+-- name: GetSemanticModelBySlug :one
+SELECT * FROM semantic_models
+WHERE workspace_id = @workspace_id::uuid AND slug = @slug::text;
+
+-- name: CreateSemanticModel :one
+INSERT INTO semantic_models (
+    workspace_id, space_id, slug, label, description, certified,
+    catalog_id, binding_id, definition, format_version, owner_user_id, updated_by
+)
+VALUES (
+    @workspace_id::uuid, @space_id::uuid, @slug::text, @label::text, @description::text, @certified::boolean,
+    @catalog_id::uuid, sqlc.narg(binding_id)::uuid, @definition::jsonb, @format_version::int,
+    sqlc.narg(owner_user_id)::uuid, @updated_by::uuid
+)
+RETURNING *;
+
+-- name: UpdateSemanticModel :one
+UPDATE semantic_models
+SET space_id = @space_id::uuid,
+    slug = @slug::text,
+    label = @label::text,
+    description = @description::text,
+    certified = @certified::boolean,
+    catalog_id = @catalog_id::uuid,
+    binding_id = sqlc.narg(binding_id)::uuid,
+    definition = @definition::jsonb,
+    format_version = @format_version::int,
+    owner_user_id = sqlc.narg(owner_user_id)::uuid,
+    updated_by = @updated_by::uuid,
+    updated_at = now()
+WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid
+RETURNING *;
+
+-- name: DeleteSemanticModel :execrows
+DELETE FROM semantic_models
+WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid;
+
+-- name: SetSemanticModelCertification :one
+UPDATE semantic_models
+SET certified = @certified::boolean,
+    certified_by = CASE WHEN @certified::boolean THEN @actor::uuid ELSE NULL END,
+    certified_at = CASE WHEN @certified::boolean THEN now() ELSE NULL END
+WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid
+RETURNING *;
