@@ -160,6 +160,9 @@ func neededBaseMetrics(q semantic.ExploreQuery, base semantic.Model, models map[
 			}
 			continue
 		}
+		if owner != base.Slug {
+			continue // a joined metric is planned against its own model
+		}
 		if err := add(name); err != nil {
 			return nil, err
 		}
@@ -247,20 +250,18 @@ func planSingle(q semantic.ExploreQuery, base semantic.Model, needed []string, d
 }
 
 // planJoined builds the inner query for fields that reach a joined dimension.
+//
+// many_to_one / one_to_one joins are safe to apply before aggregation: the
+// joined side has at most one row per key. A one_to_many join is also safe when
+// the query selects no base metric (the fan-out only multiplies base rows,
+// which are not aggregated); joined metrics then aggregate over the many side.
+// Anything else needs the CTE pre-aggregation pass and fails closed.
 func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]semantic.Model, owners map[string]string, used map[string]bool, needed []string, d dialect.Dialect, opts Options) (*plan, error) {
-	for _, name := range q.Metrics {
-		if owners[name] != base.Slug {
-			return nil, fmt.Errorf("%w: metric %q on a joined model needs CTE pre-aggregation", ErrUnsupported, name)
-		}
-	}
 	joins := map[string]semantic.Join{}
 	var ordered []semantic.Join
 	for _, j := range base.Joins {
 		if !used[j.To] {
 			continue
-		}
-		if j.Relationship == semantic.OneToMany {
-			return nil, fmt.Errorf("%w: one_to_many join to %q needs pre-aggregation", ErrUnsupported, j.To)
 		}
 		joins[j.To] = j
 		ordered = append(ordered, j)
@@ -276,6 +277,51 @@ func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]
 		// different explicit binding cannot be reached safely.
 		if base.BindingID != "" && models[slug].BindingID != "" && models[slug].BindingID != base.BindingID {
 			return nil, fmt.Errorf("%w: joined model %q is on a different binding", ErrUnsupported, slug)
+		}
+	}
+
+	baseMetrics := false
+	joinedMetrics := map[string]bool{}
+	for _, name := range q.Metrics {
+		owner := owners[name]
+		if metricOf(ownerModel(owner, base, models), name) == nil {
+			continue // derived/calculated metrics render in the outer query
+		}
+		if owner == base.Slug {
+			baseMetrics = true
+		} else {
+			joinedMetrics[owner] = true
+		}
+	}
+	oneToMany := false
+	for _, j := range ordered {
+		if j.Relationship == semantic.OneToMany {
+			oneToMany = true
+		}
+	}
+	if oneToMany {
+		if baseMetrics {
+			return nil, fmt.Errorf("%w: base metrics with a one_to_many join need CTE pre-aggregation", ErrUnsupported)
+		}
+		for _, name := range q.Metrics {
+			owner := ownerModel(owners[name], base, models)
+			if metricOf(owner, name) == nil {
+				return nil, fmt.Errorf("%w: derived or calculated metrics with a one_to_many join need CTE pre-aggregation", ErrUnsupported)
+			}
+		}
+		for _, f := range q.Filters {
+			owner := ownerModel(owners[f.Field], base, models)
+			if calculatedOf(owner, f.Field) != nil {
+				return nil, fmt.Errorf("%w: calculated-field filters with a one_to_many join need CTE pre-aggregation", ErrUnsupported)
+			}
+			if mt := metricOf(owner, f.Field); mt != nil && mt.Derived != nil {
+				return nil, fmt.Errorf("%w: derived-metric filters with a one_to_many join need CTE pre-aggregation", ErrUnsupported)
+			}
+		}
+	}
+	for slug := range joinedMetrics {
+		if joins[slug].Relationship != semantic.OneToMany {
+			return nil, fmt.Errorf("%w: metric on joined model %q needs CTE pre-aggregation", ErrUnsupported, slug)
 		}
 	}
 
@@ -347,6 +393,30 @@ func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]
 		p.selects = append(p.selects, expr+" AS "+alias)
 		p.innerPos[name] = len(p.selects)
 	}
+	for _, name := range q.Metrics {
+		owner := ownerModel(owners[name], base, models)
+		if owner.Slug == base.Slug {
+			continue
+		}
+		mt := metricOf(owner, name)
+		if mt == nil {
+			continue
+		}
+		ownerAlias, err := d.QuoteIdent(owner.Slug)
+		if err != nil {
+			return nil, err
+		}
+		expr, err := metricExpr(d, *mt, owner.Dimensions, ownerAlias)
+		if err != nil {
+			return nil, err
+		}
+		alias, err := d.QuoteIdent(name)
+		if err != nil {
+			return nil, err
+		}
+		p.selects = append(p.selects, expr+" AS "+alias)
+		p.innerPos[name] = len(p.selects)
+	}
 	for _, f := range q.Filters {
 		owner := ownerModel(owners[f.Field], base, models)
 		ownerAlias, err := d.QuoteIdent(owner.Slug)
@@ -357,7 +427,7 @@ func planJoined(q semantic.ExploreQuery, base semantic.Model, models map[string]
 			if mt.Derived != nil {
 				continue // outer query
 			}
-			expr, err := metricExpr(d, *mt, base.Dimensions, baseAlias)
+			expr, err := metricExpr(d, *mt, owner.Dimensions, ownerAlias)
 			if err != nil {
 				return nil, err
 			}

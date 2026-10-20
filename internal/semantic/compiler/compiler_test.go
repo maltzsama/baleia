@@ -370,3 +370,45 @@ func TestCompileCalculatedField(t *testing.T) {
 		t.Errorf("base metrics needed by the calculated field are missing:\n%s", got.SQL)
 	}
 }
+
+func TestCompileOneToManyJoinedMetric(t *testing.T) {
+	m := models()
+	orders := m["orders"]
+	orders.Joins = append(orders.Joins, semantic.Join{
+		To:           "order_items",
+		Relationship: semantic.OneToMany,
+		On:           []semantic.JoinKey{{From: "order_id", To: "order_id"}},
+	})
+	m["orders"] = orders
+	m["order_items"] = semantic.Model{
+		Slug: "order_items", CatalogID: "cat", BindingID: "bind", PrimaryKey: []string{"id"},
+		Source:     semantic.ModelSource{Kind: semantic.SourceTable, Namespace: []string{"sales"}, Table: "order_items"},
+		Dimensions: []semantic.Dimension{{Name: "quantity", Type: dialect.TypeInt64}},
+		Metrics:    []semantic.Metric{{Name: "quantity_sum", Aggregation: dialect.AggSum, Dimension: "quantity"}},
+	}
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"quantity_sum"}}
+	got, err := Compile(q, m, pg(t), Options{Catalog: "lake"})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	for _, want := range []string{
+		`SELECT "orders"."status" AS "status", SUM("order_items"."quantity") AS "quantity_sum"`,
+		`LEFT JOIN "sales"."order_items" "order_items" ON "orders"."order_id" = "order_items"."order_id"`,
+		`GROUP BY "orders"."status"`,
+	} {
+		if !strings.Contains(got.SQL, want) {
+			t.Errorf("SQL missing %q:\n%s", want, got.SQL)
+		}
+	}
+}
+
+func TestCompileRejectsBaseMetricWithOneToMany(t *testing.T) {
+	m := models()
+	orders := m["orders"]
+	orders.Joins[0].Relationship = semantic.OneToMany
+	m["orders"] = orders
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"segment"}, Metrics: []string{"orders"}}
+	if _, err := Compile(q, m, pg(t), Options{}); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("Compile = %v, want ErrUnsupported", err)
+	}
+}
