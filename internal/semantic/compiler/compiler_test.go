@@ -42,6 +42,9 @@ func models() map[string]semantic.Model {
 			{Name: "customer_id", Type: dialect.TypeInt64},
 			{Name: "segment", Type: dialect.TypeString},
 		},
+		Metrics: []semantic.Metric{
+			{Name: "customer_count", Aggregation: dialect.AggCount},
+		},
 	}
 	return map[string]semantic.Model{"orders": orders, "customers": customers}
 }
@@ -121,15 +124,82 @@ func TestCompileMetricFilterUsesHaving(t *testing.T) {
 	}
 }
 
-func TestCompileRejectsJoinedFields(t *testing.T) {
+func TestCompileJoinDimension(t *testing.T) {
+	q := semantic.ExploreQuery{
+		Model:      "orders",
+		Dimensions: []string{"status", "segment"},
+		Metrics:    []string{"revenue"},
+		Sorts:      []semantic.Sort{{Field: "segment"}},
+		Limit:      20,
+	}
+	got, err := Compile(q, models(), pg(t), Options{Catalog: "lake"})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	for _, want := range []string{
+		`SELECT "orders"."status" AS "status", "customers"."segment" AS "segment", SUM("orders"."order_id") AS "revenue"`,
+		`FROM "sales"."orders" AS "orders" LEFT JOIN "sales"."customers" AS "customers" ON "orders"."customer_id" = "customers"."customer_id"`,
+		`GROUP BY 1, 2`,
+		`ORDER BY 2`,
+		`LIMIT 20`,
+	} {
+		if !strings.Contains(got.SQL, want) {
+			t.Errorf("SQL missing %q:\n%s", want, got.SQL)
+		}
+	}
+}
+
+func TestCompileJoinFilterOnJoinedDimension(t *testing.T) {
 	q := semantic.ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"segment"},
-		Metrics:    []string{"revenue"},
+		Metrics:    []string{"orders"},
+		Filters:    []semantic.ExploreFilter{{Field: "segment", Op: semantic.OpEq, Values: []any{"enterprise"}}},
 	}
+	got, err := Compile(q, models(), pg(t), Options{})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	if !strings.Contains(got.SQL, `WHERE "customers"."segment" = 'enterprise'`) {
+		t.Errorf("SQL missing the joined filter:\n%s", got.SQL)
+	}
+}
+
+func TestCompileRejectsJoinedMetrics(t *testing.T) {
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"segment"}, Metrics: []string{"customer_count"}}
 	_, err := Compile(q, models(), pg(t), Options{})
 	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("Compile = %v, want ErrUnsupported", err)
+	}
+}
+
+func TestCompileRejectsOneToManyJoin(t *testing.T) {
+	m := models()
+	orders := m["orders"]
+	orders.Joins[0].Relationship = semantic.OneToMany
+	m["orders"] = orders
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"segment"}, Metrics: []string{"orders"}}
+	_, err := Compile(q, m, pg(t), Options{})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("Compile = %v, want ErrUnsupported", err)
+	}
+}
+
+func TestCompileRejectsChainedJoin(t *testing.T) {
+	m := models()
+	customers := m["customers"]
+	customers.Joins = []semantic.Join{{To: "regions", Relationship: semantic.ManyToOne, On: []semantic.JoinKey{{From: "region_id", To: "region_id"}}}}
+	m["customers"] = customers
+	m["regions"] = semantic.Model{
+		Slug: "regions", CatalogID: "cat", BindingID: "bind", PrimaryKey: []string{"region_id"},
+		Source:     semantic.ModelSource{Kind: semantic.SourceTable, Table: "regions"},
+		Dimensions: []semantic.Dimension{{Name: "region_id", Type: dialect.TypeInt64}, {Name: "region", Type: dialect.TypeString}},
+	}
+	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"region"}, Metrics: []string{"orders"}}
+	// Chained fields are not reachable from the base yet: validation rejects
+	// them instead of compiling SQL against an ambiguous join tree.
+	if _, err := Compile(q, m, pg(t), Options{}); !errors.Is(err, semantic.ErrInvalidExplore) {
+		t.Fatalf("Compile = %v, want ErrInvalidExplore", err)
 	}
 }
 
@@ -159,7 +229,7 @@ func TestCompileRejectsUnselectedSort(t *testing.T) {
 func TestCompileEveryDialect(t *testing.T) {
 	q := semantic.ExploreQuery{
 		Model:      "orders",
-		Dimensions: []string{"status"},
+		Dimensions: []string{"status", "segment"},
 		Metrics:    []string{"revenue", "orders"},
 		Filters:    []semantic.ExploreFilter{{Field: "status", Op: semantic.OpEq, Values: []any{"paid"}}},
 		Sorts:      []semantic.Sort{{Field: "revenue", Desc: true}},
