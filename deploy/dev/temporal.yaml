@@ -72,6 +72,15 @@ spec:
           image: temporalio/ui:latest
           env:
             - { name: TEMPORAL_ADDRESS, value: "temporal.baleia-dev.svc:7233" }
+            # The Service below is named "temporal-ui", so the kubelet injects
+            # TEMPORAL_UI_PORT=tcp://<ip>:8080 into every pod of this
+            # namespace — the same name the UI server uses for its own listen
+            # port. The injected value is a string, the config field is an
+            # int, and the server dies with "config file corrupted: ...
+            # cannot unmarshal !!str `tcp://1...` into int". Setting the
+            # variable explicitly wins over the injected one: the kubelet
+            # never overrides a name the container spec already defines.
+            - { name: TEMPORAL_UI_PORT, value: "8080" }
           ports:
             - { containerPort: 8080 }
 ---
