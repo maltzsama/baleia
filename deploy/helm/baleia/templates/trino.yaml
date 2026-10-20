@@ -90,6 +90,15 @@ spec:
                 secretKeyRef:
                   name: {{ include "baleia.secretName" . }}
                   key: BALEIA_TRINO_DB_PASSWORD
+            # Phase B (#200): the plugin decrypts @baleia-enc[...] values with
+            # this key. Optional so Phase A deployments keep booting; enable the
+            # matching property in catalog-store.properties when set.
+            - name: BALEIA_REGISTRY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_REGISTRY_KEY
+                  optional: true
             - name: JAVA_OPTS
               value: "-Xmx{{ .Values.trino.jvmHeap }}"
             # Trino's S3 filesystem auto-detects the region through the EC2

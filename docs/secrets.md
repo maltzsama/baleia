@@ -49,3 +49,37 @@ sides, so Baleia and the plugin agree; a divergence surfaces as
 
 `BALEIA_SECRET_FILE_BASE_DIR` is the directory `file:` references resolve
 under. Without it, `file:` references are unavailable; `env:` still works.
+
+## Catalog registry at rest (Phase B, #200 / D4)
+
+`trino_catalog_registry` rows can still hold **catalog-origin** resolved
+secrets (values Baleia decrypts from `catalog_connections` and projects). Phase
+B seals those at rest with a key **dedicated** to the registry:
+
+```bash
+BALEIA_REGISTRY_KEY=<32+ random chars>            # required to enable Phase B
+BALEIA_REGISTRY_KEY_PREVIOUS=<old key>            # only during a rotation
+```
+
+- The key is **never** `JWT_SECRET` and **never** `BALEIA_ENCRYPTION_KEY`;
+  startup rejects either reuse.
+- Derivation: `HKDF-SHA256(ikm=BALEIA_REGISTRY_KEY, salt=nil,
+  info="baleia/registry/v1", length=32)` → AES-256-GCM key. The key id is the
+  first 8 hex chars of `SHA-256(derived key)`.
+- A sealed value is stored as `@baleia-enc[v1:<key-id>:<base64(nonce|ct)>]`.
+  Baleia seals every property listed in the projection's secret keys; external
+  `@baleia-secret[...]` references and already-sealed values are left alone.
+- `catalog_version` is still hashed over the **resolved** values on both sides.
+  Baleia hashes the plaintext before sealing; the plugin hashes the decrypted
+  values it loads, so the hashes agree. A mismatch stays an explicit
+  `secret_mismatch`, never silent drift.
+- Empty `BALEIA_REGISTRY_KEY` keeps Phase A (plaintext rows). Enable Phase B
+  only after upgrading to a plugin release that understands `@baleia-enc[...]`,
+  then uncomment `baleia.registry-key=${ENV:BALEIA_REGISTRY_KEY}` in
+  `catalog-store.properties`.
+
+**Rotation.** Set the new key as `BALEIA_REGISTRY_KEY` and the old one as
+`BALEIA_REGISTRY_KEY_PREVIOUS`. Both Baleia and the plugin read with either
+key and seal with the current one, so existing rows keep opening while they are
+rewritten. Once every row has been re-sealed, drop `_PREVIOUS`.
+

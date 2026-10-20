@@ -2,6 +2,8 @@
 # Secrets keys when secrets.create is true or existingSecret is set:
 #   JWT_SECRET, BALEIA_ENCRYPTION_KEY (>= 32 chars, differs from JWT_SECRET),
 #   BALEIA_ENCRYPTION_KEY_PREVIOUS (rotation only), DATABASE_URL, BALEIA_TRINO_DB_PASSWORD,
+#   BALEIA_REGISTRY_KEY (Phase B registry encryption, >= 32 chars, differs from
+#   JWT_SECRET and BALEIA_ENCRYPTION_KEY), BALEIA_REGISTRY_KEY_PREVIOUS (rotation only),
 #   S3_ACCESS_KEY, S3_SECRET_KEY, SMTP_PASSWORD (optional)
 
 image:
