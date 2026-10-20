@@ -603,9 +603,18 @@ type ServerInterface interface {
 	// Models of the workspace — workspace members
 	// (GET /workspaces/{id}/semantic/models)
 	ListSemanticModels(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticModelsParams)
+	// Create and validate a model — space editor
+	// (POST /workspaces/{id}/semantic/models)
+	CreateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId)
+	// Delete a model — space editor
+	// (DELETE /workspaces/{id}/semantic/models/{model_id})
+	DeleteSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID)
 	// Return a model — space viewer
 	// (GET /workspaces/{id}/semantic/models/{model_id})
 	GetSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID)
+	// Update and revalidate a model — space editor
+	// (PATCH /workspaces/{id}/semantic/models/{model_id})
+	UpdateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID)
 	// Tags used by docs on catalogs the workspace may use
 	// (GET /workspaces/{id}/semantic/tags)
 	ListSemanticTags(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticTagsParams)
@@ -1827,9 +1836,27 @@ func (_ Unimplemented) ListSemanticModels(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Create and validate a model — space editor
+// (POST /workspaces/{id}/semantic/models)
+func (_ Unimplemented) CreateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a model — space editor
+// (DELETE /workspaces/{id}/semantic/models/{model_id})
+func (_ Unimplemented) DeleteSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Return a model — space viewer
 // (GET /workspaces/{id}/semantic/models/{model_id})
 func (_ Unimplemented) GetSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update and revalidate a model — space editor
+// (PATCH /workspaces/{id}/semantic/models/{model_id})
+func (_ Unimplemented) UpdateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9429,6 +9456,81 @@ func (siw *ServerInterfaceWrapper) ListSemanticModels(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// CreateSemanticModel operation middleware
+func (siw *ServerInterfaceWrapper) CreateSemanticModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSemanticModel(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSemanticModel operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSemanticModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model_id" -------------
+	var modelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model_id", chi.URLParam(r, "model_id"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSemanticModel(w, r, id, modelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSemanticModel operation middleware
 func (siw *ServerInterfaceWrapper) GetSemanticModel(w http.ResponseWriter, r *http.Request) {
 
@@ -9462,6 +9564,48 @@ func (siw *ServerInterfaceWrapper) GetSemanticModel(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSemanticModel(w, r, id, modelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSemanticModel operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSemanticModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model_id" -------------
+	var modelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model_id", chi.URLParam(r, "model_id"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSemanticModel(w, r, id, modelId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10857,7 +11001,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/workspaces/{id}/semantic/models", wrapper.ListSemanticModels)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/semantic/models", wrapper.CreateSemanticModel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}", wrapper.DeleteSemanticModel)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}", wrapper.GetSemanticModel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}", wrapper.UpdateSemanticModel)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/semantic/tags", wrapper.ListSemanticTags)
@@ -19284,6 +19437,114 @@ func (response ListSemanticModels422JSONResponse) VisitListSemanticModelsRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateSemanticModelRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateSemanticModelJSONRequestBody
+}
+
+type CreateSemanticModelResponseObject interface {
+	VisitCreateSemanticModelResponse(w http.ResponseWriter) error
+}
+
+type CreateSemanticModel201JSONResponse SemanticModel
+
+func (response CreateSemanticModel201JSONResponse) VisitCreateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticModel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateSemanticModel401JSONResponse) VisitCreateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticModel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSemanticModel403JSONResponse) VisitCreateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticModel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateSemanticModel404JSONResponse) VisitCreateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticModel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateSemanticModel409JSONResponse) VisitCreateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSemanticModel422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateSemanticModel422JSONResponse) VisitCreateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticModelRequestObject struct {
+	Id      PathId             `json:"id"`
+	ModelId openapi_types.UUID `json:"model_id"`
+}
+
+type DeleteSemanticModelResponseObject interface {
+	VisitDeleteSemanticModelResponse(w http.ResponseWriter) error
+}
+
+type DeleteSemanticModel204Response = NoContentResponse
+
+func (response DeleteSemanticModel204Response) VisitDeleteSemanticModelResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSemanticModel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSemanticModel401JSONResponse) VisitDeleteSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticModel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSemanticModel403JSONResponse) VisitDeleteSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticModel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSemanticModel404JSONResponse) VisitDeleteSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetSemanticModelRequestObject struct {
 	Id      PathId             `json:"id"`
 	ModelId openapi_types.UUID `json:"model_id"`
@@ -19325,6 +19586,72 @@ type GetSemanticModel404JSONResponse struct{ NotFoundJSONResponse }
 func (response GetSemanticModel404JSONResponse) VisitGetSemanticModelResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticModelRequestObject struct {
+	Id      PathId             `json:"id"`
+	ModelId openapi_types.UUID `json:"model_id"`
+	Body    *UpdateSemanticModelJSONRequestBody
+}
+
+type UpdateSemanticModelResponseObject interface {
+	VisitUpdateSemanticModelResponse(w http.ResponseWriter) error
+}
+
+type UpdateSemanticModel200JSONResponse SemanticModel
+
+func (response UpdateSemanticModel200JSONResponse) VisitUpdateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticModel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateSemanticModel401JSONResponse) VisitUpdateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticModel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateSemanticModel403JSONResponse) VisitUpdateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticModel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateSemanticModel404JSONResponse) VisitUpdateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticModel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateSemanticModel409JSONResponse) VisitUpdateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateSemanticModel422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateSemanticModel422JSONResponse) VisitUpdateSemanticModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -20565,9 +20892,18 @@ type StrictServerInterface interface {
 	// Models of the workspace — workspace members
 	// (GET /workspaces/{id}/semantic/models)
 	ListSemanticModels(ctx context.Context, request ListSemanticModelsRequestObject) (ListSemanticModelsResponseObject, error)
+	// Create and validate a model — space editor
+	// (POST /workspaces/{id}/semantic/models)
+	CreateSemanticModel(ctx context.Context, request CreateSemanticModelRequestObject) (CreateSemanticModelResponseObject, error)
+	// Delete a model — space editor
+	// (DELETE /workspaces/{id}/semantic/models/{model_id})
+	DeleteSemanticModel(ctx context.Context, request DeleteSemanticModelRequestObject) (DeleteSemanticModelResponseObject, error)
 	// Return a model — space viewer
 	// (GET /workspaces/{id}/semantic/models/{model_id})
 	GetSemanticModel(ctx context.Context, request GetSemanticModelRequestObject) (GetSemanticModelResponseObject, error)
+	// Update and revalidate a model — space editor
+	// (PATCH /workspaces/{id}/semantic/models/{model_id})
+	UpdateSemanticModel(ctx context.Context, request UpdateSemanticModelRequestObject) (UpdateSemanticModelResponseObject, error)
 	// Tags used by docs on catalogs the workspace may use
 	// (GET /workspaces/{id}/semantic/tags)
 	ListSemanticTags(ctx context.Context, request ListSemanticTagsRequestObject) (ListSemanticTagsResponseObject, error)
@@ -26138,6 +26474,66 @@ func (sh *strictHandler) ListSemanticModels(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// CreateSemanticModel operation middleware
+func (sh *strictHandler) CreateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateSemanticModelRequestObject
+
+	request.Id = id
+
+	var body CreateSemanticModelJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSemanticModel(ctx, request.(CreateSemanticModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSemanticModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSemanticModelResponseObject); ok {
+		if err := validResponse.VisitCreateSemanticModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSemanticModel operation middleware
+func (sh *strictHandler) DeleteSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID) {
+	var request DeleteSemanticModelRequestObject
+
+	request.Id = id
+	request.ModelId = modelId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSemanticModel(ctx, request.(DeleteSemanticModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSemanticModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSemanticModelResponseObject); ok {
+		if err := validResponse.VisitDeleteSemanticModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetSemanticModel operation middleware
 func (sh *strictHandler) GetSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID) {
 	var request GetSemanticModelRequestObject
@@ -26158,6 +26554,40 @@ func (sh *strictHandler) GetSemanticModel(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSemanticModelResponseObject); ok {
 		if err := validResponse.VisitGetSemanticModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateSemanticModel operation middleware
+func (sh *strictHandler) UpdateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID) {
+	var request UpdateSemanticModelRequestObject
+
+	request.Id = id
+	request.ModelId = modelId
+
+	var body UpdateSemanticModelJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateSemanticModel(ctx, request.(UpdateSemanticModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateSemanticModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateSemanticModelResponseObject); ok {
+		if err := validResponse.VisitUpdateSemanticModelResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -133,6 +133,39 @@ func (q *Queries) GetSemanticMetricForUpdate(ctx context.Context, arg GetSemanti
 	return i, err
 }
 
+const getSemanticModelForUpdate = `-- name: GetSemanticModelForUpdate :one
+SELECT id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at FROM semantic_models WHERE id = $1::uuid AND workspace_id = $2::uuid FOR UPDATE
+`
+
+type GetSemanticModelForUpdateParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) GetSemanticModelForUpdate(ctx context.Context, arg GetSemanticModelForUpdateParams) (SemanticModel, error) {
+	row := q.db.QueryRow(ctx, getSemanticModelForUpdate, arg.ID, arg.WorkspaceID)
+	var i SemanticModel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SpaceID,
+		&i.Slug,
+		&i.Label,
+		&i.Description,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Definition,
+		&i.FormatVersion,
+		&i.OwnerUserID,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertContentVersion = `-- name: InsertContentVersion :one
 
 INSERT INTO content_versions (
@@ -528,6 +561,75 @@ func (q *Queries) RestoreSemanticMetric(ctx context.Context, arg RestoreSemantic
 		&i.SpaceID,
 		&i.CertifiedBy,
 		&i.CertifiedAt,
+	)
+	return i, err
+}
+
+const restoreSemanticModel = `-- name: RestoreSemanticModel :one
+INSERT INTO semantic_models (
+    id, workspace_id, space_id, slug, label, description, certified, catalog_id,
+    binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+)
+VALUES (
+    $1::uuid, $2::uuid, $3::uuid, $4::text, $5::text,
+    $6::text, $7::boolean, $8::uuid,
+    $9::uuid, $10::jsonb,
+    $11::int, $12::uuid, $13::uuid, now()
+)
+RETURNING id, workspace_id, space_id, slug, label, description, certified, certified_by, certified_at, catalog_id, binding_id, definition, format_version, owner_user_id, updated_by, updated_at
+`
+
+type RestoreSemanticModelParams struct {
+	ID            pgtype.UUID `json:"id"`
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	SpaceID       pgtype.UUID `json:"space_id"`
+	Slug          string      `json:"slug"`
+	Label         string      `json:"label"`
+	Description   string      `json:"description"`
+	Certified     bool        `json:"certified"`
+	CatalogID     pgtype.UUID `json:"catalog_id"`
+	BindingID     pgtype.UUID `json:"binding_id"`
+	Definition    []byte      `json:"definition"`
+	FormatVersion int32       `json:"format_version"`
+	OwnerUserID   pgtype.UUID `json:"owner_user_id"`
+	UpdatedBy     pgtype.UUID `json:"updated_by"`
+}
+
+// Recreate a deleted model with its old id, so versions and links still line up.
+func (q *Queries) RestoreSemanticModel(ctx context.Context, arg RestoreSemanticModelParams) (SemanticModel, error) {
+	row := q.db.QueryRow(ctx, restoreSemanticModel,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.SpaceID,
+		arg.Slug,
+		arg.Label,
+		arg.Description,
+		arg.Certified,
+		arg.CatalogID,
+		arg.BindingID,
+		arg.Definition,
+		arg.FormatVersion,
+		arg.OwnerUserID,
+		arg.UpdatedBy,
+	)
+	var i SemanticModel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SpaceID,
+		&i.Slug,
+		&i.Label,
+		&i.Description,
+		&i.Certified,
+		&i.CertifiedBy,
+		&i.CertifiedAt,
+		&i.CatalogID,
+		&i.BindingID,
+		&i.Definition,
+		&i.FormatVersion,
+		&i.OwnerUserID,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

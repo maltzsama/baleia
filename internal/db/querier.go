@@ -233,6 +233,7 @@ type Querier interface {
 	GetSemanticMetricForUpdate(ctx context.Context, arg GetSemanticMetricForUpdateParams) (SemanticMetric, error)
 	GetSemanticModel(ctx context.Context, arg GetSemanticModelParams) (SemanticModel, error)
 	GetSemanticModelBySlug(ctx context.Context, arg GetSemanticModelBySlugParams) (SemanticModel, error)
+	GetSemanticModelForUpdate(ctx context.Context, arg GetSemanticModelForUpdateParams) (SemanticModel, error)
 	GetSpace(ctx context.Context, arg GetSpaceParams) (Space, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
 	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
@@ -465,6 +466,8 @@ type Querier interface {
 	// history still line up.
 	RestoreSavedQuery(ctx context.Context, arg RestoreSavedQueryParams) (SavedQuery, error)
 	RestoreSemanticMetric(ctx context.Context, arg RestoreSemanticMetricParams) (SemanticMetric, error)
+	// Recreate a deleted model with its old id, so versions and links still line up.
+	RestoreSemanticModel(ctx context.Context, arg RestoreSemanticModelParams) (SemanticModel, error)
 	RevokeAgentToken(ctx context.Context, arg RevokeAgentTokenParams) error
 	RevokeRefreshFamily(ctx context.Context, familyID pgtype.UUID) error
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error

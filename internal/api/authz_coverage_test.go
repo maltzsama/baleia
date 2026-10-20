@@ -244,6 +244,9 @@ var operationAccess = map[string]access{
 	"ListSemanticModels":  checked("metadataWorkspace", "ListVisibleSemanticModels"),
 	"GetSemanticModel":    checked("metadataWorkspace", "GetSemanticModel", "contentSpace"),
 	"CompileExploreQuery": checked("metadataWorkspace", "ListVisibleSemanticModels", "semanticTarget"),
+	"CreateSemanticModel": checked("metadataWorkspace", "semanticCatalog", "visibleModels", "contentSpace"),
+	"UpdateSemanticModel": checked("metadataWorkspace", "GetSemanticModel", "semanticCatalog", "visibleModels", "contentSpace"),
+	"DeleteSemanticModel": checked("metadataWorkspace", "GetSemanticModel", "contentSpace", "DeleteSemanticModel"),
 	// Spaces (#40): the effective role comes from the SQL function through
 	// internal/authz. Invisible is 404, below the required role is 403.
 	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "ListSpacesForPrincipal"),

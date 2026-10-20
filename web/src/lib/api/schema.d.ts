@@ -1503,7 +1503,11 @@ export interface paths {
         /** Models of the workspace — workspace members */
         get: operations["listSemanticModels"];
         put?: never;
-        post?: never;
+        /**
+         * Create and validate a model — space editor
+         * @description The definition is validated structurally (DisallowUnknownFields) and against the models already visible in the workspace (join targets and field uniqueness). No SQL is executed.
+         */
+        post: operations["createSemanticModel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1524,10 +1528,12 @@ export interface paths {
         get: operations["getSemanticModel"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a model — space editor */
+        delete: operations["deleteSemanticModel"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update and revalidate a model — space editor */
+        patch: operations["updateSemanticModel"];
         trace?: never;
     };
     "/workspaces/{id}/semantic/explore/compile": {
@@ -4763,6 +4769,43 @@ export interface components {
             readonly allowed_actions?: string[];
             /** @description Latest content version (#34) */
             version: number;
+        };
+        SemanticModelCreate: {
+            slug: string;
+            label: string;
+            description?: string;
+            certified?: boolean;
+            /**
+             * Format: uuid
+             * @description Omitted: the workspace's default space
+             */
+            space_id?: string | null;
+            /** Format: uuid */
+            catalog_id: string;
+            /** Format: uuid */
+            binding_id?: string | null;
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            owner_user_id?: string | null;
+        };
+        SemanticModelUpdate: {
+            slug?: string;
+            label?: string;
+            description?: string;
+            certified?: boolean;
+            /** Format: uuid */
+            catalog_id?: string;
+            /** Format: uuid */
+            binding_id?: string | null;
+            definition?: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            owner_user_id?: string | null;
+            /** @description Reject with 409 version_conflict when the latest content version differs */
+            expected_version?: number | null;
         };
         /** @description The only input the semantic compiler accepts. Never carries raw SQL. */
         ExploreQuery: {
@@ -8339,6 +8382,37 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    createSemanticModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticModelCreate"];
+            };
+        };
+        responses: {
+            /** @description The model */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticModel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     getSemanticModel: {
         parameters: {
             query?: never;
@@ -8363,6 +8437,56 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSemanticModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSemanticModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticModelUpdate"];
+            };
+        };
+        responses: {
+            /** @description The model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticModel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     compileExploreQuery: {

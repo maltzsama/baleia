@@ -2186,6 +2186,33 @@ components:
         allowed_actions: { type: array, items: { type: string }, readOnly: true }
         version: { type: integer, description: "Latest content version (#34)" }
 
+    SemanticModelCreate:
+      type: object
+      required: [slug, label, catalog_id, definition]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        label: { type: string }
+        description: { type: string }
+        certified: { type: boolean }
+        space_id: { type: string, format: uuid, nullable: true, description: "Omitted: the workspace's default space" }
+        catalog_id: { type: string, format: uuid }
+        binding_id: { type: string, format: uuid, nullable: true }
+        definition: { type: object, additionalProperties: true }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+
+    SemanticModelUpdate:
+      type: object
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        label: { type: string }
+        description: { type: string }
+        certified: { type: boolean }
+        catalog_id: { type: string, format: uuid }
+        binding_id: { type: string, format: uuid, nullable: true }
+        definition: { type: object, additionalProperties: true }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        expected_version: { type: integer, nullable: true, description: "Reject with 409 version_conflict when the latest content version differs" }
+
     ExploreQuery:
       type: object
       required: [model]
@@ -5235,6 +5262,30 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    post:
+      tags: [Semantic]
+      operationId: createSemanticModel
+      summary: "Create and validate a model — space editor"
+      description: >
+        The definition is validated structurally (DisallowUnknownFields) and
+        against the models already visible in the workspace (join targets and
+        field uniqueness). No SQL is executed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticModelCreate" }
+      responses:
+        "201":
+          description: "The model"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticModel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/semantic/models/{model_id}:
     parameters:
@@ -5253,6 +5304,35 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SemanticModel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Semantic]
+      operationId: updateSemanticModel
+      summary: "Update and revalidate a model — space editor"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticModelUpdate" }
+      responses:
+        "200":
+          description: "The model"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticModel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Semantic]
+      operationId: deleteSemanticModel
+      summary: "Delete a model — space editor"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }

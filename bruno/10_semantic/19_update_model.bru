@@ -1,0 +1,28 @@
+meta {
+  name: Update Model
+  type: http
+  seq: 19
+}
+
+patch {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/models/{{model_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "label": "Tracked events",
+    "expected_version": 1
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.label: eq Tracked events
+  res.body.version: eq 2
+}

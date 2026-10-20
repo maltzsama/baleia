@@ -3366,6 +3366,36 @@ type SemanticModel struct {
 	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
+// SemanticModelCreate defines model for SemanticModelCreate.
+type SemanticModelCreate struct {
+	BindingId   *openapi_types.UUID    `json:"binding_id"`
+	CatalogId   openapi_types.UUID     `json:"catalog_id"`
+	Certified   *bool                  `json:"certified,omitempty"`
+	Definition  map[string]interface{} `json:"definition"`
+	Description *string                `json:"description,omitempty"`
+	Label       string                 `json:"label"`
+	OwnerUserId *openapi_types.UUID    `json:"owner_user_id"`
+	Slug        string                 `json:"slug"`
+
+	// SpaceId Omitted: the workspace's default space
+	SpaceId *openapi_types.UUID `json:"space_id"`
+}
+
+// SemanticModelUpdate defines model for SemanticModelUpdate.
+type SemanticModelUpdate struct {
+	BindingId   *openapi_types.UUID     `json:"binding_id"`
+	CatalogId   *openapi_types.UUID     `json:"catalog_id,omitempty"`
+	Certified   *bool                   `json:"certified,omitempty"`
+	Definition  *map[string]interface{} `json:"definition,omitempty"`
+	Description *string                 `json:"description,omitempty"`
+
+	// ExpectedVersion Reject with 409 version_conflict when the latest content version differs
+	ExpectedVersion *int                `json:"expected_version"`
+	Label           *string             `json:"label,omitempty"`
+	OwnerUserId     *openapi_types.UUID `json:"owner_user_id"`
+	Slug            *string             `json:"slug,omitempty"`
+}
+
 // SemanticTag defines model for SemanticTag.
 type SemanticTag struct {
 	Count int    `json:"count"`
@@ -4651,6 +4681,12 @@ type UpdateSemanticMetricJSONRequestBody = SemanticMetricUpdate
 
 // RestoreSemanticMetricVersionJSONRequestBody defines body for RestoreSemanticMetricVersion for application/json ContentType.
 type RestoreSemanticMetricVersionJSONRequestBody = RestoreSemanticMetricRequest
+
+// CreateSemanticModelJSONRequestBody defines body for CreateSemanticModel for application/json ContentType.
+type CreateSemanticModelJSONRequestBody = SemanticModelCreate
+
+// UpdateSemanticModelJSONRequestBody defines body for UpdateSemanticModel for application/json ContentType.
+type UpdateSemanticModelJSONRequestBody = SemanticModelUpdate
 
 // CreateSpaceJSONRequestBody defines body for CreateSpace for application/json ContentType.
 type CreateSpaceJSONRequestBody = CreateSpaceRequest
