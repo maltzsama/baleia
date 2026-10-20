@@ -1,0 +1,27 @@
+meta {
+  name: Compile Explore Unknown Model
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/explore/compile
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "query": {
+      "model": "does_not_exist"
+    }
+  }
+}
+
+assert {
+  res.status: eq 404
+}

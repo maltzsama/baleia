@@ -2158,6 +2158,78 @@ components:
         sql: { type: string }
         portable: { type: boolean, description: "False when the metric uses custom_sql" }
 
+    SemanticModel:
+      type: object
+      required: [id, workspace_id, slug, label, catalog_id, definition, format_version, certified, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        space_id: { type: string, format: uuid, nullable: true }
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" }
+        label: { type: string }
+        description: { type: string }
+        certified: { type: boolean }
+        catalog_id: { type: string, format: uuid }
+        binding_id: { type: string, format: uuid, nullable: true }
+        definition:
+          type: object
+          additionalProperties: true
+          description: >
+            Semantic model v2: source (table or SQL), primary_key, dimensions,
+            metrics and joins. Validated with DisallowUnknownFields.
+        format_version: { type: integer }
+        owner_user_id: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+        certified_by: { type: string, format: uuid, nullable: true }
+        certified_at: { type: string, format: date-time, nullable: true }
+        allowed_actions: { type: array, items: { type: string }, readOnly: true }
+        version: { type: integer, description: "Latest content version (#34)" }
+
+    ExploreQuery:
+      type: object
+      required: [model]
+      description: >
+        The only input the semantic compiler accepts. Never carries raw SQL.
+      properties:
+        model: { type: string, description: "Base model slug" }
+        dimensions: { type: array, items: { type: string } }
+        metrics: { type: array, items: { type: string } }
+        filters:
+          type: array
+          items:
+            type: object
+            required: [field, op]
+            properties:
+              field: { type: string }
+              op: { type: string, enum: ["=", "!=", ">", ">=", "<", "<=", "in", "not_in", "is_null", "is_not_null"] }
+              values: { type: array, items: {} }
+        sorts:
+          type: array
+          items:
+            type: object
+            required: [field]
+            properties:
+              field: { type: string }
+              desc: { type: boolean }
+        limit: { type: integer, minimum: 0 }
+        time_grain: { type: string, nullable: true }
+
+    ExploreCompileRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { $ref: "#/components/schemas/ExploreQuery" }
+        binding_id: { type: string, format: uuid, nullable: true, description: "Defaults to the base model's binding" }
+
+    ExploreCompileResult:
+      type: object
+      required: [sql, dialect]
+      properties:
+        sql: { type: string }
+        notes: { type: array, items: { type: string } }
+        dialect: { type: string }
+
     MetadataSyncStarted:
       type: object
       required: [catalog_id, workflow_id]
@@ -5139,6 +5211,77 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/models:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Semantic]
+      operationId: listSemanticModels
+      summary: "Models of the workspace — workspace members"
+      parameters:
+        - name: space_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "Models, ordered by label"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SemanticModel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/models/{model_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: model_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Semantic]
+      operationId: getSemanticModel
+      summary: "Return a model — space viewer"
+      responses:
+        "200":
+          description: "The model"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SemanticModel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/semantic/explore/compile:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Semantic]
+      operationId: compileExploreQuery
+      summary: "Compile an explore query to SQL — space viewer"
+      description: >
+        Resolves the base model and its joined models by slug, validates the
+        explore query, and renders SQL for the binding's dialect. The query
+        never carries raw SQL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExploreCompileRequest" }
+      responses:
+        "200":
+          description: "The compiled SQL and compiler notes"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExploreCompileResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/trash:

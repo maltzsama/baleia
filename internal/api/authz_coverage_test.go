@@ -239,6 +239,11 @@ var operationAccess = map[string]access{
 	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
 	"DeleteSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "contentSpace", "DeleteSemanticMetric"),
 	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget", "contentSpace"),
+	// Semantic models v2 (#91) are content items; compile resolves visible
+	// models and the base model's binding, then renders through the compiler.
+	"ListSemanticModels":  checked("metadataWorkspace", "ListVisibleSemanticModels"),
+	"GetSemanticModel":    checked("metadataWorkspace", "GetSemanticModel", "contentSpace"),
+	"CompileExploreQuery": checked("metadataWorkspace", "ListVisibleSemanticModels", "semanticTarget"),
 	// Spaces (#40): the effective role comes from the SQL function through
 	// internal/authz. Invisible is 404, below the required role is 403.
 	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "ListSpacesForPrincipal"),

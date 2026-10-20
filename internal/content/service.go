@@ -30,6 +30,7 @@ const (
 
 	EntitySavedQuery     = "saved_query"
 	EntitySemanticMetric = "semantic_metric"
+	EntitySemanticModel  = "semantic_model"
 )
 
 var (
