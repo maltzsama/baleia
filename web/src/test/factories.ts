@@ -119,7 +119,7 @@ export function makeMe(overrides: Partial<Me> = {}): Me {
 		name: 'Ada Lovelace',
 		email: 'ada@example.com',
 		role: 'admin',
-		auth_provider: 'password',
+		auth_provider: 'local',
 		created_at: '2026-01-01T00:00:00Z',
 		features: { agents: false, assistant: false, retrievers: true },
 		global_actions: [

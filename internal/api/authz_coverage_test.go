@@ -92,7 +92,7 @@ var operationAccess = map[string]access{
 	"CreateApiKey":            {kind: kindSelf, calls: selfID},
 	"DeleteApiKey":            {kind: kindSelf, calls: selfID},
 	"ListWorkspaces":          {kind: kindSelf, calls: selfID},
-	"ListCatalogConnections":  {kind: kindSelf, calls: selfID},        // only the connections the caller created
+	"ListCatalogConnections":  {kind: kindSelf, calls: selfPrincipal}, // the caller's connections; admin sees all
 	"CreateCatalogConnection": {kind: kindSelf, calls: selfID},        // any user; becomes the owner
 	"ListTeams":               {kind: kindSelf, calls: selfPrincipal}, // the caller's teams; admin sees all
 	"ListAttention":           {kind: kindSelf, calls: selfPrincipal}, // items scoped to what the caller can act on

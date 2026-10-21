@@ -30,13 +30,12 @@ import (
 )
 
 func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
-	uid, err := uuidFromString(userID)
+	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	conns, err := h.queries.ListCatalogConnections(ctx, uid)
+	conns, err := h.queries.ListVisibleCatalogConnections(ctx, db.ListVisibleCatalogConnectionsParams{IsAdmin: p.IsAdmin(), UserID: p.UserID})
 	if err != nil {
 		return nil, err
 	}

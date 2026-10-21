@@ -405,6 +405,10 @@ type Querier interface {
 	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) ([]User, error)
+	// The connections the caller may view: their own, and every one for an admin
+	// (as authz.Connection and ListVisibleCatalogs), including the bootstrap
+	// connection that has no owner.
+	ListVisibleCatalogConnections(ctx context.Context, arg ListVisibleCatalogConnectionsParams) ([]CatalogConnection, error)
 	// Every logical catalog the caller may view: all for an admin, the caller's
 	// connections, and catalogs granted to a workspace the caller belongs to (#109).
 	ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalogsParams) ([]Catalog, error)

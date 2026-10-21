@@ -209,18 +209,22 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db
 		return db.Catalog{}, db.CatalogBinding{}, err
 	}
 
-	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
-	if err != nil {
-		return db.Catalog{}, db.CatalogBinding{}, err
+	// The member and the admin can both query tpch from their own workspace.
+	for _, user := range []db.User{member, admin} {
+		workspaceID, err := q.PersonalWorkspaceID(ctx, user.ID)
+		if err != nil {
+			return db.Catalog{}, db.CatalogBinding{}, err
+		}
+		if _, err := q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
+			WorkspaceID: workspaceID,
+			CatalogID:   catalog.ID,
+			Permission:  "read",
+			GrantedBy:   admin.ID,
+		}); err != nil {
+			return db.Catalog{}, db.CatalogBinding{}, err
+		}
 	}
-
-	_, err = q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
-		WorkspaceID: workspaceID,
-		CatalogID:   catalog.ID,
-		Permission:  "read",
-		GrantedBy:   admin.ID,
-	})
-	return catalog, binding, err
+	return catalog, binding, nil
 }
 
 // e2eTrinoCatalog is the seeded catalog's name in Trino; the registry

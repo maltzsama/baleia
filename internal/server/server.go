@@ -289,8 +289,10 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 			}
 		}
 
+		// A route that is also a build directory (/connections holds the
+		// prerendered connections/new.html) is the app, never a listing.
 		fullPath := dir + path
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		if info, err := os.Stat(fullPath); os.IsNotExist(err) || (err == nil && info.IsDir()) {
 			http.ServeFile(w, r, filepath.Join(dir, "app.html"))
 			return
 		}

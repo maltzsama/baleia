@@ -108,3 +108,25 @@ func TestStaticAPIAndAssets(t *testing.T) {
 		t.Fatalf("GET /asset.js = %d %q", rec.Code, rec.Body.String())
 	}
 }
+
+// A route that is also a build directory (/connections holds the prerendered
+// connections/new.html) used to answer with the directory listing.
+func TestStaticDirectoryRouteServesTheApp(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "app.html"), []byte("<app-shell>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "connections"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "connections", "new.html"), []byte("<new>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	handler := staticHandler(fakeStaticUsers{users: []db.User{{}}}, dir)
+	for _, target := range []string{"/connections", "/connections/"} {
+		rec := serve(handler, http.MethodGet, target)
+		if rec.Code != http.StatusOK || rec.Body.String() != "<app-shell>" {
+			t.Fatalf("GET %s = %d %q, want the app shell", target, rec.Code, rec.Body.String())
+		}
+	}
+}

@@ -41,7 +41,10 @@ function createAuthStore() {
 	}
 
 	async function load() {
-		loading = true;
+		// Only the first load is a loading state: a refresh keeps the user on
+		// screen, so views gated on `loading` (settings) do not remount and
+		// reload in a loop.
+		if (!user) loading = true;
 		try {
 			const { data } = await client.GET('/auth/me');
 			user = (data as AuthUser | undefined) ?? null;

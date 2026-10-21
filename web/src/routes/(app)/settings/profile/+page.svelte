@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { onMount } from 'svelte';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { localeStore } from '$lib/i18n/locale.svelte';
 	import { authStore, type AuthUser } from '$lib/stores/auth.svelte';
@@ -19,20 +18,14 @@
 	let error = $state('');
 	let successMsg = $state('');
 
-	let name = $state('');
-	let email = $state('');
+	// The settings layout renders this page once the user is loaded.
+	let name = $state(authStore.user?.name ?? '');
+	let email = $state(authStore.user?.email ?? '');
 	let locale = $state(authStore.user?.locale ?? localeStore.current);
 
 	let currentPassword = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
-
-	onMount(async () => {
-		await authStore.load();
-		name = authStore.user?.name ?? '';
-		email = authStore.user?.email ?? '';
-		locale = authStore.user?.locale ?? localeStore.current;
-	});
 
 	async function saveProfile() {
 		saving = true;
@@ -118,7 +111,7 @@
 					label={m.common_email()}
 					type="email"
 					bind:value={email}
-					disabled={authStore.user?.auth_provider !== 'password'}
+					disabled={authStore.user?.auth_provider !== 'local'}
 				/>
 			</div>
 			<div class="flex justify-end mt-2">
@@ -144,7 +137,7 @@
 			</p>
 		</section>
 
-		{#if authStore.user?.auth_provider === 'password'}
+		{#if authStore.user?.auth_provider === 'local'}
 			<section class="bg-slate-50 border border-border rounded-lg pt-5 px-5 pb-4 mb-4">
 				<h2 class="text-[13px] font-semibold text-text-muted uppercase tracking-[0.04em] mb-4">
 					{m.settings_profile_change_password()}
