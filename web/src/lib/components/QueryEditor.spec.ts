@@ -156,10 +156,59 @@ describe('QueryEditor', () => {
 		render(QueryEditor);
 		await screen.findByText('trino · trino');
 
-		await fireEvent.click(screen.getByRole('button', { name: /Run/ }));
+		await fireEvent.click(screen.getByTestId('run-all'));
 
 		await waitFor(() => expect(captured.body).toBeDefined());
 		expect(captured.body?.target).toEqual({ binding_id: BINDING, schema: 'sales' });
+	});
+
+	// #395: Run is the statement at the cursor (or the selection), Run all the
+	// whole script, as ⌘↵ and ⇧⌘↵.
+	function captureRuns(sent: string[]) {
+		server.use(
+			http.post('/dialects/{name}/split', ({ response }) =>
+				response(200).json([
+					{ start: 0, end: 9 },
+					{ start: 10, end: 18 }
+				])
+			),
+			http.post('/workspaces/{id}/executions', async ({ request, response }) => {
+				const body = (await request.json()) as { sql: string };
+				sent.push(body.sql);
+				return response(202).json({
+					id: EXECUTION,
+					workspace_id: WS,
+					status: 'running',
+					sql: body.sql,
+					started_at: '2026-01-01T00:00:00Z'
+				});
+			})
+		);
+	}
+
+	it('runs only the statement at the cursor with Run', async () => {
+		mockWorkbench();
+		const sent: string[] = [];
+		captureRuns(sent);
+		editor.updateSql(editor.activeId, 'SELECT 1;\nSELECT 2');
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		// The cursor starts at the top: the first statement.
+		await fireEvent.click(screen.getByTestId('run-current'));
+		await waitFor(() => expect(sent).toEqual(['SELECT 1;']));
+	});
+
+	it('runs the whole script with Run all', async () => {
+		mockWorkbench();
+		const sent: string[] = [];
+		captureRuns(sent);
+		editor.updateSql(editor.activeId, 'SELECT 1;\nSELECT 2');
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		await fireEvent.click(screen.getByTestId('run-all'));
+		await waitFor(() => expect(sent).toEqual(['SELECT 1;\nSELECT 2']));
 	});
 
 	it('keeps the target on the tab', async () => {

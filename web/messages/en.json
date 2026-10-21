@@ -1031,5 +1031,11 @@
 	"workbench_completion_in_schema": "In {schema}",
 	"workbench_completion_schema": "schema",
 	"workbench_completion_function": "function",
-	"components_resultspanel_statements": "Statements"
+	"components_resultspanel_statements": "Statements",
+	"components_queryeditor_run_selection": "Run selection",
+	"components_queryeditor_run_all": "Run all",
+	"components_queryeditor_run_hint": "Runs the selection, or the statement at the cursor (⌘/Ctrl+Enter)",
+	"components_queryeditor_run_all_hint": "Runs every statement of the script (⇧⌘/Ctrl+Shift+Enter)",
+	"workbench_split_resize_results": "Resize the results",
+	"workbench_split_hint": "Drag, or use the arrow keys; double-click to reset"
 }
