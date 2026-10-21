@@ -9,12 +9,7 @@
 	import { indentWithTab } from '@codemirror/commands';
 	import { sql as sqlLanguage } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
-	import {
-		autocompletion,
-		type Completion,
-		type CompletionContext,
-		type CompletionResult
-	} from '@codemirror/autocomplete';
+	import { autocompletion } from '@codemirror/autocomplete';
 
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { editor } from '$lib/stores/editor.svelte';
@@ -39,7 +34,8 @@
 		type WorkspaceTarget
 	} from '$lib/engines/client';
 	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
-	import { resolveAliasColumns } from '$lib/engines/completion';
+	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
+	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import ResultsPanel from './ResultsPanel.svelte';
@@ -502,107 +498,26 @@
 		});
 	});
 
-	// ── Autocomplete ─────────────────────────────────────────────────────
-	type KeywordOption = { label: string; lower: string; type: string; apply?: string };
-	const keywordOptions = $derived<KeywordOption[]>([
-		...(dialect?.keywords ?? []).map((keyword) => ({
-			label: keyword,
-			lower: keyword.toLowerCase(),
-			type: 'keyword'
-		})),
-		...(dialect?.functions ?? []).map((fn) => ({
-			label: fn,
-			lower: fn.toLowerCase(),
-			type: 'function',
-			apply: `${fn}()`
-		}))
-	]);
-
-	let completionController: AbortController | undefined;
-	let completionSeq = 0;
-
-	function delay(ms: number): Promise<void> {
-		return new Promise((resolve) => setTimeout(resolve, ms));
-	}
-
-	async function complete(context: CompletionContext): Promise<CompletionResult | null> {
-		if (!workspaceId) return null;
-		const { state, pos } = context;
-		const before = state.sliceDoc(Math.max(0, pos - 80), pos);
-		const aliasMatch = /([A-Za-z_][\w$]*)\.$/.exec(before);
-		const word = context.matchBefore(/[\w$]*/);
-		const token = word?.text ?? '';
-		const from = word?.from ?? pos;
-
-		if (!aliasMatch && token.length < 1 && !context.explicit) return null;
-
-		completionController?.abort();
-		const controller = new AbortController();
-		completionController = controller;
-		const seq = ++completionSeq;
-
-		const lowerToken = token.toLowerCase();
-		const options: Completion[] = keywordOptions
-			.filter((option) => option.lower.startsWith(lowerToken))
-			.map((option) => ({ label: option.label, type: option.type, apply: option.apply, boost: 0 }));
-
-		if (aliasMatch) {
-			try {
-				const columns = await resolveAliasColumns(
+	// ── Autocomplete (#383) ──────────────────────────────────────────────
+	// The source reads the active tab's target on every request, so switching
+	// catalog, schema or engine needs no reconfiguration.
+	const completionScope = $derived<CompletionScope | null>(
+		selectedTarget
+			? {
 					workspaceId,
-					state.doc.toString(),
-					aliasMatch[1],
-					controller.signal
-				);
-				if (seq !== completionSeq || controller.signal.aborted) return null;
-				for (const column of columns) {
-					options.unshift({
-						label: column.name,
-						type: 'property',
-						detail: column.display_type || column.native_type,
-						boost: 3
-					});
+					catalogId: selectedTarget.catalog_id,
+					bindingId: selectedTarget.binding_id,
+					engineCatalog: selectedTarget.engine_catalog_name,
+					namespaceDepth: selectedEngine?.capabilities?.namespace_depth ?? 0,
+					schema: activeTab.schema || workspaceStore.current?.default_schema || '',
+					keywords: dialect?.keywords ?? [],
+					functions: dialect?.functions ?? [],
+					cmDialect: codemirrorDialect(selectedEngine?.dialect?.codemirror_base),
+					upperCase: true
 				}
-			} catch {
-				// Aborted or unresolvable: fall back to keywords.
-			}
-			return { from, options };
-		}
-
-		if (token.length < 2) return { from, options };
-
-		// Debounce the search so a burst of keystrokes issues one request.
-		await delay(250);
-		if (controller.signal.aborted || seq !== completionSeq) return null;
-		try {
-			const results = await searchMetadata(workspaceId, token, {
-				kind: 'all',
-				limit: 20,
-				signal: controller.signal
-			});
-			if (seq !== completionSeq) return null;
-			for (const result of results) {
-				if (result.kind === 'column' && result.column) {
-					options.unshift({
-						label: result.column,
-						type: 'property',
-						detail: `${result.table} · ${result.native_type ?? ''}`.trim(),
-						boost: 2
-					});
-				} else {
-					options.unshift({
-						label: result.table,
-						type: 'class',
-						detail: result.namespace.join('.'),
-						boost: 1
-					});
-				}
-			}
-		} catch {
-			// Aborted: CodeMirror keeps the previous result.
-		}
-		return { from, options };
-	}
+			: null
+	);
+	const complete = sqlCompletionSource(() => completionScope);
 
 	// The live document lives in CodeMirror; `tab.sql` is a debounced mirror so a
 	// burst of keystrokes does not serialize the whole doc, rebuild the draft
@@ -660,7 +575,8 @@
 				sqlLanguage({ dialect: codemirrorDialect(undefined), upperCaseKeywords: true })
 			),
 			readOnlyCompartment.of(EditorState.readOnly.of(false)),
-			autocompletion({ override: [complete] }),
+			autocompletion({ ...completionConfig, override: [complete] }),
+			completionTheme,
 			EditorView.contentAttributes.of({ 'aria-label': m.components_queryeditor_sql_editor() }),
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of((update) => {

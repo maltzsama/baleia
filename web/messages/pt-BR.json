@@ -1023,5 +1023,12 @@
 	"models_migrate_error_invalid_metric": "Uma métrica v1 desta tabela não pode ser convertida.",
 	"models_migrate_error_invalid_definition": "O model resultante seria inválido.",
 	"models_migrate_error_slug_conflict": "Outro model já usa este slug.",
-	"models_migrate_error_write_failed": "Não foi possível gravar o model; tente de novo."
+	"models_migrate_error_write_failed": "Não foi possível gravar o model; tente de novo.",
+	"workbench_completion_column_of": "Coluna de {tables}",
+	"workbench_completion_table": "Tabela",
+	"workbench_completion_view": "View",
+	"workbench_completion_materialized_view": "View materializada",
+	"workbench_completion_in_schema": "Em {schema}",
+	"workbench_completion_schema": "schema",
+	"workbench_completion_function": "função"
 }

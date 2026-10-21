@@ -95,6 +95,10 @@ Workspace/catalog/namespace/table/tab selection is URL-backed through
   never sends raw SQL to the compiler.
 - SQL shown read-only goes through `CodeBlock` (named, focusable, AA syntax colors
   from `ui/patterns/codeHighlight.ts`), with the engine's `codemirror_base`.
+- Workbench autocomplete: `src/lib/workbench/sqlContext.ts` says what fits at
+  the cursor (statement keyword, table, column, clause keyword);
+  `sqlCompletion.ts` fills it from the tab catalog's stored metadata, by prefix,
+  never from a workspace-wide search; `completionTheme.ts` styles the popup.
 - Markdown is rendered only through `MarkdownView` (sanitized, images never
   rendered).
 - Every async view has loading, empty and error states; empty `catch` blocks
