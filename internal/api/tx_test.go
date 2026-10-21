@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // failWrites makes every write matching event (e.g. "INSERT ON
@@ -36,5 +37,31 @@ func TestInviteUser_TokenFailureLeavesNoUser(t *testing.T) {
 	}
 	if _, err := db.New(f.pool).GetUserByEmail(context.Background(), "new@x.io"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("user after a failed invite: err = %v, want no rows", err)
+	}
+}
+
+// TestUpdateAgent_StatusFailureKeepsTheName: a PATCH whose status write fails
+// leaves the name as it was (#376).
+func TestUpdateAgent_StatusFailureKeepsTheName(t *testing.T) {
+	f := newAgentsFixture(t, true)
+	agent := f.createAgent(t, f.owner, "etl-agent")
+	failWrites(t, f.pool, "UPDATE OF status ON agents")
+
+	name, disabled := "renamed", UpdateAgentRequestStatusDisabled
+	if _, err := f.h.UpdateAgent(f.owner, UpdateAgentRequestObject{
+		AgentId: openapi_types.UUID(agent.Id), Body: &UpdateAgentJSONRequestBody{Name: &name, Status: &disabled},
+	}); err == nil {
+		t.Fatal("update with a failed status write returned no error")
+	}
+	id, err := uuidFromString(agent.Id.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.New(f.pool).GetAgentByID(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "etl-agent" {
+		t.Fatalf("name after a failed update = %q, want etl-agent", got.Name)
 	}
 }
