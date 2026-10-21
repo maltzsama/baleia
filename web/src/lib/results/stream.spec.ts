@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setAccessToken } from '$lib/api/client';
 import { http, server } from '../../test/server';
-import { subscribeExecution, type ExecutionEvent } from './stream';
+import { subscribeExecution, terminalStatus, type ExecutionEvent } from './stream';
 
 const WS = '00000000-0000-0000-0000-000000000001';
 const EXEC = '00000000-0000-0000-0000-0000000000e1';
@@ -24,6 +24,21 @@ class FakeSocket {
 		this.onmessage?.({ data: JSON.stringify(event) });
 	}
 }
+
+const failedSnapshot: ExecutionEvent = {
+	type: 'snapshot',
+	execution_id: EXEC,
+	seq: 1,
+	ts: '2026-01-01T00:00:00Z',
+	execution: {
+		id: EXEC,
+		workspace_id: WS,
+		status: 'failed',
+		sql: 'SELECT * FROM tpch.sf1.customer',
+		created_at: '2026-01-01T00:00:00Z'
+	},
+	statements: []
+} as ExecutionEvent;
 
 function ticketHandler() {
 	server.use(
@@ -95,6 +110,25 @@ describe('subscribeExecution', () => {
 		stream.close();
 	});
 
+	// #387: a statement that fails in a few ms is final before the socket opens;
+	// the server sends only the snapshot and closes.
+	it('ends on a snapshot of an execution that already failed', async () => {
+		ticketHandler();
+		const stream = subscribeExecution({
+			workspaceId: WS,
+			executionId: EXEC,
+			onEvent: () => {}
+		});
+
+		await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+		FakeSocket.instances[0].emit(failedSnapshot);
+		FakeSocket.instances[0].close();
+
+		await new Promise((resolve) => setTimeout(resolve, 700));
+		expect(FakeSocket.instances).toHaveLength(1);
+		stream.close();
+	});
+
 	it('reconnects with a new ticket after a dropped connection', async () => {
 		ticketHandler();
 		const stream = subscribeExecution({
@@ -109,5 +143,26 @@ describe('subscribeExecution', () => {
 
 		await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(2), { timeout: 2000 });
 		stream.close();
+	});
+});
+
+describe('terminalStatus', () => {
+	it('reads the final status of an execution_status event and of a snapshot', () => {
+		expect(terminalStatus(failedSnapshot)).toBe('failed');
+		expect(
+			terminalStatus({
+				type: 'execution_status',
+				execution_id: EXEC,
+				seq: 2,
+				ts: '2026-01-01T00:00:00Z',
+				status: 'running'
+			})
+		).toBeNull();
+		expect(
+			terminalStatus({
+				...failedSnapshot,
+				execution: { ...(failedSnapshot as { execution: object }).execution, status: 'running' }
+			} as ExecutionEvent)
+		).toBeNull();
 	});
 });

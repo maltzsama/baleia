@@ -73,9 +73,9 @@ var operationAccess = map[string]access{
 	"RequestPasswordReset": {kind: kindPublic},
 	"ConfirmPasswordReset": {kind: kindPublic},
 	"RefreshToken":         {kind: kindPublic},
+	"Logout":               {kind: kindPublic},
 
 	// ── any valid token
-	"Logout":                  {kind: kindAuthenticated, why: "ends the caller's own session"},
 	"ListConnectionProviders": {kind: kindAuthenticated, why: "static provider metadata (kinds and config schemas), no tenant data"},
 	"GetDialect":              {kind: kindAuthenticated, why: "static dialect metadata (keyword and function lists), no tenant data"},
 	"SplitStatements":         {kind: kindAuthenticated, why: "splits the caller's own text with static rules; reads no data"},

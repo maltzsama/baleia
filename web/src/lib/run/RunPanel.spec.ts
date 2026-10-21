@@ -24,7 +24,7 @@ function state(overrides: Partial<RunState> = {}): RunState {
 				sql: 'SELECT * FROM missing',
 				status: 'failed',
 				errorCode: 'not_found',
-				errorMessage: 'table missing',
+				errorMessage: "not_found: line 1:15: Catalog 'tpch' not found (trino CATALOG_NOT_FOUND)",
 				resultCount: 0,
 				truncated: false
 			},
@@ -54,6 +54,10 @@ describe('RunPanel', () => {
 		});
 
 		expect(screen.getByText(/Statement 2 failed/)).toBeTruthy();
+		// The engine's own message is shown without the code prefix (#387).
+		expect(
+			screen.getByText("line 1:15: Catalog 'tpch' not found (trino CATALOG_NOT_FOUND)")
+		).toBeTruthy();
 		expect(screen.getByText(/Statements 3–3 were not run/)).toBeTruthy();
 		expect(screen.getByText('Skipped')).toBeTruthy();
 

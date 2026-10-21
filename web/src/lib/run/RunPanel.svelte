@@ -5,7 +5,7 @@
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
 	import ErrorPanel from '$lib/ui/patterns/ErrorPanel.svelte';
 	import { formatDuration } from '$lib/util/time';
-	import { orderedStatements, type RunState, type StatementState } from './reducer';
+	import { engineMessage, orderedStatements, type RunState, type StatementState } from './reducer';
 
 	let {
 		state,
@@ -156,7 +156,11 @@
 				{#if statement.status === 'failed' && statement.errorCode}
 					<div class="pl-7">
 						<ErrorPanel
-							error={{ code: statement.errorCode, message: statement.errorMessage ?? '' }}
+							open
+							error={{
+								code: statement.errorCode,
+								error_native: engineMessage(statement.errorCode, statement.errorMessage)
+							}}
 						/>
 					</div>
 				{/if}

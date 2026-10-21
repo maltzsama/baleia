@@ -132,3 +132,17 @@ export function applyEvent(state: RunState, event: ExecutionEvent): RunState {
 export function orderedStatements(state: RunState): StatementState[] {
 	return Object.values(state.statements).sort((a, b) => a.position - b.position);
 }
+
+/**
+ * The engine's message for a failed statement, without the `code: ` prefix
+ * the worker stores ("not_found: line 1:15: Catalog 'x' not found …").
+ */
+export function engineMessage(
+	code: string,
+	message: string | null | undefined
+): string | undefined {
+	const text = (message ?? '').trim();
+	const prefix = `${code}: `;
+	const native = text.startsWith(prefix) ? text.slice(prefix.length) : text;
+	return native || undefined;
+}

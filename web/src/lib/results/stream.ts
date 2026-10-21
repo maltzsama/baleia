@@ -10,8 +10,23 @@ export type ExecutionStream = { close: () => void };
 
 const TERMINAL = new Set(['finished', 'failed', 'cancelled']);
 
+/**
+ * The execution's final status when `event` ends the stream, else null. An
+ * execution that ended before the socket opened (a statement failing in a few
+ * ms) only gets a `snapshot`, after which the server closes (#387).
+ */
+export function terminalStatus(event: ExecutionEvent): string | null {
+	const status =
+		event.type === 'execution_status'
+			? event.status
+			: event.type === 'snapshot'
+				? event.execution.status
+				: '';
+	return TERMINAL.has(status) ? status : null;
+}
+
 export function isTerminal(event: ExecutionEvent): boolean {
-	return event.type === 'execution_status' && TERMINAL.has(event.status);
+	return terminalStatus(event) !== null;
 }
 
 export function subscribeExecution(options: {

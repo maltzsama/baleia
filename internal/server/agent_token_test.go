@@ -47,3 +47,22 @@ func TestAgentTokenRejectedOnChiRoutes(t *testing.T) {
 		t.Errorf("body = %q, want agent_token_not_allowed", body)
 	}
 }
+
+// TestLogoutNeedsNoAccessToken: the browser calls /auth/logout with only the
+// refresh cookie; a 401 there left the session alive and the app signed the
+// user back in (#387).
+func TestLogoutNeedsNoAccessToken(t *testing.T) {
+	called := false
+	handler := func(ctx context.Context, w http.ResponseWriter, _ *http.Request, _ interface{}) (interface{}, error) {
+		called = true
+		return nil, nil
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	rec := httptest.NewRecorder()
+	if _, err := authMiddlewareFunc("test-secret", nil)(handler, "Logout")(context.Background(), rec, req, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatalf("logout without an access token: status %d, handler not called", rec.Code)
+	}
+}
