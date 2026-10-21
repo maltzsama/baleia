@@ -252,6 +252,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
+	HasUsers(ctx context.Context) (bool, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
 	// Content versions (#34): append-only snapshots of saved queries and metrics.
@@ -436,6 +437,8 @@ type Querier interface {
 	// Disabled bindings, engines and catalogs are included; callers filter.
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
+	// Serializes first-admin setup until the transaction ends (#375).
+	LockFirstAdminSetup(ctx context.Context) error
 	ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
 	MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error
 	MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error

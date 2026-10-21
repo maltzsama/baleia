@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -504,5 +506,47 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 	events := f.mem.take()
 	if len(events) != 1 || events[0].Outcome != audit.Error || events[0].Reason != audit.ReasonReuseDetected {
 		t.Fatalf("audit = %+v, want one failed reuse_detected", events)
+	}
+}
+
+// TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin: concurrent setups with
+// different e-mails create exactly one admin; the others get 409 (#375).
+func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
+	pool := testdb.New(t)
+	h := &Handlers{queries: db.New(pool), pool: pool, cfg: &config.Config{BcryptCost: testBcryptCost}}
+	const n = 8
+	var wg sync.WaitGroup
+	created := make(chan bool, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
+				Body: &CreateAdminRequest{Name: "Admin", Email: openapi_types.Email(fmt.Sprintf("admin%d@example.test", i)), Password: "correct horse"},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			switch resp.(type) {
+			case CreateFirstAdmin201JSONResponse:
+				created <- true
+			case CreateFirstAdmin409JSONResponse:
+			default:
+				t.Errorf("setup = %T, want 201 or 409", resp)
+			}
+		}()
+	}
+	wg.Wait()
+	close(created)
+	if len(created) != 1 {
+		t.Fatalf("%d setups succeeded, want 1", len(created))
+	}
+	users, err := db.New(pool).ListUsers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("%d users after concurrent setup, want 1", len(users))
 	}
 }
