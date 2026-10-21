@@ -706,8 +706,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 		UserID:    user.ID,
 		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
 	}); err != nil {
-		slog.Error("CreatePasswordResetToken failed", "err", err)
-		return nil, err
+		return nil, fmt.Errorf("create password reset token: %w", err)
 	}
 
 	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
@@ -716,8 +715,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 		"Name":     user.Name,
 		"ResetURL": resetURL,
 	}); err != nil {
-		slog.Error("sendResetEmail failed", "err", err)
-		return nil, err
+		return nil, fmt.Errorf("send password reset e-mail: %w", err)
 	}
 
 	return RequestPasswordReset204Response{}, nil
