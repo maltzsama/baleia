@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -224,7 +225,7 @@ func (r *ObjectReaderAt) ReadAt(p []byte, off int64) (int, error) {
 	}
 	defer obj.Close()
 	n, err := io.ReadFull(obj, p[:length])
-	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 		return n, fmt.Errorf("s3 read range: %w", err)
 	}
 	if n < len(p) {
