@@ -29,6 +29,9 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// ListCatalogConnections — GET /catalog-connections (#385). The caller's own
+// connections; an admin sees every one, including the ownerless bootstrap
+// connection, as authz.Connection allows.
 func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
