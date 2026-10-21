@@ -66,18 +66,20 @@ type Server struct {
 // New builds the API server. The Temporal client is dialed by the caller
 // (with retries, internal/temporal/dial); metrics may be nil. registryKeyring
 // is nil when Phase B registry encryption is disabled.
-func New(cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) *Server {
+func New(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) *Server {
 	queries := db.New(pool)
 	rl := NewRateLimiter(RateLimiterConfig{
 		RequestsPerSecond: cfg.RateLimitRPS,
 		Burst:             cfg.RateLimitBurst,
 	})
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring, registryKeyring: registryKeyring, temporal: temporal, metrics: reg}
-	s.routes()
+	s.routes(ctx)
 	return s
 }
 
-func (s *Server) routes() {
+// routes mounts the API. ctx is the process context: background work it
+// starts (the assistant's in-process MCP session and sweeper) ends with it.
+func (s *Server) routes(ctx context.Context) {
 	s.mux.Use(middleware.RequestID)
 	s.mux.Use(obs.RouteName) // names the tracing span after chi has routed (#47)
 	if s.metrics != nil {
@@ -209,16 +211,18 @@ func (s *Server) routes() {
 		// the same gate and audit hooks apply. It is provisioned only when the
 		// agents feature is on.
 		if svc := h.AssistantService(); svc != nil {
-			if session, err := mcpServer.InProcessClient(context.Background()); err == nil {
+			if session, err := mcpServer.InProcessClient(ctx); err == nil {
 				runner := baleiaassistant.NewRunner(svc, nil, baleiaassistant.NewMCPToolCaller(session))
-				if settings, err := svc.Settings(context.Background()); err == nil && settings.Enabled && settings.Provider != nil && settings.Model != nil {
-					if key, err := svc.APIKey(context.Background()); err == nil {
+				sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				if settings, err := svc.Settings(sctx); err == nil && settings.Enabled && settings.Provider != nil && settings.Model != nil {
+					if key, err := svc.APIKey(sctx); err == nil {
 						client := obs.WrapHTTPClient(dialer.HTTPClient(assistantllm.ClientTimeout))
 						runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
 					}
 				}
 				h.SetAssistantRunner(runner)
-				go runner.RunSweeper(context.Background(), 30*time.Second)
+				go runner.RunSweeper(ctx, 30*time.Second)
 			}
 		}
 	}
