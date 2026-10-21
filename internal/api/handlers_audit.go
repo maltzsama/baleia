@@ -215,52 +215,72 @@ func (h *Handlers) ExportAuditCSV(ctx context.Context, request ExportAuditCSVReq
 		params.ToTime = pgtype.Timestamptz{Time: *q.To, Valid: true}
 	}
 
+	// The request context ends when the client goes away, and a failed
+	// write (the reader was closed) stops the producer too (#371).
+	// CloseWithError always returns nil.
 	reader, writer := io.Pipe()
 	go func() {
-		defer writer.Close()
-		cw := csv.NewWriter(writer)
-		_ = cw.Write([]string{
-			"occurred_at", "actor_kind", "actor_id", "auth_method", "action", "resource_type",
-			"resource_id", "workspace_id", "outcome", "reason", "request_id", "trace_id",
-			"client_ip", "user_agent",
-		})
-		cw.Flush()
-		base := context.WithoutCancel(ctx)
-		written := 0
-		for written < 1_000_000 {
-			rows, err := h.queries.ListAuditEvents(base, params)
-			if err != nil {
-				_ = writer.CloseWithError(err)
-				return
-			}
-			if len(rows) == 0 {
-				break
-			}
-			for _, r := range rows {
-				_ = cw.Write([]string{
-					r.OccurredAt.Time.UTC().Format(time.RFC3339),
-					r.ActorKind, strOrEmpty(r.ActorID), strOrEmpty(r.AuthMethod), r.Action,
-					r.ResourceType, strOrEmpty(r.ResourceID), idString(r.WorkspaceID), r.Outcome,
-					strOrEmpty(r.Reason), strOrEmpty(r.RequestID), strOrEmpty(r.TraceID),
-					ipOrEmpty(r.ClientIp), strOrEmpty(r.UserAgent),
-				})
-				written++
-				if written >= 1_000_000 {
-					break
-				}
-			}
-			cw.Flush()
-			if len(rows) < int(params.Lim) {
-				break
-			}
-			last := rows[len(rows)-1]
-			params.CursorAt = last.OccurredAt
-			id := last.ID
-			params.CursorID = &id
-		}
-		cw.Flush()
+		_ = writer.CloseWithError(h.writeAuditCSV(ctx, writer, params))
 	}()
 	return ExportAuditCSV200TextcsvResponse{Body: reader}, nil
+}
+
+// maxAuditExportRows bounds one CSV export.
+const maxAuditExportRows = 1_000_000
+
+// writeAuditCSV pages through the events matching params into w. It returns
+// the first query, write or context error, so nothing keeps querying once the
+// client stops reading.
+func (h *Handlers) writeAuditCSV(ctx context.Context, w io.Writer, params db.ListAuditEventsParams) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write([]string{
+		"occurred_at", "actor_kind", "actor_id", "auth_method", "action", "resource_type",
+		"resource_id", "workspace_id", "outcome", "reason", "request_id", "trace_id",
+		"client_ip", "user_agent",
+	}); err != nil {
+		return err
+	}
+	written := 0
+	for written < maxAuditExportRows {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		rows, err := h.queries.ListAuditEvents(ctx, params)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, r := range rows {
+			if err := cw.Write([]string{
+				r.OccurredAt.Time.UTC().Format(time.RFC3339),
+				r.ActorKind, strOrEmpty(r.ActorID), strOrEmpty(r.AuthMethod), r.Action,
+				r.ResourceType, strOrEmpty(r.ResourceID), idString(r.WorkspaceID), r.Outcome,
+				strOrEmpty(r.Reason), strOrEmpty(r.RequestID), strOrEmpty(r.TraceID),
+				ipOrEmpty(r.ClientIp), strOrEmpty(r.UserAgent),
+			}); err != nil {
+				return err
+			}
+			written++
+			if written >= maxAuditExportRows {
+				break
+			}
+		}
+		cw.Flush()
+		if err := cw.Error(); err != nil {
+			return err
+		}
+		if len(rows) < int(params.Lim) {
+			break
+		}
+		last := rows[len(rows)-1]
+		params.CursorAt = last.OccurredAt
+		id := last.ID
+		params.CursorID = &id
+	}
+	cw.Flush()
+	return cw.Error()
 }
 
 func strOrEmpty(value *string) string {
