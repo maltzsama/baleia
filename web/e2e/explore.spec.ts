@@ -59,3 +59,18 @@ test('@issue-121 the model editor lists seeded models and opens one', async ({
 	await expect(page.getByTestId('model-editor')).toBeVisible();
 	await expect(page.getByTestId('join-tree')).toContainText('e2e_customers');
 });
+
+test('@issue-121 the v1 migration dialog lists the seeded v1 metric', async ({
+	page,
+	loginAs,
+	expectNoA11yViolations
+}) => {
+	await loginAs('member');
+	await page.goto('/models');
+	await page.getByRole('button', { name: 'Migrate v1 metrics' }).click();
+
+	const tables = page.getByRole('list', { name: 'Tables to migrate' });
+	await expect(tables).toContainText('tiny.nation');
+	await expect(tables).toContainText('e2e_nation_count');
+	await expectNoA11yViolations(page);
+});

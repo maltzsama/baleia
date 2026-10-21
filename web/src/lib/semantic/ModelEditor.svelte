@@ -5,11 +5,12 @@
 	import { resolve } from '$app/paths';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
-	import { listCatalogBindings } from '$lib/connections/api';
 	import { listCatalogs, type Catalog } from '$lib/catalogs/admin';
 	import { getTable, searchTables, type SearchResult } from '$lib/metrics/client';
 	import {
 		AGGREGATIONS,
+		bindingOptions,
+		parseFilterValues,
 		GRAINS,
 		SemanticRequestError,
 		compileExplore,
@@ -21,6 +22,8 @@
 		listModels,
 		slugify,
 		updateModel,
+		type BindingOption,
+		type FilterOp,
 		type LogicalType,
 		type ModelDefinition,
 		type ModelDimension,
@@ -35,6 +38,7 @@
 	import Input from '$lib/ui/Input.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Textarea from '$lib/ui/Textarea.svelte';
+	import SqlSourceEditor from './SqlSourceEditor.svelte';
 	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
 	import ErrorPanel from '$lib/ui/patterns/ErrorPanel.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
@@ -54,6 +58,28 @@
 		'timestamptz'
 	];
 	const RELATIONSHIPS: Relationship[] = ['many_to_one', 'one_to_one', 'one_to_many'];
+	const FILTER_OPS: FilterOp[] = [
+		'=',
+		'!=',
+		'>',
+		'>=',
+		'<',
+		'<=',
+		'in',
+		'not_in',
+		'is_null',
+		'is_not_null'
+	];
+
+	// Editing state: the definition below strips these helper fields.
+	// `decimals` is typed as the text input's value; a number input may still
+	// hand back a number or null, which formatOf accepts.
+	type EditDimension = ModelDimension & { decimals: string };
+	type EditMetric = ModelMetric & {
+		mode: 'aggregate' | 'sql' | 'derived';
+		filterText: string[];
+		decimals: string;
+	};
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const spaces = $derived(savedQueries.spaces);
@@ -68,7 +94,7 @@
 	let catalogId = $state('');
 	let bindingId = $state('');
 	let catalogs = $state<Catalog[]>([]);
-	let bindings = $state<{ id: string; label: string }[]>([]);
+	let bindings = $state<BindingOption[]>([]);
 
 	let sourceKind = $state<'table' | 'sql'>('table');
 	let namespace = $state<string[]>([]);
@@ -78,8 +104,8 @@
 	let tableResults = $state<SearchResult[]>([]);
 	let primaryKey = $state<string[]>([]);
 
-	let dimensions = $state<ModelDimension[]>([]);
-	let metrics = $state<ModelMetric[]>([]);
+	let dimensions = $state<EditDimension[]>([]);
+	let metrics = $state<EditMetric[]>([]);
 	let joins = $state<ModelJoin[]>([]);
 	let others = $state<SemanticModel[]>([]);
 
@@ -103,19 +129,16 @@
 				? { kind: 'table', namespace, table }
 				: { kind: 'sql', sql: sourceSql },
 		primary_key: primaryKey,
-		dimensions: dimensions.map((d) => ({
+		dimensions: dimensions.map(({ decimals, ...d }) => ({
 			...d,
 			label: d.label || undefined,
+			description: d.description || undefined,
 			sql: d.sql || undefined,
 			hidden: d.hidden || undefined,
-			grains: isTimeType(d.type) && d.grains?.length ? d.grains : undefined
+			grains: isTimeType(d.type) && d.grains?.length ? d.grains : undefined,
+			format: formatOf(decimals, isNumericType(d.type))
 		})),
-		metrics: metrics.map((mt) => ({
-			...mt,
-			label: mt.label || undefined,
-			dimension: mt.dimension || undefined,
-			filters: mt.filters?.length ? mt.filters : undefined
-		})),
+		metrics: metrics.map(toMetric),
 		joins: joins.length ? joins : undefined
 	});
 
@@ -139,11 +162,7 @@
 		sourceSql = def.source?.sql ?? '';
 		primaryKey = def.primary_key ?? [];
 		dimensions = (def.dimensions ?? []).map(withDefaults);
-		metrics = (def.metrics ?? []).map((mt) => ({
-			...mt,
-			label: mt.label ?? '',
-			dimension: mt.dimension ?? ''
-		}));
+		metrics = (def.metrics ?? []).map(toEditMetric);
 		joins = (def.joins ?? []).map((j) => ({ ...j, on: j.on.map((k) => ({ ...k })) }));
 	}
 
@@ -152,10 +171,7 @@
 			bindings = [];
 			return;
 		}
-		const rows = await listCatalogBindings(id);
-		bindings = rows
-			.filter((b) => b.enabled)
-			.map((b) => ({ id: b.id, label: `${b.engine_catalog_name} (${b.connector ?? 'default'})` }));
+		bindings = await bindingOptions(id);
 		if (!bindingId || !bindings.some((b) => b.id === bindingId)) {
 			bindingId = bindings[0]?.id ?? '';
 		}
@@ -206,8 +222,63 @@
 	}
 
 	// Inputs bind to strings, so optional text fields start empty rather than undefined.
-	function withDefaults(d: ModelDimension): ModelDimension {
-		return { ...d, label: d.label ?? '', sql: d.sql ?? '', hidden: !!d.hidden };
+	function withDefaults(d: ModelDimension): EditDimension {
+		return {
+			...d,
+			label: d.label ?? '',
+			description: d.description ?? '',
+			sql: d.sql ?? '',
+			hidden: !!d.hidden,
+			decimals: d.format ? String(d.format.decimals) : ''
+		};
+	}
+	function isNumericType(type: LogicalType | undefined): boolean {
+		return type === 'int64' || type === 'float64';
+	}
+	// A number input binds a number (or null when cleared), not the typed text.
+	function formatOf(decimals: string | number | null | undefined, allowed = true) {
+		const text = String(decimals ?? '').trim();
+		const n = Number(text);
+		return allowed && text !== '' && Number.isInteger(n) && n >= 0
+			? { type: 'number', decimals: n }
+			: undefined;
+	}
+	function toEditMetric(mt: ModelMetric): EditMetric {
+		return {
+			...mt,
+			label: mt.label ?? '',
+			dimension: mt.dimension ?? '',
+			sql: mt.sql ?? '',
+			filters: (mt.filters ?? []).map((f) => ({ ...f })),
+			filterText: (mt.filters ?? []).map((f) => (f.values ?? []).join(', ')),
+			mode: mt.derived ? 'derived' : mt.sql ? 'sql' : 'aggregate',
+			decimals: mt.format ? String(mt.format.decimals) : ''
+		};
+	}
+	function toMetric({ mode, filterText, decimals, ...mt }: EditMetric): ModelMetric {
+		const base = { name: mt.name, label: mt.label || undefined, format: formatOf(decimals) };
+		if (mode === 'derived') return { ...base, derived: mt.derived };
+		const filters = (mt.filters ?? [])
+			.map((f, i) => {
+				const type = dimensions.find((d) => d.name === f.column)?.type;
+				const field = {
+					name: f.column,
+					label: f.column,
+					kind: 'dimension' as const,
+					type,
+					grains: [],
+					model: ''
+				};
+				return {
+					column: f.column,
+					op: f.op,
+					values: parseFilterValues(field, f.op as FilterOp, filterText[i] ?? '')
+				};
+			})
+			.filter((f) => f.column);
+		const scoped = { ...base, filters: filters.length ? filters : undefined };
+		if (mode === 'sql') return { ...scoped, sql: mt.sql };
+		return { ...scoped, aggregation: mt.aggregation, dimension: mt.dimension || undefined };
 	}
 	function addDimension() {
 		dimensions = [...dimensions, withDefaults({ name: '', type: 'string' })];
@@ -242,14 +313,25 @@
 	function addMetric(derived = false) {
 		metrics = [
 			...metrics,
-			derived
-				? {
-						name: '',
-						label: '',
-						derived: { left: metricNames[0] ?? '', op: '/', right: metricNames[1] ?? '' }
-					}
-				: { name: '', label: '', aggregation: 'count', dimension: '' }
+			toEditMetric(
+				derived
+					? {
+							name: '',
+							derived: { left: metricNames[0] ?? '', op: '/', right: metricNames[1] ?? '' }
+						}
+					: { name: '', aggregation: 'count' }
+			)
 		];
+	}
+	function addMetricFilter(index: number) {
+		const mt = metrics[index];
+		mt.filters = [...(mt.filters ?? []), { column: dimensionNames[0] ?? '', op: '=' }];
+		mt.filterText = [...mt.filterText, ''];
+	}
+	function removeMetricFilter(index: number, filter: number) {
+		const mt = metrics[index];
+		mt.filters = (mt.filters ?? []).filter((_, i) => i !== filter);
+		mt.filterText = mt.filterText.filter((_, i) => i !== filter);
 	}
 	function removeMetric(index: number) {
 		metrics = metrics.filter((_, i) => i !== index);
@@ -290,7 +372,9 @@
 			description: description.trim(),
 			catalog_id: catalogId,
 			binding_id: bindingId || null,
-			certified,
+			// Only a space manager sends certification: omitting it lets the API
+			// drop the badge when an editor changes a certified definition.
+			...(canCertify ? { certified } : {}),
 			definition: definition as unknown as Record<string, unknown>
 		};
 	}
@@ -463,7 +547,11 @@
 				/>
 			</div>
 			<div class="mt-3">
-				<Textarea label={m.models_sql()} bind:value={sourceSql} rows={6} class="font-mono" />
+				<SqlSourceEditor
+					label={m.models_sql()}
+					bind:value={sourceSql}
+					dialect={bindings.find((b) => b.id === bindingId)?.codemirrorBase}
+				/>
 			</div>
 		{/if}
 		<div class="mt-3 max-w-md">
@@ -516,6 +604,17 @@
 					<Input label={m.models_sql_expression()} bind:value={dimension.sql} class="font-mono" />
 					<Checkbox label={m.models_hidden()} bind:checked={dimension.hidden} />
 				</div>
+				<div class="mt-2 grid gap-2 sm:grid-cols-[1fr_8rem] sm:items-end">
+					<Input label={m.models_description()} bind:value={dimension.description} />
+					{#if isNumericType(dimension.type)}
+						<Input
+							label={m.models_decimals()}
+							type="number"
+							bind:value={dimension.decimals}
+							placeholder={m.models_decimals_none()}
+						/>
+					{/if}
+				</div>
 				{#if isTimeType(dimension.type)}
 					<fieldset class="mt-2">
 						<legend class="text-[11px] font-semibold text-text-muted">{m.models_grains()}</legend>
@@ -553,7 +652,33 @@
 					<Input label={m.models_label()} bind:value={metric.label} />
 					<Button size="sm" onclick={() => removeMetric(index)}>{m.common_remove()}</Button>
 				</div>
-				{#if metric.derived}
+				<div class="mt-2 grid gap-2 sm:grid-cols-[1fr_8rem]">
+					<Select
+						label={m.models_metric_kind()}
+						bind:value={metric.mode}
+						options={[
+							{ value: 'aggregate', label: m.models_metric_kind_aggregate() },
+							{ value: 'sql', label: m.models_metric_kind_sql() },
+							{ value: 'derived', label: m.models_metric_kind_derived() }
+						]}
+						onchange={() => {
+							if (metric.mode === 'derived' && !metric.derived)
+								metric.derived = {
+									left: metricNames[0] ?? '',
+									op: '/',
+									right: metricNames[1] ?? ''
+								};
+							if (metric.mode === 'aggregate' && !metric.aggregation) metric.aggregation = 'count';
+						}}
+					/>
+					<Input
+						label={m.models_decimals()}
+						type="number"
+						bind:value={metric.decimals}
+						placeholder={m.models_decimals_none()}
+					/>
+				</div>
+				{#if metric.mode === 'derived' && metric.derived}
 					<div class="mt-2 grid grid-cols-3 gap-2">
 						<Select
 							label={m.models_derived_left()}
@@ -579,25 +704,76 @@
 						<p class="mt-1 text-[10px] text-text-muted">{m.models_safe_divide_hint()}</p>
 					{/if}
 				{:else}
-					<div class="mt-2 grid gap-2 sm:grid-cols-2">
-						<Select
-							label={m.models_aggregation()}
-							value={metric.aggregation ?? 'count'}
-							options={AGGREGATIONS.map((a) => ({ value: a, label: a }))}
-							onchange={(e) => setAggregation(index, (e.target as HTMLSelectElement).value)}
-						/>
-						<Select
-							label={m.models_dimension()}
-							bind:value={metric.dimension}
-							placeholder={metric.aggregation === 'count' ? m.models_all_rows() : undefined}
-							options={[
-								...(metric.aggregation === 'count'
-									? [{ value: '', label: m.models_all_rows() }]
-									: []),
-								...dimensionNames.map((n) => ({ value: n, label: n }))
-							]}
-						/>
-					</div>
+					{#if metric.mode === 'sql'}
+						<div class="mt-2">
+							<Input
+								label={m.models_metric_sql()}
+								bind:value={metric.sql}
+								class="font-mono"
+								placeholder="SUM(amount) - SUM(refund)"
+							/>
+							<p class="mt-1 text-[10px] text-text-muted">{m.models_metric_sql_hint()}</p>
+						</div>
+					{:else}
+						<div class="mt-2 grid gap-2 sm:grid-cols-2">
+							<Select
+								label={m.models_aggregation()}
+								value={metric.aggregation ?? 'count'}
+								options={AGGREGATIONS.map((a) => ({ value: a, label: a }))}
+								onchange={(e) => setAggregation(index, (e.target as HTMLSelectElement).value)}
+							/>
+							<Select
+								label={m.models_dimension()}
+								bind:value={metric.dimension}
+								placeholder={metric.aggregation === 'count' ? m.models_all_rows() : undefined}
+								options={[
+									...(metric.aggregation === 'count'
+										? [{ value: '', label: m.models_all_rows() }]
+										: []),
+									...dimensionNames.map((n) => ({ value: n, label: n }))
+								]}
+							/>
+						</div>
+					{/if}
+					<fieldset class="mt-2">
+						<legend class="text-[11px] font-semibold text-text-muted"
+							>{m.models_metric_filters()}</legend
+						>
+						{#each metric.filters ?? [] as filter, filterIndex (filterIndex)}
+							<div class="mt-1 grid grid-cols-[1fr_7rem_1fr_auto] items-end gap-2">
+								<Select
+									label={m.explore_filter_field()}
+									bind:value={filter.column}
+									options={dimensionNames.map((n) => ({ value: n, label: n }))}
+								/>
+								<Select
+									label={m.explore_filter_operator()}
+									bind:value={filter.op}
+									options={FILTER_OPS.map((op) => ({ value: op, label: op }))}
+								/>
+								{#if filter.op === 'is_null' || filter.op === 'is_not_null'}
+									<div></div>
+								{:else}
+									<Input
+										label={m.explore_filter_value()}
+										bind:value={metric.filterText[filterIndex]}
+									/>
+								{/if}
+								<Button size="sm" onclick={() => removeMetricFilter(index, filterIndex)}>
+									{m.common_remove()}
+								</Button>
+							</div>
+						{/each}
+						<div class="mt-1">
+							<Button
+								size="sm"
+								onclick={() => addMetricFilter(index)}
+								disabled={dimensionNames.length === 0}
+							>
+								{m.explore_add_filter()}
+							</Button>
+						</div>
+					</fieldset>
 				{/if}
 			</div>
 		{:else}
@@ -692,7 +868,12 @@
 		{:else if previewError}
 			<p class="text-[12px] text-danger" role="alert">{previewError}</p>
 		{:else if previewSql}
-			<CodeBlock code={previewSql} language="sql" />
+			<CodeBlock
+				code={previewSql}
+				language="sql"
+				label={m.explore_compiled_sql()}
+				dialect={bindings.find((b) => b.id === bindingId)?.codemirrorBase}
+			/>
 			{#each previewNotes as note (note)}
 				<Badge tone="info">{note}</Badge>
 			{/each}

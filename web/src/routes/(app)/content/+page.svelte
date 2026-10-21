@@ -146,6 +146,7 @@
 					<div class="text-[10px] text-slate-600 dark:text-slate-300">
 						{space.counts?.saved_queries ?? 0} queries · {space.counts?.semantic_metrics ?? 0} metrics
 						·
+						{space.counts?.semantic_models ?? 0} models ·
 						{space.counts?.folders ?? 0} folders
 						{#if space.updated_at}· updated <RelativeTime at={space.updated_at} />{/if}
 					</div>

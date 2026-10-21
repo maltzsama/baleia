@@ -102,6 +102,9 @@ func main() {
 	if err := ensureModels(ctx, pool, q, member, catalog, binding); err != nil {
 		log.Fatalf("e2e-seed: models: %v", err)
 	}
+	if err := ensureV1Metric(ctx, pool, q, member, catalog, binding); err != nil {
+		log.Fatalf("e2e-seed: v1 metric: %v", err)
+	}
 
 	log.Printf("e2e-seed: ready (admin/member/viewer @e2e.test)")
 }
@@ -268,6 +271,31 @@ func ensureModels(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, member
 		}
 	}
 	return nil
+}
+
+// ensureV1Metric seeds one v1 metric on a table no model uses, so the
+// migration dialog (#121) has something to migrate.
+func ensureV1Metric(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
+	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
+	if err != nil {
+		return err
+	}
+	if _, err := q.GetSemanticMetricBySlug(ctx, db.GetSemanticMetricBySlugParams{WorkspaceID: workspaceID, Slug: "e2e_nation_count"}); err == nil {
+		return nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	space, err := q.GetDefaultSpace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	_, err = content.New(pool, q).CreateSemanticMetric(ctx, member.ID, db.CreateSemanticMetricParams{
+		WorkspaceID: workspaceID, SpaceID: space.ID, Slug: "e2e_nation_count", Label: "E2E Nations",
+		CatalogID: catalog.ID, Namespace: []string{"tiny"}, TableName: "nation", BindingID: binding.ID,
+		Definition: []byte(`{"type":"simple","aggregation":"count"}`), FormatVersion: 1,
+		OwnerUserID: member.ID, UpdatedBy: member.ID,
+	})
+	return err
 }
 
 func ensureSharedWorkspace(ctx context.Context, q *db.Queries, name string, teamID pgtype.UUID) (db.Workspace, error) {

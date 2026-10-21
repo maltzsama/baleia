@@ -6,6 +6,7 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { definitionOf, listModels, type SemanticModel } from '$lib/semantic/explore';
+	import MigrateV1Dialog from '$lib/semantic/MigrateV1Dialog.svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -23,6 +24,7 @@
 	let error = $state('');
 	let q = $state('');
 	let spaceId = $state('');
+	let migrateOpen = $state(false);
 
 	const visible = $derived(
 		models.filter((model) => {
@@ -68,6 +70,7 @@
 			<p class="mt-1 text-[13px] text-text-muted">{m.models_subtitle()}</p>
 		</div>
 		<div class="flex gap-2">
+			<Button onclick={() => (migrateOpen = true)}>{m.models_migrate_button()}</Button>
 			<Button onclick={() => goto(resolve('/explore'))}>{m.models_open_explore()}</Button>
 			<Button variant="primary" onclick={() => goto(resolve('/models/new'))}
 				>{m.models_new()}</Button
@@ -140,3 +143,5 @@
 		</div>
 	{/if}
 </div>
+
+<MigrateV1Dialog bind:open={migrateOpen} {workspaceId} onmigrated={load} />

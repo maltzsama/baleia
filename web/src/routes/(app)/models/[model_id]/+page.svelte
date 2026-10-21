@@ -112,6 +112,7 @@
 			<CodeBlock
 				code={JSON.stringify(model.definition, null, 2)}
 				language="json"
+				label={m.models_definition()}
 				maxHeight="640px"
 			/>
 		{/if}

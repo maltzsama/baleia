@@ -93,6 +93,8 @@ Workspace/catalog/namespace/table/tab selection is URL-backed through
 - The explore query (`src/lib/semantic/explore.ts`) is the only Explore state:
   it is serialized into `?q=` as base64url of canonical JSON (FD5) and the UI
   never sends raw SQL to the compiler.
+- SQL shown read-only goes through `CodeBlock` (named, focusable, AA syntax colors
+  from `ui/patterns/codeHighlight.ts`), with the engine's `codemirror_base`.
 - Markdown is rendered only through `MarkdownView` (sanitized, images never
   rendered).
 - Every async view has loading, empty and error states; empty `catch` blocks

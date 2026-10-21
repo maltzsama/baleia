@@ -3,12 +3,17 @@
 // ?q= as base64url(canonical JSON) (FD5) and compiled by the API.
 import { apiErrorMessage, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import { listCatalogBindings } from '$lib/connections/api';
+import { loadEngines } from '$lib/engines/client';
 
 export type SemanticModel = components['schemas']['SemanticModel'];
 export type SemanticModelCreate = components['schemas']['SemanticModelCreate'];
 export type SemanticModelUpdate = components['schemas']['SemanticModelUpdate'];
 export type ExploreQuery = components['schemas']['ExploreQuery'];
 export type ExploreCompileResult = components['schemas']['ExploreCompileResult'];
+export type MigrateV1Report = components['schemas']['MigrateV1Report'];
+export type MigrateV1Item = components['schemas']['MigrateV1Item'];
+export type MigrateV1Table = components['schemas']['MigrateV1Table'];
 
 export type ExploreFilter = NonNullable<ExploreQuery['filters']>[number];
 export type ExploreSort = NonNullable<ExploreQuery['sorts']>[number];
@@ -19,9 +24,14 @@ export type LogicalType =
 export type Relationship = 'many_to_one' | 'one_to_one' | 'one_to_many';
 export type AggFunc = 'sum' | 'count' | 'count_distinct' | 'avg' | 'min' | 'max';
 
+/** Display-only, as on v1 metrics: it never changes the generated SQL. */
+export type FieldFormat = { type: string; decimals: number };
+
 export type ModelDimension = {
 	name: string;
 	label?: string;
+	description?: string;
+	format?: FieldFormat;
 	sql?: string;
 	type: LogicalType;
 	grains?: string[];
@@ -35,6 +45,7 @@ export type ModelMetric = {
 	sql?: string;
 	filters?: { column: string; op: string; values?: unknown[] }[];
 	derived?: { left: string; op: '+' | '-' | '*' | '/'; right: string };
+	format?: FieldFormat;
 };
 export type ModelJoin = {
 	to: string;
@@ -213,6 +224,7 @@ export type FieldNode = {
 	name: string;
 	label: string;
 	kind: 'dimension' | 'metric' | 'calculated';
+	description?: string;
 	type?: LogicalType;
 	grains: string[];
 	model: string;
@@ -239,6 +251,7 @@ function groupOf(model: SemanticModel, join?: string): FieldGroup {
 				name: d.name,
 				label: d.label || d.name,
 				kind: 'dimension' as const,
+				description: d.description,
 				type: d.type,
 				grains: d.grains ?? [],
 				model: model.slug
@@ -477,6 +490,39 @@ export async function deleteModel(workspaceId: string, modelId: string): Promise
 		params: { path: { id: workspaceId, model_id: modelId } }
 	});
 	if (error) fail(error, response?.status, 'Could not delete the model');
+}
+
+export type BindingOption = { id: string; label: string; codemirrorBase: string | null };
+
+/**
+ * The enabled bindings of a catalog with the CodeMirror base of each engine's
+ * dialect, so SQL is highlighted the way that engine reads it.
+ */
+export async function bindingOptions(catalogId: string): Promise<BindingOption[]> {
+	const [bindings, engines] = await Promise.all([
+		listCatalogBindings(catalogId),
+		loadEngines().catch(() => [])
+	]);
+	return bindings
+		.filter((b) => b.enabled)
+		.map((b) => ({
+			id: b.id,
+			label: `${b.engine_catalog_name} (${b.connector ?? 'default'})`,
+			codemirrorBase:
+				engines.find((engine) => engine.id === b.engine_id)?.dialect?.codemirror_base ?? null
+		}));
+}
+
+export async function migrateV1(
+	workspaceId: string,
+	body: { dry_run: boolean; tables?: MigrateV1Table[] }
+): Promise<MigrateV1Report> {
+	const { data, error, response } = await client.POST(
+		'/workspaces/{id}/semantic/models/migrate-v1',
+		{ params: { path: { id: workspaceId } }, body }
+	);
+	if (error || !data) fail(error, response?.status, 'Could not migrate the v1 metrics');
+	return data;
 }
 
 export async function compileExplore(

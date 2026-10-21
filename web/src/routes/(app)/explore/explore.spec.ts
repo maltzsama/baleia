@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { encodeShare, type ExploreQuery } from '$lib/semantic/explore';
 import { http, server } from '../../../test/server';
-import { makeCatalogBinding, makeSemanticModel, makeWorkspace } from '../../../test/factories';
+import {
+	makeCatalogBinding,
+	makeEngine,
+	makeSemanticModel,
+	makeWorkspace
+} from '../../../test/factories';
 
 const WS = '00000000-0000-0000-0000-000000000001';
 
@@ -29,6 +34,7 @@ function useBackend(compile: (body: { query: ExploreQuery }) => Promise<Response
 		http.get('/workspaces/{id}/semantic/models', ({ response }) =>
 			response(200).json([makeSemanticModel()])
 		),
+		http.get('/engines', ({ response }) => response(200).json([makeEngine()])),
 		http.get('/catalogs/{id}/bindings', ({ response }) =>
 			response(200).json([makeCatalogBinding()])
 		),
@@ -120,6 +126,53 @@ describe('explore page', () => {
 		expect(alert.textContent).toContain('cannot be compiled');
 		const chip = document.querySelector('li[data-invalid]');
 		expect(chip?.textContent).toContain('Status');
+	});
+
+	it('selects a time dimension at a grain from the field tree', async () => {
+		useBackend(() => ok('SELECT 1'));
+		nav.url = new URL(
+			`http://localhost/explore?q=${encodeShare({ model: 'orders', metrics: ['revenue'] })}`
+		);
+
+		render(ExplorePage);
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Show the time grains of Created at' })
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'month' }));
+
+		await waitFor(() => expect(nav.goto).toHaveBeenCalled());
+		const url = String(nav.goto.mock.calls.at(-1)?.[0]);
+		const q = new URL(url, 'http://localhost').searchParams.get('q');
+		expect(q).toBe(
+			encodeShare({
+				model: 'orders',
+				dimensions: ['created_at'],
+				metrics: ['revenue'],
+				time_grain: 'month'
+			})
+		);
+	});
+
+	it('names a query the compiler cannot express as not supported', async () => {
+		useBackend(() =>
+			Response.json(
+				{
+					code: 'not_supported',
+					message: 'explore query not supported yet: chained join to "regions"',
+					errors: []
+				},
+				{ status: 422 }
+			)
+		);
+		nav.url = new URL(
+			`http://localhost/explore?q=${encodeShare({ model: 'orders', metrics: ['revenue'] })}`
+		);
+
+		render(ExplorePage);
+
+		const alert = await screen.findByRole('alert');
+		expect(alert.textContent).not.toContain('cannot be compiled');
+		expect(screen.getByText(/chained join to "regions"/)).toBeTruthy();
 	});
 
 	it('explains a link to a model the user cannot see', async () => {

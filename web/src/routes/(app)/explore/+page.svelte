@@ -5,7 +5,6 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { apiErrorMessage, client } from '$lib/api/client';
-	import { listCatalogBindings } from '$lib/connections/api';
 	import { poll, type PollController } from '$lib/util/poll';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
@@ -17,6 +16,7 @@
 		MAX_EXPLORE_LIMIT,
 		SemanticRequestError,
 		allFields,
+		bindingOptions,
 		canonicalQuery,
 		compileExplore,
 		decodeShare,
@@ -28,6 +28,7 @@
 		operatorsFor,
 		parseFilterValues,
 		withExploreComment,
+		type BindingOption,
 		type ExploreCompileResult,
 		type ExploreQuery,
 		type FieldNode,
@@ -56,7 +57,7 @@
 	// Raw text of each filter's value input; the query holds the typed values.
 	let filterText = $state<string[]>([]);
 	let search = $state('');
-	let bindings = $state<{ id: string; label: string }[]>([]);
+	let bindings = $state<BindingOption[]>([]);
 	let bindingId = $state('');
 	let tab = $state('results');
 
@@ -128,8 +129,21 @@
 		compiled = null;
 		compileError = null;
 		resetRun();
+		// The previous model's binding belongs to another catalog: compile only
+		// once this model's bindings are known.
+		bindingId = '';
+		bindings = [];
 		commit({ model: slug });
-		void loadBindings();
+		void loadBindings().then(scheduleCompile);
+	}
+
+	function pickGrain(field: FieldNode, grain: string) {
+		const dimensions = query.dimensions ?? [];
+		commit({
+			...query,
+			dimensions: dimensions.includes(field.name) ? dimensions : [...dimensions, field.name],
+			time_grain: grain
+		});
 	}
 
 	function toggleField(field: FieldNode) {
@@ -317,13 +331,7 @@
 		bindings = [];
 		if (!base) return;
 		try {
-			const rows = await listCatalogBindings(base.catalog_id);
-			bindings = rows
-				.filter((b) => b.enabled)
-				.map((b) => ({
-					id: b.id,
-					label: `${b.engine_catalog_name} (${b.connector ?? 'default'})`
-				}));
+			bindings = await bindingOptions(base.catalog_id);
 		} catch {
 			toasts.error(m.explore_bindings_failed());
 		}
@@ -385,7 +393,13 @@
 				{#if visibleGroups.length === 0}
 					<p class="text-[12px] text-text-muted">{m.explore_no_fields()}</p>
 				{:else}
-					<ExploreFieldTree groups={visibleGroups} {selected} ontoggle={toggleField} />
+					<ExploreFieldTree
+						groups={visibleGroups}
+						{selected}
+						timeGrain={query.time_grain ?? ''}
+						ontoggle={toggleField}
+						onpickgrain={pickGrain}
+					/>
 				{/if}
 			{/if}
 			<a class="text-[12px] text-primary hover:underline" href={resolve('/models')}>
@@ -609,7 +623,12 @@
 							<Badge tone="info">{compiled.dialect}</Badge>
 							<CopyButton value={compiled.sql} label="SQL" />
 						</div>
-						<CodeBlock code={compiled.sql} language="sql" />
+						<CodeBlock
+							code={compiled.sql}
+							language="sql"
+							dialect={bindings.find((b) => b.id === bindingId)?.codemirrorBase}
+							label={m.explore_compiled_sql()}
+						/>
 						{#if (compiled.notes ?? []).length > 0}
 							<ul
 								class="mt-2 list-disc pl-5 text-[12px] text-text-muted"

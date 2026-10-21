@@ -5,6 +5,7 @@ import ModelEditor from '$lib/semantic/ModelEditor.svelte';
 import { http, server } from '../../../test/server';
 import {
 	makeCatalogBinding,
+	makeEngine,
 	makeSearchResult,
 	makeSemanticModel,
 	makeSpace,
@@ -27,6 +28,7 @@ function baseHandlers(models = [makeSemanticModel()]) {
 		http.get('/workspaces/{id}/queries', ({ response }) => response(200).json([])),
 		http.get('/workspaces/{id}/folders', ({ response }) => response(200).json([])),
 		http.get('/workspaces/{id}/semantic/models', ({ response }) => response(200).json(models)),
+		http.get('/engines', ({ response }) => response(200).json([makeEngine()])),
 		http.get('/catalogs', ({ response }) => response(200).json([])),
 		http.get('/catalogs/{id}/bindings', ({ response }) =>
 			response(200).json([makeCatalogBinding()])
@@ -202,6 +204,65 @@ describe('model editor', () => {
 		expect(screen.getByText('The query cannot be compiled')).toBeTruthy();
 	});
 
+	it('saves custom SQL and filtered metrics with their format', async () => {
+		baseHandlers([]);
+		let sent: Record<string, unknown> | undefined;
+		server.use(
+			http.patch('/workspaces/{id}/semantic/models/{model_id}', async ({ request, response }) => {
+				sent = (await request.json()) as Record<string, unknown>;
+				return response(200).json(makeSemanticModel());
+			})
+		);
+
+		render(ModelEditor, { model: makeSemanticModel(), onsaved: () => {} });
+		const kind = await screen.findByLabelText('Kind');
+		await fireEvent.change(kind, { target: { value: 'sql' } });
+		await fireEvent.input(screen.getByLabelText(/Aggregate expression/), {
+			target: { value: 'SUM(id) - 1' }
+		});
+		const decimals = screen.getAllByLabelText('Decimals');
+		await fireEvent.input(decimals[decimals.length - 1], { target: { value: '2' } });
+		await fireEvent.click(screen.getAllByRole('button', { name: 'Add filter' })[0]);
+		const operators = screen.getAllByLabelText('Operator');
+		await fireEvent.change(operators[operators.length - 1], { target: { value: 'in' } });
+		const values = screen.getAllByLabelText('Value');
+		await fireEvent.input(values[values.length - 1], { target: { value: '1, 2' } });
+		const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+		await waitFor(() => expect(save.disabled).toBe(false));
+		await fireEvent.click(save);
+
+		await waitFor(() => expect(sent).toBeDefined());
+		const metric = (sent?.definition as { metrics: Record<string, unknown>[] }).metrics[0];
+		expect(metric).toEqual({
+			name: 'revenue',
+			label: 'Revenue',
+			sql: 'SUM(id) - 1',
+			format: { type: 'number', decimals: 2 },
+			filters: [{ column: 'id', op: 'in', values: [1, 2] }]
+		});
+	});
+
+	it('does not send certification when the user may not certify', async () => {
+		baseHandlers([]);
+		let sent: Record<string, unknown> | undefined;
+		server.use(
+			http.patch('/workspaces/{id}/semantic/models/{model_id}', async ({ request, response }) => {
+				sent = (await request.json()) as Record<string, unknown>;
+				return response(200).json(makeSemanticModel());
+			})
+		);
+		const model = makeSemanticModel({ certified: true, allowed_actions: ['view', 'update'] });
+
+		render(ModelEditor, { model, onsaved: () => {} });
+		const save = await screen.findByRole('button', { name: 'Save' });
+		await waitFor(() => expect((save as HTMLButtonElement).disabled).toBe(false));
+		await fireEvent.click(save);
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent).not.toHaveProperty('certified');
+		expect(screen.queryByLabelText('Certified')).toBeNull();
+	});
+
 	it('previews the SQL of a sample exploration for a saved model', async () => {
 		baseHandlers([makeSemanticModel()]);
 		server.use(
@@ -214,5 +275,63 @@ describe('model editor', () => {
 		await fireEvent.click(await screen.findByRole('button', { name: 'Compile a sample' }));
 
 		await waitFor(() => expect(document.body.textContent).toContain('SELECT status FROM orders'));
+	});
+});
+
+describe('v1 migration dialog', () => {
+	beforeEach(() => {
+		workspaceStore.select(makeWorkspace({ id: WS }));
+		nav.goto.mockReset();
+	});
+
+	it('dry-runs, takes a primary key for a new model and applies', async () => {
+		baseHandlers([]);
+		const bodies: { dry_run: boolean; tables?: unknown[] }[] = [];
+		server.use(
+			http.post('/workspaces/{id}/semantic/models/migrate-v1', async ({ request, response }) => {
+				const body = (await request.json()) as { dry_run: boolean; tables?: unknown[] };
+				bodies.push(body);
+				const keyed = (body.tables?.length ?? 0) > 0;
+				return response(200).json({
+					dry_run: body.dry_run,
+					items: [
+						{
+							catalog_id: '00000000-0000-0000-0000-0000000000e2',
+							namespace: ['sales'],
+							table: 'orders',
+							model_slug: 'orders',
+							model_id: body.dry_run ? null : '00000000-0000-0000-0000-0000000000d1',
+							metrics: ['revenue'],
+							columns: ['order_id', 'amount'],
+							primary_key: keyed ? ['order_id'] : [],
+							action: keyed ? 'CREATE' : 'ERROR',
+							error: keyed ? null : 'choose the primary key columns of orders'
+						}
+					]
+				});
+			})
+		);
+
+		render(ModelsPage);
+		await fireEvent.click(await screen.findByRole('button', { name: 'Migrate v1 metrics' }));
+
+		expect(await screen.findByText('choose the primary key columns of orders')).toBeTruthy();
+		const apply = screen.getByRole('button', { name: 'Apply (0)' }) as HTMLButtonElement;
+		expect(apply.disabled).toBe(true);
+
+		await fireEvent.click(screen.getByLabelText('order_id'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+		await fireEvent.click(await screen.findByRole('button', { name: 'Apply (1)' }));
+
+		expect(await screen.findByText('Migration applied.')).toBeTruthy();
+		expect(bodies.map((b) => b.dry_run)).toEqual([true, true, false]);
+		expect(bodies[2].tables).toEqual([
+			{
+				catalog_id: '00000000-0000-0000-0000-0000000000e2',
+				namespace: ['sales'],
+				table: 'orders',
+				primary_key: ['order_id']
+			}
+		]);
 	});
 });
