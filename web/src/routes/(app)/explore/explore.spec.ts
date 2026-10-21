@@ -175,6 +175,57 @@ describe('explore page', () => {
 		expect(screen.getByText(/chained join to "regions"/)).toBeTruthy();
 	});
 
+	it('explains a failed run with the error catalog and the engine detail', async () => {
+		useBackend(() => ok('SELECT 1'));
+		const EXEC = '00000000-0000-0000-0000-0000000000e9';
+		server.use(
+			http.post('/workspaces/{id}/executions', ({ response }) =>
+				response(202).json({
+					id: EXEC,
+					workspace_id: WS,
+					status: 'running',
+					sql: 'SELECT 1',
+					read_only: true
+				})
+			),
+			http.get('/workspaces/{id}/executions/{execution_id}', ({ response }) =>
+				response(200).json({
+					id: EXEC,
+					workspace_id: WS,
+					status: 'failed',
+					sql: 'SELECT 1',
+					read_only: true
+				})
+			),
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				response(200).json([
+					{
+						id: '00000000-0000-0000-0000-0000000000f9',
+						execution_id: EXEC,
+						position: 1,
+						sql: 'SELECT 1',
+						status: 'failed',
+						error_code: 'permission_denied',
+						error_message: 'Access Denied: Cannot select from table orders'
+					}
+				])
+			)
+		);
+		nav.url = new URL(
+			`http://localhost/explore?q=${encodeShare({ model: 'orders', metrics: ['revenue'] })}`
+		);
+
+		render(ExplorePage);
+		const run = await screen.findByRole('button', { name: 'Run' });
+		await waitFor(() => expect((run as HTMLButtonElement).disabled).toBe(false));
+		await fireEvent.click(run);
+
+		const alert = await screen.findByRole('alert');
+		expect(alert.textContent).not.toContain('Access Denied');
+		await fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+		expect(alert.textContent).toContain('Access Denied: Cannot select from table orders');
+	});
+
 	it('explains a link to a model the user cannot see', async () => {
 		useBackend(() => ok('SELECT 1'));
 		nav.url = new URL(`http://localhost/explore?q=${encodeShare({ model: 'ghost' })}`);

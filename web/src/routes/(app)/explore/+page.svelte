@@ -71,7 +71,9 @@
 	let runStatus = $state<'idle' | 'running' | 'finished' | 'failed' | 'cancelled' | 'timeout'>(
 		'idle'
 	);
-	let runError = $state('');
+	// The engine's failure as the error catalog reads it (FD7): a code for the
+	// headline, the native message only as a detail.
+	let runError = $state<{ code: string; error_native?: string } | null>(null);
 	let poller: PollController<string> | undefined;
 	let saveOpen = $state(false);
 
@@ -272,7 +274,7 @@
 		poller = undefined;
 		executionId = '';
 		runStatus = 'idle';
-		runError = '';
+		runError = null;
 	}
 
 	async function run() {
@@ -290,7 +292,11 @@
 		});
 		if (error || !data) {
 			runStatus = 'failed';
-			runError = apiErrorMessage(error, m.explore_run_failed());
+			const body = error as { code?: string } | undefined;
+			runError = {
+				code: body?.code ?? 'internal',
+				error_native: apiErrorMessage(error, m.explore_run_failed())
+			};
 			return;
 		}
 		const id = data.id;
@@ -312,7 +318,18 @@
 		}
 		executionId = id;
 		runStatus = result as typeof runStatus;
-		if (result === 'failed') runError = m.explore_run_failed();
+		if (result === 'failed') runError = await statementError(id);
+	}
+
+	async function statementError(id: string) {
+		const { data } = await client.GET('/workspaces/{id}/executions/{execution_id}/statements', {
+			params: { path: { id: workspaceId, execution_id: id } }
+		});
+		const failed = (data ?? []).find((statement) => statement.status === 'failed');
+		return {
+			code: failed?.error_code ?? 'query_failed',
+			error_native: failed?.error_message ?? undefined
+		};
 	}
 
 	// ── actions ─────────────────────────────────────────────────────────────────
@@ -653,11 +670,13 @@
 				{:else if runStatus === 'running'}
 					<Skeleton class="h-32 w-full" />
 				{:else if runStatus === 'failed' || runStatus === 'cancelled' || runStatus === 'timeout'}
-					<ErrorState
-						title={m.explore_run_failed()}
-						message={runError || m.explore_run_failed()}
-						onretry={run}
-					/>
+					<p class="mb-2 text-[13px] font-semibold">{m.explore_run_failed()}</p>
+					{#if runError}
+						<ErrorPanel error={runError} />
+					{/if}
+					<div class="mt-2">
+						<Button onclick={run}>{m.explore_run_again()}</Button>
+					</div>
 				{:else if executionId}
 					<div class="h-96">
 						<ResultsPanel {executionId} enabled={runStatus === 'finished'} />

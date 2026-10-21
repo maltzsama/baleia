@@ -22,7 +22,7 @@
 
 	--color-success: #047857;
 	--color-success-hover: #065f46;
-	--color-danger: #ef4444;
+	--color-danger: #dc2626; /* 4.8:1 on bg-panel, also with white text (WCAG AA) */
 
 	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 	--radius: 8px;
@@ -59,6 +59,8 @@
 	--color-border-hover: #484f58;
 	--color-text-main: #e6edf3;
 	--color-text-muted: #7d8590;
+	/* The light danger is too dark on dark panels; this one is 4.6:1 there. */
+	--color-danger: #ef4444;
 
 	--color-type-string: #2dd4bf;
 	--color-type-string-bg: #0d2320;

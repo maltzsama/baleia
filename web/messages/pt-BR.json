@@ -1009,5 +1009,6 @@
 	"models_migrate_apply": "Aplicar ({count})",
 	"models_close": "Fechar",
 	"explore_compiled_sql": "SQL compilado",
-	"models_definition": "Definição do model"
+	"models_definition": "Definição do model",
+	"explore_run_again": "Executar de novo"
 }
