@@ -90,14 +90,17 @@ func probeOIDC(ctx context.Context, cfg auth.OIDCProviderConfig) IdentityProvide
 	if err != nil {
 		return idpTestResult(idpCheck{name: "discovery", status: idpCheckFailed, message: "discovery_failed"})
 	}
-	checks := []idpCheck{{name: "discovery", status: idpCheckOK}}
-
 	var discovery struct {
 		JWKSURI       string   `json:"jwks_uri"`
 		TokenEndpoint string   `json:"token_endpoint"`
 		GrantTypes    []string `json:"grant_types_supported"`
 	}
-	_ = provider.Discovery(&discovery)
+	// A document that does not decode is a failed discovery, not one with
+	// every endpoint missing (#373).
+	if err := provider.Discovery(&discovery); err != nil {
+		return idpTestResult(idpCheck{name: "discovery", status: idpCheckFailed, message: "discovery_failed"})
+	}
+	checks := []idpCheck{{name: "discovery", status: idpCheckOK}}
 
 	switch {
 	case discovery.JWKSURI == "":
