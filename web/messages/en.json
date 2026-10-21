@@ -1030,5 +1030,6 @@
 	"workbench_completion_materialized_view": "Materialized view",
 	"workbench_completion_in_schema": "In {schema}",
 	"workbench_completion_schema": "schema",
-	"workbench_completion_function": "function"
+	"workbench_completion_function": "function",
+	"components_resultspanel_statements": "Statements"
 }

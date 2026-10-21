@@ -3,8 +3,11 @@
 	import { toasts } from '$lib/ui/toast.svelte';
 	import { cellText, formatCell, fullJson, type ColumnMeta } from '$lib/results/format';
 	import { RESULT_PAGE_SIZE, type ResultsStore } from '$lib/results/store.svelte';
+	import type { Snippet } from 'svelte';
 
-	let { store }: { store: ResultsStore } = $props();
+	// `actions` sits at the end of the toolbar (export), so the results area
+	// has one bar (#393).
+	let { store, actions }: { store: ResultsStore; actions?: Snippet } = $props();
 
 	const ROW_HEIGHT = 28;
 	const HEADER_HEIGHT = 32;
@@ -179,8 +182,9 @@
 	<div
 		class="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[11px] text-text-muted"
 	>
-		<span>{store.rowCount.toLocaleString()} {m.common_rows()}</span>
+		<!-- The run summary has the row count; here it is the download progress. -->
 		{#if store.loading && !store.done}
+			<span>{store.rowCount.toLocaleString()} {m.common_rows()}</span>
 			<span class="flex items-center gap-1">
 				<span class="h-2 w-2 animate-pulse rounded-full bg-primary"></span>
 				{formatBytes(store.bytes)}
@@ -217,6 +221,7 @@
 				}}>{m.common_expand()}</button
 			>
 		{/if}
+		{@render actions?.()}
 	</div>
 
 	{#if store.pageError}

@@ -9,7 +9,7 @@
 	import { indentWithTab } from '@codemirror/commands';
 	import { sql as sqlLanguage } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
-	import { autocompletion } from '@codemirror/autocomplete';
+	import { autocompletion, closeCompletion } from '@codemirror/autocomplete';
 
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { editor } from '$lib/stores/editor.svelte';
@@ -658,6 +658,8 @@
 	async function submit(sqlText: string) {
 		const text = sqlText.trim();
 		if (!text) return;
+		// A run is not a completion choice: drop an open suggestion list.
+		if (editorView) closeCompletion(editorView);
 		const idx = activeIdx;
 		const tab = tabs[idx];
 		if (!tab.bindingId) {
@@ -1104,7 +1106,8 @@
 			{cursorLine}{m.components_queryeditor_col()}
 			{cursorCol}</span
 		>
-		<span>{activeTab.statusText}</span>
+		<!-- Once the run ended, its panel below says how (#393). -->
+		{#if !runEnded}<span>{activeTab.statusText}</span>{/if}
 		{#if activeTab.errorMsg}<span class="text-red-600">{activeTab.errorMsg}</span>{/if}
 	</div>
 
@@ -1122,7 +1125,8 @@
 			     or DML) has nothing to show below the run panel (#387). A SELECT
 			     with no rows still has a result set: its columns. -->
 			{#if !runEnded || runHasResults}
-				<div class="min-h-0 flex-1">
+				<!-- A flex column, so the grid gets a bounded height and scrolls (#393). -->
+				<div class="flex min-h-0 flex-1 flex-col">
 					<ResultsPanel executionId={activeTab.executionId} enabled={runEnded} />
 				</div>
 			{/if}

@@ -63,10 +63,34 @@ describe('ResultsPanel', () => {
 
 		render(ResultsPanel, { props: { executionId: EXEC, enabled: true } });
 
-		expect(await screen.findByText('Statement 1')).toBeTruthy();
 		expect(await screen.findByText('id')).toBeTruthy();
 		expect(await screen.findByText('note')).toBeTruthy();
 		expect(await screen.findByText('a')).toBeTruthy();
+		// A lone statement has no tab strip: the run panel already names it (#393).
+		expect(screen.queryByRole('tab')).toBeNull();
+	});
+
+	it('shows one tab per statement for a script, without status badges', async () => {
+		server.use(
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				response(200).json([
+					statement([{ result_index: 0, rows: 2, bytes: 100, truncated: false }]),
+					{
+						...statement([{ result_index: 0, rows: 2, bytes: 100, truncated: false }]),
+						id: '00000000-0000-0000-0000-0000000000f2',
+						position: 2,
+						sql: 'SELECT 2'
+					}
+				])
+			)
+		);
+		mockResult({ id: [1, 2], note: ['a', 'b'] });
+
+		render(ResultsPanel, { props: { executionId: EXEC, enabled: true } });
+
+		const tabs = await screen.findAllByRole('tab');
+		expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Statement 1', 'Statement 2']);
+		expect(screen.queryByText('Finished')).toBeNull();
 	});
 
 	it('warns when the result was truncated', async () => {
@@ -134,9 +158,9 @@ describe('ResultsPanel', () => {
 		);
 
 		render(ResultsPanel, { props: { executionId: EXEC, enabled: true } });
-		await screen.findByText('Statement 1');
 
-		await fireEvent.change(screen.getByLabelText('Export format'), {
+		// Export sits in the grid toolbar once the result loads.
+		await fireEvent.change(await screen.findByLabelText('Export format'), {
 			target: { value: 'tsv' }
 		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Export' }));

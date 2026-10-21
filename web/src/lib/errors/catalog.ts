@@ -287,10 +287,76 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 		title: 'Agent token expiring',
 		explanation: 'An agent token expires within seven days.',
 		remediation: 'Open the agent and rotate its token.'
+	},
+
+	// A statement the engine ran (#393). The catalog key is `statement.<code>`,
+	// the engine code the worker stores; the engine's own message is the
+	// detail that names the object or the position.
+	'statement.syntax': {
+		title: 'SQL error',
+		explanation: 'The engine could not parse or type-check the statement.',
+		remediation: 'Fix the statement at the line and column the engine reports.'
+	},
+	'statement.not_found': {
+		title: 'Name not found',
+		explanation:
+			'A catalog, schema, table, column or function in the statement does not exist on the engine, or you cannot see it.',
+		remediation: 'Check the spelling and the qualified name the engine reports.'
+	},
+	'statement.permission_denied': {
+		title: 'Access denied by the engine',
+		explanation: 'The engine refused the statement for your identity.',
+		remediation: 'Ask an administrator for access to the object the engine names.'
+	},
+	'statement.read_only_unsupported': {
+		title: 'Writes are not allowed here',
+		explanation: 'This target runs read-only and the statement modifies data.',
+		remediation: 'Run a read-only statement, or use a target with write access.'
+	},
+	'statement.timeout': {
+		title: 'Statement timed out',
+		explanation: 'The engine stopped the statement at its time limit.',
+		remediation: 'Narrow the query (filters, LIMIT) or ask for a higher limit.'
+	},
+	'statement.cancelled': {
+		title: 'Statement cancelled',
+		explanation: 'The statement was cancelled before it finished.',
+		remediation: 'Run it again if you still need the result.'
+	},
+	'statement.resource_exhausted': {
+		title: 'Engine out of resources',
+		explanation: 'The engine ran out of memory or queue capacity for this statement.',
+		remediation: 'Retry later or narrow the query.'
+	},
+	'statement.engine_unavailable': {
+		title: 'Engine unavailable',
+		explanation: 'The engine could not be reached or is starting up.',
+		remediation: 'Retry in a moment; if it persists, check the engine health.'
+	},
+	'statement.conflict': {
+		title: 'Write conflict',
+		explanation: 'The statement conflicted with a concurrent change and was not applied.',
+		remediation: 'Run it again; it is never retried automatically.'
+	},
+	'statement.interrupted': {
+		title: 'Run interrupted',
+		explanation:
+			'The Baleia worker stopped while the statement was running; it may or may not have completed on the engine.',
+		remediation: 'Check the data, then re-run from this statement or the next one.'
+	},
+	'statement.internal': {
+		title: 'Statement failed',
+		explanation: 'The engine reported an error Baleia does not classify.',
+		remediation: 'Read the engine message below.'
 	}
 };
 
-export function describeError(error: unknown): DescribedError {
+/**
+ * Describes an error for the UI. With `scope`, a `<scope>.<code>` entry wins
+ * over the plain code: a statement's `not_found` is a missing table, not a
+ * deleted resource.
+ */
+export function describeError(error: unknown, scope?: 'statement'): DescribedError {
 	let code = 'internal';
 	let requestId: string | undefined;
 	let native: string | undefined;
@@ -304,11 +370,12 @@ export function describeError(error: unknown): DescribedError {
 		if (typeof value.error_native === 'string') native = value.error_native;
 	}
 
-	const entry = errorCatalog[code] ?? {
-		title: 'Unexpected error',
-		explanation: 'Baleia could not classify this error.',
-		remediation: 'Retry; if it persists, contact an administrator.'
-	};
+	const entry = (scope && errorCatalog[`${scope}.${code}`]) ||
+		errorCatalog[code] || {
+			title: 'Unexpected error',
+			explanation: 'Baleia could not classify this error.',
+			remediation: 'Retry; if it persists, contact an administrator.'
+		};
 
 	return { code, ...entry, requestId, native };
 }
