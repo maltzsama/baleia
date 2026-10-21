@@ -1,8 +1,11 @@
 package api
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // The definition a client sends carries neither the slug nor the binding, and
@@ -71,5 +74,204 @@ func TestSemanticModels_CompileResolvesModelByRowSlug(t *testing.T) {
 	}
 	if _, ok := compile("orders").(CompileExploreQuery404JSONResponse); !ok {
 		t.Fatalf("the old slug should no longer resolve")
+	}
+}
+
+func migrate(t *testing.T, f *metaFixture, ctx context.Context, body MigrateV1Request) MigrateV1Report {
+	t.Helper()
+	r, err := f.h.MigrateSemanticMetricsV1(ctx, MigrateSemanticMetricsV1RequestObject{Id: f.ws, Body: &body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, ok := r.(MigrateSemanticMetricsV1200JSONResponse)
+	if !ok {
+		t.Fatalf("migrate: %T", r)
+	}
+	return MigrateV1Report(report)
+}
+
+func listModels(t *testing.T, f *metaFixture, ctx context.Context) []SemanticModel {
+	t.Helper()
+	r, err := f.h.ListSemanticModels(ctx, ListSemanticModelsRequestObject{Id: f.ws})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r.(ListSemanticModels200JSONResponse)
+}
+
+// v1 metrics of one table become one model whose metrics keep their slugs; a
+// dry run writes nothing and a second run changes nothing (#91, #121).
+func TestSemanticModels_MigrateV1(t *testing.T) {
+	f, _ := metricFixture(t)
+	ctx := f.as(f.owner)
+	for _, body := range []SemanticMetricCreate{
+		{Slug: "order_count", Label: "Orders", CatalogId: f.lake, Namespace: []string{"sales"}, Table: "orders", Definition: simpleDefinition("count", "")},
+		{Slug: "notes", Label: "Notes", CatalogId: f.lake, Namespace: []string{"sales"}, Table: "orders", Definition: simpleDefinition("count_distinct", "order_note")},
+	} {
+		if _, ok := createMetric(t, f, ctx, body).(CreateSemanticMetric201JSONResponse); !ok {
+			t.Fatalf("create metric %s", body.Slug)
+		}
+	}
+
+	dry := migrate(t, f, ctx, MigrateV1Request{})
+	if !dry.DryRun || len(dry.Items) != 1 {
+		t.Fatalf("dry run = %+v", dry)
+	}
+	item := dry.Items[0]
+	if item.Action != MigrateV1ItemActionCREATE || item.ModelSlug != "orders" || item.ModelId != nil {
+		t.Fatalf("dry item = %+v", item)
+	}
+	if strings.Join(item.PrimaryKey, ",") != "id" || strings.Join(item.Metrics, ",") != "notes,order_count" {
+		t.Fatalf("dry item = %+v", item)
+	}
+	if strings.Join(item.Columns, ",") != "id,order_note" {
+		t.Fatalf("columns = %v (the list column has no portable type)", item.Columns)
+	}
+	if got := listModels(t, f, ctx); len(got) != 0 {
+		t.Fatalf("a dry run wrote %d models", len(got))
+	}
+
+	apply := false
+	applied := migrate(t, f, ctx, MigrateV1Request{DryRun: &apply})
+	if applied.Items[0].Action != MigrateV1ItemActionCREATE || applied.Items[0].ModelId == nil {
+		t.Fatalf("apply = %+v", applied.Items[0])
+	}
+	models := listModels(t, f, ctx)
+	if len(models) != 1 || models[0].Slug != "orders" || models[0].Version != 1 {
+		t.Fatalf("models = %+v", models)
+	}
+
+	// The migrated metrics compile with their v1 slugs.
+	metrics := []string{"order_count", "notes"}
+	r, err := f.h.CompileExploreQuery(ctx, CompileExploreQueryRequestObject{
+		Id: f.ws, Body: &ExploreCompileRequest{Query: ExploreQuery{Model: "orders", Metrics: &metrics}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, ok := r.(CompileExploreQuery200JSONResponse)
+	if !ok {
+		t.Fatalf("compile: %+v", r)
+	}
+	if !strings.Contains(out.Sql, "COUNT(DISTINCT") {
+		t.Fatalf("sql = %s", out.Sql)
+	}
+
+	again := migrate(t, f, ctx, MigrateV1Request{DryRun: &apply})
+	if again.Items[0].Action != MigrateV1ItemActionNOCHANGES {
+		t.Fatalf("second run = %+v", again.Items[0])
+	}
+
+	// A new v1 metric on the same table is added to the existing model.
+	createMetric(t, f, ctx, SemanticMetricCreate{Slug: "max_id", Label: "Max id", CatalogId: f.lake, Namespace: []string{"sales"}, Table: "orders", Definition: simpleDefinition("max", "id")})
+	updated := migrate(t, f, ctx, MigrateV1Request{DryRun: &apply})
+	if updated.Items[0].Action != MigrateV1ItemActionUPDATE {
+		t.Fatalf("update run = %+v", updated.Items[0])
+	}
+	if got := listModels(t, f, ctx); len(got) != 1 || got[0].Version != 2 {
+		t.Fatalf("models after update = %+v", got)
+	}
+}
+
+// A table without an id column needs an explicit primary key.
+func TestSemanticModels_MigrateV1NeedsPrimaryKey(t *testing.T) {
+	f, _ := metricFixture(t)
+	ctx := f.as(f.owner)
+	if _, err := f.pool.Exec(context.Background(), `UPDATE metadata_columns SET name = 'order_id' WHERE table_id = $1 AND name = 'id'`, f.orders); err != nil {
+		t.Fatal(err)
+	}
+	createMetric(t, f, ctx, SemanticMetricCreate{Slug: "order_count", Label: "Orders", CatalogId: f.lake, Namespace: []string{"sales"}, Table: "orders", Definition: simpleDefinition("count", "")})
+
+	report := migrate(t, f, ctx, MigrateV1Request{})
+	if report.Items[0].Action != MigrateV1ItemActionERROR || report.Items[0].Error == nil {
+		t.Fatalf("item = %+v", report.Items[0])
+	}
+	apply := false
+	chosen := migrate(t, f, ctx, MigrateV1Request{DryRun: &apply, Tables: &[]MigrateV1Table{{
+		CatalogId: f.lake, Namespace: []string{"sales"}, Table: "orders", PrimaryKey: []string{"order_id"},
+	}}})
+	if chosen.Items[0].Action != MigrateV1ItemActionCREATE {
+		t.Fatalf("with a primary key = %+v", chosen.Items[0])
+	}
+}
+
+// A space that holds only models is not empty: deleting it without force must
+// not cascade over them, and the content search finds models (#113, #121).
+func TestSemanticModels_SpaceCountsAndSearch(t *testing.T) {
+	f, _ := metricFixture(t)
+	ctx := f.as(f.owner)
+	created, err := f.h.CreateSemanticModel(ctx, CreateSemanticModelRequestObject{Id: f.ws, Body: &SemanticModelCreate{
+		Slug: "orders", Label: "Orders model", CatalogId: f.lake,
+		Definition: map[string]interface{}{
+			"source":      map[string]interface{}{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
+			"primary_key": []string{"id"},
+			"dimensions":  []map[string]interface{}{{"name": "id", "type": "int64"}},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := created.(CreateSemanticModel201JSONResponse)
+	n, err := f.h.queries.CountSpaceContent(context.Background(), pgtype.UUID{Bytes: *model.SpaceId, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n == 0 {
+		t.Fatal("a space with a model counts as empty")
+	}
+
+	r, err := f.h.SearchContent(ctx, SearchContentRequestObject{Id: f.ws, Params: SearchContentParams{Q: "orders mod"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := r.(SearchContent200JSONResponse)
+	if len(items) != 1 || items[0].Kind != "semantic_model" || items[0].Id != model.Id {
+		t.Fatalf("search = %+v", items)
+	}
+}
+
+// A valid query the compiler cannot express answers not_supported, not
+// invalid_definition and never a 500.
+func TestSemanticModels_CompileUnsupportedCode(t *testing.T) {
+	f, _ := metricFixture(t)
+	ctx := f.as(f.owner)
+	create := func(slug string, def map[string]interface{}) {
+		t.Helper()
+		r, err := f.h.CreateSemanticModel(ctx, CreateSemanticModelRequestObject{Id: f.ws, Body: &SemanticModelCreate{
+			Slug: slug, Label: slug, CatalogId: f.lake, Definition: def,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := r.(CreateSemanticModel201JSONResponse); !ok {
+			t.Fatalf("create %s: %+v", slug, r)
+		}
+	}
+	create("customers", map[string]interface{}{
+		"source":      map[string]interface{}{"kind": "table", "namespace": []string{"sales"}, "table": "customers"},
+		"primary_key": []string{"cid"},
+		"dimensions":  []map[string]interface{}{{"name": "cid", "type": "int64"}},
+		"metrics": []map[string]interface{}{
+			{"name": "a", "aggregation": "count"},
+			{"name": "b", "aggregation": "count"},
+			{"name": "ratio", "derived": map[string]interface{}{"left": "a", "op": "/", "right": "b"}},
+		},
+	})
+	create("orders", map[string]interface{}{
+		"source":      map[string]interface{}{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
+		"primary_key": []string{"id"},
+		"dimensions":  []map[string]interface{}{{"name": "id", "type": "int64"}, {"name": "customer", "type": "int64"}},
+		"joins":       []map[string]interface{}{{"to": "customers", "relationship": "many_to_one", "on": []map[string]string{{"from": "customer", "to": "cid"}}}},
+	})
+	metrics := []string{"ratio"}
+	r, err := f.h.CompileExploreQuery(ctx, CompileExploreQueryRequestObject{
+		Id: f.ws, Body: &ExploreCompileRequest{Query: ExploreQuery{Model: "orders", Metrics: &metrics}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := r.(CompileExploreQuery422JSONResponse)
+	if !ok || got.Code != ErrorCodeNotSupported {
+		t.Fatalf("compile = %+v, want 422 not_supported", r)
 	}
 }

@@ -562,10 +562,10 @@ const (
 
 // Defines values for ImportItemAction.
 const (
-	CREATE    ImportItemAction = "CREATE"
-	ERROR     ImportItemAction = "ERROR"
-	NOCHANGES ImportItemAction = "NO_CHANGES"
-	UPDATE    ImportItemAction = "UPDATE"
+	ImportItemActionCREATE    ImportItemAction = "CREATE"
+	ImportItemActionERROR     ImportItemAction = "ERROR"
+	ImportItemActionNOCHANGES ImportItemAction = "NO_CHANGES"
+	ImportItemActionUPDATE    ImportItemAction = "UPDATE"
 )
 
 // Defines values for ImportReportMode.
@@ -669,6 +669,14 @@ const (
 	MetadataTableSummaryKindMaterializedView MetadataTableSummaryKind = "materialized_view"
 	MetadataTableSummaryKindTable            MetadataTableSummaryKind = "table"
 	MetadataTableSummaryKindView             MetadataTableSummaryKind = "view"
+)
+
+// Defines values for MigrateV1ItemAction.
+const (
+	MigrateV1ItemActionCREATE    MigrateV1ItemAction = "CREATE"
+	MigrateV1ItemActionERROR     MigrateV1ItemAction = "ERROR"
+	MigrateV1ItemActionNOCHANGES MigrateV1ItemAction = "NO_CHANGES"
+	MigrateV1ItemActionUPDATE    MigrateV1ItemAction = "UPDATE"
 )
 
 // Defines values for MigrationSourceType.
@@ -1766,12 +1774,14 @@ type ContentSearchItem struct {
 	Certified  *bool                     `json:"certified,omitempty"`
 	FolderPath []ContentSearchFolderPath `json:"folder_path"`
 	Id         openapi_types.UUID        `json:"id"`
-	Kind       string                    `json:"kind"`
-	Slug       string                    `json:"slug"`
-	Space      ContentSearchSpace        `json:"space"`
-	Title      string                    `json:"title"`
-	UpdatedAt  time.Time                 `json:"updated_at"`
-	UpdatedBy  *ContentSearchSpace       `json:"updated_by"`
+
+	// Kind folder, saved_query, semantic_metric or semantic_model
+	Kind      string              `json:"kind"`
+	Slug      string              `json:"slug"`
+	Space     ContentSearchSpace  `json:"space"`
+	Title     string              `json:"title"`
+	UpdatedAt time.Time           `json:"updated_at"`
+	UpdatedBy *ContentSearchSpace `json:"updated_by"`
 }
 
 // ContentSearchSpace defines model for ContentSearchSpace.
@@ -2816,6 +2826,53 @@ type MetadataTableSummary struct {
 // MetadataTableSummaryKind defines model for MetadataTableSummary.Kind.
 type MetadataTableSummaryKind string
 
+// MigrateV1Item defines model for MigrateV1Item.
+type MigrateV1Item struct {
+	Action    MigrateV1ItemAction `json:"action"`
+	CatalogId openapi_types.UUID  `json:"catalog_id"`
+
+	// Columns Table columns, to choose the primary key from
+	Columns []string `json:"columns"`
+	Error   *string  `json:"error"`
+
+	// Metrics v1 metric slugs that become metrics of this model
+	Metrics []string `json:"metrics"`
+
+	// ModelId Set when the model exists (UPDATE, NO_CHANGES) or was created
+	ModelId    *openapi_types.UUID `json:"model_id"`
+	ModelSlug  string              `json:"model_slug"`
+	Namespace  []string            `json:"namespace"`
+	PrimaryKey []string            `json:"primary_key"`
+	SpaceId    *openapi_types.UUID `json:"space_id,omitempty"`
+	Table      string              `json:"table"`
+}
+
+// MigrateV1ItemAction defines model for MigrateV1Item.Action.
+type MigrateV1ItemAction string
+
+// MigrateV1Report defines model for MigrateV1Report.
+type MigrateV1Report struct {
+	DryRun bool            `json:"dry_run"`
+	Items  []MigrateV1Item `json:"items"`
+}
+
+// MigrateV1Request defines model for MigrateV1Request.
+type MigrateV1Request struct {
+	// DryRun Report what would change without writing
+	DryRun *bool `json:"dry_run,omitempty"`
+
+	// Tables Per-table choices; a table without an entry uses the defaults (primary key: a column named id)
+	Tables *[]MigrateV1Table `json:"tables,omitempty"`
+}
+
+// MigrateV1Table defines model for MigrateV1Table.
+type MigrateV1Table struct {
+	CatalogId  openapi_types.UUID `json:"catalog_id"`
+	Namespace  []string           `json:"namespace"`
+	PrimaryKey []string           `json:"primary_key"`
+	Table      string             `json:"table"`
+}
+
 // Migration defines model for Migration.
 type Migration struct {
 	CreatedAt                 time.Time           `json:"created_at"`
@@ -3469,6 +3526,7 @@ type SpaceCounts struct {
 	Folders         *int `json:"folders,omitempty"`
 	SavedQueries    *int `json:"saved_queries,omitempty"`
 	SemanticMetrics *int `json:"semantic_metrics,omitempty"`
+	SemanticModels  *int `json:"semantic_models,omitempty"`
 }
 
 // SpaceMember defines model for SpaceMember.
@@ -4699,6 +4757,9 @@ type RestoreSemanticMetricVersionJSONRequestBody = RestoreSemanticMetricRequest
 
 // CreateSemanticModelJSONRequestBody defines body for CreateSemanticModel for application/json ContentType.
 type CreateSemanticModelJSONRequestBody = SemanticModelCreate
+
+// MigrateSemanticMetricsV1JSONRequestBody defines body for MigrateSemanticMetricsV1 for application/json ContentType.
+type MigrateSemanticMetricsV1JSONRequestBody = MigrateV1Request
 
 // UpdateSemanticModelJSONRequestBody defines body for UpdateSemanticModel for application/json ContentType.
 type UpdateSemanticModelJSONRequestBody = SemanticModelUpdate

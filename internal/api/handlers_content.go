@@ -20,8 +20,8 @@ var folderSlugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 func (h *Handlers) decorateSpace(ctx context.Context, sp *Space, role string) {
 	counts, err := h.queries.CountSpaceContentKinds(ctx, pgtype.UUID{Bytes: [16]byte(sp.Id), Valid: true})
 	if err == nil {
-		saved, metrics, folders := int(counts.SavedQueries), int(counts.SemanticMetrics), int(counts.Folders)
-		sp.Counts = &SpaceCounts{SavedQueries: &saved, SemanticMetrics: &metrics, Folders: &folders}
+		saved, metrics, models, folders := int(counts.SavedQueries), int(counts.SemanticMetrics), int(counts.SemanticModels), int(counts.Folders)
+		sp.Counts = &SpaceCounts{SavedQueries: &saved, SemanticMetrics: &metrics, SemanticModels: &models, Folders: &folders}
 	}
 	acts := spaceActions(role, sp.IsDefault)
 	sp.AllowedActions = &acts
@@ -169,6 +169,30 @@ func (h *Handlers) SearchContent(ctx context.Context, request SearchContentReque
 				Space:      ContentSearchSpace{Id: openapi_types.UUID(metric.SpaceID.Bytes), Name: spaceNames[metric.SpaceID.Bytes]},
 				FolderPath: []ContentSearchFolderPath{},
 				UpdatedAt:  pgTimestampToTime(metric.UpdatedAt),
+				Certified:  &certified,
+			})
+		}
+	}
+	if kind == "" || kind == "semantic_model" {
+		models, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{
+			WorkspaceID: ws, UserID: p.UserID, SpaceID: spaceID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, model := range models {
+			if !strings.Contains(strings.ToLower(model.Label), lower) && !strings.Contains(strings.ToLower(model.Slug), lower) {
+				continue
+			}
+			certified := model.Certified
+			items = append(items, ContentSearchItem{
+				Kind:       "semantic_model",
+				Id:         openapi_types.UUID(model.ID.Bytes),
+				Slug:       model.Slug,
+				Title:      model.Label,
+				Space:      ContentSearchSpace{Id: openapi_types.UUID(model.SpaceID.Bytes), Name: spaceNames[model.SpaceID.Bytes]},
+				FolderPath: []ContentSearchFolderPath{},
+				UpdatedAt:  pgTimestampToTime(model.UpdatedAt),
 				Certified:  &certified,
 			})
 		}

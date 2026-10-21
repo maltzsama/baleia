@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/semantic/compiler"
 	"github.com/google/uuid"
@@ -153,7 +154,13 @@ func (h *Handlers) CompileExploreQuery(ctx context.Context, request CompileExplo
 	}
 	res, err := compiler.Compile(q, models, engine.Dialect(), compiler.Options{Catalog: target.EngineCatalog})
 	if err != nil {
-		if errors.Is(err, semantic.ErrInvalidExplore) || errors.Is(err, compiler.ErrUnsupported) {
+		// The query is valid but needs something the compiler or the engine's
+		// dialect cannot express (a missing primitive, a fan-out it cannot
+		// resolve): a distinct code, so the UI tells it apart from a mistake.
+		if errors.Is(err, compiler.ErrUnsupported) || errors.Is(err, dialect.ErrUnsupported) {
+			return CompileExploreQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotSupported, err.Error())}, nil
+		}
+		if errors.Is(err, semantic.ErrInvalidExplore) || errors.Is(err, dialect.ErrInvalid) {
 			return CompileExploreQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 		}
 		return nil, err

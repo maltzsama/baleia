@@ -606,6 +606,9 @@ type ServerInterface interface {
 	// Create and validate a model — space editor
 	// (POST /workspaces/{id}/semantic/models)
 	CreateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId)
+	// Migrate v1 metrics into v2 models — space editor (#91, #121)
+	// (POST /workspaces/{id}/semantic/models/migrate-v1)
+	MigrateSemanticMetricsV1(w http.ResponseWriter, r *http.Request, id PathId)
 	// Delete a model — space editor
 	// (DELETE /workspaces/{id}/semantic/models/{model_id})
 	DeleteSemanticModel(w http.ResponseWriter, r *http.Request, id PathId, modelId openapi_types.UUID)
@@ -1848,6 +1851,12 @@ func (_ Unimplemented) ListSemanticModels(w http.ResponseWriter, r *http.Request
 // Create and validate a model — space editor
 // (POST /workspaces/{id}/semantic/models)
 func (_ Unimplemented) CreateSemanticModel(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Migrate v1 metrics into v2 models — space editor (#91, #121)
+// (POST /workspaces/{id}/semantic/models/migrate-v1)
+func (_ Unimplemented) MigrateSemanticMetricsV1(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9516,6 +9525,39 @@ func (siw *ServerInterfaceWrapper) CreateSemanticModel(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// MigrateSemanticMetricsV1 operation middleware
+func (siw *ServerInterfaceWrapper) MigrateSemanticMetricsV1(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MigrateSemanticMetricsV1(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteSemanticModel operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSemanticModel(w http.ResponseWriter, r *http.Request) {
 
@@ -11192,6 +11234,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/semantic/models", wrapper.CreateSemanticModel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/semantic/models/migrate-v1", wrapper.MigrateSemanticMetricsV1)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/{id}/semantic/models/{model_id}", wrapper.DeleteSemanticModel)
@@ -19701,6 +19746,42 @@ func (response CreateSemanticModel422JSONResponse) VisitCreateSemanticModelRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type MigrateSemanticMetricsV1RequestObject struct {
+	Id   PathId `json:"id"`
+	Body *MigrateSemanticMetricsV1JSONRequestBody
+}
+
+type MigrateSemanticMetricsV1ResponseObject interface {
+	VisitMigrateSemanticMetricsV1Response(w http.ResponseWriter) error
+}
+
+type MigrateSemanticMetricsV1200JSONResponse MigrateV1Report
+
+func (response MigrateSemanticMetricsV1200JSONResponse) VisitMigrateSemanticMetricsV1Response(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type MigrateSemanticMetricsV1401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response MigrateSemanticMetricsV1401JSONResponse) VisitMigrateSemanticMetricsV1Response(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type MigrateSemanticMetricsV1404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response MigrateSemanticMetricsV1404JSONResponse) VisitMigrateSemanticMetricsV1Response(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteSemanticModelRequestObject struct {
 	Id      PathId             `json:"id"`
 	ModelId openapi_types.UUID `json:"model_id"`
@@ -21253,6 +21334,9 @@ type StrictServerInterface interface {
 	// Create and validate a model — space editor
 	// (POST /workspaces/{id}/semantic/models)
 	CreateSemanticModel(ctx context.Context, request CreateSemanticModelRequestObject) (CreateSemanticModelResponseObject, error)
+	// Migrate v1 metrics into v2 models — space editor (#91, #121)
+	// (POST /workspaces/{id}/semantic/models/migrate-v1)
+	MigrateSemanticMetricsV1(ctx context.Context, request MigrateSemanticMetricsV1RequestObject) (MigrateSemanticMetricsV1ResponseObject, error)
 	// Delete a model — space editor
 	// (DELETE /workspaces/{id}/semantic/models/{model_id})
 	DeleteSemanticModel(ctx context.Context, request DeleteSemanticModelRequestObject) (DeleteSemanticModelResponseObject, error)
@@ -26867,6 +26951,39 @@ func (sh *strictHandler) CreateSemanticModel(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateSemanticModelResponseObject); ok {
 		if err := validResponse.VisitCreateSemanticModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MigrateSemanticMetricsV1 operation middleware
+func (sh *strictHandler) MigrateSemanticMetricsV1(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request MigrateSemanticMetricsV1RequestObject
+
+	request.Id = id
+
+	var body MigrateSemanticMetricsV1JSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MigrateSemanticMetricsV1(ctx, request.(MigrateSemanticMetricsV1RequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MigrateSemanticMetricsV1")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MigrateSemanticMetricsV1ResponseObject); ok {
+		if err := validResponse.VisitMigrateSemanticMetricsV1Response(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
