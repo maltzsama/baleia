@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -34,20 +35,23 @@ func TestAuditList_Scoping(t *testing.T) {
 		}
 		return r.(ListAuditEvents200JSONResponse)
 	}
+	// The window is required unless actor_id or resource_id narrows it (#49).
+	from := time.Now().Add(-time.Hour)
 	member := ctxAs(alice, "member")
-	if got := list(member, ListAuditEventsParams{}); len(got.Items) != 2 || *got.Items[0].ActorId != alice {
+	if got := list(member, ListAuditEventsParams{From: &from}); len(got.Items) != 2 || *got.Items[0].ActorId != alice {
 		t.Fatalf("member sees %+v", got.Items)
 	}
 	other := bob
-	if got := list(member, ListAuditEventsParams{ActorId: &other}); len(got.Items) != 2 {
+	// The filter is ANDed with the caller's scope (#49), so nothing leaks.
+	if got := list(member, ListAuditEventsParams{ActorId: &other}); len(got.Items) != 0 {
 		t.Fatalf("a member cannot read someone else's events: %+v", got.Items)
 	}
 	admin := ctxAs("33333333-3333-3333-3333-333333333333", "admin")
 	one := 1
-	page := list(admin, ListAuditEventsParams{Limit: &one})
+	page := list(admin, ListAuditEventsParams{From: &from, Limit: &one})
 	seen := len(page.Items)
 	for page.NextCursor != nil {
-		page = list(admin, ListAuditEventsParams{Limit: &one, Cursor: page.NextCursor})
+		page = list(admin, ListAuditEventsParams{From: &from, Limit: &one, Cursor: page.NextCursor})
 		seen += len(page.Items)
 	}
 	if seen != 3 {
