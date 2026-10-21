@@ -30,9 +30,9 @@ func TestFileWriterIndexesBatches(t *testing.T) {
 	require.NoError(t, err)
 
 	const rows = recordBatchSize + 10 // two batches
-	values := make([][]interface{}, 0, rows)
+	values := make([][]any, 0, rows)
 	for i := 0; i < rows; i++ {
-		values = append(values, []interface{}{json.Number(strconv.Itoa(i))})
+		values = append(values, []any{json.Number(strconv.Itoa(i))})
 	}
 	require.NoError(t, b.Append(values, fw.Write))
 	require.NoError(t, b.Flush(fw.Write))
@@ -51,7 +51,7 @@ func TestFileWriterIndexesBatches(t *testing.T) {
 
 // roundTrip writes rows through the streaming writer and reads them back with
 // an IPC reader, returning the exact per-cell values.
-func roundTrip(t *testing.T, cols []ColumnInfo, rows [][]interface{}) [][]interface{} {
+func roundTrip(t *testing.T, cols []ColumnInfo, rows [][]any) [][]any {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -67,9 +67,9 @@ func roundTrip(t *testing.T, cols []ColumnInfo, rows [][]interface{}) [][]interf
 	require.True(t, r.Next(), "expected at least one record batch")
 	rec := r.Record()
 
-	got := make([][]interface{}, rec.NumRows())
+	got := make([][]any, rec.NumRows())
 	for row := 0; row < int(rec.NumRows()); row++ {
-		got[row] = make([]interface{}, len(cols))
+		got[row] = make([]any, len(cols))
 		for col := 0; col < len(cols); col++ {
 			got[row][col] = valueAt(rec.Column(col), row)
 		}
@@ -78,7 +78,7 @@ func roundTrip(t *testing.T, cols []ColumnInfo, rows [][]interface{}) [][]interf
 	return got
 }
 
-func valueAt(a arrow.Array, i int) interface{} {
+func valueAt(a arrow.Array, i int) any {
 	if a.IsNull(i) {
 		return nil
 	}
@@ -125,104 +125,104 @@ func TestTypeMapping(t *testing.T) {
 	cases := []struct {
 		name string
 		cols []ColumnInfo
-		row  []interface{}
-		want []interface{}
+		row  []any
+		want []any
 	}{
 		{
 			name: "timestamp(3)",
 			cols: []ColumnInfo{{"ts", "timestamp(3)"}},
-			row:  []interface{}{"2024-02-29 13:45:01.123"},
-			want: []interface{}{arrow.Timestamp(ts.UnixMilli())},
+			row:  []any{"2024-02-29 13:45:01.123"},
+			want: []any{arrow.Timestamp(ts.UnixMilli())},
 		},
 		{
 			name: "timestamp(6) with time zone",
 			cols: []ColumnInfo{{"ts", "timestamp(6) with time zone"}},
-			row:  []interface{}{"2024-02-29 13:45:01.123456 America/Sao_Paulo"},
-			want: []interface{}{arrow.Timestamp(saoPauloTS.UnixMicro())},
+			row:  []any{"2024-02-29 13:45:01.123456 America/Sao_Paulo"},
+			want: []any{arrow.Timestamp(saoPauloTS.UnixMicro())},
 		},
 		{
 			name: "decimal(38,10)",
 			cols: []ColumnInfo{{"d", "decimal(38,10)"}},
-			row:  []interface{}{"12345678901234567890.0123456789"},
-			want: []interface{}{mustDecimal(t, "12345678901234567890.0123456789", 38, 10)},
+			row:  []any{"12345678901234567890.0123456789"},
+			want: []any{mustDecimal(t, "12345678901234567890.0123456789", 38, 10)},
 		},
 		{
 			name: "bigint exact",
 			cols: []ColumnInfo{{"n", "bigint"}},
-			row:  []interface{}{json.Number("9007199254740993")},
-			want: []interface{}{int64(9007199254740993)},
+			row:  []any{json.Number("9007199254740993")},
+			want: []any{int64(9007199254740993)},
 		},
 		{
 			name: "integer",
 			cols: []ColumnInfo{{"n", "integer"}},
-			row:  []interface{}{json.Number("42")},
-			want: []interface{}{int32(42)},
+			row:  []any{json.Number("42")},
+			want: []any{int32(42)},
 		},
 		{
 			name: "boolean",
 			cols: []ColumnInfo{{"b", "boolean"}},
-			row:  []interface{}{true},
-			want: []interface{}{true},
+			row:  []any{true},
+			want: []any{true},
 		},
 		{
 			name: "double",
 			cols: []ColumnInfo{{"d", "double"}},
-			row:  []interface{}{json.Number("3.5")},
-			want: []interface{}{3.5},
+			row:  []any{json.Number("3.5")},
+			want: []any{3.5},
 		},
 		{
 			name: "real infinity",
 			cols: []ColumnInfo{{"r", "real"}},
-			row:  []interface{}{"Infinity"},
-			want: []interface{}{float32(math.Inf(1))},
+			row:  []any{"Infinity"},
+			want: []any{float32(math.Inf(1))},
 		},
 		{
 			name: "date before epoch",
 			cols: []ColumnInfo{{"d", "date"}},
-			row:  []interface{}{"1969-12-31"},
-			want: []interface{}{arrow.Date32(-1)},
+			row:  []any{"1969-12-31"},
+			want: []any{arrow.Date32(-1)},
 		},
 		{
 			name: "varbinary",
 			cols: []ColumnInfo{{"v", "varbinary"}},
-			row:  []interface{}{"AQID"}, // base64 of {0x01,0x02,0x03}
-			want: []interface{}{string([]byte{0x01, 0x02, 0x03})},
+			row:  []any{"AQID"}, // base64 of {0x01,0x02,0x03}
+			want: []any{string([]byte{0x01, 0x02, 0x03})},
 		},
 		{
 			name: "varchar",
 			cols: []ColumnInfo{{"s", "varchar"}},
-			row:  []interface{}{"hello"},
-			want: []interface{}{"hello"},
+			row:  []any{"hello"},
+			want: []any{"hello"},
 		},
 		{
 			name: "array(integer) as JSON",
 			cols: []ColumnInfo{{"a", "array(integer)"}},
-			row:  []interface{}{[]interface{}{json.Number("1"), json.Number("2")}},
-			want: []interface{}{"[1,2]"},
+			row:  []any{[]any{json.Number("1"), json.Number("2")}},
+			want: []any{"[1,2]"},
 		},
 		{
 			name: "map(varchar,bigint) as JSON",
 			cols: []ColumnInfo{{"m", "map(varchar,bigint)"}},
-			row:  []interface{}{map[string]interface{}{"a": json.Number("1"), "b": json.Number("2")}},
-			want: []interface{}{`{"a":1,"b":2}`},
+			row:  []any{map[string]any{"a": json.Number("1"), "b": json.Number("2")}},
+			want: []any{`{"a":1,"b":2}`},
 		},
 		{
 			name: "row as JSON",
 			cols: []ColumnInfo{{"t", "row(a integer, b varchar)"}},
-			row:  []interface{}{[]interface{}{json.Number("1"), "x"}},
-			want: []interface{}{`[1,"x"]`},
+			row:  []any{[]any{json.Number("1"), "x"}},
+			want: []any{`[1,"x"]`},
 		},
 		{
 			name: "nulls",
 			cols: []ColumnInfo{{"n", "bigint"}, {"s", "varchar"}, {"d", "timestamp(3)"}},
-			row:  []interface{}{nil, nil, nil},
-			want: []interface{}{nil, nil, nil},
+			row:  []any{nil, nil, nil},
+			want: []any{nil, nil, nil},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := roundTrip(t, c.cols, [][]interface{}{c.row})
+			got := roundTrip(t, c.cols, [][]any{c.row})
 			require.Equal(t, 1, len(got))
 			for i := range c.want {
 				require.Equal(t, c.want[i], got[0][i], "column %d", i)
@@ -236,7 +236,7 @@ func TestParseFailureIsError(t *testing.T) {
 	sw, err := NewStreamWriter(&buf, []ColumnInfo{{"n", "bigint"}})
 	require.NoError(t, err)
 
-	err = sw.AppendRows([][]interface{}{{"abc"}})
+	err = sw.AppendRows([][]any{{"abc"}})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "n", "the error must name the offending column")
 }
@@ -246,9 +246,9 @@ func TestStreamingBatches(t *testing.T) {
 	// 20000 / 8192 = 2 full batches + 3616 remainder = 3 batches.
 	const wantBatches = 3
 
-	input := make([][]interface{}, 0, rows)
+	input := make([][]any, 0, rows)
 	for i := 0; i < rows; i++ {
-		input = append(input, []interface{}{json.Number("1")})
+		input = append(input, []any{json.Number("1")})
 	}
 
 	var buf bytes.Buffer

@@ -9,8 +9,8 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 )
 
-func csrfFixture(called *bool) func(context.Context, http.ResponseWriter, *http.Request, interface{}) (interface{}, error) {
-	return func(_ context.Context, w http.ResponseWriter, _ *http.Request, _ interface{}) (interface{}, error) {
+func csrfFixture(called *bool) func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
+	return func(_ context.Context, w http.ResponseWriter, _ *http.Request, _ any) (any, error) {
 		*called = true
 		w.WriteHeader(http.StatusOK)
 		return nil, nil

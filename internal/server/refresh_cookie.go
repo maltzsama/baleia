@@ -28,7 +28,7 @@ func refreshCookieContext(next http.Handler) http.Handler {
 // opt in with X-Baleia-Client: api.
 func refreshCookieMiddleware(cfg *config.Config) api.StrictMiddlewareFunc {
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
-		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args any) (any, error) {
 			resp, err := f(ctx, w, r, args)
 			if err != nil {
 				return resp, err

@@ -57,8 +57,8 @@ func strMap(kv ...string) *map[string]string {
 	return &m
 }
 
-func anyMap(kv ...string) *map[string]interface{} {
-	m := map[string]interface{}{}
+func anyMap(kv ...string) *map[string]any {
+	m := map[string]any{}
 	for i := 0; i+1 < len(kv); i += 2 {
 		m[kv[i]] = kv[i+1]
 	}

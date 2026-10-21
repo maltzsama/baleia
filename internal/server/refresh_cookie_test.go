@@ -13,7 +13,7 @@ import (
 )
 
 func loginHandler(token string) api.StrictHandlerFunc {
-	return func(context.Context, http.ResponseWriter, *http.Request, interface{}) (interface{}, error) {
+	return func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
 		return api.Login200JSONResponse{RefreshToken: &token}, nil
 	}
 }
@@ -94,7 +94,7 @@ func TestRefreshCookie_NotInJSONForBrowser(t *testing.T) {
 // TestLogout_ClearsCookie: logout emits an expired cookie (#51).
 func TestLogout_ClearsCookie(t *testing.T) {
 	cfg := &config.Config{}
-	handler := refreshCookieMiddleware(cfg)(func(context.Context, http.ResponseWriter, *http.Request, interface{}) (interface{}, error) {
+	handler := refreshCookieMiddleware(cfg)(func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
 		return api.Logout204Response{}, nil
 	}, "Logout")
 

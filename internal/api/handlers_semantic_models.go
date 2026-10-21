@@ -209,11 +209,11 @@ func dbSemanticModelToPublic(m db.SemanticModel, version int32) SemanticModel {
 		Version:       int(version),
 		UpdatedAt:     pgTimestampToTime(m.UpdatedAt),
 	}
-	var def map[string]interface{}
+	var def map[string]any
 	if err := json.Unmarshal(m.Definition, &def); err == nil && def != nil {
 		out.Definition = def
 	} else {
-		out.Definition = map[string]interface{}{}
+		out.Definition = map[string]any{}
 	}
 	if m.SpaceID.Valid {
 		v := openapi_types.UUID(m.SpaceID.Bytes)
@@ -300,7 +300,7 @@ func derefBool(p *bool) bool {
 	return *p
 }
 
-func derefAny(p *[]interface{}) []any {
+func derefAny(p *[]any) []any {
 	if p == nil {
 		return nil
 	}
@@ -651,7 +651,7 @@ func (h *Handlers) visibleModels(ctx context.Context, ws, userID pgtype.UUID) (m
 	return out, nil
 }
 
-func parseSemanticModelDefinition(in map[string]interface{}) (semantic.Model, []byte, error) {
+func parseSemanticModelDefinition(in map[string]any) (semantic.Model, []byte, error) {
 	raw, err := json.Marshal(in)
 	if err != nil {
 		return semantic.Model{}, nil, err

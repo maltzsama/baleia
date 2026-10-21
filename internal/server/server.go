@@ -347,7 +347,7 @@ func authMiddlewareFunc(secret string, queries db.Querier) api.StrictMiddlewareF
 	}
 
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
-		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args any) (any, error) {
 			// API keys are checked before the public operations so a key can
 			// never reach /auth/* (#276).
 			if raw := r.Header.Get("X-Api-Key"); raw != "" {

@@ -168,7 +168,7 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		return nil
 	}
 
-	_, err := s.engine.client.ExecuteStream(ctx, sql, opts, func(cols []trinoclient.Column, rows [][]interface{}) error {
+	_, err := s.engine.client.ExecuteStream(ctx, sql, opts, func(cols []trinoclient.Column, rows [][]any) error {
 		if batcher == nil && len(cols) > 0 {
 			infos := make([]arrowipc.ColumnInfo, len(cols))
 			for i, c := range cols {

@@ -15,7 +15,7 @@ func csrfMiddleware(f api.StrictHandlerFunc, operationID string) api.StrictHandl
 	if operationID != "RefreshToken" && operationID != "Logout" {
 		return f
 	}
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args any) (any, error) {
 		if r.Header.Get(auth.CSRFHeader) != auth.CSRFValue {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)

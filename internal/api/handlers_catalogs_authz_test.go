@@ -466,7 +466,7 @@ func TestConnectionHandlers_Authz(t *testing.T) {
 }
 
 // visitCode renders a strict response object and returns its HTTP status.
-func visitCode(t *testing.T, resp interface{}) int {
+func visitCode(t *testing.T, resp any) int {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	switch r := resp.(type) {
@@ -512,7 +512,7 @@ func visitCode(t *testing.T, resp interface{}) int {
 	return rec.Code
 }
 
-func codeOf(t *testing.T, resp interface{}, err error) int {
+func codeOf(t *testing.T, resp any, err error) int {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)

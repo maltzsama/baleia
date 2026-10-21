@@ -53,7 +53,7 @@ func runAuth(t *testing.T, q db.Querier, method, path, operation, apiKey string)
 	t.Helper()
 	var got context.Context
 	called := false
-	handler := func(ctx context.Context, w http.ResponseWriter, _ *http.Request, _ interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, w http.ResponseWriter, _ *http.Request, _ any) (any, error) {
 		called = true
 		got = ctx
 		w.WriteHeader(http.StatusOK)

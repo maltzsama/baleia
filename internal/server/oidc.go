@@ -14,7 +14,7 @@ import (
 // ResponseWriter.
 func oidcMiddleware(cfg *config.Config) api.StrictMiddlewareFunc {
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
-		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args any) (any, error) {
 			res := &api.OIDCResult{}
 			ctx = api.WithOIDCResult(ctx, res)
 			resp, err := f(ctx, w, r, args)

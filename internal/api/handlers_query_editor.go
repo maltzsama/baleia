@@ -1379,12 +1379,12 @@ func (h *Handlers) versionConflictResponse(ctx context.Context, err error) (Conf
 	if !errors.As(err, &vc) {
 		return ConflictJSONResponse{}, false
 	}
-	params := map[string]interface{}{
+	params := map[string]any{
 		"current_version": vc.Current,
 		"updated_at":      vc.UpdatedAt,
 	}
 	if vc.UpdatedBy.Valid {
-		by := map[string]interface{}{"id": uuidStr(vc.UpdatedBy)}
+		by := map[string]any{"id": uuidStr(vc.UpdatedBy)}
 		if user, uerr := h.queries.GetUserByID(ctx, vc.UpdatedBy); uerr == nil {
 			by["name"] = user.Name
 		}

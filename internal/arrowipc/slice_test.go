@@ -38,9 +38,9 @@ func writeInt64File(t *testing.T, total int) []byte {
 	var file bytes.Buffer
 	fw, err := NewFileWriter(&file, b.Schema())
 	require.NoError(t, err)
-	rows := make([][]interface{}, 0, total)
+	rows := make([][]any, 0, total)
 	for i := 0; i < total; i++ {
-		rows = append(rows, []interface{}{json.Number(strconv.Itoa(i))})
+		rows = append(rows, []any{json.Number(strconv.Itoa(i))})
 	}
 	require.NoError(t, b.Append(rows, fw.Write))
 	require.NoError(t, b.Flush(fw.Write))
@@ -85,9 +85,9 @@ func TestSliceStreamSlicesLegacyStream(t *testing.T) {
 	var stream bytes.Buffer
 	sw, err := NewStreamWriter(&stream, []ColumnInfo{{Name: "n", Type: "bigint"}})
 	require.NoError(t, err)
-	rows := make([][]interface{}, 0, 100)
+	rows := make([][]any, 0, 100)
 	for i := 0; i < 100; i++ {
-		rows = append(rows, []interface{}{json.Number(strconv.Itoa(i))})
+		rows = append(rows, []any{json.Number(strconv.Itoa(i))})
 	}
 	require.NoError(t, sw.AppendRows(rows))
 	require.NoError(t, sw.Close())

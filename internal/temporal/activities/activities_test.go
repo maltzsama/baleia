@@ -147,7 +147,7 @@ func (s *fakeSession) Execute(ctx context.Context, sql string, cb queryengine.Ca
 		if err := sink.Begin(b.Schema()); err != nil {
 			return err
 		}
-		if err := b.Append([][]interface{}{{json.Number("1")}}, sink.Write); err != nil {
+		if err := b.Append([][]any{{json.Number("1")}}, sink.Write); err != nil {
 			return err
 		}
 		if err := b.Flush(sink.Write); err != nil {
@@ -200,7 +200,7 @@ func emitBigints(sink queryengine.RecordSink, vals []string) error {
 		return err
 	}
 	for _, v := range vals {
-		if err := b.Append([][]interface{}{{json.Number(v)}}, sink.Write); err != nil {
+		if err := b.Append([][]any{{json.Number(v)}}, sink.Write); err != nil {
 			return err
 		}
 		if err := b.Flush(sink.Write); err != nil {

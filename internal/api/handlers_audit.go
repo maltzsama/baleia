@@ -351,7 +351,7 @@ func testOutcome(ev audit.Event, ok bool) audit.Event {
 
 // connectionChanges lists what an update changed: name, read-only default,
 // URL and config values as they are; credentials only by key, as "***".
-func connectionChanges(before, after db.CatalogConnection, creds *map[string]interface{}) map[string]audit.Change {
+func connectionChanges(before, after db.CatalogConnection, creds *map[string]any) map[string]audit.Change {
 	changes := map[string]audit.Change{}
 	if before.Name != after.Name {
 		changes["name"] = audit.Change{From: before.Name, To: after.Name}

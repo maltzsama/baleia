@@ -252,10 +252,10 @@ func TestLensQueries_MemberSeesOnlyOwn(t *testing.T) {
 type recordingTemporal struct {
 	client.Client
 	mu    sync.Mutex
-	calls [][]interface{}
+	calls [][]any
 }
 
-func (f *recordingTemporal) ExecuteWorkflow(_ context.Context, _ client.StartWorkflowOptions, _ interface{}, args ...interface{}) (client.WorkflowRun, error) {
+func (f *recordingTemporal) ExecuteWorkflow(_ context.Context, _ client.StartWorkflowOptions, _ any, args ...any) (client.WorkflowRun, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, args)

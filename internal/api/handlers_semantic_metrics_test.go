@@ -64,8 +64,8 @@ func metricFixture(t *testing.T) (*metaFixture, *probeEngine) {
 	return f, e
 }
 
-func simpleDefinition(aggregation, column string) map[string]interface{} {
-	def := map[string]interface{}{"type": "simple", "aggregation": aggregation}
+func simpleDefinition(aggregation, column string) map[string]any {
+	def := map[string]any{"type": "simple", "aggregation": aggregation}
 	if column != "" {
 		def["column"] = column
 	}
@@ -177,7 +177,7 @@ func TestSemanticMetrics_CustomSQLRequiresReadOnly422(t *testing.T) {
 	ctx := f.as(f.owner)
 	engine.readOnly = queryengine.ReadOnlyNone
 
-	def := map[string]interface{}{"type": "simple", "custom_sql": `sum("net_revenue")`}
+	def := map[string]any{"type": "simple", "custom_sql": `sum("net_revenue")`}
 	r := createMetric(t, f, ctx, SemanticMetricCreate{
 		Slug: "custom", Label: "Custom", CatalogId: f.lake,
 		Namespace: []string{"sales"}, Table: "orders", Definition: def,
@@ -223,7 +223,7 @@ func TestSemanticMetrics_SQL(t *testing.T) {
 	ctx := f.as(f.owner)
 	def := simpleDefinition("sum", "net_revenue")
 	def["time_column"] = "order_date"
-	def["time_grains"] = []interface{}{"day", "month"}
+	def["time_grains"] = []any{"day", "month"}
 	r := createMetric(t, f, ctx, SemanticMetricCreate{
 		Slug: "net_revenue", Label: "Net revenue", CatalogId: f.lake,
 		Namespace: []string{"sales"}, Table: "orders", Definition: def,

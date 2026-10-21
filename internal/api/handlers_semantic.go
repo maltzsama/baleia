@@ -165,7 +165,7 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 		!request.Body.ExpectedUpdatedAt.Equal(current.UpdatedAt.Time) {
 		by := openapi_types.UUID(current.UpdatedBy.Bytes)
 		at := current.UpdatedAt.Time.Format(time.RFC3339Nano)
-		fields := map[string]interface{}{"updated_by": by, "updated_at": at}
+		fields := map[string]any{"updated_by": by, "updated_at": at}
 		return UpsertSemanticDoc409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: ErrorCodeVersionConflict, Message: "the doc changed since you loaded it", Params: &fields,
 		}}, nil
@@ -853,7 +853,7 @@ func (h *Handlers) GetSemanticMetricSql(ctx context.Context, request GetSemantic
 
 // parseDefinition decodes the request's free-form definition and rejects
 // unknown fields; it returns the normalized JSON stored in the database.
-func parseDefinition(in map[string]interface{}) (semantic.SimpleMetricV1, []byte, error) {
+func parseDefinition(in map[string]any) (semantic.SimpleMetricV1, []byte, error) {
 	raw, err := json.Marshal(in)
 	if err != nil {
 		return semantic.SimpleMetricV1{}, nil, err
@@ -1056,7 +1056,7 @@ func dbSemanticMetricToPublic(m db.SemanticMetric, version int32) SemanticMetric
 		Version:       int(version),
 		UpdatedAt:     pgTimestampToTime(m.UpdatedAt),
 	}
-	var def map[string]interface{}
+	var def map[string]any
 	if err := json.Unmarshal(m.Definition, &def); err == nil {
 		out.Definition = def
 	}
