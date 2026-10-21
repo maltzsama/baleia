@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -28,6 +29,16 @@ func (h *Handlers) assistantService() (*assistant.Service, error) {
 		return nil, errors.New("assistant service is not configured")
 	}
 	return h.assistant, nil
+}
+
+// llmProvider builds the configured provider over the SSRF-safe dialer
+// (#378); row must have a provider and a model.
+func (h *Handlers) llmProvider(row adb.AssistantSetting, key string) (*llm.HTTPProvider, error) {
+	if h.dialer == nil {
+		return nil, errors.New("assistant: no connections dialer configured")
+	}
+	client := obs.WrapHTTPClient(h.dialer.HTTPClient(llm.ClientTimeout))
+	return llm.NewHTTPProvider(client, *row.Provider, deref(row.BaseUrl), key, *row.Model), nil
 }
 
 func assistantSettingsToPublic(s adb.AssistantSetting) AssistantSettings {
@@ -207,7 +218,11 @@ func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistan
 	})
 	if h.assistantRunner != nil && row.Enabled && row.Provider != nil && row.Model != nil {
 		key, _ := svc.APIKey(ctx)
-		h.assistantRunner.SetProvider(llm.NewHTTPProvider(*row.Provider, deref(row.BaseUrl), key, *row.Model))
+		provider, err := h.llmProvider(row, key)
+		if err != nil {
+			return nil, err
+		}
+		h.assistantRunner.SetProvider(provider)
 	}
 	return PutAssistantSettings200JSONResponse(assistantSettingsToPublic(row)), nil
 }
@@ -235,7 +250,10 @@ func (h *Handlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObje
 		msg := "api key is not configured"
 		return TestAssistant200JSONResponse(AssistantTestResult{Ok: false, Error: &msg}), nil
 	}
-	provider := llm.NewHTTPProvider(*row.Provider, deref(row.BaseUrl), key, *row.Model)
+	provider, err := h.llmProvider(row, key)
+	if err != nil {
+		return nil, err
+	}
 	start := time.Now()
 	_, err = provider.Stream(ctx, llm.Request{
 		Messages:  []llm.Message{{Role: "user", Content: "reply with the single word ok"}},
