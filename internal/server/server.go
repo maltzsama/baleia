@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
@@ -245,7 +246,7 @@ func (s *Server) routes() {
 
 // staticUsers tells the static handler whether the first admin exists.
 type staticUsers interface {
-	ListUsers(ctx context.Context) ([]db.User, error)
+	HasUsers(ctx context.Context) (bool, error)
 }
 
 // engineCapabilities adapts the API's engine registry to agentpolicy.
@@ -260,6 +261,19 @@ func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (query
 // extensionless route so the client router matches it.
 func staticHandler(users staticUsers, dir string) http.Handler {
 	fileServer := http.FileServer(http.Dir(dir))
+	// Once the first admin exists the install never goes back to setup, so
+	// the answer is cached and the database is no longer asked (#375).
+	var setUp atomic.Bool
+	configured := func(ctx context.Context) bool {
+		if setUp.Load() {
+			return true
+		}
+		ok, err := users.HasUsers(ctx)
+		if err == nil && ok {
+			setUp.Store(true)
+		}
+		return err == nil && ok
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
@@ -269,8 +283,7 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 		}
 
 		if path == "/" || path == "/setup" || strings.HasSuffix(path, ".html") {
-			list, err := users.ListUsers(r.Context())
-			configured := err == nil && len(list) > 0
+			configured := configured(r.Context())
 
 			if !configured && path != "/setup" {
 				http.Redirect(w, r, "/setup", http.StatusFound)

@@ -7,17 +7,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/galileostudio/baleia/internal/db"
 )
 
 type fakeStaticUsers struct {
-	users []db.User
-	err   error
+	configured bool
+	err        error
+	calls      int
 }
 
-func (f fakeStaticUsers) ListUsers(context.Context) ([]db.User, error) {
-	return f.users, f.err
+func (f *fakeStaticUsers) HasUsers(context.Context) (bool, error) {
+	f.calls++
+	return f.configured, f.err
 }
 
 func staticFixture(t *testing.T, configured bool) http.Handler {
@@ -33,11 +33,7 @@ func staticFixture(t *testing.T, configured bool) http.Handler {
 			t.Fatal(err)
 		}
 	}
-	users := fakeStaticUsers{}
-	if configured {
-		users.users = []db.User{{}}
-	}
-	return staticHandler(users, dir)
+	return staticHandler(&fakeStaticUsers{configured: configured}, dir)
 }
 
 func serve(handler http.Handler, method, target string) *httptest.ResponseRecorder {
@@ -103,7 +99,7 @@ func TestStaticAPIAndAssets(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "asset.js"), []byte("console.log(1)"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rec = serve(staticHandler(fakeStaticUsers{users: []db.User{{}}}, dir), http.MethodGet, "/asset.js")
+	rec = serve(staticHandler(&fakeStaticUsers{configured: true}, dir), http.MethodGet, "/asset.js")
 	if rec.Code != http.StatusOK || rec.Body.String() != "console.log(1)" {
 		t.Fatalf("GET /asset.js = %d %q", rec.Code, rec.Body.String())
 	}
@@ -122,11 +118,34 @@ func TestStaticDirectoryRouteServesTheApp(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "connections", "new.html"), []byte("<new>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	handler := staticHandler(fakeStaticUsers{users: []db.User{{}}}, dir)
+	handler := staticHandler(&fakeStaticUsers{configured: true}, dir)
 	for _, target := range []string{"/connections", "/connections/"} {
 		rec := serve(handler, http.MethodGet, target)
 		if rec.Code != http.StatusOK || rec.Body.String() != "<app-shell>" {
 			t.Fatalf("GET %s = %d %q, want the app shell", target, rec.Code, rec.Body.String())
 		}
+	}
+}
+
+// TestStatic_CachesConfigured: once set up, the shell no longer asks the
+// database on every page load (#375); before that it keeps asking.
+func TestStatic_CachesConfigured(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "app.html"), []byte("<app-shell>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	users := &fakeStaticUsers{}
+	handler := staticHandler(users, dir)
+	serve(handler, http.MethodGet, "/")
+	serve(handler, http.MethodGet, "/")
+	if users.calls != 2 {
+		t.Fatalf("not set up: %d lookups, want 2", users.calls)
+	}
+	users.configured = true
+	for range 3 {
+		serve(handler, http.MethodGet, "/")
+	}
+	if users.calls != 3 {
+		t.Fatalf("set up: %d lookups, want 3 (cached after the first yes)", users.calls)
 	}
 }
