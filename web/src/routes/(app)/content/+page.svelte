@@ -4,6 +4,7 @@
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { contentHref, searchContent, type ContentSearchItem } from '$lib/content/client';
+	import { kindEntry } from '$lib/content/kinds';
 	import SpaceDialog from '$lib/components/SpaceDialog.svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -54,7 +55,7 @@
 	}
 
 	function kindLabel(kind: string): string {
-		return kind === 'saved_query' ? 'Query' : kind === 'semantic_metric' ? 'Metric' : 'Folder';
+		return kindEntry(kind).label;
 	}
 
 	onMount(load);

@@ -2,6 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import { savedQueries, type QueryFolder, type SavedQuery } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import {
@@ -12,6 +13,8 @@
 		type SemanticMetric
 	} from '$lib/content/client';
 	import HistoryDrawer from '$lib/content/HistoryDrawer.svelte';
+	import { kindEntry } from '$lib/content/kinds';
+	import { listModels, type SemanticModel } from '$lib/semantic/explore';
 	import { exportSpace, importSpace, type ImportReport } from '$lib/content/history';
 	import MoveToSpaceDialog from '$lib/components/MoveToSpaceDialog.svelte';
 	import SpaceAccessDialog from '$lib/components/SpaceAccessDialog.svelte';
@@ -33,6 +36,7 @@
 	const space = $derived(savedQueries.space(spaceId));
 	const folders = $derived(savedQueries.foldersIn(spaceId));
 	let metrics = $state<SemanticMetric[]>([]);
+	let models = $state<SemanticModel[]>([]);
 	const loading = $derived(savedQueries.loading);
 	const error = $derived(savedQueries.error);
 
@@ -56,6 +60,7 @@
 			.queriesIn(spaceId)
 			.filter((query) => (query.folder_id ?? null) === (currentFolder ?? null))
 	);
+	const spaceModels = $derived(currentFolder ? [] : models);
 	const spaceMetrics = $derived(
 		currentFolder ? [] : metrics.filter((metric) => metric.space_id === spaceId)
 	);
@@ -104,6 +109,7 @@
 		if (!workspaceId) return;
 		await savedQueries.reload(workspaceId);
 		metrics = await listMetrics(workspaceId);
+		models = await listModels(workspaceId, spaceId);
 	}
 
 	function openQuery(query: SavedQuery) {
@@ -416,7 +422,7 @@
 			</nav>
 
 			<section class="min-w-0">
-				{#if queries.length === 0 && spaceMetrics.length === 0}
+				{#if queries.length === 0 && spaceMetrics.length === 0 && spaceModels.length === 0}
 					<EmptyState
 						title="Nothing here"
 						description={canEdit
@@ -438,6 +444,26 @@
 								</tr>
 							</thead>
 							<tbody>
+								{#each spaceModels as model (model.id)}
+									<tr class="border-b border-border/60 last:border-b-0">
+										<td class="px-3 py-1.5"
+											><Badge tone="info">{kindEntry('semantic_model').label}</Badge></td
+										>
+										<td class="px-3 py-1.5">
+											<a class="font-medium hover:underline" href={resolve(`/models/${model.id}`)}>
+												{model.label}
+											</a>
+											{#if model.certified}<Badge tone="success">Certified</Badge>{/if}
+										</td>
+										<td class="px-3 py-1.5 font-mono">{model.slug}</td>
+										<td class="px-3 py-1.5"><RelativeTime at={model.updated_at} /></td>
+										<td class="px-3 py-1.5 text-right">
+											<a class="text-primary hover:underline" href={resolve(`/models/${model.id}`)}
+												>Open</a
+											>
+										</td>
+									</tr>
+								{/each}
 								{#each spaceMetrics as metric (metric.id)}
 									<tr class="border-b border-border/60 last:border-b-0">
 										<td class="px-3 py-1.5"><Badge tone="info">Metric</Badge></td>
