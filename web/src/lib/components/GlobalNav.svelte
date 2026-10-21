@@ -110,6 +110,18 @@
 			>
 		</a>
 		<a
+			href={resolve('/explore')}
+			title={m.explore_title()}
+			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
+				{isActive('/explore') || isActive('/models')
+				? 'bg-primary text-white'
+				: 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+		>
+			<svg viewBox="0 0 24 24" class="w-4 h-4"
+				><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3M8 11h6M11 8v6" /></svg
+			>
+		</a>
+		<a
 			href={resolve('/data/docs')}
 			title={m.common_docs()}
 			class="w-9 h-9 flex items-center justify-center rounded-[10px] no-underline transition-all duration-150
