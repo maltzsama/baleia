@@ -40,7 +40,7 @@ func newTurnFixture(t *testing.T) (*Service, pgtype.UUID, pgtype.UUID) {
 		t.Fatal(err)
 	}
 	if _, err := svc.UpdateSettings(ctx, SettingsInput{
-		Enabled: true, Provider: strptr("fake"), Model: strptr("fake"),
+		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_and_samples", MaxTurnSeconds: 10,
 		MaxToolCallsPerTurn: 5, MaxOutputTokensPerTurn: 100, DailyTokenBudgetPerUser: 100000,
 	}); err != nil {
@@ -131,7 +131,7 @@ func TestTurnToolCallsGoThroughTheCaller(t *testing.T) {
 func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 	svc, userID, workspaceID := newTurnFixture(t)
 	if _, err := svc.UpdateSettings(context.Background(), SettingsInput{
-		Enabled: true, Provider: strptr("fake"), Model: strptr("fake"),
+		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_only", MaxTurnSeconds: 10,
 		MaxToolCallsPerTurn: 5, MaxOutputTokensPerTurn: 100, DailyTokenBudgetPerUser: 0,
 	}); err != nil {
@@ -139,7 +139,7 @@ func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 	}
 	// 0 disables the check, so force a tiny budget with a large usage row.
 	if _, err := svc.UpdateSettings(context.Background(), SettingsInput{
-		Enabled: true, Provider: strptr("fake"), Model: strptr("fake"),
+		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_only", MaxTurnSeconds: 10,
 		MaxToolCallsPerTurn: 5, MaxOutputTokensPerTurn: 100, DailyTokenBudgetPerUser: 1,
 	}); err != nil {
