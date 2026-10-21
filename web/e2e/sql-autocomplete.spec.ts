@@ -1,27 +1,25 @@
-import type { APIRequestContext } from '@playwright/test';
 import { expect, test, type Page } from './fixtures';
 
 // #383: the workbench autocomplete follows the statement context and the tab's
 // catalog. Completions read the stored metadata, which a fresh cluster only
 // has after the first scheduled pass, so the spec runs one pass of the seeded
-// e2e_tpch catalog (cmd/e2e-seed) as the admin first.
-async function syncTpchMetadata(request: APIRequestContext) {
-	const login = await request.post('/api/v1/auth/login', {
-		data: { email: 'admin@e2e.test', password: process.env.E2E_PASSWORD ?? 'e2e-password' }
-	});
-	expect(login.ok()).toBeTruthy();
-	const headers = { Authorization: `Bearer ${(await login.json()).token}` };
+// e2e_tpch catalog (cmd/e2e-seed) as the signed-in admin first. The token is
+// read from the page's own login response: a second login counts against the
+// 10/min limit (#391), and a second refresh races the page's and revokes the
+// session as token reuse.
+async function syncTpchMetadata(page: Page, token: string) {
+	const headers = { Authorization: `Bearer ${token}` };
 	const catalogs: { id: string; name: string }[] = await (
-		await request.get('/api/v1/catalogs', { headers })
+		await page.request.get('/api/v1/catalogs', { headers })
 	).json();
 	const tpch = catalogs.find((catalog) => catalog.name === 'e2e_tpch');
 	expect(tpch, 'seeded e2e_tpch catalog').toBeTruthy();
 	const runs = `/api/v1/catalogs/${tpch!.id}/metadata/sync-runs?limit=1`;
-	const sync = await request.post(`/api/v1/catalogs/${tpch!.id}/metadata/sync`, { headers });
+	const sync = await page.request.post(`/api/v1/catalogs/${tpch!.id}/metadata/sync`, { headers });
 	// 409: a scheduled pass is already running; waiting for it is enough.
 	expect([202, 409]).toContain(sync.status());
 	await expect
-		.poll(async () => (await (await request.get(runs, { headers })).json())[0]?.status, {
+		.poll(async () => (await (await page.request.get(runs, { headers })).json())[0]?.status, {
 			timeout: 90_000
 		})
 		.toBe('finished');
@@ -40,12 +38,19 @@ const options = (page: Page) =>
 
 test('@issue-383 autocomplete follows the statement context', async ({
 	page,
-	request,
 	loginAs,
 	expectNoA11yViolations
 }) => {
-	await syncTpchMetadata(request);
-	await loginAs('member');
+	// The admin's workspace is granted e2e_tpch too (cmd/e2e-seed).
+	let token = '';
+	await page.route('**/api/v1/auth/login', async (route) => {
+		const response = await route.fetch();
+		if (response.ok()) token = (await response.json()).token;
+		await route.fulfill({ response });
+	});
+	await loginAs('admin');
+	await page.unroute('**/api/v1/auth/login');
+	await syncTpchMetadata(page, token);
 
 	// Start of a statement: statement keywords, not functions.
 	await typeSql(page, 's');
