@@ -41,6 +41,7 @@ import (
 	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
 	_ "github.com/galileostudio/baleia/internal/queryengine/sqlserver"
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
+	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
@@ -146,7 +147,12 @@ func main() {
 	engines := queryengine.NewManager(db.New(pool), keyring, conns, dialer)
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, dialer.HTTPClient(60*time.Second)))
 
-	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor)
+	s3Client, err := storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
+	if err != nil {
+		slog.Error("result storage", "err", err)
+		os.Exit(1)
+	}
+	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor, s3Client)
 	act.SetMetrics(reg)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(db.New(pool), keyring, conns, engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones

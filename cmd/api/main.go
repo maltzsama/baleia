@@ -105,7 +105,11 @@ func main() {
 	}
 	defer temporalClient.Close()
 
-	srv := server.New(ctx, cfg, pool, keyring, registryKeyring, temporalClient, reg)
+	srv, err := server.New(ctx, cfg, pool, keyring, registryKeyring, temporalClient, reg)
+	if err != nil {
+		slog.Error("server setup", "err", err)
+		os.Exit(1)
+	}
 	if err := srv.Run(ctx); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)

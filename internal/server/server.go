@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -66,20 +67,22 @@ type Server struct {
 // New builds the API server. The Temporal client is dialed by the caller
 // (with retries, internal/temporal/dial); metrics may be nil. registryKeyring
 // is nil when Phase B registry encryption is disabled.
-func New(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) *Server {
+func New(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) (*Server, error) {
 	queries := db.New(pool)
 	rl := NewRateLimiter(RateLimiterConfig{
 		RequestsPerSecond: cfg.RateLimitRPS,
 		Burst:             cfg.RateLimitBurst,
 	})
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring, registryKeyring: registryKeyring, temporal: temporal, metrics: reg}
-	s.routes(ctx)
-	return s
+	if err := s.routes(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // routes mounts the API. ctx is the process context: background work it
 // starts (the assistant's in-process MCP session and sweeper) ends with it.
-func (s *Server) routes(ctx context.Context) {
+func (s *Server) routes(ctx context.Context) error {
 	s.mux.Use(middleware.RequestID)
 	s.mux.Use(obs.RouteName) // names the tracing span after chi has routed (#47)
 	if s.metrics != nil {
@@ -120,7 +123,10 @@ func (s *Server) routes(ctx context.Context) {
 	}
 	temporalClient := s.temporal
 
-	s3Client := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
+	s3Client, err := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
+	if err != nil {
+		return err
+	}
 
 	// Every connection provider dials through one SSRF-safe dialer
 	// (docs/adr/0011).
@@ -130,14 +136,14 @@ func (s *Server) routes(ctx context.Context) {
 		AllowLoopback: s.cfg.ConnectionsAllowLoopback,
 	})
 	if err != nil {
-		panic("invalid connection network settings: " + err.Error())
+		return fmt.Errorf("invalid connection network settings: %w", err)
 	}
 	conns, err := providers.New(dialer, providers.Options{
 		SQLite: sqlite.Options{Root: s.cfg.SQLiteRoot, AllowWrite: s.cfg.SQLiteAllowWrite},
 		Glue:   glue.Options{AllowAmbientCredentials: s.cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: s.cfg.ConnectionsAllowLoopback},
 	})
 	if err != nil {
-		panic("connection providers: " + err.Error())
+		return fmt.Errorf("connection providers: %w", err)
 	}
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).
@@ -250,6 +256,7 @@ func (s *Server) routes(ctx context.Context) {
 	s.mux.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		static.ServeHTTP(w, r)
 	}))
+	return nil
 }
 
 // staticUsers tells the static handler whether the first admin exists.
