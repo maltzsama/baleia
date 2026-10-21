@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -457,13 +458,28 @@ func extractToken(r *http.Request) string {
 	return ""
 }
 
+// Run serves until ctx ends, then drains in-flight requests for at most
+// HTTPShutdownTimeout (#372). A clean shutdown returns nil.
 func (s *Server) Run(ctx context.Context) error {
-	srv := &http.Server{Addr: ":" + s.cfg.Port, Handler: obs.HTTPHandler(s.mux, "http.server")}
+	srv := &http.Server{
+		Addr:    ":" + s.cfg.Port,
+		Handler: obs.HTTPHandler(s.mux, "http.server"),
+		// No ReadTimeout/WriteTimeout: downloads, SSE and WebSockets are
+		// long-lived. Slow headers and idle keep-alives are bounded.
+		ReadHeaderTimeout: s.cfg.HTTPReadHeaderTimeout,
+		IdleTimeout:       s.cfg.HTTPIdleTimeout,
+	}
+	shutdown := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
-		srv.Shutdown(context.Background())
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.cfg.HTTPShutdownTimeout)
+		defer cancel()
+		shutdown <- srv.Shutdown(sctx)
 	}()
-	return srv.ListenAndServe()
+	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return <-shutdown
 }
 
 func derefString(value *string) string {

@@ -153,6 +153,11 @@ type Config struct {
 	DBMaxConns        int
 	DBMinConns        int
 	DBMaxConnLifetime time.Duration
+	// HTTP* bound the API listener (#372). There is no server-wide read or
+	// write timeout: result downloads, SSE and WebSockets are long-lived.
+	HTTPReadHeaderTimeout time.Duration
+	HTTPIdleTimeout       time.Duration
+	HTTPShutdownTimeout   time.Duration
 	// AgentsEnabled mounts the agent management API and /mcp (#59). Off by
 	// default: no agent token exists until an administrator enables it.
 	AgentsEnabled bool
@@ -249,6 +254,9 @@ func Load() *Config {
 		DBMaxConns:                  getEnvInt("BALEIA_DB_MAX_CONNS", 0),
 		DBMinConns:                  getEnvInt("BALEIA_DB_MIN_CONNS", 2),
 		DBMaxConnLifetime:           getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
+		HTTPReadHeaderTimeout:       getEnvDuration("BALEIA_HTTP_READ_HEADER_TIMEOUT", 10*time.Second),
+		HTTPIdleTimeout:             getEnvDuration("BALEIA_HTTP_IDLE_TIMEOUT", 2*time.Minute),
+		HTTPShutdownTimeout:         getEnvDuration("BALEIA_HTTP_SHUTDOWN_TIMEOUT", 20*time.Second),
 	}
 }
 
@@ -344,6 +352,9 @@ func (c *Config) Validate() error {
 		{"BALEIA_ACCESS_TOKEN_TTL", c.AccessTokenTTL},
 		{"BALEIA_REFRESH_TOKEN_TTL", c.RefreshTokenTTL},
 		{"BALEIA_RESET_TOKEN_TTL", c.ResetTokenTTL},
+		{"BALEIA_HTTP_READ_HEADER_TIMEOUT", c.HTTPReadHeaderTimeout},
+		{"BALEIA_HTTP_IDLE_TIMEOUT", c.HTTPIdleTimeout},
+		{"BALEIA_HTTP_SHUTDOWN_TIMEOUT", c.HTTPShutdownTimeout},
 	} {
 		if ttl.v < 0 {
 			return fmt.Errorf("%s must be positive (got %s)", ttl.name, ttl.v)
