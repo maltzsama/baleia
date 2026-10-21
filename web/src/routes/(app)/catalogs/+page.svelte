@@ -89,7 +89,7 @@
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label={m.catalogs_loading_catalogs()}>
+		<div class="flex flex-col gap-2" role="status" aria-label={m.catalogs_loading_catalogs()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-12 w-full" />
 			{/each}

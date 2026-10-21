@@ -92,7 +92,7 @@
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label={m.models_loading()}>
+		<div class="flex flex-col gap-2" role="status" aria-label={m.models_loading()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-12 w-full" />
 			{/each}

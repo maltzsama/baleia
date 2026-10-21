@@ -299,7 +299,11 @@
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label={m.settings_audit_loading_audit_events()}>
+		<div
+			class="flex flex-col gap-2"
+			role="status"
+			aria-label={m.settings_audit_loading_audit_events()}
+		>
 			{#each [0, 1, 2, 3, 4] as item (item)}
 				<Skeleton class="h-9 w-full" />
 			{/each}

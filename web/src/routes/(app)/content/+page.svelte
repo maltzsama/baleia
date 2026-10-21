@@ -106,7 +106,11 @@
 	{/if}
 
 	{#if loading}
-		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={m.content_loading_spaces()}>
+		<div
+			class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+			role="status"
+			aria-label={m.content_loading_spaces()}
+		>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-28 w-full" />
 			{/each}
