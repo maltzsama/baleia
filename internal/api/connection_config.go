@@ -176,9 +176,7 @@ func storedColumns(h *Handlers, cfg connections.Config) (config []byte, url stri
 // publicConfig returns the stored non-secret values for responses.
 func publicConfig(raw []byte) map[string]string {
 	out := map[string]string{}
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &out)
-	}
+	decodeStored(raw, &out, "connections.config")
 	return out
 }
 

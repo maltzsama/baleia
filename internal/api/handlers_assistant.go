@@ -74,7 +74,7 @@ func assistantConversationToPublic(c adb.AssistantConversation) AssistantConvers
 
 func assistantMessageToPublic(m adb.AssistantMessage) AssistantMessage {
 	var content any
-	_ = json.Unmarshal(m.Content, &content)
+	decodeStored(m.Content, &content, "assistant_messages.content")
 	out := AssistantMessage{
 		Seq:       int(m.Seq),
 		Role:      AssistantMessageRole(m.Role),

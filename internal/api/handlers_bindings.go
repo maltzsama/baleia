@@ -43,7 +43,7 @@ func unprocessableFields(msg string, fields ...FieldError) UnprocessableEntityJS
 
 func extraPropsOf(raw []byte) map[string]string {
 	out := map[string]string{}
-	_ = json.Unmarshal(raw, &out)
+	decodeStored(raw, &out, "extra_props")
 	return out
 }
 

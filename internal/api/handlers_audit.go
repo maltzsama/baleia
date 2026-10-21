@@ -365,8 +365,8 @@ func connectionChanges(before, after db.CatalogConnection, creds *map[string]int
 		changes["url"] = audit.Change{From: before.Url, To: after.Url}
 	}
 	var was, is map[string]any
-	_ = json.Unmarshal(before.Config, &was)
-	_ = json.Unmarshal(after.Config, &is)
+	decodeStored(before.Config, &was, "connections.config")
+	decodeStored(after.Config, &is, "connections.config")
 	for k, v := range is {
 		if old, ok := was[k]; !ok || fmt.Sprint(old) != fmt.Sprint(v) {
 			changes["config."+k] = audit.Change{From: was[k], To: v}
@@ -419,7 +419,7 @@ func catalogChanges(c db.Catalog, name, trinoName, warehouse, connector string, 
 // propKeys lists the keys of a JSON object, sorted.
 func propKeys(raw []byte) []string {
 	var m map[string]any
-	_ = json.Unmarshal(raw, &m)
+	decodeStored(raw, &m, "extra_props")
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
