@@ -163,6 +163,8 @@ type Config struct {
 	DBStatementTimeout time.Duration
 	DBIdleInTxTimeout  time.Duration
 	DBLockTimeout      time.Duration
+	// WorkerHealthPort is the worker's liveness listener (WORKER_HEALTH_PORT).
+	WorkerHealthPort string
 	// HTTP* bound the API listener (#372). There is no server-wide read or
 	// write timeout: result downloads, SSE and WebSockets are long-lived.
 	HTTPReadHeaderTimeout time.Duration
@@ -196,6 +198,7 @@ func Load() *Config {
 		PolarisURL:            getEnv("POLARIS_URL", "http://localhost:8181"),
 		PolarisClientID:       getEnv("POLARIS_CLIENT_ID", ""),
 		PolarisClientSecret:   getEnv("POLARIS_CLIENT_SECRET", ""),
+		WorkerHealthPort:      getEnv("WORKER_HEALTH_PORT", "8081"),
 		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),
 		TrinoDBPassword:       getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
 		TrinoAdminUser:        getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),

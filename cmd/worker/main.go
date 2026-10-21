@@ -257,7 +257,7 @@ func main() {
 
 	slog.Info("worker started", "queue", taskQueue, "schedules_enabled", cfg.SchedulesEnabled)
 
-	go serveHealth("WORKER_HEALTH_PORT", "8081")
+	go serveHealth(cfg.WorkerHealthPort)
 
 	// One dry reconcile at boot: drift shows up in the log (counts only).
 	go func() {
@@ -274,11 +274,7 @@ func main() {
 
 // serveHealth exposes a liveness endpoint Kubernetes can probe. If the port
 // cannot be bound the worker still starts; the probe simply stays down.
-func serveHealth(envKey, fallback string) {
-	port := os.Getenv(envKey)
-	if port == "" {
-		port = fallback
-	}
+func serveHealth(port string) {
 	if _, err := strconv.Atoi(port); err != nil {
 		slog.Error("invalid health port", "port", port, "err", err)
 		return
