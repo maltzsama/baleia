@@ -7,6 +7,7 @@ const apiCodes = [
 	'not_found',
 	'conflict',
 	'validation_error',
+	'invalid_definition',
 	'rate_limited',
 	'service_unavailable',
 	'provider_unsupported',

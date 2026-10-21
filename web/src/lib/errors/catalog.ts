@@ -42,6 +42,12 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 		explanation: 'One or more fields are invalid.',
 		remediation: 'Fix the highlighted fields and retry.'
 	},
+	invalid_definition: {
+		title: 'The query cannot be compiled',
+		explanation:
+			'The model or the explore query uses a field, join or feature the compiler cannot resolve for this engine.',
+		remediation: 'Check the highlighted fields, the model joins and the engine, then retry.'
+	},
 	rate_limited: {
 		title: 'Too many requests',
 		explanation: 'You have made too many requests in a short period.',

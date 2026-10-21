@@ -4,6 +4,7 @@ import type { components } from '$lib/api/schema';
 
 type Workspace = components['schemas']['Workspace'];
 type SavedQuery = components['schemas']['SavedQuery'];
+type SemanticModel = components['schemas']['SemanticModel'];
 type Space = components['schemas']['Space'];
 type SpaceMember = components['schemas']['SpaceMember'];
 type QueryFolder = components['schemas']['QueryFolder'];
@@ -311,6 +312,35 @@ export function makeTestResult(
 			{ name: 'metadata', ok: true, detail: '1 catalogs' },
 			{ name: 'direct_engine', ok: true }
 		],
+		...overrides
+	};
+}
+
+export function makeSemanticModel(overrides: Partial<SemanticModel> = {}): SemanticModel {
+	return {
+		id: '00000000-0000-0000-0000-0000000000d1',
+		workspace_id: '00000000-0000-0000-0000-000000000001',
+		space_id: '00000000-0000-0000-0000-000000000011',
+		slug: 'orders',
+		label: 'Orders',
+		description: '',
+		certified: false,
+		catalog_id: '00000000-0000-0000-0000-0000000000e2',
+		binding_id: '00000000-0000-0000-0000-0000000000e3',
+		definition: {
+			source: { kind: 'table', namespace: ['public'], table: 'orders' },
+			primary_key: ['id'],
+			dimensions: [
+				{ name: 'id', type: 'int64' },
+				{ name: 'status', label: 'Status', type: 'string' },
+				{ name: 'created_at', label: 'Created at', type: 'timestamp', grains: ['day', 'month'] }
+			],
+			metrics: [{ name: 'revenue', label: 'Revenue', aggregation: 'sum', dimension: 'id' }]
+		},
+		format_version: 1,
+		updated_at: '2026-01-01T00:00:00Z',
+		version: 1,
+		allowed_actions: ['view', 'update', 'delete'],
 		...overrides
 	};
 }

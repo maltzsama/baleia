@@ -21,6 +21,7 @@
 	import { savedQueries, type SavedQuery } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { registerProvider, unregisterProvider } from '$lib/palette/registry';
+	import { modelPaletteProvider } from '$lib/semantic/palette';
 	import { MAX_DRAFT_SQL } from '$lib/workbench/drafts';
 	import type { Conflict } from '$lib/workbench/conflict';
 	import CommandPalette from '$lib/workbench/CommandPalette.svelte';
@@ -450,6 +451,13 @@
 				}));
 			}
 		});
+		registerProvider(
+			modelPaletteProvider({
+				workspaceId: () => workspaceId,
+				bindingId: () => editor.activeTab?.bindingId ?? '',
+				insert: (sql) => editor.insert(sql)
+			})
+		);
 	}
 
 	// Mirrors the store's active tab into CodeMirror when another component
@@ -665,6 +673,7 @@
 			document.removeEventListener('visibilitychange', onVisibility);
 			unregisterProvider('actions');
 			unregisterProvider('metrics');
+			unregisterProvider('models');
 			unregisterProvider('queries');
 			unregisterProvider('tables');
 			stream?.close();
