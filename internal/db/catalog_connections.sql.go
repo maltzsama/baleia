@@ -145,6 +145,54 @@ func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.U
 	return items, nil
 }
 
+const listVisibleCatalogConnections = `-- name: ListVisibleCatalogConnections :many
+SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only FROM catalog_connections
+WHERE $1::bool OR created_by = $2
+ORDER BY name
+`
+
+type ListVisibleCatalogConnectionsParams struct {
+	IsAdmin bool        `json:"is_admin"`
+	UserID  pgtype.UUID `json:"user_id"`
+}
+
+// The connections the caller may view: their own, and every one for an admin
+// (as authz.Connection and ListVisibleCatalogs), including the bootstrap
+// connection that has no owner.
+func (q *Queries) ListVisibleCatalogConnections(ctx context.Context, arg ListVisibleCatalogConnectionsParams) ([]CatalogConnection, error) {
+	rows, err := q.db.Query(ctx, listVisibleCatalogConnections, arg.IsAdmin, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CatalogConnection
+	for rows.Next() {
+		var i CatalogConnection
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.Url,
+			&i.CredentialsEnc,
+			&i.DefaultReadonly,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Host,
+			&i.Port,
+			&i.CreatedBy,
+			&i.Config,
+			&i.CredentialsReadOnly,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCatalogConnection = `-- name: UpdateCatalogConnection :one
 UPDATE catalog_connections
 SET name             = COALESCE($1, name),

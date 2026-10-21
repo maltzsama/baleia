@@ -11,6 +11,14 @@ SELECT * FROM catalog_connections WHERE id = $1;
 -- name: ListCatalogConnections :many
 SELECT * FROM catalog_connections WHERE created_by = $1 ORDER BY name;
 
+-- name: ListVisibleCatalogConnections :many
+-- The connections the caller may view: their own, and every one for an admin
+-- (as authz.Connection and ListVisibleCatalogs), including the bootstrap
+-- connection that has no owner.
+SELECT * FROM catalog_connections
+WHERE sqlc.arg(is_admin)::bool OR created_by = sqlc.arg(user_id)
+ORDER BY name;
+
 -- name: UpdateCatalogConnection :one
 -- Partial update: only fields present in the request are written. COALESCE with
 -- a NULL narg leaves omitted columns untouched, so concurrent PATCH requests to

@@ -29,14 +29,16 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// ListCatalogConnections — GET /catalog-connections (#385). The caller's own
+// connections; an admin sees every one, including the ownerless bootstrap
+// connection, as authz.Connection allows.
 func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
-	uid, err := uuidFromString(userID)
+	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	conns, err := h.queries.ListCatalogConnections(ctx, uid)
+	conns, err := h.queries.ListVisibleCatalogConnections(ctx, db.ListVisibleCatalogConnectionsParams{IsAdmin: p.IsAdmin(), UserID: p.UserID})
 	if err != nil {
 		return nil, err
 	}
