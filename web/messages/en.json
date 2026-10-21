@@ -1023,5 +1023,12 @@
 	"models_migrate_error_invalid_metric": "A v1 metric of this table cannot be converted.",
 	"models_migrate_error_invalid_definition": "The resulting model would be invalid.",
 	"models_migrate_error_slug_conflict": "Another model already uses this slug.",
-	"models_migrate_error_write_failed": "The model could not be written; try again."
+	"models_migrate_error_write_failed": "The model could not be written; try again.",
+	"workbench_completion_column_of": "Column of {tables}",
+	"workbench_completion_table": "Table",
+	"workbench_completion_view": "View",
+	"workbench_completion_materialized_view": "Materialized view",
+	"workbench_completion_in_schema": "In {schema}",
+	"workbench_completion_schema": "schema",
+	"workbench_completion_function": "function"
 }

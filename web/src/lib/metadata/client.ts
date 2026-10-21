@@ -172,7 +172,13 @@ export function loadTable(
 export function searchMetadata(
 	workspaceId: string,
 	q: string,
-	options: { kind?: 'table' | 'column' | 'all'; limit?: number; signal?: AbortSignal } = {}
+	options: {
+		kind?: 'table' | 'column' | 'all';
+		/** Only this catalog; every catalog the workspace may use otherwise. */
+		catalogId?: string;
+		limit?: number;
+		signal?: AbortSignal;
+	} = {}
 ): Promise<MetadataSearchResult[]> {
 	return client
 		.GET('/workspaces/{id}/metadata/search', {
@@ -181,6 +187,7 @@ export function searchMetadata(
 				query: {
 					q,
 					...(options.kind ? { kind: options.kind } : {}),
+					...(options.catalogId ? { catalog_id: options.catalogId } : {}),
 					...(options.limit ? { limit: options.limit } : {})
 				}
 			},
