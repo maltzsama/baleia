@@ -40,7 +40,11 @@ type Config struct {
 	DatabaseURL  string
 	TemporalHost string
 	PolarisURL   string
-	TrinoURL     string
+	// PolarisClientID/Secret seed the credentials of a polaris connection
+	// created without any (POLARIS_CLIENT_ID, POLARIS_CLIENT_SECRET).
+	PolarisClientID     string
+	PolarisClientSecret string
+	TrinoURL            string
 	// TrinoDBPassword is the password for the dedicated baleia_trino role, from
 	// the same env var the Trino plugin reads. Empty means "leave it unchanged".
 	TrinoDBPassword string
@@ -190,6 +194,8 @@ func Load() *Config {
 		DatabaseURL:           getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
 		TemporalHost:          getEnv("TEMPORAL_HOST", "localhost:7233"),
 		PolarisURL:            getEnv("POLARIS_URL", "http://localhost:8181"),
+		PolarisClientID:       getEnv("POLARIS_CLIENT_ID", ""),
+		PolarisClientSecret:   getEnv("POLARIS_CLIENT_SECRET", ""),
 		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),
 		TrinoDBPassword:       getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
 		TrinoAdminUser:        getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
@@ -378,6 +384,15 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("BALEIA_BCRYPT_COST must be between %d and %d (got %d)", MinBcryptCost, MaxBcryptCost, c.BcryptCost)
 	}
 	return nil
+}
+
+// PolarisDefaultCredentials returns the polaris credentials from the
+// environment, or nil unless both are set.
+func (c *Config) PolarisDefaultCredentials() map[string]string {
+	if c.PolarisClientID == "" || c.PolarisClientSecret == "" {
+		return nil
+	}
+	return map[string]string{"client_id": c.PolarisClientID, "client_secret": c.PolarisClientSecret}
 }
 
 // AccessTTL is the access-token lifetime; zero means DefaultAccessTokenTTL.

@@ -135,3 +135,14 @@ func TestMetadataSyncEvery(t *testing.T) {
 		}
 	}
 }
+
+// TestPolarisDefaultCredentials: the polaris fallback needs both values.
+func TestPolarisDefaultCredentials(t *testing.T) {
+	if got := (&Config{PolarisClientID: "id"}).PolarisDefaultCredentials(); got != nil {
+		t.Fatalf("only the id: %v, want nil", got)
+	}
+	got := (&Config{PolarisClientID: "id", PolarisClientSecret: "s"}).PolarisDefaultCredentials()
+	if got["client_id"] != "id" || got["client_secret"] != "s" {
+		t.Fatalf("got %v", got)
+	}
+}

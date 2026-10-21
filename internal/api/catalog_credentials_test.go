@@ -95,7 +95,7 @@ func TestCreateCredentials(t *testing.T) {
 
 	t.Run("generic credentials are used for every type", func(t *testing.T) {
 		for _, typ := range []string{"polaris", "nessie", "glue", "hive", "iceberg", "postgresql", "mysql"} {
-			got := createCredentials(&CreateCatalogConnectionRequest{Type: typ, Credentials: &generic})
+			got := createCredentials(&CreateCatalogConnectionRequest{Type: typ, Credentials: &generic}, nil)
 			if got == nil {
 				t.Errorf("%s: generic credentials dropped", typ)
 			}
@@ -103,25 +103,27 @@ func TestCreateCredentials(t *testing.T) {
 	})
 	t.Run("typed credentials win over generic", func(t *testing.T) {
 		typed := &SqlCredentials{}
-		got := createCredentials(&CreateCatalogConnectionRequest{Type: "postgresql", PostgresqlCredentials: typed, Credentials: &generic})
+		got := createCredentials(&CreateCatalogConnectionRequest{Type: "postgresql", PostgresqlCredentials: typed, Credentials: &generic}, nil)
 		if got != typed {
 			t.Fatalf("got %v, want the typed credentials", got)
 		}
 	})
 	t.Run("no credentials is an untyped nil", func(t *testing.T) {
-		if got := createCredentials(&CreateCatalogConnectionRequest{Type: "postgresql"}); got != nil {
+		if got := createCredentials(&CreateCatalogConnectionRequest{Type: "postgresql"}, nil); got != nil {
 			t.Fatalf("got %v, want nil", got)
 		}
 	})
-	t.Run("polaris falls back to the environment", func(t *testing.T) {
-		t.Setenv("POLARIS_CLIENT_ID", "env-id")
-		t.Setenv("POLARIS_CLIENT_SECRET", "env-secret")
-		got, ok := createCredentials(&CreateCatalogConnectionRequest{Type: "polaris"}).(map[string]string)
+	t.Run("polaris falls back to the deployment defaults", func(t *testing.T) {
+		defaults := map[string]string{"client_id": "env-id", "client_secret": "env-secret"}
+		got, ok := createCredentials(&CreateCatalogConnectionRequest{Type: "polaris"}, defaults).(map[string]string)
 		if !ok || got["client_id"] != "env-id" {
 			t.Fatalf("got %v", got)
 		}
-		if createCredentials(&CreateCatalogConnectionRequest{Type: "nessie"}) != nil {
-			t.Fatal("env fallback must be polaris-only")
+		if createCredentials(&CreateCatalogConnectionRequest{Type: "nessie"}, defaults) != nil {
+			t.Fatal("the fallback must be polaris-only")
+		}
+		if got := createCredentials(&CreateCatalogConnectionRequest{Type: "polaris"}, nil); got != nil {
+			t.Fatalf("polaris without defaults = %v, want an untyped nil", got)
 		}
 	})
 }

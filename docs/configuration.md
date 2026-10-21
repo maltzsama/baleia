@@ -12,6 +12,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `TEMPORAL_HOST` | `localhost:7233` | Temporal server address |
 | `TRINO_URL` | `http://localhost:8088` | Trino coordinator REST endpoint. At API boot it also seeds the default Trino engine (with the service and admin identities below) and keeps it in step while that engine's connection is system-owned; engine endpoints live in the database (`engines`, [ADR 0002](adr/0002-connections-engines-catalogs-bindings.md)). Trino is dialed through the connections dialer like every engine, so a loopback `TRINO_URL` needs `BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true` (set by `make dev`) |
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |
+| `POLARIS_CLIENT_ID` / `POLARIS_CLIENT_SECRET` | _(unset)_ | Credentials stored for a `polaris` connection created without any; both must be set |
 | `PUBLIC_URL` | `http://localhost:8080` | Externally reachable URL (used for presigned links) |
 | `S3_ENDPOINT` | `localhost:9000` | S3-compatible storage endpoint (RustFS) |
 | `S3_ACCESS_KEY` | `rustfsadmin` | S3 access key |

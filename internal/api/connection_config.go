@@ -97,7 +97,7 @@ func (h *Handlers) createConfig(id pgtype.UUID, body *CreateCatalogConnectionReq
 	if body.Config != nil {
 		values = *body.Config
 	}
-	creds, err := legacyCredentials(body)
+	creds, err := legacyCredentials(body, h.cfg.PolarisDefaultCredentials())
 	if err != nil {
 		return connections.Config{}, err
 	}
@@ -111,8 +111,8 @@ func (h *Handlers) createConfig(id pgtype.UUID, body *CreateCatalogConnectionReq
 // legacyCredentials returns the credentials object of a create request as a
 // map: the typed field for the type, else the generic one, else (polaris) the
 // POLARIS_CLIENT_ID / POLARIS_CLIENT_SECRET defaults.
-func legacyCredentials(body *CreateCatalogConnectionRequest) (map[string]any, error) {
-	v := createCredentials(body)
+func legacyCredentials(body *CreateCatalogConnectionRequest, polarisDefault map[string]string) (map[string]any, error) {
+	v := createCredentials(body, polarisDefault)
 	if v == nil {
 		return nil, nil
 	}
