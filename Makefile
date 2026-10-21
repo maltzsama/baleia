@@ -106,12 +106,14 @@ e2e:
 	@kubectl -n $(K8S_NS) wait --for=condition=ready pod -l app=postgres --timeout=120s
 	@sleep 2
 	DATABASE_URL="postgresql://baleia:baleia@localhost:5433/baleia?sslmode=disable" \
+		E2E_TRINO_URL=http://localhost:8081 \
 		go run -tags e2e ./cmd/e2e-seed
 	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
 
 e2e-forward:
 	kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080 &
 	kubectl -n $(K8S_NS) port-forward svc/postgres 5433:5432 &
+	kubectl -n $(K8S_NS) port-forward svc/baleia-trino 8081:8080 &
 
 e2e-down:
 	K8S_PURGE=1 $(MAKE) k8s-down

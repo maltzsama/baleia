@@ -10,15 +10,18 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	trinobinding "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -98,6 +101,11 @@ func main() {
 	catalog, binding, err := ensureTarget(ctx, q, admin, member)
 	if err != nil {
 		log.Fatalf("e2e-seed: target: %v", err)
+	}
+	if trinoURL := os.Getenv("E2E_TRINO_URL"); trinoURL != "" {
+		if err := ensureTrinoCatalog(ctx, q, trinoURL); err != nil {
+			log.Fatalf("e2e-seed: trino catalog: %v", err)
+		}
 	}
 	if err := ensureModels(ctx, pool, q, member, catalog, binding); err != nil {
 		log.Fatalf("e2e-seed: models: %v", err)
@@ -195,7 +203,7 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db
 	binding, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{
 		CatalogID:         catalog.ID,
 		EngineID:          row.Engine.ID,
-		EngineCatalogName: "tpch",
+		EngineCatalogName: e2eTrinoCatalog,
 	})
 	if err != nil {
 		return db.Catalog{}, db.CatalogBinding{}, err
@@ -213,6 +221,44 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db
 		GrantedBy:   admin.ID,
 	})
 	return catalog, binding, err
+}
+
+// e2eTrinoCatalog is the seeded catalog's name in Trino; the registry
+// reserves the connector names themselves (registry_catalog_name_not_reserved).
+const e2eTrinoCatalog = "e2e_tpch"
+
+// ensureTrinoCatalog registers the `tpch` connector as a Trino catalog the way a binding
+// does (registry row, then CREATE CATALOG), so the target seeded above can
+// actually run queries. Without it Trino answers CATALOG_NOT_FOUND and the run
+// smokes (#106, #121) cannot pass. Trino's built-in tpch connector needs no
+// external service.
+func ensureTrinoCatalog(ctx context.Context, q *db.Queries, trinoURL string) error {
+	cluster, err := q.GetDefaultTrinoCluster(ctx)
+	if err != nil {
+		return err
+	}
+	// One property is required: CREATE CATALOG ... WITH () is a syntax error.
+	props := map[string]string{"tpch.splits-per-node": "4"}
+	raw, err := json.Marshal(props)
+	if err != nil {
+		return err
+	}
+	version := trinobinding.Version(e2eTrinoCatalog, "tpch", props)
+	if err := q.UpsertTrinoCatalogRegistry(ctx, db.UpsertTrinoCatalogRegistryParams{
+		ClusterID: cluster.ID, CatalogName: e2eTrinoCatalog, ConnectorName: "tpch",
+		Column4: raw, CatalogVersion: &version,
+	}); err != nil {
+		return err
+	}
+	user := os.Getenv("E2E_TRINO_ADMIN_USER")
+	if user == "" {
+		user = "baleia_admin"
+	}
+	err = trino.New(trinoURL, user).CreateCatalog(ctx, trino.CatalogSpec{Name: e2eTrinoCatalog, Connector: "tpch", Properties: props})
+	if errors.Is(err, trino.ErrCatalogExists) {
+		return nil
+	}
+	return err
 }
 
 // seedModels are the semantic models (#121) the Explore smoke explores: two
