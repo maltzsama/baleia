@@ -205,8 +205,9 @@ describe('QueryEditor', () => {
 		const sent: string[] = [];
 		captureRuns(sent);
 		server.use(
+			// The splitter refuses the script (unterminated string, …).
 			http.post('/dialects/{name}/split', ({ response }) =>
-				response(500).json({ code: 'internal', message: 'boom' })
+				response(422).json({ code: 'validation_error', message: 'cannot split', errors: [] })
 			)
 		);
 		editor.updateSql(editor.activeId, 'SELECT 1;\nSELECT 2');
