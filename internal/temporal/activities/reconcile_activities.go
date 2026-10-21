@@ -67,6 +67,7 @@ func (a *Activities) reconcileAll(ctx context.Context, dryRun bool, beat func(in
 	onAction := func(_ context.Context, act bindings.Action) {
 		ev := audit.Event{Action: audit.CatalogReconcile, ResourceType: "engine",
 			Changes: map[string]audit.Change{"catalog": {To: act.Catalog}, "kind": {To: act.Kind}, "reason": {To: act.Reason}}}
+		// Audit is best effort; Record logs and counts its own failures.
 		if act.Result == bindings.ResultFailed {
 			_ = a.audit.Record(actx, ev.Failed(audit.ReasonEngineError))
 			return

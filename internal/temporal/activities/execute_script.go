@@ -267,6 +267,8 @@ func (s *script) cancelled(position int32, h queryengine.QueryHandle) error {
 	if h.QueryID != "" {
 		s.cancelOnEngine(h, "cancelled by baleia")
 	}
+	// Best effort: the workflow's cancel path runs the same bookkeeping
+	// with retries (AbandonStatements).
 	_, _ = s.a.queries.AbandonRunningStatements(s.bk, db.AbandonRunningStatementsParams{
 		ExecutionID: s.execID, Status: "cancelled", ErrorCode: optional(string(queryengine.CodeCancelled)),
 	})

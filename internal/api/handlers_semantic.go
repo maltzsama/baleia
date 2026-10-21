@@ -614,10 +614,8 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 	if body.Certified != nil && *body.Certified != current.Certified && !isManager {
 		return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a metric"}}, nil
 	}
-	if body.Certified != nil {
-		// Handled after the update so certified_by/at stay consistent.
-		_ = body.Certified
-	}
+	// body.Certified is applied after the update so certified_by/at stay
+	// consistent.
 	changesDefinition := body.Definition != nil || body.CatalogId != nil || body.Namespace != nil || body.Table != nil
 	slug, label, tableName := current.Slug, current.Label, current.TableName
 	namespace := current.Namespace

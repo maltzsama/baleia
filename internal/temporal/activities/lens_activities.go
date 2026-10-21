@@ -381,6 +381,7 @@ func allTables(ctx context.Context, r connections.MetadataReader, catalog string
 }
 
 func engineUUID(id string) pgtype.UUID {
+	// An unparsable id stays invalid and matches no row.
 	var out pgtype.UUID
 	_ = out.Scan(id)
 	return out
@@ -501,6 +502,7 @@ func finishMaintenanceRun(queries db.Querier, ctx context.Context, runID, status
 	if message != "" {
 		messagePtr = &message
 	}
+	// Best effort: the run's own outcome is returned to the workflow.
 	_, _ = queries.UpdateMaintenanceRun(context.WithoutCancel(ctx), db.UpdateMaintenanceRunParams{
 		ID: id, Status: status, ErrorCode: codePtr, ErrorMessage: messagePtr,
 	})

@@ -184,6 +184,8 @@ func (p *HTTPProvider) anthropic(ctx context.Context, req Request) (Response, er
 				content = append(content, map[string]any{"type": "text", "text": m.Content})
 			}
 			for _, call := range m.ToolCalls {
+				// The model's own arguments, sent back as given; invalid
+				// JSON becomes null and the provider reports it.
 				var input any
 				_ = json.Unmarshal(call.Arguments, &input)
 				content = append(content, map[string]any{

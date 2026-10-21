@@ -250,6 +250,7 @@ func main() {
 				os.Exit(1)
 			}
 		} else {
+			// Best effort: an absent schedule is the state we want.
 			_ = schedules.Remove(context.Background(), c, schedules.AuditExport)
 		}
 	}

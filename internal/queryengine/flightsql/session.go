@@ -94,6 +94,7 @@ func (s *session) cancelOnContext(ctx context.Context, info *flight.FlightInfo) 
 	}
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
+	// Best effort: the stream is already abandoned client-side.
 	_, _ = s.engine.c.client.CancelFlightInfo(cctx, &flight.CancelFlightInfoRequest{Info: info})
 }
 

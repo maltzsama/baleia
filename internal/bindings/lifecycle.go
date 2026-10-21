@@ -168,6 +168,7 @@ func (l Lifecycle) create(ctx context.Context, p Projection) error {
 		if u, ok := l.Binder.(Unstager); ok {
 			uctx, ucancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
 			defer ucancel()
+			// Best effort: the create error below is what matters.
 			_ = u.Unstage(uctx, l.Engine, p.EngineCatalog)
 		}
 	}

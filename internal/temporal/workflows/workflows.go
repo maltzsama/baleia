@@ -171,6 +171,7 @@ func failExecution(ctx workflow.Context, executionID string, cause error) error 
 	if cause != nil {
 		params.ErrorMessage = cause.Error()
 	}
+	// Best effort: the cause is returned below either way.
 	_ = workflow.ExecuteActivity(ctx, activities.FailExecution, params).Get(ctx, nil)
 	return cause
 }
@@ -186,6 +187,7 @@ func markCancelled(ctx workflow.Context, in QueryExecutionInput) error {
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 
+	// Bookkeeping with retries; a final failure must not hide the cancel.
 	_ = workflow.ExecuteActivity(dctx, activities.AbandonStatements, activities.AbandonStatementsParams{
 		ExecutionID: in.ExecutionID,
 		EngineID:    in.Target.EngineID,

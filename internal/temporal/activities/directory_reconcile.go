@@ -288,6 +288,7 @@ func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan,
 		*actions = append(*actions, reconcileAction{UserID: tc.UserID.String(), Action: "team", Detail: tc.TeamID})
 	}
 	for _, u := range plan.Synced {
+		// Best effort: an unmarked user is planned again on the next run.
 		_ = q.MarkDirectorySynced(ctx, u.ID)
 	}
 	return tx.Commit(ctx)
@@ -319,6 +320,7 @@ func (a *Activities) auditChange(ctx context.Context, ev audit.Event) {
 	if a.audit == nil {
 		return
 	}
+	// Audit is best effort; Record logs and counts its own failures.
 	_ = a.audit.Record(audit.WithService(ctx, "directory-reconciler"), ev)
 }
 

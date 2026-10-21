@@ -534,6 +534,7 @@ func encodeSessionProperties(props map[string]string) string {
 func (c *Client) cancelAbandoned(nextURI, user string) {
 	reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	// Best effort: Trino also abandons a query nobody polls.
 	_ = c.deleteURI(reqCtx, nextURI, user)
 }
 

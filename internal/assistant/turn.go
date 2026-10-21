@@ -132,10 +132,12 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 	}
 	msg, err := r.append(ctx, id, "user", map[string]any{"text": text}, nil, nil)
 	if err != nil {
+		// Best effort: a claim left behind is freed by RunSweeper.
 		_ = r.svc.Release(context.Background(), id)
 		return 0, err
 	}
 	if claimed.Title == "" {
+		// Cosmetic: an untitled conversation still works.
 		_ = r.svc.SetTitle(ctx, id, titleFrom(text))
 	}
 	turnCtx, cancel := context.WithTimeout(context.Background(), time.Duration(settings.MaxTurnSeconds)*time.Second)
@@ -148,6 +150,7 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 			r.mu.Lock()
 			delete(r.cancels, id.Bytes)
 			r.mu.Unlock()
+			// Best effort: a claim left behind is freed by RunSweeper.
 			_ = r.svc.Release(context.Background(), id)
 		}()
 		r.run(turnCtx, claimed, settings)
@@ -301,6 +304,7 @@ func (r *Runner) heartbeat(ctx context.Context, id pgtype.UUID, stop <-chan stru
 		case <-stop:
 			return
 		case <-ticker.C:
+			// A missed beat is retried on the next tick.
 			_ = r.svc.Heartbeat(ctx, id)
 		}
 	}

@@ -110,6 +110,7 @@ func (s *session) maybeKill(ctx context.Context) {
 	}
 	kctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
+	// Best effort: the statement is already abandoned client-side.
 	_ = s.engine.kill(kctx, s.connID)
 }
 

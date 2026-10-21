@@ -328,6 +328,7 @@ func (h *Handlers) audited(ctx context.Context, e audit.Event) {
 	if h.audit == nil {
 		return
 	}
+	// Audit is best effort; Record logs and counts its own failures.
 	_ = h.audit.Record(ctx, e)
 }
 

@@ -454,6 +454,7 @@ func authenticateAPIKey(ctx context.Context, queries db.Querier, raw string) (co
 	ctx = context.WithValue(ctx, auth.ContextKeyRole, user.Role)
 	ctx = audit.WithAuthMethod(ctx, audit.AuthAPIKey)
 	// Best effort; never log the key or its hash.
+	// Best effort: a failed touch must not reject a valid key.
 	_ = queries.TouchAPIKey(ctx, key.ID)
 	return ctx, true
 }
