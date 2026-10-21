@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
@@ -21,6 +22,8 @@
 	import { savedQueries, type SavedQuery } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { registerProvider, unregisterProvider } from '$lib/palette/registry';
+	import { modelPaletteProvider } from '$lib/semantic/palette';
+	import { exploreLinkOf, listModels, migratedModelOf } from '$lib/semantic/explore';
 	import { MAX_DRAFT_SQL } from '$lib/workbench/drafts';
 	import type { Conflict } from '$lib/workbench/conflict';
 	import CommandPalette from '$lib/workbench/CommandPalette.svelte';
@@ -102,6 +105,16 @@
 	const selectedTarget = $derived(targets.find((t) => t.binding_id === activeTab.bindingId));
 	const activeEngineId = $derived(selectedTarget?.engine_id ?? '');
 	const selectedEngine = $derived(engines.find((e) => e.id === activeEngineId));
+	// A query saved from Explore re-opens there (#121).
+	const exploreLink = $derived(exploreLinkOf(activeTab?.sql ?? ''));
+
+	function openInExplore() {
+		if (!exploreLink) return;
+		flushSql();
+		// The link is the explore query the tab was saved from, not a route.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(exploreLink);
+	}
 
 	const engineChoices = $derived.by(() => {
 		const out: { id: string; name: string; kind: string }[] = [];
@@ -430,26 +443,38 @@
 					params: { path: { id: workspaceId }, query: { ...(q ? { q } : {}), limit: 20 } }
 				});
 				const tabBinding = editor.activeTab?.bindingId ?? '';
-				return (data ?? []).slice(0, 20).map((metric) => ({
-					id: `metric-${metric.id}`,
-					label: metric.label,
-					detail: metric.slug,
-					group: 'Metrics',
-					run: async () => {
-						const { data: rendered } = await client.GET(
-							'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
-							{
-								params: {
-									path: { id: workspaceId, metric_id: metric.id },
-									query: tabBinding ? { binding_id: tabBinding } : {}
+				// A v1 metric migrated into a model is offered by "Insert from model".
+				const models = await listModels(workspaceId).catch(() => []);
+				return (data ?? [])
+					.filter((metric) => !migratedModelOf(models, metric))
+					.slice(0, 20)
+					.map((metric) => ({
+						id: `metric-${metric.id}`,
+						label: metric.label,
+						detail: metric.slug,
+						group: 'Metrics',
+						run: async () => {
+							const { data: rendered } = await client.GET(
+								'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
+								{
+									params: {
+										path: { id: workspaceId, metric_id: metric.id },
+										query: tabBinding ? { binding_id: tabBinding } : {}
+									}
 								}
-							}
-						);
-						if (rendered?.sql) editor.insert(rendered.sql);
-					}
-				}));
+							);
+							if (rendered?.sql) editor.insert(rendered.sql);
+						}
+					}));
 			}
 		});
+		registerProvider(
+			modelPaletteProvider({
+				workspaceId: () => workspaceId,
+				bindingId: () => editor.activeTab?.bindingId ?? '',
+				insert: (sql) => editor.insert(sql)
+			})
+		);
 	}
 
 	// Mirrors the store's active tab into CodeMirror when another component
@@ -665,6 +690,7 @@
 			document.removeEventListener('visibilitychange', onVisibility);
 			unregisterProvider('actions');
 			unregisterProvider('metrics');
+			unregisterProvider('models');
 			unregisterProvider('queries');
 			unregisterProvider('tables');
 			stream?.close();
@@ -1039,6 +1065,13 @@
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{m.components_queryeditor_commands()}</button
 		>
+		{#if exploreLink}
+			<button
+				onclick={openInExplore}
+				class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-primary border border-transparent bg-transparent hover:bg-border whitespace-nowrap"
+				>{m.explore_open_in_explore()}</button
+			>
+		{/if}
 		<div class="flex-1"></div>
 
 		<div class="flex items-center gap-1.5" aria-label={m.components_queryeditor_query_target()}>

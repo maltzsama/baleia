@@ -234,7 +234,7 @@
 
 		<div class="rounded-lg border border-border bg-bg-panel">
 			{#if loading}
-				<div class="space-y-2 p-4" aria-label={m.history_loading_history()}>
+				<div class="space-y-2 p-4" role="status" aria-label={m.history_loading_history()}>
 					<Skeleton class="h-5 w-full" />
 					<Skeleton class="h-5 w-5/6" />
 					<Skeleton class="h-5 w-4/5" />
@@ -398,7 +398,7 @@
 					{m.history_statements()}
 				</h3>
 				{#if statementsLoading}
-					<div class="space-y-2" aria-label={m.history_loading_statements()}>
+					<div class="space-y-2" role="status" aria-label={m.history_loading_statements()}>
 						<Skeleton class="h-4 w-full" />
 						<Skeleton class="h-4 w-2/3" />
 					</div>

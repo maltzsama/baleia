@@ -15,7 +15,8 @@ const countSpaceContent = `-- name: CountSpaceContent :one
 SELECT
     (SELECT count(*) FROM query_folders WHERE space_id = $1::uuid) +
     (SELECT count(*) FROM saved_queries WHERE space_id = $1::uuid) +
-    (SELECT count(*) FROM semantic_metrics WHERE space_id = $1::uuid) AS n
+    (SELECT count(*) FROM semantic_metrics WHERE space_id = $1::uuid) +
+    (SELECT count(*) FROM semantic_models WHERE space_id = $1::uuid) AS n
 `
 
 func (q *Queries) CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error) {
@@ -29,19 +30,26 @@ const countSpaceContentKinds = `-- name: CountSpaceContentKinds :one
 SELECT
     (SELECT count(*) FROM saved_queries WHERE space_id = $1::uuid)::bigint AS saved_queries,
     (SELECT count(*) FROM semantic_metrics WHERE space_id = $1::uuid)::bigint AS semantic_metrics,
+    (SELECT count(*) FROM semantic_models WHERE space_id = $1::uuid)::bigint AS semantic_models,
     (SELECT count(*) FROM query_folders WHERE space_id = $1::uuid)::bigint AS folders
 `
 
 type CountSpaceContentKindsRow struct {
 	SavedQueries    int64 `json:"saved_queries"`
 	SemanticMetrics int64 `json:"semantic_metrics"`
+	SemanticModels  int64 `json:"semantic_models"`
 	Folders         int64 `json:"folders"`
 }
 
 func (q *Queries) CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error) {
 	row := q.db.QueryRow(ctx, countSpaceContentKinds, spaceID)
 	var i CountSpaceContentKindsRow
-	err := row.Scan(&i.SavedQueries, &i.SemanticMetrics, &i.Folders)
+	err := row.Scan(
+		&i.SavedQueries,
+		&i.SemanticMetrics,
+		&i.SemanticModels,
+		&i.Folders,
+	)
 	return i, err
 }
 

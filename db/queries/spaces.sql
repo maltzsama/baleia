@@ -54,7 +54,8 @@ WHERE workspace_id = @workspace_id::uuid AND id = @id::uuid AND NOT is_default;
 SELECT
     (SELECT count(*) FROM query_folders WHERE space_id = @space_id::uuid) +
     (SELECT count(*) FROM saved_queries WHERE space_id = @space_id::uuid) +
-    (SELECT count(*) FROM semantic_metrics WHERE space_id = @space_id::uuid) AS n;
+    (SELECT count(*) FROM semantic_metrics WHERE space_id = @space_id::uuid) +
+    (SELECT count(*) FROM semantic_models WHERE space_id = @space_id::uuid) AS n;
 
 -- name: SetSpaceMember :one
 INSERT INTO space_members (space_id, principal_type, principal_id, role, granted_by)
@@ -76,4 +77,5 @@ SELECT * FROM space_members WHERE space_id = @space_id::uuid ORDER BY principal_
 SELECT
     (SELECT count(*) FROM saved_queries WHERE space_id = @space_id::uuid)::bigint AS saved_queries,
     (SELECT count(*) FROM semantic_metrics WHERE space_id = @space_id::uuid)::bigint AS semantic_metrics,
+    (SELECT count(*) FROM semantic_models WHERE space_id = @space_id::uuid)::bigint AS semantic_models,
     (SELECT count(*) FROM query_folders WHERE space_id = @space_id::uuid)::bigint AS folders;

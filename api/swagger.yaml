@@ -2482,6 +2482,7 @@ components:
       properties:
         saved_queries: { type: integer }
         semantic_metrics: { type: integer }
+        semantic_models: { type: integer }
         folders: { type: integer }
 
     ContentSearchSpace:
@@ -2502,7 +2503,7 @@ components:
       type: object
       required: [kind, id, slug, title, space, folder_path, updated_at]
       properties:
-        kind: { type: string }
+        kind: { type: string, description: "folder, saved_query, semantic_metric or semantic_model" }
         id: { type: string, format: uuid }
         slug: { type: string }
         title: { type: string }
@@ -2633,6 +2634,55 @@ components:
       properties:
         new_slug: { type: string, nullable: true, description: "Retry a slug conflict with this slug" }
         space_id: { type: string, format: uuid, nullable: true }
+
+    MigrateV1Request:
+      type: object
+      properties:
+        dry_run: { type: boolean, default: true, description: "Report what would change without writing" }
+        tables:
+          type: array
+          description: "Per-table choices; a table without an entry uses the defaults (primary key: a column named id)"
+          items: { $ref: "#/components/schemas/MigrateV1Table" }
+
+    MigrateV1Table:
+      type: object
+      required: [catalog_id, namespace, table, primary_key]
+      properties:
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        primary_key: { type: array, minItems: 1, items: { type: string } }
+
+    MigrateV1Report:
+      type: object
+      required: [dry_run, items]
+      properties:
+        dry_run: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MigrateV1Item" }
+
+    MigrateV1Item:
+      type: object
+      required: [catalog_id, namespace, table, model_slug, metrics, columns, primary_key, action]
+      properties:
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        table: { type: string }
+        model_slug: { type: string }
+        model_id: { type: string, format: uuid, nullable: true, description: "Set when the model exists (UPDATE, NO_CHANGES) or was created" }
+        space_id: { type: string, format: uuid }
+        metrics: { type: array, items: { type: string }, description: "v1 metric slugs that become metrics of this model" }
+        columns: { type: array, items: { type: string }, description: "Table columns, to choose the primary key from" }
+        primary_key: { type: array, items: { type: string } }
+        action: { type: string, enum: [CREATE, UPDATE, NO_CHANGES, ERROR] }
+        error_code:
+          type: string
+          nullable: true
+          description: "Set with action ERROR; the UI translates it"
+          x-enum-varnames: [MigrateV1ItemErrorCodeCatalogNotGranted, MigrateV1ItemErrorCodePrimaryKeyRequired, MigrateV1ItemErrorCodePrimaryKeyInvalid, MigrateV1ItemErrorCodeSpaceForbidden, MigrateV1ItemErrorCodeInvalidMetric, MigrateV1ItemErrorCodeInvalidDefinition, MigrateV1ItemErrorCodeSlugConflict, MigrateV1ItemErrorCodeWriteFailed]
+          enum: [catalog_not_granted, primary_key_required, primary_key_invalid, space_forbidden, invalid_metric, invalid_definition, slug_conflict, write_failed]
+        error: { type: string, nullable: true, description: "Detail for the error_code (English, not for headlines)" }
 
     RestoreSemanticModelRequest:
       type: object
@@ -5292,6 +5342,34 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/semantic/models/migrate-v1:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Semantic]
+      operationId: migrateSemanticMetricsV1
+      summary: "Migrate v1 metrics into v2 models — space editor (#91, #121)"
+      description: >
+        Groups the caller's visible v1 metrics by table; each table becomes a
+        model (an existing model on the same table is reused) and each metric
+        becomes a model metric with the same slug. Upsert by slug: metrics the
+        model already has are left alone and nothing is deleted. v1 metrics
+        keep working. Writing needs editor on the metric's space; dry_run
+        (the default) only reports.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MigrateV1Request" }
+      responses:
+        "200":
+          description: "One item per table"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrateV1Report" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/semantic/models/{model_id}:
     parameters:

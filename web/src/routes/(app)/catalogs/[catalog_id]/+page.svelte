@@ -414,7 +414,7 @@
 
 <div class="flex-1 overflow-y-auto p-7">
 	{#if loading && !catalog}
-		<div class="flex flex-col gap-2" aria-label={m.catalogs_loading_the_catalog()}>
+		<div class="flex flex-col gap-2" role="status" aria-label={m.catalogs_loading_the_catalog()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-14 w-full" />
 			{/each}

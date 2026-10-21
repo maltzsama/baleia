@@ -1514,6 +1514,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/semantic/models/migrate-v1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Migrate v1 metrics into v2 models — space editor (#91, #121)
+         * @description Groups the caller's visible v1 metrics by table; each table becomes a model (an existing model on the same table is reused) and each metric becomes a model metric with the same slug. Upsert by slug: metrics the model already has are left alone and nothing is deleted. v1 metrics keep working. Writing needs editor on the metric's space; dry_run (the default) only reports.
+         */
+        post: operations["migrateSemanticMetricsV1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/models/{model_id}": {
         parameters: {
             query?: never;
@@ -5089,6 +5111,7 @@ export interface components {
         SpaceCounts: {
             saved_queries?: number;
             semantic_metrics?: number;
+            semantic_models?: number;
             folders?: number;
         };
         ContentSearchSpace: {
@@ -5102,6 +5125,7 @@ export interface components {
             name: string;
         };
         ContentSearchItem: {
+            /** @description folder, saved_query, semantic_metric or semantic_model */
             kind: string;
             /** Format: uuid */
             id: string;
@@ -5236,6 +5260,54 @@ export interface components {
             new_slug?: string | null;
             /** Format: uuid */
             space_id?: string | null;
+        };
+        MigrateV1Request: {
+            /**
+             * @description Report what would change without writing
+             * @default true
+             */
+            dry_run: boolean;
+            /** @description Per-table choices; a table without an entry uses the defaults (primary key: a column named id) */
+            tables?: components["schemas"]["MigrateV1Table"][];
+        };
+        MigrateV1Table: {
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            table: string;
+            primary_key: string[];
+        };
+        MigrateV1Report: {
+            dry_run: boolean;
+            items: components["schemas"]["MigrateV1Item"][];
+        };
+        MigrateV1Item: {
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            table: string;
+            model_slug: string;
+            /**
+             * Format: uuid
+             * @description Set when the model exists (UPDATE, NO_CHANGES) or was created
+             */
+            model_id?: string | null;
+            /** Format: uuid */
+            space_id?: string;
+            /** @description v1 metric slugs that become metrics of this model */
+            metrics: string[];
+            /** @description Table columns, to choose the primary key from */
+            columns: string[];
+            primary_key: string[];
+            /** @enum {string} */
+            action: "CREATE" | "UPDATE" | "NO_CHANGES" | "ERROR";
+            /**
+             * @description Set with action ERROR; the UI translates it
+             * @enum {string|null}
+             */
+            error_code?: "catalog_not_granted" | "primary_key_required" | "primary_key_invalid" | "space_forbidden" | "invalid_metric" | "invalid_definition" | "slug_conflict" | "write_failed" | null;
+            /** @description Detail for the error_code (English, not for headlines) */
+            error?: string | null;
         };
         RestoreSemanticModelRequest: {
             /** @description Retry a slug conflict with this slug */
@@ -8479,6 +8551,34 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    migrateSemanticMetricsV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrateV1Request"];
+            };
+        };
+        responses: {
+            /** @description One item per table */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrateV1Report"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getSemanticModel: {

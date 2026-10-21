@@ -5,7 +5,10 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { listCatalogBindings } from '$lib/connections/api';
+	import { listModels, migratedModelOf } from '$lib/semantic/explore';
 	import HistoryDrawer from '$lib/content/HistoryDrawer.svelte';
 	import {
 		deleteMetric,
@@ -54,6 +57,14 @@
 		try {
 			await savedQueries.reload(workspaceId);
 			metric = await getMetric(workspaceId, metricId);
+			// A migrated v1 metric lives on in its model (#91): keep old links working.
+			const migrated = migratedModelOf(await listModels(workspaceId).catch(() => []), metric);
+			if (migrated) {
+				await goto(resolve(`/models/${migrated.id}`), {
+					replaceState: true
+				});
+				return;
+			}
 			const rows = await listCatalogBindings(metric.catalog_id);
 			bindings = rows
 				.filter((b) => b.enabled)

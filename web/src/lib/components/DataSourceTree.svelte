@@ -336,7 +336,7 @@
 			{m.components_datasourcetree_select_a_workspace_to_browse_catalogs()}
 		</p>
 	{:else if loading}
-		<div class="space-y-2 px-2 py-3" aria-label="Loading catalogs">
+		<div class="space-y-2 px-2 py-3" role="status" aria-label={m.catalogs_loading_catalogs()}>
 			<Skeleton class="h-4 w-3/4" />
 			<Skeleton class="h-4 w-2/3" />
 			<Skeleton class="h-4 w-4/5" />

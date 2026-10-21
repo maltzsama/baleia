@@ -297,7 +297,11 @@
 	</div>
 
 	{#if loading}
-		<div class="flex flex-col gap-2" aria-label={m.monitoring_loading_monitoring_engines()}>
+		<div
+			class="flex flex-col gap-2"
+			role="status"
+			aria-label={m.monitoring_loading_monitoring_engines()}
+		>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-14 w-full" />
 			{/each}

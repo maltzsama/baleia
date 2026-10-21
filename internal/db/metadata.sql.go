@@ -249,6 +249,26 @@ func (q *Queries) GetGrantedMetadataTable(ctx context.Context, arg GetGrantedMet
 	return i, err
 }
 
+const getMetadataTableByName = `-- name: GetMetadataTableByName :one
+SELECT id FROM metadata_tables
+WHERE catalog_id = $1::uuid AND namespace = $2::text[] AND name = $3::text
+  AND removed_at IS NULL
+`
+
+type GetMetadataTableByNameParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	Namespace []string    `json:"namespace"`
+	Name      string      `json:"name"`
+}
+
+// A live table by its natural key, for the v1 -> v2 metric migration (#121).
+func (q *Queries) GetMetadataTableByName(ctx context.Context, arg GetMetadataTableByNameParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getMetadataTableByName, arg.CatalogID, arg.Namespace, arg.Name)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getTableFingerprints = `-- name: GetTableFingerprints :many
 SELECT namespace, name, fingerprint, properties
 FROM metadata_tables

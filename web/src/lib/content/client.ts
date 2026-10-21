@@ -3,6 +3,7 @@
 // store (#40).
 import { apiErrorMessage, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import { kindEntry } from './kinds';
 
 export type ContentSearchItem = components['schemas']['ContentSearchItem'];
 export type WorkspacePrincipal = components['schemas']['WorkspacePrincipal'];
@@ -93,9 +94,7 @@ export async function listMetrics(workspaceId: string): Promise<SemanticMetric[]
 	return data;
 }
 
-/** The route a content item opens (#112 / #33). */
+/** The route a content item opens (#112 / #33 / #121). */
 export function contentHref(item: { kind: string; id: string }): string {
-	if (item.kind === 'saved_query') return `/sql/q/${item.id}`;
-	if (item.kind === 'semantic_metric') return `/metrics/${item.id}`;
-	return `/content?folder=${item.id}`;
+	return kindEntry(item.kind).href(item.id);
 }

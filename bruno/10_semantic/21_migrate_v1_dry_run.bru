@@ -1,0 +1,27 @@
+meta {
+  name: Migrate V1 Metrics Dry Run
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/semantic/models/migrate-v1
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "dry_run": true
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.dry_run: eq true
+  res.body.items: isArray
+}

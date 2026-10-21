@@ -36,6 +36,12 @@ func agentToolDoc(name string) (label, description string, readOnly bool) {
 		return "List metrics", "The semantic metrics available to the workspace.", true
 	case agentpolicy.ToolRenderMetric:
 		return "Render metric", "Run a semantic metric and return its rows.", true
+	case agentpolicy.ToolListModels:
+		return "List models", "The semantic models visible to the workspace.", true
+	case agentpolicy.ToolDescribeModel:
+		return "Describe model", "Dimensions, metrics and joins of one semantic model.", true
+	case agentpolicy.ToolQuerySemantic:
+		return "Query semantic layer", "Compile an explore query over a model into SQL; never accepts raw SQL.", true
 	case agentpolicy.ToolRunQuery:
 		return "Run query", "Run a read-only SQL query on a workspace target.", true
 	case agentpolicy.ToolGetExecution:

@@ -4,6 +4,7 @@
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { contentHref, searchContent, type ContentSearchItem } from '$lib/content/client';
+	import { kindEntry } from '$lib/content/kinds';
 	import SpaceDialog from '$lib/components/SpaceDialog.svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -54,7 +55,7 @@
 	}
 
 	function kindLabel(kind: string): string {
-		return kind === 'saved_query' ? 'Query' : kind === 'semantic_metric' ? 'Metric' : 'Folder';
+		return kindEntry(kind).label;
 	}
 
 	onMount(load);
@@ -105,7 +106,11 @@
 	{/if}
 
 	{#if loading}
-		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={m.content_loading_spaces()}>
+		<div
+			class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+			role="status"
+			aria-label={m.content_loading_spaces()}
+		>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-28 w-full" />
 			{/each}
@@ -145,6 +150,7 @@
 					<div class="text-[10px] text-slate-600 dark:text-slate-300">
 						{space.counts?.saved_queries ?? 0} queries · {space.counts?.semantic_metrics ?? 0} metrics
 						·
+						{space.counts?.semantic_models ?? 0} models ·
 						{space.counts?.folders ?? 0} folders
 						{#if space.updated_at}· updated <RelativeTime at={space.updated_at} />{/if}
 					</div>

@@ -76,12 +76,15 @@ type ModelSource struct {
 // Dimension is a column or SQL expression with a logical type. Time dimensions
 // declare the grains they support.
 type Dimension struct {
-	Name   string              `json:"name"`
-	Label  string              `json:"label,omitempty"`
-	SQL    string              `json:"sql,omitempty"` // empty: the column named Name
-	Type   dialect.LogicalType `json:"type"`
-	Grains []dialect.TimeGrain `json:"grains,omitempty"`
-	Hidden bool                `json:"hidden,omitempty"`
+	Name        string              `json:"name"`
+	Label       string              `json:"label,omitempty"`
+	Description string              `json:"description,omitempty"`
+	SQL         string              `json:"sql,omitempty"` // empty: the column named Name
+	Type        dialect.LogicalType `json:"type"`
+	Grains      []dialect.TimeGrain `json:"grains,omitempty"`
+	Hidden      bool                `json:"hidden,omitempty"`
+	// Format is display-only, as on metrics; it never changes the SQL.
+	Format *Format `json:"format,omitempty"`
 }
 
 // Metric is an aggregation over a dimension (or a raw SQL aggregate) or a
@@ -95,6 +98,9 @@ type Metric struct {
 	Filters     []Filter        `json:"filters,omitempty"`
 	Derived     *DerivedMetric  `json:"derived,omitempty"`
 	Format      *Format         `json:"format,omitempty"`
+	// MigratedFrom is the id of the v1 metric this one was migrated from
+	// (#91, #121). It never changes the SQL; the v1 page redirects by it.
+	MigratedFrom string `json:"migrated_from,omitempty"`
 }
 
 // CalculatedField is an expression over the query result (dimension/metric

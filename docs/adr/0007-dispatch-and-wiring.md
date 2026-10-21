@@ -15,6 +15,8 @@ to substitute a fake in tests or add a second engine without editing those call 
 - Engine adapters, connection providers, binders and external database clients are constructed
   only at the two wiring sites, `internal/server/server.go` (API) and `cmd/worker/main.go` (worker),
   and injected as interfaces — the same pattern as `db.Querier`.
+- `cmd/e2e-seed/main.go` (build tag `e2e`, never in the release image) is a third, test-only
+  composition root: it registers the Playwright smoke's Trino catalog the way a binding does (#121).
 - Kind registries (`queryengine.RegisterKind`, the provider registry, the binder registry) are
   consumed only at the wiring sites and in the packages that implement the kinds.
 - Baleia's own database (`pgxpool.New`, `sql.Open` for migrations) is opened only in `cmd/*` and
