@@ -120,7 +120,9 @@ func (h *Handlers) CompileExploreQuery(ctx context.Context, request CompileExplo
 		if err != nil {
 			return CompileExploreQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, "model "+rows[i].Slug+": "+err.Error())}, nil
 		}
-		// The row is authoritative for the binding context.
+		// The row is authoritative: a definition written through the API carries
+		// neither the slug (renames leave it stale) nor the binding context.
+		m.Slug = rows[i].Slug
 		m.CatalogID = uuid.UUID(rows[i].CatalogID.Bytes).String()
 		if rows[i].BindingID.Valid {
 			m.BindingID = uuid.UUID(rows[i].BindingID.Bytes).String()
@@ -635,6 +637,7 @@ func (h *Handlers) visibleModels(ctx context.Context, ws, userID pgtype.UUID) (m
 		if err != nil {
 			continue // a malformed sibling must not block a valid edit
 		}
+		m.Slug = rows[i].Slug
 		m.CatalogID = uuid.UUID(rows[i].CatalogID.Bytes).String()
 		out[m.Slug] = m
 	}
