@@ -38,6 +38,11 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_DB_MAX_CONNS` | api `20`, worker `10` | Size of Baleia's own database pool (observable as `baleia_db_pool_*`) |
 | `BALEIA_DB_MIN_CONNS` | `2` | Connections the pool keeps open |
 | `BALEIA_DB_MAX_CONN_LIFETIME` | `1h` | Recycle pool connections after this long |
+| `BALEIA_DB_MAX_CONN_IDLE_TIME` | `30m` | Close pool connections idle for this long |
+| `BALEIA_DB_HEALTH_CHECK_PERIOD` | `1m` | How often the pool checks idle connections |
+| `BALEIA_DB_STATEMENT_TIMEOUT` | `1m` | `statement_timeout` on Baleia's own sessions (not user queries, which use `BALEIA_STATEMENT_TIMEOUT`); `0` disables it |
+| `BALEIA_DB_IDLE_IN_TX_TIMEOUT` | `1m` | `idle_in_transaction_session_timeout`: a leaked transaction is ended and its locks released; `0` disables it |
+| `BALEIA_DB_LOCK_TIMEOUT` | `30s` | `lock_timeout` on Baleia's own sessions; `0` disables it |
 | `BALEIA_HTTP_READ_HEADER_TIMEOUT` | `10s` | Time a client has to send the request headers to the API |
 | `BALEIA_HTTP_IDLE_TIMEOUT` | `2m` | How long an idle keep-alive connection to the API stays open |
 | `BALEIA_HTTP_SHUTDOWN_TIMEOUT` | `20s` | How long the API drains in-flight requests on shutdown (keep it below the pod's termination grace period) |

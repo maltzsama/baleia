@@ -52,6 +52,8 @@ func main() {
 	reg := metrics.New("api")
 	pool, err := dbpool.Open(ctx, cfg.DatabaseURL, dbpool.Options{
 		MaxConns: cfg.PoolSize(20), MinConns: int32(cfg.DBMinConns), MaxConnLifetime: cfg.DBMaxConnLifetime,
+		MaxConnIdleTime: cfg.DBMaxConnIdleTime, HealthCheckPeriod: cfg.DBHealthCheckPeriod,
+		StatementTimeout: cfg.DBStatementTimeout, IdleInTxTimeout: cfg.DBIdleInTxTimeout, LockTimeout: cfg.DBLockTimeout,
 		Tracer: obs.PGXTracer(reg.NewPoolTracer()),
 	})
 	if err != nil {

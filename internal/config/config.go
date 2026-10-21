@@ -150,9 +150,15 @@ type Config struct {
 	AuditExportInterval time.Duration
 	// Baleia's database pool; DBMaxConns 0 means the process default (api 20,
 	// worker 10).
-	DBMaxConns        int
-	DBMinConns        int
-	DBMaxConnLifetime time.Duration
+	DBMaxConns          int
+	DBMinConns          int
+	DBMaxConnLifetime   time.Duration
+	DBMaxConnIdleTime   time.Duration
+	DBHealthCheckPeriod time.Duration
+	// Server-side guards on the pool's sessions (#377); 0 disables one.
+	DBStatementTimeout time.Duration
+	DBIdleInTxTimeout  time.Duration
+	DBLockTimeout      time.Duration
 	// HTTP* bound the API listener (#372). There is no server-wide read or
 	// write timeout: result downloads, SSE and WebSockets are long-lived.
 	HTTPReadHeaderTimeout time.Duration
@@ -254,6 +260,11 @@ func Load() *Config {
 		DBMaxConns:                  getEnvInt("BALEIA_DB_MAX_CONNS", 0),
 		DBMinConns:                  getEnvInt("BALEIA_DB_MIN_CONNS", 2),
 		DBMaxConnLifetime:           getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
+		DBMaxConnIdleTime:           getEnvDuration("BALEIA_DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
+		DBHealthCheckPeriod:         getEnvDuration("BALEIA_DB_HEALTH_CHECK_PERIOD", time.Minute),
+		DBStatementTimeout:          getEnvDuration("BALEIA_DB_STATEMENT_TIMEOUT", time.Minute),
+		DBIdleInTxTimeout:           getEnvDuration("BALEIA_DB_IDLE_IN_TX_TIMEOUT", time.Minute),
+		DBLockTimeout:               getEnvDuration("BALEIA_DB_LOCK_TIMEOUT", 30*time.Second),
 		HTTPReadHeaderTimeout:       getEnvDuration("BALEIA_HTTP_READ_HEADER_TIMEOUT", 10*time.Second),
 		HTTPIdleTimeout:             getEnvDuration("BALEIA_HTTP_IDLE_TIMEOUT", 2*time.Minute),
 		HTTPShutdownTimeout:         getEnvDuration("BALEIA_HTTP_SHUTDOWN_TIMEOUT", 20*time.Second),
@@ -352,6 +363,9 @@ func (c *Config) Validate() error {
 		{"BALEIA_ACCESS_TOKEN_TTL", c.AccessTokenTTL},
 		{"BALEIA_REFRESH_TOKEN_TTL", c.RefreshTokenTTL},
 		{"BALEIA_RESET_TOKEN_TTL", c.ResetTokenTTL},
+		{"BALEIA_DB_STATEMENT_TIMEOUT", c.DBStatementTimeout},
+		{"BALEIA_DB_IDLE_IN_TX_TIMEOUT", c.DBIdleInTxTimeout},
+		{"BALEIA_DB_LOCK_TIMEOUT", c.DBLockTimeout},
 		{"BALEIA_HTTP_READ_HEADER_TIMEOUT", c.HTTPReadHeaderTimeout},
 		{"BALEIA_HTTP_IDLE_TIMEOUT", c.HTTPIdleTimeout},
 		{"BALEIA_HTTP_SHUTDOWN_TIMEOUT", c.HTTPShutdownTimeout},
