@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -304,10 +305,15 @@ func (h *Handlers) Logout(ctx context.Context, request LogoutRequestObject) (Log
 	if token != "" {
 		hash := auth.HashRefreshToken(token)
 		if rt, err := h.queries.GetRefreshTokenByHashAny(ctx, hash); err == nil {
-			// Logout ends the whole rotation family, not only this token.
-			_ = h.queries.RevokeRefreshFamily(ctx, rt.FamilyID)
-			h.audited(audit.AsUser(ctx, idString(rt.UserID), audit.AuthRefreshTok),
-				audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(rt.UserID), Outcome: audit.Allowed})
+			// Logout ends the whole rotation family, not only this token. A
+			// client disconnect must not cancel the revoke halfway (#370).
+			actx := audit.AsUser(ctx, idString(rt.UserID), audit.AuthRefreshTok)
+			ev := audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(rt.UserID)}
+			if err := h.queries.RevokeRefreshFamily(context.WithoutCancel(ctx), rt.FamilyID); err != nil {
+				h.audited(actx, ev.Failed(audit.ReasonInternal))
+				return nil, fmt.Errorf("logout: revoke refresh family: %w", err)
+			}
+			h.audited(actx, ev.Allowed())
 		}
 	}
 	return Logout204Response{}, nil
@@ -580,7 +586,12 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 		reused := false
 		if errors.Is(err, pgx.ErrNoRows) {
 			if old, lookupErr := h.queries.GetRefreshTokenByHashAny(ctx, hash); lookupErr == nil && old.Revoked {
-				_ = h.queries.RevokeRefreshFamily(ctx, old.FamilyID)
+				// The family may be stolen: a failed revoke is a server
+				// error, never a quiet 401 that leaves it usable (#370).
+				if revokeErr := h.queries.RevokeRefreshFamily(context.WithoutCancel(ctx), old.FamilyID); revokeErr != nil {
+					h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Failed(audit.ReasonReuseDetected))
+					return nil, fmt.Errorf("refresh: revoke reused family: %w", revokeErr)
+				}
 				h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied(audit.ReasonReuseDetected))
 				reused = true
 			}

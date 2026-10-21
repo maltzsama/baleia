@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"testing"
 	"time"
@@ -461,5 +462,47 @@ func TestRoleChange_RevokesRefresh(t *testing.T) {
 	}
 	if got := refreshStatus(t, f.h, token); got != 401 {
 		t.Errorf("refresh after role change = %d, want 401", got)
+	}
+}
+
+// failingRevoke is the real querier with RevokeRefreshFamily failing.
+type failingRevoke struct{ db.Querier }
+
+func (failingRevoke) RevokeRefreshFamily(context.Context, pgtype.UUID) error {
+	return errors.New("db down")
+}
+
+// TestLogout_RevokeFailureIsAnError: a failed revoke is not reported as a
+// successful logout, and the audit trail records the failure (#370).
+func TestLogout_RevokeFailureIsAnError(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+	f.mem.take()
+	f.h.queries = failingRevoke{f.h.queries}
+
+	if _, err := f.h.Logout(context.Background(), LogoutRequestObject{Body: &LogoutRequest{RefreshToken: &token}}); err == nil {
+		t.Fatal("logout with a failed revoke returned no error")
+	}
+	events := f.mem.take()
+	if len(events) != 1 || events[0].Action != audit.AuthLogout || events[0].Outcome != audit.Error {
+		t.Fatalf("audit = %+v, want one failed auth.logout", events)
+	}
+}
+
+// TestRefresh_ReuseRevokeFailureIsAnError: a replayed token whose family
+// cannot be revoked is a server error, not a quiet 401 (#370).
+func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
+	f := newAuthFixture(t)
+	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
+	refreshToken(t, f.h, token)
+	f.mem.take()
+	f.h.queries = failingRevoke{f.h.queries}
+
+	if _, err := f.h.RefreshToken(context.Background(), RefreshTokenRequestObject{Body: &RefreshRequest{RefreshToken: &token}}); err == nil {
+		t.Fatal("replay with a failed revoke returned no error")
+	}
+	events := f.mem.take()
+	if len(events) != 1 || events[0].Outcome != audit.Error || events[0].Reason != audit.ReasonReuseDetected {
+		t.Fatalf("audit = %+v, want one failed reuse_detected", events)
 	}
 }
