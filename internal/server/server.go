@@ -183,11 +183,14 @@ func (s *Server) routes() {
 	wsHandler.SetTickets(tickets)
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
 
-	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
+	strictHandler := baleiaapi.NewStrictHandlerWithOptions(h, []baleiaapi.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret, s.queries),
 		csrfMiddleware,
 		refreshCookieMiddleware(s.cfg),
 		oidcMiddleware(s.cfg),
+	}, baleiaapi.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  strictRequestError,
+		ResponseErrorHandlerFunc: strictResponseError,
 	})
 
 	// The MCP surface is mounted outside /api/v1: agent tokens are valid only
