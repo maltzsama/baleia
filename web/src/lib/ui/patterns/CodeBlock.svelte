@@ -2,19 +2,31 @@
 	import { onMount } from 'svelte';
 	import { basicSetup } from 'codemirror';
 	import { EditorView } from '@codemirror/view';
-	import { EditorState } from '@codemirror/state';
+	import { Compartment, EditorState } from '@codemirror/state';
 	import { sql } from '@codemirror/lang-sql';
+	import { codemirrorDialect } from '$lib/engines/client';
 	import CopyButton from './CopyButton.svelte';
+	import { accessibleHighlight } from './codeHighlight';
 
 	let {
 		code,
 		language = 'text',
+		dialect,
+		label,
 		maxHeight = '360px'
 	}: {
 		code: string;
 		language?: 'sql' | 'json' | 'text';
+		/** Accessible name of the code region; defaults to the language. */
+		label?: string;
+		/** The engine's CodeMirror base (`codemirror_base`), for SQL highlighting. */
+		dialect?: string | null;
 		maxHeight?: string;
 	} = $props();
+
+	const grammar = new Compartment();
+	const sqlGrammar = (base: string | null | undefined) =>
+		language === 'sql' ? [sql({ dialect: codemirrorDialect(base), upperCaseKeywords: true })] : [];
 
 	let host: HTMLDivElement;
 	let view: EditorView | undefined;
@@ -24,13 +36,22 @@
 			basicSetup,
 			EditorView.editable.of(false),
 			EditorState.readOnly.of(true),
-			...(language === 'sql' ? [sql()] : [])
+			grammar.of(sqlGrammar(dialect)),
+			accessibleHighlight,
+			// Read-only content is still a focusable, named region so keyboard
+			// users can scroll it (axe: aria-input-field-name, scrollable-region-focusable).
+			EditorView.contentAttributes.of({ 'aria-label': label ?? language, tabindex: '0' })
 		];
 		view = new EditorView({
 			state: EditorState.create({ doc: code, extensions }),
 			parent: host
 		});
 		return () => view?.destroy();
+	});
+
+	$effect(() => {
+		const base = dialect;
+		view?.dispatch({ effects: grammar.reconfigure(sqlGrammar(base)) });
 	});
 
 	$effect(() => {

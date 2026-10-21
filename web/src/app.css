@@ -14,7 +14,7 @@
 	--color-border-hover: #cbd5e1;
 
 	--color-text-main: #1e293b;
-	--color-text-muted: #64748b;
+	--color-text-muted: #5b6b82; /* 4.8:1 on bg-app (WCAG AA) */
 
 	--color-primary: #2563eb;
 	--color-primary-hover: #1d4ed8;
