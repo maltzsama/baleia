@@ -199,6 +199,24 @@ describe('QueryEditor', () => {
 		await waitFor(() => expect(sent).toEqual(['SELECT 1;']));
 	});
 
+	// CodeRabbit on #396: Run must not fall back to the whole script.
+	it('runs one statement with Run even when the engine splitter fails', async () => {
+		mockWorkbench();
+		const sent: string[] = [];
+		captureRuns(sent);
+		server.use(
+			http.post('/dialects/{name}/split', ({ response }) =>
+				response(500).json({ code: 'internal', message: 'boom' })
+			)
+		);
+		editor.updateSql(editor.activeId, 'SELECT 1;\nSELECT 2');
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		await fireEvent.click(screen.getByTestId('run-current'));
+		await waitFor(() => expect(sent).toEqual(['SELECT 1;']));
+	});
+
 	it('runs the whole script with Run all', async () => {
 		mockWorkbench();
 		const sent: string[] = [];

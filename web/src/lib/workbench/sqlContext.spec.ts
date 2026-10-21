@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sqlContextAt } from './sqlContext';
+import { sqlContextAt, statementSpanAt } from './sqlContext';
 
 // `|` marks the cursor.
 function at(text: string) {
@@ -123,5 +123,29 @@ describe('sqlContextAt', () => {
 
 	it('does not complete inside a number', () => {
 		expect(at('SELECT 12|')).toBeNull();
+	});
+});
+
+describe('statementSpanAt (#395)', () => {
+	const text = (doc: string, pos: number) => {
+		const span = statementSpanAt(doc, pos);
+		return span ? doc.slice(span.start, span.end).trim() : null;
+	};
+
+	it('picks the statement that holds the cursor', () => {
+		const doc = 'SELECT 1;\nSELECT 2;\nSELECT 3';
+		expect(text(doc, 3)).toBe('SELECT 1;');
+		expect(text(doc, doc.indexOf('2'))).toBe('SELECT 2;');
+		expect(text(doc, doc.length)).toBe('SELECT 3');
+	});
+
+	it('ignores semicolons in strings, comments and quoted identifiers', () => {
+		const doc = 'SELECT \';\' AS a, "x;y" -- c;\nFROM t;\nSELECT 2';
+		expect(text(doc, 0)).toBe('SELECT \';\' AS a, "x;y" -- c;\nFROM t;');
+	});
+
+	it('takes the last statement when the cursor is after it, and null on an empty doc', () => {
+		expect(text('SELECT 1;\n\n', 12)).toBe('SELECT 1;');
+		expect(statementSpanAt('  \n ', 2)).toBeNull();
 	});
 });

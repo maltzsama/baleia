@@ -37,6 +37,7 @@
 	} from '$lib/engines/client';
 	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
 	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
+	import { statementSpanAt } from '$lib/workbench/sqlContext';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
@@ -723,23 +724,25 @@
 			return;
 		}
 		const full = doc.toString();
+		const head = selection.head;
 		const name = selectedEngine?.dialect?.name;
-		if (!name) {
-			await submit(full);
-			return;
+		// Run never falls back to the whole script, which is Run all's job: the
+		// engine's splitter knows its dialect, and the local one stands in when
+		// it is unavailable (#395).
+		let span: { start: number; end: number } | null | undefined;
+		if (name) {
+			try {
+				const spans = await splitStatements(name, full);
+				span =
+					spans.find((s) => s.start <= head && head <= s.end) ??
+					[...spans].reverse().find((s) => s.end <= head) ??
+					spans[0];
+			} catch {
+				span = undefined;
+			}
 		}
-		try {
-			const spans = await splitStatements(name, full);
-			const head = selection.head;
-			const span =
-				spans.find((s) => s.start <= head && head <= s.end) ??
-				[...spans].reverse().find((s) => s.end <= head) ??
-				spans[0];
-			await submit(span ? full.slice(span.start, span.end) : full);
-		} catch {
-			// The splitter refused (unterminated string, …): run the script.
-			await submit(full);
-		}
+		span ??= statementSpanAt(full, head);
+		if (span) await submit(full.slice(span.start, span.end));
 	}
 
 	async function cancelExecution() {
