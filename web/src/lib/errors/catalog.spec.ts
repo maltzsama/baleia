@@ -33,6 +33,29 @@ describe('error catalog', () => {
 		}
 	});
 
+	// The codes internal/queryengine stores on a failed statement (#393).
+	it('describes every engine statement code as a statement error', () => {
+		for (const code of [
+			'syntax',
+			'not_found',
+			'permission_denied',
+			'read_only_unsupported',
+			'timeout',
+			'cancelled',
+			'resource_exhausted',
+			'engine_unavailable',
+			'conflict',
+			'interrupted',
+			'internal'
+		]) {
+			expect(errorCatalog[`statement.${code}`], code).toBeDefined();
+			expect(describeError({ code }, 'statement').code, code).toBe(code);
+		}
+		// A statement's not_found is a missing name, not a deleted resource.
+		expect(describeError({ code: 'not_found' }, 'statement').title).toBe('Name not found');
+		expect(describeError({ code: 'not_found' }).title).toBe('Not found');
+	});
+
 	it('falls back for unknown codes without throwing', () => {
 		const described = describeError({ code: 'mystery', request_id: 'req-1' });
 		expect(described.code).toBe('mystery');

@@ -44,10 +44,19 @@
 		);
 	}
 
+	// Rows only for a statement that finished: a failed one has none to count.
 	function rowsLabel(statement: StatementState): string {
-		if (statement.rowsReturned == null) return '';
-		return `${statement.rowsReturned} rows`;
+		if (statement.rowsReturned == null || statement.status !== 'finished') return '';
+		const rows = statement.rowsReturned;
+		return `${rows.toLocaleString()} ${rows === 1 ? 'row' : 'rows'}`;
 	}
+
+	// A lone statement is summarised in the header; the list (one row per
+	// statement) is for scripts, where it tells the statements apart (#393).
+	const single = $derived(statements.length === 1 ? statements[0] : null);
+	const singleError = $derived(
+		single && single.status === 'failed' && single.errorCode ? single : null
+	);
 </script>
 
 <section
@@ -55,12 +64,28 @@
 	aria-label={m.run_runpanel_run_progress()}
 >
 	<header
-		class="flex flex-wrap items-center gap-3 border-b border-border px-3.5 py-1.5 text-[11px]"
+		class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3.5 py-1.5 text-[11px]"
 	>
 		<StatusBadge kind="execution" status={state.status} />
+		{#if single}
+			{#if rowsLabel(single)}
+				<span class="font-semibold">{rowsLabel(single)}</span>
+			{/if}
+			{#if single.durationMs != null}
+				<span class="text-slate-600 dark:text-slate-300">{formatDuration(single.durationMs)}</span>
+			{/if}
+			{#if single.truncated}
+				<Badge tone="warning">{m.run_runpanel_truncated()}</Badge>
+			{/if}
+		{:else if statements.length > 1}
+			<span class="text-slate-600 dark:text-slate-300">
+				{statements.length}
+				{m.run_runpanel_statement()}s
+			</span>
+		{/if}
+		<span class="flex-1"></span>
 		{#if state.target}
 			<span class="text-slate-600 dark:text-slate-300">
-				{m.common_ran_on()}
 				{state.target.engine_name} · {state.target.catalog_name}{state.target.schema
 					? `.${state.target.schema}`
 					: ''}
@@ -69,10 +94,6 @@
 		{#if state.readOnly}
 			<Badge tone="warning">{m.common_read_only()}</Badge>
 		{/if}
-		<span class="text-slate-600 dark:text-slate-300">
-			{statements.length}
-			{m.run_runpanel_statement()}{statements.length === 1 ? '' : 's'}
-		</span>
 		{#if executing && canCancel}
 			<Button size="sm" onclick={oncancel}>{m.common_cancel()}</Button>
 		{/if}
@@ -125,51 +146,66 @@
 		</div>
 	{/if}
 
-	<ol class="max-h-56 overflow-y-auto px-3.5 py-2 text-[11px]">
-		{#each statements as statement (statement.position)}
-			<li class="flex flex-col gap-1 border-b border-border/60 py-1.5 last:border-b-0">
-				<div class="flex items-center gap-2">
-					<span class="w-5 shrink-0 font-mono text-slate-600 dark:text-slate-300">
-						{statement.position}
-					</span>
-					<StatusBadge kind="statement" status={statement.status} />
-					<button
-						type="button"
-						class="min-w-0 flex-1 truncate text-left font-mono hover:text-primary"
-						title={statement.sql}
-						onclick={() => onpick?.(statement.position)}
-					>
-						{firstLine(statement.sql)}
-					</button>
-					{#if statement.truncated}
-						<Badge tone="warning">{m.run_runpanel_truncated()}</Badge>
-					{/if}
-					{#if statement.durationMs != null}
-						<span class="shrink-0 text-slate-600 dark:text-slate-300">
-							{formatDuration(statement.durationMs)}
+	{#if singleError}
+		<div class="px-3.5 py-2">
+			<ErrorPanel
+				open
+				scope="statement"
+				error={{
+					code: singleError.errorCode,
+					error_native: engineMessage(singleError.errorCode!, singleError.errorMessage)
+				}}
+			/>
+		</div>
+	{:else if statements.length > 1}
+		<ol class="max-h-40 overflow-y-auto px-3.5 py-1 text-[11px]">
+			{#each statements as statement (statement.position)}
+				<li class="flex flex-col gap-1 border-b border-border/60 py-1 last:border-b-0">
+					<div class="flex items-center gap-2">
+						<span class="w-5 shrink-0 font-mono text-slate-600 dark:text-slate-300">
+							{statement.position}
 						</span>
-					{/if}
-					{#if rowsLabel(statement)}
-						<span class="shrink-0 text-slate-600 dark:text-slate-300">{rowsLabel(statement)}</span>
-					{/if}
-				</div>
-				{#if statement.status === 'failed' && statement.errorCode}
-					<div class="pl-7">
-						<ErrorPanel
-							open
-							error={{
-								code: statement.errorCode,
-								error_native: engineMessage(statement.errorCode, statement.errorMessage)
-							}}
-						/>
+						{#if statement.status !== 'finished'}
+							<StatusBadge kind="statement" status={statement.status} />
+						{/if}
+						<button
+							type="button"
+							class="min-w-0 flex-1 truncate text-left font-mono text-slate-600 hover:text-primary dark:text-slate-300"
+							title={statement.sql}
+							onclick={() => onpick?.(statement.position)}
+						>
+							{firstLine(statement.sql)}
+						</button>
+						{#if statement.truncated}
+							<Badge tone="warning">{m.run_runpanel_truncated()}</Badge>
+						{/if}
+						{#if rowsLabel(statement)}
+							<span class="shrink-0">{rowsLabel(statement)}</span>
+						{/if}
+						{#if statement.durationMs != null}
+							<span class="w-14 shrink-0 text-right text-slate-600 dark:text-slate-300">
+								{formatDuration(statement.durationMs)}
+							</span>
+						{/if}
 					</div>
-				{/if}
-			</li>
-		{/each}
-		{#if statements.length === 0}
-			<li class="py-2 text-slate-600 dark:text-slate-300">
-				{m.run_runpanel_waiting_for_the_first_statement()}
-			</li>
-		{/if}
-	</ol>
+					{#if statement.status === 'failed' && statement.errorCode}
+						<div class="pl-7">
+							<ErrorPanel
+								open
+								scope="statement"
+								error={{
+									code: statement.errorCode,
+									error_native: engineMessage(statement.errorCode, statement.errorMessage)
+								}}
+							/>
+						</div>
+					{/if}
+				</li>
+			{/each}
+		</ol>
+	{:else if statements.length === 0}
+		<p class="px-3.5 py-2 text-[11px] text-slate-600 dark:text-slate-300">
+			{m.run_runpanel_waiting_for_the_first_statement()}
+		</p>
+	{/if}
 </section>

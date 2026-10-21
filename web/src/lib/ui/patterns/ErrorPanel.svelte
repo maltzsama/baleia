@@ -6,9 +6,14 @@
 
 	// `open` starts with the details shown: a SQL error is only actionable
 	// with the engine's own message.
-	let { error, open = false }: { error: unknown; open?: boolean } = $props();
+	// `scope` picks the catalog entries of a context (a statement's error).
+	let {
+		error,
+		open = false,
+		scope
+	}: { error: unknown; open?: boolean; scope?: 'statement' } = $props();
 
-	const described = $derived(describeError(error));
+	const described = $derived(describeError(error, scope));
 	let details = $state(untrack(() => open));
 </script>
 

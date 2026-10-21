@@ -9,7 +9,6 @@
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
-	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
 	import ResultGrid from './ResultGrid.svelte';
 
 	type QueryStatement = components['schemas']['QueryStatement'];
@@ -161,51 +160,37 @@
 	{:else if statements.length === 0}
 		<EmptyState title="No statements" description="This execution did not record any statements." />
 	{:else}
-		<div
-			class="flex shrink-0 items-stretch overflow-x-auto border-b border-border bg-bg-toolbar px-2"
-		>
-			{#each statements as statement (statement.id)}
-				{@const hasResults = (statement.result_sets?.length ?? 0) > 0}
-				<button
-					type="button"
-					class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[11px] font-semibold {statement.position ===
-					activePosition
-						? 'border-b-primary text-primary'
-						: 'border-b-transparent text-text-muted hover:text-text-main'} {hasResults
-						? ''
-						: 'opacity-60'}"
-					title={statementTitle(statement)}
-					onclick={() => {
-						activePosition = statement.position;
-						activeResultIndex = 0;
-					}}
-				>
-					<span>Statement {statement.position}</span>
-					<StatusBadge kind="statement" status={statement.status} />
-				</button>
-			{/each}
-			<span class="flex-1"></span>
-			<div class="flex shrink-0 items-center gap-1 pr-1 text-[11px] text-text-muted">
-				<select
-					bind:value={exportFormat}
-					aria-label="Export format"
-					class="rounded border border-border bg-bg-panel px-1.5 py-1 text-[11px]"
-				>
-					<option value="csv">CSV</option>
-					<option value="tsv">TSV</option>
-					<option value="jsonl">JSON Lines</option>
-					<option value="arrow">Arrow</option>
-				</select>
-				<button
-					type="button"
-					class="rounded border border-border px-2 py-1 font-medium text-text-muted hover:border-border-hover hover:text-text-main disabled:opacity-50"
-					disabled={activePosition == null || exporting}
-					onclick={download}
-				>
-					{exporting ? m.components_resultspanel_exporting() : m.components_resultspanel_export()}
-				</button>
+		<!-- One tab per statement only for a script; the run panel above already
+		     shows each statement's status (#393). -->
+		{#if statements.length > 1}
+			<div
+				class="flex shrink-0 items-stretch overflow-x-auto border-b border-border bg-bg-toolbar px-2"
+				role="tablist"
+				aria-label={m.components_resultspanel_statements()}
+			>
+				{#each statements as statement (statement.id)}
+					{@const hasResults = (statement.result_sets?.length ?? 0) > 0}
+					<button
+						type="button"
+						role="tab"
+						aria-selected={statement.position === activePosition}
+						class="whitespace-nowrap border-b-2 px-3 py-1.5 text-[11px] font-semibold {statement.position ===
+						activePosition
+							? 'border-b-primary text-primary'
+							: 'border-b-transparent text-text-muted hover:text-text-main'} {hasResults
+							? ''
+							: 'opacity-60'}"
+						title={statementTitle(statement)}
+						onclick={() => {
+							activePosition = statement.position;
+							activeResultIndex = 0;
+						}}
+					>
+						Statement {statement.position}
+					</button>
+				{/each}
 			</div>
-		</div>
+		{/if}
 
 		{#if resultSets.length > 1}
 			<div class="flex shrink-0 items-center gap-1 border-b border-border px-3 py-1">
@@ -249,7 +234,29 @@
 				<Skeleton class="h-4 w-2/3" />
 			</div>
 		{:else}
-			<ResultGrid {store} />
+			<ResultGrid {store}>
+				{#snippet actions()}
+					<span class="mx-1 h-4 w-px bg-border" aria-hidden="true"></span>
+					<select
+						bind:value={exportFormat}
+						aria-label="Export format"
+						class="rounded border border-border bg-bg-panel px-1.5 py-0.5 text-[11px]"
+					>
+						<option value="csv">CSV</option>
+						<option value="tsv">TSV</option>
+						<option value="jsonl">JSON Lines</option>
+						<option value="arrow">Arrow</option>
+					</select>
+					<button
+						type="button"
+						class="rounded border border-border px-2 py-0.5 font-medium text-text-muted hover:border-border-hover hover:text-text-main disabled:opacity-50"
+						disabled={activePosition == null || exporting}
+						onclick={download}
+					>
+						{exporting ? m.components_resultspanel_exporting() : m.components_resultspanel_export()}
+					</button>
+				{/snippet}
+			</ResultGrid>
 		{/if}
 	{/if}
 </div>
