@@ -33,6 +33,13 @@ func (t migrationTable) key() string {
 	return uuid.UUID(t.catalogID.Bytes).String() + "|" + strings.Join(t.namespace, ".") + "|" + t.table
 }
 
+// migrationGuards are the handler's authorization checks, handed to the
+// per-table step.
+type migrationGuards struct {
+	granted func(catalog pgtype.UUID) (bool, error)
+	canEdit func(space pgtype.UUID) (bool, error)
+}
+
 // MigrateSemanticMetricsV1 — POST /workspaces/{id}/semantic/models/migrate-v1
 //
 // Each table used by the caller's visible v1 metrics becomes a model (an
@@ -94,10 +101,23 @@ func (h *Handlers) MigrateSemanticMetricsV1(ctx context.Context, request Migrate
 	}
 	// Slugs taken in this run, so two tables named alike get distinct models.
 	reserved := map[string]bool{}
+	// The guards stay in the handler so the authz coverage test sees them:
+	// metric visibility is the space role only, so reading a table's columns
+	// and writing a model also need the catalog grant and an editable space.
+	guards := migrationGuards{
+		granted: func(catalog pgtype.UUID) (bool, error) {
+			nf, err := h.semanticCatalog(ctx, ws, openapi_types.UUID(catalog.Bytes))
+			return !nf, err
+		},
+		canEdit: func(space pgtype.UUID) (bool, error) {
+			se, err := h.contentSpace(ctx, ws, space, authz.SpaceEditor)
+			return err == nil && se == nil, err
+		},
+	}
 
 	items := make([]MigrateV1Item, 0, len(tables))
 	for _, t := range tables {
-		item, err := h.migrateTable(ctx, ws, userID, *t, modelRows, visible, reserved, choices[t.key()], dryRun)
+		item, err := h.migrateTable(ctx, ws, userID, guards, *t, modelRows, visible, reserved, choices[t.key()], dryRun)
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +126,7 @@ func (h *Handlers) MigrateSemanticMetricsV1(ctx context.Context, request Migrate
 	return MigrateSemanticMetricsV1200JSONResponse(MigrateV1Report{DryRun: dryRun, Items: items}), nil
 }
 
-func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
+func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards migrationGuards, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
 	item := MigrateV1Item{
 		CatalogId: openapi_types.UUID(t.catalogID.Bytes),
 		Namespace: t.namespace,
@@ -127,11 +147,9 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 		return item, nil
 	}
 
-	// Metric visibility is the space role only; reading the table's columns
-	// and creating a model also need the catalog grant, as on create.
-	if nf, err := h.semanticCatalog(ctx, ws, openapi_types.UUID(t.catalogID.Bytes)); err != nil {
+	if granted, err := guards.granted(t.catalogID); err != nil {
 		return MigrateV1Item{}, err
-	} else if nf {
+	} else if !granted {
 		return fail(MigrateV1ItemErrorCodeCatalogNotGranted, "the catalog of "+t.table+" is not granted to this workspace")
 	}
 
@@ -202,9 +220,9 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 		// The model lives where the caller may write: the first metric's space
 		// they edit.
 		for _, m := range t.metrics {
-			if se, err := h.contentSpace(ctx, ws, m.SpaceID, authz.SpaceEditor); err != nil {
+			if ok, err := guards.canEdit(m.SpaceID); err != nil {
 				return MigrateV1Item{}, err
-			} else if se == nil {
+			} else if ok {
 				spaceID = m.SpaceID
 				break
 			}
@@ -284,9 +302,9 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 	}
 
 	if existing != nil {
-		if se, err := h.contentSpace(ctx, ws, existing.SpaceID, authz.SpaceEditor); err != nil {
+		if ok, err := guards.canEdit(existing.SpaceID); err != nil {
 			return MigrateV1Item{}, err
-		} else if se != nil {
+		} else if !ok {
 			return fail(MigrateV1ItemErrorCodeSpaceForbidden, "you may not edit the space of model "+existing.Slug)
 		}
 	}
