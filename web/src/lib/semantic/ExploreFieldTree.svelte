@@ -44,16 +44,20 @@
 			{/if}
 			<button
 				type="button"
-				class="flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-2 py-1 text-left text-[12px] hover:bg-bg-toolbar {selected.includes(
+				class="flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-2 py-1 text-left text-[12px] hover:bg-bg-toolbar disabled:cursor-not-allowed disabled:line-through {selected.includes(
 					field.name
 				)
 					? 'bg-bg-toolbar font-semibold text-primary'
 					: ''}"
 				aria-pressed={selected.includes(field.name)}
-				title={field.description || undefined}
+				disabled={field.ambiguous}
+				title={field.ambiguous ? m.explore_ambiguous_field() : field.description || undefined}
 				onclick={() => ontoggle(field)}
 			>
 				<span class="truncate">{field.label}</span>
+				{#if field.ambiguous}
+					<span class="sr-only">{m.explore_ambiguous_field()}</span>
+				{/if}
 				<span class="shrink-0 font-mono text-[10px] text-text-muted">
 					{field.kind === 'dimension' ? field.type : field.kind}
 				</span>

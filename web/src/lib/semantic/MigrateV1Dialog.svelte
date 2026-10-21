@@ -5,7 +5,13 @@
 	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
-	import { migrateV1, type MigrateV1Item, type MigrateV1Report } from './explore';
+	import ErrorPanel from '$lib/ui/patterns/ErrorPanel.svelte';
+	import {
+		SemanticRequestError,
+		migrateV1,
+		type MigrateV1Item,
+		type MigrateV1Report
+	} from './explore';
 
 	// v1 -> v2 migration (#91, #121): a dry run lists each table and what would
 	// happen; the author picks primary keys for new models and applies. Upsert
@@ -21,7 +27,8 @@
 	let loading = $state(false);
 	let applying = $state(false);
 	let applied = $state(false);
-	let error = $state('');
+	// A failed request, rendered through the error catalog (FD7).
+	let error = $state<{ code: string; error_native?: string } | null>(null);
 	let wasOpen = false;
 
 	const tableKey = (item: MigrateV1Item) =>
@@ -34,7 +41,7 @@
 	const needsKey = (item: MigrateV1Item) => !item.model_id;
 
 	async function run(dryRun: boolean) {
-		error = '';
+		error = null;
 		const tables = (report?.items ?? [])
 			.filter((item) => needsKey(item) && (keys[tableKey(item)] ?? []).length > 0)
 			.map((item) => ({
@@ -54,7 +61,10 @@
 				onmigrated();
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = {
+				code: e instanceof SemanticRequestError ? (e.code ?? 'internal') : 'internal',
+				error_native: e instanceof Error ? e.message : String(e)
+			};
 		}
 	}
 
@@ -77,6 +87,23 @@
 			? current.filter((c) => c !== column)
 			: [...current, column];
 	}
+
+	const actionLabel = {
+		CREATE: m.models_migrate_action_create,
+		UPDATE: m.models_migrate_action_update,
+		NO_CHANGES: m.models_migrate_action_no_changes,
+		ERROR: m.models_migrate_action_error
+	};
+	const errorLabel: Record<NonNullable<MigrateV1Item['error_code']>, () => string> = {
+		catalog_not_granted: m.models_migrate_error_catalog_not_granted,
+		primary_key_required: m.models_migrate_error_primary_key_required,
+		primary_key_invalid: m.models_migrate_error_primary_key_invalid,
+		space_forbidden: m.models_migrate_error_space_forbidden,
+		invalid_metric: m.models_migrate_error_invalid_metric,
+		invalid_definition: m.models_migrate_error_invalid_definition,
+		slug_conflict: m.models_migrate_error_slug_conflict,
+		write_failed: m.models_migrate_error_write_failed
+	};
 
 	const tones = {
 		CREATE: 'info',
@@ -102,7 +129,7 @@
 		{#if loading && !report}
 			<Skeleton class="h-24 w-full" />
 		{:else if error}
-			<p class="text-danger" role="alert">{error}</p>
+			<ErrorPanel {error} />
 		{:else if report && report.items.length === 0}
 			<p>{m.models_migrate_nothing()}</p>
 		{:else if report}
@@ -114,13 +141,16 @@
 					<li class="rounded border border-border p-2">
 						<div class="flex flex-wrap items-center justify-between gap-2">
 							<span class="font-mono">{[...item.namespace, item.table].join('.')}</span>
-							<Badge tone={tones[item.action]}>{item.action}</Badge>
+							<Badge tone={tones[item.action]}>{actionLabel[item.action]()}</Badge>
 						</div>
 						<div class="mt-1 text-text-muted">
 							{m.models_migrate_into({ model: item.model_slug, metrics: item.metrics.join(', ') })}
 						</div>
+						{#if item.error_code}
+							<p class="mt-1 text-danger">{errorLabel[item.error_code]()}</p>
+						{/if}
 						{#if item.error}
-							<p class="mt-1 text-danger">{item.error}</p>
+							<p class="mt-0.5 font-mono text-[10px] text-text-muted">{item.error}</p>
 						{/if}
 						{#if needsKey(item) && !applied}
 							<fieldset class="mt-2">

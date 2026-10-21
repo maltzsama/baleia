@@ -1010,5 +1010,18 @@
 	"models_close": "Close",
 	"explore_compiled_sql": "Compiled SQL",
 	"models_definition": "Model definition",
-	"explore_run_again": "Run again"
+	"explore_run_again": "Run again",
+	"explore_ambiguous_field": "Another model in this join tree has a field with this name, so it cannot be selected. Rename one of them in the model editor.",
+	"models_migrate_action_create": "New model",
+	"models_migrate_action_update": "Adds to the model",
+	"models_migrate_action_no_changes": "Already migrated",
+	"models_migrate_action_error": "Needs attention",
+	"models_migrate_error_catalog_not_granted": "The catalog of this table is not granted to the workspace.",
+	"models_migrate_error_primary_key_required": "Choose the primary key columns of this table.",
+	"models_migrate_error_primary_key_invalid": "A chosen primary key column is not a column of this table.",
+	"models_migrate_error_space_forbidden": "You may not edit the space where this model would be written.",
+	"models_migrate_error_invalid_metric": "A v1 metric of this table cannot be converted.",
+	"models_migrate_error_invalid_definition": "The resulting model would be invalid.",
+	"models_migrate_error_slug_conflict": "Another model already uses this slug.",
+	"models_migrate_error_write_failed": "The model could not be written; try again."
 }

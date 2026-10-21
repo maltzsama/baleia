@@ -1010,5 +1010,18 @@
 	"models_close": "Fechar",
 	"explore_compiled_sql": "SQL compilado",
 	"models_definition": "Definição do model",
-	"explore_run_again": "Executar de novo"
+	"explore_run_again": "Executar de novo",
+	"explore_ambiguous_field": "Outro model desta árvore de joins tem um campo com este nome, então ele não pode ser selecionado. Renomeie um deles no editor de models.",
+	"models_migrate_action_create": "Novo model",
+	"models_migrate_action_update": "Acrescenta ao model",
+	"models_migrate_action_no_changes": "Já migrado",
+	"models_migrate_action_error": "Precisa de atenção",
+	"models_migrate_error_catalog_not_granted": "O catálogo desta tabela não está liberado para o workspace.",
+	"models_migrate_error_primary_key_required": "Escolha as colunas da chave primária desta tabela.",
+	"models_migrate_error_primary_key_invalid": "Uma coluna escolhida para a chave primária não existe nesta tabela.",
+	"models_migrate_error_space_forbidden": "Você não pode editar o espaço onde este model seria gravado.",
+	"models_migrate_error_invalid_metric": "Uma métrica v1 desta tabela não pode ser convertida.",
+	"models_migrate_error_invalid_definition": "O model resultante seria inválido.",
+	"models_migrate_error_slug_conflict": "Outro model já usa este slug.",
+	"models_migrate_error_write_failed": "Não foi possível gravar o model; tente de novo."
 }

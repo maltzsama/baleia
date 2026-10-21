@@ -679,6 +679,18 @@ const (
 	MigrateV1ItemActionUPDATE    MigrateV1ItemAction = "UPDATE"
 )
 
+// Defines values for MigrateV1ItemErrorCode.
+const (
+	MigrateV1ItemErrorCodeCatalogNotGranted  MigrateV1ItemErrorCode = "catalog_not_granted"
+	MigrateV1ItemErrorCodeInvalidDefinition  MigrateV1ItemErrorCode = "invalid_definition"
+	MigrateV1ItemErrorCodeInvalidMetric      MigrateV1ItemErrorCode = "invalid_metric"
+	MigrateV1ItemErrorCodePrimaryKeyInvalid  MigrateV1ItemErrorCode = "primary_key_invalid"
+	MigrateV1ItemErrorCodePrimaryKeyRequired MigrateV1ItemErrorCode = "primary_key_required"
+	MigrateV1ItemErrorCodeSlugConflict       MigrateV1ItemErrorCode = "slug_conflict"
+	MigrateV1ItemErrorCodeSpaceForbidden     MigrateV1ItemErrorCode = "space_forbidden"
+	MigrateV1ItemErrorCodeWriteFailed        MigrateV1ItemErrorCode = "write_failed"
+)
+
 // Defines values for MigrationSourceType.
 const (
 	MigrationSourceTypeNessie MigrationSourceType = "nessie"
@@ -2833,7 +2845,12 @@ type MigrateV1Item struct {
 
 	// Columns Table columns, to choose the primary key from
 	Columns []string `json:"columns"`
-	Error   *string  `json:"error"`
+
+	// Error Detail for the error_code (English, not for headlines)
+	Error *string `json:"error"`
+
+	// ErrorCode Set with action ERROR; the UI translates it
+	ErrorCode *MigrateV1ItemErrorCode `json:"error_code"`
 
 	// Metrics v1 metric slugs that become metrics of this model
 	Metrics []string `json:"metrics"`
@@ -2849,6 +2866,9 @@ type MigrateV1Item struct {
 
 // MigrateV1ItemAction defines model for MigrateV1Item.Action.
 type MigrateV1ItemAction string
+
+// MigrateV1ItemErrorCode Set with action ERROR; the UI translates it
+type MigrateV1ItemErrorCode string
 
 // MigrateV1Report defines model for MigrateV1Report.
 type MigrateV1Report struct {

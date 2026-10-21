@@ -5301,6 +5301,12 @@ export interface components {
             primary_key: string[];
             /** @enum {string} */
             action: "CREATE" | "UPDATE" | "NO_CHANGES" | "ERROR";
+            /**
+             * @description Set with action ERROR; the UI translates it
+             * @enum {string|null}
+             */
+            error_code?: "catalog_not_granted" | "primary_key_required" | "primary_key_invalid" | "space_forbidden" | "invalid_metric" | "invalid_definition" | "slug_conflict" | "write_failed" | null;
+            /** @description Detail for the error_code (English, not for headlines) */
             error?: string | null;
         };
         RestoreSemanticModelRequest: {

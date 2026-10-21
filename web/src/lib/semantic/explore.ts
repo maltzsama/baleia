@@ -46,6 +46,8 @@ export type ModelMetric = {
 	filters?: { column: string; op: string; values?: unknown[] }[];
 	derived?: { left: string; op: '+' | '-' | '*' | '/'; right: string };
 	format?: FieldFormat;
+	/** The v1 metric this one was migrated from (#91); set by the migration. */
+	migrated_from?: string;
 };
 export type ModelJoin = {
 	to: string;
@@ -228,6 +230,12 @@ export type FieldNode = {
 	type?: LogicalType;
 	grains: string[];
 	model: string;
+	/**
+	 * Explore queries name fields without their model, and the compiler
+	 * rejects a name shared across the join tree: such fields are shown but
+	 * cannot be selected.
+	 */
+	ambiguous?: boolean;
 };
 export type FieldGroup = {
 	/** Slug of the model that owns the fields. */
@@ -287,6 +295,17 @@ export function fieldTree(models: SemanticModel[], baseSlug: string): FieldGroup
 		if (!target || seen.has(target.slug)) continue;
 		seen.add(target.slug);
 		groups.push(groupOf(target, join.to));
+	}
+	const counts = new Map<string, number>();
+	for (const group of groups) {
+		for (const field of [...group.dimensions, ...group.metrics]) {
+			counts.set(field.name, (counts.get(field.name) ?? 0) + 1);
+		}
+	}
+	for (const group of groups) {
+		for (const field of [...group.dimensions, ...group.metrics]) {
+			if ((counts.get(field.name) ?? 0) > 1) field.ambiguous = true;
+		}
 	}
 	return groups;
 }
@@ -363,23 +382,19 @@ export function exploreLinkOf(sql: string): string | null {
 }
 
 /**
- * The v2 model a v1 metric migrated into (#91): same slug, same table. The v1
- * page redirects there so old links keep working.
+ * The v2 model a v1 metric was migrated into (#91): a model metric that
+ * records this metric as its source. A metric that merely shares the slug is
+ * not a migration, so the v1 page stays reachable for it.
  */
 export function migratedModelOf(
 	models: SemanticModel[],
-	metric: { slug: string; namespace: string[]; table: string; catalog_id: string }
+	metric: { id: string; catalog_id: string }
 ): SemanticModel | undefined {
-	return models.find((model) => {
-		const def = definitionOf(model);
-		return (
+	return models.find(
+		(model) =>
 			model.catalog_id === metric.catalog_id &&
-			def.source?.kind === 'table' &&
-			def.source.table === metric.table &&
-			(def.source.namespace ?? []).join('.') === metric.namespace.join('.') &&
-			(def.metrics ?? []).some((mt) => mt.name === metric.slug)
-		);
-	});
+			(definitionOf(model).metrics ?? []).some((mt) => mt.migrated_from === metric.id)
+	);
 }
 
 // ── model helpers ───────────────────────────────────────────────────────────────

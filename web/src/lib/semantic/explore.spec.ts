@@ -106,6 +106,17 @@ describe('field tree', () => {
 		expect(groups[1].dimensions[0].label).toBe('Country');
 	});
 
+	it('marks a name shared across the join tree as ambiguous', () => {
+		const clash = model('customers', {
+			source: { kind: 'table', table: 'customers' },
+			dimensions: [{ name: 'status', type: 'string' }]
+		});
+		const groups = fieldTree([orders, clash], 'orders');
+		expect(groups[0].dimensions.find((d) => d.name === 'status')?.ambiguous).toBe(true);
+		expect(groups[1].dimensions[0].ambiguous).toBe(true);
+		expect(groups[0].dimensions.find((d) => d.name === 'created_at')?.ambiguous).toBeUndefined();
+	});
+
 	it('returns nothing for an unknown base model and ignores missing join targets', () => {
 		expect(fieldTree([orders], 'nope')).toEqual([]);
 		expect(fieldTree([orders], 'orders')).toHaveLength(1);
@@ -187,20 +198,24 @@ describe('model helpers', () => {
 });
 
 describe('v1 migration redirect', () => {
-	const ordersWithNs = model('orders', {
+	const migrated = model('orders', {
 		source: { kind: 'table', namespace: ['public'], table: 'orders' },
-		metrics: [{ name: 'revenue', aggregation: 'sum', dimension: 'amount' }]
+		metrics: [{ name: 'revenue', aggregation: 'count', migrated_from: 'm1' }]
 	});
-	const v1 = { slug: 'revenue', namespace: ['public'], table: 'orders', catalog_id: 'c1' };
-
-	it('finds the model that kept the metric slug on the same table', () => {
-		expect(migratedModelOf([customers, ordersWithNs], v1)?.slug).toBe('orders');
+	const lookalike = model('orders_copy', {
+		source: { kind: 'table', namespace: ['public'], table: 'orders' },
+		metrics: [{ name: 'revenue', aggregation: 'count' }]
 	});
 
-	it('does not match another table, namespace, catalog or slug', () => {
-		expect(migratedModelOf([ordersWithNs], { ...v1, table: 'items' })).toBeUndefined();
-		expect(migratedModelOf([ordersWithNs], { ...v1, namespace: ['other'] })).toBeUndefined();
-		expect(migratedModelOf([ordersWithNs], { ...v1, catalog_id: 'c2' })).toBeUndefined();
-		expect(migratedModelOf([ordersWithNs], { ...v1, slug: 'other' })).toBeUndefined();
+	it('finds the model whose metric records the v1 metric as its source', () => {
+		expect(
+			migratedModelOf([customers, lookalike, migrated], { id: 'm1', catalog_id: 'c1' })?.slug
+		).toBe('orders');
+	});
+
+	it('ignores a metric that only shares the slug, and other catalogs', () => {
+		expect(migratedModelOf([lookalike], { id: 'm1', catalog_id: 'c1' })).toBeUndefined();
+		expect(migratedModelOf([migrated], { id: 'm1', catalog_id: 'c2' })).toBeUndefined();
+		expect(migratedModelOf([migrated], { id: 'm2', catalog_id: 'c1' })).toBeUndefined();
 	});
 });

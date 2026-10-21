@@ -117,13 +117,22 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 	for _, m := range t.metrics {
 		item.Metrics = append(item.Metrics, m.Slug)
 	}
-	fail := func(msg string) (MigrateV1Item, error) {
+	fail := func(code MigrateV1ItemErrorCode, msg string) (MigrateV1Item, error) {
 		item.Action = MigrateV1ItemActionERROR
+		item.ErrorCode = &code
 		item.Error = &msg
 		if item.PrimaryKey == nil {
 			item.PrimaryKey = []string{}
 		}
 		return item, nil
+	}
+
+	// Metric visibility is the space role only; reading the table's columns
+	// and creating a model also need the catalog grant, as on create.
+	if nf, err := h.semanticCatalog(ctx, ws, openapi_types.UUID(t.catalogID.Bytes)); err != nil {
+		return MigrateV1Item{}, err
+	} else if nf {
+		return fail(MigrateV1ItemErrorCodeCatalogNotGranted, "the catalog of "+t.table+" is not granted to this workspace")
 	}
 
 	columns, err := h.migrationColumns(ctx, t)
@@ -176,11 +185,11 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 		}
 		item.PrimaryKey = primaryKey
 		if len(primaryKey) == 0 {
-			return fail("choose the primary key columns of " + t.table)
+			return fail(MigrateV1ItemErrorCodePrimaryKeyRequired, "choose the primary key columns of "+t.table)
 		}
 		for _, k := range primaryKey {
 			if !slices.ContainsFunc(columns, func(c semantic.ColumnType) bool { return c.Name == k }) {
-				return fail("primary key column " + k + " is not a column of " + t.table)
+				return fail(MigrateV1ItemErrorCodePrimaryKeyInvalid, "primary key column "+k+" is not a column of "+t.table)
 			}
 		}
 		model = semantic.Model{
@@ -201,7 +210,7 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 			}
 		}
 		if !spaceID.Valid {
-			return fail("you may not edit the space of any of these metrics")
+			return fail(MigrateV1ItemErrorCodeSpaceForbidden, "you may not edit the space of any of these metrics")
 		}
 		if b := t.metrics[0].BindingID; b.Valid {
 			model.BindingID = uuid.UUID(b.Bytes).String()
@@ -217,7 +226,7 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 		}
 		v1, err := semantic.ParseSimpleMetricV1(m.Definition)
 		if err != nil {
-			return fail("metric " + m.Slug + ": " + err.Error())
+			return fail(MigrateV1ItemErrorCodeInvalidMetric, "metric "+m.Slug+": "+err.Error())
 		}
 		converted, metric, err := semantic.MigrateV1(semantic.MigrateV1Input{
 			CatalogID: model.CatalogID, ModelSlug: model.Slug, Label: model.Label,
@@ -225,9 +234,12 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 			MetricSlug: m.Slug, Metric: v1, Columns: columns,
 		})
 		if err != nil {
-			return fail("metric " + m.Slug + ": " + err.Error())
+			return fail(MigrateV1ItemErrorCodeInvalidMetric, "metric "+m.Slug+": "+err.Error())
 		}
 		metric.Label = m.Label
+		// The v1 page redirects only to a metric that records where it came
+		// from, never to one that merely shares the slug.
+		metric.MigratedFrom = uuid.UUID(m.ID.Bytes).String()
 		for _, d := range converted.Dimensions {
 			if !slices.ContainsFunc(model.Dimensions, func(x semantic.Dimension) bool { return x.Name == d.Name }) {
 				model.Dimensions = append(model.Dimensions, d)
@@ -265,7 +277,7 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 		}
 	}
 	if err := model.Validate(others); err != nil {
-		return fail(err.Error())
+		return fail(MigrateV1ItemErrorCodeInvalidDefinition, err.Error())
 	}
 	if dryRun {
 		return item, nil
@@ -275,7 +287,7 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 		if se, err := h.contentSpace(ctx, ws, existing.SpaceID, authz.SpaceEditor); err != nil {
 			return MigrateV1Item{}, err
 		} else if se != nil {
-			return fail("you may not edit the space of model " + existing.Slug)
+			return fail(MigrateV1ItemErrorCodeSpaceForbidden, "you may not edit the space of model "+existing.Slug)
 		}
 	}
 	raw, err := json.Marshal(model)
@@ -291,7 +303,7 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 			FormatVersion: 1, OwnerUserID: existing.OwnerUserID, UpdatedBy: userID,
 		}, &version)
 		if err != nil {
-			return fail("could not update model " + existing.Slug + ": " + err.Error())
+			return fail(MigrateV1ItemErrorCodeWriteFailed, "could not update model "+existing.Slug+": "+err.Error())
 		}
 		visible[model.Slug] = model
 		return item, nil
@@ -303,7 +315,7 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, t m
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return fail("a model with slug " + model.Slug + " already exists")
+			return fail(MigrateV1ItemErrorCodeSlugConflict, "a model with slug "+model.Slug+" already exists")
 		}
 		return MigrateV1Item{}, err
 	}

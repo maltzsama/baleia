@@ -2676,7 +2676,13 @@ components:
         columns: { type: array, items: { type: string }, description: "Table columns, to choose the primary key from" }
         primary_key: { type: array, items: { type: string } }
         action: { type: string, enum: [CREATE, UPDATE, NO_CHANGES, ERROR] }
-        error: { type: string, nullable: true }
+        error_code:
+          type: string
+          nullable: true
+          description: "Set with action ERROR; the UI translates it"
+          x-enum-varnames: [MigrateV1ItemErrorCodeCatalogNotGranted, MigrateV1ItemErrorCodePrimaryKeyRequired, MigrateV1ItemErrorCodePrimaryKeyInvalid, MigrateV1ItemErrorCodeSpaceForbidden, MigrateV1ItemErrorCodeInvalidMetric, MigrateV1ItemErrorCodeInvalidDefinition, MigrateV1ItemErrorCodeSlugConflict, MigrateV1ItemErrorCodeWriteFailed]
+          enum: [catalog_not_granted, primary_key_required, primary_key_invalid, space_forbidden, invalid_metric, invalid_definition, slug_conflict, write_failed]
+        error: { type: string, nullable: true, description: "Detail for the error_code (English, not for headlines)" }
 
     RestoreSemanticModelRequest:
       type: object

@@ -98,6 +98,9 @@ type Metric struct {
 	Filters     []Filter        `json:"filters,omitempty"`
 	Derived     *DerivedMetric  `json:"derived,omitempty"`
 	Format      *Format         `json:"format,omitempty"`
+	// MigratedFrom is the id of the v1 metric this one was migrated from
+	// (#91, #121). It never changes the SQL; the v1 page redirects by it.
+	MigratedFrom string `json:"migrated_from,omitempty"`
 }
 
 // CalculatedField is an expression over the query result (dimension/metric

@@ -256,7 +256,13 @@
 		};
 	}
 	function toMetric({ mode, filterText, decimals, ...mt }: EditMetric): ModelMetric {
-		const base = { name: mt.name, label: mt.label || undefined, format: formatOf(decimals) };
+		const base = {
+			name: mt.name,
+			label: mt.label || undefined,
+			format: formatOf(decimals),
+			// Kept so the migrated v1 metric's page still finds this metric.
+			migrated_from: mt.migrated_from || undefined
+		};
 		if (mode === 'derived') return { ...base, derived: mt.derived };
 		const filters = (mt.filters ?? [])
 			.map((f, i) => {

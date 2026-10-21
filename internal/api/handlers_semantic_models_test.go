@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -157,6 +159,15 @@ func TestSemanticModels_MigrateV1(t *testing.T) {
 		t.Fatalf("sql = %s", out.Sql)
 	}
 
+	// Each migrated metric records its v1 source; the v1 page redirects by it.
+	def := models[0].Definition["metrics"].([]interface{})
+	for _, raw := range def {
+		mt := raw.(map[string]interface{})
+		if mt["migrated_from"] == nil || mt["migrated_from"] == "" {
+			t.Fatalf("metric %v has no migrated_from", mt["name"])
+		}
+	}
+
 	again := migrate(t, f, ctx, MigrateV1Request{DryRun: &apply})
 	if again.Items[0].Action != MigrateV1ItemActionNOCHANGES {
 		t.Fatalf("second run = %+v", again.Items[0])
@@ -183,7 +194,8 @@ func TestSemanticModels_MigrateV1NeedsPrimaryKey(t *testing.T) {
 	createMetric(t, f, ctx, SemanticMetricCreate{Slug: "order_count", Label: "Orders", CatalogId: f.lake, Namespace: []string{"sales"}, Table: "orders", Definition: simpleDefinition("count", "")})
 
 	report := migrate(t, f, ctx, MigrateV1Request{})
-	if report.Items[0].Action != MigrateV1ItemActionERROR || report.Items[0].Error == nil {
+	if report.Items[0].Action != MigrateV1ItemActionERROR || report.Items[0].ErrorCode == nil ||
+		*report.Items[0].ErrorCode != MigrateV1ItemErrorCodePrimaryKeyRequired {
 		t.Fatalf("item = %+v", report.Items[0])
 	}
 	apply := false
@@ -273,5 +285,36 @@ func TestSemanticModels_CompileUnsupportedCode(t *testing.T) {
 	got, ok := r.(CompileExploreQuery422JSONResponse)
 	if !ok || got.Code != ErrorCodeNotSupported {
 		t.Fatalf("compile = %+v, want 422 not_supported", r)
+	}
+}
+
+// A v1 metric on a catalog the workspace no longer has a grant for must not
+// leak the table's columns or become a model.
+func TestSemanticModels_MigrateV1NeedsCatalogGrant(t *testing.T) {
+	f, _ := metricFixture(t)
+	ctx := f.as(f.owner)
+	space, err := f.h.queries.GetDefaultSpace(context.Background(), pgtype.UUID{Bytes: f.ws, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := pgtype.UUID{Bytes: uuid.MustParse(f.owner), Valid: true}
+	if _, err := f.h.queries.CreateSemanticMetric(context.Background(), db.CreateSemanticMetricParams{
+		WorkspaceID: pgtype.UUID{Bytes: f.ws, Valid: true}, SpaceID: space.ID, Slug: "secret_count", Label: "Secret",
+		CatalogID: pgtype.UUID{Bytes: f.other, Valid: true}, Namespace: []string{"sales"}, TableName: "orders_secret",
+		Definition: []byte(`{"type":"simple","aggregation":"count"}`), FormatVersion: 1, OwnerUserID: owner, UpdatedBy: owner,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	apply := false
+	report := migrate(t, f, ctx, MigrateV1Request{DryRun: &apply})
+	if len(report.Items) != 1 || report.Items[0].ErrorCode == nil ||
+		*report.Items[0].ErrorCode != MigrateV1ItemErrorCodeCatalogNotGranted {
+		t.Fatalf("report = %+v", report.Items)
+	}
+	if len(report.Items[0].Columns) != 0 {
+		t.Fatalf("columns leaked: %v", report.Items[0].Columns)
+	}
+	if got := listModels(t, f, ctx); len(got) != 0 {
+		t.Fatalf("created %d models on an ungranted catalog", len(got))
 	}
 }

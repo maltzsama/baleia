@@ -305,6 +305,7 @@ describe('v1 migration dialog', () => {
 							columns: ['order_id', 'amount'],
 							primary_key: keyed ? ['order_id'] : [],
 							action: keyed ? 'CREATE' : 'ERROR',
+							error_code: keyed ? null : 'primary_key_required',
 							error: keyed ? null : 'choose the primary key columns of orders'
 						}
 					]
@@ -315,7 +316,8 @@ describe('v1 migration dialog', () => {
 		render(ModelsPage);
 		await fireEvent.click(await screen.findByRole('button', { name: 'Migrate v1 metrics' }));
 
-		expect(await screen.findByText('choose the primary key columns of orders')).toBeTruthy();
+		expect(await screen.findByText('Choose the primary key columns of this table.')).toBeTruthy();
+		expect(screen.getByText('Needs attention')).toBeTruthy();
 		const apply = screen.getByRole('button', { name: 'Apply (0)' }) as HTMLButtonElement;
 		expect(apply.disabled).toBe(true);
 

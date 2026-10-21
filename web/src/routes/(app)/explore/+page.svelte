@@ -344,15 +344,24 @@
 		void goto(resolve('/sql'));
 	}
 
+	let bindingsSeq = 0;
+
 	async function loadBindings() {
+		// A slower answer for a model the user already left must not set the
+		// engine of the model now selected.
+		const seq = ++bindingsSeq;
+		const model = base;
 		bindings = [];
-		if (!base) return;
+		if (!model) return;
+		let options: BindingOption[] = [];
 		try {
-			bindings = await bindingOptions(base.catalog_id);
+			options = await bindingOptions(model.catalog_id);
 		} catch {
-			toasts.error(m.explore_bindings_failed());
+			if (seq === bindingsSeq) toasts.error(m.explore_bindings_failed());
 		}
-		bindingId = base.binding_id ?? bindings[0]?.id ?? '';
+		if (seq !== bindingsSeq) return;
+		bindings = options;
+		bindingId = model.binding_id ?? options[0]?.id ?? '';
 	}
 
 	async function load() {
