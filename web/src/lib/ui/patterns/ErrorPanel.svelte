@@ -1,12 +1,15 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { describeError } from '$lib/errors/catalog';
 	import CopyButton from './CopyButton.svelte';
 
-	let { error }: { error: unknown } = $props();
+	// `open` starts with the details shown: a SQL error is only actionable
+	// with the engine's own message.
+	let { error, open = false }: { error: unknown; open?: boolean } = $props();
 
 	const described = $derived(describeError(error));
-	let details = $state(false);
+	let details = $state(untrack(() => open));
 </script>
 
 <div

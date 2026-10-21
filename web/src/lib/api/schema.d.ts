@@ -112,7 +112,7 @@ export interface paths {
         put?: never;
         /**
          * Invalidate current session
-         * @description Revokes the refresh-token family and clears the `baleia_refresh` cookie.
+         * @description Revokes the refresh-token family and clears the `baleia_refresh` cookie. It needs no access token: the refresh token (cookie or body) identifies the session, so a browser can log out with an expired or in-memory-only token.
          */
         post: operations["logout"];
         delete?: never;

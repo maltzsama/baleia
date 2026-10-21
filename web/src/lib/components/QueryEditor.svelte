@@ -42,7 +42,7 @@
 	import RunPanel from '$lib/run/RunPanel.svelte';
 	import { applyEvent, initialRunState, type RunState } from '$lib/run/reducer';
 	import {
-		isTerminal,
+		terminalStatus,
 		subscribeExecution,
 		type ExecutionEvent,
 		type ExecutionStream
@@ -746,6 +746,15 @@
 
 	let stream: ExecutionStream | null = null;
 
+	// The results load once the run ended, from its state, never from the
+	// translated status line (#387).
+	const runEnded = $derived(
+		!!runState && ['finished', 'failed', 'cancelled'].includes(runState.status)
+	);
+	const runHasResults = $derived(
+		!!runState && Object.values(runState.statements).some((statement) => statement.resultCount > 0)
+	);
+
 	function executionStatusText(status: string): string {
 		switch (status) {
 			case 'finished':
@@ -784,12 +793,15 @@
 					tab.statusText = `Running statement ${event.position}…`;
 					return;
 				}
-				if (event.type !== 'execution_status') return;
-				tab.statusText = executionStatusText(event.status);
-				if (isTerminal(event)) {
+				// A snapshot can already be final (the run ended before the socket).
+				const done = terminalStatus(event);
+				if (done) {
+					tab.statusText = executionStatusText(done);
 					executing = false;
-					notifyBackground(event.status);
+					notifyBackground(done);
+					return;
 				}
+				if (event.type === 'execution_status') tab.statusText = executionStatusText(event.status);
 			},
 			onGaveUp: () => {
 				executing = false;
@@ -1106,12 +1118,14 @@
 				onrerun={rerun}
 				onpick={() => editorView?.focus()}
 			/>
-			<div class="min-h-0 flex-1">
-				<ResultsPanel
-					executionId={activeTab.executionId}
-					enabled={activeTab.statusText === 'Complete'}
-				/>
-			</div>
+			<!-- A run that ended without any result set (a failed statement, a DDL
+			     or DML) has nothing to show below the run panel (#387). A SELECT
+			     with no rows still has a result set: its columns. -->
+			{#if !runEnded || runHasResults}
+				<div class="min-h-0 flex-1">
+					<ResultsPanel executionId={activeTab.executionId} enabled={runEnded} />
+				</div>
+			{/if}
 		</div>
 	{/if}
 

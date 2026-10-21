@@ -312,6 +312,9 @@ func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddl
 		"RequestPasswordReset": true,
 		"ConfirmPasswordReset": true,
 		"RefreshToken":         true,
+		// Logout authenticates by the refresh cookie it revokes: it must work
+		// without an access token, which the browser does not send (#263).
+		"Logout": true,
 	}
 
 	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
