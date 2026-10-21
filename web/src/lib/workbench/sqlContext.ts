@@ -314,3 +314,30 @@ function expectAt(head: Token[], qualifier: string[]): Expect {
 	if (!prev || (prev.kind === 'punct' && prev.value === '(')) return 'statement';
 	return 'keyword';
 }
+
+/**
+ * The statement at `pos` as [start, end) offsets, split at `;` outside strings,
+ * comments and quoted identifiers. The workbench uses it when the engine's
+ * splitter is unavailable, so Run still executes one statement (#395). A
+ * cursor after the last statement picks that statement; null on an empty doc.
+ */
+export function statementSpanAt(doc: string, pos: number): { start: number; end: number } | null {
+	const spans: { start: number; end: number }[] = [];
+	let start = 0;
+	for (const token of tokenize(doc)) {
+		if (token.kind === 'punct' && token.value === ';') {
+			spans.push({ start, end: token.end });
+			start = token.end;
+		}
+	}
+	spans.push({ start, end: doc.length });
+	const nonEmpty = spans.filter((span) =>
+		doc.slice(span.start, span.end).replace(/;\s*$/, '').trim()
+	);
+	if (nonEmpty.length === 0) return null;
+	return (
+		nonEmpty.find((span) => span.start <= pos && pos <= span.end) ??
+		[...nonEmpty].reverse().find((span) => span.end <= pos) ??
+		nonEmpty[0]
+	);
+}

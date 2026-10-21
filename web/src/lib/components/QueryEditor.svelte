@@ -5,7 +5,7 @@
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
 	import { EditorView, keymap } from '@codemirror/view';
-	import { EditorState, Compartment } from '@codemirror/state';
+	import { EditorState, Compartment, Prec } from '@codemirror/state';
 	import { indentWithTab } from '@codemirror/commands';
 	import { sql as sqlLanguage } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
@@ -24,6 +24,8 @@
 	import CommandPalette from '$lib/workbench/CommandPalette.svelte';
 	import SaveConflictDialog from '$lib/workbench/SaveConflictDialog.svelte';
 	import SaveQueryDialog from '$lib/workbench/SaveQueryDialog.svelte';
+	import SplitHandle from '$lib/workbench/SplitHandle.svelte';
+	import { SPLIT_DEFAULT, loadSplit } from '$lib/workbench/split';
 	import {
 		codemirrorDialect,
 		formatterLanguage,
@@ -35,6 +37,7 @@
 	} from '$lib/engines/client';
 	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
 	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
+	import { statementSpanAt } from '$lib/workbench/sqlContext';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
@@ -74,6 +77,9 @@
 	let dark = $state(browser && document.body.classList.contains('dark'));
 	let cursorLine = $state(1);
 	let cursorCol = $state(1);
+	// The results area's share of the workbench height, resizable (#395).
+	let resultsPct = $state(browser ? loadSplit() : SPLIT_DEFAULT);
+	let rootEl: HTMLDivElement | undefined = $state();
 
 	const workspaceId = $derived(workspaceStore.current?.id || '');
 	let targets = $state<WorkspaceTarget[]>([]);
@@ -350,7 +356,7 @@
 			search: (query) => {
 				const q = query.toLowerCase();
 				return [
-					{ id: 'run-all', label: m.components_queryeditor_run(), run: () => void runAll() },
+					{ id: 'run-all', label: m.components_queryeditor_run_all(), run: () => void runAll() },
 					{
 						id: 'run-current',
 						label: m.components_queryeditor_run_current_statement(),
@@ -554,23 +560,28 @@
 
 		const extensions = [
 			basicSetup,
-			keymap.of([
-				indentWithTab,
-				{
-					key: 'Mod-Enter',
-					run: () => {
-						void runCurrent();
-						return true;
+			// The run keys outrank basicSetup's defaultKeymap, which binds
+			// Mod-Enter to insertBlankLine: it won, and ⌘/Ctrl+Enter only added
+			// a line (#395).
+			Prec.highest(
+				keymap.of([
+					{
+						key: 'Mod-Enter',
+						run: () => {
+							void runCurrent();
+							return true;
+						}
+					},
+					{
+						key: 'Shift-Mod-Enter',
+						run: () => {
+							void runAll();
+							return true;
+						}
 					}
-				},
-				{
-					key: 'Shift-Mod-Enter',
-					run: () => {
-						void runAll();
-						return true;
-					}
-				}
-			]),
+				])
+			),
+			keymap.of([indentWithTab]),
 			dialectCompartment.of(
 				sqlLanguage({ dialect: codemirrorDialect(undefined), upperCaseKeywords: true })
 			),
@@ -713,23 +724,25 @@
 			return;
 		}
 		const full = doc.toString();
+		const head = selection.head;
 		const name = selectedEngine?.dialect?.name;
-		if (!name) {
-			await submit(full);
-			return;
+		// Run never falls back to the whole script, which is Run all's job: the
+		// engine's splitter knows its dialect, and the local one stands in when
+		// it is unavailable (#395).
+		let span: { start: number; end: number } | null | undefined;
+		if (name) {
+			try {
+				const spans = await splitStatements(name, full);
+				span =
+					spans.find((s) => s.start <= head && head <= s.end) ??
+					[...spans].reverse().find((s) => s.end <= head) ??
+					spans[0];
+			} catch {
+				span = undefined;
+			}
 		}
-		try {
-			const spans = await splitStatements(name, full);
-			const head = selection.head;
-			const span =
-				spans.find((s) => s.start <= head && head <= s.end) ??
-				[...spans].reverse().find((s) => s.end <= head) ??
-				spans[0];
-			await submit(span ? full.slice(span.start, span.end) : full);
-		} catch {
-			// The splitter refused (unterminated string, …): run the script.
-			await submit(full);
-		}
+		span ??= statementSpanAt(full, head);
+		if (span) await submit(full.slice(span.start, span.end));
 	}
 
 	async function cancelExecution() {
@@ -903,7 +916,7 @@
 	}
 </script>
 
-<div class="flex-1 flex flex-col overflow-hidden min-w-0">
+<div bind:this={rootEl} class="flex-1 flex flex-col overflow-hidden min-w-0">
 	<div
 		class="flex items-stretch bg-bg-toolbar pt-1.5 px-2 gap-0.5 border-b border-border shrink-0 overflow-x-auto"
 	>
@@ -940,9 +953,13 @@
 	</div>
 
 	<div class="flex items-center py-1.5 px-3 gap-1.5 border-b border-border bg-bg-toolbar shrink-0">
+		<!-- Run is the selection, or the statement at the cursor, like ⌘↵;
+		     Run all is the whole script (#395). -->
 		<button
-			onclick={runAll}
+			onclick={() => void runCurrent()}
 			disabled={executing}
+			title={m.components_queryeditor_run_hint()}
+			data-testid="run-current"
 			class="bg-success text-white border-none py-[5px] px-3.5 text-xs font-bold rounded-[5px] cursor-pointer flex items-center gap-1.5 hover:enabled:bg-success-hover disabled:opacity-60 disabled:cursor-not-allowed"
 		>
 			<svg viewBox="0 0 24 24" class="w-2.5 h-2.5 fill-white stroke-none"
@@ -950,6 +967,16 @@
 			>
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
+		</button>
+		<button
+			onclick={() => void runAll()}
+			disabled={executing}
+			title={m.components_queryeditor_run_all_hint()}
+			data-testid="run-all"
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+		>
+			{m.components_queryeditor_run_all()}
+			<span class="text-[10px] opacity-70 font-normal">⇧⌘↵</span>
 		</button>
 		{#if executing && canCancel}
 			<button
@@ -1112,7 +1139,8 @@
 	</div>
 
 	{#if activeTab.executionId && runState}
-		<div class="flex h-[46%] shrink-0 flex-col border-t border-border">
+		<SplitHandle bind:value={resultsPct} container={() => rootEl} />
+		<div class="flex shrink-0 flex-col" style:height="{resultsPct}%" data-testid="results-area">
 			<RunPanel
 				state={runState}
 				{executing}
