@@ -5,7 +5,7 @@
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
 	import { EditorView, keymap } from '@codemirror/view';
-	import { EditorState, Compartment } from '@codemirror/state';
+	import { EditorState, Compartment, Prec } from '@codemirror/state';
 	import { indentWithTab } from '@codemirror/commands';
 	import { sql as sqlLanguage } from '@codemirror/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
@@ -76,8 +76,6 @@
 	let dark = $state(browser && document.body.classList.contains('dark'));
 	let cursorLine = $state(1);
 	let cursorCol = $state(1);
-	// Run executes the selection when there is one (#395).
-	let hasSelection = $state(false);
 	// The results area's share of the workbench height, resizable (#395).
 	let resultsPct = $state(browser ? loadSplit() : SPLIT_DEFAULT);
 	let rootEl: HTMLDivElement | undefined = $state();
@@ -561,23 +559,28 @@
 
 		const extensions = [
 			basicSetup,
-			keymap.of([
-				indentWithTab,
-				{
-					key: 'Mod-Enter',
-					run: () => {
-						void runCurrent();
-						return true;
+			// The run keys outrank basicSetup's defaultKeymap, which binds
+			// Mod-Enter to insertBlankLine: it won, and ⌘/Ctrl+Enter only added
+			// a line (#395).
+			Prec.highest(
+				keymap.of([
+					{
+						key: 'Mod-Enter',
+						run: () => {
+							void runCurrent();
+							return true;
+						}
+					},
+					{
+						key: 'Shift-Mod-Enter',
+						run: () => {
+							void runAll();
+							return true;
+						}
 					}
-				},
-				{
-					key: 'Shift-Mod-Enter',
-					run: () => {
-						void runAll();
-						return true;
-					}
-				}
-			]),
+				])
+			),
+			keymap.of([indentWithTab]),
 			dialectCompartment.of(
 				sqlLanguage({ dialect: codemirrorDialect(undefined), upperCaseKeywords: true })
 			),
@@ -594,7 +597,6 @@
 					flushSql();
 				}
 				if (update.selectionSet || update.docChanged) {
-					hasSelection = !update.state.selection.main.empty;
 					const head = update.state.selection.main.head;
 					const line = update.state.doc.lineAt(head);
 					cursorLine = line.number;
@@ -960,11 +962,7 @@
 			<svg viewBox="0 0 24 24" class="w-2.5 h-2.5 fill-white stroke-none"
 				><polygon points="5 3 19 12 5 21 5 3" /></svg
 			>
-			{executing
-				? m.components_queryeditor_running()
-				: hasSelection
-					? m.components_queryeditor_run_selection()
-					: m.components_queryeditor_run()}
+			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
 		</button>
 		<button
