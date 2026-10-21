@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
-	baleiaapi "github.com/galileostudio/baleia/internal/api"
-	baleiaassistant "github.com/galileostudio/baleia/internal/assistant"
+	"github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/assistant"
 	assistantllm "github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -155,7 +155,7 @@ func (s *Server) routes(ctx context.Context) error {
 	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, obs.WrapHTTPClient(dialer.HTTPClient(60*time.Second)))
 	binder := bindtrino.New(trinoAdmin, s.queries).WithRegistryKeyring(s.registryKeyring)
 
-	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
+	h := api.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
 	// The audit trail is best-effort: a failed write is counted, never fatal.
 	var auditMetrics *metrics.Audit
 	if s.metrics != nil {
@@ -191,12 +191,12 @@ func (s *Server) routes(ctx context.Context) error {
 	wsHandler.SetTickets(tickets)
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
 
-	strictHandler := baleiaapi.NewStrictHandlerWithOptions(h, []baleiaapi.StrictMiddlewareFunc{
+	strictHandler := api.NewStrictHandlerWithOptions(h, []api.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret, s.queries),
 		csrfMiddleware,
 		refreshCookieMiddleware(s.cfg),
 		oidcMiddleware(s.cfg),
-	}, baleiaapi.StrictHTTPServerOptions{
+	}, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  strictRequestError,
 		ResponseErrorHandlerFunc: strictResponseError,
 	})
@@ -218,7 +218,7 @@ func (s *Server) routes(ctx context.Context) error {
 		// agents feature is on.
 		if svc := h.AssistantService(); svc != nil {
 			if session, err := mcpServer.InProcessClient(ctx); err == nil {
-				runner := baleiaassistant.NewRunner(svc, nil, baleiaassistant.NewMCPToolCaller(session))
+				runner := assistant.NewRunner(svc, nil, assistant.NewMCPToolCaller(session))
 				sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
 				if settings, err := svc.Settings(sctx); err == nil && settings.Enabled && settings.Provider != nil && settings.Model != nil {
@@ -239,7 +239,7 @@ func (s *Server) routes(ctx context.Context) error {
 		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
 		r.Use(authLimiter.Middleware)
 		r.Use(OptionalJSONBody)
-		baleiaapi.HandlerFromMux(strictHandler, r)
+		api.HandlerFromMux(strictHandler, r)
 
 		// Non-oapi routes (dynamic catalog browsing) share the chi auth
 		// middleware; handlers read the caller from the request context.
@@ -265,7 +265,7 @@ type staticUsers interface {
 }
 
 // engineCapabilities adapts the API's engine registry to agentpolicy.
-type engineCapabilities struct{ h *baleiaapi.Handlers }
+type engineCapabilities struct{ h *api.Handlers }
 
 func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (queryengine.ReadOnlySupport, error) {
 	return e.h.EngineReadOnly(ctx, id)
@@ -329,7 +329,7 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 	})
 }
 
-func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddlewareFunc {
+func authMiddlewareFunc(secret string, queries db.Querier) api.StrictMiddlewareFunc {
 	publicOps := map[string]bool{
 		"GetSetupStatus":       true,
 		"CreateFirstAdmin":     true,
@@ -346,7 +346,7 @@ func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddl
 		"Logout": true,
 	}
 
-	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
+	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
 			// API keys are checked before the public operations so a key can
 			// never reach /auth/* (#276).

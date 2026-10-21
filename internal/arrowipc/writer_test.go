@@ -49,7 +49,6 @@ func TestFileWriterIndexesBatches(t *testing.T) {
 	require.Equal(t, int64(10), second.NumRows())
 }
 
-
 // roundTrip writes rows through the streaming writer and reads them back with
 // an IPC reader, returning the exact per-cell values.
 func roundTrip(t *testing.T, cols []ColumnInfo, rows [][]interface{}) [][]interface{} {

@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/galileostudio/baleia/internal/dbpool"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -14,9 +11,12 @@ import (
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
+	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/jackc/pgx/v5"
 )
 
