@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -75,28 +76,36 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 		return nil, err
 	}
 
-	user, err := h.queries.CreateUser(ctx, db.CreateUserParams{
-		Name:         string(request.Body.Email),
-		Email:        string(request.Body.Email),
-		Role:         string(request.Body.Role),
-		AuthProvider: "local",
-		PasswordHash: &hash,
-	})
-	if err != nil {
-		slog.Error("CreateUser failed", "err", err)
-		return nil, err
-	}
-
 	token := randomState()
 	expires := time.Now().Add(72 * time.Hour)
 
-	// The invite link carries the raw token; only its hash is stored (#51).
-	if err := h.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
-		TokenHash: auth.HashToken(token),
-		UserID:    user.ID,
-		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
-	}); err != nil {
-		slog.Error("CreatePasswordResetToken failed", "err", err)
+	// The user and the invite token are one write: a user without a token
+	// could neither sign in nor be invited again (#376). The e-mail goes out
+	// only after the commit.
+	var user db.User
+	err = h.inTx(ctx, func(q db.Querier) error {
+		var err error
+		user, err = q.CreateUser(ctx, db.CreateUserParams{
+			Name:         string(request.Body.Email),
+			Email:        string(request.Body.Email),
+			Role:         string(request.Body.Role),
+			AuthProvider: "local",
+			PasswordHash: &hash,
+		})
+		if err != nil {
+			return fmt.Errorf("create user: %w", err)
+		}
+		// The invite link carries the raw token; only its hash is stored (#51).
+		if err := q.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+			TokenHash: auth.HashToken(token),
+			UserID:    user.ID,
+			ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+		}); err != nil {
+			return fmt.Errorf("create invite token: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
