@@ -183,9 +183,12 @@ func ensureTeamMember(ctx context.Context, q *db.Queries, teamID, userID pgtype.
 	return err
 }
 
-// ensureTarget exposes the built-in `tpch` catalog on the default Trino engine
-// and grants it to the member's personal workspace, so the workbench has a
-// runnable target for the `@harness run` smoke.
+// ensureTarget exposes Trino's tpch connector as the e2e_tpch catalog on the
+// default Trino engine and grants it to the member's and the admin's personal
+// workspaces, so the workbench has a runnable target for the `@harness run`
+// smoke. The Baleia catalog has the engine catalog's name (#388): `tpch`
+// itself is reserved, and a different name on each side made `tpch.*`
+// queries fail with CATALOG_NOT_FOUND.
 func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db.Catalog, db.CatalogBinding, error) {
 	row, err := q.GetDefaultTrinoEngine(ctx)
 	if err != nil {
@@ -194,7 +197,7 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db
 
 	catalog, err := q.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{
 		ConnectionID: row.Engine.ConnectionID,
-		Name:         "tpch",
+		Name:         e2eTrinoCatalog,
 	})
 	if err != nil {
 		return db.Catalog{}, db.CatalogBinding{}, err
@@ -209,7 +212,7 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db
 		return db.Catalog{}, db.CatalogBinding{}, err
 	}
 
-	// The member and the admin can both query tpch from their own workspace.
+	// The member and the admin can both query it from their own workspace.
 	for _, user := range []db.User{member, admin} {
 		workspaceID, err := q.PersonalWorkspaceID(ctx, user.ID)
 		if err != nil {
@@ -227,8 +230,9 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db
 	return catalog, binding, nil
 }
 
-// e2eTrinoCatalog is the seeded catalog's name in Trino; the registry
-// reserves the connector names themselves (registry_catalog_name_not_reserved).
+// e2eTrinoCatalog names the seeded catalog in Baleia and in Trino alike; the
+// registry reserves the connector names themselves
+// (registry_catalog_name_not_reserved), so it cannot be `tpch`.
 const e2eTrinoCatalog = "e2e_tpch"
 
 // ensureTrinoCatalog registers the `tpch` connector as a Trino catalog the way a binding

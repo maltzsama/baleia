@@ -8,7 +8,7 @@ test('@issue-385 the admin sees connections, a catalog and the profile', async (
 	expectNoA11yViolations
 }) => {
 	await loginAs('admin');
-	await expect(page.getByTestId('catalog-select')).toContainText('tpch');
+	await expect(page.getByTestId('catalog-select')).toContainText('e2e_tpch');
 
 	// A full load of /connections, not a client-side navigation.
 	await page.goto('/connections');

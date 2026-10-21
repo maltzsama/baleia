@@ -4,7 +4,7 @@ import { expect, test, type Page } from './fixtures';
 // #383: the workbench autocomplete follows the statement context and the tab's
 // catalog. Completions read the stored metadata, which a fresh cluster only
 // has after the first scheduled pass, so the spec runs one pass of the seeded
-// tpch catalog (cmd/e2e-seed) as the admin first.
+// e2e_tpch catalog (cmd/e2e-seed) as the admin first.
 async function syncTpchMetadata(request: APIRequestContext) {
 	const login = await request.post('/api/v1/auth/login', {
 		data: { email: 'admin@e2e.test', password: process.env.E2E_PASSWORD ?? 'e2e-password' }
@@ -14,8 +14,8 @@ async function syncTpchMetadata(request: APIRequestContext) {
 	const catalogs: { id: string; name: string }[] = await (
 		await request.get('/api/v1/catalogs', { headers })
 	).json();
-	const tpch = catalogs.find((catalog) => catalog.name === 'tpch');
-	expect(tpch, 'seeded tpch catalog').toBeTruthy();
+	const tpch = catalogs.find((catalog) => catalog.name === 'e2e_tpch');
+	expect(tpch, 'seeded e2e_tpch catalog').toBeTruthy();
 	const runs = `/api/v1/catalogs/${tpch!.id}/metadata/sync-runs?limit=1`;
 	const sync = await request.post(`/api/v1/catalogs/${tpch!.id}/metadata/sync`, { headers });
 	// 409: a scheduled pass is already running; waiting for it is enough.

@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 
 // #121: pick a model, click fields, read the compiled SQL and run it. The seed
-// (cmd/e2e-seed) creates e2e_orders joined many_to_one to e2e_customers over tpch.
+// (cmd/e2e-seed) creates e2e_orders joined many_to_one to e2e_customers over e2e_tpch.
 test('@issue-121 explore compiles a model query and shares it as a link', async ({
 	page,
 	loginAs,
