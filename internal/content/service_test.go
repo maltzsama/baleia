@@ -202,7 +202,9 @@ func TestConcurrentUpdates_NoDuplicateVersion(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			_, _, err := f.s.UpdateSavedQuery(ctx, f.user, db.UpdateSavedQueryParams{
-				WorkspaceID: f.ws, ID: q.ID, Name: q.Name, Sql: fmt.Sprintf("SELECT %d", i),
+				// Never "SELECT 1" (the created SQL): that update would be a
+				// no-op when it runs first and write no version.
+				WorkspaceID: f.ws, ID: q.ID, Name: q.Name, Sql: fmt.Sprintf("SELECT %d", 100+i),
 				SpaceID: q.SpaceID, Slug: q.Slug, UpdatedBy: f.user,
 			}, nil)
 			if err != nil {
