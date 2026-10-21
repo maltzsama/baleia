@@ -1118,9 +1118,10 @@
 				onrerun={rerun}
 				onpick={() => editorView?.focus()}
 			/>
-			<!-- A run that ended without any result set (a failed lone statement)
-			     has nothing to show below its error (#387). -->
-			{#if !runEnded || runState.status === 'finished' || runHasResults}
+			<!-- A run that ended without any result set (a failed statement, a DDL
+			     or DML) has nothing to show below the run panel (#387). A SELECT
+			     with no rows still has a result set: its columns. -->
+			{#if !runEnded || runHasResults}
 				<div class="min-h-0 flex-1">
 					<ResultsPanel executionId={activeTab.executionId} enabled={runEnded} />
 				</div>
