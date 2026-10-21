@@ -22,6 +22,18 @@ func (q *Queries) CatalogConnectionNameExists(ctx context.Context, name string) 
 	return exists, err
 }
 
+const countEncryptedConnections = `-- name: CountEncryptedConnections :one
+SELECT count(*) FROM catalog_connections WHERE credentials_enc IS NOT NULL
+`
+
+// Whether any credential is stored, so a missing encryption key is fatal.
+func (q *Queries) CountEncryptedConnections(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countEncryptedConnections)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCatalogConnection = `-- name: CreateCatalogConnection :one
 INSERT INTO catalog_connections (id, name, type, url, config, credentials_enc, default_readonly, credentials_read_only, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

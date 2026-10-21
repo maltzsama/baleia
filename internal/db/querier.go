@@ -50,6 +50,8 @@ type Querier interface {
 	CountCatalogAccessImpact(ctx context.Context, arg CountCatalogAccessImpactParams) (CountCatalogAccessImpactRow, error)
 	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error)
 	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error)
+	// Whether any credential is stored, so a missing encryption key is fatal.
+	CountEncryptedConnections(ctx context.Context) (int64, error)
 	// What stops an engine from being deleted: managed bindings and executions
 	// still running on it. Native bindings go with the engine.
 	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (CountEngineBlockersRow, error)
@@ -163,6 +165,7 @@ type Querier interface {
 	// The age of the oldest audit event not yet exported (the lag the exporter
 	// reports). NULL when nothing is pending.
 	GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamptz, error)
+	GetAuditExportCursor(ctx context.Context, sink string) (GetAuditExportCursorRow, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
 	GetBinding(ctx context.Context, id pgtype.UUID) (CatalogBinding, error)
 	// Everything an execution target needs about a binding: its engine and its
@@ -298,6 +301,8 @@ type Querier interface {
 	// last row of the previous page. Every filter is optional. A non-admin is
 	// scoped to their own events and to events of workspaces they own (#49).
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]ListAuditEventsRow, error)
+	// The batch after the cursor, before the safety-lag cutoff.
+	ListAuditEventsForExport(ctx context.Context, arg ListAuditEventsForExportParams) ([]ListAuditEventsForExportRow, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
 	ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]BindingStatusV, error)
 	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]CatalogBinding, error)
@@ -495,6 +500,7 @@ type Querier interface {
 	// Every visible saved query, optionally filtered by space and text (#113).
 	SearchVisibleSavedQueries(ctx context.Context, arg SearchVisibleSavedQueriesParams) ([]SavedQuery, error)
 	SetAgentStatus(ctx context.Context, arg SetAgentStatusParams) (Agent, error)
+	SetAuditExportCursor(ctx context.Context, arg SetAuditExportCursorParams) error
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	// Stores the resolved target of an execution. target_snapshot is immutable

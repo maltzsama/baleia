@@ -112,11 +112,7 @@ func main() {
 	// The worker opens stored connection credentials (Lens table health), so it
 	// follows the same key policy as the API: refuse to start without a key
 	// once credentials exist.
-	keyring, err := bootstrap.LoadKeyring(ctx, cfg, func(ctx context.Context) (int64, error) {
-		var n int64
-		err := pool.QueryRow(ctx, "SELECT count(*) FROM catalog_connections WHERE credentials_enc IS NOT NULL").Scan(&n)
-		return n, err
-	})
+	keyring, err := bootstrap.LoadKeyring(ctx, cfg, db.New(pool).CountEncryptedConnections)
 	if err != nil {
 		slog.Error("credential keyring", "err", err)
 		os.Exit(1)
@@ -199,7 +195,7 @@ func main() {
 			slog.Error("audit export sink", "err", err)
 			os.Exit(1)
 		}
-		pg := auditexport.Postgres{Pool: pool}
+		pg := auditexport.Postgres{Queries: db.New(pool)}
 		act.SetAuditExporter(&auditexport.Exporter{
 			Source: pg, Cursor: pg, Sink: sink,
 			Index: cfg.AuditExportIndex, Batch: cfg.AuditExportBatch, Lag: auditexport.DefaultSafetyLag,
