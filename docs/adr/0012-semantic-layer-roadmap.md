@@ -31,8 +31,9 @@ release cycle.
 `Cast`, `SafeDivide`, `Literal`, `Limit`) with golden tests (#14). `internal/semantic` renders
 simple metrics per dialect, and the API validates them with a zero-row probe in a read-only engine
 session (#33). Docs, tags and owners live in `semantic_docs`, keyed by the table's natural key so
-they survive a metadata resync. Spaces (#40), versions and bundles (#34) and the v2 semantic layer
-(#91) are not implemented yet.
+they survive a metadata resync. Spaces (#40) and versions and bundles (#34) are in place. The v2 semantic layer is in
+place too: models, joins and the per-dialect compiler (#91), with the Explore UI and the model
+editor on top (#121).
 
 ## Alternatives considered
 

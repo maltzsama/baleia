@@ -29,7 +29,8 @@ between instances) is built once per kind.
 
 Spaces, slugs and `space_id` ownership are in place (#40); saved queries and semantic metrics are
 content items with portable slugs. Content versions, trash/restore and the `baleia.bundle`
-export/import (content-as-code) are in place (#34); the v2 semantic layer is still pending (#91).
+export/import (content-as-code) are in place (#34); semantic models are a content kind with versions, trash and bundles (#91), and the Explore UI
+and model editor read them through the kind registry (#121).
 
 ## Alternatives considered
 

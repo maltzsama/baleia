@@ -16,10 +16,12 @@ import (
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dbpool"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type seedUser struct {
@@ -93,8 +95,12 @@ func main() {
 		log.Fatalf("e2e-seed: shared workspace: %v", err)
 	}
 
-	if err := ensureTarget(ctx, q, admin, member); err != nil {
+	catalog, binding, err := ensureTarget(ctx, q, admin, member)
+	if err != nil {
 		log.Fatalf("e2e-seed: target: %v", err)
+	}
+	if err := ensureModels(ctx, pool, q, member, catalog, binding); err != nil {
+		log.Fatalf("e2e-seed: models: %v", err)
 	}
 
 	log.Printf("e2e-seed: ready (admin/member/viewer @e2e.test)")
@@ -169,10 +175,10 @@ func ensureTeamMember(ctx context.Context, q *db.Queries, teamID, userID pgtype.
 // ensureTarget exposes the built-in `tpch` catalog on the default Trino engine
 // and grants it to the member's personal workspace, so the workbench has a
 // runnable target for the `@harness run` smoke.
-func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) error {
+func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db.Catalog, db.CatalogBinding, error) {
 	row, err := q.GetDefaultTrinoEngine(ctx)
 	if err != nil {
-		return err
+		return db.Catalog{}, db.CatalogBinding{}, err
 	}
 
 	catalog, err := q.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{
@@ -180,20 +186,21 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) err
 		Name:         "tpch",
 	})
 	if err != nil {
-		return err
+		return db.Catalog{}, db.CatalogBinding{}, err
 	}
 
-	if _, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{
+	binding, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{
 		CatalogID:         catalog.ID,
 		EngineID:          row.Engine.ID,
 		EngineCatalogName: "tpch",
-	}); err != nil {
-		return err
+	})
+	if err != nil {
+		return db.Catalog{}, db.CatalogBinding{}, err
 	}
 
 	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
 	if err != nil {
-		return err
+		return db.Catalog{}, db.CatalogBinding{}, err
 	}
 
 	_, err = q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
@@ -202,7 +209,65 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) err
 		Permission:  "read",
 		GrantedBy:   admin.ID,
 	})
-	return err
+	return catalog, binding, err
+}
+
+// seedModels are the semantic models (#121) the Explore smoke explores: two
+// tpch tables joined many_to_one, written through the content service so they
+// get a version like any model created through the API.
+var seedModels = []struct {
+	slug, label, definition string
+}{
+	{
+		slug: "e2e_customers", label: "E2E Customers",
+		definition: `{"source":{"kind":"table","namespace":["tiny"],"table":"customer"},
+			"primary_key":["custkey"],
+			"dimensions":[{"name":"custkey","type":"int64"},{"name":"nation","sql":"nationkey","type":"int64"}],
+			"metrics":[{"name":"customer_count","label":"Customers","aggregation":"count"}]}`,
+	},
+	{
+		slug: "e2e_orders", label: "E2E Orders",
+		definition: `{"source":{"kind":"table","namespace":["tiny"],"table":"orders"},
+			"primary_key":["orderkey"],
+			"dimensions":[{"name":"orderkey","type":"int64"},{"name":"custkey_fk","sql":"custkey","type":"int64"},
+				{"name":"order_status","label":"Order status","sql":"orderstatus","type":"string"},
+				{"name":"order_date","label":"Order date","sql":"orderdate","type":"date","grains":["month","year"]}],
+			"metrics":[{"name":"order_count","label":"Orders","aggregation":"count"},
+				{"name":"total_price","label":"Total price","aggregation":"sum","dimension":"orderkey"}],
+			"joins":[{"to":"e2e_customers","relationship":"many_to_one","on":[{"from":"custkey_fk","to":"custkey"}]}]}`,
+	},
+}
+
+// ensureModels creates the e2e models in the member's default space; an
+// existing slug is left untouched so the seed stays idempotent.
+func ensureModels(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
+	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
+	if err != nil {
+		return err
+	}
+	space, err := q.GetDefaultSpace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	svc := content.New(pool, q)
+	for _, m := range seedModels {
+		_, err := q.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: workspaceID, Slug: m.slug})
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if _, err := svc.CreateSemanticModel(ctx, member.ID, db.CreateSemanticModelParams{
+			WorkspaceID: workspaceID, SpaceID: space.ID, Slug: m.slug, Label: m.label,
+			CatalogID: catalog.ID, BindingID: binding.ID,
+			Definition: []byte(m.definition), FormatVersion: 1,
+			OwnerUserID: member.ID, UpdatedBy: member.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ensureSharedWorkspace(ctx context.Context, q *db.Queries, name string, teamID pgtype.UUID) (db.Workspace, error) {

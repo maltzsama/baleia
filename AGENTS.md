@@ -46,6 +46,8 @@ runs in `.github/workflows/web-e2e.yml` for PRs that touch `web/**`,
 /sql                  Workbench (editor + explorer + results)
 /sql/q/{query_id}     Workbench with a saved query open
 /data                 Data explorer (metadata-driven)
+/explore?q=           Semantic explore (model fields -> compiled SQL, FD5 share link)
+/models               Semantic models; /models/{model_id} is the model editor
 /connections          Connections, catalogs and bindings
 /monitoring           Cluster, queries, table health and maintenance
 /history              Query history
@@ -86,6 +88,11 @@ Workspace/catalog/namespace/table/tab selection is URL-backed through
   `StateTimeline`.
 - `src/lib/util/poll.ts`, `src/lib/util/time.ts`, `src/lib/errors/catalog.ts`.
 - Provider/engine kind literals live only in `ui/patterns/kindIcon.ts` (FD6).
+- Content kinds (query, metric, model) get their label and route from
+  `src/lib/content/kinds.ts`; a new kind is one more entry.
+- The explore query (`src/lib/semantic/explore.ts`) is the only Explore state:
+  it is serialized into `?q=` as base64url of canonical JSON (FD5) and the UI
+  never sends raw SQL to the compiler.
 - Markdown is rendered only through `MarkdownView` (sanitized, images never
   rendered).
 - Every async view has loading, empty and error states; empty `catch` blocks
