@@ -182,19 +182,9 @@ func (h *Handlers) validateAgentWorkspaces(ctx context.Context, owner pgtype.UUI
 }
 
 func (h *Handlers) addAgentWorkspaces(ctx context.Context, agentID pgtype.UUID, ws []pgtype.UUID) error {
-	q := h.queries
-	if h.pool != nil {
-		// Keep the replacement atomic: a partial set would silently widen or
-		// narrow the agent's reach.
-		return withTx(ctx, h.pool, func(tx pgx.Tx) error {
-			txq := q
-			if concrete, ok := q.(*db.Queries); ok {
-				txq = concrete.WithTx(tx)
-			}
-			return addAgentWorkspaces(ctx, txq, agentID, ws)
-		})
-	}
-	return addAgentWorkspaces(ctx, q, agentID, ws)
+	// Keep the replacement atomic: a partial set would silently widen or
+	// narrow the agent's reach.
+	return h.inTx(ctx, func(q db.Querier) error { return addAgentWorkspaces(ctx, q, agentID, ws) })
 }
 
 func addAgentWorkspaces(ctx context.Context, q db.Querier, agentID pgtype.UUID, ws []pgtype.UUID) error {

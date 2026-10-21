@@ -12,7 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -23,15 +22,6 @@ var engineNameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`)
 
 // enginePingTimeout bounds the reachability check of a new engine.
 const enginePingTimeout = 15 * time.Second
-
-// inTx runs fn in one transaction. Without a pool (unit tests) it runs fn on
-// the handler's querier directly.
-func (h *Handlers) inTx(ctx context.Context, fn func(q db.Querier) error) error {
-	if h.pool == nil {
-		return fn(h.queries)
-	}
-	return withTx(ctx, h.pool, func(tx pgx.Tx) error { return fn(db.New(tx)) })
-}
 
 // isFKViolation reports a delete blocked by a foreign key: 23503 for NO
 // ACTION, 23001 for ON DELETE RESTRICT (engines use RESTRICT).
