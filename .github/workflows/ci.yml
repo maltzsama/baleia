@@ -9,6 +9,15 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    # DB-backed tests (internal/testdb) fail instead of skipping when CI=true.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: baleia_dev
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -18,6 +27,8 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
+        env:
+          BALEIA_TEST_DATABASE_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
         run: go test ./...
 
   # Baleia's half of the registry contract against the fixtures of the pinned

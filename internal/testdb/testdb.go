@@ -1,6 +1,7 @@
 // Package testdb gives tests a throwaway database migrated to the latest
 // version, on the server of BALEIA_TEST_DATABASE_URL (a role allowed to
-// CREATE DATABASE). Tests that need it skip without that variable.
+// CREATE DATABASE). Tests that need it skip without that variable, except in
+// CI (CI=true), where a missing database is a failure, not a silent skip.
 package testdb
 
 import (
@@ -23,6 +24,9 @@ func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
 	if admin == "" {
+		if os.Getenv("CI") == "true" {
+			t.Fatal("BALEIA_TEST_DATABASE_URL not set in CI: DB-backed tests would be skipped")
+		}
 		t.Skip("BALEIA_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
