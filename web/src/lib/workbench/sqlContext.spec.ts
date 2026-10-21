@@ -95,6 +95,22 @@ describe('sqlContextAt', () => {
 		expect(at('SELECT * FROM t WHERE f(a) = |')).toMatchObject({ expect: 'column' });
 	});
 
+	it('keeps the column context inside function calls and expressions', () => {
+		expect(at('SELECT count(|')).toMatchObject({ expect: 'column', prefix: '' });
+		expect(at('SELECT coalesce(a, na|')).toMatchObject({ expect: 'column', prefix: 'na' });
+		expect(at('SELECT * FROM t WHERE (a = 1 OR |')).toMatchObject({ expect: 'column' });
+		expect(at('SELECT * FROM t WHERE x IN (SELECT |')).toMatchObject({ expect: 'column' });
+		expect(at('SELECT * FROM t WHERE x IN (|')).toMatchObject({ expect: 'column' });
+	});
+
+	it('reads doubled quotes inside quoted identifiers', () => {
+		expect(at('SELECT | FROM "a""b" t')?.tables).toEqual([{ path: ['a"b'], alias: 't' }]);
+		expect(at('SELECT | FROM `a``b` t')?.tables).toEqual([{ path: ['a`b'], alias: 't' }]);
+		expect(at('SELECT | FROM [a]]b] t')?.tables).toEqual([{ path: ['a]b'], alias: 't' }]);
+		expect(at('SELECT "a""b|')).toBeNull();
+		expect(at('SELECT "a""b" |')).toMatchObject({ expect: 'column' });
+	});
+
 	it('suggests nothing inside strings, comments and quoted identifiers', () => {
 		expect(at("SELECT 'abc|")).toBeNull();
 		expect(at("SELECT 'it''s |'")).toBeNull();

@@ -59,16 +59,22 @@ function tokenize(text: string): Token[] {
 			}
 			tokens.push({ kind: 'string', value: '', start, end: i, open: !closed });
 		} else if (ch in QUOTE_CLOSE) {
+			// A doubled closer is an escaped one: "a""b", `a``b`, [a]]b].
 			const close = QUOTE_CLOSE[ch];
-			const end = text.indexOf(close, i + 1);
-			i = end < 0 ? text.length : end + 1;
-			tokens.push({
-				kind: 'quoted',
-				value: text.slice(start + 1, end < 0 ? text.length : end),
-				start,
-				end: i,
-				open: end < 0
-			});
+			let value = '';
+			let closed = false;
+			i++;
+			while (i < text.length) {
+				if (text[i] === close && text[i + 1] === close) {
+					value += close;
+					i += 2;
+				} else if (text[i] === close) {
+					i++;
+					closed = true;
+					break;
+				} else value += text[i++];
+			}
+			tokens.push({ kind: 'quoted', value, start, end: i, open: !closed });
 		} else if (/[A-Za-z_]/.test(ch)) {
 			while (i < text.length && /[\w$]/.test(text[i])) i++;
 			tokens.push({ kind: 'word', value: text.slice(start, i), start, end: i });
@@ -275,8 +281,12 @@ function expectAt(head: Token[], qualifier: string[]): Expect {
 	// The clause in effect at the cursor's depth.
 	const stack: Clause[] = ['none'];
 	for (const token of head) {
-		if (token.kind === 'punct' && token.value === '(') stack.push('none');
-		else if (token.kind === 'punct' && token.value === ')') {
+		if (token.kind === 'punct' && token.value === '(') {
+			// Function arguments and expressions keep the column context; a
+			// subquery switches it at its SELECT.
+			const outer = stack[stack.length - 1];
+			stack.push(outer === 'select' || outer === 'column' ? 'column' : 'none');
+		} else if (token.kind === 'punct' && token.value === ')') {
 			if (stack.length > 1) stack.pop();
 		} else {
 			const clause = CLAUSES[upper(token)];
