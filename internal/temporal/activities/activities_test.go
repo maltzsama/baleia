@@ -9,16 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fakeQuerier embeds db.Querier so only the exercised method is implemented.
@@ -208,20 +207,6 @@ func emitBigints(sink queryengine.RecordSink, vals []string) error {
 		}
 	}
 	return sink.End(queryengine.Stats{RowCount: int64(len(vals))})
-}
-
-// handleQuerier records the query handles the activity persists.
-type handleQuerier struct {
-	db.Querier
-	mu      sync.Mutex
-	handles []db.SetStatementQueryHandleParams
-}
-
-func (q *handleQuerier) SetStatementQueryHandle(_ context.Context, p db.SetStatementQueryHandleParams) error {
-	q.mu.Lock()
-	q.handles = append(q.handles, p)
-	q.mu.Unlock()
-	return nil
 }
 
 // fakeS3 drains the upload stream and reports a fixed size or error.

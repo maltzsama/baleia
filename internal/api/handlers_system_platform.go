@@ -52,10 +52,6 @@ func runResource(ctx context.Context, errorCode string, probe func(context.Conte
 	return res
 }
 
-func unknownResource(code string) SystemStatusResource {
-	return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr(code)}
-}
-
 func statusItems(items []SystemStatusItem) *[]SystemStatusItem { return &items }
 
 func (h *Handlers) metadataSyncEvery() time.Duration {

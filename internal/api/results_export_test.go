@@ -28,7 +28,7 @@ func arrowStream(t *testing.T, values []string) *bytes.Buffer {
 	}
 	column := builder.NewArray()
 	defer column.Release()
-	record := array.NewRecord(schema, []arrow.Array{column}, int64(len(values)))
+	record := array.NewRecordBatch(schema, []arrow.Array{column}, int64(len(values)))
 	defer record.Release()
 
 	var out bytes.Buffer
@@ -147,7 +147,7 @@ func TestExportCSV_OneMillionRows(t *testing.T) {
 			}
 			column := builder.NewArray()
 			builder.Release()
-			record := array.NewRecord(schema, []arrow.Array{column}, batchSize)
+			record := array.NewRecordBatch(schema, []arrow.Array{column}, batchSize)
 			writeErr = writer.Write(record)
 			record.Release()
 			column.Release()

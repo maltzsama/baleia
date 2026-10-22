@@ -673,35 +673,6 @@ func dbRetrieverHistoryToPublic(h db.RetrieverRefreshHistory) RetrieverRefreshHi
 	}
 }
 
-// workspaceHasEnabledCatalog reports whether the workspace's owner has an
-// enabled Iceberg-family catalog whose Trino name matches catalogName (#16
-// workspace access rules, as used by resolveDefaultTrinoCatalog).
-func (h *Handlers) workspaceHasEnabledCatalog(ctx context.Context, workspaceID pgtype.UUID, catalogName string) bool {
-	workspace, err := h.queries.GetWorkspaceByID(ctx, workspaceID)
-	if err != nil || !workspace.OwnerUserID.Valid {
-		return false
-	}
-	conns, err := h.queries.ListCatalogConnections(ctx, workspace.OwnerUserID)
-	if err != nil {
-		return false
-	}
-	for _, conn := range conns {
-		if conn.Type != "polaris" && conn.Type != "iceberg" && conn.Type != "nessie" {
-			continue
-		}
-		rows, err := h.queries.ListCatalogsByConnection(ctx, conn.ID)
-		if err != nil {
-			continue
-		}
-		for _, r := range rows {
-			if r.Enabled && r.TrinoName() != "" && (r.TrinoName() == catalogName || r.Name == catalogName) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // validateDestIdentifier checks a destination identifier (catalog, namespace or
 // table) against Trino's relaxed identifier rules before it is quoted into SQL.
 func validateDestIdentifier(value, field string) error {

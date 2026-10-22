@@ -2,11 +2,11 @@ package queryengine
 
 import (
 	"context"
-	"github.com/galileostudio/baleia/internal/dialect"
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
 // Class says whether an engine hosts catalogs from other connections

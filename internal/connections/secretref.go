@@ -62,7 +62,7 @@ func ResolveSecretReference(v string) (string, error) {
 		}
 		b, err := os.ReadFile(filepath.Join(base, m[2]))
 		if err != nil {
-			return "", fmt.Errorf("%w: %v", ErrSecretReference, err)
+			return "", fmt.Errorf("%w: %w", ErrSecretReference, err)
 		}
 		// A mounted file usually ends with a newline; secrets do not include it.
 		return strings.TrimRight(string(b), "\r\n"), nil

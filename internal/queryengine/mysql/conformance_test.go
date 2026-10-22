@@ -3,7 +3,6 @@ package mysql
 import (
 	"context"
 	"database/sql"
-
 	"net"
 	"net/url"
 	"os"

@@ -8,12 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/galileostudio/baleia/internal/dialect"
 	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/connections"
 	trinoprovider "github.com/galileostudio/baleia/internal/connections/trino"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"

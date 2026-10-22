@@ -47,7 +47,7 @@ func wrapped(open, closeBy string) func(string) string {
 
 func xHex(h string) string { return "X'" + h + "'" }
 
-var trinoDialect = register(&spec{
+var _ = register(&spec{
 	name:      Trino,
 	identOpen: `"`, identClose: `"`,
 	lex:         lexRules{identQuotes: `"`},
@@ -74,7 +74,7 @@ var trinoDialect = register(&spec{
 	formatter:   "trino", codemirror: "StandardSQL",
 })
 
-var postgresDialect = register(&spec{
+var _ = register(&spec{
 	name:      PostgreSQL,
 	identOpen: `"`, identClose: `"`,
 	maxIdent: 63, identBytes: true,
@@ -169,12 +169,12 @@ FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER 
 }
 
 var (
-	mysqlDialect = register(mysqlFamily(MySQL, "mysql", "MySQL", true))
+	_ = register(mysqlFamily(MySQL, "mysql", "MySQL", true))
 	// MariaDB has no CAST(... AS JSON); JSON is a LONGTEXT alias there.
-	mariadbDialect = register(mysqlFamily(MariaDB, "mariadb", "MariaSQL", false))
+	_ = register(mysqlFamily(MariaDB, "mariadb", "MariaSQL", false))
 )
 
-var tsqlDialect = register(&spec{
+var _ = register(&spec{
 	name:      TSQL,
 	identOpen: "[", identClose: "]",
 	maxIdent:        128,
@@ -219,7 +219,7 @@ FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @p1 AND TABLE_NAME = @p2 OR
 	formatter: "transactsql", codemirror: "MSSQL",
 })
 
-var oracleDialect = register(&spec{
+var _ = register(&spec{
 	name:      Oracle,
 	identOpen: `"`, identClose: `"`,
 	maxIdent: 128, identBytes: true,
@@ -285,7 +285,7 @@ func sqliteTimeTrunc(e string, g TimeGrain) (string, error) {
 	return "datetime(" + e + ", 'start of year')", nil
 }
 
-var sqliteDialect = register(&spec{
+var _ = register(&spec{
 	name:      SQLite,
 	identOpen: `"`, identClose: `"`,
 	lex:         lexRules{identQuotes: "\"`", brackets: true},
@@ -321,7 +321,7 @@ FROM pragma_table_info(?2, ?1) ORDER BY cid`,
 	formatter: "sqlite", codemirror: "SQLite",
 })
 
-var clickhouseDialect = register(&spec{
+var _ = register(&spec{
 	name:      ClickHouse,
 	identOpen: "`", identClose: "`",
 	backslashStrings: true,
@@ -356,7 +356,7 @@ WHERE database = {p1:String} AND table = {p2:String} ORDER BY position`,
 // flightSQLDialect is the ANSI subset: a Flight SQL server can be anything.
 // The adapter may switch to a specific dialect when GetSqlInfo names the
 // server.
-var flightSQLDialect = register(&spec{
+var _ = register(&spec{
 	name:      FlightSQL,
 	identOpen: `"`, identClose: `"`,
 	lex:         lexRules{identQuotes: `"`},

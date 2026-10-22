@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/version"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,8 +23,6 @@ import (
 	tallyprom "github.com/uber-go/tally/v4/prometheus"
 	"go.temporal.io/sdk/client"
 	sdktally "go.temporal.io/sdk/contrib/tally"
-
-	"github.com/galileostudio/baleia/internal/version"
 )
 
 // Namespace prefixes every Baleia metric.

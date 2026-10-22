@@ -19,7 +19,7 @@ func int64Column(t *testing.T, data []byte) []int64 {
 	defer r.Release()
 	var out []int64
 	for r.Next() {
-		col := r.Record().Column(0).(*array.Int64)
+		col := r.RecordBatch().Column(0).(*array.Int64)
 		for i := 0; i < col.Len(); i++ {
 			out = append(out, col.Value(i))
 		}

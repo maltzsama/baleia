@@ -98,10 +98,8 @@ func TestBuildCreateCatalogDDL_EscapesSingleQuote(t *testing.T) {
 	}
 	ddl := buildCreateCatalogDDL(spec)
 
-	if !strings.Contains(ddl, "'abc''def'") {
-		// wait — this password IS a secret key, so it'll be placeholderized,
-		// not escaped. Test the escape path with a non-secret value instead.
-	}
+	// The password is a secret key, so it is placeholderized, not escaped;
+	// the escape path is tested with a non-secret value below.
 
 	// Non-secret: connection-url contains no quote, but let's also test
 	// an explicit non-secret with a single quote to exercise the escape path.
@@ -146,7 +144,7 @@ func TestValidateCatalogName(t *testing.T) {
 
 func TestCreateCatalog_RejectsInvalidNameBeforeExecute(t *testing.T) {
 	c := &Client{baseURL: "http://invalid:1", user: "test", http: nil}
-	err := c.CreateCatalog(nil, CatalogSpec{
+	err := c.CreateCatalog(context.Background(), CatalogSpec{
 		Name:       "BadName",
 		Connector:  "iceberg",
 		Properties: map[string]string{"a": "b"},

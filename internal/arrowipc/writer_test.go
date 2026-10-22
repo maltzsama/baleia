@@ -65,7 +65,7 @@ func roundTrip(t *testing.T, cols []ColumnInfo, rows [][]any) [][]any {
 	defer r.Release()
 
 	require.True(t, r.Next(), "expected at least one record batch")
-	rec := r.Record()
+	rec := r.RecordBatch()
 
 	got := make([][]any, rec.NumRows())
 	for row := 0; row < int(rec.NumRows()); row++ {

@@ -104,7 +104,7 @@ func TestNoSQLInSpanAttributes(t *testing.T) {
 
 	for _, s := range exp.GetSpans() {
 		for _, a := range s.Attributes {
-			if strings.Contains(strings.ToUpper(a.Value.Emit()), "SELECT SECRET") {
+			if strings.Contains(strings.ToUpper(a.Value.String()), "SELECT SECRET") {
 				t.Errorf("span %q leaked the SQL text in attribute %q", s.Name, a.Key)
 			}
 		}

@@ -16,12 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/bindings/stored"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
-	"github.com/galileostudio/baleia/internal/dbpool"
-	"github.com/galileostudio/baleia/internal/metadata"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/temporal/dial"
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -29,9 +23,11 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/metadata"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
-
 	// Engine kinds register themselves.
 	_ "github.com/galileostudio/baleia/internal/queryengine/clickhouse"
 	_ "github.com/galileostudio/baleia/internal/queryengine/flightsql"
@@ -43,11 +39,13 @@ import (
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/worker"
 )
 

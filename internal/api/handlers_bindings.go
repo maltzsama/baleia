@@ -55,10 +55,6 @@ type bindingTarget struct {
 	cluster db.TrinoCluster
 }
 
-func (t bindingTarget) ref() bindings.EngineRef {
-	return bindings.EngineRef{ID: t.engine.ID, ClusterID: t.cluster.ID}
-}
-
 // primary reports whether b is the binding the catalog's Trino columns
 // describe.
 func (t bindingTarget) primary() bool { return t.catalog.ClusterID == t.cluster.ID }

@@ -395,7 +395,7 @@ func (im *importer) planFolder(p *planItem) {
 	if existing, ok := im.foldersBySlug[item.Slug]; ok {
 		p.existingID = existing.ID
 		p.folderID = parentID
-		sameParent := (existing.ParentID.Valid == false && item.Parent == nil) ||
+		sameParent := (!existing.ParentID.Valid && item.Parent == nil) ||
 			(existing.ParentID.Valid && item.Parent != nil && *im.folderParents[item.Slug] == *item.Parent)
 		if existing.Name == item.Name && sameParent {
 			p.action = ActionNoChanges
