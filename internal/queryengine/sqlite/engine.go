@@ -28,6 +28,14 @@ func init() {
 	queryengine.RegisterKind(Kind, queryengine.ClassDirect, newEngine)
 }
 
+// Spec is the kind's entry for a queryengine.Registry (#364): engines it
+// builds use o, the same confinement the SQLite provider applies.
+func Spec(o Options) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, _ *connections.Dialer) (queryengine.Engine, error) {
+		return newEngineWithOptions(row, cfg, o)
+	}}
+}
+
 // newEngine builds the engine from its connection config (path, read_write) and
 // the server-side options. SQLite dials nothing, so the dialer is unused.
 func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Config, _ *connections.Dialer) (queryengine.Engine, error) {

@@ -37,7 +37,7 @@ func oracleEngine(t *testing.T, raw string) queryengine.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := newEngine(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, connections.Config{
+	e, err := newEngine(Options{})(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, connections.Config{
 		Kind: connections.KindOracle,
 		Values: map[string]string{
 			"host": u.Hostname(), "port": port,

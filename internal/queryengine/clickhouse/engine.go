@@ -20,6 +20,11 @@ func init() {
 	queryengine.RegisterKind(Kind, queryengine.ClassDirect, newEngine)
 }
 
+// Spec is the kind's entry for a queryengine.Registry (#364).
+func Spec() queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine}
+}
+
 // newEngine builds the engine from its connection config (host, port, secure,
 // database, username; password in secrets). Every dial goes through d.
 func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {

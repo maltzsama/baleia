@@ -31,6 +31,14 @@ func init() {
 	queryengine.RegisterKind(KindMariaDB, queryengine.ClassDirect, newEngine(true))
 }
 
+// Specs are the MySQL and MariaDB entries for a queryengine.Registry (#364).
+func Specs() []queryengine.KindSpec {
+	return []queryengine.KindSpec{
+		{Name: KindMySQL, Class: queryengine.ClassDirect, Factory: newEngine(false)},
+		{Name: KindMariaDB, Class: queryengine.ClassDirect, Factory: newEngine(true)},
+	}
+}
+
 // newEngine returns the factory of a MySQL or MariaDB engine.
 func newEngine(mariadb bool) queryengine.Factory {
 	kind := KindMySQL

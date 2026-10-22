@@ -40,9 +40,16 @@ import (
 const Kind = "fake"
 
 func init() {
-	queryengine.RegisterKind(Kind, queryengine.ClassDirect, func(_ context.Context, row queryengine.EngineRow, _ connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-		return New(Options{ID: row.ID, Dialer: d}), nil
-	})
+	queryengine.RegisterKind(Kind, queryengine.ClassDirect, newEngine)
+}
+
+// Spec is the kind's entry for a queryengine.Registry (#364).
+func Spec() queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine}
+}
+
+func newEngine(_ context.Context, row queryengine.EngineRow, _ connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+	return New(Options{ID: row.ID, Dialer: d}), nil
 }
 
 // Options configure a fake engine.

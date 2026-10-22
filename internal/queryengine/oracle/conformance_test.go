@@ -49,7 +49,7 @@ func TestConformance(t *testing.T) {
 		Secrets: map[string]string{"password": pass},
 	}
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
-		e, err := newEngine(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
+		e, err := newEngine(Options{})(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
 		if err != nil {
 			t.Fatal(err)
 		}
