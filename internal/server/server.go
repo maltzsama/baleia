@@ -41,7 +41,7 @@ type Server struct {
 	queries *db.Queries
 	metrics *metrics.Registry
 
-	handlers *api.Handlers
+	handlers *api.API
 	strict   api.ServerInterface
 	ws       *ws.Handler
 	mcp      *mcp.Server // nil unless agents are enabled
@@ -64,7 +64,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	// The assistant runner needs the MCP server, which needs these handlers:
 	// they get the slot now and the runner once it is built (#363).
 	runner := &assistant.RunnerSlot{}
-	h, err := api.NewHandlers(api.Deps{
+	h, err := api.NewAPI(api.Deps{
 		Data:          api.DataDeps{Queries: core.Queries, Pool: core.Pool},
 		Engines:       api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder, Dialer: core.Dialer},
 		Observability: api.ObservabilityDeps{Audit: core.Audit, Metrics: core.Metrics},
@@ -121,7 +121,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 // startAssistant provisions the assistant (#62) when the agents feature is
 // on. It runs turns through an in-memory MCP client, so the same gate and
 // audit hooks apply.
-func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server, dialer *connections.Dialer, slot *assistant.RunnerSlot) {
+func startAssistant(ctx context.Context, h *api.API, mcpServer *mcp.Server, dialer *connections.Dialer, slot *assistant.RunnerSlot) {
 	svc := h.AssistantService()
 	if svc == nil {
 		return
@@ -230,7 +230,7 @@ type staticUsers interface {
 }
 
 // engineCapabilities adapts the API's engine registry to agentpolicy.
-type engineCapabilities struct{ h *api.Handlers }
+type engineCapabilities struct{ h *api.API }
 
 func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (queryengine.ReadOnlySupport, error) {
 	return e.h.EngineReadOnly(ctx, id)

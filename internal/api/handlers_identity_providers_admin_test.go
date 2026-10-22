@@ -13,7 +13,7 @@ func fakeIDPProbe(_ context.Context, _ providerConfig, _ string) IdentityProvide
 	return idpTestResult(idpCheck{name: "fake", status: idpCheckOK})
 }
 
-func createOIDCProvider(t *testing.T, h *Handlers) IdentityProviderDetail {
+func createOIDCProvider(t *testing.T, h *API) IdentityProviderDetail {
 	t.Helper()
 	resp, err := h.CreateIdentityProvider(idpAdminCtx(), CreateIdentityProviderRequestObject{Body: &CreateIdentityProviderRequest{
 		Name: "okta", Type: IdentityProviderTypeOidc, Oidc: validOIDCConfig(),

@@ -12,7 +12,7 @@ import (
 )
 
 // handlerFields are the dependencies a test sets. Tests build handlers only
-// through testHandlers, so splitting the handlers by domain (#365) changes
+// through testAPI, so splitting the handlers by domain (#365) changes
 // this file, not every fixture.
 type handlerFields struct {
 	queries        db.Querier
@@ -34,8 +34,8 @@ type handlerFields struct {
 	dialer         *connections.Dialer
 }
 
-// testHandlers builds handlers from the fields a test sets; the rest stay zero.
-func testHandlers(f handlerFields) *Handlers {
+// testAPI builds handlers from the fields a test sets; the rest stay zero.
+func testAPI(f handlerFields) *API {
 	c := &core{
 		versionCache:   f.versionCache,
 		queries:        f.queries,
@@ -51,7 +51,7 @@ func testHandlers(f handlerFields) *Handlers {
 		dialects:       f.dialects,
 		audit:          f.audit,
 	}
-	return &Handlers{
+	return &API{
 		core: c,
 		OpsHandlers: &OpsHandlers{
 			core:           c,

@@ -115,13 +115,13 @@ func (q *engineQuerier) DeleteEngine(context.Context, pgtype.UUID) error {
 	return nil
 }
 
-func engineHandlers(t *testing.T, q *engineQuerier, providers ...connections.Provider) *Handlers {
+func engineHandlers(t *testing.T, q *engineQuerier, providers ...connections.Provider) *API {
 	t.Helper()
 	reg, err := connections.NewRegistry(providers...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return testHandlers(handlerFields{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
+	return testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 }
 
 func ownedConnection(t *testing.T, typ string, owner string) db.CatalogConnection {
@@ -131,7 +131,7 @@ func ownedConnection(t *testing.T, typ string, owner string) db.CatalogConnectio
 	}
 }
 
-func createEngine(t *testing.T, h *Handlers, name string) *httptest.ResponseRecorder {
+func createEngine(t *testing.T, h *API, name string) *httptest.ResponseRecorder {
 	t.Helper()
 	resp, err := h.CreateEngine(testContext(), CreateEngineRequestObject{Body: &CreateEngineRequest{Name: name, ConnectionId: openapi_types.UUID{0xC1}}})
 	if err != nil {
@@ -215,7 +215,7 @@ func engineFixture(t *testing.T, owner string) *engineQuerier {
 	return &engineQuerier{conn: conn, engine: db.Engine{ID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "ch", ConnectionID: conn.ID}}
 }
 
-func deleteEngine(t *testing.T, h *Handlers) *httptest.ResponseRecorder {
+func deleteEngine(t *testing.T, h *API) *httptest.ResponseRecorder {
 	t.Helper()
 	resp, err := h.DeleteEngine(testContext(), DeleteEngineRequestObject{Id: [16]byte{0xE1}})
 	if err != nil {

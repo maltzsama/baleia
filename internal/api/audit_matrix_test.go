@@ -48,7 +48,7 @@ func (m *memAudit) take() []recorded {
 
 type auditFixture struct {
 	pool                   *pgxpool.Pool
-	h                      *Handlers
+	h                      *API
 	mem                    *memAudit
 	admin, owner, stranger string
 	ownerWS                openapi_types.UUID
@@ -76,7 +76,7 @@ func newAuditFixture(t *testing.T) *auditFixture {
 		t.Fatal(err)
 	}
 	f.ownerWS = openapi_types.UUID(ws.Bytes)
-	f.h = testHandlers(handlerFields{
+	f.h = testAPI(handlerFields{
 		queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, schema: poolSchema{pool: pool}, keyring: testKeyring(t), connections: testRegistry(t),
 		settings:     SettingsFromConfig(&config.Config{JWTSecret: strings.Repeat("s", 40)}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),

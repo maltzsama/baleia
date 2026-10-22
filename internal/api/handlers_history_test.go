@@ -17,7 +17,7 @@ import (
 // as non-owners, plus the catalog/engine/binding the executions ran on.
 type historyFixture struct {
 	pool     *pgxpool.Pool
-	h        *Handlers
+	h        *API
 	owner    openapi_types.UUID
 	member   openapi_types.UUID
 	stranger openapi_types.UUID
@@ -66,7 +66,7 @@ func newHistoryFixture(t *testing.T) *historyFixture {
 	scan(&f.catalog, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1,'lake','native') RETURNING id`, conn)
 	scan(&f.binding, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode) VALUES ($1,$2,'lake_t','adopted') RETURNING id`, f.catalog, f.engine)
 
-	f.h = testHandlers(handlerFields{queries: db.New(pool)})
+	f.h = testAPI(handlerFields{queries: db.New(pool)})
 	return f
 }
 

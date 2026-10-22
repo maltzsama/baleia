@@ -14,7 +14,7 @@ import (
 
 type attentionFixture struct {
 	pool      *pgxpool.Pool
-	h         *Handlers
+	h         *API
 	admin     context.Context
 	owner     context.Context
 	stranger  context.Context
@@ -85,7 +85,7 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 	}
 
 	f.cache = NewTTLStore[[]AttentionItem](time.Hour)
-	f.h = testHandlers(handlerFields{
+	f.h = testAPI(handlerFields{
 		queries:        db.New(pool),
 		pool:           pool,
 		tx:             poolTx{pool: pool},

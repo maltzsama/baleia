@@ -28,8 +28,8 @@ func (f *fakeLoginQuerier) GetUserByEmail(context.Context, string) (db.User, err
 	return f.user, f.err
 }
 
-func loginHandlers(q db.Querier) *Handlers {
-	return testHandlers(handlerFields{queries: q, tx: directTx{q: q}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
+func loginHandlers(q db.Querier) *API {
+	return testAPI(handlerFields{queries: q, tx: directTx{q: q}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 }
 
 func loginResponse(t *testing.T, resp LoginResponseObject, err error, name string) {
@@ -68,7 +68,7 @@ func TestLogin_UniformErrors(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		handle *Handlers
+		handle *API
 	}{
 		{"unknown e-mail", loginHandlers(&fakeLoginQuerier{err: errors.New("no rows")})},
 		{"sso-only account", loginHandlers(&fakeLoginQuerier{user: db.User{AuthProvider: "oidc"}})},

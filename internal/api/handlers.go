@@ -31,7 +31,7 @@ import (
 
 var ErrWorkspaceNotFound = errors.New("workspace not found")
 
-type Handlers struct {
+type API struct {
 	// core is embedded at the top so the shared fields and helpers resolve
 	// here, not ambiguously through every group.
 	*core
@@ -46,7 +46,7 @@ type Handlers struct {
 
 // The handlers implement the whole generated strict server; the split by
 // domain (#365) keeps it composed into one value.
-var _ StrictServerInterface = (*Handlers)(nil)
+var _ StrictServerInterface = (*API)(nil)
 
 // MailSender is the transactional e-mail surface (#67).
 type MailSender interface {
@@ -76,7 +76,7 @@ func (h *QueryHandlers) wsTicketStore() *wsticket.Store {
 }
 
 // contentService returns the content writer, constructing one for handlers
-// built by tests without NewHandlers.
+// built by tests without NewAPI.
 func (h *core) contentService() *content.Service {
 	if h.content != nil {
 		return h.content
@@ -84,8 +84,8 @@ func (h *core) contentService() *content.Service {
 	return content.New(h.pool, h.queries)
 }
 
-// apiMetrics are the API's producers (#87); all nil-safe, zero without
-// SetMetrics.
+// apiMetrics are the API's producers (#87); all nil-safe, zero without a
+// metrics registry.
 type apiMetrics struct {
 	auth      *metrics.Auth
 	authz     *metrics.Authz
@@ -94,7 +94,7 @@ type apiMetrics struct {
 }
 
 // AuthMetrics is the authentication producer (for the server's rate limiter).
-func (h *Handlers) AuthMetrics() *metrics.Auth { return h.metrics.auth }
+func (h *API) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 
 // registerMetrics registers the API's producers on reg and exports bindings
 // by lifecycle state.
@@ -169,9 +169,9 @@ type EngineDeps struct {
 	Dialer *connections.Dialer
 }
 
-// NewHandlers builds the handlers. It fails when a required dependency is
+// NewAPI builds the handlers. It fails when a required dependency is
 // missing instead of leaving a nil to be found at request time.
-func NewHandlers(d Deps) (*Handlers, error) {
+func NewAPI(d Deps) (*API, error) {
 	var missing []string
 	for name, absent := range map[string]bool{
 		"Data.Queries":        d.Data.Queries == nil,
@@ -213,7 +213,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	if c.audit == nil {
 		c.audit = audit.Nop{}
 	}
-	h := &Handlers{
+	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),
 		WorkspaceHandlers: newWorkspaceHandlers(c),

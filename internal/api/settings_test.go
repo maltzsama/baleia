@@ -38,7 +38,7 @@ func TestSettingsFromConfig(t *testing.T) {
 // TestSettings_ZeroValue: handlers built without configuration fall back to
 // the defaults the nil config used to give.
 func TestSettings_ZeroValue(t *testing.T) {
-	h := testHandlers(handlerFields{})
+	h := testAPI(handlerFields{})
 	if h.metadataSyncEvery() != config.DefaultMetadataSyncInterval {
 		t.Errorf("metadata sync = %v, want the default", h.metadataSyncEvery())
 	}

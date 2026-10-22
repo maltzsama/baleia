@@ -1287,7 +1287,7 @@ func (h *core) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, e
 	return trinoIdentity(ctx, h.queries, h.settings.Execution.TrinoUserIdentity, uid)
 }
 
-// trinoIdentity is trinoIdentityFor without the Handlers, for the Lens handlers.
+// trinoIdentity is trinoIdentityFor without the API, for the Lens handlers.
 func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UUID) (string, error) {
 	switch mode {
 	case "email":

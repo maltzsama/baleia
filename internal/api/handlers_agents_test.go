@@ -19,7 +19,7 @@ import (
 
 type agentsFixture struct {
 	pool    *pgxpool.Pool
-	h       *Handlers
+	h       *API
 	owner   context.Context
 	other   context.Context
 	admin   context.Context
@@ -58,7 +58,7 @@ func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 		t.Fatal(err)
 	}
 
-	f.h = testHandlers(handlerFields{
+	f.h = testAPI(handlerFields{
 		queries:  db.New(pool),
 		pool:     pool,
 		tx:       poolTx{pool: pool},
@@ -267,7 +267,7 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 		agentBound: true,
 	}
 	temporal := &fakeTemporalClient{}
-	h := testHandlers(handlerFields{
+	h := testAPI(handlerFields{
 		queries: fake, tx: directTx{q: fake},
 		settings:       SettingsFromConfig(&config.Config{StatementTimeout: 30 * time.Minute}),
 		temporalClient: temporal,

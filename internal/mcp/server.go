@@ -50,7 +50,7 @@ func (NopHooks) OnToolCall(context.Context, agentpolicy.Call, Outcome) {}
 
 // Server is the MCP HTTP surface.
 type Server struct {
-	handlers *api.Handlers
+	handlers *api.API
 	gate     *agentpolicy.Gate
 	tokens   agentauth.Store
 	hooks    Hooks
@@ -61,7 +61,7 @@ type Server struct {
 
 // New builds the MCP server. allowedOrigins is empty by default, which rejects
 // any request carrying an Origin header (native MCP clients do not send one).
-func New(h *api.Handlers, gate *agentpolicy.Gate, tokens agentauth.Store, hooks Hooks, allowedOrigins []string) *Server {
+func New(h *api.API, gate *agentpolicy.Gate, tokens agentauth.Store, hooks Hooks, allowedOrigins []string) *Server {
 	if hooks == nil {
 		hooks = NopHooks{}
 	}

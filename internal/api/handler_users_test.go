@@ -43,7 +43,7 @@ func TestRemoveUserConflict(t *testing.T) {
 		{"other reference", fmt.Errorf("delete: %w", &pgconn.PgError{Code: "23503", ConstraintName: "x_fkey", TableName: "audit"}), "user_in_use"},
 	}
 	for _, tc := range cases {
-		h := testHandlers(handlerFields{queries: &fakeUserDeleter{deleteErr: tc.err}})
+		h := testAPI(handlerFields{queries: &fakeUserDeleter{deleteErr: tc.err}})
 		resp, err := h.RemoveUser(ctx, RemoveUserRequestObject{})
 		if err != nil {
 			t.Fatalf("%s: err = %v", tc.name, err)
@@ -62,7 +62,7 @@ func TestRemoveUserConflict(t *testing.T) {
 		}
 	}
 	// Any other failure is still an error.
-	h := testHandlers(handlerFields{queries: &fakeUserDeleter{deleteErr: errors.New("connection reset")}})
+	h := testAPI(handlerFields{queries: &fakeUserDeleter{deleteErr: errors.New("connection reset")}})
 	if _, err := h.RemoveUser(ctx, RemoveUserRequestObject{}); err == nil {
 		t.Error("a non-FK failure must stay an error")
 	}
@@ -72,7 +72,7 @@ func TestRemoveUserConflict(t *testing.T) {
 // tokens (#51).
 func TestDisable_RevokesRefresh(t *testing.T) {
 	fake := &fakeUserDeleter{}
-	h := testHandlers(handlerFields{queries: fake, tx: directTx{q: fake}})
+	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
 	ctx := context.WithValue(context.Background(), auth.ContextKeyRole, "admin")
 
 	resp, err := h.RemoveUser(ctx, RemoveUserRequestObject{})

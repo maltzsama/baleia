@@ -19,7 +19,7 @@ import (
 )
 
 func TestGetDialect(t *testing.T) {
-	h := testHandlers(handlerFields{dialects: dialect.NewRegistry()})
+	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
 	resp, err := h.GetDialect(testContext(), GetDialectRequestObject{Name: "tsql"})
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestGetDialect(t *testing.T) {
 }
 
 func TestSplitStatements_UTF16Offsets(t *testing.T) {
-	h := testHandlers(handlerFields{dialects: dialect.NewRegistry()})
+	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
 	sql := "SELECT 'é😀';\n  SELECT \"a;b\" -- x\n"
 	resp, err := h.SplitStatements(testContext(), SplitStatementsRequestObject{Name: "trino", Body: &SplitStatementsRequest{Sql: sql}})
 	if err != nil {
@@ -103,7 +103,7 @@ func TestDescribeEngine(t *testing.T) {
 	}))
 	defer srv.Close()
 	engines, _ := trinoBackends(srv.URL)
-	h := testHandlers(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)})
+	h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)})
 	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
 		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(10, 0), Valid: true}}
 
@@ -122,7 +122,7 @@ func TestDescribeEngine(t *testing.T) {
 	}
 
 	// No adapter for the kind (or a disabled engine): the dialect is still known.
-	h = testHandlers(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: failingEngines{}})
+	h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: failingEngines{}})
 	row.Kind = "postgresql"
 	e := h.describeEngine(context.Background(), row)
 	if e.Capabilities != nil || e.Version != nil || e.Dialect == nil || e.Dialect.Name != "postgresql" {
@@ -144,7 +144,7 @@ func (s slowEngines) DefaultTrino(context.Context) (queryengine.Engine, error) {
 // TestDescribeEngines_ParallelInOrder: slow engines overlap and the list
 // keeps its order.
 func TestDescribeEngines_ParallelInOrder(t *testing.T) {
-	h := testHandlers(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: 100 * time.Millisecond}})
+	h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: 100 * time.Millisecond}})
 	rows := make([]db.Engine, 8)
 	for i := range rows {
 		rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
@@ -162,7 +162,7 @@ func TestDescribeEngines_ParallelInOrder(t *testing.T) {
 }
 
 func TestExplainSQL(t *testing.T) {
-	h := testHandlers(handlerFields{dialects: dialect.NewRegistry()})
+	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
 	resp, err := h.ExplainSQL(testContext(), ExplainSQLRequestObject{Name: "sqlite", Body: &ExplainRequest{Sql: "SELECT 1;"}})
 	if err != nil {
 		t.Fatal(err)
@@ -191,7 +191,7 @@ func TestExplainSQL(t *testing.T) {
 	}
 }
 
-func mustExplain(t *testing.T, h *Handlers, req ExplainSQLRequestObject) ExplainSQLResponseObject {
+func mustExplain(t *testing.T, h *API, req ExplainSQLRequestObject) ExplainSQLResponseObject {
 	t.Helper()
 	resp, err := h.ExplainSQL(testContext(), req)
 	if err != nil {
@@ -209,7 +209,7 @@ func TestEngineHealth_FromProbe(t *testing.T) {
 	defer srv.Close()
 
 	engines, _ := trinoBackends(srv.URL)
-	h := testHandlers(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)})
+	h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)})
 	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
 		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(20, 0), Valid: true}}
 

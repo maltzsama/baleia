@@ -147,9 +147,10 @@ func (q *bindingQuerier) SoftDeleteTrinoCatalogRegistry(_ context.Context, p db.
 	return nil
 }
 
-func bindingHandlers(t *testing.T, q *bindingQuerier) (*Handlers, *fakeTrino) {
+func bindingHandlers(t *testing.T, q *bindingQuerier) (*API, *fakeTrino) {
+	t.Helper()
 	ft := newFakeTrino(t)
-	h := testHandlers(handlerFields{queries: q, tx: directTx{q: q}, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
+	h := testAPI(handlerFields{queries: q, tx: directTx{q: q}, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 	h.engines, h.binder = trinoBackends(ft.srv.URL)
 	return h, ft
 }
@@ -163,7 +164,7 @@ func code(t *testing.T, visit func(*httptest.ResponseRecorder) error) (int, stri
 	return rec.Code, rec.Body.String()
 }
 
-func createBinding(t *testing.T, h *Handlers, ctx context.Context, body CreateBindingRequest) (int, string) {
+func createBinding(t *testing.T, h *API, ctx context.Context, body CreateBindingRequest) (int, string) { //nolint:revive // thelper wants t first in test helpers
 	t.Helper()
 	resp, err := h.CreateCatalogBinding(ctx, CreateCatalogBindingRequestObject{Id: openapi_types.UUID(bCatalog.Bytes), Body: &body})
 	if err != nil {
