@@ -217,12 +217,23 @@ func (s *Server) routes(ctx context.Context) error {
 		// the same gate and audit hooks apply. It is provisioned only when the
 		// agents feature is on.
 		if svc := h.AssistantService(); svc != nil {
-			if session, err := mcpServer.InProcessClient(ctx); err == nil {
+			session, err := mcpServer.InProcessClient(ctx)
+			if err != nil {
+				slog.WarnContext(ctx, "assistant disabled: in-process MCP client", "err", err)
+			} else {
 				runner := assistant.NewRunner(svc, nil, assistant.NewMCPToolCaller(session))
+				// Without stored settings the runner starts with no provider;
+				// saving the settings sets one.
 				sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
-				if settings, err := svc.Settings(sctx); err == nil && settings.Enabled && settings.Provider != nil && settings.Model != nil {
-					if key, err := svc.APIKey(sctx); err == nil {
+				settings, err := svc.Settings(sctx)
+				switch {
+				case err != nil:
+					slog.WarnContext(ctx, "assistant: settings not loaded at startup", "err", err)
+				case settings.Enabled && settings.Provider != nil && settings.Model != nil:
+					if key, err := svc.APIKey(sctx); err != nil {
+						slog.WarnContext(ctx, "assistant: API key not loaded at startup", "err", err)
+					} else {
 						client := obs.WrapHTTPClient(dialer.HTTPClient(assistantllm.ClientTimeout))
 						runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
 					}
