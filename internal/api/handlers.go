@@ -34,12 +34,12 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	*core
+	*QueryHandlers
 	*CatalogHandlers
 	*WorkspaceHandlers
 	*AuthHandlers
 	// schema reports the applied migration version (poolSchema outside tests).
 	schema schemaVersioner
-	s3     *storage.S3Client
 	// dialer is the SSRF-safe dialer for transient engines (#12).
 	dialer *connections.Dialer
 	// assistant owns assistant settings, agents and conversations (#62).
@@ -47,9 +47,6 @@ type Handlers struct {
 	// assistantRunner holds the runner of MCP-backed turns (and its SSE hub),
 	// stored after the handlers are built; empty when not provisioned.
 	assistantRunner *assistant.RunnerSlot
-	// wsTickets issues the single-use WebSocket tickets (#26); the WS handler
-	// shares this store.
-	wsTickets *wsticket.Store
 	// systemStatusSchedule and systemStatusEngine are the status page's probe
 	// seams (#291). Tests inject them without a Temporal server or an engine.
 	systemStatusSchedule func(ctx context.Context, id string) (SystemStatusItemStatus, string)
@@ -83,7 +80,7 @@ func (h *AuthHandlers) mailSender() MailSender {
 	})
 }
 
-func (h *Handlers) wsTicketStore() *wsticket.Store {
+func (h *QueryHandlers) wsTicketStore() *wsticket.Store {
 	if h.wsTickets == nil {
 		h.wsTickets = wsticket.New()
 	}
@@ -209,6 +206,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
 	c := &core{
+		s3:             d.Storage,
 		queries:        d.Data.Queries,
 		pool:           d.Data.Pool,
 		tx:             poolTx{pool: d.Data.Pool},
@@ -225,6 +223,10 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	}
 	h := &Handlers{
 		core: c,
+		QueryHandlers: &QueryHandlers{
+			core:      c,
+			wsTickets: d.WSTickets,
+		},
 		CatalogHandlers: &CatalogHandlers{
 			core:         c,
 			versionCache: NewTTLStore[engineProbe](engineVersionTTL),
@@ -235,10 +237,8 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		},
 		AuthHandlers:    &AuthHandlers{core: c},
 		schema:          poolSchema{pool: d.Data.Pool},
-		s3:              d.Storage,
 		dialer:          d.Engines.Dialer,
 		assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
-		wsTickets:       d.WSTickets,
 		assistantRunner: d.Assistant,
 	}
 	if h.audit == nil {

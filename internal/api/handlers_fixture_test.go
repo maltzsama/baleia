@@ -52,6 +52,9 @@ func testHandlers(f handlerFields) *Handlers {
 	}
 	return &Handlers{
 		core: c,
+		QueryHandlers: &QueryHandlers{
+			core: c,
+		},
 		CatalogHandlers: &CatalogHandlers{
 			core:         c,
 			versionCache: f.versionCache,

@@ -7,6 +7,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
@@ -24,6 +25,8 @@ type core struct {
 	keyring        *crypto.Keyring
 	temporalClient client.Client
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
+	// s3 holds query results and exports (object storage).
+	s3 *storage.S3Client
 	// connections holds every connection provider (docs/adr/0002).
 	connections *connections.Registry
 	// engines runs SQL (docs/adr/0002), built at the wiring site.
