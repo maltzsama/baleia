@@ -72,7 +72,7 @@ func (s *fakeSessions) RevokeAll(_ context.Context, id pgtype.UUID) {
 func setup(t *testing.T) (*Service, *fakeStore, *fakeMailer, *fakeSessions, db.User) {
 	t.Helper()
 	pt := "pt-BR"
-	u := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "ana@x.io", Name: "Ana", Locale: &pt}
+	u := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "ana@x.io", Name: "Ana", Locale: &pt, AuthProvider: "local", Status: "active"}
 	st := &fakeStore{users: map[string]db.User{u.Email: u}, resets: map[string]pgtype.UUID{}, passwords: map[[16]byte]string{}}
 	m, ss := &fakeMailer{}, &fakeSessions{}
 	return New(st, m, ss, Config{PublicURL: "https://baleia.example", DefaultLocale: "en", TokenTTL: time.Hour, PasswordCost: bcrypt.MinCost}), st, m, ss, u
@@ -158,5 +158,21 @@ func TestConfirm_StoreFailureIsNotAnInvalidLink(t *testing.T) {
 	s := New(brokenStore{st}, m, ss, Config{PasswordCost: bcrypt.MinCost})
 	if _, err := s.Confirm(context.Background(), "any", "new-password"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalidToken) {
 		t.Errorf("Confirm = %v, want the store error", err)
+	}
+}
+
+// TestRequest_OnlyLocalActiveAccounts: an SSO or suspended account gets no
+// link, and the answer is the same as for an unknown address.
+func TestRequest_OnlyLocalActiveAccounts(t *testing.T) {
+	s, st, m, _, _ := setup(t)
+	st.users["sso@x.io"] = db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "sso@x.io", AuthProvider: "oidc", Status: "active"}
+	st.users["off@x.io"] = db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "off@x.io", AuthProvider: "local", Status: "suspended"}
+	for _, email := range []string{"sso@x.io", "off@x.io"} {
+		if err := s.Request(context.Background(), email); err != nil {
+			t.Errorf("Request(%s) = %v, want nil", email, err)
+		}
+	}
+	if len(m.sent) != 0 || len(st.resets) != 0 {
+		t.Errorf("sent %d e-mails and stored %d links, want none", len(m.sent), len(st.resets))
 	}
 }

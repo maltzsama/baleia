@@ -61,11 +61,16 @@ func New(store Store, mailer Mailer, sessions Sessions, cfg Config) *Service {
 	return &Service{store: store, mailer: mailer, sessions: sessions, cfg: cfg}
 }
 
-// Request e-mails a reset link to the account with this address. An unknown
-// address is not an error, so the answer never reveals whether it exists.
+// Request e-mails a reset link to the account with this address. Only a
+// local, active account gets one: an SSO account cannot sign in with a
+// password and a suspended one cannot sign in at all. Any other address is not
+// an error, so the answer never reveals whether it exists.
 func (s *Service) Request(ctx context.Context, email string) error {
 	user, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
+		return nil
+	}
+	if user.AuthProvider != "local" || auth.RequireActive(user.Status) != nil {
 		return nil
 	}
 
