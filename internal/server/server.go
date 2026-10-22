@@ -58,20 +58,22 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
 
+	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
+	// that the WebSocket handler consumes; the JWT never appears in the URL.
+	tickets := wsticket.New()
 	h, err := api.NewHandlers(api.Deps{
-		Data:     api.DataDeps{Queries: core.Queries, Pool: core.Pool},
-		Engines:  api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder},
-		Config:   cfg,
-		Keyring:  core.Keyring,
-		Temporal: core.Temporal,
-		Storage:  core.Storage,
+		Data:          api.DataDeps{Queries: core.Queries, Pool: core.Pool},
+		Engines:       api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder, Dialer: core.Dialer},
+		Observability: api.ObservabilityDeps{Audit: core.Audit, Metrics: core.Metrics},
+		Config:        cfg,
+		Keyring:       core.Keyring,
+		Temporal:      core.Temporal,
+		Storage:       core.Storage,
+		WSTickets:     tickets,
 	})
 	if err != nil {
 		return nil, err
 	}
-	h.SetAudit(core.Audit)
-	h.SetDialer(core.Dialer)
-	h.SetMetrics(core.Metrics)
 	s.handlers = h
 
 	authMetrics := h.AuthMetrics()
@@ -86,10 +88,6 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
 	}, func(kind string) { authMetrics.Attempt(kind, metrics.OutcomeRateLimited) })
 
-	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
-	// that the handler consumes; the JWT never appears in the URL.
-	tickets := wsticket.New()
-	h.SetWSTickets(tickets)
 	s.ws = ws.New(core.Queries.AsWSQuerier(), cfg.JWTSecret, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
 	s.ws.SetTickets(tickets)
 

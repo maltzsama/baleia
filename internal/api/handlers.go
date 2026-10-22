@@ -117,8 +117,6 @@ func (h *Handlers) mailSender() MailSender {
 	})
 }
 
-// SetWSTickets wires the shared WebSocket ticket store (#26).
-func (h *Handlers) SetWSTickets(store *wsticket.Store) { h.wsTickets = store }
 
 func (h *Handlers) wsTicketStore() *wsticket.Store {
 	if h.wsTickets == nil {
@@ -148,9 +146,9 @@ type apiMetrics struct {
 // AuthMetrics is the authentication producer (for the server's rate limiter).
 func (h *Handlers) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 
-// SetMetrics registers the API's producers on reg and exports bindings by
-// lifecycle state.
-func (h *Handlers) SetMetrics(reg *metrics.Registry) {
+// registerMetrics registers the API's producers on reg and exports bindings
+// by lifecycle state.
+func (h *Handlers) registerMetrics(reg *metrics.Registry) {
 	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory()}
 	reg.WatchBindingStates(func(ctx context.Context) (map[string]int64, error) {
 		rows, err := h.queries.CountManagedBindingsByState(ctx)
@@ -181,13 +179,24 @@ type engineKinds interface {
 // Deps is everything the API handlers need, built by the composition root
 // (internal/app) and grouped by area (#363).
 type Deps struct {
-	Data    DataDeps
-	Engines EngineDeps
-	Config  *config.Config
+	Data          DataDeps
+	Engines       EngineDeps
+	Observability ObservabilityDeps
+	Config        *config.Config
 	// Keyring seals stored credentials; nil while none is stored.
 	Keyring  *crypto.Keyring
 	Temporal client.Client
 	Storage  *storage.S3Client
+	// WSTickets issues the single-use WebSocket tickets (#26); the WebSocket
+	// handler consumes from the same store. Nil builds one.
+	WSTickets *wsticket.Store
+}
+
+// ObservabilityDeps are optional: a nil Audit records nothing and a nil
+// Metrics registers nothing.
+type ObservabilityDeps struct {
+	Audit   audit.Recorder
+	Metrics *metrics.Registry
 }
 
 // DataDeps is Baleia's own database.
@@ -203,6 +212,8 @@ type EngineDeps struct {
 	Kinds       engineKinds
 	Dialects    *dialect.Registry
 	Binder      *bindtrino.Binder
+	// Dialer is the SSRF-safe dialer outbound calls go through (#12, #378).
+	Dialer *connections.Dialer
 }
 
 // NewHandlers builds the handlers. It fails when a required dependency is
@@ -220,6 +231,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		"Engines.Kinds":       d.Engines.Kinds == nil,
 		"Engines.Dialects":    d.Engines.Dialects == nil,
 		"Engines.Binder":      d.Engines.Binder == nil,
+		"Engines.Dialer":      d.Engines.Dialer == nil,
 	} {
 		if absent {
 			missing = append(missing, name)
@@ -229,7 +241,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		slices.Sort(missing)
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
-	return &Handlers{
+	h := &Handlers{
 		connections:    d.Engines.Connections,
 		queries:        d.Data.Queries,
 		pool:           d.Data.Pool,
@@ -241,20 +253,27 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		kinds:          d.Engines.Kinds,
 		dialects:       d.Engines.Dialects,
 		binder:         d.Engines.Binder,
+		dialer:         d.Engines.Dialer,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
-		audit:          audit.Nop{},
+		audit:          d.Observability.Audit,
 		content:        content.New(d.Data.Pool, d.Data.Queries),
 		assistant:      assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
-		wsTickets:      wsticket.New(),
-	}, nil
+		wsTickets:      d.WSTickets,
+	}
+	if h.audit == nil {
+		h.audit = audit.Nop{}
+	}
+	if h.wsTickets == nil {
+		h.wsTickets = wsticket.New()
+	}
+	if d.Observability.Metrics != nil {
+		h.registerMetrics(d.Observability.Metrics)
+	}
+	return h, nil
 }
 
-// SetDialer wires the dialer connection tests build transient engines with.
-func (h *Handlers) SetDialer(d *connections.Dialer) { h.dialer = d }
 
-// SetAudit wires the audit recorder (#45).
-func (h *Handlers) SetAudit(r audit.Recorder) { h.audit = r }
 
 // SetAssistantRunner wires the turn engine and its SSE hub (#62).
 func (h *Handlers) SetAssistantRunner(r *assistant.Runner) { h.assistantRunner = r }

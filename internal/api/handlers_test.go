@@ -7,23 +7,30 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/galileostudio/baleia/internal/wsticket"
 )
 
 // testDeps is a complete Deps over a throwaway database.
 func testDeps(t *testing.T) Deps {
 	t.Helper()
 	pool := testdb.New(t)
+	d, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	s3, err := storage.New("localhost:9000", "", "", "results", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return Deps{
 		Data:     DataDeps{Queries: db.New(pool), Pool: pool},
-		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(nil, nil)},
+		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(nil, nil), Dialer: d},
 		Config:   &config.Config{},
 		Temporal: &fakeTemporalClient{},
 		Storage:  s3,
@@ -37,7 +44,7 @@ func TestNewHandlers_RequiresDependencies(t *testing.T) {
 	if err == nil {
 		t.Fatal("NewHandlers with missing dependencies returned no error")
 	}
-	for _, want := range []string{"Data.Pool", "Data.Queries", "Engines.Binder", "Storage", "Temporal"} {
+	for _, want := range []string{"Data.Pool", "Data.Queries", "Engines.Binder", "Engines.Dialer", "Storage", "Temporal"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not name %s", err, want)
 		}
@@ -63,5 +70,25 @@ func TestNewHandlers_Defaults(t *testing.T) {
 	}
 	if h.wsTickets == nil {
 		t.Error("ticket store must be built")
+	}
+}
+
+// TestNewHandlers_Observability: the audit recorder, the metrics and the
+// ticket store given in Deps are the ones the handlers use.
+func TestNewHandlers_Observability(t *testing.T) {
+	deps := testDeps(t)
+	rec := &memAudit{}
+	tickets := wsticket.New()
+	deps.Observability = ObservabilityDeps{Audit: rec, Metrics: metrics.New("api")}
+	deps.WSTickets = tickets
+	h, err := NewHandlers(deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.audit != rec || h.wsTickets != tickets {
+		t.Error("the injected audit recorder and ticket store must be used")
+	}
+	if h.AuthMetrics() == nil {
+		t.Error("metrics must be registered when a registry is given")
 	}
 }
