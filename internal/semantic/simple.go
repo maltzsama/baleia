@@ -106,7 +106,7 @@ func ParseSimpleMetricV1(raw []byte) (SimpleMetricV1, error) {
 	dec.DisallowUnknownFields()
 	var m SimpleMetricV1
 	if err := dec.Decode(&m); err != nil {
-		return SimpleMetricV1{}, fmt.Errorf("%w: %v", ErrInvalid, err)
+		return SimpleMetricV1{}, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	if err := m.Validate(); err != nil {
 		return SimpleMetricV1{}, err

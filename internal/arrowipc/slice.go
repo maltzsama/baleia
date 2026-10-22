@@ -89,7 +89,7 @@ func SliceStream(data []byte, offset, limit int64) ([]byte, error) {
 	}
 	pos := int64(0)
 	for r.Next() && remaining > 0 {
-		rec := r.Record()
+		rec := r.RecordBatch()
 		rows := rec.NumRows()
 		if pos+rows <= offset {
 			pos += rows

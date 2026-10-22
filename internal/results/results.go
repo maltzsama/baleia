@@ -62,7 +62,7 @@ func Read(ctx context.Context, s3 *storage.S3Client, key string, offset, limit, 
 	}
 	used := 0
 	for reader.Next() {
-		rec := reader.Record()
+		rec := reader.RecordBatch()
 		cols := rec.Columns()
 		for i := 0; i < int(rec.NumRows()); i++ {
 			if maxRows > 0 && len(out.Rows) >= maxRows {

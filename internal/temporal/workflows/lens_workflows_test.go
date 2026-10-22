@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -86,16 +87,17 @@ func TestLensTableHealth_FanOut(t *testing.T) {
 
 func parseWorkflowSources() (*token.FileSet, []*ast.File, error) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", nil, 0)
+	names, err := filepath.Glob("*.go")
 	if err != nil {
 		return nil, nil, err
 	}
 	var files []*ast.File
-	for _, pkg := range pkgs {
-		if pkg.Name != "workflows" {
-			continue
+	for _, name := range names {
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			return nil, nil, err
 		}
-		for _, f := range pkg.Files {
+		if f.Name.Name == "workflows" {
 			files = append(files, f)
 		}
 	}

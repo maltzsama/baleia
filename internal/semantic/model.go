@@ -312,7 +312,7 @@ func ParseShare(s string) (ExploreQuery, error) {
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&q); err != nil {
-		return q, fmt.Errorf("%w: %v", ErrInvalidExplore, err)
+		return q, fmt.Errorf("%w: %w", ErrInvalidExplore, err)
 	}
 	return q, nil
 }

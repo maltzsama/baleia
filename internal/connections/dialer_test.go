@@ -116,7 +116,10 @@ func TestHTTPClientUsesDialer(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
-	_, err = d.HTTPClient(0).Get(srv.URL)
+	resp, err := d.HTTPClient(0).Get(srv.URL)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 	if !errors.Is(err, ErrDeniedNetwork) {
 		t.Fatalf("want ErrDeniedNetwork, got %v", err)
 	}
