@@ -22,7 +22,6 @@ package fake
 import (
 	"context"
 	"fmt"
-	"github.com/galileostudio/baleia/internal/dialect"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +32,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/decimal128"
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
 

@@ -2,9 +2,9 @@ package providers
 
 import (
 	"fmt"
-	"github.com/galileostudio/baleia/internal/bindings"
 	"strings"
 
+	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
 )
 

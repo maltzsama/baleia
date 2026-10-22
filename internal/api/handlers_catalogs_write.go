@@ -9,10 +9,9 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/catalogs"
-
-	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"

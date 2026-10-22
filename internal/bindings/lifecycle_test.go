@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"time"
 )
 
 // fakeBinder fails the operations listed in fail and confirms unless told not to.

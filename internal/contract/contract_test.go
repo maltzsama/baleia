@@ -20,12 +20,11 @@ import (
 	"testing"
 	"time"
 
+	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
-	"github.com/galileostudio/baleia/internal/trino"
 )
 
 func fixture(t *testing.T, name string, v any) {

@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
-
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/jackc/pgx/v5/pgtype"
