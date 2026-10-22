@@ -69,7 +69,11 @@ func loopbackRegistry(t *testing.T) (*connections.Registry, *connections.Dialer)
 }
 
 func draftHandlers(t *testing.T, reg *connections.Registry) *Handlers {
-	return &Handlers{queries: draftQuerier{t: t}, connections: reg, cfg: &config.Config{}}
+	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Handlers{queries: draftQuerier{t: t}, connections: reg, cfg: &config.Config{}, kinds: testKinds(t, d)}
 }
 
 func draft(url string, intents ...string) *TestConnectionRequest {
@@ -200,9 +204,9 @@ func TestTransient_IntentsFilter(t *testing.T) {
 // TestTransient_DirectEngineNotRegistered: a kind without an engine adapter
 // yet skips the direct check; nothing is registered.
 func TestTransient_DirectEngineNotRegistered(t *testing.T) {
-	reg, _ := loopbackRegistry(t)
+	reg, d := loopbackRegistry(t)
 	p, _ := reg.Get(connections.KindPostgreSQL)
-	c, err := connectionTest{h: &Handlers{}, provider: p}.directEngine(context.Background())
+	c, err := connectionTest{h: &Handlers{kinds: testKinds(t, d)}, provider: p}.directEngine(context.Background())
 	if err != nil || c.Skipped == nil || !*c.Skipped {
 		t.Fatalf("check = %+v, %v", c, err)
 	}

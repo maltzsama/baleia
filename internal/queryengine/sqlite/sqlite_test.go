@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -196,16 +195,15 @@ func TestCancelUnsupported(t *testing.T) {
 	}
 }
 
-// TestFactoryConfiguredRoot checks the registration and the Configure path the
-// wiring sites use, through the registered factory.
-func TestFactoryConfiguredRoot(t *testing.T) {
-	if !slices.Contains(queryengine.Kinds(), Kind) {
-		t.Fatalf("kind %q is not registered", Kind)
-	}
+// TestSpec checks the path the composition root uses: the spec's factory
+// builds engines with the options it was given.
+func TestSpec(t *testing.T) {
 	o, cfg := fixture(t, false)
-	Configure(o)
-	t.Cleanup(func() { Configure(Options{}) })
-	e, err := newEngine(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, nil)
+	s := Spec(o)
+	if s.Name != Kind {
+		t.Fatalf("spec kind = %q, want %q", s.Name, Kind)
+	}
+	e, err := s.Factory(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

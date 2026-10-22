@@ -2,7 +2,6 @@ package flightsql
 
 import (
 	"context"
-	"slices"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -10,9 +9,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestRegistered(t *testing.T) {
-	if !slices.Contains(queryengine.Kinds(), Kind) {
-		t.Fatalf("kind %q is not registered", Kind)
+func TestSpec(t *testing.T) {
+	if s := Spec(); s.Name != Kind || s.Factory == nil {
+		t.Fatalf("spec = %+v, want kind %q with a factory", s, Kind)
 	}
 }
 

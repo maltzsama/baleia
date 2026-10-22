@@ -428,3 +428,18 @@ func TestProjectionOnlyInBinders(t *testing.T) {
 		})
 	})
 }
+
+// TestNoInitInEngines: engine kinds are listed explicitly by internal/engines
+// and injected (#364); an adapter never registers itself from init().
+func TestNoInitInEngines(t *testing.T) {
+	goSources(t, func(rel string, f *ast.File) {
+		if !strings.HasPrefix(rel, "internal/queryengine/") && !strings.HasPrefix(rel, "internal/engines/") {
+			return
+		}
+		for _, d := range f.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.Name == "init" {
+				t.Errorf("%s declares init(); export a queryengine.KindSpec and list it in internal/engines", rel)
+			}
+		}
+	})
+}

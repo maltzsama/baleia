@@ -1,0 +1,40 @@
+// Package engines lists Baleia's engine kinds (#364). It is the only package
+// that knows every adapter: the composition root (internal/app) builds the
+// registry here and injects it, instead of adapters registering themselves
+// into a global from init().
+package engines
+
+import (
+	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/queryengine/clickhouse"
+	"github.com/galileostudio/baleia/internal/queryengine/flightsql"
+	"github.com/galileostudio/baleia/internal/queryengine/mysql"
+	"github.com/galileostudio/baleia/internal/queryengine/oracle"
+	"github.com/galileostudio/baleia/internal/queryengine/postgresql"
+	"github.com/galileostudio/baleia/internal/queryengine/sqlite"
+	"github.com/galileostudio/baleia/internal/queryengine/sqlserver"
+	"github.com/galileostudio/baleia/internal/queryengine/trino"
+)
+
+// Options are the server-side settings some kinds need.
+type Options struct {
+	// SQLite confines database files (BALEIA_SQLITE_ROOT,
+	// BALEIA_SQLITE_ALLOW_WRITE), like the SQLite provider.
+	SQLite sqlite.Options
+	Oracle oracle.Options
+}
+
+// NewRegistry builds the registry of every engine kind Baleia ships.
+func NewRegistry(o Options) (*queryengine.Registry, error) {
+	specs := []queryengine.KindSpec{
+		clickhouse.Spec(),
+		flightsql.Spec(),
+		oracle.Spec(o.Oracle),
+		postgresql.Spec(),
+		sqlite.Spec(o.SQLite),
+		sqlserver.Spec(),
+		trino.Spec(),
+	}
+	specs = append(specs, mysql.Specs()...)
+	return queryengine.NewRegistry(specs...)
+}

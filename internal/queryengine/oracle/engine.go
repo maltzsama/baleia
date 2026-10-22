@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 
@@ -28,12 +27,34 @@ const (
 	defaultLobMaxBytes = 1 << 20
 )
 
-func init() {
-	queryengine.RegisterKind(Kind, queryengine.ClassDirect, newEngine)
+// Options are the server-side Oracle settings.
+type Options struct {
+	// LOBMaxBytes caps a CLOB/NCLOB/BLOB value read into Arrow
+	// (BALEIA_LOB_MAX_BYTES); zero or less means 1 MiB.
+	LOBMaxBytes int
 }
 
-// newEngine builds the engine from its connection config. It dials through d.
-func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+func (o Options) lobMaxBytes() int {
+	if o.LOBMaxBytes > 0 {
+		return o.LOBMaxBytes
+	}
+	return defaultLobMaxBytes
+}
+
+// Spec is the kind's entry for a queryengine.Registry (#364).
+func Spec(o Options) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine(o)}
+}
+
+// newEngine returns the factory: it builds the engine from its connection
+// config and dials through d.
+func newEngine(o Options) queryengine.Factory {
+	return func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+		return buildEngine(row, cfg, d, o)
+	}
+}
+
+func buildEngine(row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer, o Options) (queryengine.Engine, error) {
 	port, err := strconv.Atoi(valueOr(cfg.Value("port"), "1521"))
 	if err != nil {
 		return nil, fmt.Errorf("oracle config: %w", connections.ErrValidation)
@@ -52,19 +73,9 @@ func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Con
 		id:                    row.ID,
 		catalog:               cfg.Value("service_name"),
 		cancelWithAlterSystem: cfg.Value("cancel_with_alter_system") == "true",
-		lobMaxBytes:           lobMaxBytes(),
+		lobMaxBytes:           o.lobMaxBytes(),
 		db:                    db,
 	}, nil
-}
-
-// lobMaxBytes is BALEIA_LOB_MAX_BYTES, default 1 MiB.
-func lobMaxBytes() int {
-	if v := os.Getenv("BALEIA_LOB_MAX_BYTES"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	return defaultLobMaxBytes
 }
 
 // Engine is an Oracle Database reached directly.

@@ -49,7 +49,20 @@ func newManager(t *testing.T, s *store) (*queryengine.Manager, *connections.Dial
 	if err != nil {
 		t.Fatal(err)
 	}
-	return queryengine.NewManager(s, nil, nil, d), d
+	return queryengine.NewManager(s, nil, nil, d, testKinds(t)), d
+}
+
+// testKinds is the registry the manager tests build engines from.
+func testKinds(t *testing.T) *queryengine.Registry {
+	t.Helper()
+	readOnlyNone := queryengine.KindSpec{Name: readOnlyNoneKind, Class: queryengine.ClassDirect, Factory: func(_ context.Context, row queryengine.EngineRow, _ connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+		return fake.New(fake.Options{ID: row.ID, Dialer: d, ReadOnly: queryengine.ReadOnlyNone}), nil
+	}}
+	r, err := queryengine.NewRegistry(fake.Spec(), readOnlyNone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
 
 // unwrap reaches the fake behind the manager's wrapper.
@@ -181,12 +194,6 @@ func TestManager_Refuses(t *testing.T) {
 
 const readOnlyNoneKind = "fake-readonly-none"
 
-func init() {
-	queryengine.RegisterKind(readOnlyNoneKind, queryengine.ClassDirect, func(_ context.Context, row queryengine.EngineRow, _ connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-		return fake.New(fake.Options{ID: row.ID, Dialer: d, ReadOnly: queryengine.ReadOnlyNone}), nil
-	})
-}
-
 type multiStore map[[16]byte]*db.GetEngineWithConnectionRow
 
 func (s multiStore) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngineRow, error) {
@@ -215,7 +222,7 @@ func TestManager_SeveralInstancesAndKinds(t *testing.T) {
 		ids = append(ids, id)
 	}
 	d, _ := connections.NewDialer(connections.DialerOptions{})
-	m := queryengine.NewManager(s, nil, nil, d)
+	m := queryengine.NewManager(s, nil, nil, d, testKinds(t))
 	seen := map[*fake.Engine]bool{}
 	for _, id := range ids {
 		e, err := m.Get(ctx, id)

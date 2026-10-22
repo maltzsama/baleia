@@ -44,6 +44,7 @@ type Handlers struct {
 	// engines runs SQL (docs/adr/0002); binder binds catalogs into Trino as
 	// the admin identity (docs/adr/0005, #80). Both are built at the wiring site.
 	engines engineSource
+	kinds   engineKinds
 	binder  *bindtrino.Binder
 	metrics apiMetrics
 	// audit records security and data operations (#45; call sites #43).
@@ -164,7 +165,14 @@ type engineSource interface {
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
 }
 
-func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, binder *bindtrino.Binder) *Handlers {
+// engineKinds says which engine kinds have an adapter and builds one-off
+// engines for connection tests (#364); the engine manager implements it.
+type engineKinds interface {
+	HasKind(kind string) bool
+	Transient(ctx context.Context, kind string, cfg connections.Config) (queryengine.Engine, error)
+}
+
+func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, kinds engineKinds, binder *bindtrino.Binder) *Handlers {
 	var assistantSvc *assistant.Service
 	if pool != nil {
 		assistantSvc = assistant.New(assistantdb.New(pool), keyring)
@@ -178,6 +186,7 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		temporalClient: temporalClient,
 		s3:             s3,
 		engines:        engines,
+		kinds:          kinds,
 		binder:         binder,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),

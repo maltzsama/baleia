@@ -89,8 +89,6 @@ func TestEncodeCredentialsBoundToRow(t *testing.T) {
 }
 
 func TestCreateCredentials(t *testing.T) {
-	t.Setenv("POLARIS_CLIENT_ID", "")
-	t.Setenv("POLARIS_CLIENT_SECRET", "")
 	generic := map[string]any{"client_id": "id", "client_secret": "secret"}
 
 	t.Run("generic credentials are used for every type", func(t *testing.T) {

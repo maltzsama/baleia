@@ -19,8 +19,12 @@ to substitute a fake in tests or add a second engine without editing those call 
   `internal/server` receives the built graph.
 - `cmd/e2e-seed/main.go` (build tag `e2e`, never in the release image) is a third, test-only
   composition root: it registers the Playwright smoke's Trino catalog the way a binding does (#121).
-- Kind registries (`queryengine.RegisterKind`, the provider registry, the binder registry) are
-  consumed only at the wiring sites and in the packages that implement the kinds.
+- Kind registries (the engine kind registry, the provider registry, the binder registry) are
+  consumed only at the wiring sites and in the packages that implement the kinds. Since #364 engine
+  kinds no longer register themselves from `init()` into a global: each adapter exports a
+  `queryengine.KindSpec`, `internal/engines.NewRegistry(Options)` lists them with their options
+  (SQLite confinement, Oracle LOB cap), and the composition root injects the registry into the
+  engine manager. `TestNoInitInEngines` keeps it that way.
 - Baleia's own database (`pgxpool.New`, `sql.Open` for migrations) is opened only in `cmd/*` and
   `internal/migrate`.
 - `internal/arch_test.go` (`TestAdapterConstructionOnlyInWiring`) enforces this by parsing the
