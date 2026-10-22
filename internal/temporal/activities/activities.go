@@ -370,12 +370,10 @@ type workerMetrics struct {
 	directory *metrics.Directory
 }
 
-// SetMetrics registers the worker's producers on reg.
+// SetMetrics registers the worker's producers on reg. Result storage is
+// instrumented where it is built (internal/app).
 func (a *Activities) SetMetrics(reg *metrics.Registry) {
 	a.metrics = workerMetrics{engine: reg.Engine(), schedules: reg.Schedules(), metadata: reg.Metadata(), directory: reg.Directory()}
-	if s3, ok := a.s3.(interface{ SetMetrics(*metrics.Storage) }); ok {
-		s3.SetMetrics(reg.Storage())
-	}
 }
 
 // passDone records a successful pass of a schedule.
