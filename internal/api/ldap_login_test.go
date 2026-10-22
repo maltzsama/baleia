@@ -55,7 +55,7 @@ func ldapLoginFixture(t *testing.T) (*auditFixture, db.AuthProvider) {
 		VALUES ('Alice', 'alice@corp.test', 'member', 'ldap', $1, 'stable-1') RETURNING id`, ap.ID).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
-	f.h.ldapAuthenticate = func(_ context.Context, _ identityldap.Config, username, password string) (*identityldap.User, error) {
+	f.h.directory = directoryFunc(func(_ context.Context, _ identityldap.Config, username, password string) (*identityldap.User, error) {
 		if username != "alice" || password != "secret" {
 			return nil, identityldap.ErrInvalidCredentials
 		}
@@ -65,7 +65,7 @@ func ldapLoginFixture(t *testing.T) (*auditFixture, db.AuthProvider) {
 			Name:       "Alice",
 			Role:       identity.RoleAdmin,
 		}, nil
-	}
+	})
 	return f, ap
 }
 
@@ -170,9 +170,9 @@ func TestLogin_LDAPUniformError(t *testing.T) {
 // the provider/external id pair is not a valid directory link.
 func TestLogin_LDAPRejectsNonLDAPAccount(t *testing.T) {
 	f, ap := ldapLoginFixture(t)
-	f.h.ldapAuthenticate = func(context.Context, identityldap.Config, string, string) (*identityldap.User, error) {
+	f.h.directory = directoryFunc(func(context.Context, identityldap.Config, string, string) (*identityldap.User, error) {
 		return &identityldap.User{ExternalID: "local-linked", Role: identity.RoleAdmin}, nil
-	}
+	})
 	hash, err := auth.HashPasswordWithCost("local-password", testBcryptCost)
 	if err != nil {
 		t.Fatal(err)
@@ -199,9 +199,9 @@ func TestLogin_LDAPRejectsNonLDAPAccount(t *testing.T) {
 // denied; LDAP never auto-creates by e-mail.
 func TestLogin_LDAPNotProvisioned(t *testing.T) {
 	f, ap := ldapLoginFixture(t)
-	f.h.ldapAuthenticate = func(context.Context, identityldap.Config, string, string) (*identityldap.User, error) {
+	f.h.directory = directoryFunc(func(context.Context, identityldap.Config, string, string) (*identityldap.User, error) {
 		return &identityldap.User{ExternalID: "unlinked-1", Email: "new@corp.test", Name: "New", Role: identity.RoleMember}, nil
-	}
+	})
 	resp, err := f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{
 		ProviderId: providerID(ap),
 		Username:   ptr("new"),

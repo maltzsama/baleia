@@ -250,11 +250,7 @@ func (h *AuthHandlers) loginLDAP(ctx context.Context, body *LoginRequest, ev aud
 		return invalid()
 	}
 
-	authenticate := h.ldapAuthenticate
-	if authenticate == nil {
-		authenticate = identityldap.Authenticate
-	}
-	result, err := authenticate(ctx, cfg, username, body.Password)
+	result, err := h.directory.Authenticate(ctx, cfg, username, body.Password)
 	if err != nil {
 		return invalid()
 	}

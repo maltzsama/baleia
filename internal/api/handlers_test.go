@@ -123,3 +123,15 @@ func TestNewAPI_GroupsShareCore(t *testing.T) {
 	assertGroupsWired(t, h)
 	assertGroupsWired(t, testAPI(handlerFields{}))
 }
+
+// TestNewAuthHandlers_RealSeams: outside tests the auth seams reach the real
+// directory and the network.
+func TestNewAuthHandlers_RealSeams(t *testing.T) {
+	a := newAuthHandlers(&core{})
+	if _, ok := a.directory.(ldapDirectory); !ok {
+		t.Errorf("directory = %T, want ldapDirectory", a.directory)
+	}
+	if _, ok := a.prober.(networkProber); !ok {
+		t.Errorf("prober = %T, want networkProber", a.prober)
+	}
+}

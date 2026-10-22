@@ -26,12 +26,9 @@ const (
 	idpProbeTimeout = 10 * time.Second
 )
 
-// probeIdentityProvider uses the injected probe when a test provides one.
+// probeIdentityProvider probes through the group's prober.
 func (h *AuthHandlers) probeIdentityProvider(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult {
-	if h.idpProbe != nil {
-		return h.idpProbe(ctx, cfg, testUsername)
-	}
-	return defaultIdentityProviderProbe(ctx, cfg, testUsername)
+	return h.prober.Probe(ctx, cfg, testUsername)
 }
 
 func defaultIdentityProviderProbe(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult {

@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
+
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
@@ -75,6 +78,19 @@ func testAPI(f handlerFields) *API {
 		WorkspaceHandlers: &WorkspaceHandlers{
 			core: c,
 		},
-		AuthHandlers: &AuthHandlers{core: c},
+		AuthHandlers: newAuthHandlers(c),
 	}
+}
+
+// directoryFunc and proberFunc adapt a test function to the auth seams.
+type directoryFunc func(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)
+
+func (f directoryFunc) Authenticate(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error) {
+	return f(ctx, cfg, username, password)
+}
+
+type proberFunc func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
+
+func (f proberFunc) Probe(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult {
+	return f(ctx, cfg, testUsername)
 }
