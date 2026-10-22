@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 
 	"github.com/galileostudio/baleia/internal/catalogs"
@@ -97,7 +98,7 @@ func (h *Handlers) createConfig(id pgtype.UUID, body *CreateCatalogConnectionReq
 	if body.Config != nil {
 		values = *body.Config
 	}
-	creds, err := legacyCredentials(body, h.cfg.PolarisDefaultCredentials())
+	creds, err := legacyCredentials(body, maps.Clone(h.settings.Execution.PolarisDefaultCredentials))
 	if err != nil {
 		return connections.Config{}, err
 	}

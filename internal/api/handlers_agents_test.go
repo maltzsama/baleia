@@ -59,9 +59,10 @@ func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 	}
 
 	f.h = &Handlers{
-		queries: db.New(pool),
-		pool:    pool,
-		cfg:     &config.Config{AgentsEnabled: enabled},
+		queries:  db.New(pool),
+		pool:     pool,
+		tx:       poolTx{pool: pool},
+		settings: SettingsFromConfig(&config.Config{AgentsEnabled: enabled}),
 	}
 	return f
 }
@@ -267,8 +268,8 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 	}
 	temporal := &fakeTemporalClient{}
 	h := &Handlers{
-		queries:        fake,
-		cfg:            &config.Config{StatementTimeout: 30 * time.Minute},
+		queries: fake, tx: directTx{q: fake},
+		settings:       SettingsFromConfig(&config.Config{StatementTimeout: 30 * time.Minute}),
 		temporalClient: temporal,
 		kinds:          testKinds(t, nil),
 		dialects:       dialect.NewRegistry(),

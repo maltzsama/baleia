@@ -71,7 +71,7 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 	}
 
 	tempPassword := randomState()
-	hash, err := auth.HashPasswordWithCost(tempPassword, h.cfg.PasswordCost())
+	hash, err := auth.HashPasswordWithCost(tempPassword, h.settings.Auth.PasswordCost)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +109,8 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 		return nil, err
 	}
 
-	inviteURL := h.cfg.PublicURL + "/accept-invite?token=" + token
-	locale := mail.LocaleOrDefault(user.Locale, h.cfg.DefaultLocale)
+	inviteURL := h.settings.Mail.PublicURL + "/accept-invite?token=" + token
+	locale := mail.LocaleOrDefault(user.Locale, h.settings.Mail.DefaultLocale)
 	if err := h.mailSender().Send(ctx, user.Email, locale, mail.TemplateInvite, map[string]any{
 		"Name":      user.Name,
 		"InviteURL": inviteURL,

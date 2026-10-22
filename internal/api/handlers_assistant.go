@@ -216,13 +216,13 @@ func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistan
 			// api_key is deliberately absent.
 		},
 	})
-	if h.assistantRunner != nil && row.Enabled && row.Provider != nil && row.Model != nil {
+	if runner := h.assistantRunner.Load(); runner != nil && row.Enabled && row.Provider != nil && row.Model != nil {
 		key, _ := svc.APIKey(ctx)
 		provider, err := h.llmProvider(row, key)
 		if err != nil {
 			return nil, err
 		}
-		h.assistantRunner.SetProvider(provider)
+		runner.SetProvider(provider)
 	}
 	return PutAssistantSettings200JSONResponse(assistantSettingsToPublic(row)), nil
 }
@@ -372,11 +372,12 @@ func (h *Handlers) SendAssistantMessage(ctx context.Context, request SendAssista
 	if _, err := h.assistantService(); err != nil {
 		return nil, err
 	}
-	if h.assistantRunner == nil {
+	runner := h.assistantRunner.Load()
+	if runner == nil {
 		return nil, assistant.ErrRunnerUnavailable
 	}
 	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
-	seq, err := h.assistantRunner.Start(ctx, p.UserID, id, text)
+	seq, err := runner.Start(ctx, p.UserID, id, text)
 	switch {
 	case errors.Is(err, assistant.ErrNotFound):
 		return SendAssistantMessage404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
@@ -407,8 +408,8 @@ func (h *Handlers) CancelAssistantTurn(ctx context.Context, request CancelAssist
 		}
 		return nil, err
 	}
-	if h.assistantRunner != nil {
-		h.assistantRunner.Cancel(id)
+	if runner := h.assistantRunner.Load(); runner != nil {
+		runner.Cancel(id)
 	}
 	return CancelAssistantTurn202Response{}, nil
 }
@@ -446,8 +447,8 @@ func (h *Handlers) StreamAssistantConversation(ctx context.Context, request Stre
 		replay = append(replay, assistantMessageToPublic(row))
 	}
 	stream := &assistantSSE{ctx: ctx, replay: replay, lastSeq: after, ping: time.NewTicker(15 * time.Second)}
-	if h.assistantRunner != nil {
-		stream.events, stream.unsubscribe = h.assistantRunner.Hub().Subscribe(id.Bytes)
+	if runner := h.assistantRunner.Load(); runner != nil {
+		stream.events, stream.unsubscribe = runner.Hub().Subscribe(id.Bytes)
 	}
 	return StreamAssistantConversation200TexteventStreamResponse{Body: stream}, nil
 }

@@ -21,19 +21,19 @@ import (
 var errWorkspaceNotVisible = errors.New("workspace not visible")
 
 func (h *Handlers) agentsEnabled() bool {
-	return h.cfg != nil && h.cfg.AgentsEnabled
+	return h.settings.Agents.Enabled
 }
 
 func (h *Handlers) agentTokenDefaultTTL() time.Duration {
-	if h.cfg != nil && h.cfg.AgentTokenDefaultTTL > 0 {
-		return h.cfg.AgentTokenDefaultTTL
+	if h.settings.Agents.TokenDefaultTTL > 0 {
+		return h.settings.Agents.TokenDefaultTTL
 	}
 	return auth.DefaultAgentTokenTTL
 }
 
 func (h *Handlers) agentTokenMaxTTL() time.Duration {
-	if h.cfg != nil && h.cfg.AgentTokenMaxTTL > 0 {
-		return h.cfg.AgentTokenMaxTTL
+	if h.settings.Agents.TokenMaxTTL > 0 {
+		return h.settings.Agents.TokenMaxTTL
 	}
 	return auth.MaxAgentTokenTTL
 }

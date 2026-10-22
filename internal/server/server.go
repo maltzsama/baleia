@@ -58,10 +58,26 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
 
-	h := api.NewHandlers(core.Queries, core.Pool, cfg, core.Keyring, core.Temporal, core.Storage, core.Connections, core.Engines, core.Engines, core.Dialects, core.Binder)
-	h.SetAudit(core.Audit)
-	h.SetDialer(core.Dialer)
-	h.SetMetrics(core.Metrics)
+	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
+	// that the WebSocket handler consumes; the JWT never appears in the URL.
+	tickets := wsticket.New()
+	// The assistant runner needs the MCP server, which needs these handlers:
+	// they get the slot now and the runner once it is built (#363).
+	runner := &assistant.RunnerSlot{}
+	h, err := api.NewHandlers(api.Deps{
+		Data:          api.DataDeps{Queries: core.Queries, Pool: core.Pool},
+		Engines:       api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder, Dialer: core.Dialer},
+		Observability: api.ObservabilityDeps{Audit: core.Audit, Metrics: core.Metrics},
+		Settings:      api.SettingsFromConfig(cfg),
+		Keyring:       core.Keyring,
+		Temporal:      core.Temporal,
+		Storage:       core.Storage,
+		WSTickets:     tickets,
+		Assistant:     runner,
+	})
+	if err != nil {
+		return nil, err
+	}
 	s.handlers = h
 
 	authMetrics := h.AuthMetrics()
@@ -76,10 +92,6 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
 	}, func(kind string) { authMetrics.Attempt(kind, metrics.OutcomeRateLimited) })
 
-	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
-	// that the handler consumes; the JWT never appears in the URL.
-	tickets := wsticket.New()
-	h.SetWSTickets(tickets)
 	s.ws = ws.New(core.Queries.AsWSQuerier(), cfg.JWTSecret, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
 	s.ws.SetTickets(tickets)
 
@@ -99,7 +111,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings(), core.Dialects)
 		gate.SetObserver(core.Metrics.Agent())
 		s.mcp = mcp.New(h, gate, core.Queries, mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
-		startAssistant(ctx, h, s.mcp, core.Dialer)
+		startAssistant(ctx, h, s.mcp, core.Dialer, runner)
 	}
 
 	s.routes()
@@ -109,7 +121,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 // startAssistant provisions the assistant (#62) when the agents feature is
 // on. It runs turns through an in-memory MCP client, so the same gate and
 // audit hooks apply.
-func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server, dialer *connections.Dialer) {
+func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server, dialer *connections.Dialer, slot *assistant.RunnerSlot) {
 	svc := h.AssistantService()
 	if svc == nil {
 		return
@@ -136,7 +148,7 @@ func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server,
 			runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
 		}
 	}
-	h.SetAssistantRunner(runner)
+	slot.Store(runner)
 	go runner.RunSweeper(ctx, 30*time.Second)
 }
 

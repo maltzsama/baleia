@@ -73,7 +73,7 @@ func draftHandlers(t *testing.T, reg *connections.Registry) *Handlers {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Handlers{queries: draftQuerier{t: t}, connections: reg, cfg: &config.Config{}, kinds: testKinds(t, d)}
+	return &Handlers{queries: draftQuerier{t: t}, connections: reg, settings: SettingsFromConfig(&config.Config{}), kinds: testKinds(t, d)}
 }
 
 func draft(url string, intents ...string) *TestConnectionRequest {

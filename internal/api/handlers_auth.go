@@ -62,7 +62,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		return CreateFirstAdmin422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
 	}
 
-	hash, err := auth.HashPasswordWithCost(request.Body.Password, h.cfg.PasswordCost())
+	hash, err := auth.HashPasswordWithCost(request.Body.Password, h.settings.Auth.PasswordCost)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		return nil, err
 	}
 
-	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
+	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.settings.Auth.JWTSecret, h.settings.Auth.AccessTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
 		FamilyID:  newTokenFamily(),
 	}); err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 	return CreateFirstAdmin201JSONResponse{
 		Token:        accessToken,
 		RefreshToken: &refreshToken,
-		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
+		ExpiresAt:    time.Now().Add(h.settings.Auth.AccessTTL),
 		User:         dbUserToPublic(user),
 	}, nil
 }
@@ -285,7 +285,7 @@ func (h *Handlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.E
 // issueLogin mints the access and refresh tokens after the credential check
 // succeeded, so local and directory logins behave identically.
 func (h *Handlers) issueLogin(ctx context.Context, user db.User, ev audit.Event, method string) (LoginResponseObject, error) {
-	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
+	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.settings.Auth.JWTSecret, h.settings.Auth.AccessTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (h *Handlers) issueLogin(ctx context.Context, user db.User, ev audit.Event,
 	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
 		FamilyID:  newTokenFamily(),
 	}); err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func (h *Handlers) issueLogin(ctx context.Context, user db.User, ev audit.Event,
 	return Login200JSONResponse{
 		Token:        accessToken,
 		RefreshToken: &refreshToken,
-		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
+		ExpiresAt:    time.Now().Add(h.settings.Auth.AccessTTL),
 		User:         dbUserToPublic(user),
 	}, nil
 }
@@ -564,7 +564,7 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
 		FamilyID:  newTokenFamily(),
 	}); err != nil {
 		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
@@ -641,7 +641,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 		}, nil
 	}
 
-	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.cfg.JWTSecret, h.cfg.AccessTTL())
+	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.settings.Auth.JWTSecret, h.settings.Auth.AccessTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -654,7 +654,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: newHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.cfg.RefreshTTL()), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
 		FamilyID:  rt.FamilyID,
 	}); err != nil {
 		return nil, err
@@ -664,7 +664,7 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 	return RefreshToken200JSONResponse{
 		Token:        accessToken,
 		RefreshToken: &newRefreshToken,
-		ExpiresAt:    time.Now().Add(h.cfg.AccessTTL()),
+		ExpiresAt:    time.Now().Add(h.settings.Auth.AccessTTL),
 	}, nil
 }
 
@@ -681,7 +681,7 @@ func refreshTokenFromBody(bodyToken *string, ctx context.Context) string {
 
 func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPasswordResetRequestObject) (RequestPasswordResetResponseObject, error) {
 
-	if h.cfg.SMTPHost == "" || h.cfg.SMTPPort == "" {
+	if h.settings.Mail.SMTPHost == "" || h.settings.Mail.SMTPPort == "" {
 		return RequestPasswordReset503JSONResponse{
 			Code:    ErrorCodeServiceUnavailable,
 			Message: "email service not configured",
@@ -698,7 +698,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 	}
 
 	token := randomState()
-	expires := time.Now().Add(h.cfg.ResetTTL())
+	expires := time.Now().Add(h.settings.Auth.ResetTTL)
 
 	// Only the hash is stored; the raw token travels in the e-mail link (#51).
 	if err := h.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
@@ -709,8 +709,8 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 		return nil, fmt.Errorf("create password reset token: %w", err)
 	}
 
-	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
-	locale := mail.LocaleOrDefault(user.Locale, h.cfg.DefaultLocale)
+	resetURL := h.settings.Mail.PublicURL + "/reset-password?token=" + token
+	locale := mail.LocaleOrDefault(user.Locale, h.settings.Mail.DefaultLocale)
 	if err := h.mailSender().Send(ctx, user.Email, locale, mail.TemplatePasswordReset, map[string]any{
 		"Name":     user.Name,
 		"ResetURL": resetURL,
@@ -736,7 +736,7 @@ func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPass
 		}, nil
 	}
 
-	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.cfg.PasswordCost())
+	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.settings.Auth.PasswordCost)
 	if err != nil {
 		return nil, err
 	}
@@ -852,7 +852,7 @@ func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordReq
 		return UpdatePassword422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
 	}
 
-	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.cfg.PasswordCost())
+	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.settings.Auth.PasswordCost)
 	if err != nil {
 		return nil, err
 	}
@@ -962,7 +962,7 @@ func (h *Handlers) newOIDCProvider(ctx context.Context, providerID string, ap db
 	if err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
 	}
-	redirectURL := h.cfg.PublicURL + "/api/v1/auth/oidc/" + providerID + "/callback"
+	redirectURL := h.settings.Mail.PublicURL + "/api/v1/auth/oidc/" + providerID + "/callback"
 	provider, err := auth.NewOIDCProvider(ctx, auth.OIDCConfig{
 		IssuerURL:    cfg.IssuerURL,
 		ClientID:     cfg.ClientID,

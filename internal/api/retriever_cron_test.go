@@ -71,7 +71,7 @@ func (f *updateRetrieverFake) UpdateRetriever(_ context.Context, p db.UpdateRetr
 func TestUpdateRetriever_CronValidation(t *testing.T) {
 	for name, expr := range map[string]string{"every minute": "* * * * *", "invalid": "not a cron"} {
 		f := &updateRetrieverFake{}
-		h := &Handlers{dialects: dialect.NewRegistry(), queries: f}
+		h := &Handlers{dialects: dialect.NewRegistry(), queries: f, tx: directTx{q: f}}
 		bad := expr
 		resp, err := h.UpdateRetriever(testContext(), UpdateRetrieverRequestObject{
 			Id: PathId{0xAA}, RetrieverId: PathId{0xBB}, Body: &UpdateRetrieverJSONRequestBody{CronSchedule: &bad},
@@ -89,7 +89,7 @@ func TestUpdateRetriever_CronValidation(t *testing.T) {
 	}
 
 	f := &updateRetrieverFake{}
-	h := &Handlers{dialects: dialect.NewRegistry(), queries: f}
+	h := &Handlers{dialects: dialect.NewRegistry(), queries: f, tx: directTx{q: f}}
 	good := "30 2 * * *"
 	if _, err := h.UpdateRetriever(testContext(), UpdateRetrieverRequestObject{
 		Id: PathId{0xAA}, RetrieverId: PathId{0xBB}, Body: &UpdateRetrieverJSONRequestBody{CronSchedule: &good},

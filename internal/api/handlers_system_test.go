@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestSystemStatus_AdminOnly(t *testing.T) {
-	h := &Handlers{cfg: &config.Config{}}
+	h := &Handlers{settings: SettingsFromConfig(&config.Config{}), schema: unreachableSchema{}}
 
 	resp, err := h.GetSystemStatus(context.Background(), GetSystemStatusRequestObject{})
 	if err != nil {
@@ -66,14 +67,14 @@ func TestSystemStatus_SectionTimeout(t *testing.T) {
 }
 
 func TestSystemStatus_NoSecrets(t *testing.T) {
-	h := &Handlers{cfg: &config.Config{
+	h := &Handlers{settings: SettingsFromConfig(&config.Config{
 		SMTPHost:     "smtp.internal.example",
 		SMTPFrom:     "ops@internal.example",
 		SMTPUser:     "smtp-service",
 		SMTPPassword: "smtp-secret",
 		S3Endpoint:   "s3.internal.example:9000",
 		TemporalHost: "temporal.internal:7233",
-	}}
+	}), schema: unreachableSchema{}}
 
 	resp, err := h.GetSystemStatus(ctxAs(uuid.NewString(), "admin"), GetSystemStatusRequestObject{})
 	if err != nil {
@@ -107,7 +108,7 @@ func TestSystemStatus_NoSecrets(t *testing.T) {
 }
 
 func TestSystemStatus_SMTPNotConfigured(t *testing.T) {
-	section := smtpStatusSection(&config.Config{})
+	section := smtpStatusSection(MailSettings{})
 	if section.Status != Unknown || section.Configured == nil || *section.Configured {
 		t.Fatalf("smtp section = %+v, want unconfigured/unknown", section)
 	}
@@ -133,4 +134,11 @@ func TestSystemStatus_DatabaseMigrationVersion(t *testing.T) {
 	if ok.Database.MigrationVersion == nil || *ok.Database.MigrationVersion <= 0 {
 		t.Fatalf("migration version = %v", ok.Database.MigrationVersion)
 	}
+}
+
+// unreachableSchema is a database that cannot be reached.
+type unreachableSchema struct{}
+
+func (unreachableSchema) SchemaVersion(context.Context) (int64, error) {
+	return 0, errors.New("database unreachable")
 }

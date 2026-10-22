@@ -17,26 +17,23 @@ import (
 // back to the packaged default.
 func (h *Handlers) agentCeilings() agentpolicy.Ceilings {
 	c := agentpolicy.DefaultCeilings()
-	if h.cfg == nil {
-		return c
+	if h.settings.Agents.MaxRows > 0 {
+		c.MaxRowsReturned = h.settings.Agents.MaxRows
 	}
-	if h.cfg.AgentMaxRows > 0 {
-		c.MaxRowsReturned = h.cfg.AgentMaxRows
+	if h.settings.Agents.MaxResultBytes > 0 {
+		c.MaxResultBytes = h.settings.Agents.MaxResultBytes
 	}
-	if h.cfg.AgentMaxResultBytes > 0 {
-		c.MaxResultBytes = h.cfg.AgentMaxResultBytes
+	if h.settings.Agents.MaxQueryRuntimeSeconds > 0 {
+		c.MaxQueryRuntimeSeconds = h.settings.Agents.MaxQueryRuntimeSeconds
 	}
-	if h.cfg.AgentMaxQueryRuntimeSeconds > 0 {
-		c.MaxQueryRuntimeSeconds = h.cfg.AgentMaxQueryRuntimeSeconds
+	if h.settings.Agents.MaxConcurrentQueries > 0 {
+		c.MaxConcurrentQueries = h.settings.Agents.MaxConcurrentQueries
 	}
-	if h.cfg.AgentMaxConcurrentQueries > 0 {
-		c.MaxConcurrentQueries = h.cfg.AgentMaxConcurrentQueries
+	if h.settings.Agents.MaxQueriesPerHour > 0 {
+		c.MaxQueriesPerHour = h.settings.Agents.MaxQueriesPerHour
 	}
-	if h.cfg.AgentMaxQueriesPerHour > 0 {
-		c.MaxQueriesPerHour = h.cfg.AgentMaxQueriesPerHour
-	}
-	if h.cfg.AgentMaxToolCallsPerMinute > 0 {
-		c.MaxToolCallsPerMinute = h.cfg.AgentMaxToolCallsPerMinute
+	if h.settings.Agents.MaxToolCallsPerMinute > 0 {
+		c.MaxToolCallsPerMinute = h.settings.Agents.MaxToolCallsPerMinute
 	}
 	return c
 }

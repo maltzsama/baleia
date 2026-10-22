@@ -862,9 +862,9 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		SQL:               request.Body.Sql,
 		Target:            target,
 		Identity:          queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID)},
-		StatementTimeout:  h.cfg.StatementTimeout,
+		StatementTimeout:  h.settings.Execution.StatementTimeout,
 		RequestID:         requestID,
-		ExecutionTimeout:  h.cfg.ExecutionTimeout,
+		ExecutionTimeout:  h.settings.Execution.ExecutionTimeout,
 		RerunExecutionID:  rerunExecutionID,
 		RerunFromPosition: rerunFromPosition,
 		Dialect:           dialectName,
@@ -1284,7 +1284,7 @@ func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionR
 // queries, according to BALEIA_TRINO_USER_IDENTITY ("uuid" default: u_<uuid>,
 // "email": the user's e-mail). Never an admin or service identity.
 func (h *Handlers) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
-	return trinoIdentity(ctx, h.queries, h.cfg.TrinoUserIdentity, uid)
+	return trinoIdentity(ctx, h.queries, h.settings.Execution.TrinoUserIdentity, uid)
 }
 
 // trinoIdentity is trinoIdentityFor without the Handlers, for the Lens handlers.

@@ -137,7 +137,7 @@ func TestCreateRetriever_IncrementalNotSupported(t *testing.T) {
 
 func TestCreateRetriever_StoresDestinationFields(t *testing.T) {
 	fake := &fakeRetrieverQuerier{}
-	resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: fake}).CreateRetriever(testContext(), retrieverRequest())
+	resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: fake, tx: directTx{q: fake}}).CreateRetriever(testContext(), retrieverRequest())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestDeleteRetriever(t *testing.T) {
 	req := DeleteRetrieverRequestObject{Id: PathId{0xAA}, RetrieverId: [16]byte{0xBB}}
 
 	q := &fakeRetrieverDeleter{rows: 1}
-	resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: q}).DeleteRetriever(testContext(), req)
+	resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}}).DeleteRetriever(testContext(), req)
 	if err != nil {
 		t.Fatal(err)
 	}

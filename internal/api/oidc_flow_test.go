@@ -159,9 +159,9 @@ func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
 func oidcHandlers(t *testing.T, q *db.Queries) *Handlers {
 	t.Helper()
 	return &Handlers{
-		queries: q,
-		keyring: oidcTestKeyring(t),
-		cfg:     &config.Config{PublicURL: "http://localhost", JWTSecret: "test-secret"},
+		queries: q, tx: directTx{q: q},
+		keyring:  oidcTestKeyring(t),
+		settings: SettingsFromConfig(&config.Config{PublicURL: "http://localhost", JWTSecret: "test-secret"}),
 	}
 }
 

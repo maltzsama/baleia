@@ -33,7 +33,7 @@ func (f *fakeLocaleQuerier) UpdateUser(_ context.Context, arg db.UpdateUserParam
 func TestPatchMeLocale(t *testing.T) {
 	t.Run("stores a supported locale", func(t *testing.T) {
 		fake := &fakeLocaleQuerier{user: db.User{ID: mustUUID(t, localeTestUserID)}}
-		h := &Handlers{queries: fake}
+		h := &Handlers{queries: fake, tx: directTx{q: fake}}
 		locale := LocalePtBR
 
 		resp, err := h.UpdateProfile(ctxAs(localeTestUserID, "member"), UpdateProfileRequestObject{
@@ -57,7 +57,7 @@ func TestPatchMeLocale(t *testing.T) {
 	t.Run("keeps the current locale when omitted", func(t *testing.T) {
 		current := "en"
 		fake := &fakeLocaleQuerier{user: db.User{ID: mustUUID(t, localeTestUserID), Locale: &current}}
-		h := &Handlers{queries: fake}
+		h := &Handlers{queries: fake, tx: directTx{q: fake}}
 
 		if _, err := h.UpdateProfile(ctxAs(localeTestUserID, "member"), UpdateProfileRequestObject{
 			Body: &UpdateProfileRequest{Name: ptr("New name")},
@@ -71,7 +71,7 @@ func TestPatchMeLocale(t *testing.T) {
 
 	t.Run("rejects an unsupported locale", func(t *testing.T) {
 		fake := &fakeLocaleQuerier{user: db.User{ID: mustUUID(t, localeTestUserID)}}
-		h := &Handlers{queries: fake}
+		h := &Handlers{queries: fake, tx: directTx{q: fake}}
 		unsupported := Locale("fr")
 
 		resp, err := h.UpdateProfile(ctxAs(localeTestUserID, "member"), UpdateProfileRequestObject{

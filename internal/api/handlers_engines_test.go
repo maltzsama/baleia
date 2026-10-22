@@ -121,7 +121,7 @@ func engineHandlers(t *testing.T, q *engineQuerier, providers ...connections.Pro
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Handlers{dialects: dialect.NewRegistry(), queries: q, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+	return &Handlers{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
 }
 
 func ownedConnection(t *testing.T, typ string, owner string) db.CatalogConnection {
@@ -339,4 +339,13 @@ func TestDeleteConnectionBackingEngine409(t *testing.T) {
 	if rec.Code != 409 || !strings.Contains(rec.Body.String(), "connection_in_use") {
 		t.Fatalf("response = %d %s", rec.Code, rec.Body)
 	}
+}
+
+// The describeEngine reads: these fakes have no catalog bound to the engine.
+func (q *engineQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+	return nil, nil
+}
+
+func (q *deleteConnQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+	return nil, nil
 }

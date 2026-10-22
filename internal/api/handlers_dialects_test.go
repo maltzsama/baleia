@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -102,7 +103,7 @@ func TestDescribeEngine(t *testing.T) {
 	}))
 	defer srv.Close()
 	engines, _ := trinoBackends(srv.URL)
-	h := &Handlers{dialects: dialect.NewRegistry(), engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)}
+	h := &Handlers{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)}
 	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
 		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(10, 0), Valid: true}}
 
@@ -121,7 +122,7 @@ func TestDescribeEngine(t *testing.T) {
 	}
 
 	// No adapter for the kind (or a disabled engine): the dialect is still known.
-	h = &Handlers{dialects: dialect.NewRegistry(), engines: failingEngines{}}
+	h = &Handlers{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: failingEngines{}}
 	row.Kind = "postgresql"
 	e := h.describeEngine(context.Background(), row)
 	if e.Capabilities != nil || e.Version != nil || e.Dialect == nil || e.Dialect.Name != "postgresql" {
@@ -143,7 +144,7 @@ func (s slowEngines) DefaultTrino(context.Context) (queryengine.Engine, error) {
 // TestDescribeEngines_ParallelInOrder: slow engines overlap and the list
 // keeps its order.
 func TestDescribeEngines_ParallelInOrder(t *testing.T) {
-	h := &Handlers{dialects: dialect.NewRegistry(), engines: slowEngines{delay: 100 * time.Millisecond}}
+	h := &Handlers{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: 100 * time.Millisecond}}
 	rows := make([]db.Engine, 8)
 	for i := range rows {
 		rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
@@ -208,7 +209,7 @@ func TestEngineHealth_FromProbe(t *testing.T) {
 	defer srv.Close()
 
 	engines, _ := trinoBackends(srv.URL)
-	h := &Handlers{dialects: dialect.NewRegistry(), engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)}
+	h := &Handlers{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)}
 	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
 		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(20, 0), Valid: true}}
 
@@ -239,4 +240,16 @@ func TestConnectionAllows_ChecksComputedActions(t *testing.T) {
 	if connectionAllows(CatalogConnection{}, "register_engine") {
 		t.Fatal("nil actions should allow nothing")
 	}
+}
+
+// noEngineRows has no connection or binding for any engine, so describeEngine
+// reports neither.
+type noEngineRows struct{ db.Querier }
+
+func (noEngineRows) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
+	return db.CatalogConnection{}, pgx.ErrNoRows
+}
+
+func (noEngineRows) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+	return nil, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
@@ -60,3 +61,9 @@ func testKinds(t *testing.T, d *connections.Dialer) engineKinds {
 	}
 	return registryKinds{r: r, d: d}
 }
+
+// directTx runs fn on q without a transaction: the fixtures' fake queriers
+// have no database to open one on.
+type directTx struct{ q db.Querier }
+
+func (t directTx) InTx(_ context.Context, fn func(db.Querier) error) error { return fn(t.q) }

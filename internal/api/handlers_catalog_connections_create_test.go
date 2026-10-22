@@ -82,7 +82,7 @@ func validCreateRequests() map[string]*CreateCatalogConnectionRequest {
 }
 
 func createHandlers(t *testing.T, q db.Querier, kr *crypto.Keyring) *Handlers {
-	return &Handlers{queries: q, keyring: kr, connections: testRegistry(t), cfg: &config.Config{}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+	return &Handlers{queries: q, tx: directTx{q: q}, keyring: kr, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
 }
 
 func visitCreate(t *testing.T, resp CreateCatalogConnectionResponseObject) *httptest.ResponseRecorder {

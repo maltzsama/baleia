@@ -72,7 +72,7 @@ func TestRemoveUserConflict(t *testing.T) {
 // tokens (#51).
 func TestDisable_RevokesRefresh(t *testing.T) {
 	fake := &fakeUserDeleter{}
-	h := &Handlers{queries: fake}
+	h := &Handlers{queries: fake, tx: directTx{q: fake}}
 	ctx := context.WithValue(context.Background(), auth.ContextKeyRole, "admin")
 
 	resp, err := h.RemoveUser(ctx, RemoveUserRequestObject{})

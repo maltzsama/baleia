@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/version"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
 
@@ -34,7 +34,7 @@ func (h *Handlers) GetSystemStatus(ctx context.Context, _ GetSystemStatusRequest
 
 	status := SystemStatus{
 		Baleia: baleiaStatusSection(),
-		Smtp:   smtpStatusSection(h.cfg),
+		Smtp:   smtpStatusSection(h.settings.Mail),
 	}
 	h.probeDependencies(ctx, &status)
 	h.probePlatform(ctx, &status)
@@ -68,13 +68,9 @@ func baleiaStatusSection() SystemStatusSection {
 func (h *Handlers) databaseStatusSection(ctx context.Context) SystemStatusSection {
 	var migrationVersion int64
 	section := runStatusSection(ctx, "database_unavailable", func(ctx context.Context) error {
-		if h.pool == nil {
-			return errors.New("no database pool")
-		}
-		// Raw SQL on purpose: goose_db_version is goose's own table, not part
-		// of the migrations sqlc reads.
-		return h.pool.QueryRow(ctx,
-			`SELECT COALESCE(MAX(version_id), 0) FROM goose_db_version WHERE is_applied`).Scan(&migrationVersion)
+		v, err := h.schema.SchemaVersion(ctx)
+		migrationVersion = v
+		return err
 	})
 	if section.Status == Ok {
 		section.MigrationVersion = &migrationVersion
@@ -101,8 +97,8 @@ func (h *Handlers) objectStorageStatusSection(ctx context.Context) SystemStatusS
 	})
 }
 
-func smtpStatusSection(cfg *config.Config) SystemStatusSection {
-	configured := cfg != nil && cfg.SMTPHost != "" && cfg.SMTPFrom != ""
+func smtpStatusSection(mail MailSettings) SystemStatusSection {
+	configured := mail.SMTPHost != "" && mail.SMTPFrom != ""
 	latency := 0
 	section := SystemStatusSection{Status: Ok, LatencyMs: &latency, Configured: &configured}
 	if !configured {
@@ -128,4 +124,20 @@ func runStatusSection(ctx context.Context, errorCode string, probe func(context.
 		section.ErrorCode = &errorCode
 	}
 	return section
+}
+
+// schemaVersioner reports the migration version applied to Baleia's database.
+type schemaVersioner interface {
+	SchemaVersion(ctx context.Context) (int64, error)
+}
+
+// poolSchema reads the version from goose's table on Baleia's pool.
+type poolSchema struct{ pool *pgxpool.Pool }
+
+func (p poolSchema) SchemaVersion(ctx context.Context) (int64, error) {
+	var v int64
+	// Raw SQL on purpose: goose_db_version is goose's own table, not part of
+	// the migrations sqlc reads.
+	err := p.pool.QueryRow(ctx, `SELECT COALESCE(MAX(version_id), 0) FROM goose_db_version WHERE is_applied`).Scan(&v)
+	return v, err
 }
