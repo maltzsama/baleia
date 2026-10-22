@@ -29,7 +29,37 @@ jobs:
       - name: Test
         env:
           BALEIA_TEST_DATABASE_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
-        run: go test ./...
+        run: go test -race ./...
+
+  # Existing findings are a baseline: only issues new since the merge base
+  # with main fail the job (#369).
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.15.0
+          args: --new-from-merge-base=origin/main
+
+  vuln:
+    name: Vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   # Baleia's half of the registry contract against the fixtures of the pinned
   # plugin release (#39): the Makefile's BALEIA_PLUGIN_VERSION.

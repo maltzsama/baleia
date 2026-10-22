@@ -11,14 +11,18 @@ the phase-3 issues reference as **FD1–FD16**.
 | `make dev` / `make worker` | Run the API / Temporal worker locally. |
 | `make up` / `make down` | Start / stop the compose stack. |
 | `make generate` / `make sqlc` | Regenerate OpenAPI handlers / SQL code. |
-| `make lint` | `golangci-lint`. |
+| `make lint` / `make lint-all` | `golangci-lint` on what is new since `origin/main` / on everything. |
+| `make vuln` | `govulncheck`. |
 | `make build` / `build-web` / `build-all` | Compile binaries / frontend / both. |
 | `make e2e` | minikube (`make k8s-up`) + `cmd/e2e-seed` + Playwright (`web/e2e`). |
 | `make e2e-down` | Tear minikube down (`k8s-down` with `K8S_PURGE=1`). |
 
-Backend definition of done (`DoD-standard`): `go vet ./...`, `go test ./...`,
-`make lint`, regenerated OpenAPI/sqlc when the contract changes, and a Bruno
-case for every new endpoint.
+Backend definition of done (`DoD-standard`): `go vet ./...`, `go test -race
+./...` (with `BALEIA_TEST_DATABASE_URL` for the DB-backed tests), `make lint`,
+`make vuln`, regenerated OpenAPI/sqlc when the contract changes, and a Bruno
+case for every new endpoint. CI (`.github/workflows/ci.yml`) runs the same:
+`Test` with Postgres and `-race`, `Lint` (golangci-lint, `.golangci.yml`, new
+issues only) and `Vulnerabilities` (govulncheck).
 
 ## Frontend
 
