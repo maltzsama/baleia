@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -92,7 +93,7 @@ func newFixture() *fixture {
 		now:    time.Now(),
 	}
 	f.p = authz.Principal{UserID: uid(2), Role: "member", Kind: authz.KindAgent, AgentID: uid(1)}
-	f.gate = NewGate(f.store, fakeEngines{readOnly: queryengine.ReadOnlyEnforced}, DefaultCeilings())
+	f.gate = NewGate(f.store, fakeEngines{readOnly: queryengine.ReadOnlyEnforced}, DefaultCeilings(), dialect.NewRegistry())
 	f.gate.SetClock(func() time.Time { return f.now })
 	return f
 }
@@ -227,7 +228,7 @@ func TestCeilingsClampAndPolicyChangeTakesEffect(t *testing.T) {
 
 func TestReadOnlyEnforcement(t *testing.T) {
 	f := newFixture()
-	f.gate = NewGate(f.store, fakeEngines{readOnly: queryengine.ReadOnlyNone}, DefaultCeilings())
+	f.gate = NewGate(f.store, fakeEngines{readOnly: queryengine.ReadOnlyNone}, DefaultCeilings(), dialect.NewRegistry())
 	f.gate.SetClock(func() time.Time { return f.now })
 	if dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1"))); dec.Allowed || dec.Reason != ReasonScope {
 		t.Fatalf("unenforced engine = %+v, want scope refusal", dec)

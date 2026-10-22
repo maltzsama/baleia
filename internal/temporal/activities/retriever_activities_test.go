@@ -9,6 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
@@ -114,7 +115,7 @@ func TestRetrieverRefresh_QuotesIdentifiers(t *testing.T) {
 }
 
 func TestRetrieverDispatch_ReturnsDue(t *testing.T) {
-	a := &Activities{queries: &retrieverFakeQuerier{due: []db.Retriever{fakeRetriever()}}}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: &retrieverFakeQuerier{due: []db.Retriever{fakeRetriever()}}}
 
 	due, err := a.retrieverDispatch(context.Background())
 	if err != nil {
@@ -164,7 +165,7 @@ func TestRetrieverRefresh_FailureTransitions(t *testing.T) {
 func runRetrieverRefresh(queries *retrieverFakeQuerier, eng *fakeEngine) error {
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: queries, engines: eng, s3: &fakeS3{}, cfg: &config.Config{}}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), queries: queries, engines: eng, s3: &fakeS3{}, cfg: &config.Config{}}
 
 	wts := &testsuite.WorkflowTestSuite{}
 	ts := wts.NewTestActivityEnvironment()
@@ -179,7 +180,7 @@ func runRetrieverRefresh(queries *retrieverFakeQuerier, eng *fakeEngine) error {
 
 func TestAdvanceRetrieverSchedule_ComputesNext(t *testing.T) {
 	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever()}
-	a := &Activities{queries: fakeQuery}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: fakeQuery}
 
 	err := a.advanceRetrieverSchedule(context.Background(), AdvanceRetrieverScheduleParams{
 		RetrieverID: fakeRetriever().ID.String(),

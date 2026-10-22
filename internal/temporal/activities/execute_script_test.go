@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -202,7 +203,7 @@ func runScript(t *testing.T, a *Activities, p ExecuteScriptParams) (*ExecuteScri
 func TestExecuteScript_SessionStatePersists(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino}
 	store := newStatementStore(2)
-	r, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
 		scriptParams("SET x=42", "SELECT var x"))
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +230,7 @@ func TestExecuteScript_SessionStatePersists(t *testing.T) {
 func TestExecuteScript_StopsOnFailure(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino, failOn: "BROKEN"}
 	store := newStatementStore(4)
-	r, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
 		scriptParams("SELECT 1", "BROKEN", "SELECT 3", "SELECT 4"))
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +255,7 @@ func TestExecuteScript_RunsOnTarget(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino}
 	p := scriptParams("SELECT 1")
 	p.Target.EngineCatalog, p.Target.Schema, p.Target.ReadOnly = "sales", "eu", true
-	if _, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
+	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: newStatementStore(1), engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.gotEngine) != 1 || fake.gotEngine[0] != "e1000000-0000-0000-0000-000000000000" {
@@ -273,7 +274,7 @@ func TestExecuteScript_AgentSessionTag(t *testing.T) {
 	p := scriptParams("SELECT 1")
 	p.Target.ReadOnly = true
 	p.Identity.AgentID = "a-1"
-	if _, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
+	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: newStatementStore(1), engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
 		t.Fatal(err)
 	}
 	spec := fake.lastSpec
@@ -289,7 +290,7 @@ func TestExecuteScript_NoEngineFailsFirst(t *testing.T) {
 	store := newStatementStore(2)
 	p := scriptParams("SELECT 1", "SELECT 2")
 	p.Target.EngineID = pgtype.UUID{}
-	if _, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
+	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
 		t.Fatal(err)
 	}
 	if got := store.status(); strings.Join(got, ",") != "failed,skipped" {
@@ -307,7 +308,7 @@ func TestExecuteScript_HeartbeatsHandle(t *testing.T) {
 	store := newStatementStore(2)
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: store, engines: &fakeEngine{Engine: testTrino, assignID: true}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), queries: store, engines: &fakeEngine{Engine: testTrino, assignID: true}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
 
 	var mu sync.Mutex
 	var beats []heartbeatDetails
@@ -348,7 +349,7 @@ func TestExecuteScript_HeartbeatsWhileBlocked(t *testing.T) {
 	defer func() { heartbeatInterval = intervalBefore }()
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: newStatementStore(1), engines: &fakeEngine{Engine: testTrino, block: 200 * time.Millisecond}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), queries: newStatementStore(1), engines: &fakeEngine{Engine: testTrino, block: 200 * time.Millisecond}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
 
 	var mu sync.Mutex
 	beats := 0
@@ -382,7 +383,7 @@ func TestExecuteScript_RetriesOnlyBeforeHandle(t *testing.T) {
 
 	fake := &fakeEngine{Engine: testTrino, err: queryengine.NewError(queryengine.CodeUnavailable, "trino", "", "connection refused")}
 	store := newStatementStore(1)
-	r, err := runScript(t, &Activities{queries: store, engines: fake, cfg: testActivitiesConfig()}, scriptParams("INSERT INTO t VALUES (1)"))
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, cfg: testActivitiesConfig()}, scriptParams("INSERT INTO t VALUES (1)"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +395,7 @@ func TestExecuteScript_RetriesOnlyBeforeHandle(t *testing.T) {
 	}
 
 	fake = &fakeEngine{Engine: testTrino, assignID: true, err: queryengine.NewError(queryengine.CodeUnavailable, "trino", "", "connection reset")}
-	if _, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, cfg: testActivitiesConfig()}, scriptParams("INSERT INTO t VALUES (1)")); err != nil {
+	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: newStatementStore(1), engines: fake, cfg: testActivitiesConfig()}, scriptParams("INSERT INTO t VALUES (1)")); err != nil {
 		t.Fatal(err)
 	}
 	if fake.callCount != 1 {
@@ -406,7 +407,7 @@ func TestExecuteScript_RetriesOnlyBeforeHandle(t *testing.T) {
 // the statement and stores a truncated (not failed) result.
 func TestExecuteScript_Truncates(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino, assignID: true, deliver: 5}
-	r, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{},
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: newStatementStore(1), engines: fake, s3: &fakeS3{},
 		cfg: &config.Config{ResultMaxRows: 2, ResultMaxBytes: 1 << 20}}, scriptParams("SELECT 1"))
 	if err != nil {
 		t.Fatal(err)
@@ -424,7 +425,7 @@ func TestExecuteScript_Truncates(t *testing.T) {
 // to the stored stream.
 func TestExecuteScript_TruncatesOnBytes(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino, assignID: true, deliver: 50}
-	r, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{},
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: newStatementStore(1), engines: fake, s3: &fakeS3{},
 		cfg: &config.Config{ResultMaxRows: 1000, ResultMaxBytes: 1024}}, scriptParams("SELECT 1"))
 	if err != nil {
 		t.Fatal(err)
@@ -439,7 +440,7 @@ func TestExecuteScript_TruncatesOnBytes(t *testing.T) {
 // nothing and carry no result key.
 func TestExecuteScript_DDLNoUpload(t *testing.T) {
 	s3 := &fakeS3{}
-	r, err := runScript(t, &Activities{queries: newStatementStore(1), engines: &fakeEngine{Engine: testTrino, noColumns: true}, s3: s3, cfg: testActivitiesConfig()},
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: newStatementStore(1), engines: &fakeEngine{Engine: testTrino, noColumns: true}, s3: s3, cfg: testActivitiesConfig()},
 		scriptParams("CREATE TABLE x (a int)"))
 	if err != nil {
 		t.Fatal(err)
@@ -453,7 +454,7 @@ func TestExecuteScript_DDLNoUpload(t *testing.T) {
 // never finishes it without a result.
 func TestExecuteScript_UploadFailureFails(t *testing.T) {
 	store := newStatementStore(2)
-	r, err := runScript(t, &Activities{queries: store, engines: &fakeEngine{Engine: testTrino, assignID: true}, s3: &fakeS3{err: errors.New("s3 down")}, cfg: testActivitiesConfig()},
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: &fakeEngine{Engine: testTrino, assignID: true}, s3: &fakeS3{err: errors.New("s3 down")}, cfg: testActivitiesConfig()},
 		scriptParams("SELECT 1", "SELECT 2"))
 	if err != nil {
 		t.Fatal(err)
@@ -472,7 +473,7 @@ func TestExecuteScript_UploadFailureFails(t *testing.T) {
 func TestExecuteScript_ForbiddenStatement(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino}
 	store := newStatementStore(1)
-	if _, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
+	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
 		scriptParams("CREATE CATALOG evil USING memory")); err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +507,7 @@ func TestExecuteScript_CancelUsesHandle(t *testing.T) {
 	store := newStatementStore(2)
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}
 
 	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(scriptWorkflow)
@@ -554,7 +555,7 @@ func TestAbandonStatements_CancelsAndSkips(t *testing.T) {
 	store.rows[1].status = "finished"
 	store.rows[2].status = "running"
 	store.rows[2].handle = []byte(`{"engine_id":"e1","query_id":"q-2"}`)
-	a := &Activities{queries: store, engines: fake}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake}
 	p := AbandonStatementsParams{ExecutionID: testExecID, EngineID: testEngineID, Status: "failed", ErrorCode: CodeInterrupted, Error: "interrupted"}
 	ts := (&testsuite.WorkflowTestSuite{}).NewTestActivityEnvironment()
 	before := defaultActivities
@@ -583,7 +584,7 @@ func TestAbandonStatements_CancelsAndSkips(t *testing.T) {
 func TestExecuteScript_CancelledOnEngine(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino, err: queryengine.NewError(queryengine.CodeCancelled, "trino", "ADMINISTRATIVELY_KILLED", "killed")}
 	store := newStatementStore(2)
-	r, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, scriptParams("SELECT 1", "SELECT 2"))
+	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, scriptParams("SELECT 1", "SELECT 2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -608,7 +609,7 @@ func TestExecuteScript_DeadlineIsTimeout(t *testing.T) {
 	s3 := &fakeS3{}
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: store, engines: fake, s3: s3, cfg: testActivitiesConfig()}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: s3, cfg: testActivitiesConfig()}
 
 	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(shortScriptWorkflow)

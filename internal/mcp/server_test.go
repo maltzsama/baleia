@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -182,7 +183,7 @@ func TestRefusalBeforeHandler(t *testing.T) {
 		ID: uid(1), OwnerID: uid(2), Kind: "external", Status: "active",
 		Policy: []byte(`{"tools":[]}`),
 	}}
-	gate := agentpolicy.NewGate(store, nil, agentpolicy.DefaultCeilings())
+	gate := agentpolicy.NewGate(store, nil, agentpolicy.DefaultCeilings(), dialect.NewRegistry())
 	server := New(nil, gate, tokens, nil, nil)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)

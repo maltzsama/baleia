@@ -257,7 +257,7 @@ const (
 // conditional update matches nothing (the execution was cancelled), the activity
 // must succeed without overwriting the terminal status.
 func TestCompleteExecutionDoesNotOverwriteTerminal(t *testing.T) {
-	a := &Activities{queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
 
 	err := a.completeExecution(context.Background(), CompleteExecutionParams{
 		ExecutionID: testExecID,
@@ -269,7 +269,7 @@ func TestCompleteExecutionDoesNotOverwriteTerminal(t *testing.T) {
 }
 
 func TestFailExecutionDoesNotOverwriteTerminal(t *testing.T) {
-	a := &Activities{queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
 
 	err := a.failExecution(context.Background(), FailExecutionParams{
 		ExecutionID: testExecID,
@@ -280,7 +280,7 @@ func TestFailExecutionDoesNotOverwriteTerminal(t *testing.T) {
 }
 
 func TestCompleteExecutionPropagatesRealErrors(t *testing.T) {
-	a := &Activities{queries: &fakeQuerier{updateErr: context.DeadlineExceeded}}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: &fakeQuerier{updateErr: context.DeadlineExceeded}}
 
 	err := a.completeExecution(context.Background(), CompleteExecutionParams{
 		ExecutionID: testExecID,

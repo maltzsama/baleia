@@ -37,13 +37,15 @@ type engineSource interface {
 }
 
 type Activities struct {
-	metrics workerMetrics
-	queries db.Querier
-	pool    *pgxpool.Pool
-	engines engineSource
-	monitor lensMonitor
-	s3      s3Client
-	cfg     *config.Config
+	// dialects split and gate scripts by the target engine's dialect.
+	dialects *dialect.Registry
+	metrics  workerMetrics
+	queries  db.Querier
+	pool     *pgxpool.Pool
+	engines  engineSource
+	monitor  lensMonitor
+	s3       s3Client
+	cfg      *config.Config
 	// keyring opens stored connection credentials (table health talks to the
 	// catalog manager). May be nil on a fresh install with no credentials.
 	keyring *crypto.Keyring
@@ -75,8 +77,9 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client) *Activities {
+func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
 	a := &Activities{
+		dialects:    dialects,
 		queries:     db.New(pool),
 		pool:        pool,
 		engines:     engines,
@@ -133,8 +136,8 @@ type SplitSQLParams struct {
 }
 
 // paramsDialect is the dialect an activity input names.
-func paramsDialect(name string) (dialect.Dialect, error) {
-	d, ok := dialect.Get(name)
+func (a *Activities) paramsDialect(name string) (dialect.Dialect, error) {
+	d, ok := a.dialects.Get(name)
 	if !ok {
 		return nil, temporal.NewNonRetryableApplicationError("unknown dialect "+name, "editor_rejected", nil)
 	}
@@ -157,7 +160,7 @@ func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*Spli
 	// statement, before the workflow starts any statement. The editor gate also
 	// rejects EXECUTE IMMEDIATE smuggling catalog DDL and SET SESSION
 	// AUTHORIZATION. The script is split with the target engine's dialect.
-	d, err := paramsDialect(params.Dialect)
+	d, err := a.paramsDialect(params.Dialect)
 	if err != nil {
 		return nil, err
 	}

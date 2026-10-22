@@ -5,11 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/dialect"
 	"go.temporal.io/sdk/temporal"
 )
 
 func TestSplitSQL(t *testing.T) {
-	a := &Activities{}
+	a := &Activities{dialects: dialect.NewRegistry()}
 	res, err := a.splitSQL(context.Background(), SplitSQLParams{SQL: "SELECT 1; SELECT 'a;b'", Dialect: "trino"})
 	if err != nil || len(res.Statements) != 2 {
 		t.Fatalf("%+v, %v", res, err)
@@ -25,7 +26,7 @@ func TestSplitSQL(t *testing.T) {
 
 // TestSplitSQL_Dialect: the script is split with the target engine's dialect.
 func TestSplitSQL_Dialect(t *testing.T) {
-	a := &Activities{}
+	a := &Activities{dialects: dialect.NewRegistry()}
 	res, err := a.splitSQL(context.Background(), SplitSQLParams{SQL: "SELECT 1\nGO\nSELECT 2", Dialect: "tsql"})
 	if err != nil || len(res.Statements) != 2 {
 		t.Fatalf("tsql GO: %+v, %v", res, err)

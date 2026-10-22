@@ -3,6 +3,7 @@ package activities
 import (
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/storage"
 )
@@ -17,5 +18,5 @@ func TestSetMetrics_LeavesStorageToTheWiring(t *testing.T) {
 	}
 	reg := metrics.New("worker")
 	s3.SetMetrics(reg.Storage())
-	(&Activities{s3: s3}).SetMetrics(reg)
+	(&Activities{dialects: dialect.NewRegistry(), s3: s3}).SetMetrics(reg)
 }

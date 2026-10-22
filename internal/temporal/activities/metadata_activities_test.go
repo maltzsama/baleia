@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
@@ -30,7 +31,7 @@ func TestSyncCatalogMetadata_Errors(t *testing.T) {
 		metadata.ErrCatalogNotFound: true,
 		errors.New("network"):       false,
 	} {
-		a := &Activities{metadata: fakeSyncer{err: err}}
+		a := &Activities{dialects: dialect.NewRegistry(), metadata: fakeSyncer{err: err}}
 		_, got := a.syncCatalogMetadata(context.Background(), SyncCatalogMetadataParams{CatalogID: id})
 		var appErr *temporal.ApplicationError
 		if isApp := errors.As(got, &appErr) && appErr.NonRetryable(); isApp != nonRetryable {
@@ -39,7 +40,7 @@ func TestSyncCatalogMetadata_Errors(t *testing.T) {
 	}
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{metadata: fakeSyncer{}}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), metadata: fakeSyncer{}}
 	ts := (&testsuite.WorkflowTestSuite{}).NewTestActivityEnvironment()
 	ts.RegisterActivity(SyncCatalogMetadata)
 	v, err := ts.ExecuteActivity(SyncCatalogMetadata, SyncCatalogMetadataParams{CatalogID: id})
@@ -66,7 +67,7 @@ func TestSyncCatalogMetadata_HeartbeatsWhileWaiting(t *testing.T) {
 	before, interval := defaultActivities, metadataHeartbeatInterval
 	defer func() { defaultActivities, metadataHeartbeatInterval = before, interval }()
 	metadataHeartbeatInterval = 10 * time.Millisecond
-	defaultActivities = &Activities{metadata: slowSyncer{d: 150 * time.Millisecond}}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), metadata: slowSyncer{d: 150 * time.Millisecond}}
 	var mu sync.Mutex
 	beats := 0
 	ts := (&testsuite.WorkflowTestSuite{}).NewTestActivityEnvironment()
