@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 
@@ -30,8 +29,8 @@ const (
 
 // Options are the server-side Oracle settings.
 type Options struct {
-	// LOBMaxBytes caps a CLOB/NCLOB/BLOB value read into Arrow; zero means
-	// BALEIA_LOB_MAX_BYTES, else 1 MiB.
+	// LOBMaxBytes caps a CLOB/NCLOB/BLOB value read into Arrow
+	// (BALEIA_LOB_MAX_BYTES); zero or less means 1 MiB.
 	LOBMaxBytes int
 }
 
@@ -39,7 +38,7 @@ func (o Options) lobMaxBytes() int {
 	if o.LOBMaxBytes > 0 {
 		return o.LOBMaxBytes
 	}
-	return lobMaxBytes()
+	return defaultLobMaxBytes
 }
 
 // Spec is the kind's entry for a queryengine.Registry (#364).
@@ -77,16 +76,6 @@ func buildEngine(row queryengine.EngineRow, cfg connections.Config, d *connectio
 		lobMaxBytes:           o.lobMaxBytes(),
 		db:                    db,
 	}, nil
-}
-
-// lobMaxBytes is BALEIA_LOB_MAX_BYTES, default 1 MiB.
-func lobMaxBytes() int {
-	if v := os.Getenv("BALEIA_LOB_MAX_BYTES"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	return defaultLobMaxBytes
 }
 
 // Engine is an Oracle Database reached directly.

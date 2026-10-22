@@ -26,6 +26,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/queryengine/oracle"
 	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
@@ -147,6 +148,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	// (docs/adr/0011).
 	kinds, err := engines.NewRegistry(engines.Options{
 		SQLite: sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
+		Oracle: oracle.Options{LOBMaxBytes: cfg.OracleLOBMaxBytes},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("engine kinds: %w", err)
