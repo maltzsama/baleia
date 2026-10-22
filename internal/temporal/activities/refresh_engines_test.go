@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/testsuite"
 )
@@ -106,7 +107,7 @@ func TestRefreshEngineCatalogs(t *testing.T) {
 		trinoRow,
 	}}
 	var observed []pgtype.UUID
-	a := &Activities{queries: q, connections: reg}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: q, connections: reg}
 	a.SetEngineObserver(func(_ context.Context, eng db.Engine, cluster pgtype.UUID) error {
 		observed = append(observed, eng.ID, cluster)
 		return nil

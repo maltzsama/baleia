@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -63,7 +64,7 @@ func TestTableHealthOpensCredentialsThroughKeyring(t *testing.T) {
 	}
 
 	t.Run("readable credentials reach the client decrypted", func(t *testing.T) {
-		a := &Activities{keyring: kr, connections: conns, queries: &connQuerier{conn: db.CatalogConnection{ID: id, Type: "polaris", Url: srv.URL, CredentialsEnc: &sealed}}}
+		a := &Activities{dialects: dialect.NewRegistry(), keyring: kr, connections: conns, queries: &connQuerier{conn: db.CatalogConnection{ID: id, Type: "polaris", Url: srv.URL, CredentialsEnc: &sealed}}}
 		_ = a.lensAnalyzeTableHealth(context.Background(), params) // fails at the stub server
 		if atomic.LoadInt32(&hits) == 0 {
 			t.Fatal("client never called the catalog manager")
@@ -76,7 +77,7 @@ func TestTableHealthOpensCredentialsThroughKeyring(t *testing.T) {
 	t.Run("unreadable credentials stop before any call", func(t *testing.T) {
 		atomic.StoreInt32(&hits, 0)
 		legacy := "bGVnYWN5LWNpcGhlcnRleHQ"
-		a := &Activities{keyring: kr, connections: conns, queries: &connQuerier{conn: db.CatalogConnection{ID: id, Type: "polaris", Url: srv.URL, CredentialsEnc: &legacy}}}
+		a := &Activities{dialects: dialect.NewRegistry(), keyring: kr, connections: conns, queries: &connQuerier{conn: db.CatalogConnection{ID: id, Type: "polaris", Url: srv.URL, CredentialsEnc: &legacy}}}
 		err := a.lensAnalyzeTableHealth(context.Background(), params)
 		if !errors.Is(err, catalogs.ErrCredentialsUnreadable) {
 			t.Fatalf("err = %v, want ErrCredentialsUnreadable", err)

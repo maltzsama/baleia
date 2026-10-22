@@ -14,8 +14,6 @@ import (
 // queries into the dialect.
 type introspector struct{ e *Engine }
 
-func literal(s string) string { return trinoclient.QuoteString(s) }
-
 func (in introspector) query(ctx context.Context, sql string) ([][]any, error) {
 	res, err := in.e.client.ExecuteWithOptions(ctx, sql, trinoclient.ExecuteOptions{Source: "baleia", ClientTags: []string{"baleia", "introspection"}})
 	if err != nil {
@@ -33,7 +31,7 @@ func (in introspector) ListCatalogs(ctx context.Context) ([]string, error) {
 }
 
 func (in introspector) ListSchemas(ctx context.Context, catalog string) ([][]string, error) {
-	c, err := trinoclient.QualifiedName(catalog)
+	c, err := in.e.dialect.QualifiedName(catalog)
 	if err != nil {
 		return nil, queryengine.NewError(queryengine.CodeNotFound, Kind, "", err.Error())
 	}
@@ -60,13 +58,13 @@ func (in introspector) ListTables(ctx context.Context, catalog string, schema []
 	if err != nil {
 		return nil, err
 	}
-	c, err := trinoclient.QualifiedName(catalog)
+	c, err := in.e.dialect.QualifiedName(catalog)
 	if err != nil {
 		return nil, queryengine.NewError(queryengine.CodeNotFound, Kind, "", err.Error())
 	}
 	rows, err := in.query(ctx, fmt.Sprintf(
 		"SELECT table_name, table_type FROM %s.information_schema.tables WHERE table_schema = %s ORDER BY table_name",
-		c, literal(s)))
+		c, in.e.dialect.QuoteString(s)))
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +87,13 @@ func (in introspector) DescribeTable(ctx context.Context, t connections.TableRef
 	if err != nil {
 		return nil, err
 	}
-	c, err := trinoclient.QualifiedName(t.Catalog)
+	c, err := in.e.dialect.QualifiedName(t.Catalog)
 	if err != nil {
 		return nil, queryengine.NewError(queryengine.CodeNotFound, Kind, "", err.Error())
 	}
 	rows, err := in.query(ctx, fmt.Sprintf(
 		"SELECT column_name, data_type, is_nullable, ordinal_position FROM %s.information_schema.columns WHERE table_schema = %s AND table_name = %s ORDER BY ordinal_position",
-		c, literal(s), literal(t.Name)))
+		c, in.e.dialect.QuoteString(s), in.e.dialect.QuoteString(t.Name)))
 	if err != nil {
 		return nil, err
 	}

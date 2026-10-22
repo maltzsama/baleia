@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -119,6 +120,7 @@ func (h *Handlers) ImportSpaceBundle(ctx context.Context, request ImportSpaceBun
 		Bundle:             bundle,
 		Mode:               mode,
 		AllowCertification: isManager,
+		Dialect:            h.dialects.MustGet(dialect.Trino),
 		ValidateMetric: func(catalogID pgtype.UUID, namespace []string, table string, definition json.RawMessage, bindingID pgtype.UUID) error {
 			def, _, err := parseDefinitionRaw(definition)
 			if err != nil {

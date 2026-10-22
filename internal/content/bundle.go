@@ -215,6 +215,9 @@ type ImportReport struct {
 // ErrImportFailed means an apply had item errors; nothing was written.
 var ErrImportFailed = errors.New("import has item errors")
 
+// ErrNoDialect means ImportOptions carries no dialect to check saved queries.
+var ErrNoDialect = errors.New("content: import needs a dialect")
+
 // ImportOptions configure one import.
 type ImportOptions struct {
 	WorkspaceID pgtype.UUID
@@ -226,6 +229,9 @@ type ImportOptions struct {
 	// Only a space manager may certify, so an editor's import preserves the
 	// existing row's certification (and creates uncertified rows).
 	AllowCertification bool
+	// Dialect checks saved queries against the editor policy; they run on the
+	// default Trino engine.
+	Dialect dialect.Dialect
 	// ValidateMetric runs #33's engine probe in apply mode; nil skips it.
 	ValidateMetric func(catalogID pgtype.UUID, namespace []string, table string, definition json.RawMessage, bindingID pgtype.UUID) error
 }
@@ -234,6 +240,9 @@ type ImportOptions struct {
 // transaction. A dry run always rolls back.
 func (s *Service) Import(ctx context.Context, opts ImportOptions) (ImportReport, error) {
 	report := ImportReport{Mode: string(opts.Mode)}
+	if opts.Dialect == nil {
+		return report, ErrNoDialect
+	}
 	var q db.Querier
 	var tx pgx.Tx
 	var err error
@@ -414,7 +423,7 @@ func (im *importer) planSavedQuery(ctx context.Context, p *planItem) {
 		p.action, p.message = ActionError, "name_and_sql_required"
 		return
 	}
-	if policy.ForbiddenInEditor(dialect.MustGet(dialect.Trino), item.SQL) {
+	if policy.ForbiddenInEditor(im.opts.Dialect, item.SQL) {
 		p.action, p.message = ActionError, "forbidden_sql"
 		return
 	}

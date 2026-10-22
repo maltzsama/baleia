@@ -11,6 +11,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
 
@@ -84,7 +85,7 @@ func TestRootConfinement(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := connections.Config{Kind: connections.KindSQLite, Values: map[string]string{"path": tc.path}}
-			e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, tc.o)
+			e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, tc.o, testDialect)
 			if tc.want == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -105,7 +106,7 @@ func TestRootConfinement(t *testing.T) {
 
 func TestRefusesAttachAndTail(t *testing.T) {
 	o, cfg := fixture(t, true)
-	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o)
+	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestRefusesAttachAndTail(t *testing.T) {
 
 func TestReadOnlyEvenWithPragma(t *testing.T) {
 	o, cfg := fixture(t, true)
-	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o)
+	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +165,7 @@ func TestMixedTypesFallback(t *testing.T) {
 		"CREATE TABLE m(x INTEGER)", "INSERT INTO m VALUES (1)", "INSERT INTO m VALUES ('abc')")
 	o := Options{Root: dir}
 	cfg := connections.Config{Kind: connections.KindSQLite, Values: map[string]string{"path": "mixed.db"}}
-	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o)
+	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func TestMixedTypesFallback(t *testing.T) {
 
 func TestCancelUnsupported(t *testing.T) {
 	o, cfg := fixture(t, false)
-	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o)
+	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ func TestCancelUnsupported(t *testing.T) {
 // builds engines with the options it was given.
 func TestSpec(t *testing.T) {
 	o, cfg := fixture(t, false)
-	s := Spec(o)
+	s := Spec(o, dialect.NewRegistry().MustGet(dialect.SQLite))
 	if s.Name != Kind {
 		t.Fatalf("spec kind = %q, want %q", s.Name, Kind)
 	}
@@ -233,3 +234,6 @@ type discardSink struct{}
 func (*discardSink) Begin(*arrow.Schema) error         { return nil }
 func (*discardSink) Write(rec arrow.RecordBatch) error { rec.Release(); return nil }
 func (*discardSink) End(queryengine.Stats) error       { return nil }
+
+// testDialect is the dialect SQLite engines speak in these tests.
+var testDialect = dialect.NewRegistry().MustGet(dialect.SQLite)

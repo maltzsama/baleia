@@ -10,6 +10,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 	_ "github.com/microsoft/go-mssqldb"
@@ -48,7 +49,7 @@ func TestConformance(t *testing.T) {
 		Secrets: map[string]string{"password": pass},
 	}
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
-		e, err := newEngine(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
+		e, err := newEngine(dialect.NewRegistry().MustGet(dialect.TSQL))(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
 		if err != nil {
 			t.Fatal(err)
 		}

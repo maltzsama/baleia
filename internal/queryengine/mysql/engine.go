@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	driver "github.com/go-sql-driver/mysql"
 )
@@ -26,16 +25,17 @@ const (
 
 const connectTimeout = 10 * time.Second
 
-// Specs are the MySQL and MariaDB entries for a queryengine.Registry (#364).
-func Specs() []queryengine.KindSpec {
+// Specs are the MySQL and MariaDB entries for a queryengine.Registry (#364),
+// with the dialect each speaks.
+func Specs(mysql, mariadb queryengine.Dialect) []queryengine.KindSpec {
 	return []queryengine.KindSpec{
-		{Name: KindMySQL, Class: queryengine.ClassDirect, Factory: newEngine(false)},
-		{Name: KindMariaDB, Class: queryengine.ClassDirect, Factory: newEngine(true)},
+		{Name: KindMySQL, Class: queryengine.ClassDirect, Factory: newEngine(false, mysql)},
+		{Name: KindMariaDB, Class: queryengine.ClassDirect, Factory: newEngine(true, mariadb)},
 	}
 }
 
 // newEngine returns the factory of a MySQL or MariaDB engine.
-func newEngine(mariadb bool) queryengine.Factory {
+func newEngine(mariadb bool, dl queryengine.Dialect) queryengine.Factory {
 	kind := KindMySQL
 	if mariadb {
 		kind = KindMariaDB
@@ -53,7 +53,7 @@ func newEngine(mariadb bool) queryengine.Factory {
 		db := sql.OpenDB(connector)
 		db.SetMaxOpenConns(8)
 		db.SetConnMaxIdleTime(time.Minute)
-		return &Engine{id: row.ID, kind: kind, mariadb: mariadb, db: db}, nil
+		return &Engine{dialect: dl, id: row.ID, kind: kind, mariadb: mariadb, db: db}, nil
 	}
 }
 
@@ -100,6 +100,7 @@ func driverConfig(cfg connections.Config, network string) (*driver.Config, error
 
 // Engine is a MySQL or MariaDB server reached directly.
 type Engine struct {
+	dialect queryengine.Dialect
 	id      string
 	kind    string
 	mariadb bool
@@ -111,12 +112,7 @@ func (e *Engine) Kind() string             { return e.kind }
 func (e *Engine) Class() queryengine.Class { return queryengine.ClassDirect }
 func (e *Engine) Close() error             { return e.db.Close() }
 
-func (e *Engine) Dialect() queryengine.Dialect {
-	if e.mariadb {
-		return dialect.MustGet(dialect.MariaDB)
-	}
-	return dialect.MustGet(dialect.MySQL)
-}
+func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
 
 // Capabilities of MySQL/MariaDB in v1.
 func (e *Engine) Capabilities() queryengine.Capabilities {

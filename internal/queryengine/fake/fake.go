@@ -54,6 +54,8 @@ type Options struct {
 	Dialer *connections.Dialer // recorded so tests can check the factory got it
 	// ReadOnly defaults to enforced.
 	ReadOnly queryengine.ReadOnlySupport
+	// Dialect defaults to the generic ANSI one (dialect.FlightSQL).
+	Dialect queryengine.Dialect
 }
 
 // Engine is the fake engine.
@@ -67,6 +69,9 @@ type Engine struct {
 func New(o Options) *Engine {
 	if o.ReadOnly == "" {
 		o.ReadOnly = queryengine.ReadOnlyEnforced
+	}
+	if o.Dialect == nil {
+		o.Dialect = dialect.NewRegistry().MustGet(dialect.FlightSQL)
 	}
 	return &Engine{opts: o}
 }
@@ -84,12 +89,12 @@ func (e *Engine) Closed() bool {
 func (e *Engine) ID() string                   { return e.opts.ID }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassDirect }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.FlightSQL) } // ANSI
+func (e *Engine) Dialect() queryengine.Dialect { return e.opts.Dialect }
 func (e *Engine) Ping(context.Context) error   { return nil }
 
 func (e *Engine) Capabilities() queryengine.Capabilities {
 	return queryengine.Capabilities{
-		Dialect:            dialect.FlightSQL,
+		Dialect:            e.opts.Dialect.Name(),
 		IdentityModes:      []string{"connection"},
 		ReadOnly:           e.opts.ReadOnly,
 		CancelScope:        queryengine.CancelAnyProcess,

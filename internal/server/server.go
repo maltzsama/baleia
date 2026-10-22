@@ -58,7 +58,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
 
-	h := api.NewHandlers(core.Queries, core.Pool, cfg, core.Keyring, core.Temporal, core.Storage, core.Connections, core.Engines, core.Engines, core.Binder)
+	h := api.NewHandlers(core.Queries, core.Pool, cfg, core.Keyring, core.Temporal, core.Storage, core.Connections, core.Engines, core.Engines, core.Dialects, core.Binder)
 	h.SetAudit(core.Audit)
 	h.SetDialer(core.Dialer)
 	h.SetMetrics(core.Metrics)
@@ -96,7 +96,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	// The MCP surface is mounted outside /api/v1: agent tokens are valid only
 	// here (#58), and the streamable handler authenticates every request.
 	if cfg.AgentsEnabled {
-		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings())
+		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings(), core.Dialects)
 		gate.SetObserver(core.Metrics.Agent())
 		s.mcp = mcp.New(h, gate, core.Queries, mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
 		startAssistant(ctx, h, s.mcp, core.Dialer)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 )
@@ -21,7 +22,7 @@ func TestConformance(t *testing.T) {
 	setup(t, c)
 
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
-		return queryengine.Guard(&Engine{id: "conformance", c: c}, false)
+		return queryengine.Guard(&Engine{dialect: dialect.NewRegistry().MustGet(dialect.ClickHouse), id: "conformance", c: c}, false)
 	}, conformance.Fixtures{
 		TypesSQL: `SELECT
 			toInt64(9007199254740993) AS c_int64,
@@ -66,7 +67,7 @@ func TestConformance(t *testing.T) {
 // sink with no Baleia mapping layer.
 func TestArrowPassthrough(t *testing.T) {
 	c := testClient(t)
-	e := queryengine.Guard(&Engine{id: "passthrough", c: c}, false)
+	e := queryengine.Guard(&Engine{dialect: dialect.NewRegistry().MustGet(dialect.ClickHouse), id: "passthrough", c: c}, false)
 	tbl, err := queryengine.Collect(context.Background(), e, queryengine.SessionSpec{},
 		`SELECT toUInt64(18446744073709551615) AS u,
 		 toDecimal128('1.25', 2) AS d,

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
 func provider(t *testing.T) *Provider {
@@ -18,7 +19,7 @@ func provider(t *testing.T) *Provider {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(d)
+	return New(d, dialect.NewRegistry().MustGet(dialect.Trino))
 }
 
 func TestValidate(t *testing.T) {
@@ -49,7 +50,7 @@ func TestLiteralsKeepPercent(t *testing.T) {
 	defer srv.Close()
 	p := provider(t)
 	cfg, _ := p.Validate(connections.Config{Values: map[string]string{"url": srv.URL}})
-	r := &reader{c: p.client(cfg)}
+	r := &reader{c: p.client(cfg), dialect: p.dialect}
 	_, _, _ = r.ListTables(context.Background(), "cat{catalog}", connections.Namespace{"a%sb{catalog}"}, "x%d")
 	want := `FROM "cat{catalog}".information_schema.tables`
 	if !strings.Contains(got, want) || !strings.Contains(got, `'a%sb{catalog}'`) || !strings.Contains(got, `'x%d'`) {

@@ -32,35 +32,40 @@ const (
 const requestTimeout = 60 * time.Second
 
 // Spec is the kind's entry for a queryengine.Registry (#364).
-func Spec() queryengine.KindSpec {
-	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassFederated, Factory: newEngine}
+func Spec(dl queryengine.Dialect) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassFederated, Factory: newEngine(dl)}
 }
 
 // newEngine builds the engine from its connection config: url, and the
 // service_user (fallback identity) and admin_user (kills queries by handle)
 // that bootstrap keeps in step with the environment.
-func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-	url := cfg.Value("url")
-	if url == "" {
-		return nil, fmt.Errorf("trino engine %s: connection has no url", row.Name)
+func newEngine(dl queryengine.Dialect) queryengine.Factory {
+	return func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+		url := cfg.Value("url")
+		if url == "" {
+			return nil, fmt.Errorf("trino engine %s: connection has no url", row.Name)
+		}
+		service := valueOr(cfg.Value("service_user"), defaultServiceUser)
+		admin := valueOr(cfg.Value("admin_user"), defaultAdminUser)
+		hc := obs.WrapHTTPClient(trinoprovider.HTTPClient(d, cfg, requestTimeout))
+		return &Engine{
+			dialect: dl,
+			id:      row.ID,
+			client:  trinoclient.NewWithHTTPClient(url, service, hc),
+			admin:   trinoclient.NewWithHTTPClient(url, admin, hc),
+		}, nil
 	}
-	service := valueOr(cfg.Value("service_user"), defaultServiceUser)
-	admin := valueOr(cfg.Value("admin_user"), defaultAdminUser)
-	hc := obs.WrapHTTPClient(trinoprovider.HTTPClient(d, cfg, requestTimeout))
-	return &Engine{
-		id:     row.ID,
-		client: trinoclient.NewWithHTTPClient(url, service, hc),
-		admin:  trinoclient.NewWithHTTPClient(url, admin, hc),
-	}, nil
 }
 
-// New builds an engine for a coordinator URL; tests and tools use it.
-func New(id, url, serviceUser, adminUser string, d *connections.Dialer) *Engine {
+// New builds an engine for a coordinator URL that speaks dl; tests and tools
+// use it.
+func New(id, url, serviceUser, adminUser string, d *connections.Dialer, dl queryengine.Dialect) *Engine {
 	hc := obs.WrapHTTPClient(d.HTTPClient(requestTimeout))
 	return &Engine{
-		id:     id,
-		client: trinoclient.NewWithHTTPClient(url, valueOr(serviceUser, defaultServiceUser), hc),
-		admin:  trinoclient.NewWithHTTPClient(url, valueOr(adminUser, defaultAdminUser), hc),
+		dialect: dl,
+		id:      id,
+		client:  trinoclient.NewWithHTTPClient(url, valueOr(serviceUser, defaultServiceUser), hc),
+		admin:   trinoclient.NewWithHTTPClient(url, valueOr(adminUser, defaultAdminUser), hc),
 	}
 }
 
@@ -73,15 +78,16 @@ func valueOr(v, def string) string {
 
 // Engine is a Trino coordinator.
 type Engine struct {
-	id     string
-	client *trinoclient.Client // runs statements; identity set per session
-	admin  *trinoclient.Client // kills queries by handle; never runs user SQL
+	dialect queryengine.Dialect
+	id      string
+	client  *trinoclient.Client // runs statements; identity set per session
+	admin   *trinoclient.Client // kills queries by handle; never runs user SQL
 }
 
 func (e *Engine) ID() string                   { return e.id }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassFederated }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.Trino) }
+func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
 func (e *Engine) Close() error                 { return nil }
 
 // Capabilities of Trino in v1.

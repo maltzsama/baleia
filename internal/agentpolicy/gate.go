@@ -83,6 +83,7 @@ type Observer interface {
 
 // Gate is the single enforcement point for agent tool calls.
 type Gate struct {
+	dialects *dialect.Registry
 	store    Store
 	engines  EngineCapabilities
 	ceilings Ceilings
@@ -92,11 +93,12 @@ type Gate struct {
 }
 
 // NewGate builds a gate. ceilings zero values fall back to DefaultCeilings.
-func NewGate(store Store, engines EngineCapabilities, ceilings Ceilings) *Gate {
+func NewGate(store Store, engines EngineCapabilities, ceilings Ceilings, dialects *dialect.Registry) *Gate {
 	if ceilings == (Ceilings{}) {
 		ceilings = DefaultCeilings()
 	}
 	return &Gate{
+		dialects: dialects,
 		store:    store,
 		engines:  engines,
 		ceilings: ceilings,
@@ -211,7 +213,7 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 		}
 		return Decision{}, err
 	}
-	d, ok := dialect.ForEngineKind(engine.Kind)
+	d, ok := g.dialects.ForEngineKind(engine.Kind)
 	if !ok {
 		return refuse(ReasonPolicy, "engine dialect is not supported"), nil
 	}

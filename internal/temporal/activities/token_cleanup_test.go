@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -87,7 +88,7 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	insertAttempt("oidc-live", now.Add(time.Hour))
 
 	old := defaultActivities
-	defaultActivities = &Activities{queries: q}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), queries: q}
 	t.Cleanup(func() { defaultActivities = old })
 
 	if err := CleanupExpiredTokens(ctx); err != nil {

@@ -3,11 +3,12 @@ package clickhouse
 import (
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
 
 func TestSpec(t *testing.T) {
-	if s := Spec(); s.Name != Kind || s.Factory == nil {
+	if s := Spec(dialect.NewRegistry().MustGet(dialect.ClickHouse)); s.Name != Kind || s.Factory == nil {
 		t.Fatalf("spec = %+v, want kind %q with a factory", s, Kind)
 	}
 }

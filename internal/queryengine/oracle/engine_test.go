@@ -1,6 +1,10 @@
 package oracle
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/galileostudio/baleia/internal/dialect"
+)
 
 func TestOptions_LOBMaxBytes(t *testing.T) {
 	tests := []struct {
@@ -22,7 +26,7 @@ func TestOptions_LOBMaxBytes(t *testing.T) {
 }
 
 func TestSpec(t *testing.T) {
-	if s := Spec(Options{}); s.Name != Kind || s.Factory == nil {
+	if s := Spec(Options{}, dialect.NewRegistry().MustGet(dialect.Oracle)); s.Name != Kind || s.Factory == nil {
 		t.Fatalf("spec = %+v, want kind %q with a factory", s, Kind)
 	}
 }

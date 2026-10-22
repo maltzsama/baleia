@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
@@ -54,4 +55,16 @@ func TestConformance_ReadOnlyNone(t *testing.T) {
 	conformance.Run(t, func(*testing.T) queryengine.Engine {
 		return fake.New(fake.Options{ID: "e2", ReadOnly: queryengine.ReadOnlyNone})
 	}, fixtures())
+}
+
+// TestCapabilities_ReportTheInjectedDialect: Capabilities and Dialect agree.
+func TestCapabilities_ReportTheInjectedDialect(t *testing.T) {
+	pg := dialect.NewRegistry().MustGet(dialect.PostgreSQL)
+	e := fake.New(fake.Options{Dialect: pg})
+	if got := e.Capabilities().Dialect; got != pg.Name() {
+		t.Fatalf("capabilities dialect = %q, want %q", got, pg.Name())
+	}
+	if got := fake.New(fake.Options{}).Capabilities().Dialect; got != dialect.FlightSQL {
+		t.Fatalf("default capabilities dialect = %q, want %q", got, dialect.FlightSQL)
+	}
 }

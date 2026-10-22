@@ -44,6 +44,31 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
+// TestNewRegistry: every registry built lists the same dialects, so callers
+// can each be injected their own without disagreeing.
+func TestNewRegistry(t *testing.T) {
+	a, b := NewRegistry(), NewRegistry()
+	if !slices.Equal(a.Names(), b.Names()) || !slices.Equal(a.Names(), Names()) {
+		t.Fatalf("names differ: %v / %v / %v", a.Names(), b.Names(), Names())
+	}
+	for _, n := range a.Names() {
+		if a.MustGet(n).Name() != n {
+			t.Errorf("%s: wrong dialect", n)
+		}
+	}
+}
+
+// TestMustGetPanicsOnUnknown: MustGet is for the name constants; an unknown
+// name is a programming error.
+func TestMustGetPanicsOnUnknown(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustGet of an unknown dialect did not panic")
+		}
+	}()
+	MustGet("nope")
+}
+
 // TestForEngineKind covers the kind → dialect translation: every engine kind
 // the API can carry resolves, and a miss is (nil, false) explicitly rather
 // than through a lookup of the empty name.
@@ -446,5 +471,51 @@ func TestSplitStatements_trino(t *testing.T) {
 	// Dollar quoting is PostgreSQL's (the old splitter applied it to Trino).
 	if got := split(t, PostgreSQL, "SELECT $$hello; world$$; SELECT 2"); len(got) != 2 {
 		t.Errorf("postgresql $$: %q", got)
+	}
+}
+
+// Trino quoting cases moved from internal/trino when its package-level
+// helpers went away (#364 follow-up).
+func TestTrino_QuoteIdent(t *testing.T) {
+	trino := NewRegistry().MustGet(Trino)
+	for in, want := range map[string]string{
+		"orders":     `"orders"`,
+		`a"b`:        `"a""b"`,
+		"x; DROP":    `"x; DROP"`,
+		"with space": `"with space"`,
+		`"`:          `""""`,
+		"ünïcode":    `"ünïcode"`,
+		"new\nline":  "\"new\nline\"",
+		"semi;--/*":  `"semi;--/*"`,
+	} {
+		got, err := trino.QuoteIdent(in)
+		if err != nil || got != want {
+			t.Errorf("QuoteIdent(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "a\x00b"} {
+		if _, err := trino.QuoteIdent(bad); err == nil {
+			t.Errorf("QuoteIdent(%q) accepted", bad)
+		}
+	}
+}
+
+func TestTrino_QualifiedName(t *testing.T) {
+	trino := NewRegistry().MustGet(Trino)
+	got, err := trino.QualifiedName("cat", `we"ird`, "t")
+	if err != nil || got != `"cat"."we""ird"."t"` {
+		t.Fatalf("QualifiedName = %q, %v", got, err)
+	}
+	if _, err := trino.QualifiedName("cat", "", "t"); err == nil {
+		t.Fatal("an empty part must fail the whole name")
+	}
+}
+
+func TestTrino_QuoteString(t *testing.T) {
+	trino := NewRegistry().MustGet(Trino)
+	for in, want := range map[string]string{"7d": `'7d'`, "it's": `'it''s'`, `'; DROP`: `'''; DROP'`} {
+		if got := trino.QuoteString(in); got != want {
+			t.Errorf("QuoteString(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

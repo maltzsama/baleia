@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -85,7 +86,7 @@ func newMetaFixture(t *testing.T) *metaFixture {
 	var deep openapi_types.UUID
 	table(&deep, f.lake, `{ops,"b.c"}`, "deep", false)
 
-	f.h = &Handlers{queries: db.New(pool)} // no engines: reads never call one
+	f.h = &Handlers{dialects: dialect.NewRegistry(), queries: db.New(pool)} // no engines: reads never call one
 	return f
 }
 

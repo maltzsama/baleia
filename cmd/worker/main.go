@@ -77,7 +77,7 @@ func run(cfg *config.Config) error {
 	// Lens reads the Trino coordinator's runtime state as the service identity.
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.Dialer.HTTPClient(60*time.Second)))
 
-	act := activities.New(pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage)
+	act := activities.New(pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
 	act.SetMetrics(reg)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(core.Queries, core.Keyring, core.Connections, core.Engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones

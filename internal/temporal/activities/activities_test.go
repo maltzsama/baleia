@@ -12,7 +12,9 @@ import (
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/google/uuid"
@@ -30,10 +32,19 @@ func (f *fakeQuerier) UpdateQueryExecution(context.Context, db.UpdateQueryExecut
 	return db.QueryExecution{}, f.updateErr
 }
 
+// testTrino is a Trino adapter whose coordinator is never reached: its
+// dialect, capabilities and maintenance rendering need none.
+var testTrino = func() *qtrino.Engine {
+	d, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		panic(err)
+	}
+	return qtrino.New("test-trino", "http://127.0.0.1:1", "", "", d, dialect.NewRegistry().MustGet(dialect.Trino))
+}()
+
 // fakeEngine is a scripted engine (and engine source) so the activities can
-// be tested against a blocked, failing, or always-succeeding backend. The
-// embedded Trino adapter is nil: its dialect, capabilities and maintenance
-// rendering need no coordinator, so the SQL under test is Trino's own.
+// be tested against a blocked, failing, or always-succeeding backend. It
+// embeds testTrino, so the SQL under test is Trino's own.
 type fakeEngine struct {
 	*qtrino.Engine
 	mu        sync.Mutex
@@ -246,7 +257,7 @@ const (
 // conditional update matches nothing (the execution was cancelled), the activity
 // must succeed without overwriting the terminal status.
 func TestCompleteExecutionDoesNotOverwriteTerminal(t *testing.T) {
-	a := &Activities{queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
 
 	err := a.completeExecution(context.Background(), CompleteExecutionParams{
 		ExecutionID: testExecID,
@@ -258,7 +269,7 @@ func TestCompleteExecutionDoesNotOverwriteTerminal(t *testing.T) {
 }
 
 func TestFailExecutionDoesNotOverwriteTerminal(t *testing.T) {
-	a := &Activities{queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: &fakeQuerier{updateErr: pgx.ErrNoRows}}
 
 	err := a.failExecution(context.Background(), FailExecutionParams{
 		ExecutionID: testExecID,
@@ -269,7 +280,7 @@ func TestFailExecutionDoesNotOverwriteTerminal(t *testing.T) {
 }
 
 func TestCompleteExecutionPropagatesRealErrors(t *testing.T) {
-	a := &Activities{queries: &fakeQuerier{updateErr: context.DeadlineExceeded}}
+	a := &Activities{dialects: dialect.NewRegistry(), queries: &fakeQuerier{updateErr: context.DeadlineExceeded}}
 
 	err := a.completeExecution(context.Background(), CompleteExecutionParams{
 		ExecutionID: testExecID,

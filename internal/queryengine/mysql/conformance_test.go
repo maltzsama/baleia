@@ -10,6 +10,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 	driver "github.com/go-sql-driver/mysql"
@@ -59,7 +60,7 @@ func runConformance(t *testing.T, env string, mariadb bool) {
 		Secrets: map[string]string{"password": pass},
 	}
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
-		e, err := newEngine(mariadb)(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: kind}, cfg, d)
+		e, err := newEngine(mariadb, testDialect(mariadb))(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: kind}, cfg, d)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,4 +140,13 @@ func setup(t *testing.T, u *url.URL) {
 			t.Fatalf("%s: %v", stmt, err)
 		}
 	}
+}
+
+// testDialect is the dialect the MySQL or MariaDB engine speaks.
+func testDialect(mariadb bool) queryengine.Dialect {
+	r := dialect.NewRegistry()
+	if mariadb {
+		return r.MustGet(dialect.MariaDB)
+	}
+	return r.MustGet(dialect.MySQL)
 }

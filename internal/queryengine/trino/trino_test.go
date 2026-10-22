@@ -13,6 +13,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
 )
@@ -114,7 +115,7 @@ func testEngine(t *testing.T, f *fakeCoordinator) *Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New("e1", srv.URL, "svc", "adm", d)
+	return New("e1", srv.URL, "svc", "adm", d, dialect.NewRegistry().MustGet(dialect.Trino))
 }
 
 func TestSessionAppliesResponseHeaders(t *testing.T) {

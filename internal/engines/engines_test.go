@@ -3,15 +3,23 @@ package engines
 import (
 	"slices"
 	"testing"
+
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
 func TestNewRegistry_ListsEveryKind(t *testing.T) {
-	r, err := NewRegistry(Options{})
+	r, err := NewRegistry(Options{Dialects: dialect.NewRegistry()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	expected := []string{"clickhouse", "flightsql", "mariadb", "mysql", "oracle", "postgresql", "sqlite", "sqlserver", "trino"}
 	if got := r.Kinds(); !slices.Equal(got, expected) {
 		t.Fatalf("kinds = %v, want %v", got, expected)
+	}
+}
+
+func TestNewRegistry_RequiresDialects(t *testing.T) {
+	if _, err := NewRegistry(Options{}); err == nil {
+		t.Fatal("NewRegistry without dialects returned no error")
 	}
 }

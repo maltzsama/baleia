@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -70,7 +71,7 @@ func (f *updateRetrieverFake) UpdateRetriever(_ context.Context, p db.UpdateRetr
 func TestUpdateRetriever_CronValidation(t *testing.T) {
 	for name, expr := range map[string]string{"every minute": "* * * * *", "invalid": "not a cron"} {
 		f := &updateRetrieverFake{}
-		h := &Handlers{queries: f}
+		h := &Handlers{dialects: dialect.NewRegistry(), queries: f}
 		bad := expr
 		resp, err := h.UpdateRetriever(testContext(), UpdateRetrieverRequestObject{
 			Id: PathId{0xAA}, RetrieverId: PathId{0xBB}, Body: &UpdateRetrieverJSONRequestBody{CronSchedule: &bad},
@@ -88,7 +89,7 @@ func TestUpdateRetriever_CronValidation(t *testing.T) {
 	}
 
 	f := &updateRetrieverFake{}
-	h := &Handlers{queries: f}
+	h := &Handlers{dialects: dialect.NewRegistry(), queries: f}
 	good := "30 2 * * *"
 	if _, err := h.UpdateRetriever(testContext(), UpdateRetrieverRequestObject{
 		Id: PathId{0xAA}, RetrieverId: PathId{0xBB}, Body: &UpdateRetrieverJSONRequestBody{CronSchedule: &good},
@@ -108,7 +109,7 @@ func TestTriggerRetrieverRefresh_OnlyFull(t *testing.T) {
 	full := TriggerRetrieverRefreshJSONBodyRefreshType("full")
 
 	tc := &recordingTemporal{}
-	h := &Handlers{queries: &updateRetrieverFake{}, temporalClient: tc}
+	h := &Handlers{dialects: dialect.NewRegistry(), queries: &updateRetrieverFake{}, temporalClient: tc}
 	req := func(rt *TriggerRetrieverRefreshJSONBodyRefreshType) TriggerRetrieverRefreshRequestObject {
 		return TriggerRetrieverRefreshRequestObject{Id: PathId{0xAA}, RetrieverId: PathId{0xBB}, Body: &TriggerRetrieverRefreshJSONRequestBody{RefreshType: rt}}
 	}

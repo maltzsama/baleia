@@ -26,7 +26,7 @@ func TestConformance(t *testing.T) {
 		Values: map[string]string{"path": "conformance.db", "read_write": "true"},
 	}
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
-		e, err := newEngineWithOptions(queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, o)
+		e, err := newEngineWithOptions(queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, o, testDialect)
 		if err != nil {
 			t.Fatal(err)
 		}
