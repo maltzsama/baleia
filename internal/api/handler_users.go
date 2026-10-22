@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func (h *Handlers) ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error) {
+func (h *AuthHandlers) ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error) {
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		return ListUsers403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
@@ -56,7 +56,7 @@ func (h *Handlers) ListUsers(ctx context.Context, request ListUsersRequestObject
 	}, nil
 }
 
-func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObject) (InviteUserResponseObject, error) {
+func (h *AuthHandlers) InviteUser(ctx context.Context, request InviteUserRequestObject) (InviteUserResponseObject, error) {
 	ev := audit.Event{Action: audit.UserInvite, ResourceType: "user"}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
@@ -124,7 +124,7 @@ func (h *Handlers) InviteUser(ctx context.Context, request InviteUserRequestObje
 	return InviteUser201JSONResponse(dbUserToPublic(user)), nil
 }
 
-func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleRequestObject) (UpdateUserRoleResponseObject, error) {
+func (h *AuthHandlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleRequestObject) (UpdateUserRoleResponseObject, error) {
 	ev := audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
@@ -163,7 +163,7 @@ func (h *Handlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleReq
 	return UpdateUserRole200JSONResponse(dbUserToPublic(user)), nil
 }
 
-func (h *Handlers) RemoveUser(ctx context.Context, request RemoveUserRequestObject) (RemoveUserResponseObject, error) {
+func (h *AuthHandlers) RemoveUser(ctx context.Context, request RemoveUserRequestObject) (RemoveUserResponseObject, error) {
 	ev := audit.Event{Action: audit.UserDisable, ResourceType: "user", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {

@@ -19,7 +19,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/dialect"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -35,6 +34,7 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	*core
+	*AuthHandlers
 	// schema reports the applied migration version (poolSchema outside tests).
 	schema schemaVersioner
 	s3     *storage.S3Client
@@ -57,28 +57,9 @@ type Handlers struct {
 	// seams (#291). Tests inject them without a Temporal server or an engine.
 	systemStatusSchedule func(ctx context.Context, id string) (SystemStatusItemStatus, string)
 	systemStatusEngine   func(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string)
-	// dummyHash is compared against on the unknown-account and SSO-only paths
-	// so timing does not reveal whether an account exists (#51).
-	dummyHashOnce sync.Once
-	dummyHash     string
-	// loginDelay slows repeated login failures per account (#51).
-	loginDelayStore *LoginDelay
-	loginDelayOnce  sync.Once
-	// mailer sends password-reset and invite e-mails (#51) localized by the
-	// recipient's preference (#67). Tests inject a fake so the paths run
-	// without an SMTP server.
-	mailer MailSender
-	// oidcCache holds discovered providers keyed by id + config version (#280).
-	oidcCache sync.Map
 	// attentionCache caches the computed attention items for 30 s per user (#261).
 	attentionCache *TTLStore[[]AttentionItem]
 	attentionOnce  sync.Once
-	// ldapAuthenticate verifies directory credentials (#255). Tests inject a
-	// fake so the handler branch runs without a directory server.
-	ldapAuthenticate func(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)
-	// idpProbe probes a provider configuration without persisting anything
-	// (#286). Tests inject a fake so the handler runs without a network.
-	idpProbe func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
 }
 
 // The handlers implement the whole generated strict server; the split by
@@ -91,7 +72,7 @@ type MailSender interface {
 }
 
 // mailSender uses the injected mailer, or SMTP from the configuration.
-func (h *Handlers) mailSender() MailSender {
+func (h *AuthHandlers) mailSender() MailSender {
 	if h.mailer != nil {
 		return h.mailer
 	}
@@ -230,22 +211,24 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		slices.Sort(missing)
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
+	c := &core{
+		queries:        d.Data.Queries,
+		pool:           d.Data.Pool,
+		tx:             poolTx{pool: d.Data.Pool},
+		settings:       d.Settings,
+		keyring:        d.Keyring,
+		temporalClient: d.Temporal,
+		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		connections:    d.Engines.Connections,
+		engines:        d.Engines.Engines,
+		kinds:          d.Engines.Kinds,
+		dialects:       d.Engines.Dialects,
+		audit:          d.Observability.Audit,
+		content:        content.New(d.Data.Pool, d.Data.Queries),
+	}
 	h := &Handlers{
-		core: &core{
-			queries:        d.Data.Queries,
-			pool:           d.Data.Pool,
-			tx:             poolTx{pool: d.Data.Pool},
-			settings:       d.Settings,
-			keyring:        d.Keyring,
-			temporalClient: d.Temporal,
-			catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
-			connections:    d.Engines.Connections,
-			engines:        d.Engines.Engines,
-			kinds:          d.Engines.Kinds,
-			dialects:       d.Engines.Dialects,
-			audit:          d.Observability.Audit,
-			content:        content.New(d.Data.Pool, d.Data.Queries),
-		},
+		core:            c,
+		AuthHandlers:    &AuthHandlers{core: c},
 		schema:          poolSchema{pool: d.Data.Pool},
 		s3:              d.Storage,
 		versionCache:    NewTTLStore[engineProbe](engineVersionTTL),

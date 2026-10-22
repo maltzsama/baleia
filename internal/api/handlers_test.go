@@ -1,6 +1,7 @@
 package api
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -91,4 +92,34 @@ func TestNewHandlers_Observability(t *testing.T) {
 	if h.AuthMetrics() == nil {
 		t.Error("metrics must be registered when a registry is given")
 	}
+}
+
+// assertGroupsWired: every handler group embedded in Handlers is built and
+// shares the one core (#365); a nil group would only fail at request time.
+func assertGroupsWired(t *testing.T, h *Handlers) {
+	t.Helper()
+	v := reflect.ValueOf(h).Elem()
+	for i := range v.NumField() {
+		f := v.Type().Field(i)
+		if !f.Anonymous || f.Name == "core" {
+			continue
+		}
+		g := v.Field(i)
+		if g.IsNil() {
+			t.Errorf("group %s is not built", f.Name)
+			continue
+		}
+		if c := g.Elem().FieldByName("core"); !c.IsValid() || c.Pointer() != reflect.ValueOf(h.core).Pointer() {
+			t.Errorf("group %s does not share the handlers' core", f.Name)
+		}
+	}
+}
+
+func TestNewHandlers_GroupsShareCore(t *testing.T) {
+	h, err := NewHandlers(testDeps(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertGroupsWired(t, h)
+	assertGroupsWired(t, testHandlers(handlerFields{}))
 }

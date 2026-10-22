@@ -14,7 +14,7 @@ import (
 
 // SuspendUser — POST /users/{id}/suspend (#258). The account is suspended,
 // never deleted; its refresh tokens and API keys die immediately.
-func (h *Handlers) SuspendUser(ctx context.Context, request SuspendUserRequestObject) (SuspendUserResponseObject, error) {
+func (h *AuthHandlers) SuspendUser(ctx context.Context, request SuspendUserRequestObject) (SuspendUserResponseObject, error) {
 	uid := pgtype.UUID{Bytes: request.Id, Valid: true}
 	ev := audit.Event{Action: audit.UserSuspend, ResourceType: "user", ResourceID: idString(uid)}
 	if auth.RoleFromContext(ctx) != "admin" {
@@ -61,7 +61,7 @@ func (h *Handlers) SuspendUser(ctx context.Context, request SuspendUserRequestOb
 
 // ReinstateUser — POST /users/{id}/reinstate (#258). An admin override can
 // lift any suspension, including a directory one.
-func (h *Handlers) ReinstateUser(ctx context.Context, request ReinstateUserRequestObject) (ReinstateUserResponseObject, error) {
+func (h *AuthHandlers) ReinstateUser(ctx context.Context, request ReinstateUserRequestObject) (ReinstateUserResponseObject, error) {
 	uid := pgtype.UUID{Bytes: request.Id, Valid: true}
 	ev := audit.Event{Action: audit.UserReinstate, ResourceType: "user", ResourceID: idString(uid)}
 	if auth.RoleFromContext(ctx) != "admin" {
@@ -86,7 +86,7 @@ func (h *Handlers) ReinstateUser(ctx context.Context, request ReinstateUserReque
 }
 
 // ListDirectoryReconcileRuns — GET /admin/directory-reconcile-runs (#258).
-func (h *Handlers) ListDirectoryReconcileRuns(ctx context.Context, request ListDirectoryReconcileRunsRequestObject) (ListDirectoryReconcileRunsResponseObject, error) {
+func (h *AuthHandlers) ListDirectoryReconcileRuns(ctx context.Context, request ListDirectoryReconcileRunsRequestObject) (ListDirectoryReconcileRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListDirectoryReconcileRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

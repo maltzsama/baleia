@@ -16,7 +16,7 @@ import (
 // UpdateIdentityProvider — PATCH /admin/identity-providers/{id} (#285).
 // Omitted config fields keep their stored value; an empty secret clears it.
 // The provider type is immutable.
-func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIdentityProviderRequestObject) (UpdateIdentityProviderResponseObject, error) {
+func (h *AuthHandlers) UpdateIdentityProvider(ctx context.Context, request UpdateIdentityProviderRequestObject) (UpdateIdentityProviderResponseObject, error) {
 	ev := audit.Event{Action: audit.IdentityProviderUpdate, ResourceType: "identity_provider", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
@@ -104,7 +104,7 @@ func (h *Handlers) UpdateIdentityProvider(ctx context.Context, request UpdateIde
 // DeleteIdentityProvider — DELETE /admin/identity-providers/{id} (#285).
 // Linked users make the delete a 409 unless suspend_users=true; in that case
 // they are suspended and detached, never orphaned.
-func (h *Handlers) DeleteIdentityProvider(ctx context.Context, request DeleteIdentityProviderRequestObject) (DeleteIdentityProviderResponseObject, error) {
+func (h *AuthHandlers) DeleteIdentityProvider(ctx context.Context, request DeleteIdentityProviderRequestObject) (DeleteIdentityProviderResponseObject, error) {
 	ev := audit.Event{Action: audit.IdentityProviderDelete, ResourceType: "identity_provider", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
@@ -153,7 +153,7 @@ func (h *Handlers) DeleteIdentityProvider(ctx context.Context, request DeleteIde
 }
 
 // TestIdentityProvider — POST /admin/identity-providers/{id}/test (#286).
-func (h *Handlers) TestIdentityProvider(ctx context.Context, request TestIdentityProviderRequestObject) (TestIdentityProviderResponseObject, error) {
+func (h *AuthHandlers) TestIdentityProvider(ctx context.Context, request TestIdentityProviderRequestObject) (TestIdentityProviderResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return TestIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
@@ -189,7 +189,7 @@ func (h *Handlers) TestIdentityProvider(ctx context.Context, request TestIdentit
 
 // TestIdentityProviderTransient — POST /admin/identity-providers/test (#286).
 // It validates and probes an unsaved configuration and writes nothing.
-func (h *Handlers) TestIdentityProviderTransient(ctx context.Context, request TestIdentityProviderTransientRequestObject) (TestIdentityProviderTransientResponseObject, error) {
+func (h *AuthHandlers) TestIdentityProviderTransient(ctx context.Context, request TestIdentityProviderTransientRequestObject) (TestIdentityProviderTransientResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return TestIdentityProviderTransient403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}

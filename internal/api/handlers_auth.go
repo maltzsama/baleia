@@ -36,7 +36,7 @@ func newTokenFamily() pgtype.UUID {
 // errAlreadySetUp aborts a first-admin setup that lost the race.
 var errAlreadySetUp = errors.New("already set up")
 
-func (h *Handlers) GetSetupStatus(ctx context.Context, request GetSetupStatusRequestObject) (GetSetupStatusResponseObject, error) {
+func (h *AuthHandlers) GetSetupStatus(ctx context.Context, request GetSetupStatusRequestObject) (GetSetupStatusResponseObject, error) {
 	configured, err := h.queries.HasUsers(ctx)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (h *Handlers) GetSetupStatus(ctx context.Context, request GetSetupStatusReq
 	}, nil
 }
 
-func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdminRequestObject) (CreateFirstAdminResponseObject, error) {
+func (h *AuthHandlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdminRequestObject) (CreateFirstAdminResponseObject, error) {
 	alreadySetUp := CreateFirstAdmin409JSONResponse{
 		ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "already set up"},
 	}
@@ -134,7 +134,7 @@ func shortPassword() UnprocessableEntityJSONResponse {
 	return unprocessable(ErrorCodeValidationError, "password must be at least 8 characters")
 }
 
-func (h *Handlers) Login(ctx context.Context, request LoginRequestObject) (resp LoginResponseObject, err error) {
+func (h *AuthHandlers) Login(ctx context.Context, request LoginRequestObject) (resp LoginResponseObject, err error) {
 	kind := metrics.AuthPassword
 	method := audit.AuthPassword
 	if request.Body.ProviderId != nil {
@@ -224,7 +224,7 @@ func loginIdentifier(body *LoginRequest) string {
 // users are never auto-provisioned: the account must already be linked by its
 // stable id (default deny). Every failure is the uniform
 // invalid_credentials error.
-func (h *Handlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.Event, identifier string, failed func(string)) (LoginResponseObject, error) {
+func (h *AuthHandlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.Event, identifier string, failed func(string)) (LoginResponseObject, error) {
 	invalid := func() (LoginResponseObject, error) {
 		h.loginDelay().Failure(identifier)
 		failed("invalid_credentials")
@@ -315,7 +315,7 @@ func (h *core) issueLogin(ctx context.Context, user db.User, ev audit.Event, met
 	}, nil
 }
 
-func (h *Handlers) Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error) {
+func (h *AuthHandlers) Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error) {
 	// Browsers send the refresh token in the HttpOnly cookie; API clients may
 	// still send it in the body (#51).
 	var bodyToken *string
@@ -340,7 +340,7 @@ func (h *Handlers) Logout(ctx context.Context, request LogoutRequestObject) (Log
 	return Logout204Response{}, nil
 }
 
-func (h *Handlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error) {
+func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -408,7 +408,7 @@ func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAct
 // ListAuthProviders — GET /auth/providers (#289). Public, enabled providers
 // only; it never returns configuration or secrets. It supersedes
 // /auth/oidc/providers and adds LDAP.
-func (h *Handlers) ListAuthProviders(ctx context.Context, _ ListAuthProvidersRequestObject) (ListAuthProvidersResponseObject, error) {
+func (h *AuthHandlers) ListAuthProviders(ctx context.Context, _ ListAuthProvidersRequestObject) (ListAuthProvidersResponseObject, error) {
 	providers, err := h.queries.ListAuthProviders(ctx)
 	if err != nil {
 		return nil, err
@@ -425,7 +425,7 @@ func (h *Handlers) ListAuthProviders(ctx context.Context, _ ListAuthProvidersReq
 	return result, nil
 }
 
-func (h *Handlers) ListOIDCProviders(ctx context.Context, request ListOIDCProvidersRequestObject) (ListOIDCProvidersResponseObject, error) {
+func (h *AuthHandlers) ListOIDCProviders(ctx context.Context, request ListOIDCProvidersRequestObject) (ListOIDCProvidersResponseObject, error) {
 	providers, err := h.queries.ListAuthProviders(ctx)
 	if err != nil {
 		return nil, err
@@ -443,7 +443,7 @@ func (h *Handlers) ListOIDCProviders(ctx context.Context, request ListOIDCProvid
 	return ListOIDCProviders200JSONResponse(result), nil
 }
 
-func (h *Handlers) OidcRedirect(ctx context.Context, request OidcRedirectRequestObject) (OidcRedirectResponseObject, error) {
+func (h *AuthHandlers) OidcRedirect(ctx context.Context, request OidcRedirectRequestObject) (OidcRedirectResponseObject, error) {
 	providerID := request.ProviderId.String()
 	provider, _, err := h.cachedOIDCProvider(ctx, providerID)
 	if err != nil {
@@ -491,7 +491,7 @@ func (h *Handlers) OidcRedirect(ctx context.Context, request OidcRedirectRequest
 	return OidcRedirect302Response{}, nil
 }
 
-func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequestObject) (resp OidcCallbackResponseObject, err error) {
+func (h *AuthHandlers) OidcCallback(ctx context.Context, request OidcCallbackRequestObject) (resp OidcCallbackResponseObject, err error) {
 	outcome := metrics.OutcomeSuccess
 	defer func() { h.metrics.auth.Attempt(metrics.AuthOIDC, outcome) }()
 	res := OIDCResultFromContext(ctx)
@@ -580,7 +580,7 @@ func (h *Handlers) OidcCallback(ctx context.Context, request OidcCallbackRequest
 
 // ── Refresh Token ─────────────────────────────────────────────────────────────
 
-func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (resp RefreshTokenResponseObject, err error) {
+func (h *AuthHandlers) RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (resp RefreshTokenResponseObject, err error) {
 	defer func() { h.metrics.auth.Attempt(metrics.AuthRefresh, authOutcome(resp, err)) }()
 
 	// Browsers rely on the HttpOnly cookie; API clients may send the token in
@@ -679,7 +679,7 @@ func refreshTokenFromBody(bodyToken *string, ctx context.Context) string {
 
 // ── Password Reset ────────────────────────────────────────────────────────────
 
-func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPasswordResetRequestObject) (RequestPasswordResetResponseObject, error) {
+func (h *AuthHandlers) RequestPasswordReset(ctx context.Context, request RequestPasswordResetRequestObject) (RequestPasswordResetResponseObject, error) {
 
 	if h.settings.Mail.SMTPHost == "" || h.settings.Mail.SMTPPort == "" {
 		return RequestPasswordReset503JSONResponse{
@@ -721,7 +721,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 	return RequestPasswordReset204Response{}, nil
 }
 
-func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPasswordResetRequestObject) (ConfirmPasswordResetResponseObject, error) {
+func (h *AuthHandlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPasswordResetRequestObject) (ConfirmPasswordResetResponseObject, error) {
 	ev := audit.Event{Action: audit.AuthPasswordResetConfirm, ResourceType: "user"}
 	// Validate before consuming: a short password must not burn the link.
 	if len(request.Body.NewPassword) < minPasswordLength {
@@ -767,7 +767,7 @@ func (h *core) revokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) 
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 
-func (h *Handlers) GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error) {
+func (h *AuthHandlers) GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -782,7 +782,7 @@ func (h *Handlers) GetProfile(ctx context.Context, request GetProfileRequestObje
 	return GetProfile200JSONResponse(dbUserToPublic(user)), nil
 }
 
-func (h *Handlers) UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error) {
+func (h *AuthHandlers) UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -831,7 +831,7 @@ func (h *Handlers) UpdateProfile(ctx context.Context, request UpdateProfileReque
 	return UpdateProfile200JSONResponse(dbUserToPublic(updated)), nil
 }
 
-func (h *Handlers) UpdatePassword(ctx context.Context, request UpdatePasswordRequestObject) (UpdatePasswordResponseObject, error) {
+func (h *AuthHandlers) UpdatePassword(ctx context.Context, request UpdatePasswordRequestObject) (UpdatePasswordResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -916,7 +916,7 @@ type oidcCacheEntry struct {
 // cachedOIDCProvider returns the provider from the discovery cache (#280). The
 // key includes updated_at, so a config change misses immediately; entries
 // expire after an hour.
-func (h *Handlers) cachedOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
+func (h *AuthHandlers) cachedOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
 	var apID pgtype.UUID
 	if err := apID.Scan(providerID); err != nil {
 		return nil, auth.OIDCProviderConfig{}, err

@@ -12,7 +12,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func (h *Handlers) ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error) {
+func (h *AuthHandlers) ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error) { //nolint:revive // name fixed by the generated StrictServerInterface
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -31,7 +31,7 @@ func (h *Handlers) ListApiKeys(ctx context.Context, request ListApiKeysRequestOb
 	return ListApiKeys200JSONResponse(result), nil
 }
 
-func (h *Handlers) CreateApiKey(ctx context.Context, request CreateApiKeyRequestObject) (CreateApiKeyResponseObject, error) {
+func (h *AuthHandlers) CreateApiKey(ctx context.Context, request CreateApiKeyRequestObject) (CreateApiKeyResponseObject, error) { //nolint:revive // name fixed by the generated StrictServerInterface
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -72,7 +72,7 @@ func (h *Handlers) CreateApiKey(ctx context.Context, request CreateApiKeyRequest
 	}, nil
 }
 
-func (h *Handlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error) {
+func (h *AuthHandlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyRequestObject) (DeleteApiKeyResponseObject, error) { //nolint:revive // name fixed by the generated StrictServerInterface
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {

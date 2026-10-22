@@ -36,21 +36,23 @@ type handlerFields struct {
 
 // testHandlers builds handlers from the fields a test sets; the rest stay zero.
 func testHandlers(f handlerFields) *Handlers {
+	c := &core{
+		queries:        f.queries,
+		pool:           f.pool,
+		tx:             f.tx,
+		settings:       f.settings,
+		keyring:        f.keyring,
+		temporalClient: f.temporalClient,
+		catalogCache:   f.catalogCache,
+		connections:    f.connections,
+		engines:        f.engines,
+		kinds:          f.kinds,
+		dialects:       f.dialects,
+		audit:          f.audit,
+	}
 	return &Handlers{
-		core: &core{
-			queries:        f.queries,
-			pool:           f.pool,
-			tx:             f.tx,
-			settings:       f.settings,
-			keyring:        f.keyring,
-			temporalClient: f.temporalClient,
-			catalogCache:   f.catalogCache,
-			connections:    f.connections,
-			engines:        f.engines,
-			kinds:          f.kinds,
-			dialects:       f.dialects,
-			audit:          f.audit,
-		},
+		core:           c,
+		AuthHandlers:   &AuthHandlers{core: c},
 		schema:         f.schema,
 		versionCache:   f.versionCache,
 		attentionCache: f.attentionCache,

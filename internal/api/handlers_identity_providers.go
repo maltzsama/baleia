@@ -28,7 +28,7 @@ type providerConfig struct {
 	ldap *identityldap.Config
 }
 
-func (h *Handlers) ListIdentityProviders(ctx context.Context, request ListIdentityProvidersRequestObject) (ListIdentityProvidersResponseObject, error) {
+func (h *AuthHandlers) ListIdentityProviders(ctx context.Context, request ListIdentityProvidersRequestObject) (ListIdentityProvidersResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return ListIdentityProviders403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
 			Code: ErrorCodeForbidden, Message: "admin only",
@@ -51,7 +51,7 @@ func (h *Handlers) ListIdentityProviders(ctx context.Context, request ListIdenti
 	return ListIdentityProviders200JSONResponse(out), nil
 }
 
-func (h *Handlers) GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error) {
+func (h *AuthHandlers) GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return GetIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
 			Code: ErrorCodeForbidden, Message: "admin only",
@@ -72,7 +72,7 @@ func (h *Handlers) GetIdentityProvider(ctx context.Context, request GetIdentityP
 	return GetIdentityProvider200JSONResponse(detail), nil
 }
 
-func (h *Handlers) CreateIdentityProvider(ctx context.Context, request CreateIdentityProviderRequestObject) (CreateIdentityProviderResponseObject, error) {
+func (h *AuthHandlers) CreateIdentityProvider(ctx context.Context, request CreateIdentityProviderRequestObject) (CreateIdentityProviderResponseObject, error) {
 	ev := audit.Event{Action: audit.IdentityProviderCreate, ResourceType: "identity_provider"}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
