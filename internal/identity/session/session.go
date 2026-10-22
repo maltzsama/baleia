@@ -98,7 +98,11 @@ func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.Use
 	if err != nil {
 		// No live row: a revoked one with this hash means a rotated token was
 		// replayed, so the whole family goes (#51).
-		if old, lookupErr := s.tokens.GetRefreshTokenByHashAny(ctx, hash); lookupErr == nil && old.Revoked {
+		old, lookupErr := s.tokens.GetRefreshTokenByHashAny(ctx, hash)
+		if lookupErr != nil && !errors.Is(lookupErr, pgx.ErrNoRows) {
+			return Pair{}, db.User{}, fmt.Errorf("look up refresh token: %w", lookupErr)
+		}
+		if lookupErr == nil && old.Revoked {
 			// A client disconnect must not cancel the revoke halfway (#370).
 			if revokeErr := s.tokens.RevokeRefreshFamily(context.WithoutCancel(ctx), old.FamilyID); revokeErr != nil {
 				return Pair{}, db.User{}, fmt.Errorf("%w: %w", ErrReuseNotContained, revokeErr)

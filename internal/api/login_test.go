@@ -2,13 +2,13 @@ package api
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -70,7 +70,7 @@ func TestLogin_UniformErrors(t *testing.T) {
 		name   string
 		handle *API
 	}{
-		{"unknown e-mail", loginHandlers(&fakeLoginQuerier{err: errors.New("no rows")})},
+		{"unknown e-mail", loginHandlers(&fakeLoginQuerier{err: pgx.ErrNoRows})},
 		{"sso-only account", loginHandlers(&fakeLoginQuerier{user: db.User{AuthProvider: "oidc"}})},
 		{"wrong password", loginHandlers(&fakeLoginQuerier{user: db.User{AuthProvider: "local", PasswordHash: &wrongHash}})},
 	}
@@ -88,7 +88,7 @@ func TestLogin_TimingEqualized(t *testing.T) {
 	const minBcryptTime = 15 * time.Millisecond
 
 	start := time.Now()
-	resp, err := loginHandlers(&fakeLoginQuerier{err: errors.New("no rows")}).Login(
+	resp, err := loginHandlers(&fakeLoginQuerier{err: pgx.ErrNoRows}).Login(
 		context.Background(),
 		LoginRequestObject{Body: &LoginRequest{Email: emailPtr("nobody@example.test"), Password: "whatever"}},
 	)

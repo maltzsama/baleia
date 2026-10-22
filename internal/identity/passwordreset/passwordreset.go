@@ -67,8 +67,11 @@ func New(store Store, mailer Mailer, sessions Sessions, cfg Config) *Service {
 // an error, so the answer never reveals whether it exists.
 func (s *Service) Request(ctx context.Context, email string) error {
 	user, err := s.store.GetUserByEmail(ctx, email)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("look up account: %w", err)
 	}
 	if user.AuthProvider != "local" || auth.RequireActive(user.Status) != nil {
 		return nil

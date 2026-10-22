@@ -6,6 +6,7 @@ package login
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -13,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/identity/provision"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -69,11 +71,14 @@ func New(store Store, directory Directory, keyring *crypto.Keyring, passwordCost
 // Password verifies a local account's e-mail and password.
 func (s *Service) Password(ctx context.Context, email, password string) (db.User, error) {
 	user, err := s.store.GetUserByEmail(ctx, email)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// Unknown e-mail: compare against a dummy hash anyway so the response
 		// time does not reveal whether the account exists (#51).
 		_ = auth.CheckPassword(s.dummyPasswordHash(), password)
 		return db.User{}, ErrInvalidCredentials
+	}
+	if err != nil {
+		return db.User{}, fmt.Errorf("look up account: %w", err)
 	}
 	// An SSO-only account and a wrong password are indistinguishable (#51).
 	if user.AuthProvider != "local" || user.PasswordHash == nil {
@@ -96,6 +101,9 @@ func (s *Service) Directory(ctx context.Context, providerID pgtype.UUID, usernam
 		return db.User{}, ErrInvalidCredentials
 	}
 	ap, err := s.store.GetAuthProviderByID(ctx, providerID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return db.User{}, fmt.Errorf("look up provider: %w", err)
+	}
 	if err != nil || ap.Type != "ldap" || !ap.Enabled {
 		return db.User{}, ErrInvalidCredentials
 	}
@@ -113,6 +121,9 @@ func (s *Service) Directory(ctx context.Context, providerID pgtype.UUID, usernam
 		AuthProviderID: ap.ID,
 		ExternalID:     &result.ExternalID,
 	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return db.User{}, fmt.Errorf("look up directory account: %w", err)
+	}
 	if err != nil || user.AuthProvider != "ldap" {
 		return db.User{}, ErrInvalidCredentials
 	}

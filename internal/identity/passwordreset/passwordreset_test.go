@@ -176,3 +176,20 @@ func TestRequest_OnlyLocalActiveAccounts(t *testing.T) {
 		t.Errorf("sent %d e-mails and stored %d links, want none", len(m.sent), len(st.resets))
 	}
 }
+
+func (brokenStore) GetUserByEmail(context.Context, string) (db.User, error) {
+	return db.User{}, errDown
+}
+
+// TestRequest_StoreFailureIsAnError: a database outage is an error, and no
+// e-mail goes out.
+func TestRequest_StoreFailureIsAnError(t *testing.T) {
+	_, st, m, ss, _ := setup(t)
+	s := New(brokenStore{st}, m, ss, Config{PasswordCost: bcrypt.MinCost})
+	if err := s.Request(context.Background(), "ana@x.io"); !errors.Is(err, errDown) {
+		t.Errorf("Request = %v, want the store error", err)
+	}
+	if len(m.sent) != 0 {
+		t.Error("no e-mail on a store failure")
+	}
+}

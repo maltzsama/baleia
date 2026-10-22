@@ -166,3 +166,28 @@ func TestDirectory(t *testing.T) {
 		})
 	}
 }
+
+// brokenStore fails every read the way a lost connection does.
+type brokenStore struct{ *fakeStore }
+
+var errDown = errors.New("connection refused")
+
+func (brokenStore) GetUserByEmail(context.Context, string) (db.User, error) {
+	return db.User{}, errDown
+}
+
+func (brokenStore) GetAuthProviderByID(context.Context, pgtype.UUID) (db.AuthProvider, error) {
+	return db.AuthProvider{}, errDown
+}
+
+// TestStoreFailureIsNotInvalidCredentials: a database outage is an error, not
+// a failed login that is audited as denied and slows the account down.
+func TestStoreFailureIsNotInvalidCredentials(t *testing.T) {
+	s := New(brokenStore{newStore()}, fakeDirectory{}, nil, bcrypt.MinCost)
+	if _, err := s.Password(context.Background(), "ana@x.io", "right"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("Password = %v, want the store error", err)
+	}
+	if _, err := s.Directory(context.Background(), newID(), "ana", "right"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("Directory = %v, want the store error", err)
+	}
+}

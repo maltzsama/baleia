@@ -218,3 +218,25 @@ func TestStoreFailureIsNotInvalid(t *testing.T) {
 		t.Errorf("End = %v, %v; want the store error", found, err)
 	}
 }
+
+// lostLookup has no live row (a replay or an unknown token) and then fails
+// the lookup that decides which.
+type lostLookup struct{ *fakeStore }
+
+func (lostLookup) ConsumeRefreshToken(context.Context, string) (db.ConsumeRefreshTokenRow, error) {
+	return db.ConsumeRefreshTokenRow{}, pgx.ErrNoRows
+}
+
+func (lostLookup) GetRefreshTokenByHashAny(context.Context, string) (db.RefreshToken, error) {
+	return db.RefreshToken{}, errDown
+}
+
+// TestRotate_ReuseLookupFailureIsAnError: when the reuse check cannot run,
+// that is a server error, not an invalid token that skips the family revoke.
+func TestRotate_ReuseLookupFailureIsAnError(t *testing.T) {
+	f := newFakeStore()
+	s := New(lostLookup{f}, f, Config{JWTSecret: "0123456789abcdef0123456789abcdef", AccessTTL: time.Minute, RefreshTTL: time.Hour})
+	if _, _, err := s.Rotate(context.Background(), "any"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalid) {
+		t.Errorf("Rotate = %v, want the store error", err)
+	}
+}
