@@ -120,11 +120,14 @@ func run(cfg *config.Config) error {
 			return fmt.Errorf("audit export sink: %w", err)
 		}
 		pg := auditexport.Postgres{Queries: core.Queries}
+		// Registered once: calling AuditExport() per lag report would register
+		// the collectors again and panic.
+		exportMetrics := reg.AuditExport()
 		act.SetAuditExporter(&auditexport.Exporter{
 			Source: pg, Cursor: pg, Sink: sink,
 			Index: cfg.AuditExportIndex, Batch: cfg.AuditExportBatch, Lag: auditexport.DefaultSafetyLag,
-			OnBatch: reg.AuditExport().Observe,
-			OnLag:   func(t time.Time) { reg.AuditExport().SetLag(time.Since(t).Seconds()) },
+			OnBatch: exportMetrics.Observe,
+			OnLag:   func(t time.Time) { exportMetrics.SetLag(time.Since(t).Seconds()) },
 		})
 	}
 	activities.Register(w, act)
