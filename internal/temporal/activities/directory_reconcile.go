@@ -288,8 +288,11 @@ func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan,
 		*actions = append(*actions, reconcileAction{UserID: tc.UserID.String(), Action: "team", Detail: tc.TeamID})
 	}
 	for _, u := range plan.Synced {
-		// Best effort: an unmarked user is planned again on the next run.
-		_ = q.MarkDirectorySynced(ctx, u.ID)
+		// Not best effort: a failed statement aborts the transaction, so the
+		// commit would fail anyway; report the cause instead.
+		if err := q.MarkDirectorySynced(ctx, u.ID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
 }
