@@ -48,7 +48,13 @@ func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) erro
 	if d, ok := dialect.ForEngineKind(in.Target.EngineKind); ok {
 		dialectName = d.Name()
 	}
+	return runQueryExecution(ctx, in, dialectName)
+}
 
+// runQueryExecution is the body every QueryExecutionWorkflow version shares:
+// a version only decides where the script's dialect comes from. Its commands
+// must not change while runs of any version that uses it may be open.
+func runQueryExecution(ctx workflow.Context, in QueryExecutionInput, dialectName string) error {
 	// Bookkeeping activities are idempotent DB updates and may be retried.
 	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
