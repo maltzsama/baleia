@@ -24,7 +24,7 @@ import (
 // The turn engine and SSE stream land in the follow-up; this file is the
 // persistence and configuration surface.
 
-func (h *Handlers) assistantService() (*assistant.Service, error) {
+func (h *AgentHandlers) assistantService() (*assistant.Service, error) {
 	if h.assistant == nil {
 		return nil, errors.New("assistant service is not configured")
 	}
@@ -33,7 +33,7 @@ func (h *Handlers) assistantService() (*assistant.Service, error) {
 
 // llmProvider builds the configured provider over the SSRF-safe dialer
 // (#378); row must have a provider and a model.
-func (h *Handlers) llmProvider(row adb.AssistantSetting, key string) (*llm.HTTPProvider, error) {
+func (h *AgentHandlers) llmProvider(row adb.AssistantSetting, key string) (*llm.HTTPProvider, error) {
 	if h.dialer == nil {
 		return nil, errors.New("assistant: no connections dialer configured")
 	}
@@ -94,7 +94,7 @@ func assistantMessageToPublic(m adb.AssistantMessage) AssistantMessage {
 
 // GetAssistantStatus — GET /assistant/status. Any authenticated user; a missing
 // settings row or an unconfigured service reports the conservative default.
-func (h *Handlers) GetAssistantStatus(ctx context.Context, _ GetAssistantStatusRequestObject) (GetAssistantStatusResponseObject, error) {
+func (h *AgentHandlers) GetAssistantStatus(ctx context.Context, _ GetAssistantStatusRequestObject) (GetAssistantStatusResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return GetAssistantStatus401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
@@ -109,7 +109,7 @@ func (h *Handlers) GetAssistantStatus(ctx context.Context, _ GetAssistantStatusR
 }
 
 // GetAssistantSettings — GET /admin/assistant/settings (G-admin).
-func (h *Handlers) GetAssistantSettings(ctx context.Context, _ GetAssistantSettingsRequestObject) (GetAssistantSettingsResponseObject, error) {
+func (h *AgentHandlers) GetAssistantSettings(ctx context.Context, _ GetAssistantSettingsRequestObject) (GetAssistantSettingsResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return GetAssistantSettings403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
@@ -126,7 +126,7 @@ func (h *Handlers) GetAssistantSettings(ctx context.Context, _ GetAssistantSetti
 
 // PutAssistantSettings — PUT /admin/assistant/settings (G-admin). The API key is
 // write-only: an omitted or empty value keeps the stored key.
-func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistantSettingsRequestObject) (PutAssistantSettingsResponseObject, error) {
+func (h *AgentHandlers) PutAssistantSettings(ctx context.Context, request PutAssistantSettingsRequestObject) (PutAssistantSettingsResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return PutAssistantSettings403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
@@ -229,7 +229,7 @@ func (h *Handlers) PutAssistantSettings(ctx context.Context, request PutAssistan
 
 // TestAssistant — POST /admin/assistant/test. Sends a one-token prompt to the
 // configured provider and reports latency or a sanitized error.
-func (h *Handlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObject) (TestAssistantResponseObject, error) {
+func (h *AgentHandlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObject) (TestAssistantResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return TestAssistant403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
@@ -268,7 +268,7 @@ func (h *Handlers) TestAssistant(ctx context.Context, _ TestAssistantRequestObje
 }
 
 // ListAssistantConversations — GET /assistant/conversations?workspace_id=…
-func (h *Handlers) ListAssistantConversations(ctx context.Context, request ListAssistantConversationsRequestObject) (ListAssistantConversationsResponseObject, error) {
+func (h *AgentHandlers) ListAssistantConversations(ctx context.Context, request ListAssistantConversationsRequestObject) (ListAssistantConversationsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListAssistantConversations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -293,7 +293,7 @@ func (h *Handlers) ListAssistantConversations(ctx context.Context, request ListA
 }
 
 // CreateAssistantConversation — POST /assistant/conversations.
-func (h *Handlers) CreateAssistantConversation(ctx context.Context, request CreateAssistantConversationRequestObject) (CreateAssistantConversationResponseObject, error) {
+func (h *AgentHandlers) CreateAssistantConversation(ctx context.Context, request CreateAssistantConversationRequestObject) (CreateAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -318,7 +318,7 @@ func (h *Handlers) CreateAssistantConversation(ctx context.Context, request Crea
 
 // GetAssistantConversation — GET /assistant/conversations/{id}. Conversations
 // are private: another user, admins included, gets a 404.
-func (h *Handlers) GetAssistantConversation(ctx context.Context, request GetAssistantConversationRequestObject) (GetAssistantConversationResponseObject, error) {
+func (h *AgentHandlers) GetAssistantConversation(ctx context.Context, request GetAssistantConversationRequestObject) (GetAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -357,7 +357,7 @@ func (h *Handlers) GetAssistantConversation(ctx context.Context, request GetAssi
 
 // SendAssistantMessage — POST /assistant/conversations/{id}/messages. The turn
 // runs in the background; the response carries the accepted user seq.
-func (h *Handlers) SendAssistantMessage(ctx context.Context, request SendAssistantMessageRequestObject) (SendAssistantMessageResponseObject, error) {
+func (h *AgentHandlers) SendAssistantMessage(ctx context.Context, request SendAssistantMessageRequestObject) (SendAssistantMessageResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return SendAssistantMessage401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -392,7 +392,7 @@ func (h *Handlers) SendAssistantMessage(ctx context.Context, request SendAssista
 }
 
 // CancelAssistantTurn — POST /assistant/conversations/{id}/cancel.
-func (h *Handlers) CancelAssistantTurn(ctx context.Context, request CancelAssistantTurnRequestObject) (CancelAssistantTurnResponseObject, error) {
+func (h *AgentHandlers) CancelAssistantTurn(ctx context.Context, request CancelAssistantTurnRequestObject) (CancelAssistantTurnResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CancelAssistantTurn401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -418,7 +418,7 @@ func (h *Handlers) CancelAssistantTurn(ctx context.Context, request CancelAssist
 // stream replays persisted messages after after_seq and then forwards live
 // messages/deltas. The generated Visit uses io.Copy, so the body implements
 // io.WriterTo to flush each frame through http.Flusher.
-func (h *Handlers) StreamAssistantConversation(ctx context.Context, request StreamAssistantConversationRequestObject) (StreamAssistantConversationResponseObject, error) {
+func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request StreamAssistantConversationRequestObject) (StreamAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return StreamAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -541,7 +541,7 @@ func (s *assistantSSE) WriteTo(w io.Writer) (int64, error) {
 	}
 }
 
-func (h *Handlers) DeleteAssistantConversation(ctx context.Context, request DeleteAssistantConversationRequestObject) (DeleteAssistantConversationResponseObject, error) {
+func (h *AgentHandlers) DeleteAssistantConversation(ctx context.Context, request DeleteAssistantConversationRequestObject) (DeleteAssistantConversationResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteAssistantConversation401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

@@ -66,7 +66,7 @@ func ttlDays(d time.Duration) int {
 // GetAgentsMeta — GET /agents/meta (#120). Any authenticated user with the
 // feature enabled: the UI needs the MCP URL, token TTLs and the tool registry
 // before an agent exists.
-func (h *Handlers) GetAgentsMeta(ctx context.Context, _ GetAgentsMetaRequestObject) (GetAgentsMetaResponseObject, error) {
+func (h *AgentHandlers) GetAgentsMeta(ctx context.Context, _ GetAgentsMetaRequestObject) (GetAgentsMetaResponseObject, error) {
 	if !h.agentsEnabled() {
 		return GetAgentsMeta404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -93,7 +93,7 @@ func (h *Handlers) GetAgentsMeta(ctx context.Context, _ GetAgentsMetaRequestObje
 // GetAgentEligibility — GET /agents/{agent_id}/eligibility (#120). For each
 // catalog granted to the agent's bound workspaces, list the engines hosting it
 // and whether the agent may run there.
-func (h *Handlers) GetAgentEligibility(ctx context.Context, request GetAgentEligibilityRequestObject) (GetAgentEligibilityResponseObject, error) {
+func (h *AgentHandlers) GetAgentEligibility(ctx context.Context, request GetAgentEligibilityRequestObject) (GetAgentEligibilityResponseObject, error) {
 	if !h.agentsEnabled() {
 		return GetAgentEligibility404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -166,7 +166,7 @@ func (h *Handlers) GetAgentEligibility(ctx context.Context, request GetAgentElig
 	return GetAgentEligibility200JSONResponse(out), nil
 }
 
-func (h *Handlers) engineEligibility(ctx context.Context, effective agentpolicy.Effective, catalogID, engineID pgtype.UUID, engine db.Engine) AgentEngineEligibility {
+func (h *AgentHandlers) engineEligibility(ctx context.Context, effective agentpolicy.Effective, catalogID, engineID pgtype.UUID, engine db.Engine) AgentEngineEligibility {
 	out := AgentEngineEligibility{
 		EngineId:   openapi_types.UUID(engineID.Bytes),
 		EngineName: engine.Name,

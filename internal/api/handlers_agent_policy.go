@@ -174,7 +174,7 @@ func sortedKeys(set map[string]bool) []string {
 	return out
 }
 
-func (h *Handlers) GetAgentPolicy(ctx context.Context, request GetAgentPolicyRequestObject) (GetAgentPolicyResponseObject, error) {
+func (h *AgentHandlers) GetAgentPolicy(ctx context.Context, request GetAgentPolicyRequestObject) (GetAgentPolicyResponseObject, error) {
 	if !h.agentsEnabled() {
 		return GetAgentPolicy404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -206,7 +206,7 @@ func (h *Handlers) GetAgentPolicy(ctx context.Context, request GetAgentPolicyReq
 	}), nil
 }
 
-func (h *Handlers) PutAgentPolicy(ctx context.Context, request PutAgentPolicyRequestObject) (PutAgentPolicyResponseObject, error) {
+func (h *AgentHandlers) PutAgentPolicy(ctx context.Context, request PutAgentPolicyRequestObject) (PutAgentPolicyResponseObject, error) {
 	if !h.agentsEnabled() {
 		return PutAgentPolicy404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}

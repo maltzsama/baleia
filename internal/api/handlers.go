@@ -34,6 +34,7 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	*core
+	*AgentHandlers
 	*SemanticHandlers
 	*QueryHandlers
 	*CatalogHandlers
@@ -41,13 +42,6 @@ type Handlers struct {
 	*AuthHandlers
 	// schema reports the applied migration version (poolSchema outside tests).
 	schema schemaVersioner
-	// dialer is the SSRF-safe dialer for transient engines (#12).
-	dialer *connections.Dialer
-	// assistant owns assistant settings, agents and conversations (#62).
-	assistant *assistant.Service
-	// assistantRunner holds the runner of MCP-backed turns (and its SSE hub),
-	// stored after the handlers are built; empty when not provisioned.
-	assistantRunner *assistant.RunnerSlot
 	// systemStatusSchedule and systemStatusEngine are the status page's probe
 	// seams (#291). Tests inject them without a Temporal server or an engine.
 	systemStatusSchedule func(ctx context.Context, id string) (SystemStatusItemStatus, string)
@@ -224,6 +218,12 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	}
 	h := &Handlers{
 		core: c,
+		AgentHandlers: &AgentHandlers{
+			core:            c,
+			dialer:          d.Engines.Dialer,
+			assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
+			assistantRunner: d.Assistant,
+		},
 		SemanticHandlers: &SemanticHandlers{
 			core: c,
 		},
@@ -239,11 +239,8 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		WorkspaceHandlers: &WorkspaceHandlers{
 			core: c,
 		},
-		AuthHandlers:    &AuthHandlers{core: c},
-		schema:          poolSchema{pool: d.Data.Pool},
-		dialer:          d.Engines.Dialer,
-		assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
-		assistantRunner: d.Assistant,
+		AuthHandlers: &AuthHandlers{core: c},
+		schema:       poolSchema{pool: d.Data.Pool},
 	}
 	if h.audit == nil {
 		h.audit = audit.Nop{}
@@ -258,7 +255,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 }
 
 // AssistantService exposes the persistence service to the wiring site.
-func (h *Handlers) AssistantService() *assistant.Service { return h.assistant }
+func (h *AgentHandlers) AssistantService() *assistant.Service { return h.assistant }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

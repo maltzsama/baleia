@@ -17,7 +17,7 @@ import (
 // AgentWorkspaces returns the workspaces the current agent principal is bound
 // to (#58). The MCP list_workspaces tool uses it instead of the owner's full
 // list.
-func (h *Handlers) AgentWorkspaces(ctx context.Context) ([]Workspace, error) {
+func (h *AgentHandlers) AgentWorkspaces(ctx context.Context) ([]Workspace, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (h *Handlers) AgentWorkspaces(ctx context.Context) ([]Workspace, error) {
 }
 
 // MCPResults reads a bounded page of a stored Arrow result for an agent tool
-func (h *Handlers) MCPResults(ctx context.Context, workspaceID, executionID openapi_types.UUID, offset, limit, maxRows, maxBytes int) (results.Result, error) {
+func (h *AgentHandlers) MCPResults(ctx context.Context, workspaceID, executionID openapi_types.UUID, offset, limit, maxRows, maxBytes int) (results.Result, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, workspaceID); err != nil {
 		return results.Result{}, err
 	}
@@ -67,11 +67,11 @@ func (h *Handlers) MCPResults(ctx context.Context, workspaceID, executionID open
 }
 
 // AgentCeilings exposes the server-side policy ceilings to the MCP wiring.
-func (h *Handlers) AgentCeilings() agentpolicy.Ceilings { return h.agentCeilings() }
+func (h *AgentHandlers) AgentCeilings() agentpolicy.Ceilings { return h.agentCeilings() }
 
 // EngineReadOnly reports whether an engine can enforce a read-only session;
 // the agent gate needs it.
-func (h *Handlers) EngineReadOnly(ctx context.Context, engineID pgtype.UUID) (queryengine.ReadOnlySupport, error) {
+func (h *AgentHandlers) EngineReadOnly(ctx context.Context, engineID pgtype.UUID) (queryengine.ReadOnlySupport, error) {
 	eng, err := h.engines.Get(ctx, engineID)
 	if err != nil {
 		return "", err

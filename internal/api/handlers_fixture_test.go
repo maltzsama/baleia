@@ -52,6 +52,10 @@ func testHandlers(f handlerFields) *Handlers {
 	}
 	return &Handlers{
 		core: c,
+		AgentHandlers: &AgentHandlers{
+			core:   c,
+			dialer: f.dialer,
+		},
 		SemanticHandlers: &SemanticHandlers{
 			core: c,
 		},
@@ -69,6 +73,5 @@ func testHandlers(f handlerFields) *Handlers {
 		AuthHandlers:   &AuthHandlers{core: c},
 		schema:         f.schema,
 		attentionCache: f.attentionCache,
-		dialer:         f.dialer,
 	}
 }

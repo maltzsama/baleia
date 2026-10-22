@@ -195,7 +195,7 @@ func addAgentWorkspaces(ctx context.Context, q db.Querier, agentID pgtype.UUID, 
 
 // ── handlers ─────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error) {
+func (h *AgentHandlers) ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error) {
 	if !h.agentsEnabled() {
 		return ListAgents404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -230,7 +230,7 @@ func (h *Handlers) ListAgents(ctx context.Context, request ListAgentsRequestObje
 	return ListAgents200JSONResponse(out), nil
 }
 
-func (h *Handlers) CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error) {
+func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return CreateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -290,7 +290,7 @@ func (h *Handlers) CreateAgent(ctx context.Context, request CreateAgentRequestOb
 	return CreateAgent201JSONResponse(pub), nil
 }
 
-func (h *Handlers) GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error) {
+func (h *AgentHandlers) GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return GetAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -316,7 +316,7 @@ func (h *Handlers) GetAgent(ctx context.Context, request GetAgentRequestObject) 
 	return GetAgent200JSONResponse(pub), nil
 }
 
-func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error) {
+func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return UpdateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -431,7 +431,7 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 	return UpdateAgent200JSONResponse(pub), nil
 }
 
-func (h *Handlers) DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error) {
+func (h *AgentHandlers) DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return DeleteAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -457,7 +457,7 @@ func (h *Handlers) DeleteAgent(ctx context.Context, request DeleteAgentRequestOb
 	return DeleteAgent204Response{}, nil
 }
 
-func (h *Handlers) ListAgentTokens(ctx context.Context, request ListAgentTokensRequestObject) (ListAgentTokensResponseObject, error) {
+func (h *AgentHandlers) ListAgentTokens(ctx context.Context, request ListAgentTokensRequestObject) (ListAgentTokensResponseObject, error) {
 	if !h.agentsEnabled() {
 		return ListAgentTokens404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -487,7 +487,7 @@ func (h *Handlers) ListAgentTokens(ctx context.Context, request ListAgentTokensR
 	return ListAgentTokens200JSONResponse(out), nil
 }
 
-func (h *Handlers) CreateAgentToken(ctx context.Context, request CreateAgentTokenRequestObject) (CreateAgentTokenResponseObject, error) {
+func (h *AgentHandlers) CreateAgentToken(ctx context.Context, request CreateAgentTokenRequestObject) (CreateAgentTokenResponseObject, error) {
 	if !h.agentsEnabled() {
 		return CreateAgentToken404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -555,7 +555,7 @@ func (h *Handlers) CreateAgentToken(ctx context.Context, request CreateAgentToke
 	}), nil
 }
 
-func (h *Handlers) RevokeAgentToken(ctx context.Context, request RevokeAgentTokenRequestObject) (RevokeAgentTokenResponseObject, error) {
+func (h *AgentHandlers) RevokeAgentToken(ctx context.Context, request RevokeAgentTokenRequestObject) (RevokeAgentTokenResponseObject, error) {
 	if !h.agentsEnabled() {
 		return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
