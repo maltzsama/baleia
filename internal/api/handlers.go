@@ -3,6 +3,9 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -175,30 +178,76 @@ type engineKinds interface {
 	Transient(ctx context.Context, kind string, cfg connections.Config) (queryengine.Engine, error)
 }
 
-func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, kinds engineKinds, dialects *dialect.Registry, binder *bindtrino.Binder) *Handlers {
-	var assistantSvc *assistant.Service
-	if pool != nil {
-		assistantSvc = assistant.New(assistantdb.New(pool), keyring)
+// Deps is everything the API handlers need, built by the composition root
+// (internal/app) and grouped by area (#363).
+type Deps struct {
+	Data    DataDeps
+	Engines EngineDeps
+	Config  *config.Config
+	// Keyring seals stored credentials; nil while none is stored.
+	Keyring  *crypto.Keyring
+	Temporal client.Client
+	Storage  *storage.S3Client
+}
+
+// DataDeps is Baleia's own database.
+type DataDeps struct {
+	Queries db.Querier
+	Pool    *pgxpool.Pool
+}
+
+// EngineDeps are the connections, engines and catalog bindings.
+type EngineDeps struct {
+	Connections *connections.Registry
+	Engines     engineSource
+	Kinds       engineKinds
+	Dialects    *dialect.Registry
+	Binder      *bindtrino.Binder
+}
+
+// NewHandlers builds the handlers. It fails when a required dependency is
+// missing instead of leaving a nil to be found at request time.
+func NewHandlers(d Deps) (*Handlers, error) {
+	var missing []string
+	for name, absent := range map[string]bool{
+		"Data.Queries":        d.Data.Queries == nil,
+		"Data.Pool":           d.Data.Pool == nil,
+		"Config":              d.Config == nil,
+		"Temporal":            d.Temporal == nil,
+		"Storage":             d.Storage == nil,
+		"Engines.Connections": d.Engines.Connections == nil,
+		"Engines.Engines":     d.Engines.Engines == nil,
+		"Engines.Kinds":       d.Engines.Kinds == nil,
+		"Engines.Dialects":    d.Engines.Dialects == nil,
+		"Engines.Binder":      d.Engines.Binder == nil,
+	} {
+		if absent {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		slices.Sort(missing)
+		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
 	return &Handlers{
-		connections:    conns,
-		queries:        queries,
-		pool:           pool,
-		cfg:            cfg,
-		keyring:        keyring,
-		temporalClient: temporalClient,
-		s3:             s3,
-		engines:        engines,
-		kinds:          kinds,
-		dialects:       dialects,
-		binder:         binder,
+		connections:    d.Engines.Connections,
+		queries:        d.Data.Queries,
+		pool:           d.Data.Pool,
+		cfg:            d.Config,
+		keyring:        d.Keyring,
+		temporalClient: d.Temporal,
+		s3:             d.Storage,
+		engines:        d.Engines.Engines,
+		kinds:          d.Engines.Kinds,
+		dialects:       d.Engines.Dialects,
+		binder:         d.Engines.Binder,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
 		audit:          audit.Nop{},
-		content:        content.New(pool, queries),
-		assistant:      assistantSvc,
+		content:        content.New(d.Data.Pool, d.Data.Queries),
+		assistant:      assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
 		wsTickets:      wsticket.New(),
-	}
+	}, nil
 }
 
 // SetDialer wires the dialer connection tests build transient engines with.
