@@ -22,7 +22,7 @@ func requireOracle(t *testing.T) string {
 	return raw
 }
 
-func oracleEngine(t *testing.T, raw string) queryengine.Engine {
+func oracleEngine(t *testing.T, raw string, o Options) queryengine.Engine {
 	t.Helper()
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -37,7 +37,7 @@ func oracleEngine(t *testing.T, raw string) queryengine.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := newEngine(Options{})(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, connections.Config{
+	e, err := newEngine(o)(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, connections.Config{
 		Kind: connections.KindOracle,
 		Values: map[string]string{
 			"host": u.Hostname(), "port": port,
@@ -83,7 +83,7 @@ func atoiPort(t *testing.T, p string) int {
 // TestNumberWithoutPrecisionExact: a NUMBER without precision is read as exact
 // decimal text, never as float64.
 func TestNumberWithoutPrecisionExact(t *testing.T) {
-	e := oracleEngine(t, requireOracle(t))
+	e := oracleEngine(t, requireOracle(t), Options{})
 	tbl, err := queryengine.Collect(context.Background(), e, queryengine.SessionSpec{},
 		`SELECT 12345678901234567890.123456789 AS "n" FROM dual`, 10)
 	if err != nil {
@@ -99,7 +99,6 @@ func TestNumberWithoutPrecisionExact(t *testing.T) {
 // is flagged in the field metadata.
 func TestLobCap(t *testing.T) {
 	raw := requireOracle(t)
-	t.Setenv("BALEIA_LOB_MAX_BYTES", "1024")
 	db := oracleAdmin(t, raw)
 	ctx := context.Background()
 	t.Cleanup(func() {
@@ -114,7 +113,7 @@ func TestLobCap(t *testing.T) {
 			t.Fatalf("%s: %v", stmt, err)
 		}
 	}
-	e := oracleEngine(t, raw)
+	e := oracleEngine(t, raw, Options{LOBMaxBytes: 1024})
 	tbl, err := queryengine.Collect(ctx, e, queryengine.SessionSpec{}, `SELECT c AS "c" FROM baleia_lob_test`, 10)
 	if err != nil {
 		t.Fatal(err)
