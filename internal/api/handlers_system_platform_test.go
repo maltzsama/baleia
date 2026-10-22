@@ -26,7 +26,7 @@ func findStatusItem(t *testing.T, res SystemStatusResource, name string) SystemS
 // TestSystemStatus_ScheduleMissing: a schedule Temporal does not know is
 // reported as `missing`, never blank.
 func TestSystemStatus_ScheduleMissing(t *testing.T) {
-	h := &Handlers{}
+	h := &Handlers{schema: unreachableSchema{}}
 	h.systemStatusSchedule = func(_ context.Context, id string) (SystemStatusItemStatus, string) {
 		if id == schedules.MetadataSync {
 			return SystemStatusItemStatusMissing, "schedule_missing"

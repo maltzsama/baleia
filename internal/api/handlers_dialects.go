@@ -104,20 +104,18 @@ func (h *Handlers) describeEngine(ctx context.Context, e db.Engine) Engine {
 	if d, ok := h.dialects.ForEngineKind(e.Kind); ok {
 		out.Dialect = dialectToPublic(d)
 	}
-	if h.queries != nil && h.pool != nil {
-		if conn, err := h.queries.GetCatalogConnectionByID(ctx, e.ConnectionID); err == nil {
-			out.Connection = &EngineConnectionRef{Id: openapi_types.UUID(conn.ID.Bytes), Name: conn.Name}
-			readOnly := conn.CredentialsReadOnly
-			out.CredentialsReadOnly = &readOnly
+	if conn, err := h.queries.GetCatalogConnectionByID(ctx, e.ConnectionID); err == nil {
+		out.Connection = &EngineConnectionRef{Id: openapi_types.UUID(conn.ID.Bytes), Name: conn.Name}
+		readOnly := conn.CredentialsReadOnly
+		out.CredentialsReadOnly = &readOnly
+	}
+	if bindings, err := h.queries.ListBindingsByEngine(ctx, e.ID); err == nil {
+		seen := make(map[[16]byte]struct{}, len(bindings))
+		for _, b := range bindings {
+			seen[b.CatalogID.Bytes] = struct{}{}
 		}
-		if bindings, err := h.queries.ListBindingsByEngine(ctx, e.ID); err == nil {
-			seen := make(map[[16]byte]struct{}, len(bindings))
-			for _, b := range bindings {
-				seen[b.CatalogID.Bytes] = struct{}{}
-			}
-			n := len(seen)
-			out.CatalogCount = &n
-		}
+		n := len(seen)
+		out.CatalogCount = &n
 	}
 	now := time.Now()
 	if h.engines == nil {

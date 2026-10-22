@@ -38,7 +38,9 @@ type Handlers struct {
 	queries db.Querier
 	pool    *pgxpool.Pool
 	// tx runs dependent writes in one transaction (poolTx outside tests).
-	tx             txRunner
+	tx txRunner
+	// schema reports the applied migration version (poolSchema outside tests).
+	schema         schemaVersioner
 	cfg            *config.Config
 	keyring        *crypto.Keyring
 	temporalClient client.Client
@@ -248,6 +250,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		queries:         d.Data.Queries,
 		pool:            d.Data.Pool,
 		tx:              poolTx{pool: d.Data.Pool},
+		schema:          poolSchema{pool: d.Data.Pool},
 		cfg:             d.Config,
 		keyring:         d.Keyring,
 		temporalClient:  d.Temporal,

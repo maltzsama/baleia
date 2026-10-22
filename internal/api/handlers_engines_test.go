@@ -340,3 +340,12 @@ func TestDeleteConnectionBackingEngine409(t *testing.T) {
 		t.Fatalf("response = %d %s", rec.Code, rec.Body)
 	}
 }
+
+// The describeEngine reads: these fakes have no catalog bound to the engine.
+func (q *engineQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+	return nil, nil
+}
+
+func (q *deleteConnQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+	return nil, nil
+}
