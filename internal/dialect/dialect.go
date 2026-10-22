@@ -249,19 +249,11 @@ func (r *Registry) Names() []string {
 	return out
 }
 
-// defaultRegistry backs the package-level lookups below while callers move
-// to an injected Registry (#364 follow-up); it goes away with them.
+// defaultRegistry backs ForEngineKind, the one package-level lookup left.
 var defaultRegistry = NewRegistry()
 
 // ForEngineKind returns the dialect of a query-engine kind.
+//
+// Deprecated: only QueryExecutionWorkflowV2 calls it, so its open runs replay;
+// everything else uses an injected Registry. It goes away with V2.
 func ForEngineKind(kind string) (Dialect, bool) { return defaultRegistry.ForEngineKind(kind) }
-
-// Get returns a dialect by name.
-func Get(name string) (Dialect, bool) { return defaultRegistry.Get(name) }
-
-// MustGet returns a dialect and panics for an unknown name; use it only with
-// the name constants.
-func MustGet(name string) Dialect { return defaultRegistry.MustGet(name) }
-
-// Names lists the dialects, sorted.
-func Names() []string { return defaultRegistry.Names() }

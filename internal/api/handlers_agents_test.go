@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -270,6 +271,7 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 		cfg:            &config.Config{StatementTimeout: 30 * time.Minute},
 		temporalClient: temporal,
 		kinds:          testKinds(t, nil),
+		dialects:       dialect.NewRegistry(),
 	}
 	agentCtx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
 	agentCtx = context.WithValue(agentCtx, auth.ContextKeyRole, "member")

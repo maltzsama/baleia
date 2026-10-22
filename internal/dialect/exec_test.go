@@ -157,7 +157,7 @@ type fixture struct {
 
 func runDialect(t *testing.T, name string, fx fixture) {
 	t.Helper()
-	d := dialect.MustGet(name)
+	d := dialect.NewRegistry().MustGet(name)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	one := func(t *testing.T, expr string) string {

@@ -13,7 +13,7 @@ import (
 // TestPLSQLBlockKeptWhole: a PL/SQL block is one statement, kept whole with its
 // END; and terminated by a line with / (SQL*Plus convention).
 func TestPLSQLBlockKeptWhole(t *testing.T) {
-	spans, err := dialect.MustGet(dialect.Oracle).Statements("BEGIN\n  NULL;\nEND;\n/\n")
+	spans, err := dialect.NewRegistry().MustGet(dialect.Oracle).Statements("BEGIN\n  NULL;\nEND;\n/\n")
 	if err != nil {
 		t.Fatal(err)
 	}

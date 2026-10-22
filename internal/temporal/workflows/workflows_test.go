@@ -102,6 +102,28 @@ func TestV2_RunsScriptOnTarget(t *testing.T) {
 	require.Equal(t, activities.CompleteExecutionParams{ExecutionID: "exec-2", Status: "finished", RowsReturned: 2, DurationMs: 4}, completed)
 }
 
+// TestV3_SplitsWithTheInputDialect: V3 splits with the dialect the caller
+// resolved, not one it looks up from the target's engine kind.
+func TestV3_SplitsWithTheInputDialect(t *testing.T) {
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+	var split activities.SplitSQLParams
+	env.OnActivity(activities.SplitSQL, mock.Anything, mock.MatchedBy(func(p activities.SplitSQLParams) bool {
+		split = p
+		return true
+	})).Return(&activities.SplitSQLResult{Statements: []string{"SELECT 1"}}, nil)
+	env.OnActivity(activities.CreateStatementRecords, mock.Anything, mock.Anything).Return(&activities.CreateStatementRecordsResult{Statements: []string{"SELECT 1"}}, nil)
+	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.Anything).Return(finished(1), nil)
+	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
+
+	in := v2Input() // a Trino target
+	in.Dialect = "tsql"
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, in)
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+	require.Equal(t, "tsql", split.Dialect)
+}
+
 // TestV2_TwoEnginesSameWorkflow: the workflow never names an engine. Targets
 // on engines of different kinds run through the same workflow, each split
 // with its engine's dialect and executed on its engine.
@@ -320,7 +342,7 @@ func TestV2_InputHasNoSecrets(t *testing.T) {
 		}
 		return out
 	}
-	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RerunExecutionID", "RerunFromPosition"}, fields(QueryExecutionInput{}))
+	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RerunExecutionID", "RerunFromPosition", "Dialect"}, fields(QueryExecutionInput{}))
 	require.Equal(t, []string{"EngineID", "EngineKind", "EngineName", "BindingID", "CatalogID", "CatalogName", "EngineCatalog", "Schema", "ReadOnly"}, fields(queryengine.Target{}))
 	require.Equal(t, []string{"UserID", "AgentID"}, fields(queryengine.Identity{}))
 }

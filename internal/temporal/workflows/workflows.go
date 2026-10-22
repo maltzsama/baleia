@@ -31,6 +31,9 @@ type QueryExecutionInput struct {
 	// RerunFromPosition instead of splitting SQL again (#111).
 	RerunExecutionID  string
 	RerunFromPosition int32
+	// Dialect splits and gates the script (V3); the caller resolves it from
+	// the target's engine kind. V2 ignores it and resolves it itself.
+	Dialect string
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -45,10 +48,23 @@ const defaultExecutionTimeout = 2 * time.Hour
 // add V3 and drain V2 (see #27).
 func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) error {
 	dialectName := dialect.Trino
-	if d, ok := dialect.ForEngineKind(in.Target.EngineKind); ok {
+	if d, ok := dialect.ForEngineKind(in.Target.EngineKind); ok { //nolint:staticcheck // V2 keeps its lookup so open runs replay
 		dialectName = d.Name()
 	}
+	return runQueryExecution(ctx, in, dialectName)
+}
 
+// QueryExecutionWorkflowV3 is V2 with the script's dialect resolved by the
+// caller (the API's injected dialect registry) instead of inside the workflow;
+// its commands are V2's.
+func QueryExecutionWorkflowV3(ctx workflow.Context, in QueryExecutionInput) error {
+	return runQueryExecution(ctx, in, in.Dialect)
+}
+
+// runQueryExecution is the body every QueryExecutionWorkflow version shares:
+// a version only decides where the script's dialect comes from. Its commands
+// must not change while runs of any version that uses it may be open.
+func runQueryExecution(ctx workflow.Context, in QueryExecutionInput, dialectName string) error {
 	// Bookkeeping activities are idempotent DB updates and may be retried.
 	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,

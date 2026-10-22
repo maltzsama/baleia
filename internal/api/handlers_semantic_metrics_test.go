@@ -20,10 +20,12 @@ type probeEngine struct {
 	lastSQL  string
 }
 
-func (e *probeEngine) ID() string                                            { return "semantic-engine" }
-func (e *probeEngine) Kind() string                                          { return "trino" }
-func (e *probeEngine) Class() queryengine.Class                              { return queryengine.ClassFederated }
-func (e *probeEngine) Dialect() queryengine.Dialect                          { return dialect.MustGet(dialect.Trino) }
+func (e *probeEngine) ID() string               { return "semantic-engine" }
+func (e *probeEngine) Kind() string             { return "trino" }
+func (e *probeEngine) Class() queryengine.Class { return queryengine.ClassFederated }
+func (e *probeEngine) Dialect() queryengine.Dialect {
+	return dialect.NewRegistry().MustGet(dialect.Trino)
+}
 func (e *probeEngine) Cancel(context.Context, queryengine.QueryHandle) error { return nil }
 func (e *probeEngine) Ping(context.Context) error                            { return nil }
 func (e *probeEngine) Introspector() queryengine.Introspector                { return nil }

@@ -104,8 +104,8 @@ func TestStatementForbidden(t *testing.T) {
 // the engine supports, including when hidden after another statement with
 // that engine's own separators.
 func TestForbiddenInEditor(t *testing.T) {
-	for _, name := range dialect.Names() {
-		d := dialect.MustGet(name)
+	for _, name := range dialect.NewRegistry().Names() {
+		d := dialect.NewRegistry().MustGet(name)
 		for _, sql := range []string{
 			"CREATE CATALOG x USING tpch",
 			"SELECT 1; DROP CATALOG x",
@@ -126,15 +126,15 @@ func TestForbiddenInEditor(t *testing.T) {
 			t.Errorf("%s: %q, %v", name, stmts, err)
 		}
 	}
-	tsql := dialect.MustGet(dialect.TSQL)
+	tsql := dialect.NewRegistry().MustGet(dialect.TSQL)
 	if !ForbiddenInEditor(tsql, "SELECT 1\nGO\nDROP CATALOG x") {
 		t.Error("tsql: catalog DDL after GO allowed")
 	}
 	// An unsplittable script is judged whole, and EditorStatements reports why.
-	if !ForbiddenInEditor(dialect.MustGet(dialect.Trino), "DROP CATALOG x; SELECT 'open") {
+	if !ForbiddenInEditor(dialect.NewRegistry().MustGet(dialect.Trino), "DROP CATALOG x; SELECT 'open") {
 		t.Error("unterminated script hid catalog DDL")
 	}
-	if _, err := EditorStatements(dialect.MustGet(dialect.Trino), "SELECT 'open"); !errors.Is(err, dialect.ErrInvalid) {
+	if _, err := EditorStatements(dialect.NewRegistry().MustGet(dialect.Trino), "SELECT 'open"); !errors.Is(err, dialect.ErrInvalid) {
 		t.Errorf("unterminated string: %v", err)
 	}
 }

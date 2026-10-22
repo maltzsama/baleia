@@ -132,7 +132,9 @@ func run(cfg *config.Config) error {
 	}
 	activities.Register(w, act)
 
+	// V2 stays registered until its open runs drain; new runs start V3.
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV2)
+	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV3)
 	w.RegisterWorkflow(workflows.LensQueryPollWorkflow)
 	w.RegisterWorkflow(workflows.LensClusterPollWorkflow)
 	w.RegisterWorkflow(workflows.LensTableHealthWorkflow)

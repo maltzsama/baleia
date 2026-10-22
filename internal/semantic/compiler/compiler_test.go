@@ -51,7 +51,7 @@ func models() map[string]semantic.Model {
 
 func pg(t *testing.T) dialect.Dialect {
 	t.Helper()
-	d, ok := dialect.Get(dialect.PostgreSQL)
+	d, ok := dialect.NewRegistry().Get(dialect.PostgreSQL)
 	if !ok {
 		t.Fatal("postgresql dialect missing")
 	}
@@ -277,8 +277,8 @@ func TestCompileEveryDialect(t *testing.T) {
 		Sorts:      []semantic.Sort{{Field: "revenue", Desc: true}},
 		Limit:      25,
 	}
-	for _, name := range dialect.Names() {
-		d, ok := dialect.Get(name)
+	for _, name := range dialect.NewRegistry().Names() {
+		d, ok := dialect.NewRegistry().Get(name)
 		if !ok {
 			continue
 		}
@@ -337,7 +337,7 @@ func TestCompileMigratedV1MetricWithFilter(t *testing.T) {
 func TestCompilePortableGroupBy(t *testing.T) {
 	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"orders"}}
 	for _, name := range []string{dialect.TSQL, dialect.Oracle, dialect.PostgreSQL} {
-		d, ok := dialect.Get(name)
+		d, ok := dialect.NewRegistry().Get(name)
 		if !ok {
 			continue
 		}

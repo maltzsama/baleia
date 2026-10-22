@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -89,7 +90,7 @@ func runQuery(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) *h
 func runQueryWith(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) (*httptest.ResponseRecorder, *fakeTemporalClient) {
 	t.Helper()
 	tc := &fakeTemporalClient{}
-	h := &Handlers{queries: fake, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: tc, kinds: testKinds(t, nil)}
+	h := &Handlers{queries: fake, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: tc, kinds: testKinds(t, nil), dialects: dialect.NewRegistry()}
 	resp, err := h.RunQuery(testContext(), RunQueryRequestObject{Id: PathId{0xAA}, Body: &RunQueryJSONRequestBody{Sql: "SELECT 1", Target: target}})
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +121,7 @@ func TestRunQuery_StoresTarget(t *testing.T) {
 		t.Fatalf("workflow input = %T", tc.started[0])
 	}
 	if in.Target.EngineID != id(0xE1) || in.Target.EngineCatalog != "eng_cat_1" || in.Target.Schema != "tiny" || !in.Target.ReadOnly ||
-		in.Identity.UserID == "" || in.StatementTimeout != time.Minute || in.SQL != "SELECT 1" {
+		in.Identity.UserID == "" || in.StatementTimeout != time.Minute || in.SQL != "SELECT 1" || in.Dialect != dialect.Trino {
 		t.Fatalf("workflow input = %+v", in)
 	}
 	p := fake.created[0]
