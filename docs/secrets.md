@@ -19,8 +19,11 @@ lives in Baleia's database:
 - `env:` reads `VAR` from the process environment (upper-case names only).
 - `file:` reads `BALEIA_SECRET_FILE_BASE_DIR/name`; the name must not contain a
   path separator or `..`. The read is confined to that directory: a symlink
-  inside it may point within it (as a mounted Kubernetes Secret does), and one
-  that points outside is refused.
+  inside it may point within it through a **relative** target (as the
+  `name -> ..data/name` links of a mounted Kubernetes Secret do). A symlink
+  with an absolute target is refused even when it points inside the
+  directory, so convert absolute links to relative ones; an unresolvable
+  reference yields an empty secret.
 
 Baleia stores the **reference** (not the value), resolves it for its own use
 (browsing, connection tests) with the same rules, and projects the reference

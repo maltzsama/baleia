@@ -123,8 +123,9 @@ func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
 }
 
 // TestSecretResolver_FileStaysUnderTheBaseDir: a symlink that escapes the base
-// directory is refused; one that stays inside it (how a Kubernetes Secret
-// volume links name -> ..data/name) resolves.
+// directory is refused, and so is one with an absolute target; a relative one
+// that stays inside it (how a Kubernetes Secret volume links name ->
+// ..data/name) resolves.
 func TestSecretResolver_FileStaysUnderTheBaseDir(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "outside.txt")
 	if err := os.WriteFile(outside, []byte("leaked"), 0o600); err != nil {
@@ -143,11 +144,18 @@ func TestSecretResolver_FileStaysUnderTheBaseDir(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
 		t.Fatal(err)
 	}
+	// An absolute target is refused even when it stays inside the directory.
+	if err := os.Symlink(filepath.Join(dir, "..data", "token"), filepath.Join(dir, "absolute")); err != nil {
+		t.Fatal(err)
+	}
 	r := SecretResolver{FileBaseDir: dir}
 	if v, err := r.Resolve("@baleia-secret[file:token]"); err != nil || v != "mounted" {
 		t.Errorf("symlink inside the base dir = %q, %v; want mounted", v, err)
 	}
 	if v, err := r.Resolve("@baleia-secret[file:escape]"); !errors.Is(err, ErrSecretReference) || v != "" {
 		t.Errorf("symlink out of the base dir = %q, %v; want ErrSecretReference", v, err)
+	}
+	if v, err := r.Resolve("@baleia-secret[file:absolute]"); !errors.Is(err, ErrSecretReference) || v != "" {
+		t.Errorf("absolute symlink inside the base dir = %q, %v; want ErrSecretReference", v, err)
 	}
 }
