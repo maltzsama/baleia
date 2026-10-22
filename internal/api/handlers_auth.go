@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/identity/account"
 	"github.com/galileostudio/baleia/internal/identity/login"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
@@ -229,7 +230,7 @@ func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (G
 		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	user, err := h.queries.GetUserByID(ctx, uid)
+	user, err := h.accounts.Get(ctx, uid)
 	if err != nil {
 		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
 	}
@@ -250,7 +251,7 @@ func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (G
 		locale := Locale(*user.Locale)
 		me.Locale = &locale
 	}
-	if ws, err := h.queries.PersonalWorkspaceID(ctx, user.ID); err == nil {
+	if ws, ok := h.accounts.PersonalWorkspace(ctx, user.ID); ok {
 		id := openapi_types.UUID(ws.Bytes)
 		me.PersonalWorkspaceId = &id
 	}
@@ -534,7 +535,7 @@ func (h *AuthHandlers) GetProfile(ctx context.Context, request GetProfileRequest
 		return GetProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	user, err := h.queries.GetUserByID(ctx, uid)
+	user, err := h.accounts.Get(ctx, uid)
 	if err != nil {
 		return GetProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
 	}
@@ -549,27 +550,18 @@ func (h *AuthHandlers) UpdateProfile(ctx context.Context, request UpdateProfileR
 		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	current, err := h.queries.GetUserByID(ctx, uid)
-	if err != nil {
-		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
-	}
-
-	name := current.Name
-	email := current.Email
-	if request.Body.Name != nil {
-		name = *request.Body.Name
-	}
+	change := account.Profile{Name: request.Body.Name}
 	if request.Body.Email != nil {
-		email = string(*request.Body.Email)
+		email := string(*request.Body.Email)
+		change.Email = &email
 	}
-	locale := current.Locale
 	if request.Body.Locale != nil {
 		// The generated enum type does not validate on decode; reject anything
 		// outside the supported locales with a translatable field code (#67).
 		switch *request.Body.Locale {
 		case LocaleEn, LocalePtBR:
 			value := string(*request.Body.Locale)
-			locale = &value
+			change.Locale = &value
 		default:
 			return UpdateProfile422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
 				"locale must be en or pt-BR",
@@ -578,12 +570,10 @@ func (h *AuthHandlers) UpdateProfile(ctx context.Context, request UpdateProfileR
 		}
 	}
 
-	updated, err := h.queries.UpdateUser(ctx, db.UpdateUserParams{
-		ID:     uid,
-		Name:   name,
-		Email:  email,
-		Locale: locale,
-	})
+	updated, err := h.accounts.UpdateProfile(ctx, uid, change)
+	if errors.Is(err, account.ErrNotFound) {
+		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -598,34 +588,19 @@ func (h *AuthHandlers) UpdatePassword(ctx context.Context, request UpdatePasswor
 		return UpdatePassword401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	user, err := h.queries.GetUserByID(ctx, uid)
-	if err != nil {
+	// A password change ends the user's other sessions (#51).
+	switch err := h.accounts.ChangePassword(ctx, uid, request.Body.CurrentPassword, request.Body.NewPassword); {
+	case errors.Is(err, account.ErrNotFound):
 		return UpdatePassword401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
-	}
-
-	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, request.Body.CurrentPassword) {
+	case errors.Is(err, account.ErrWrongPassword):
 		return UpdatePassword422JSONResponse{
 			UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "current password is incorrect"),
 		}, nil
-	}
-	if len(request.Body.NewPassword) < minPasswordLength {
+	case errors.Is(err, account.ErrPasswordTooShort):
 		return UpdatePassword422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
-	}
-
-	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.settings.Auth.PasswordCost)
-	if err != nil {
+	case err != nil:
 		return nil, err
 	}
-
-	if err := h.queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
-		ID:           uid,
-		PasswordHash: &hash,
-	}); err != nil {
-		return nil, err
-	}
-
-	// A password change ends the user's other sessions (#51).
-	h.revokeUserRefreshTokens(ctx, uid)
 
 	return UpdatePassword204Response{}, nil
 }
