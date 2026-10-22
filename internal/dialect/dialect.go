@@ -196,47 +196,72 @@ var kindToName = map[string]string{
 	"flightsql": FlightSQL, "fake": FlightSQL,
 }
 
-// ForEngineKind returns the dialect of a query-engine kind.
-func ForEngineKind(kind string) (Dialect, bool) {
-	name, ok := kindToName[kind]
-	if !ok {
-		return nil, false
-	}
-	return Get(name)
+// Registry holds every dialect by name (#364 follow-up): built once by
+// NewRegistry and only read afterwards, so it is safe for concurrent use.
+type Registry struct {
+	byName map[string]Dialect
 }
 
-var registry = map[string]Dialect{}
-
-func register(d Dialect) Dialect {
-	if _, dup := registry[d.Name()]; dup {
-		panic("dialect registered twice: " + d.Name())
+// NewRegistry builds the dialects of every engine Baleia supports.
+func NewRegistry() *Registry {
+	r := &Registry{byName: map[string]Dialect{}}
+	for _, d := range []Dialect{
+		newTrino(), newPostgreSQL(), newMySQL(), newMariaDB(), newTSQL(),
+		newOracle(), newSQLite(), newClickHouse(), newFlightSQL(),
+	} {
+		r.byName[d.Name()] = d
 	}
-	registry[d.Name()] = d
-	return d
+	return r
 }
 
 // Get returns a dialect by name.
-func Get(name string) (Dialect, bool) {
-	d, ok := registry[name]
+func (r *Registry) Get(name string) (Dialect, bool) {
+	d, ok := r.byName[name]
 	return d, ok
 }
 
-// MustGet returns a registered dialect and panics for an unknown name; use it
-// only with the name constants.
-func MustGet(name string) Dialect {
-	d, ok := registry[name]
+// MustGet returns a dialect and panics for an unknown name; use it only with
+// the name constants.
+func (r *Registry) MustGet(name string) Dialect {
+	d, ok := r.byName[name]
 	if !ok {
 		panic("unknown dialect: " + name)
 	}
 	return d
 }
 
-// Names lists the registered dialects, sorted.
-func Names() []string {
-	out := make([]string, 0, len(registry))
-	for n := range registry {
+// ForEngineKind returns the dialect of a query-engine kind.
+func (r *Registry) ForEngineKind(kind string) (Dialect, bool) {
+	name, ok := kindToName[kind]
+	if !ok {
+		return nil, false
+	}
+	return r.Get(name)
+}
+
+// Names lists the dialects, sorted.
+func (r *Registry) Names() []string {
+	out := make([]string, 0, len(r.byName))
+	for n := range r.byName {
 		out = append(out, n)
 	}
 	slices.Sort(out)
 	return out
 }
+
+// defaultRegistry backs the package-level lookups below while callers move
+// to an injected Registry (#364 follow-up); it goes away with them.
+var defaultRegistry = NewRegistry()
+
+// ForEngineKind returns the dialect of a query-engine kind.
+func ForEngineKind(kind string) (Dialect, bool) { return defaultRegistry.ForEngineKind(kind) }
+
+// Get returns a dialect by name.
+func Get(name string) (Dialect, bool) { return defaultRegistry.Get(name) }
+
+// MustGet returns a dialect and panics for an unknown name; use it only with
+// the name constants.
+func MustGet(name string) Dialect { return defaultRegistry.MustGet(name) }
+
+// Names lists the dialects, sorted.
+func Names() []string { return defaultRegistry.Names() }

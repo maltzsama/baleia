@@ -44,6 +44,20 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
+// TestNewRegistry: every registry built lists the same dialects, so callers
+// can each be injected their own without disagreeing.
+func TestNewRegistry(t *testing.T) {
+	a, b := NewRegistry(), NewRegistry()
+	if !slices.Equal(a.Names(), b.Names()) || !slices.Equal(a.Names(), Names()) {
+		t.Fatalf("names differ: %v / %v / %v", a.Names(), b.Names(), Names())
+	}
+	for _, n := range a.Names() {
+		if a.MustGet(n).Name() != n {
+			t.Errorf("%s: wrong dialect", n)
+		}
+	}
+}
+
 // TestMustGetPanicsOnUnknown: MustGet is for the name constants; an unknown
 // name is a programming error.
 func TestMustGetPanicsOnUnknown(t *testing.T) {
