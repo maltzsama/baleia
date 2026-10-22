@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,78 +14,137 @@ import (
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/app"
 	"github.com/galileostudio/baleia/internal/assistant"
 	assistantllm "github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
-	// Engine kinds register themselves.
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/glue"
-	"github.com/galileostudio/baleia/internal/connections/providers"
-	"github.com/galileostudio/baleia/internal/connections/sqlite"
-	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mcp"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	_ "github.com/galileostudio/baleia/internal/queryengine/clickhouse"
-	_ "github.com/galileostudio/baleia/internal/queryengine/flightsql"
-	_ "github.com/galileostudio/baleia/internal/queryengine/mysql"
-	_ "github.com/galileostudio/baleia/internal/queryengine/oracle"
-	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
-	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
-	_ "github.com/galileostudio/baleia/internal/queryengine/sqlserver"
-	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
-	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/galileostudio/baleia/internal/ws"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.temporal.io/sdk/client"
 )
 
 type Server struct {
-	cfg             *config.Config
-	mux             *chi.Mux
-	pool            *pgxpool.Pool
-	queries         *db.Queries
-	rl              *RateLimiter
-	keyring         *crypto.Keyring
-	registryKeyring *crypto.Keyring
-	temporal        client.Client
-	metrics         *metrics.Registry
+	cfg     *config.Config
+	mux     *chi.Mux
+	pool    *pgxpool.Pool
+	queries *db.Queries
+	metrics *metrics.Registry
+
+	handlers *api.Handlers
+	strict   api.ServerInterface
+	ws       *ws.Handler
+	mcp      *mcp.Server // nil unless agents are enabled
+	// rl and authLimiter run cleanup goroutines; Run stops them on shutdown.
+	rl               *RateLimiter
+	authLimiter      *AuthRouteLimiter
+	onRefreshLimited func()
 }
 
-// New builds the API server. The Temporal client is dialed by the caller
-// (with retries, internal/temporal/dial); metrics may be nil. registryKeyring
-// is nil when Phase B registry encryption is disabled.
-func New(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) (*Server, error) {
-	queries := db.New(pool)
-	rl := NewRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: cfg.RateLimitRPS,
-		Burst:             cfg.RateLimitBurst,
+// New builds the API on the shared graph (internal/app). ctx is the process
+// context: background work started here (the assistant's in-process MCP
+// session and sweeper) ends with it.
+func New(ctx context.Context, core *app.Core) (*Server, error) {
+	cfg := core.Config
+	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
+
+	h := api.NewHandlers(core.Queries, core.Pool, cfg, core.Keyring, core.Temporal, core.Storage, core.Connections, core.Engines, core.Binder)
+	h.SetAudit(core.Audit)
+	h.SetDialer(core.Dialer)
+	h.SetMetrics(core.Metrics)
+	s.handlers = h
+
+	authMetrics := h.AuthMetrics()
+	s.onRefreshLimited = func() { authMetrics.Attempt(metrics.AuthRefresh, metrics.OutcomeRateLimited) }
+	s.rl = NewRateLimiter(RateLimiterConfig{RequestsPerSecond: cfg.RateLimitRPS, Burst: cfg.RateLimitBurst})
+	// Strict per-IP limits on the password-guessing surface (#51). They are
+	// per replica: a multi-replica deployment needs a shared limiter to enforce
+	// them across the fleet.
+	s.authLimiter = NewAuthRouteLimiter([]AuthRouteLimit{
+		{Path: "/api/v1/auth/login", Kind: metrics.AuthPassword, Every: time.Minute, Burst: 10},
+		{Path: "/api/v1/auth/password-reset/request", Kind: metrics.AuthPasswordResetRequest, Every: 15 * time.Minute, Burst: 5},
+		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
+	}, func(kind string) { authMetrics.Attempt(kind, metrics.OutcomeRateLimited) })
+
+	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
+	// that the handler consumes; the JWT never appears in the URL.
+	tickets := wsticket.New()
+	h.SetWSTickets(tickets)
+	s.ws = ws.New(core.Queries.AsWSQuerier(), cfg.JWTSecret, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
+	s.ws.SetTickets(tickets)
+
+	s.strict = api.NewStrictHandlerWithOptions(h, []api.StrictMiddlewareFunc{
+		authMiddlewareFunc(cfg.JWTSecret, core.Queries),
+		csrfMiddleware,
+		refreshCookieMiddleware(cfg),
+		oidcMiddleware(cfg),
+	}, api.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  strictRequestError,
+		ResponseErrorHandlerFunc: strictResponseError,
 	})
-	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring, registryKeyring: registryKeyring, temporal: temporal, metrics: reg}
-	if err := s.routes(ctx); err != nil {
-		return nil, err
+
+	// The MCP surface is mounted outside /api/v1: agent tokens are valid only
+	// here (#58), and the streamable handler authenticates every request.
+	if cfg.AgentsEnabled {
+		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings())
+		gate.SetObserver(core.Metrics.Agent())
+		s.mcp = mcp.New(h, gate, core.Queries, mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
+		startAssistant(ctx, h, s.mcp, core.Dialer)
 	}
+
+	s.routes()
 	return s, nil
 }
 
-// routes mounts the API. ctx is the process context: background work it
-// starts (the assistant's in-process MCP session and sweeper) ends with it.
-func (s *Server) routes(ctx context.Context) error {
-	s.mux.Use(middleware.RequestID)
-	s.mux.Use(obs.RouteName) // names the tracing span after chi has routed (#47)
-	if s.metrics != nil {
-		s.mux.Use(s.metrics.HTTP().Middleware) // route templates, never raw paths (#87)
+// startAssistant provisions the assistant (#62) when the agents feature is
+// on. It runs turns through an in-memory MCP client, so the same gate and
+// audit hooks apply.
+func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server, dialer *connections.Dialer) {
+	svc := h.AssistantService()
+	if svc == nil {
+		return
 	}
+	session, err := mcpServer.InProcessClient(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "assistant disabled: in-process MCP client", "err", err)
+		return
+	}
+	runner := assistant.NewRunner(svc, nil, assistant.NewMCPToolCaller(session))
+	// Without stored settings the runner starts with no provider; saving the
+	// settings sets one.
+	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	settings, err := svc.Settings(sctx)
+	switch {
+	case err != nil:
+		slog.WarnContext(ctx, "assistant: settings not loaded at startup", "err", err)
+	case settings.Enabled && settings.Provider != nil && settings.Model != nil:
+		if key, err := svc.APIKey(sctx); err != nil {
+			slog.WarnContext(ctx, "assistant: API key not loaded at startup", "err", err)
+		} else {
+			client := obs.WrapHTTPClient(dialer.HTTPClient(assistantllm.ClientTimeout))
+			runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
+		}
+	}
+	h.SetAssistantRunner(runner)
+	go runner.RunSweeper(ctx, 30*time.Second)
+}
+
+// routes mounts what New built; it builds nothing (#362).
+func (s *Server) routes() {
+	s.mux.Use(middleware.RequestID)
+	s.mux.Use(obs.RouteName)               // names the tracing span after chi has routed (#47)
+	s.mux.Use(s.metrics.HTTP().Middleware) // route templates, never raw paths (#87)
 	s.mux.Use(RequestIDHeader)
 	s.mux.Use(StructuredLogger(slog.Default()))
 	s.mux.Use(middleware.Recoverer)
@@ -114,151 +172,37 @@ func (s *Server) routes(ctx context.Context) error {
 
 	// Prometheus scrape endpoint (#87): no tenant data, gated by the optional
 	// BALEIA_METRICS_TOKEN instead of the user JWT.
-	if s.cfg.MetricsEnabled && s.metrics != nil {
+	if s.cfg.MetricsEnabled {
 		metricsHandler := s.metrics.Handler(s.cfg.MetricsToken)
 		s.mux.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			metricsHandler.ServeHTTP(w, r)
 		})
 	}
-	temporalClient := s.temporal
 
-	s3Client, err := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
-	if err != nil {
-		return err
-	}
+	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", s.ws.StreamExecution)
 
-	// Every connection provider dials through one SSRF-safe dialer
-	// (docs/adr/0011).
-	dialer, err := connections.NewDialer(connections.DialerOptions{
-		DenyCIDRs:     s.cfg.ConnectionsDenyCIDRs,
-		AllowCIDRs:    s.cfg.ConnectionsAllowCIDRs,
-		AllowLoopback: s.cfg.ConnectionsAllowLoopback,
-	})
-	if err != nil {
-		return fmt.Errorf("invalid connection network settings: %w", err)
-	}
-	conns, err := providers.New(dialer, providers.Options{
-		SQLite: sqlite.Options{Root: s.cfg.SQLiteRoot, AllowWrite: s.cfg.SQLiteAllowWrite},
-		Glue:   glue.Options{AllowAmbientCredentials: s.cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: s.cfg.ConnectionsAllowLoopback},
-	})
-	if err != nil {
-		return fmt.Errorf("connection providers: %w", err)
-	}
-	// The SQLite engine confines files to the same root the provider uses
-	// (docs/adr/0011).
-	sqliteengine.Configure(sqliteengine.Options{Root: s.cfg.SQLiteRoot, AllowWrite: s.cfg.SQLiteAllowWrite})
-
-	// Engines run SQL (docs/adr/0002); catalog DDL runs as the Trino admin
-	// identity (docs/adr/0005). Both dial through the connections dialer.
-	engines := queryengine.NewManager(s.queries, s.keyring, conns, dialer)
-	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, obs.WrapHTTPClient(dialer.HTTPClient(60*time.Second)))
-	binder := bindtrino.New(trinoAdmin, s.queries).WithRegistryKeyring(s.registryKeyring)
-
-	h := api.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
-	// The audit trail is best-effort: a failed write is counted, never fatal.
-	var auditMetrics *metrics.Audit
-	if s.metrics != nil {
-		auditMetrics = s.metrics.Audit()
-	}
-	auditRec := audit.NewPostgres(s.queries, conns.SecretKeys(), auditMetrics.WriteFailed)
-	h.SetAudit(auditRec)
-	h.SetDialer(dialer)
-	var onRefreshLimited func()
-	var onAuthLimited func(kind string)
-	if s.metrics != nil {
-		h.SetMetrics(s.metrics)
-		s3Client.SetMetrics(s.metrics.Storage())
-		auth := h.AuthMetrics()
-		onRefreshLimited = func() { auth.Attempt(metrics.AuthRefresh, metrics.OutcomeRateLimited) }
-		onAuthLimited = func(kind string) { auth.Attempt(kind, metrics.OutcomeRateLimited) }
-	}
-
-	// Strict per-IP limits on the password-guessing surface (#51). They are
-	// per replica: a multi-replica deployment needs a shared limiter to enforce
-	// them across the fleet.
-	authLimiter := NewAuthRouteLimiter([]AuthRouteLimit{
-		{Path: "/api/v1/auth/login", Kind: metrics.AuthPassword, Every: time.Minute, Burst: 10},
-		{Path: "/api/v1/auth/password-reset/request", Kind: metrics.AuthPasswordResetRequest, Every: 15 * time.Minute, Burst: 5},
-		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
-	}, onAuthLimited)
-
-	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
-	// that the handler consumes; the JWT never appears in the URL.
-	tickets := wsticket.New()
-	h.SetWSTickets(tickets)
-	wsHandler := ws.New(s.queries.AsWSQuerier(), s.cfg.JWTSecret, s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
-	wsHandler.SetTickets(tickets)
-	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
-
-	strictHandler := api.NewStrictHandlerWithOptions(h, []api.StrictMiddlewareFunc{
-		authMiddlewareFunc(s.cfg.JWTSecret, s.queries),
-		csrfMiddleware,
-		refreshCookieMiddleware(s.cfg),
-		oidcMiddleware(s.cfg),
-	}, api.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc:  strictRequestError,
-		ResponseErrorHandlerFunc: strictResponseError,
-	})
-
-	// The MCP surface is mounted outside /api/v1: agent tokens are valid only
-	// here (#58), and the streamable handler authenticates every request.
-	if s.cfg.AgentsEnabled {
-		gate := agentpolicy.NewGate(s.queries, engineCapabilities{h: h}, h.AgentCeilings())
-		if s.metrics != nil {
-			gate.SetObserver(s.metrics.Agent())
-		}
-		mcpServer := mcp.New(h, gate, s.queries, mcp.NewAuditHooks(auditRec), s.cfg.MCPAllowedOrigins)
+	if s.mcp != nil {
 		s.mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
-			mcpServer.Handler().ServeHTTP(w, r)
+			s.mcp.Handler().ServeHTTP(w, r)
 		})
-
-		// The assistant (#62) runs turns through an in-memory MCP client, so
-		// the same gate and audit hooks apply. It is provisioned only when the
-		// agents feature is on.
-		if svc := h.AssistantService(); svc != nil {
-			session, err := mcpServer.InProcessClient(ctx)
-			if err != nil {
-				slog.WarnContext(ctx, "assistant disabled: in-process MCP client", "err", err)
-			} else {
-				runner := assistant.NewRunner(svc, nil, assistant.NewMCPToolCaller(session))
-				// Without stored settings the runner starts with no provider;
-				// saving the settings sets one.
-				sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				defer cancel()
-				settings, err := svc.Settings(sctx)
-				switch {
-				case err != nil:
-					slog.WarnContext(ctx, "assistant: settings not loaded at startup", "err", err)
-				case settings.Enabled && settings.Provider != nil && settings.Model != nil:
-					if key, err := svc.APIKey(sctx); err != nil {
-						slog.WarnContext(ctx, "assistant: API key not loaded at startup", "err", err)
-					} else {
-						client := obs.WrapHTTPClient(dialer.HTTPClient(assistantllm.ClientTimeout))
-						runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
-					}
-				}
-				h.SetAssistantRunner(runner)
-				go runner.RunSweeper(ctx, 30*time.Second)
-			}
-		}
 	}
 
 	s.mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(audit.Middleware)
 		r.Use(refreshCookieContext)
-		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
-		r.Use(authLimiter.Middleware)
+		r.Use(RateLimitRefreshMiddleware(s.rl, s.onRefreshLimited))
+		r.Use(s.authLimiter.Middleware)
 		r.Use(OptionalJSONBody)
-		api.HandlerFromMux(strictHandler, r)
+		api.HandlerFromMux(s.strict, r)
 
 		// Non-oapi routes (dynamic catalog browsing) share the chi auth
 		// middleware; handlers read the caller from the request context.
 		r.Group(func(r chi.Router) {
 			r.Use(chiAuthMiddleware(s.cfg.JWTSecret, s.queries))
-			r.Get("/workspaces/{id}/catalogs", h.ListWorkspaceCatalogs)
-			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", h.HandleListNamespaces)
-			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", h.HandleListTables)
-			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables/{table}/columns", h.HandleListColumns)
+			r.Get("/workspaces/{id}/catalogs", s.handlers.ListWorkspaceCatalogs)
+			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", s.handlers.HandleListNamespaces)
+			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", s.handlers.HandleListTables)
+			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables/{table}/columns", s.handlers.HandleListColumns)
 		})
 	})
 
@@ -266,7 +210,6 @@ func (s *Server) routes(ctx context.Context) error {
 	s.mux.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		static.ServeHTTP(w, r)
 	}))
-	return nil
 }
 
 // staticUsers tells the static handler whether the first admin exists.
@@ -499,8 +442,9 @@ func extractToken(r *http.Request) string {
 
 // Run serves until ctx ends, then drains in-flight requests for at most
 // HTTPShutdownTimeout, or without a deadline when it is zero (#372). A clean
-// shutdown returns nil.
+// shutdown returns nil. The rate limiters stop when Run returns.
 func (s *Server) Run(ctx context.Context) error {
+	defer s.stopLimiters()
 	srv := &http.Server{
 		Addr:    ":" + s.cfg.Port,
 		Handler: obs.HTTPHandler(s.mux, "http.server"),
@@ -524,6 +468,16 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 	return <-shutdown
+}
+
+// stopLimiters ends the limiters' cleanup goroutines.
+func (s *Server) stopLimiters() {
+	if s.rl != nil {
+		s.rl.Stop()
+	}
+	if s.authLimiter != nil {
+		s.authLimiter.Stop()
+	}
 }
 
 func derefString(value *string) string {

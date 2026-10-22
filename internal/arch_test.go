@@ -31,10 +31,12 @@ type constructionRule struct {
 	offenders map[string]string
 }
 
-// wiringSites are the only places that construct adapters (ADR 0007). The
-// e2e seed (build tag e2e, never shipped) is a third composition root: it
-// registers the smoke's Trino catalog the way a binding does.
-var wiringSites = []string{"internal/server/server.go", "cmd/worker/main.go", "cmd/e2e-seed/main.go"}
+// wiringSites are the only places that construct adapters (ADR 0007):
+// internal/app builds the graph the API and the worker share (#362), and the
+// worker adds its Lens monitor. The e2e seed (build tag e2e, never shipped) is
+// a test-only composition root: it registers the smoke's Trino catalog the way
+// a binding does.
+var wiringSites = []string{"internal/app/app.go", "cmd/worker/main.go", "cmd/e2e-seed/main.go"}
 
 var constructionRules = []constructionRule{
 	{
