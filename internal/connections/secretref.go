@@ -33,11 +33,16 @@ func IsSecretReference(v string) bool {
 	return !strings.Contains(m[2], "..")
 }
 
-// ResolveSecretReference resolves an external reference with Baleia's own
-// environment: env: from the process environment, file: under
-// BALEIA_SECRET_FILE_BASE_DIR. A value that is not a reference is returned
-// unchanged.
-func ResolveSecretReference(v string) (string, error) {
+// SecretResolver resolves external secret references with Baleia's own
+// environment: env: from the process environment, file: under FileBaseDir
+// (BALEIA_SECRET_FILE_BASE_DIR). The zero value resolves env: only.
+type SecretResolver struct {
+	FileBaseDir string
+}
+
+// Resolve returns the value v refers to. A value that is not a reference is
+// returned unchanged.
+func (r SecretResolver) Resolve(v string) (string, error) {
 	m := secretReferenceRe.FindStringSubmatch(v)
 	if m == nil {
 		return v, nil
@@ -53,14 +58,13 @@ func ResolveSecretReference(v string) (string, error) {
 		}
 		return val, nil
 	case "file":
-		base := os.Getenv("BALEIA_SECRET_FILE_BASE_DIR")
-		if base == "" {
+		if r.FileBaseDir == "" {
 			return "", fmt.Errorf("%w: BALEIA_SECRET_FILE_BASE_DIR is not set", ErrSecretReference)
 		}
 		if strings.Contains(m[2], "..") {
 			return "", fmt.Errorf("%w: invalid file name", ErrSecretReference)
 		}
-		b, err := os.ReadFile(filepath.Join(base, m[2]))
+		b, err := os.ReadFile(filepath.Join(r.FileBaseDir, m[2]))
 		if err != nil {
 			return "", fmt.Errorf("%w: %w", ErrSecretReference, err)
 		}
@@ -68,4 +72,11 @@ func ResolveSecretReference(v string) (string, error) {
 		return strings.TrimRight(string(b), "\r\n"), nil
 	}
 	return "", fmt.Errorf("%w: unknown origin %q", ErrSecretReference, m[1])
+}
+
+// ResolveSecretReference resolves v with the base directory read from
+// BALEIA_SECRET_FILE_BASE_DIR. It goes away once every Config carries the
+// resolver the composition root builds (#367).
+func ResolveSecretReference(v string) (string, error) {
+	return SecretResolver{FileBaseDir: os.Getenv("BALEIA_SECRET_FILE_BASE_DIR")}.Resolve(v)
 }

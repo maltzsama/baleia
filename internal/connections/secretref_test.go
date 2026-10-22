@@ -57,6 +57,25 @@ func TestResolveSecretReference(t *testing.T) {
 	}
 }
 
+func TestSecretResolver_Resolve(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := (SecretResolver{FileBaseDir: dir}).Resolve("@baleia-secret[file:token.txt]"); err != nil || v != "from-file" {
+		t.Errorf("file = %q, %v", v, err)
+	}
+	// The zero value has no base directory: file references are refused, env
+	// references still resolve.
+	if _, err := (SecretResolver{}).Resolve("@baleia-secret[file:token.txt]"); !errors.Is(err, ErrSecretReference) {
+		t.Errorf("file without a base directory = %v", err)
+	}
+	t.Setenv("BALEIA_TEST_REF", "s3cret")
+	if v, err := (SecretResolver{}).Resolve("@baleia-secret[env:BALEIA_TEST_REF]"); err != nil || v != "s3cret" {
+		t.Errorf("env with the zero value = %q, %v", v, err)
+	}
+}
+
 func TestConfigReferenceAndSecret(t *testing.T) {
 	t.Setenv("BALEIA_TEST_REF", "s3cret")
 	ref := Config{Secrets: map[string]string{"password": "@baleia-secret[env:BALEIA_TEST_REF]"}}
