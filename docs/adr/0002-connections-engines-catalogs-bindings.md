@@ -58,7 +58,8 @@ maintained copy.
 
 ## Consequences
 
-- A new provider, engine kind or binder is one package plus a registration; no `switch` edits.
+- A new provider, engine kind or binder is one package plus a registration; no `switch` edits. An
+  engine kind's registration is one line in `internal/engines` (#364).
 - A catalog can be bound into several federated engines and queried directly at the same time.
 - Authorization (#16) is expressed on catalogs, not on connections or engine-side names.
 - Migrations must backfill: every existing connection gets a catalog, the default Trino engine is
