@@ -27,6 +27,9 @@ import (
 type Options struct {
 	SQLite sqlite.Options
 	Glue   glue.Options
+	// Secrets resolves external secret references in every Config the
+	// registry builds (BALEIA_SECRET_FILE_BASE_DIR for file:).
+	Secrets connections.SecretResolver
 	// Dialects quote SQL for providers that read through an engine (Trino);
 	// nil builds a registry of its own.
 	Dialects *dialect.Registry
@@ -41,7 +44,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 	if o.Dialects == nil {
 		o.Dialects = dialect.NewRegistry()
 	}
-	return connections.NewRegistry(
+	reg, err := connections.NewRegistry(
 		polaris.New(d),
 		nessie.New(d),
 		iceberg.New(d),
@@ -61,4 +64,8 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		planned.Doris(),
 		planned.StarRocks(),
 	)
+	if err != nil {
+		return nil, err
+	}
+	return reg.WithSecrets(o.Secrets), nil
 }

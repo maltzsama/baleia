@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestIsSecretReference(t *testing.T) {
@@ -31,29 +33,47 @@ func TestIsSecretReference(t *testing.T) {
 	}
 }
 
-func TestResolveSecretReference(t *testing.T) {
+func TestSecretResolver_ResolveEnvFileAndLiteral(t *testing.T) {
 	t.Setenv("BALEIA_TEST_REF", "s3cret")
-	if v, err := ResolveSecretReference("@baleia-secret[env:BALEIA_TEST_REF]"); err != nil || v != "s3cret" {
-		t.Errorf("env = %q, %v", v, err)
-	}
-	if _, err := ResolveSecretReference("@baleia-secret[env:BALEIA_DEFINITELY_MISSING]"); !errors.Is(err, ErrSecretReference) {
-		t.Errorf("missing env = %v", err)
-	}
-
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("BALEIA_SECRET_FILE_BASE_DIR", dir)
-	if v, err := ResolveSecretReference("@baleia-secret[file:token.txt]"); err != nil || v != "from-file" {
+	r := SecretResolver{FileBaseDir: dir}
+	if v, err := r.Resolve("@baleia-secret[env:BALEIA_TEST_REF]"); err != nil || v != "s3cret" {
+		t.Errorf("env = %q, %v", v, err)
+	}
+	if _, err := r.Resolve("@baleia-secret[env:BALEIA_DEFINITELY_MISSING]"); !errors.Is(err, ErrSecretReference) {
+		t.Errorf("missing env = %v", err)
+	}
+	if v, err := r.Resolve("@baleia-secret[file:token.txt]"); err != nil || v != "from-file" {
 		t.Errorf("file = %q, %v (the trailing newline is dropped)", v, err)
 	}
-	if _, err := ResolveSecretReference("@baleia-secret[file:missing.txt]"); !errors.Is(err, ErrSecretReference) {
+	if _, err := r.Resolve("@baleia-secret[file:missing.txt]"); !errors.Is(err, ErrSecretReference) {
 		t.Errorf("missing file = %v", err)
 	}
 	// A literal is returned unchanged.
-	if v, err := ResolveSecretReference("literal"); err != nil || v != "literal" {
+	if v, err := r.Resolve("literal"); err != nil || v != "literal" {
 		t.Errorf("literal = %q, %v", v, err)
+	}
+}
+
+func TestSecretResolver_Resolve(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := (SecretResolver{FileBaseDir: dir}).Resolve("@baleia-secret[file:token.txt]"); err != nil || v != "from-file" {
+		t.Errorf("file = %q, %v", v, err)
+	}
+	// The zero value has no base directory: file references are refused, env
+	// references still resolve.
+	if _, err := (SecretResolver{}).Resolve("@baleia-secret[file:token.txt]"); !errors.Is(err, ErrSecretReference) {
+		t.Errorf("file without a base directory = %v", err)
+	}
+	t.Setenv("BALEIA_TEST_REF", "s3cret")
+	if v, err := (SecretResolver{}).Resolve("@baleia-secret[env:BALEIA_TEST_REF]"); err != nil || v != "s3cret" {
+		t.Errorf("env with the zero value = %q, %v", v, err)
 	}
 }
 
@@ -80,5 +100,62 @@ func TestConfigReferenceAndSecret(t *testing.T) {
 	}
 	if missing.Reference("password") == "" {
 		t.Error("the raw reference must still be available")
+	}
+}
+
+// TestRegistryConfig_ResolvesWithTheRegistrySecrets: a Config the registry
+// builds resolves file references under the registry's base directory, not
+// the environment's.
+func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := reg.WithSecrets(SecretResolver{FileBaseDir: dir}).NewConfig(pgtype.UUID{}, KindPostgreSQL)
+	cfg.Secrets["password"] = "@baleia-secret[file:token.txt]"
+	if got := cfg.Secret("password"); got != "from-file" {
+		t.Fatalf("Secret = %q, want from-file", got)
+	}
+}
+
+// TestSecretResolver_FileStaysUnderTheBaseDir: a symlink that escapes the base
+// directory is refused, and so is one with an absolute target; a relative one
+// that stays inside it (how a Kubernetes Secret volume links name ->
+// ..data/name) resolves.
+func TestSecretResolver_FileStaysUnderTheBaseDir(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("leaked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "..data"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "..data", "token"), []byte("mounted\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..data", "token"), filepath.Join(dir, "token")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	// An absolute target is refused even when it stays inside the directory.
+	if err := os.Symlink(filepath.Join(dir, "..data", "token"), filepath.Join(dir, "absolute")); err != nil {
+		t.Fatal(err)
+	}
+	r := SecretResolver{FileBaseDir: dir}
+	if v, err := r.Resolve("@baleia-secret[file:token]"); err != nil || v != "mounted" {
+		t.Errorf("symlink inside the base dir = %q, %v; want mounted", v, err)
+	}
+	if v, err := r.Resolve("@baleia-secret[file:escape]"); !errors.Is(err, ErrSecretReference) || v != "" {
+		t.Errorf("symlink out of the base dir = %q, %v; want ErrSecretReference", v, err)
+	}
+	if v, err := r.Resolve("@baleia-secret[file:absolute]"); !errors.Is(err, ErrSecretReference) || v != "" {
+		t.Errorf("absolute symlink inside the base dir = %q, %v; want ErrSecretReference", v, err)
 	}
 }

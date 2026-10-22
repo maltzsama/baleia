@@ -95,6 +95,9 @@ type Config struct {
 	Kind         Kind
 	Values       map[string]string
 	Secrets      map[string]string
+	// resolver resolves external secret references; a Config built by a
+	// Registry carries the registry's (see Registry.NewConfig).
+	resolver *SecretResolver
 }
 
 // Value returns a non-secret value, or "" when unset.
@@ -102,13 +105,18 @@ func (c Config) Value(key string) string { return c.Values[key] }
 
 // Secret returns a secret value resolved for Baleia's own use: an external
 // reference (@baleia-secret[env:…] or @baleia-secret[file:…]) is resolved with
-// Baleia's environment; empty when it cannot be resolved.
+// the Config's resolver; empty when it cannot be resolved.
 func (c Config) Secret(key string) string {
 	v := c.Secrets[key]
 	if !IsSecretReference(v) {
 		return v
 	}
-	resolved, err := ResolveSecretReference(v)
+	// A Config built without a registry resolves env: references only.
+	var r SecretResolver
+	if c.resolver != nil {
+		r = *c.resolver
+	}
+	resolved, err := r.Resolve(v)
 	if err != nil {
 		return ""
 	}
@@ -183,6 +191,7 @@ var (
 // (docs/adr/0007) and read concurrently afterwards.
 type Registry struct {
 	providers map[Kind]Provider
+	secrets   *SecretResolver
 }
 
 // NewRegistry registers the providers; a kind registered twice is an error.
@@ -195,6 +204,18 @@ func NewRegistry(providers ...Provider) (*Registry, error) {
 		r.providers[p.Kind()] = p
 	}
 	return r, nil
+}
+
+// WithSecrets returns a registry with the same providers whose Configs
+// resolve external secret references with sr.
+func (r *Registry) WithSecrets(sr SecretResolver) *Registry {
+	return &Registry{providers: r.providers, secrets: &sr}
+}
+
+// NewConfig returns an empty Config of kind that resolves secret references
+// with the registry's resolver.
+func (r *Registry) NewConfig(id pgtype.UUID, kind Kind) Config {
+	return Config{ConnectionID: id, Kind: kind, Values: map[string]string{}, Secrets: map[string]string{}, resolver: r.secrets}
 }
 
 // Get returns the provider of a kind, or ErrUnknownKind.

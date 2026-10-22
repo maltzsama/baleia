@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -33,11 +32,16 @@ func IsSecretReference(v string) bool {
 	return !strings.Contains(m[2], "..")
 }
 
-// ResolveSecretReference resolves an external reference with Baleia's own
-// environment: env: from the process environment, file: under
-// BALEIA_SECRET_FILE_BASE_DIR. A value that is not a reference is returned
-// unchanged.
-func ResolveSecretReference(v string) (string, error) {
+// SecretResolver resolves external secret references with Baleia's own
+// environment: env: from the process environment, file: under FileBaseDir
+// (BALEIA_SECRET_FILE_BASE_DIR). The zero value resolves env: only.
+type SecretResolver struct {
+	FileBaseDir string
+}
+
+// Resolve returns the value v refers to. A value that is not a reference is
+// returned unchanged.
+func (r SecretResolver) Resolve(v string) (string, error) {
 	m := secretReferenceRe.FindStringSubmatch(v)
 	if m == nil {
 		return v, nil
@@ -53,14 +57,20 @@ func ResolveSecretReference(v string) (string, error) {
 		}
 		return val, nil
 	case "file":
-		base := os.Getenv("BALEIA_SECRET_FILE_BASE_DIR")
-		if base == "" {
+		if r.FileBaseDir == "" {
 			return "", fmt.Errorf("%w: BALEIA_SECRET_FILE_BASE_DIR is not set", ErrSecretReference)
 		}
 		if strings.Contains(m[2], "..") {
 			return "", fmt.Errorf("%w: invalid file name", ErrSecretReference)
 		}
-		b, err := os.ReadFile(filepath.Join(base, m[2]))
+		// os.Root confines the read to the base directory: a symlink inside it
+		// may point within it (a mounted Kubernetes Secret does), never out.
+		root, err := os.OpenRoot(r.FileBaseDir)
+		if err != nil {
+			return "", fmt.Errorf("%w: %w", ErrSecretReference, err)
+		}
+		defer func() { _ = root.Close() }()
+		b, err := root.ReadFile(m[2])
 		if err != nil {
 			return "", fmt.Errorf("%w: %w", ErrSecretReference, err)
 		}
