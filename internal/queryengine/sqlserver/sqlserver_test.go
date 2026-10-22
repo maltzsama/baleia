@@ -13,7 +13,7 @@ import (
 // TestGOBatches: the dialect splits a script on GO lines, and GO never reaches
 // the server (each batch is one Execute).
 func TestGOBatches(t *testing.T) {
-	spans, err := dialect.MustGet(dialect.TSQL).Statements("SELECT 1\nGO\nSELECT 2\nGO\n")
+	spans, err := dialect.NewRegistry().MustGet(dialect.TSQL).Statements("SELECT 1\nGO\nSELECT 2\nGO\n")
 	if err != nil {
 		t.Fatal(err)
 	}

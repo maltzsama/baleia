@@ -73,7 +73,7 @@ func TestRenderTrino(t *testing.T) {
 		},
 	})
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.MustGet(dialect.Trino), RenderOptions{
+	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{
 		Alias: "net_revenue", Grain: dialect.GrainMonth, From: &from,
 	})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestRenderTrino(t *testing.T) {
 func TestRenderScalarAndLimit(t *testing.T) {
 	col := "amount"
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggAvg, Column: &col})
-	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.MustGet(dialect.Trino), RenderOptions{
+	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{
 		Alias: "avg_amount", Limit: 10,
 	})
 	if err != nil {
@@ -105,7 +105,7 @@ func TestRenderScalarAndLimit(t *testing.T) {
 
 func TestRenderCountStar(t *testing.T) {
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggCount})
-	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.MustGet(dialect.Trino), RenderOptions{Alias: "orders"})
+	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "orders"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestRenderFilterValuesAreLiterals(t *testing.T) {
 		Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col,
 		Filters: []Filter{{Column: "name", Op: OpEq, Values: []any{`x' OR '1'='1`}}},
 	})
-	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.MustGet(dialect.Trino), RenderOptions{Alias: "sum_amount"})
+	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "sum_amount"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestRenderFilterValuesAreLiterals(t *testing.T) {
 func TestRenderQuotesIdentifiers(t *testing.T) {
 	col := "amount"
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col})
-	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: `we"ird`}, dialect.MustGet(dialect.Trino), RenderOptions{Alias: "sum_amount"})
+	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: `we"ird`}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "sum_amount"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestRenderQuotesIdentifiers(t *testing.T) {
 func TestRenderGrainRequiresTimeColumn(t *testing.T) {
 	col := "amount"
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col})
-	_, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.MustGet(dialect.Trino), RenderOptions{Alias: "x", Grain: dialect.GrainDay})
+	_, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "x", Grain: dialect.GrainDay})
 	if err == nil || !strings.Contains(err.Error(), "without a time column") {
 		t.Fatalf("expected a time-column error, got %v", err)
 	}
@@ -152,7 +152,7 @@ func TestRenderGrainRequiresTimeColumn(t *testing.T) {
 
 func TestRenderCustomSQL(t *testing.T) {
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, CustomSQL: ptr(`sum("amount") filter (where "paid")`)})
-	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.MustGet(dialect.Trino), RenderOptions{Alias: "paid"})
+	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "paid"})
 	if err != nil {
 		t.Fatal(err)
 	}

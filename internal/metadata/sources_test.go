@@ -186,7 +186,7 @@ type fakeIntrospectEngine struct {
 
 func (e *fakeIntrospectEngine) Kind() string { return "trino" }
 func (e *fakeIntrospectEngine) Dialect() queryengine.Dialect {
-	return dialect.MustGet(dialect.Trino)
+	return dialect.NewRegistry().MustGet(dialect.Trino)
 }
 func (e *fakeIntrospectEngine) OpenSession(_ context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {
 	e.spec = spec
@@ -200,7 +200,7 @@ func (s *fakeIntrospectSession) Close() error { return nil }
 func (s *fakeIntrospectSession) Execute(_ context.Context, sql string, _ queryengine.Callbacks, sink queryengine.RecordSink) error {
 	s.e.sqls = append(s.e.sqls, sql)
 	rows := [][]string{{"sales"}, {"empty"}}
-	if sql == dialect.MustGet(dialect.Trino).MetadataQueries().Catalog {
+	if sql == dialect.NewRegistry().MustGet(dialect.Trino).MetadataQueries().Catalog {
 		rows = [][]string{
 			{"sales", "orders", "TABLE", "id", "bigint", "NO", "1"},
 			{"sales", "orders", "TABLE", "note", "varchar", "YES", "2"},

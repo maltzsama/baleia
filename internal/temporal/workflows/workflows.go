@@ -48,7 +48,7 @@ const defaultExecutionTimeout = 2 * time.Hour
 // add V3 and drain V2 (see #27).
 func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) error {
 	dialectName := dialect.Trino
-	if d, ok := dialect.ForEngineKind(in.Target.EngineKind); ok {
+	if d, ok := dialect.ForEngineKind(in.Target.EngineKind); ok { //nolint:staticcheck // V2 keeps its lookup so open runs replay
 		dialectName = d.Name()
 	}
 	return runQueryExecution(ctx, in, dialectName)

@@ -113,7 +113,7 @@ func TestGenerateLists(t *testing.T) {
 	if name == "" {
 		t.Skip("BALEIA_UPDATE_LISTS not set")
 	}
-	d, ok := dialect.Get(name)
+	d, ok := dialect.NewRegistry().Get(name)
 	if !ok {
 		t.Fatalf("unknown dialect %q", name)
 	}

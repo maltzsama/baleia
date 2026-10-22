@@ -14,17 +14,17 @@ import (
 func TestAllDialectsMatchRegistry(t *testing.T) {
 	got := slices.Clone(allDialects)
 	slices.Sort(got)
-	if want := Names(); !slices.Equal(got, want) {
+	if want := testRegistry.Names(); !slices.Equal(got, want) {
 		t.Errorf("allDialects = %v, registered = %v", got, want)
 	}
 }
 
 func TestRegistry(t *testing.T) {
-	if got := strings.Join(Names(), ","); got != "clickhouse,flightsql-generic,mariadb,mysql,oracle,postgresql,sqlite,trino,tsql" {
+	if got := strings.Join(testRegistry.Names(), ","); got != "clickhouse,flightsql-generic,mariadb,mysql,oracle,postgresql,sqlite,trino,tsql" {
 		t.Errorf("names = %s", got)
 	}
 	for _, n := range allDialects {
-		d := MustGet(n)
+		d := testRegistry.MustGet(n)
 		if d.Name() != n || d.FormatterLanguage() == "" || d.CodeMirrorBase() == "" {
 			t.Errorf("%s: incomplete", n)
 		}
@@ -39,7 +39,7 @@ func TestRegistry(t *testing.T) {
 			t.Errorf("%s: metadata queries must use the dialect's placeholders", n)
 		}
 	}
-	if _, ok := Get("nope"); ok {
+	if _, ok := testRegistry.Get("nope"); ok {
 		t.Error("unknown dialect found")
 	}
 }
@@ -48,8 +48,8 @@ func TestRegistry(t *testing.T) {
 // can each be injected their own without disagreeing.
 func TestNewRegistry(t *testing.T) {
 	a, b := NewRegistry(), NewRegistry()
-	if !slices.Equal(a.Names(), b.Names()) || !slices.Equal(a.Names(), Names()) {
-		t.Fatalf("names differ: %v / %v / %v", a.Names(), b.Names(), Names())
+	if !slices.Equal(a.Names(), b.Names()) || !slices.Equal(a.Names(), testRegistry.Names()) {
+		t.Fatalf("names differ: %v / %v / %v", a.Names(), b.Names(), testRegistry.Names())
 	}
 	for _, n := range a.Names() {
 		if a.MustGet(n).Name() != n {
@@ -66,7 +66,7 @@ func TestMustGetPanicsOnUnknown(t *testing.T) {
 			t.Fatal("MustGet of an unknown dialect did not panic")
 		}
 	}()
-	MustGet("nope")
+	testRegistry.MustGet("nope")
 }
 
 // TestForEngineKind covers the kind → dialect translation: every engine kind
@@ -78,13 +78,13 @@ func TestForEngineKind(t *testing.T) {
 		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
 		"flightsql": FlightSQL, "fake": FlightSQL, // the test fake shares the ANSI subset
 	} {
-		d, ok := ForEngineKind(kind)
+		d, ok := testRegistry.ForEngineKind(kind)
 		if !ok || d == nil || d.Name() != want {
 			t.Errorf("ForEngineKind(%q) = (%v, %v), want %q", kind, d, ok, want)
 		}
 	}
 	for _, kind := range []string{"", "nope", "postgres", "sql-server"} {
-		if d, ok := ForEngineKind(kind); ok || d != nil {
+		if d, ok := testRegistry.ForEngineKind(kind); ok || d != nil {
 			t.Errorf("ForEngineKind(%q) = (%v, %v), want (nil, false)", kind, d, ok)
 		}
 	}
@@ -96,7 +96,7 @@ func TestQuoteIdent(t *testing.T) {
 		MySQL: "`a\"b`", MariaDB: "`a\"b`", ClickHouse: "`a\"b`", TSQL: `[a"b]`,
 	}
 	for _, n := range allDialects {
-		d := MustGet(n)
+		d := testRegistry.MustGet(n)
 		got, err := d.QuoteIdent(`a"b`)
 		if n == Oracle {
 			// Oracle has no escape for " inside a quoted identifier (ORA-25716).
@@ -114,19 +114,19 @@ func TestQuoteIdent(t *testing.T) {
 	}
 	// The closing quote character is doubled.
 	for n, in := range map[string]string{MySQL: "a`b", TSQL: "a]b", ClickHouse: "a`b"} {
-		got, _ := MustGet(n).QuoteIdent(in)
+		got, _ := testRegistry.MustGet(n).QuoteIdent(in)
 		if want := map[string]string{MySQL: "`a``b`", TSQL: "[a]]b]", ClickHouse: "`a``b`"}[n]; got != want {
 			t.Errorf("%s: %q", n, got)
 		}
 	}
 	// Identifier limits: PostgreSQL 63 bytes, MySQL 64 characters, Oracle 128 bytes.
-	if _, err := MustGet(PostgreSQL).QuoteIdent(strings.Repeat("a", 64)); err == nil {
+	if _, err := testRegistry.MustGet(PostgreSQL).QuoteIdent(strings.Repeat("a", 64)); err == nil {
 		t.Error("postgresql: 64 bytes accepted")
 	}
-	if _, err := MustGet(MySQL).QuoteIdent(strings.Repeat("é", 64)); err != nil {
+	if _, err := testRegistry.MustGet(MySQL).QuoteIdent(strings.Repeat("é", 64)); err != nil {
 		t.Errorf("mysql counts characters: %v", err)
 	}
-	if _, err := MustGet(Oracle).QuoteIdent(strings.Repeat("é", 65)); err == nil {
+	if _, err := testRegistry.MustGet(Oracle).QuoteIdent(strings.Repeat("é", 65)); err == nil {
 		t.Error("oracle: 130 bytes accepted")
 	}
 }
@@ -144,18 +144,18 @@ func TestQualify(t *testing.T) {
 		FlightSQL:  `"c"."s"."t"`,
 	}
 	for n, want := range cases {
-		got, err := MustGet(n).Qualify("c", []string{"s"}, "t")
+		got, err := testRegistry.MustGet(n).Qualify("c", []string{"s"}, "t")
 		if err != nil || got != want {
 			t.Errorf("%s: %q, %v", n, got, err)
 		}
 	}
-	if _, err := MustGet(Trino).Qualify("c", []string{"a", "b"}, "t"); !errors.Is(err, ErrInvalid) {
+	if _, err := testRegistry.MustGet(Trino).Qualify("c", []string{"a", "b"}, "t"); !errors.Is(err, ErrInvalid) {
 		t.Error("trino accepted a two-level schema")
 	}
-	if got, err := MustGet(FlightSQL).Qualify("", []string{"a", "b"}, "t"); err != nil || got != `"a"."b"."t"` {
+	if got, err := testRegistry.MustGet(FlightSQL).Qualify("", []string{"a", "b"}, "t"); err != nil || got != `"a"."b"."t"` {
 		t.Errorf("flightsql deep path: %q, %v", got, err)
 	}
-	if got, _ := MustGet(Trino).Qualify("", []string{"s"}, "t"); got != `"s"."t"` {
+	if got, _ := testRegistry.MustGet(Trino).Qualify("", []string{"s"}, "t"); got != `"s"."t"` {
 		t.Errorf("trino without catalog: %q", got)
 	}
 }
@@ -169,7 +169,7 @@ func TestQuoteString(t *testing.T) {
 		TSQL: `N'it''s a \ test'`,
 	}
 	for _, n := range allDialects {
-		if got := MustGet(n).QuoteString(in); got != want[n] {
+		if got := testRegistry.MustGet(n).QuoteString(in); got != want[n] {
 			t.Errorf("%s: %s", n, got)
 		}
 	}
@@ -177,7 +177,7 @@ func TestQuoteString(t *testing.T) {
 
 func split(t *testing.T, name, sql string) []string {
 	t.Helper()
-	out, err := MustGet(name).SplitStatements(sql)
+	out, err := testRegistry.MustGet(name).SplitStatements(sql)
 	if err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
@@ -193,7 +193,7 @@ func TestSplitStatements_common(t *testing.T) {
 		if got := split(t, n, `SELECT "a;b" FROM t; SELECT 'it''s;'`); len(got) != 2 {
 			t.Errorf("%s: quoted identifier or doubled quote split: %q", n, got)
 		}
-		if _, err := MustGet(n).SplitStatements("SELECT 'open"); !errors.Is(err, ErrInvalid) {
+		if _, err := testRegistry.MustGet(n).SplitStatements("SELECT 'open"); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: unterminated string accepted", n)
 		}
 	}
@@ -221,7 +221,7 @@ func TestSplitStatements_mysql(t *testing.T) {
 		if len(got) != 2 {
 			t.Errorf("%s: %q", n, got)
 		}
-		_, err := MustGet(n).SplitStatements("DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END//\nDELIMITER ;")
+		_, err := testRegistry.MustGet(n).SplitStatements("DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END//\nDELIMITER ;")
 		if !errors.Is(err, ErrDelimiter) {
 			t.Errorf("%s: DELIMITER: %v", n, err)
 		}
@@ -251,7 +251,7 @@ func TestSplitStatements_oracle(t *testing.T) {
 
 func TestStatementsOffsets(t *testing.T) {
 	sql := "  SELECT 1;\n\nSELECT 'x;';"
-	spans, err := MustGet(Trino).Statements(sql)
+	spans, err := testRegistry.MustGet(Trino).Statements(sql)
 	if err != nil || len(spans) != 2 {
 		t.Fatal(spans, err)
 	}
@@ -270,7 +270,7 @@ func TestPreviewAndLimit(t *testing.T) {
 		MySQL:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1 -- note\n) AS baleia_limit LIMIT 5"},
 	}
 	for n, w := range want {
-		d := MustGet(n)
+		d := testRegistry.MustGet(n)
 		if got := d.PreviewSQL("t", 10); got != w[0] {
 			t.Errorf("%s preview: %s", n, got)
 		}
@@ -278,10 +278,10 @@ func TestPreviewAndLimit(t *testing.T) {
 			t.Errorf("%s limit: %s", n, got)
 		}
 	}
-	if _, ok := MustGet(TSQL).ExplainSQL("SELECT 1"); ok {
+	if _, ok := testRegistry.MustGet(TSQL).ExplainSQL("SELECT 1"); ok {
 		t.Error("tsql has no single-statement EXPLAIN")
 	}
-	if got, ok := MustGet(SQLite).ExplainSQL("SELECT 1;"); !ok || got != "EXPLAIN QUERY PLAN SELECT 1" {
+	if got, ok := testRegistry.MustGet(SQLite).ExplainSQL("SELECT 1;"); !ok || got != "EXPLAIN QUERY PLAN SELECT 1" {
 		t.Errorf("sqlite explain: %q", got)
 	}
 }
@@ -355,7 +355,7 @@ func TestLiteral(t *testing.T) {
 		{Trino, nil, TypeString, "NULL"},
 	}
 	for _, c := range cases {
-		got, err := MustGet(c.dialect).Literal(c.v, c.typ)
+		got, err := testRegistry.MustGet(c.dialect).Literal(c.v, c.typ)
 		if err != nil || got != c.want {
 			t.Errorf("%s %s %v: %q, %v (want %q)", c.dialect, c.typ, c.v, got, err, c.want)
 		}
@@ -375,7 +375,7 @@ func TestLiteral(t *testing.T) {
 		{Trino, 1.0, "uuid", ErrInvalid},
 	}
 	for _, c := range bad {
-		if _, err := MustGet(c.dialect).Literal(c.v, c.typ); !errors.Is(err, c.err) {
+		if _, err := testRegistry.MustGet(c.dialect).Literal(c.v, c.typ); !errors.Is(err, c.err) {
 			t.Errorf("%s %s %v: %v, want %v", c.dialect, c.typ, c.v, err, c.err)
 		}
 	}
@@ -409,7 +409,7 @@ func TestGenerationGolden(t *testing.T) {
 			"CAST(x AS DECIMAL(18,2))", "(CAST(a AS DOUBLE PRECISION)) / NULLIF(b, 0)"},
 	}
 	for _, n := range allDialects {
-		d, w := MustGet(n), want[n]
+		d, w := testRegistry.MustGet(n), want[n]
 		approx, err1 := d.Aggregate(AggApproxCountDistinct, "x", false)
 		month, err2 := d.TimeTrunc("ts", GrainMonth)
 		week, err3 := d.TimeTrunc("ts", GrainWeek)
@@ -430,16 +430,16 @@ func TestGenerationGolden(t *testing.T) {
 			t.Errorf("%s: count(*) %q", n, s)
 		}
 	}
-	if _, err := MustGet(Trino).TimeTrunc("ts", "fortnight"); !errors.Is(err, ErrInvalid) {
+	if _, err := testRegistry.MustGet(Trino).TimeTrunc("ts", "fortnight"); !errors.Is(err, ErrInvalid) {
 		t.Error("unknown grain accepted")
 	}
-	if _, err := MustGet(MySQL).Cast("x", TypeBoolean); !errors.Is(err, ErrUnsupported) {
+	if _, err := testRegistry.MustGet(MySQL).Cast("x", TypeBoolean); !errors.Is(err, ErrUnsupported) {
 		t.Error("mysql cast to boolean must be unsupported")
 	}
-	if _, err := MustGet(MariaDB).Cast("x", TypeJSON); !errors.Is(err, ErrUnsupported) {
+	if _, err := testRegistry.MustGet(MariaDB).Cast("x", TypeJSON); !errors.Is(err, ErrUnsupported) {
 		t.Error("mariadb cast to json must be unsupported")
 	}
-	if got, _ := MustGet(SQLite).Cast("x", TypeTimestamp); got != "datetime(x)" {
+	if got, _ := testRegistry.MustGet(SQLite).Cast("x", TypeTimestamp); got != "datetime(x)" {
 		t.Errorf("sqlite timestamp cast: %s", got)
 	}
 }
@@ -516,6 +516,32 @@ func TestTrino_QuoteString(t *testing.T) {
 	for in, want := range map[string]string{"7d": `'7d'`, "it's": `'it''s'`, `'; DROP`: `'''; DROP'`} {
 		if got := trino.QuoteString(in); got != want {
 			t.Errorf("QuoteString(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// testRegistry is the registry the package's own tests read dialects from.
+var testRegistry = NewRegistry()
+
+// TestForEngineKindDeprecated: the package-level lookup QueryExecutionWorkflowV2
+// still uses gives the same answers as the registry; it goes with V2.
+// TestForEngineKind covers the kind → dialect translation: every engine kind
+// the API can carry resolves, and a miss is (nil, false) explicitly rather
+// than through a lookup of the empty name.
+func TestForEngineKindDeprecated(t *testing.T) {
+	for kind, want := range map[string]string{
+		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
+		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
+		"flightsql": FlightSQL, "fake": FlightSQL, // the test fake shares the ANSI subset
+	} {
+		d, ok := ForEngineKind(kind) //nolint:staticcheck // the deprecated lookup is under test
+		if !ok || d == nil || d.Name() != want {
+			t.Errorf("ForEngineKind(%q) = (%v, %v), want %q", kind, d, ok, want)
+		}
+	}
+	for _, kind := range []string{"", "nope", "postgres", "sql-server"} {
+		if d, ok := ForEngineKind(kind); ok || d != nil { //nolint:staticcheck // the deprecated lookup is under test
+			t.Errorf("ForEngineKind(%q) = (%v, %v), want (nil, false)", kind, d, ok)
 		}
 	}
 }
