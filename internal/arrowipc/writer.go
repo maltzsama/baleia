@@ -127,7 +127,7 @@ func (b *Batcher) Schema() *arrow.Schema { return b.schema }
 func (b *Batcher) RowCount() int64 { return b.total }
 
 // Append converts rows, handing every full batch to emit, which owns it.
-func (b *Batcher) Append(rows [][]interface{}, emit func(arrow.RecordBatch) error) error {
+func (b *Batcher) Append(rows [][]any, emit func(arrow.RecordBatch) error) error {
 	for _, row := range rows {
 		if len(row) != len(b.builders) {
 			return fmt.Errorf("row %d: got %d values, expected %d columns", b.total, len(row), len(b.builders))
@@ -200,7 +200,7 @@ func (s *StreamWriter) write(rec arrow.RecordBatch) error {
 }
 
 // AppendRows appends rows, writing a record batch every recordBatchSize rows.
-func (s *StreamWriter) AppendRows(rows [][]interface{}) error {
+func (s *StreamWriter) AppendRows(rows [][]any) error {
 	return s.batcher.Append(rows, s.write)
 }
 
@@ -312,7 +312,7 @@ func parseTimestampInfo(t string) (arrow.TimeUnit, bool) {
 // appendValue appends one cell to its builder according to the column's Arrow
 // type. A value that cannot be parsed for its declared type is an error,
 // never a silent zero.
-func appendValue(b array.Builder, typ arrow.DataType, val interface{}) error {
+func appendValue(b array.Builder, typ arrow.DataType, val any) error {
 	if val == nil {
 		b.AppendNull()
 		return nil
@@ -423,7 +423,7 @@ func appendValue(b array.Builder, typ arrow.DataType, val interface{}) error {
 
 // toInt64Exact decodes an exact integer. With UseNumber, Trino integers arrive
 // as json.Number so bigint precision is never lost.
-func toInt64Exact(val interface{}) (int64, error) {
+func toInt64Exact(val any) (int64, error) {
 	switch v := val.(type) {
 	case json.Number:
 		return v.Int64()
@@ -436,7 +436,7 @@ func toInt64Exact(val interface{}) (int64, error) {
 
 // toFloat64Exact decodes a float. Trino sends reals as JSON numbers or the
 // literal strings NaN, Infinity and -Infinity.
-func toFloat64Exact(val interface{}) (float64, error) {
+func toFloat64Exact(val any) (float64, error) {
 	switch v := val.(type) {
 	case json.Number:
 		return v.Float64()
@@ -455,7 +455,7 @@ func toFloat64Exact(val interface{}) (float64, error) {
 	}
 }
 
-func toBool(val interface{}) (bool, error) {
+func toBool(val any) (bool, error) {
 	switch v := val.(type) {
 	case bool:
 		return v, nil
@@ -543,7 +543,7 @@ func parseTimestampWithZone(s string) (time.Time, error) {
 // toJSONString renders a cell as text: strings stay as-is, structured values
 // (array/map/row) are marshaled to JSON so Go map syntax never leaks into
 // results.
-func toJSONString(val interface{}) (string, error) {
+func toJSONString(val any) (string, error) {
 	if s, ok := val.(string); ok {
 		return s, nil
 	}

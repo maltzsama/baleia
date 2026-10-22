@@ -108,8 +108,8 @@ func TestBundleExportImport(t *testing.T) {
 	// An unknown kind is an ERROR and apply answers 422, writing nothing.
 	bad := ImportSpaceBundleJSONRequestBody{}
 	_ = json.Unmarshal(raw, &bad)
-	items := bad["items"].([]interface{})
-	bad["items"] = append(items, map[string]interface{}{"kind": "model", "slug": "nope"})
+	items := bad["items"].([]any)
+	bad["items"] = append(items, map[string]any{"kind": "model", "slug": "nope"})
 	r, err = f.h.ImportSpaceBundle(ctx, ImportSpaceBundleRequestObject{
 		Id: ws2, SpaceId: dest.Id, Body: &bad, Params: ImportSpaceBundleParams{Mode: &apply},
 	})

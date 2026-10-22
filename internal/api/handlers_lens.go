@@ -101,12 +101,12 @@ func (h *lensHandlers) listQueries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := make([]map[string]interface{}, len(snapshots))
+	result := make([]map[string]any, len(snapshots))
 	for i, s := range snapshots {
 		result[i] = snapshotToMap(s)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"data":       result,
 		"pagination": map[string]int{"page": page, "per_page": perPage, "total": len(result)},
 	})
@@ -136,7 +136,7 @@ func (h *lensHandlers) getCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"active_workers":     snapshot.ActiveWorkers,
 		"running_queries":    snapshot.RunningQueries,
 		"queued_queries":     snapshot.QueuedQueries,
@@ -157,9 +157,9 @@ func (h *lensHandlers) listClusterHistory(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	result := make([]map[string]interface{}, len(snapshots))
+	result := make([]map[string]any, len(snapshots))
 	for i, s := range snapshots {
-		result[i] = map[string]interface{}{
+		result[i] = map[string]any{
 			"id":              s.ID,
 			"captured_at":     s.CapturedAt,
 			"active_workers":  s.ActiveWorkers,
@@ -182,7 +182,7 @@ func (h *lensHandlers) listTableHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := make([]map[string]interface{}, len(snapshots))
+	result := make([]map[string]any, len(snapshots))
 	for i, s := range snapshots {
 		result[i] = healthToMap(s)
 	}
@@ -208,7 +208,7 @@ func (h *lensHandlers) listTableHealthByConnection(w http.ResponseWriter, r *htt
 		return
 	}
 
-	result := make([]map[string]interface{}, len(snapshots))
+	result := make([]map[string]any, len(snapshots))
 	for i, s := range snapshots {
 		result[i] = healthToMap(s)
 	}
@@ -366,7 +366,7 @@ func (h *lensHandlers) queryAnalytics(w http.ResponseWriter, r *http.Request) {
 		avgDuration = totalDuration / int64(len(snapshots))
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"total_queries":   len(snapshots),
 		"error_count":     errorCount,
 		"avg_duration_ms": avgDuration,
@@ -374,8 +374,8 @@ func (h *lensHandlers) queryAnalytics(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func snapshotToMap(s db.TrinoQuerySnapshot) map[string]interface{} {
-	return map[string]interface{}{
+func snapshotToMap(s db.TrinoQuerySnapshot) map[string]any {
+	return map[string]any{
 		"id":                   s.ID,
 		"trino_query_id":       s.TrinoQueryID,
 		"origin":               s.Origin,
@@ -392,8 +392,8 @@ func snapshotToMap(s db.TrinoQuerySnapshot) map[string]interface{} {
 	}
 }
 
-func healthToMap(s db.TableHealthSnapshot) map[string]interface{} {
-	return map[string]interface{}{
+func healthToMap(s db.TableHealthSnapshot) map[string]any {
+	return map[string]any{
 		"id":                    s.ID,
 		"catalog_connection_id": s.CatalogConnectionID,
 		"catalog":               s.Catalog,
@@ -410,7 +410,7 @@ func healthToMap(s db.TableHealthSnapshot) map[string]interface{} {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)

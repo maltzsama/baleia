@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	baleiaapi "github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 )
 
-func loginHandler(token string) baleiaapi.StrictHandlerFunc {
-	return func(context.Context, http.ResponseWriter, *http.Request, interface{}) (interface{}, error) {
-		return baleiaapi.Login200JSONResponse{RefreshToken: &token}, nil
+func loginHandler(token string) api.StrictHandlerFunc {
+	return func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
+		return api.Login200JSONResponse{RefreshToken: &token}, nil
 	}
 }
 
@@ -48,7 +48,7 @@ func TestRefreshCookie_Flags(t *testing.T) {
 	if c.MaxAge != int(time.Hour.Seconds()) {
 		t.Errorf("max-age = %d, want %d", c.MaxAge, int(time.Hour.Seconds()))
 	}
-	if login, ok := resp.(baleiaapi.Login200JSONResponse); !ok || login.RefreshToken != nil {
+	if login, ok := resp.(api.Login200JSONResponse); !ok || login.RefreshToken != nil {
 		t.Errorf("browser response leaked the refresh token: %#v", resp)
 	}
 }
@@ -79,7 +79,7 @@ func TestRefreshCookie_NotInJSONForBrowser(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			login := resp.(baleiaapi.Login200JSONResponse)
+			login := resp.(api.Login200JSONResponse)
 			if got := login.RefreshToken != nil; got != tc.want {
 				t.Errorf("refresh_token present = %v, want %v", got, tc.want)
 			}
@@ -94,8 +94,8 @@ func TestRefreshCookie_NotInJSONForBrowser(t *testing.T) {
 // TestLogout_ClearsCookie: logout emits an expired cookie (#51).
 func TestLogout_ClearsCookie(t *testing.T) {
 	cfg := &config.Config{}
-	handler := refreshCookieMiddleware(cfg)(func(context.Context, http.ResponseWriter, *http.Request, interface{}) (interface{}, error) {
-		return baleiaapi.Logout204Response{}, nil
+	handler := refreshCookieMiddleware(cfg)(func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
+		return api.Logout204Response{}, nil
 	}, "Logout")
 
 	rec := httptest.NewRecorder()

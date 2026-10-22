@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	baleiaapi "github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 )
@@ -12,11 +12,11 @@ import (
 // oidcMiddleware injects the strict OIDC result and, after the handler, writes
 // its redirect and cookies (#280). The strict handler does not receive the
 // ResponseWriter.
-func oidcMiddleware(cfg *config.Config) baleiaapi.StrictMiddlewareFunc {
-	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
-		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
-			res := &baleiaapi.OIDCResult{}
-			ctx = baleiaapi.WithOIDCResult(ctx, res)
+func oidcMiddleware(cfg *config.Config) api.StrictMiddlewareFunc {
+	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args any) (any, error) {
+			res := &api.OIDCResult{}
+			ctx = api.WithOIDCResult(ctx, res)
 			resp, err := f(ctx, w, r, args)
 			if err != nil {
 				return resp, err

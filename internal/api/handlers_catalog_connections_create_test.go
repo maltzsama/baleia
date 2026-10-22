@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/catalogs"
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -56,8 +57,8 @@ func strMap(kv ...string) *map[string]string {
 	return &m
 }
 
-func anyMap(kv ...string) *map[string]interface{} {
-	m := map[string]interface{}{}
+func anyMap(kv ...string) *map[string]any {
+	m := map[string]any{}
 	for i := 0; i+1 < len(kv); i += 2 {
 		m[kv[i]] = kv[i+1]
 	}
@@ -81,7 +82,7 @@ func validCreateRequests() map[string]*CreateCatalogConnectionRequest {
 }
 
 func createHandlers(t *testing.T, q db.Querier, kr *crypto.Keyring) *Handlers {
-	return &Handlers{queries: q, keyring: kr, connections: testRegistry(t), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+	return &Handlers{queries: q, keyring: kr, connections: testRegistry(t), cfg: &config.Config{}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
 }
 
 func visitCreate(t *testing.T, resp CreateCatalogConnectionResponseObject) *httptest.ResponseRecorder {

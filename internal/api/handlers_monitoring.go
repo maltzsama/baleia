@@ -468,6 +468,7 @@ func (h *Handlers) CreateMaintenanceRun(ctx context.Context, request CreateMaint
 			ID: workflowID, TaskQueue: "baleia-task-queue",
 		}, workflows.MaintenanceRunWorkflow, runID.String(), uuid.UUID(bindingID.Bytes).String(), trinoName, request.Body.Namespace, request.Body.Table, retention, ops)
 		if err != nil {
+			// Best effort: the start error below is what the caller sees.
 			_, _ = h.queries.UpdateMaintenanceRun(ctx, db.UpdateMaintenanceRunParams{
 				ID: run.ID, Status: "failed", ErrorCode: monitoringStringPtr("workflow_start_failed"), ErrorMessage: monitoringStringPtr(err.Error()),
 			})

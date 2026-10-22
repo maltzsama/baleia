@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -29,8 +30,9 @@ type S3Client struct {
 	metrics   *metrics.Storage // nil-safe
 }
 
-// New creates the adapter. The endpoint is a host[:port] (no scheme).
-func New(endpoint, accessKey, secretKey, bucket string, useSSL bool) *S3Client {
+// New creates the adapter. The endpoint is a host[:port] (no scheme). It
+// fails only on an unusable configuration.
+func New(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*S3Client, error) {
 	ep := strings.TrimRight(endpoint, "/")
 	if i := strings.Index(ep, "://"); i >= 0 {
 		ep = ep[i+3:]
@@ -49,9 +51,7 @@ func New(endpoint, accessKey, secretKey, bucket string, useSSL bool) *S3Client {
 
 	mc, err := minio.New(ep, opts)
 	if err != nil {
-		// minio.New returns an error only when the config is unusable; surface
-		// it as a panic-free placeholder so wiring at startup can propagate it.
-		panic(fmt.Sprintf("storage: invalid s3 endpoint %q: %v", ep, err))
+		return nil, fmt.Errorf("storage: invalid s3 endpoint %q: %w", ep, err)
 	}
 
 	return &S3Client{
@@ -61,7 +61,7 @@ func New(endpoint, accessKey, secretKey, bucket string, useSSL bool) *S3Client {
 		bucket:    bucket,
 		useSSL:    useSSL,
 		client:    mc,
-	}
+	}, nil
 }
 
 // MakeBucket ensures the bucket exists (idempotent).
@@ -224,7 +224,7 @@ func (r *ObjectReaderAt) ReadAt(p []byte, off int64) (int, error) {
 	}
 	defer obj.Close()
 	n, err := io.ReadFull(obj, p[:length])
-	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 		return n, fmt.Errorf("s3 read range: %w", err)
 	}
 	if n < len(p) {

@@ -215,52 +215,72 @@ func (h *Handlers) ExportAuditCSV(ctx context.Context, request ExportAuditCSVReq
 		params.ToTime = pgtype.Timestamptz{Time: *q.To, Valid: true}
 	}
 
+	// The request context ends when the client goes away, and a failed
+	// write (the reader was closed) stops the producer too (#371).
+	// CloseWithError always returns nil.
 	reader, writer := io.Pipe()
 	go func() {
-		defer writer.Close()
-		cw := csv.NewWriter(writer)
-		_ = cw.Write([]string{
-			"occurred_at", "actor_kind", "actor_id", "auth_method", "action", "resource_type",
-			"resource_id", "workspace_id", "outcome", "reason", "request_id", "trace_id",
-			"client_ip", "user_agent",
-		})
-		cw.Flush()
-		base := context.WithoutCancel(ctx)
-		written := 0
-		for written < 1_000_000 {
-			rows, err := h.queries.ListAuditEvents(base, params)
-			if err != nil {
-				_ = writer.CloseWithError(err)
-				return
-			}
-			if len(rows) == 0 {
-				break
-			}
-			for _, r := range rows {
-				_ = cw.Write([]string{
-					r.OccurredAt.Time.UTC().Format(time.RFC3339),
-					r.ActorKind, strOrEmpty(r.ActorID), strOrEmpty(r.AuthMethod), r.Action,
-					r.ResourceType, strOrEmpty(r.ResourceID), idString(r.WorkspaceID), r.Outcome,
-					strOrEmpty(r.Reason), strOrEmpty(r.RequestID), strOrEmpty(r.TraceID),
-					ipOrEmpty(r.ClientIp), strOrEmpty(r.UserAgent),
-				})
-				written++
-				if written >= 1_000_000 {
-					break
-				}
-			}
-			cw.Flush()
-			if len(rows) < int(params.Lim) {
-				break
-			}
-			last := rows[len(rows)-1]
-			params.CursorAt = last.OccurredAt
-			id := last.ID
-			params.CursorID = &id
-		}
-		cw.Flush()
+		_ = writer.CloseWithError(h.writeAuditCSV(ctx, writer, params))
 	}()
 	return ExportAuditCSV200TextcsvResponse{Body: reader}, nil
+}
+
+// maxAuditExportRows bounds one CSV export.
+const maxAuditExportRows = 1_000_000
+
+// writeAuditCSV pages through the events matching params into w. It returns
+// the first query, write or context error, so nothing keeps querying once the
+// client stops reading.
+func (h *Handlers) writeAuditCSV(ctx context.Context, w io.Writer, params db.ListAuditEventsParams) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write([]string{
+		"occurred_at", "actor_kind", "actor_id", "auth_method", "action", "resource_type",
+		"resource_id", "workspace_id", "outcome", "reason", "request_id", "trace_id",
+		"client_ip", "user_agent",
+	}); err != nil {
+		return err
+	}
+	written := 0
+	for written < maxAuditExportRows {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		rows, err := h.queries.ListAuditEvents(ctx, params)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, r := range rows {
+			if err := cw.Write([]string{
+				r.OccurredAt.Time.UTC().Format(time.RFC3339),
+				r.ActorKind, strOrEmpty(r.ActorID), strOrEmpty(r.AuthMethod), r.Action,
+				r.ResourceType, strOrEmpty(r.ResourceID), idString(r.WorkspaceID), r.Outcome,
+				strOrEmpty(r.Reason), strOrEmpty(r.RequestID), strOrEmpty(r.TraceID),
+				ipOrEmpty(r.ClientIp), strOrEmpty(r.UserAgent),
+			}); err != nil {
+				return err
+			}
+			written++
+			if written >= maxAuditExportRows {
+				break
+			}
+		}
+		cw.Flush()
+		if err := cw.Error(); err != nil {
+			return err
+		}
+		if len(rows) < int(params.Lim) {
+			break
+		}
+		last := rows[len(rows)-1]
+		params.CursorAt = last.OccurredAt
+		id := last.ID
+		params.CursorID = &id
+	}
+	cw.Flush()
+	return cw.Error()
 }
 
 func strOrEmpty(value *string) string {
@@ -308,6 +328,7 @@ func (h *Handlers) audited(ctx context.Context, e audit.Event) {
 	if h.audit == nil {
 		return
 	}
+	// Audit is best effort; Record logs and counts its own failures.
 	_ = h.audit.Record(ctx, e)
 }
 
@@ -330,7 +351,7 @@ func testOutcome(ev audit.Event, ok bool) audit.Event {
 
 // connectionChanges lists what an update changed: name, read-only default,
 // URL and config values as they are; credentials only by key, as "***".
-func connectionChanges(before, after db.CatalogConnection, creds *map[string]interface{}) map[string]audit.Change {
+func connectionChanges(before, after db.CatalogConnection, creds *map[string]any) map[string]audit.Change {
 	changes := map[string]audit.Change{}
 	if before.Name != after.Name {
 		changes["name"] = audit.Change{From: before.Name, To: after.Name}
@@ -345,8 +366,8 @@ func connectionChanges(before, after db.CatalogConnection, creds *map[string]int
 		changes["url"] = audit.Change{From: before.Url, To: after.Url}
 	}
 	var was, is map[string]any
-	_ = json.Unmarshal(before.Config, &was)
-	_ = json.Unmarshal(after.Config, &is)
+	decodeStored(before.Config, &was, "connections.config")
+	decodeStored(after.Config, &is, "connections.config")
 	for k, v := range is {
 		if old, ok := was[k]; !ok || fmt.Sprint(old) != fmt.Sprint(v) {
 			changes["config."+k] = audit.Change{From: was[k], To: v}
@@ -399,7 +420,7 @@ func catalogChanges(c db.Catalog, name, trinoName, warehouse, connector string, 
 // propKeys lists the keys of a JSON object, sorted.
 func propKeys(raw []byte) []string {
 	var m map[string]any
-	_ = json.Unmarshal(raw, &m)
+	decodeStored(raw, &m, "extra_props")
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

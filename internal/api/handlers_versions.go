@@ -446,7 +446,7 @@ func contentVersionToPublic(version int32, kind string, authorID pgtype.UUID, au
 }
 
 func contentVersionDetail(version int32, kind string, authorID pgtype.UUID, authorName *string, restoredFrom *int32, createdAt pgtype.Timestamptz, snapshot []byte) (ContentVersionDetail, error) {
-	var snap map[string]interface{}
+	var snap map[string]any
 	if err := json.Unmarshal(snapshot, &snap); err != nil {
 		return ContentVersionDetail{}, err
 	}

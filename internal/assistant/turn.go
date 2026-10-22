@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -131,10 +132,12 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 	}
 	msg, err := r.append(ctx, id, "user", map[string]any{"text": text}, nil, nil)
 	if err != nil {
+		// Best effort: a claim left behind is freed by RunSweeper.
 		_ = r.svc.Release(context.Background(), id)
 		return 0, err
 	}
 	if claimed.Title == "" {
+		// Cosmetic: an untitled conversation still works.
 		_ = r.svc.SetTitle(ctx, id, titleFrom(text))
 	}
 	turnCtx, cancel := context.WithTimeout(context.Background(), time.Duration(settings.MaxTurnSeconds)*time.Second)
@@ -147,6 +150,7 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 			r.mu.Lock()
 			delete(r.cancels, id.Bytes)
 			r.mu.Unlock()
+			// Best effort: a claim left behind is freed by RunSweeper.
 			_ = r.svc.Release(context.Background(), id)
 		}()
 		r.run(turnCtx, claimed, settings)
@@ -245,7 +249,9 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 			out = &v
 		}
 		if resp.Text != "" {
-			_, _ = r.append(ctx, conversation.ID, "assistant", map[string]any{"text": resp.Text}, in, out)
+			if _, err := r.append(ctx, conversation.ID, "assistant", map[string]any{"text": resp.Text}, in, out); err != nil {
+				slog.WarnContext(ctx, "assistant: reply not stored", "err", err)
+			}
 		}
 		if len(resp.ToolCalls) == 0 {
 			return
@@ -260,8 +266,12 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 				break
 			}
 			used++
+			// Arguments that do not decode reach the tool as none; the tool
+			// then reports what is missing to the model.
 			args := map[string]any{}
-			_ = json.Unmarshal(call.Arguments, &args)
+			if err := json.Unmarshal(call.Arguments, &args); err != nil {
+				slog.WarnContext(ctx, "assistant: tool arguments do not decode", "tool", call.Name, "err", err)
+			}
 			_, _ = r.append(ctx, conversation.ID, "tool_call", map[string]any{
 				"call_id": call.ID, "tool": call.Name, "arguments": json.RawMessage(call.Arguments),
 			}, nil, nil)
@@ -294,6 +304,7 @@ func (r *Runner) heartbeat(ctx context.Context, id pgtype.UUID, stop <-chan stru
 		case <-stop:
 			return
 		case <-ticker.C:
+			// A missed beat is retried on the next tick.
 			_ = r.svc.Heartbeat(ctx, id)
 		}
 	}
@@ -318,7 +329,9 @@ func historyToLLM(rows []adb.AssistantMessage) []llm.Message {
 	out := make([]llm.Message, 0, len(rows))
 	for _, row := range rows {
 		var content map[string]any
-		_ = json.Unmarshal(row.Content, &content)
+		if err := json.Unmarshal(row.Content, &content); err != nil {
+			slog.Warn("assistant: stored message does not decode", "seq", row.Seq, "err", err)
+		}
 		switch row.Role {
 		case "user":
 			text, _ := content["text"].(string)

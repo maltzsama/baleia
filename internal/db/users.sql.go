@@ -351,6 +351,17 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	return i, err
 }
 
+const hasUsers = `-- name: HasUsers :one
+SELECT EXISTS (SELECT 1 FROM users)
+`
+
+func (q *Queries) HasUsers(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, hasUsers)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
 SELECT id, user_id, name, key_hash, expires_at, created_at, prefix, scopes, last_used_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC
 `
@@ -562,6 +573,16 @@ func (q *Queries) ListUsersByAuthProvider(ctx context.Context, authProviderID pg
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockFirstAdminSetup = `-- name: LockFirstAdminSetup :exec
+SELECT pg_advisory_xact_lock(hashtext('first-admin-setup'))
+`
+
+// Serializes first-admin setup until the transaction ends (#375).
+func (q *Queries) LockFirstAdminSetup(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockFirstAdminSetup)
+	return err
 }
 
 const markDirectorySynced = `-- name: MarkDirectorySynced :exec

@@ -2,17 +2,20 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
-	baleiaapi "github.com/galileostudio/baleia/internal/api"
-	baleiaassistant "github.com/galileostudio/baleia/internal/assistant"
+	"github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/assistant"
 	assistantllm "github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -64,18 +67,22 @@ type Server struct {
 // New builds the API server. The Temporal client is dialed by the caller
 // (with retries, internal/temporal/dial); metrics may be nil. registryKeyring
 // is nil when Phase B registry encryption is disabled.
-func New(cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) *Server {
+func New(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, keyring, registryKeyring *crypto.Keyring, temporal client.Client, reg *metrics.Registry) (*Server, error) {
 	queries := db.New(pool)
 	rl := NewRateLimiter(RateLimiterConfig{
 		RequestsPerSecond: cfg.RateLimitRPS,
 		Burst:             cfg.RateLimitBurst,
 	})
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: pool, queries: queries, rl: rl, keyring: keyring, registryKeyring: registryKeyring, temporal: temporal, metrics: reg}
-	s.routes()
-	return s
+	if err := s.routes(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
-func (s *Server) routes() {
+// routes mounts the API. ctx is the process context: background work it
+// starts (the assistant's in-process MCP session and sweeper) ends with it.
+func (s *Server) routes(ctx context.Context) error {
 	s.mux.Use(middleware.RequestID)
 	s.mux.Use(obs.RouteName) // names the tracing span after chi has routed (#47)
 	if s.metrics != nil {
@@ -116,7 +123,10 @@ func (s *Server) routes() {
 	}
 	temporalClient := s.temporal
 
-	s3Client := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
+	s3Client, err := storage.New(s.cfg.S3Endpoint, s.cfg.S3AccessKey, s.cfg.S3SecretKey, s.cfg.S3Bucket, s.cfg.S3UseSSL)
+	if err != nil {
+		return err
+	}
 
 	// Every connection provider dials through one SSRF-safe dialer
 	// (docs/adr/0011).
@@ -126,14 +136,14 @@ func (s *Server) routes() {
 		AllowLoopback: s.cfg.ConnectionsAllowLoopback,
 	})
 	if err != nil {
-		panic("invalid connection network settings: " + err.Error())
+		return fmt.Errorf("invalid connection network settings: %w", err)
 	}
 	conns, err := providers.New(dialer, providers.Options{
 		SQLite: sqlite.Options{Root: s.cfg.SQLiteRoot, AllowWrite: s.cfg.SQLiteAllowWrite},
 		Glue:   glue.Options{AllowAmbientCredentials: s.cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: s.cfg.ConnectionsAllowLoopback},
 	})
 	if err != nil {
-		panic("connection providers: " + err.Error())
+		return fmt.Errorf("connection providers: %w", err)
 	}
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).
@@ -145,7 +155,7 @@ func (s *Server) routes() {
 	trinoAdmin := trino.NewWithHTTPClient(s.cfg.TrinoURL, s.cfg.TrinoAdminUser, obs.WrapHTTPClient(dialer.HTTPClient(60*time.Second)))
 	binder := bindtrino.New(trinoAdmin, s.queries).WithRegistryKeyring(s.registryKeyring)
 
-	h := baleiaapi.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
+	h := api.NewHandlers(s.queries, s.pool, s.cfg, s.keyring, temporalClient, s3Client, conns, engines, binder)
 	// The audit trail is best-effort: a failed write is counted, never fatal.
 	var auditMetrics *metrics.Audit
 	if s.metrics != nil {
@@ -181,11 +191,14 @@ func (s *Server) routes() {
 	wsHandler.SetTickets(tickets)
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", wsHandler.StreamExecution)
 
-	strictHandler := baleiaapi.NewStrictHandler(h, []baleiaapi.StrictMiddlewareFunc{
+	strictHandler := api.NewStrictHandlerWithOptions(h, []api.StrictMiddlewareFunc{
 		authMiddlewareFunc(s.cfg.JWTSecret, s.queries),
 		csrfMiddleware,
 		refreshCookieMiddleware(s.cfg),
 		oidcMiddleware(s.cfg),
+	}, api.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  strictRequestError,
+		ResponseErrorHandlerFunc: strictResponseError,
 	})
 
 	// The MCP surface is mounted outside /api/v1: agent tokens are valid only
@@ -204,15 +217,29 @@ func (s *Server) routes() {
 		// the same gate and audit hooks apply. It is provisioned only when the
 		// agents feature is on.
 		if svc := h.AssistantService(); svc != nil {
-			if session, err := mcpServer.InProcessClient(context.Background()); err == nil {
-				runner := baleiaassistant.NewRunner(svc, nil, baleiaassistant.NewMCPToolCaller(session))
-				if settings, err := svc.Settings(context.Background()); err == nil && settings.Enabled && settings.Provider != nil && settings.Model != nil {
-					if key, err := svc.APIKey(context.Background()); err == nil {
-						runner.SetProvider(assistantllm.NewHTTPProvider(*settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
+			session, err := mcpServer.InProcessClient(ctx)
+			if err != nil {
+				slog.WarnContext(ctx, "assistant disabled: in-process MCP client", "err", err)
+			} else {
+				runner := assistant.NewRunner(svc, nil, assistant.NewMCPToolCaller(session))
+				// Without stored settings the runner starts with no provider;
+				// saving the settings sets one.
+				sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				settings, err := svc.Settings(sctx)
+				switch {
+				case err != nil:
+					slog.WarnContext(ctx, "assistant: settings not loaded at startup", "err", err)
+				case settings.Enabled && settings.Provider != nil && settings.Model != nil:
+					if key, err := svc.APIKey(sctx); err != nil {
+						slog.WarnContext(ctx, "assistant: API key not loaded at startup", "err", err)
+					} else {
+						client := obs.WrapHTTPClient(dialer.HTTPClient(assistantllm.ClientTimeout))
+						runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
 					}
 				}
 				h.SetAssistantRunner(runner)
-				go runner.RunSweeper(context.Background(), 30*time.Second)
+				go runner.RunSweeper(ctx, 30*time.Second)
 			}
 		}
 	}
@@ -223,7 +250,7 @@ func (s *Server) routes() {
 		r.Use(RateLimitRefreshMiddleware(s.rl, onRefreshLimited))
 		r.Use(authLimiter.Middleware)
 		r.Use(OptionalJSONBody)
-		baleiaapi.HandlerFromMux(strictHandler, r)
+		api.HandlerFromMux(strictHandler, r)
 
 		// Non-oapi routes (dynamic catalog browsing) share the chi auth
 		// middleware; handlers read the caller from the request context.
@@ -240,15 +267,16 @@ func (s *Server) routes() {
 	s.mux.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		static.ServeHTTP(w, r)
 	}))
+	return nil
 }
 
 // staticUsers tells the static handler whether the first admin exists.
 type staticUsers interface {
-	ListUsers(ctx context.Context) ([]db.User, error)
+	HasUsers(ctx context.Context) (bool, error)
 }
 
 // engineCapabilities adapts the API's engine registry to agentpolicy.
-type engineCapabilities struct{ h *baleiaapi.Handlers }
+type engineCapabilities struct{ h *api.Handlers }
 
 func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (queryengine.ReadOnlySupport, error) {
 	return e.h.EngineReadOnly(ctx, id)
@@ -259,6 +287,19 @@ func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (query
 // extensionless route so the client router matches it.
 func staticHandler(users staticUsers, dir string) http.Handler {
 	fileServer := http.FileServer(http.Dir(dir))
+	// Once the first admin exists the install never goes back to setup, so
+	// the answer is cached and the database is no longer asked (#375).
+	var setUp atomic.Bool
+	configured := func(ctx context.Context) bool {
+		if setUp.Load() {
+			return true
+		}
+		ok, err := users.HasUsers(ctx)
+		if err == nil && ok {
+			setUp.Store(true)
+		}
+		return err == nil && ok
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
@@ -268,8 +309,7 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 		}
 
 		if path == "/" || path == "/setup" || strings.HasSuffix(path, ".html") {
-			list, err := users.ListUsers(r.Context())
-			configured := err == nil && len(list) > 0
+			configured := configured(r.Context())
 
 			if !configured && path != "/setup" {
 				http.Redirect(w, r, "/setup", http.StatusFound)
@@ -300,7 +340,7 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 	})
 }
 
-func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddlewareFunc {
+func authMiddlewareFunc(secret string, queries db.Querier) api.StrictMiddlewareFunc {
 	publicOps := map[string]bool{
 		"GetSetupStatus":       true,
 		"CreateFirstAdmin":     true,
@@ -317,8 +357,8 @@ func authMiddlewareFunc(secret string, queries db.Querier) baleiaapi.StrictMiddl
 		"Logout": true,
 	}
 
-	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
-		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args any) (any, error) {
 			// API keys are checked before the public operations so a key can
 			// never reach /auth/* (#276).
 			if raw := r.Header.Get("X-Api-Key"); raw != "" {
@@ -436,6 +476,7 @@ func authenticateAPIKey(ctx context.Context, queries db.Querier, raw string) (co
 	ctx = context.WithValue(ctx, auth.ContextKeyRole, user.Role)
 	ctx = audit.WithAuthMethod(ctx, audit.AuthAPIKey)
 	// Best effort; never log the key or its hash.
+	// Best effort: a failed touch must not reject a valid key.
 	_ = queries.TouchAPIKey(ctx, key.ID)
 	return ctx, true
 }
@@ -457,13 +498,33 @@ func extractToken(r *http.Request) string {
 	return ""
 }
 
+// Run serves until ctx ends, then drains in-flight requests for at most
+// HTTPShutdownTimeout, or without a deadline when it is zero (#372). A clean
+// shutdown returns nil.
 func (s *Server) Run(ctx context.Context) error {
-	srv := &http.Server{Addr: ":" + s.cfg.Port, Handler: obs.HTTPHandler(s.mux, "http.server")}
+	srv := &http.Server{
+		Addr:    ":" + s.cfg.Port,
+		Handler: obs.HTTPHandler(s.mux, "http.server"),
+		// No ReadTimeout/WriteTimeout: downloads, SSE and WebSockets are
+		// long-lived. Slow headers and idle keep-alives are bounded.
+		ReadHeaderTimeout: s.cfg.HTTPReadHeaderTimeout,
+		IdleTimeout:       s.cfg.HTTPIdleTimeout,
+	}
+	shutdown := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
-		srv.Shutdown(context.Background())
+		// Zero drains with no deadline.
+		sctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		if s.cfg.HTTPShutdownTimeout > 0 {
+			sctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), s.cfg.HTTPShutdownTimeout)
+		}
+		defer cancel()
+		shutdown <- srv.Shutdown(sctx)
 	}()
-	return srv.ListenAndServe()
+	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return <-shutdown
 }
 
 func derefString(value *string) string {

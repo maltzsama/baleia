@@ -242,7 +242,7 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 		Columns: make([]MetadataColumn, 0, len(cols)),
 		Doc:     tableDoc,
 	}
-	_ = json.Unmarshal(t.Properties, &out.Properties)
+	decodeStored(t.Properties, &out.Properties, "metadata_tables.properties")
 	var d dialect.Dialect
 	if hasBinding {
 		id := openapi_types.UUID(b.ID.Bytes)

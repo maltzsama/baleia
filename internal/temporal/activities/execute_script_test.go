@@ -313,7 +313,7 @@ func TestExecuteScript_HeartbeatsHandle(t *testing.T) {
 	var beats []heartbeatDetails
 	recordBefore := recordHeartbeat
 	defer func() { recordHeartbeat = recordBefore }()
-	recordHeartbeat = func(ctx context.Context, details ...interface{}) {
+	recordHeartbeat = func(ctx context.Context, details ...any) {
 		mu.Lock()
 		beats = append(beats, details[0].(heartbeatDetails))
 		mu.Unlock()
@@ -354,7 +354,7 @@ func TestExecuteScript_HeartbeatsWhileBlocked(t *testing.T) {
 	beats := 0
 	recordBefore := recordHeartbeat
 	defer func() { recordHeartbeat = recordBefore }()
-	recordHeartbeat = func(ctx context.Context, details ...interface{}) {
+	recordHeartbeat = func(ctx context.Context, details ...any) {
 		mu.Lock()
 		beats++
 		mu.Unlock()

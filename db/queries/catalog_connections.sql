@@ -38,3 +38,7 @@ RETURNING *;
 DELETE FROM catalog_connections WHERE id = $1;
 -- name: CatalogConnectionNameExists :one
 SELECT EXISTS (SELECT 1 FROM catalog_connections WHERE name = $1);
+
+-- name: CountEncryptedConnections :one
+-- Whether any credential is stored, so a missing encryption key is fatal.
+SELECT count(*) FROM catalog_connections WHERE credentials_enc IS NOT NULL;

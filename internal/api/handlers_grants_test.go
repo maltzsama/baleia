@@ -226,7 +226,7 @@ func grantBody(q *authzFake, perm GrantCatalogAccessRequestPermission) *GrantCat
 	return &GrantCatalogAccessJSONRequestBody{CatalogId: q.cat.ID.Bytes, Permission: perm}
 }
 
-func wsCode(t *testing.T, resp interface{}) int {
+func wsCode(t *testing.T, resp any) int {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	switch r := resp.(type) {
@@ -455,7 +455,7 @@ func TestGrantMemberCatalogAccess(t *testing.T) {
 	}
 }
 
-func visitConnCode(t *testing.T, resp interface{}) int {
+func visitConnCode(t *testing.T, resp any) int {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	r, ok := resp.(interface {

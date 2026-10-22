@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	baleiaapi "github.com/galileostudio/baleia/internal/api"
+	"github.com/galileostudio/baleia/internal/api"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 )
@@ -26,9 +26,9 @@ func refreshCookieContext(next http.Handler) http.Handler {
 // refreshCookieMiddleware sets or clears the refresh cookie around token
 // operations. It also hides the JSON refresh token from browsers; API clients
 // opt in with X-Baleia-Client: api.
-func refreshCookieMiddleware(cfg *config.Config) baleiaapi.StrictMiddlewareFunc {
-	return func(f baleiaapi.StrictHandlerFunc, operationID string) baleiaapi.StrictHandlerFunc {
-		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+func refreshCookieMiddleware(cfg *config.Config) api.StrictMiddlewareFunc {
+	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args any) (any, error) {
 			resp, err := f(ctx, w, r, args)
 			if err != nil {
 				return resp, err
@@ -36,7 +36,7 @@ func refreshCookieMiddleware(cfg *config.Config) baleiaapi.StrictMiddlewareFunc 
 			apiClient := r.Header.Get(auth.ClientHeader) == auth.ClientAPI
 			switch operationID {
 			case "Login":
-				if v, ok := resp.(baleiaapi.Login200JSONResponse); ok {
+				if v, ok := resp.(api.Login200JSONResponse); ok {
 					if v.RefreshToken != nil {
 						auth.SetRefreshCookie(w, *v.RefreshToken, cfg.RefreshTTL())
 						if !apiClient {
@@ -46,7 +46,7 @@ func refreshCookieMiddleware(cfg *config.Config) baleiaapi.StrictMiddlewareFunc 
 					return v, nil
 				}
 			case "CreateFirstAdmin":
-				if v, ok := resp.(baleiaapi.CreateFirstAdmin201JSONResponse); ok {
+				if v, ok := resp.(api.CreateFirstAdmin201JSONResponse); ok {
 					if v.RefreshToken != nil {
 						auth.SetRefreshCookie(w, *v.RefreshToken, cfg.RefreshTTL())
 						if !apiClient {
@@ -56,7 +56,7 @@ func refreshCookieMiddleware(cfg *config.Config) baleiaapi.StrictMiddlewareFunc 
 					return v, nil
 				}
 			case "RefreshToken":
-				if v, ok := resp.(baleiaapi.RefreshToken200JSONResponse); ok {
+				if v, ok := resp.(api.RefreshToken200JSONResponse); ok {
 					if v.RefreshToken != nil {
 						auth.SetRefreshCookie(w, *v.RefreshToken, cfg.RefreshTTL())
 						if !apiClient {

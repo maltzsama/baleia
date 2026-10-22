@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -32,26 +33,30 @@ func newTokenFamily() pgtype.UUID {
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
+// errAlreadySetUp aborts a first-admin setup that lost the race.
+var errAlreadySetUp = errors.New("already set up")
+
 func (h *Handlers) GetSetupStatus(ctx context.Context, request GetSetupStatusRequestObject) (GetSetupStatusResponseObject, error) {
-	users, err := h.queries.ListUsers(ctx)
+	configured, err := h.queries.HasUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return GetSetupStatus200JSONResponse{
-		IsConfigured: len(users) > 0,
+		IsConfigured: configured,
 		Version:      version.Version,
 	}, nil
 }
 
 func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdminRequestObject) (CreateFirstAdminResponseObject, error) {
-	users, err := h.queries.ListUsers(ctx)
+	alreadySetUp := CreateFirstAdmin409JSONResponse{
+		ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "already set up"},
+	}
+	configured, err := h.queries.HasUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(users) > 0 {
-		return CreateFirstAdmin409JSONResponse{
-			ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "already set up"},
-		}, nil
+	if configured {
+		return alreadySetUp, nil
 	}
 	if len(request.Body.Password) < minPasswordLength {
 		return CreateFirstAdmin422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
@@ -62,13 +67,30 @@ func (h *Handlers) CreateFirstAdmin(ctx context.Context, request CreateFirstAdmi
 		return nil, err
 	}
 
-	user, err := h.queries.CreateUser(ctx, db.CreateUserParams{
-		Name:         request.Body.Name,
-		Email:        string(request.Body.Email),
-		PasswordHash: &hash,
-		Role:         "admin",
-		AuthProvider: "local",
+	// The check above is only a fast path: two concurrent setups both pass
+	// it, so the lock and a second check make exactly one of them win (#375).
+	var user db.User
+	err = h.inTx(ctx, func(q db.Querier) error {
+		if err := q.LockFirstAdminSetup(ctx); err != nil {
+			return err
+		}
+		if configured, err := q.HasUsers(ctx); err != nil {
+			return err
+		} else if configured {
+			return errAlreadySetUp
+		}
+		user, err = q.CreateUser(ctx, db.CreateUserParams{
+			Name:         request.Body.Name,
+			Email:        string(request.Body.Email),
+			PasswordHash: &hash,
+			Role:         "admin",
+			AuthProvider: "local",
+		})
+		return err
 	})
+	if errors.Is(err, errAlreadySetUp) {
+		return alreadySetUp, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -304,10 +326,15 @@ func (h *Handlers) Logout(ctx context.Context, request LogoutRequestObject) (Log
 	if token != "" {
 		hash := auth.HashRefreshToken(token)
 		if rt, err := h.queries.GetRefreshTokenByHashAny(ctx, hash); err == nil {
-			// Logout ends the whole rotation family, not only this token.
-			_ = h.queries.RevokeRefreshFamily(ctx, rt.FamilyID)
-			h.audited(audit.AsUser(ctx, idString(rt.UserID), audit.AuthRefreshTok),
-				audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(rt.UserID), Outcome: audit.Allowed})
+			// Logout ends the whole rotation family, not only this token. A
+			// client disconnect must not cancel the revoke halfway (#370).
+			actx := audit.AsUser(ctx, idString(rt.UserID), audit.AuthRefreshTok)
+			ev := audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(rt.UserID)}
+			if err := h.queries.RevokeRefreshFamily(context.WithoutCancel(ctx), rt.FamilyID); err != nil {
+				h.audited(actx, ev.Failed(audit.ReasonInternal))
+				return nil, fmt.Errorf("logout: revoke refresh family: %w", err)
+			}
+			h.audited(actx, ev.Allowed())
 		}
 	}
 	return Logout204Response{}, nil
@@ -580,7 +607,12 @@ func (h *Handlers) RefreshToken(ctx context.Context, request RefreshTokenRequest
 		reused := false
 		if errors.Is(err, pgx.ErrNoRows) {
 			if old, lookupErr := h.queries.GetRefreshTokenByHashAny(ctx, hash); lookupErr == nil && old.Revoked {
-				_ = h.queries.RevokeRefreshFamily(ctx, old.FamilyID)
+				// The family may be stolen: a failed revoke is a server
+				// error, never a quiet 401 that leaves it usable (#370).
+				if revokeErr := h.queries.RevokeRefreshFamily(context.WithoutCancel(ctx), old.FamilyID); revokeErr != nil {
+					h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Failed(audit.ReasonReuseDetected))
+					return nil, fmt.Errorf("refresh: revoke reused family: %w", revokeErr)
+				}
 				h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied(audit.ReasonReuseDetected))
 				reused = true
 			}
@@ -674,8 +706,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 		UserID:    user.ID,
 		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
 	}); err != nil {
-		slog.Error("CreatePasswordResetToken failed", "err", err)
-		return nil, err
+		return nil, fmt.Errorf("create password reset token: %w", err)
 	}
 
 	resetURL := h.cfg.PublicURL + "/reset-password?token=" + token
@@ -684,8 +715,7 @@ func (h *Handlers) RequestPasswordReset(ctx context.Context, request RequestPass
 		"Name":     user.Name,
 		"ResetURL": resetURL,
 	}); err != nil {
-		slog.Error("sendResetEmail failed", "err", err)
-		return nil, err
+		return nil, fmt.Errorf("send password reset e-mail: %w", err)
 	}
 
 	return RequestPasswordReset204Response{}, nil

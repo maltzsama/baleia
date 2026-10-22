@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"log/slog"
 
-	"github.com/pressly/goose/v3"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 )
 
 func Up(ctx context.Context, dsn string) error {

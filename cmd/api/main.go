@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/galileostudio/baleia/internal/dbpool"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -14,9 +11,12 @@ import (
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
+	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -52,6 +52,8 @@ func main() {
 	reg := metrics.New("api")
 	pool, err := dbpool.Open(ctx, cfg.DatabaseURL, dbpool.Options{
 		MaxConns: cfg.PoolSize(20), MinConns: int32(cfg.DBMinConns), MaxConnLifetime: cfg.DBMaxConnLifetime,
+		MaxConnIdleTime: cfg.DBMaxConnIdleTime, HealthCheckPeriod: cfg.DBHealthCheckPeriod,
+		StatementTimeout: cfg.DBStatementTimeout, IdleInTxTimeout: cfg.DBIdleInTxTimeout, LockTimeout: cfg.DBLockTimeout,
 		Tracer: obs.PGXTracer(reg.NewPoolTracer()),
 	})
 	if err != nil {
@@ -81,11 +83,7 @@ func main() {
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET). With
 	// stored credentials and no key, refuse to start rather than serve rows we
 	// cannot read.
-	keyring, err := bootstrap.LoadKeyring(ctx, cfg, func(ctx context.Context) (int64, error) {
-		var n int64
-		err := pool.QueryRow(ctx, "SELECT count(*) FROM catalog_connections WHERE credentials_enc IS NOT NULL").Scan(&n)
-		return n, err
-	})
+	keyring, err := bootstrap.LoadKeyring(ctx, cfg, db.New(pool).CountEncryptedConnections)
 	if err != nil {
 		slog.Error("credential keyring", "err", err)
 		os.Exit(1)
@@ -107,7 +105,11 @@ func main() {
 	}
 	defer temporalClient.Close()
 
-	srv := server.New(cfg, pool, keyring, registryKeyring, temporalClient, reg)
+	srv, err := server.New(ctx, cfg, pool, keyring, registryKeyring, temporalClient, reg)
+	if err != nil {
+		slog.Error("server setup", "err", err)
+		os.Exit(1)
+	}
 	if err := srv.Run(ctx); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)

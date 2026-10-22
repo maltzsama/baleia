@@ -17,7 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -613,23 +612,6 @@ func pgTimestampToTimePtr(ts pgtype.Timestamptz) *time.Time {
 		return nil
 	}
 	return &t
-}
-
-// (time.Time alias kept local; pgTimestampToTime lives in handlers.go)
-// ─────────────────────────────────────────────────────────────────────────
-// tx helper
-// ─────────────────────────────────────────────────────────────────────────
-
-func withTx(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := fn(tx); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
 }
 
 func ptrSyncStatus(s CatalogSyncStatus) *CatalogSyncStatus { return &s }

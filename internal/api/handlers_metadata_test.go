@@ -24,7 +24,7 @@ type metadataTemporal struct {
 	err    error
 }
 
-func (f *metadataTemporal) ExecuteWorkflow(_ context.Context, o client.StartWorkflowOptions, _ interface{}, args ...interface{}) (client.WorkflowRun, error) {
+func (f *metadataTemporal) ExecuteWorkflow(_ context.Context, o client.StartWorkflowOptions, _ any, args ...any) (client.WorkflowRun, error) {
 	f.opts = o
 	f.starts = append(f.starts, o)
 	if len(args) == 1 {

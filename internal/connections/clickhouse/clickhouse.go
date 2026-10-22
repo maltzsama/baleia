@@ -7,6 +7,7 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -153,7 +154,7 @@ func (c *client) stream(ctx context.Context, sql string, params map[string]strin
 	dec := json.NewDecoder(resp.Body)
 	for {
 		var row []json.RawMessage
-		if err := dec.Decode(&row); err == io.EOF {
+		if err := dec.Decode(&row); errors.Is(err, io.EOF) {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("clickhouse decode: %w", err)

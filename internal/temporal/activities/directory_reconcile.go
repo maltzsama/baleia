@@ -288,7 +288,11 @@ func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan,
 		*actions = append(*actions, reconcileAction{UserID: tc.UserID.String(), Action: "team", Detail: tc.TeamID})
 	}
 	for _, u := range plan.Synced {
-		_ = q.MarkDirectorySynced(ctx, u.ID)
+		// Not best effort: a failed statement aborts the transaction, so the
+		// commit would fail anyway; report the cause instead.
+		if err := q.MarkDirectorySynced(ctx, u.ID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
 }
@@ -319,6 +323,7 @@ func (a *Activities) auditChange(ctx context.Context, ev audit.Event) {
 	if a.audit == nil {
 		return
 	}
+	// Audit is best effort; Record logs and counts its own failures.
 	_ = a.audit.Record(audit.WithService(ctx, "directory-reconciler"), ev)
 }
 

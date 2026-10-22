@@ -59,6 +59,7 @@ func (h AuditHooks) OnToolCall(ctx context.Context, c agentpolicy.Call, o Outcom
 			"duration_ms":   {To: o.Duration.Milliseconds()},
 		},
 	}
+	// Audit is best effort; Record logs and counts its own failures.
 	_ = h.rec.Record(ctx, ev)
 }
 

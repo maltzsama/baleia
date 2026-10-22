@@ -331,6 +331,7 @@ func (s *engineSource) Walk(ctx context.Context, known func([]string, string) (K
 		if len(r) < 7 {
 			return fmt.Errorf("catalog query returned %d columns, want 7", len(r))
 		}
+		// A missing or non-numeric position sorts first (0).
 		var pos int
 		_, _ = fmt.Sscan(r[6].s, &pos)
 		return g.Add(connections.CatalogRow{

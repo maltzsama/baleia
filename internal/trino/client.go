@@ -118,21 +118,21 @@ type StatementResponse struct {
 	NextURI string          `json:"nextUri"`
 	Stats   StatementStats  `json:"stats"`
 	Columns []Column        `json:"columns"`
-	Data    [][]interface{} `json:"data"`
+	Data    [][]any         `json:"data"`
 	Error   *StatementError `json:"error"`
 }
 
 type StatementError struct {
-	Message   string      `json:"message"`
-	ErrorCode interface{} `json:"errorCode"`
-	ErrorName string      `json:"errorName"`
-	ErrorType string      `json:"errorType"`
+	Message   string `json:"message"`
+	ErrorCode any    `json:"errorCode"`
+	ErrorName string `json:"errorName"`
+	ErrorType string `json:"errorType"`
 }
 
 type QueryResult struct {
 	QueryID  string
 	Columns  []Column
-	Data     [][]interface{}
+	Data     [][]any
 	RowCount int64
 }
 
@@ -336,7 +336,7 @@ func (c *Client) Execute(ctx context.Context, sql, catalog, schema string) (*Que
 func (c *Client) ExecuteWithOptions(ctx context.Context, sql string, opts ExecuteOptions) (*QueryResult, error) {
 	result := &QueryResult{}
 
-	queryID, err := c.pumpStatement(ctx, sql, opts, func(cols []Column, rows [][]interface{}) error {
+	queryID, err := c.pumpStatement(ctx, sql, opts, func(cols []Column, rows [][]any) error {
 		if len(result.Columns) == 0 && len(cols) > 0 {
 			result.Columns = cols
 		}
@@ -361,14 +361,14 @@ func (c *Client) ExecuteWithOptions(ctx context.Context, sql string, opts Execut
 // onPage callback errors abort the polling loop and are returned as-is,
 // abandoning the query on Trino (same as context cancellation).
 func (c *Client) ExecuteStream(ctx context.Context, sql string, opts ExecuteOptions,
-	onPage func(cols []Column, rows [][]interface{}) error) (string, error) {
+	onPage func(cols []Column, rows [][]any) error) (string, error) {
 	return c.pumpStatement(ctx, sql, opts, onPage)
 }
 
 // pumpStatement drives the Trino statement protocol, calling onPage for the
 // initial response and every subsequent page.
 func (c *Client) pumpStatement(ctx context.Context, sql string, opts ExecuteOptions,
-	onPage func(cols []Column, rows [][]interface{}) error) (string, error) {
+	onPage func(cols []Column, rows [][]any) error) (string, error) {
 	reqURL := c.baseURL + "/v1/statement"
 	user := c.resolveUser(opts)
 
@@ -455,7 +455,7 @@ func (c *Client) resolveUser(opts ExecuteOptions) string {
 	return c.user
 }
 
-func (c *Client) onPage(onPage func(cols []Column, rows [][]interface{}) error, cols []Column, rows [][]interface{}) error {
+func (c *Client) onPage(onPage func(cols []Column, rows [][]any) error, cols []Column, rows [][]any) error {
 	if onPage == nil {
 		return nil
 	}
@@ -534,6 +534,7 @@ func encodeSessionProperties(props map[string]string) string {
 func (c *Client) cancelAbandoned(nextURI, user string) {
 	reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	// Best effort: Trino also abandons a query nobody polls.
 	_ = c.deleteURI(reqCtx, nextURI, user)
 }
 

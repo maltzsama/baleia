@@ -48,6 +48,13 @@ WHERE id = $1;
 -- name: ListUsers :many
 SELECT * FROM users ORDER BY name;
 
+-- name: HasUsers :one
+SELECT EXISTS (SELECT 1 FROM users);
+
+-- name: LockFirstAdminSetup :exec
+-- Serializes first-admin setup until the transaction ends (#375).
+SELECT pg_advisory_xact_lock(hashtext('first-admin-setup'));
+
 -- name: CreateAPIKey :one
 INSERT INTO api_keys (user_id, name, key_hash, prefix, scopes, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)

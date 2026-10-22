@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -39,6 +41,7 @@ import (
 	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
 	_ "github.com/galileostudio/baleia/internal/queryengine/sqlserver"
 	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
+	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
@@ -51,6 +54,11 @@ import (
 const taskQueue = "baleia-task-queue"
 
 func main() {
+	// Setup is cancelled by SIGINT/SIGTERM like the API's (#367); the worker
+	// itself stops on worker.InterruptCh below.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	cfg := config.Load()
 
 	if err := cfg.Validate(); err != nil {
@@ -58,7 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	shutdownTracing, err := obs.Setup(context.Background(), cfg.TracingEnabled, "worker")
+	shutdownTracing, err := obs.Setup(ctx, cfg.TracingEnabled, "worker")
 	if err != nil {
 		slog.Error("tracing setup", "err", err)
 		os.Exit(1)
@@ -66,8 +74,10 @@ func main() {
 	defer func() { _ = shutdownTracing(context.Background()) }()
 
 	reg := metrics.New("worker")
-	pool, err := dbpool.Open(context.Background(), cfg.DatabaseURL, dbpool.Options{
+	pool, err := dbpool.Open(ctx, cfg.DatabaseURL, dbpool.Options{
 		MaxConns: cfg.PoolSize(10), MinConns: int32(cfg.DBMinConns), MaxConnLifetime: cfg.DBMaxConnLifetime,
+		MaxConnIdleTime: cfg.DBMaxConnIdleTime, HealthCheckPeriod: cfg.DBHealthCheckPeriod,
+		StatementTimeout: cfg.DBStatementTimeout, IdleInTxTimeout: cfg.DBIdleInTxTimeout, LockTimeout: cfg.DBLockTimeout,
 		Tracer: obs.PGXTracer(reg.NewPoolTracer()),
 	})
 	if err != nil {
@@ -79,7 +89,7 @@ func main() {
 
 	temporalMetrics, flushTemporal := reg.TemporalHandler()
 	defer func() { _ = flushTemporal() }()
-	c, err := dial.Temporal(context.Background(), cfg.TemporalHost, temporalMetrics, 30*time.Second, obs.ClientInterceptors())
+	c, err := dial.Temporal(ctx, cfg.TemporalHost, temporalMetrics, 30*time.Second, obs.ClientInterceptors())
 	if err != nil {
 		slog.Error("temporal", "err", err)
 		os.Exit(1)
@@ -103,11 +113,7 @@ func main() {
 	// The worker opens stored connection credentials (Lens table health), so it
 	// follows the same key policy as the API: refuse to start without a key
 	// once credentials exist.
-	keyring, err := bootstrap.LoadKeyring(context.Background(), cfg, func(ctx context.Context) (int64, error) {
-		var n int64
-		err := pool.QueryRow(ctx, "SELECT count(*) FROM catalog_connections WHERE credentials_enc IS NOT NULL").Scan(&n)
-		return n, err
-	})
+	keyring, err := bootstrap.LoadKeyring(ctx, cfg, db.New(pool).CountEncryptedConnections)
 	if err != nil {
 		slog.Error("credential keyring", "err", err)
 		os.Exit(1)
@@ -141,7 +147,12 @@ func main() {
 	engines := queryengine.NewManager(db.New(pool), keyring, conns, dialer)
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, dialer.HTTPClient(60*time.Second)))
 
-	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor)
+	s3Client, err := storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
+	if err != nil {
+		slog.Error("result storage", "err", err)
+		os.Exit(1)
+	}
+	act := activities.New(pool, cfg, keyring, conns, engines, lensMonitor, s3Client)
 	act.SetMetrics(reg)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(db.New(pool), keyring, conns, engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones
@@ -190,7 +201,7 @@ func main() {
 			slog.Error("audit export sink", "err", err)
 			os.Exit(1)
 		}
-		pg := auditexport.Postgres{Pool: pool}
+		pg := auditexport.Postgres{Queries: db.New(pool)}
 		act.SetAuditExporter(&auditexport.Exporter{
 			Source: pg, Cursor: pg, Sink: sink,
 			Index: cfg.AuditExportIndex, Batch: cfg.AuditExportBatch, Lag: auditexport.DefaultSafetyLag,
@@ -220,17 +231,17 @@ func main() {
 	if cfg.SchedulesEnabled {
 		// Recurring jobs are Temporal Schedules, created idempotently on every
 		// boot. Each workflow does a single pass and returns.
-		if err := schedules.Ensure(context.Background(), c, taskQueue, schedulespecs.Core(cfg.MetadataSyncEvery())); err != nil {
+		if err := schedules.Ensure(ctx, c, taskQueue, schedulespecs.Core(cfg.MetadataSyncEvery())); err != nil {
 			slog.Error("failed to ensure schedules", "err", err)
 			os.Exit(1)
 		}
 		// Binding reconciliation on a schedule is opt-in (#37).
 		if cfg.ReconcileInterval > 0 {
-			err = schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
+			err = schedules.Ensure(ctx, c, taskQueue, []schedules.Spec{
 				schedulespecs.CatalogReconcile(cfg.ReconcileInterval),
 			})
 		} else {
-			err = schedules.Remove(context.Background(), c, schedules.CatalogReconcile)
+			err = schedules.Remove(ctx, c, schedules.CatalogReconcile)
 		}
 		if err != nil {
 			slog.Error("failed to ensure the reconcile schedule", "err", err)
@@ -241,24 +252,25 @@ func main() {
 	// Audit export to OpenSearch (#50) runs only when a sink is configured.
 	if cfg.SchedulesEnabled {
 		if cfg.AuditExportURL != "" {
-			if err := schedules.Ensure(context.Background(), c, taskQueue, []schedules.Spec{
+			if err := schedules.Ensure(ctx, c, taskQueue, []schedules.Spec{
 				schedulespecs.AuditExport(cfg.AuditExportInterval),
 			}); err != nil {
 				slog.Error("failed to ensure the audit export schedule", "err", err)
 				os.Exit(1)
 			}
 		} else {
-			_ = schedules.Remove(context.Background(), c, schedules.AuditExport)
+			// Best effort: an absent schedule is the state we want.
+			_ = schedules.Remove(ctx, c, schedules.AuditExport)
 		}
 	}
 
 	slog.Info("worker started", "queue", taskQueue, "schedules_enabled", cfg.SchedulesEnabled)
 
-	go serveHealth("WORKER_HEALTH_PORT", "8081")
+	go serveHealth(cfg.WorkerHealthPort)
 
 	// One dry reconcile at boot: drift shows up in the log (counts only).
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
 		act.ReconcileAtBoot(ctx)
 	}()
@@ -271,11 +283,7 @@ func main() {
 
 // serveHealth exposes a liveness endpoint Kubernetes can probe. If the port
 // cannot be bound the worker still starts; the probe simply stays down.
-func serveHealth(envKey, fallback string) {
-	port := os.Getenv(envKey)
-	if port == "" {
-		port = fallback
-	}
+func serveHealth(port string) {
 	if _, err := strconv.Atoi(port); err != nil {
 		slog.Error("invalid health port", "port", port, "err", err)
 		return

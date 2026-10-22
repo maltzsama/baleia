@@ -20,7 +20,12 @@ and the audit trail apply unchanged.
 5. Use **Test connection** to send a one-token prompt.
 
 The API process needs egress to the provider's `base_url`. Air-gapped
-deployments point it at an internal OpenAI-compatible server.
+deployments point it at an internal OpenAI-compatible server. Provider calls
+dial through the same SSRF-safe dialer as connections
+([ADR 0011](adr/0011-direct-connections-security.md)): `BALEIA_CONNECTIONS_DENY_CIDRS`
+and `BALEIA_CONNECTIONS_ALLOW_CIDRS` apply, and a server on loopback (a local
+Ollama, for example) needs `BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true`, for
+development only.
 
 ## Data leaving the instance
 

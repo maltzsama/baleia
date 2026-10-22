@@ -75,13 +75,13 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor) *Activities {
+func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client) *Activities {
 	a := &Activities{
 		queries:     db.New(pool),
 		pool:        pool,
 		engines:     engines,
 		monitor:     mon,
-		s3:          storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL),
+		s3:          s3,
 		cfg:         cfg,
 		keyring:     keyring,
 		connections: conns,

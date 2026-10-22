@@ -92,8 +92,13 @@ type HTTPProvider struct {
 	Client   *http.Client
 }
 
-// NewHTTPProvider builds a provider from the stored settings.
-func NewHTTPProvider(provider, baseURL, apiKey, model string) *HTTPProvider {
+// ClientTimeout bounds one provider call; callers build the client with it.
+const ClientTimeout = 120 * time.Second
+
+// NewHTTPProvider builds a provider from the stored settings. client must dial
+// through connections.Dialer (#378): the base URL is admin-configurable and
+// may point at an internal address.
+func NewHTTPProvider(client *http.Client, provider, baseURL, apiKey, model string) *HTTPProvider {
 	if baseURL == "" {
 		if provider == "anthropic" {
 			baseURL = "https://api.anthropic.com"
@@ -103,7 +108,7 @@ func NewHTTPProvider(provider, baseURL, apiKey, model string) *HTTPProvider {
 	}
 	return &HTTPProvider{
 		Provider: provider, BaseURL: strings.TrimRight(baseURL, "/"), APIKey: apiKey, Model: model,
-		Client: &http.Client{Timeout: 120 * time.Second},
+		Client: client,
 	}
 }
 
@@ -179,6 +184,8 @@ func (p *HTTPProvider) anthropic(ctx context.Context, req Request) (Response, er
 				content = append(content, map[string]any{"type": "text", "text": m.Content})
 			}
 			for _, call := range m.ToolCalls {
+				// The model's own arguments, sent back as given; invalid
+				// JSON becomes null and the provider reports it.
 				var input any
 				_ = json.Unmarshal(call.Arguments, &input)
 				content = append(content, map[string]any{

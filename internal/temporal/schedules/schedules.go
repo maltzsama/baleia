@@ -21,7 +21,7 @@ type Spec struct {
 	// Workflow is the workflow function to run on each schedule tick.
 	Workflow any
 	// Args are the workflow arguments, if any.
-	Args []interface{}
+	Args []any
 	// Every is the interval between runs.
 	Every time.Duration
 }

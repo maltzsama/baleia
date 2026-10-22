@@ -14,6 +14,7 @@ import (
 	"time"
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/icebergrest"
 	"github.com/galileostudio/baleia/internal/connections/providers"
@@ -68,7 +69,7 @@ func loopbackRegistry(t *testing.T) (*connections.Registry, *connections.Dialer)
 }
 
 func draftHandlers(t *testing.T, reg *connections.Registry) *Handlers {
-	return &Handlers{queries: draftQuerier{t: t}, connections: reg}
+	return &Handlers{queries: draftQuerier{t: t}, connections: reg, cfg: &config.Config{}}
 }
 
 func draft(url string, intents ...string) *TestConnectionRequest {

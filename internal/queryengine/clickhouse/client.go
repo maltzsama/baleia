@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -216,7 +217,7 @@ func (c *client) queryStrings(ctx context.Context, r request) ([][]string, error
 // isEmpty reports whether the response body carries no Arrow stream.
 func isEmpty(br *bufio.Reader) (bool, error) {
 	if _, err := br.Peek(1); err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return true, nil
 		}
 		return false, err

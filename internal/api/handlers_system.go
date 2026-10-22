@@ -71,6 +71,8 @@ func (h *Handlers) databaseStatusSection(ctx context.Context) SystemStatusSectio
 		if h.pool == nil {
 			return errors.New("no database pool")
 		}
+		// Raw SQL on purpose: goose_db_version is goose's own table, not part
+		// of the migrations sqlc reads.
 		return h.pool.QueryRow(ctx,
 			`SELECT COALESCE(MAX(version_id), 0) FROM goose_db_version WHERE is_applied`).Scan(&migrationVersion)
 	})

@@ -181,22 +181,6 @@ func (h *Handlers) validateAgentWorkspaces(ctx context.Context, owner pgtype.UUI
 	return out, nil
 }
 
-func (h *Handlers) addAgentWorkspaces(ctx context.Context, agentID pgtype.UUID, ws []pgtype.UUID) error {
-	q := h.queries
-	if h.pool != nil {
-		// Keep the replacement atomic: a partial set would silently widen or
-		// narrow the agent's reach.
-		return withTx(ctx, h.pool, func(tx pgx.Tx) error {
-			txq := q
-			if concrete, ok := q.(*db.Queries); ok {
-				txq = concrete.WithTx(tx)
-			}
-			return addAgentWorkspaces(ctx, txq, agentID, ws)
-		})
-	}
-	return addAgentWorkspaces(ctx, q, agentID, ws)
-}
-
 func addAgentWorkspaces(ctx context.Context, q db.Querier, agentID pgtype.UUID, ws []pgtype.UUID) error {
 	if err := q.ClearAgentWorkspaces(ctx, agentID); err != nil {
 		return err
@@ -277,16 +261,23 @@ func (h *Handlers) CreateAgent(ctx context.Context, request CreateAgentRequestOb
 		}
 	}
 
-	agent, err := h.queries.CreateAgent(ctx, db.CreateAgentParams{
-		OwnerID:     p.UserID,
-		Kind:        "external",
-		Name:        name,
-		Description: description,
+	// The agent and its workspace set are one write: a partial set would
+	// silently widen or narrow the agent's reach.
+	var agent db.Agent
+	err = h.inTx(ctx, func(q db.Querier) error {
+		var err error
+		agent, err = q.CreateAgent(ctx, db.CreateAgentParams{
+			OwnerID:     p.UserID,
+			Kind:        "external",
+			Name:        name,
+			Description: description,
+		})
+		if err != nil {
+			return err
+		}
+		return addAgentWorkspaces(ctx, q, agent.ID, workspaceIDs)
 	})
 	if err != nil {
-		return nil, err
-	}
-	if err := h.addAgentWorkspaces(ctx, agent.ID, workspaceIDs); err != nil {
 		return nil, err
 	}
 
@@ -403,18 +394,23 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 		changes["workspace_ids"] = audit.Change{From: from, To: to}
 	}
 
-	if _, err := h.queries.UpdateAgent(ctx, db.UpdateAgentParams{ID: agent.ID, Name: name, Description: description}); err != nil {
+	// Name, status and workspace set change together or not at all (#376).
+	err = h.inTx(ctx, func(q db.Querier) error {
+		if _, err := q.UpdateAgent(ctx, db.UpdateAgentParams{ID: agent.ID, Name: name, Description: description}); err != nil {
+			return err
+		}
+		if request.Body.Status != nil && string(*request.Body.Status) != agent.Status {
+			if _, err := q.SetAgentStatus(ctx, db.SetAgentStatusParams{ID: agent.ID, Status: string(*request.Body.Status)}); err != nil {
+				return err
+			}
+		}
+		if request.Body.WorkspaceIds != nil {
+			return addAgentWorkspaces(ctx, q, agent.ID, workspaceIDs)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
-	}
-	if request.Body.Status != nil && string(*request.Body.Status) != agent.Status {
-		if _, err := h.queries.SetAgentStatus(ctx, db.SetAgentStatusParams{ID: agent.ID, Status: string(*request.Body.Status)}); err != nil {
-			return nil, err
-		}
-	}
-	if request.Body.WorkspaceIds != nil {
-		if err := h.addAgentWorkspaces(ctx, agent.ID, workspaceIDs); err != nil {
-			return nil, err
-		}
 	}
 
 	action := audit.AgentUpdate

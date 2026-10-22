@@ -165,7 +165,7 @@ func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemantic
 		!request.Body.ExpectedUpdatedAt.Equal(current.UpdatedAt.Time) {
 		by := openapi_types.UUID(current.UpdatedBy.Bytes)
 		at := current.UpdatedAt.Time.Format(time.RFC3339Nano)
-		fields := map[string]interface{}{"updated_by": by, "updated_at": at}
+		fields := map[string]any{"updated_by": by, "updated_at": at}
 		return UpsertSemanticDoc409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: ErrorCodeVersionConflict, Message: "the doc changed since you loaded it", Params: &fields,
 		}}, nil
@@ -614,10 +614,8 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 	if body.Certified != nil && *body.Certified != current.Certified && !isManager {
 		return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a metric"}}, nil
 	}
-	if body.Certified != nil {
-		// Handled after the update so certified_by/at stay consistent.
-		_ = body.Certified
-	}
+	// body.Certified is applied after the update so certified_by/at stay
+	// consistent.
 	changesDefinition := body.Definition != nil || body.CatalogId != nil || body.Namespace != nil || body.Table != nil
 	slug, label, tableName := current.Slug, current.Label, current.TableName
 	namespace := current.Namespace
@@ -855,7 +853,7 @@ func (h *Handlers) GetSemanticMetricSql(ctx context.Context, request GetSemantic
 
 // parseDefinition decodes the request's free-form definition and rejects
 // unknown fields; it returns the normalized JSON stored in the database.
-func parseDefinition(in map[string]interface{}) (semantic.SimpleMetricV1, []byte, error) {
+func parseDefinition(in map[string]any) (semantic.SimpleMetricV1, []byte, error) {
 	raw, err := json.Marshal(in)
 	if err != nil {
 		return semantic.SimpleMetricV1{}, nil, err
@@ -1058,7 +1056,7 @@ func dbSemanticMetricToPublic(m db.SemanticMetric, version int32) SemanticMetric
 		Version:       int(version),
 		UpdatedAt:     pgTimestampToTime(m.UpdatedAt),
 	}
-	var def map[string]interface{}
+	var def map[string]any
 	if err := json.Unmarshal(m.Definition, &def); err == nil {
 		out.Definition = def
 	}

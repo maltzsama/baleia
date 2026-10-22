@@ -40,7 +40,11 @@ type Config struct {
 	DatabaseURL  string
 	TemporalHost string
 	PolarisURL   string
-	TrinoURL     string
+	// PolarisClientID/Secret seed the credentials of a polaris connection
+	// created without any (POLARIS_CLIENT_ID, POLARIS_CLIENT_SECRET).
+	PolarisClientID     string
+	PolarisClientSecret string
+	TrinoURL            string
 	// TrinoDBPassword is the password for the dedicated baleia_trino role, from
 	// the same env var the Trino plugin reads. Empty means "leave it unchanged".
 	TrinoDBPassword string
@@ -150,9 +154,22 @@ type Config struct {
 	AuditExportInterval time.Duration
 	// Baleia's database pool; DBMaxConns 0 means the process default (api 20,
 	// worker 10).
-	DBMaxConns        int
-	DBMinConns        int
-	DBMaxConnLifetime time.Duration
+	DBMaxConns          int
+	DBMinConns          int
+	DBMaxConnLifetime   time.Duration
+	DBMaxConnIdleTime   time.Duration
+	DBHealthCheckPeriod time.Duration
+	// Server-side guards on the pool's sessions (#377); 0 disables one.
+	DBStatementTimeout time.Duration
+	DBIdleInTxTimeout  time.Duration
+	DBLockTimeout      time.Duration
+	// WorkerHealthPort is the worker's liveness listener (WORKER_HEALTH_PORT).
+	WorkerHealthPort string
+	// HTTP* bound the API listener (#372). There is no server-wide read or
+	// write timeout: result downloads, SSE and WebSockets are long-lived.
+	HTTPReadHeaderTimeout time.Duration
+	HTTPIdleTimeout       time.Duration
+	HTTPShutdownTimeout   time.Duration
 	// AgentsEnabled mounts the agent management API and /mcp (#59). Off by
 	// default: no agent token exists until an administrator enables it.
 	AgentsEnabled bool
@@ -179,6 +196,9 @@ func Load() *Config {
 		DatabaseURL:           getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
 		TemporalHost:          getEnv("TEMPORAL_HOST", "localhost:7233"),
 		PolarisURL:            getEnv("POLARIS_URL", "http://localhost:8181"),
+		PolarisClientID:       getEnv("POLARIS_CLIENT_ID", ""),
+		PolarisClientSecret:   getEnv("POLARIS_CLIENT_SECRET", ""),
+		WorkerHealthPort:      getEnv("WORKER_HEALTH_PORT", "8081"),
 		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),
 		TrinoDBPassword:       getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
 		TrinoAdminUser:        getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
@@ -249,6 +269,14 @@ func Load() *Config {
 		DBMaxConns:                  getEnvInt("BALEIA_DB_MAX_CONNS", 0),
 		DBMinConns:                  getEnvInt("BALEIA_DB_MIN_CONNS", 2),
 		DBMaxConnLifetime:           getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
+		DBMaxConnIdleTime:           getEnvDuration("BALEIA_DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
+		DBHealthCheckPeriod:         getEnvDuration("BALEIA_DB_HEALTH_CHECK_PERIOD", time.Minute),
+		DBStatementTimeout:          getEnvDuration("BALEIA_DB_STATEMENT_TIMEOUT", time.Minute),
+		DBIdleInTxTimeout:           getEnvDuration("BALEIA_DB_IDLE_IN_TX_TIMEOUT", time.Minute),
+		DBLockTimeout:               getEnvDuration("BALEIA_DB_LOCK_TIMEOUT", 30*time.Second),
+		HTTPReadHeaderTimeout:       getEnvDuration("BALEIA_HTTP_READ_HEADER_TIMEOUT", 10*time.Second),
+		HTTPIdleTimeout:             getEnvDuration("BALEIA_HTTP_IDLE_TIMEOUT", 2*time.Minute),
+		HTTPShutdownTimeout:         getEnvDuration("BALEIA_HTTP_SHUTDOWN_TIMEOUT", 20*time.Second),
 	}
 }
 
@@ -344,6 +372,12 @@ func (c *Config) Validate() error {
 		{"BALEIA_ACCESS_TOKEN_TTL", c.AccessTokenTTL},
 		{"BALEIA_REFRESH_TOKEN_TTL", c.RefreshTokenTTL},
 		{"BALEIA_RESET_TOKEN_TTL", c.ResetTokenTTL},
+		{"BALEIA_DB_STATEMENT_TIMEOUT", c.DBStatementTimeout},
+		{"BALEIA_DB_IDLE_IN_TX_TIMEOUT", c.DBIdleInTxTimeout},
+		{"BALEIA_DB_LOCK_TIMEOUT", c.DBLockTimeout},
+		{"BALEIA_HTTP_READ_HEADER_TIMEOUT", c.HTTPReadHeaderTimeout},
+		{"BALEIA_HTTP_IDLE_TIMEOUT", c.HTTPIdleTimeout},
+		{"BALEIA_HTTP_SHUTDOWN_TIMEOUT", c.HTTPShutdownTimeout},
 	} {
 		if ttl.v < 0 {
 			return fmt.Errorf("%s must be positive (got %s)", ttl.name, ttl.v)
@@ -353,6 +387,15 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("BALEIA_BCRYPT_COST must be between %d and %d (got %d)", MinBcryptCost, MaxBcryptCost, c.BcryptCost)
 	}
 	return nil
+}
+
+// PolarisDefaultCredentials returns the polaris credentials from the
+// environment, or nil unless both are set.
+func (c *Config) PolarisDefaultCredentials() map[string]string {
+	if c.PolarisClientID == "" || c.PolarisClientSecret == "" {
+		return nil
+	}
+	return map[string]string{"client_id": c.PolarisClientID, "client_secret": c.PolarisClientSecret}
 }
 
 // AccessTTL is the access-token lifetime; zero means DefaultAccessTokenTTL.

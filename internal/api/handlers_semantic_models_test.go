@@ -17,14 +17,14 @@ func TestSemanticModels_CompileResolvesModelByRowSlug(t *testing.T) {
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 
-	definition := map[string]interface{}{
-		"source":      map[string]interface{}{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
+	definition := map[string]any{
+		"source":      map[string]any{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
 		"primary_key": []string{"id"},
-		"dimensions": []map[string]interface{}{
+		"dimensions": []map[string]any{
 			{"name": "id", "type": "int64"},
 			{"name": "status", "type": "string"},
 		},
-		"metrics": []map[string]interface{}{{"name": "order_count", "aggregation": "count"}},
+		"metrics": []map[string]any{{"name": "order_count", "aggregation": "count"}},
 	}
 	created, err := f.h.CreateSemanticModel(ctx, CreateSemanticModelRequestObject{
 		Id: f.ws,
@@ -160,9 +160,9 @@ func TestSemanticModels_MigrateV1(t *testing.T) {
 	}
 
 	// Each migrated metric records its v1 source; the v1 page redirects by it.
-	def := models[0].Definition["metrics"].([]interface{})
+	def := models[0].Definition["metrics"].([]any)
 	for _, raw := range def {
-		mt := raw.(map[string]interface{})
+		mt := raw.(map[string]any)
 		if mt["migrated_from"] == nil || mt["migrated_from"] == "" {
 			t.Fatalf("metric %v has no migrated_from", mt["name"])
 		}
@@ -214,10 +214,10 @@ func TestSemanticModels_SpaceCountsAndSearch(t *testing.T) {
 	ctx := f.as(f.owner)
 	created, err := f.h.CreateSemanticModel(ctx, CreateSemanticModelRequestObject{Id: f.ws, Body: &SemanticModelCreate{
 		Slug: "orders", Label: "Orders model", CatalogId: f.lake,
-		Definition: map[string]interface{}{
-			"source":      map[string]interface{}{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
+		Definition: map[string]any{
+			"source":      map[string]any{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
 			"primary_key": []string{"id"},
-			"dimensions":  []map[string]interface{}{{"name": "id", "type": "int64"}},
+			"dimensions":  []map[string]any{{"name": "id", "type": "int64"}},
 		},
 	}})
 	if err != nil {
@@ -247,7 +247,7 @@ func TestSemanticModels_SpaceCountsAndSearch(t *testing.T) {
 func TestSemanticModels_CompileUnsupportedCode(t *testing.T) {
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
-	create := func(slug string, def map[string]interface{}) {
+	create := func(slug string, def map[string]any) {
 		t.Helper()
 		r, err := f.h.CreateSemanticModel(ctx, CreateSemanticModelRequestObject{Id: f.ws, Body: &SemanticModelCreate{
 			Slug: slug, Label: slug, CatalogId: f.lake, Definition: def,
@@ -259,21 +259,21 @@ func TestSemanticModels_CompileUnsupportedCode(t *testing.T) {
 			t.Fatalf("create %s: %+v", slug, r)
 		}
 	}
-	create("customers", map[string]interface{}{
-		"source":      map[string]interface{}{"kind": "table", "namespace": []string{"sales"}, "table": "customers"},
+	create("customers", map[string]any{
+		"source":      map[string]any{"kind": "table", "namespace": []string{"sales"}, "table": "customers"},
 		"primary_key": []string{"cid"},
-		"dimensions":  []map[string]interface{}{{"name": "cid", "type": "int64"}},
-		"metrics": []map[string]interface{}{
+		"dimensions":  []map[string]any{{"name": "cid", "type": "int64"}},
+		"metrics": []map[string]any{
 			{"name": "a", "aggregation": "count"},
 			{"name": "b", "aggregation": "count"},
-			{"name": "ratio", "derived": map[string]interface{}{"left": "a", "op": "/", "right": "b"}},
+			{"name": "ratio", "derived": map[string]any{"left": "a", "op": "/", "right": "b"}},
 		},
 	})
-	create("orders", map[string]interface{}{
-		"source":      map[string]interface{}{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
+	create("orders", map[string]any{
+		"source":      map[string]any{"kind": "table", "namespace": []string{"sales"}, "table": "orders"},
 		"primary_key": []string{"id"},
-		"dimensions":  []map[string]interface{}{{"name": "id", "type": "int64"}, {"name": "customer", "type": "int64"}},
-		"joins":       []map[string]interface{}{{"to": "customers", "relationship": "many_to_one", "on": []map[string]string{{"from": "customer", "to": "cid"}}}},
+		"dimensions":  []map[string]any{{"name": "id", "type": "int64"}, {"name": "customer", "type": "int64"}},
+		"joins":       []map[string]any{{"to": "customers", "relationship": "many_to_one", "on": []map[string]string{{"from": "customer", "to": "cid"}}}},
 	})
 	metrics := []string{"ratio"}
 	r, err := f.h.CompileExploreQuery(ctx, CompileExploreQueryRequestObject{

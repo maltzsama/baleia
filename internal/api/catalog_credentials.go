@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"os"
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -39,10 +38,11 @@ func encodeCredentials(kr *crypto.Keyring, creds any, connID pgtype.UUID) (*stri
 
 // createCredentials picks the credentials to store from a create request: the
 // typed field for the connection type, else the generic `credentials` object.
-// For polaris it falls back to POLARIS_CLIENT_ID/POLARIS_CLIENT_SECRET so a
-// deployment can seed the first connection from its environment. It returns an
-// untyped nil when the request carries none.
-func createCredentials(body *CreateCatalogConnectionRequest) any {
+// For polaris it falls back to the deployment's POLARIS_CLIENT_ID and
+// POLARIS_CLIENT_SECRET (polarisDefault) so the first connection can be seeded
+// from the environment. It returns an untyped nil when the request carries
+// none.
+func createCredentials(body *CreateCatalogConnectionRequest, polarisDefault map[string]string) any {
 	switch string(body.Type) {
 	case "nessie":
 		if body.NessieCredentials != nil {
@@ -72,11 +72,8 @@ func createCredentials(body *CreateCatalogConnectionRequest) any {
 	if body.Credentials != nil && len(*body.Credentials) > 0 {
 		return *body.Credentials
 	}
-	if string(body.Type) == "polaris" {
-		id, secret := os.Getenv("POLARIS_CLIENT_ID"), os.Getenv("POLARIS_CLIENT_SECRET")
-		if id != "" && secret != "" {
-			return map[string]string{"client_id": id, "client_secret": secret}
-		}
+	if string(body.Type) == "polaris" && polarisDefault != nil {
+		return polarisDefault
 	}
 	return nil
 }
