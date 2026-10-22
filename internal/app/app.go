@@ -26,16 +26,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	// Engine kinds register themselves.
-	_ "github.com/galileostudio/baleia/internal/queryengine/clickhouse"
-	_ "github.com/galileostudio/baleia/internal/queryengine/flightsql"
-	_ "github.com/galileostudio/baleia/internal/queryengine/mysql"
-	_ "github.com/galileostudio/baleia/internal/queryengine/oracle"
-	_ "github.com/galileostudio/baleia/internal/queryengine/postgresql"
 	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
-	// Engine kinds register themselves.
-	_ "github.com/galileostudio/baleia/internal/queryengine/sqlserver"
-	_ "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/trino"
@@ -154,7 +145,6 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	}
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).
-	sqliteengine.Configure(sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite})
 	kinds, err := engines.NewRegistry(engines.Options{
 		SQLite: sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
 	})

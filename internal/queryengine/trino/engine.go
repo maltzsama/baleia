@@ -31,10 +31,6 @@ const (
 // requestTimeout bounds one HTTP request (one page), not a statement.
 const requestTimeout = 60 * time.Second
 
-func init() {
-	queryengine.RegisterKind(Kind, queryengine.ClassFederated, newEngine)
-}
-
 // Spec is the kind's entry for a queryengine.Registry (#364).
 func Spec() queryengine.KindSpec {
 	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassFederated, Factory: newEngine}

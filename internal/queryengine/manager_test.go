@@ -194,12 +194,6 @@ func TestManager_Refuses(t *testing.T) {
 
 const readOnlyNoneKind = "fake-readonly-none"
 
-func init() {
-	queryengine.RegisterKind(readOnlyNoneKind, queryengine.ClassDirect, func(_ context.Context, row queryengine.EngineRow, _ connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-		return fake.New(fake.Options{ID: row.ID, Dialer: d, ReadOnly: queryengine.ReadOnlyNone}), nil
-	})
-}
-
 type multiStore map[[16]byte]*db.GetEngineWithConnectionRow
 
 func (s multiStore) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngineRow, error) {

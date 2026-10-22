@@ -16,10 +16,6 @@ import (
 // Kind is the registered engine kind.
 const Kind = "clickhouse"
 
-func init() {
-	queryengine.RegisterKind(Kind, queryengine.ClassDirect, newEngine)
-}
-
 // Spec is the kind's entry for a queryengine.Registry (#364).
 func Spec() queryengine.KindSpec {
 	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine}

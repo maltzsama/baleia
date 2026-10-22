@@ -28,10 +28,6 @@ const (
 	defaultLobMaxBytes = 1 << 20
 )
 
-func init() {
-	queryengine.RegisterKind(Kind, queryengine.ClassDirect, newEngine(Options{}))
-}
-
 // Options are the server-side Oracle settings.
 type Options struct {
 	// LOBMaxBytes caps a CLOB/NCLOB/BLOB value read into Arrow; zero means

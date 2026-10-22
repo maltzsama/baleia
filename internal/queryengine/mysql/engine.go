@@ -26,11 +26,6 @@ const (
 
 const connectTimeout = 10 * time.Second
 
-func init() {
-	queryengine.RegisterKind(KindMySQL, queryengine.ClassDirect, newEngine(false))
-	queryengine.RegisterKind(KindMariaDB, queryengine.ClassDirect, newEngine(true))
-}
-
 // Specs are the MySQL and MariaDB entries for a queryengine.Registry (#364).
 func Specs() []queryengine.KindSpec {
 	return []queryengine.KindSpec{

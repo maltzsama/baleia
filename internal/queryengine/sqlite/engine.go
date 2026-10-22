@@ -24,10 +24,6 @@ const Kind = "sqlite"
 // maxConns bounds each pool; SQLite allows concurrent readers.
 const maxConns = 8
 
-func init() {
-	queryengine.RegisterKind(Kind, queryengine.ClassDirect, newEngine)
-}
-
 // Spec is the kind's entry for a queryengine.Registry (#364): engines it
 // builds use o, the same confinement the SQLite provider applies.
 func Spec(o Options) queryengine.KindSpec {
@@ -36,14 +32,8 @@ func Spec(o Options) queryengine.KindSpec {
 	}}
 }
 
-// newEngine builds the engine from its connection config (path, read_write) and
-// the server-side options. SQLite dials nothing, so the dialer is unused.
-func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Config, _ *connections.Dialer) (queryengine.Engine, error) {
-	return newEngineWithOptions(row, cfg, currentOptions())
-}
-
-// newEngineWithOptions is newEngine with explicit options, for tests and the
-// wiring sites.
+// newEngineWithOptions builds the engine from its connection config (path,
+// read_write) and the server-side options. SQLite dials nothing.
 func newEngineWithOptions(row queryengine.EngineRow, cfg connections.Config, o Options) (queryengine.Engine, error) {
 	if o.Root == "" {
 		return nil, queryengine.NewError(queryengine.CodeUnavailable, Kind, "", "SQLite is not configured: BALEIA_SQLITE_ROOT is not set")
