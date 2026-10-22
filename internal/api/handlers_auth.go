@@ -18,6 +18,7 @@ import (
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/session"
+	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/jackc/pgx/v5"
@@ -27,11 +28,8 @@ import (
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
-// errAlreadySetUp aborts a first-admin setup that lost the race.
-var errAlreadySetUp = errors.New("already set up")
-
 func (h *AuthHandlers) GetSetupStatus(ctx context.Context, request GetSetupStatusRequestObject) (GetSetupStatusResponseObject, error) {
-	configured, err := h.queries.HasUsers(ctx)
+	configured, err := h.setup.Configured(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +43,8 @@ func (h *AuthHandlers) CreateFirstAdmin(ctx context.Context, request CreateFirst
 	alreadySetUp := CreateFirstAdmin409JSONResponse{
 		ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "already set up"},
 	}
-	configured, err := h.queries.HasUsers(ctx)
+	// A fast path only: the service checks again under a lock (#375).
+	configured, err := h.setup.Configured(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -56,33 +55,8 @@ func (h *AuthHandlers) CreateFirstAdmin(ctx context.Context, request CreateFirst
 		return CreateFirstAdmin422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
 	}
 
-	hash, err := auth.HashPasswordWithCost(request.Body.Password, h.settings.Auth.PasswordCost)
-	if err != nil {
-		return nil, err
-	}
-
-	// The check above is only a fast path: two concurrent setups both pass
-	// it, so the lock and a second check make exactly one of them win (#375).
-	var user db.User
-	err = h.inTx(ctx, func(q db.Querier) error {
-		if err := q.LockFirstAdminSetup(ctx); err != nil {
-			return err
-		}
-		if configured, err := q.HasUsers(ctx); err != nil {
-			return err
-		} else if configured {
-			return errAlreadySetUp
-		}
-		user, err = q.CreateUser(ctx, db.CreateUserParams{
-			Name:         request.Body.Name,
-			Email:        string(request.Body.Email),
-			PasswordHash: &hash,
-			Role:         "admin",
-			AuthProvider: "local",
-		})
-		return err
-	})
-	if errors.Is(err, errAlreadySetUp) {
+	user, err := h.setup.CreateFirstAdmin(ctx, request.Body.Name, string(request.Body.Email), request.Body.Password)
+	if errors.Is(err, setup.ErrAlreadySetUp) {
 		return alreadySetUp, nil
 	}
 	if err != nil {

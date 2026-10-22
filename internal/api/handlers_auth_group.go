@@ -4,9 +4,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/galileostudio/baleia/internal/db"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/session"
+	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/mail"
 )
 
@@ -33,6 +35,8 @@ type AuthHandlers struct {
 	sessions *session.Service
 	// resets runs the e-mailed password reset (#51).
 	resets *passwordreset.Service
+	// setup creates the first administrator.
+	setup *setup.Service
 	// prober probes a provider configuration without persisting anything
 	// (#286); tests give a fake so the handler runs without a network.
 	prober identityProviderProber
@@ -68,6 +72,9 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		directory: ldapDirectory{},
 		prober:    networkProber{},
 		sessions:  newSessions(c),
+		setup: setup.New(c.queries, func(ctx context.Context, fn func(setup.Store) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		}, c.settings.Auth.PasswordCost),
 	}
 	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
 		PublicURL:     c.settings.Mail.PublicURL,
