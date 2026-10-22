@@ -7,9 +7,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/providers"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -26,7 +26,7 @@ func (h *AuthHandlers) UpdateIdentityProvider(ctx context.Context, request Updat
 		return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 
-	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
+	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
@@ -86,9 +86,7 @@ func (h *AuthHandlers) UpdateIdentityProvider(ctx context.Context, request Updat
 		return nil, errors.New("identity provider has an unknown type")
 	}
 
-	ap, err = h.queries.UpdateAuthProvider(ctx, db.UpdateAuthProviderParams{
-		ID: ap.ID, Name: name, ConfigEnc: sealed, Enabled: enabled,
-	})
+	ap, err = h.providers.Update(ctx, ap.ID, name, enabled, sealed)
 	if err != nil {
 		return nil, err
 	}
@@ -111,44 +109,23 @@ func (h *AuthHandlers) DeleteIdentityProvider(ctx context.Context, request Delet
 		return DeleteIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
-	if err != nil {
+	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	suspend := request.Params.SuspendUsers != nil && *request.Params.SuspendUsers
+	switch err := h.providers.Delete(ctx, id, suspend); {
+	case errors.Is(err, providers.ErrNotFound):
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return DeleteIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
-	}
-
-	linked, err := h.queries.CountUsersByAuthProvider(ctx, ap.ID)
-	if err != nil {
-		return nil, err
-	}
-	suspend := request.Params.SuspendUsers != nil && *request.Params.SuspendUsers
-	if linked > 0 && !suspend {
+	case errors.Is(err, providers.ErrInUse):
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return DeleteIdentityProvider409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code:    ErrorCodeProviderInUse,
 			Message: "users are still linked to this provider; pass suspend_users=true to suspend and detach them",
 		}}, nil
-	}
-
-	err = h.inTx(ctx, func(q db.Querier) error {
-		if suspend && linked > 0 {
-			if err := q.RevokeRefreshTokensByAuthProvider(ctx, ap.ID); err != nil {
-				return err
-			}
-			if err := q.DeleteAPIKeysByAuthProvider(ctx, ap.ID); err != nil {
-				return err
-			}
-			if err := q.SuspendUsersByAuthProvider(ctx, ap.ID); err != nil {
-				return err
-			}
-		}
-		return q.DeleteAuthProvider(ctx, ap.ID)
-	})
-	if err != nil {
+	case err != nil:
 		return nil, err
 	}
 
-	h.audited(ctx, withID(ev, ap.ID).Allowed())
+	h.audited(ctx, withID(ev, id).Allowed())
 	return DeleteIdentityProvider204Response{}, nil
 }
 
@@ -157,7 +134,7 @@ func (h *AuthHandlers) TestIdentityProvider(ctx context.Context, request TestIde
 	if auth.RoleFromContext(ctx) != "admin" {
 		return TestIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
-	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
+	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if err != nil {
 		return TestIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
 	}

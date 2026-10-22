@@ -290,13 +290,13 @@ func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAct
 // only; it never returns configuration or secrets. It supersedes
 // /auth/oidc/providers and adds LDAP.
 func (h *AuthHandlers) ListAuthProviders(ctx context.Context, _ ListAuthProvidersRequestObject) (ListAuthProvidersResponseObject, error) {
-	providers, err := h.queries.ListAuthProviders(ctx)
+	enabled, err := h.providers.ListEnabled(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(ListAuthProviders200JSONResponse, 0, len(providers))
-	for _, p := range providers {
+	result := make(ListAuthProviders200JSONResponse, 0, len(enabled))
+	for _, p := range enabled {
 		result = append(result, AuthProvider{
 			Id:   openapi_types.UUID(p.ID.Bytes),
 			Name: p.Name,
@@ -307,13 +307,13 @@ func (h *AuthHandlers) ListAuthProviders(ctx context.Context, _ ListAuthProvider
 }
 
 func (h *AuthHandlers) ListOIDCProviders(ctx context.Context, request ListOIDCProvidersRequestObject) (ListOIDCProvidersResponseObject, error) {
-	providers, err := h.queries.ListAuthProviders(ctx)
+	enabled, err := h.providers.ListEnabled(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]OIDCProvider, 0, len(providers))
-	for _, p := range providers {
+	result := make([]OIDCProvider, 0, len(enabled))
+	for _, p := range enabled {
 		id := openapi_types.UUID(p.ID.Bytes)
 		result = append(result, OIDCProvider{
 			Id:   id,
