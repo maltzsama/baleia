@@ -12,7 +12,7 @@ import (
 // that enforce the action, so the UI never contradicts the server. The checker
 // is the single implementation; these helpers only classify its outcome.
 
-func (h *Handlers) catalogActions(ctx context.Context, id pgtype.UUID) []CatalogAllowedAction {
+func (h *core) catalogActions(ctx context.Context, id pgtype.UUID) []CatalogAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -28,7 +28,7 @@ func (h *Handlers) catalogActions(ctx context.Context, id pgtype.UUID) []Catalog
 	return acts
 }
 
-func (h *Handlers) catalogBindingActions(ctx context.Context, b dbCatalogBindingRef) []CatalogBindingAllowedAction {
+func (h *core) catalogBindingActions(ctx context.Context, b dbCatalogBindingRef) []CatalogBindingAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -45,7 +45,7 @@ func (h *Handlers) catalogBindingActions(ctx context.Context, b dbCatalogBinding
 
 type dbCatalogBindingRef struct{ catalogID pgtype.UUID }
 
-func (h *Handlers) catalogConnectionActions(ctx context.Context, id pgtype.UUID) []CatalogConnectionAllowedAction {
+func (h *core) catalogConnectionActions(ctx context.Context, id pgtype.UUID) []CatalogConnectionAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -61,7 +61,7 @@ func (h *Handlers) catalogConnectionActions(ctx context.Context, id pgtype.UUID)
 	return acts
 }
 
-func (h *Handlers) engineActions(ctx context.Context, id pgtype.UUID) []EngineAllowedAction {
+func (h *core) engineActions(ctx context.Context, id pgtype.UUID) []EngineAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -77,7 +77,7 @@ func (h *Handlers) engineActions(ctx context.Context, id pgtype.UUID) []EngineAl
 	return acts
 }
 
-func (h *Handlers) workspaceActions(ctx context.Context, id pgtype.UUID) []WorkspaceAllowedAction {
+func (h *core) workspaceActions(ctx context.Context, id pgtype.UUID) []WorkspaceAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -93,7 +93,7 @@ func (h *Handlers) workspaceActions(ctx context.Context, id pgtype.UUID) []Works
 	return acts
 }
 
-func (h *Handlers) withConnectionActions(ctx context.Context, c db.CatalogConnection) CatalogConnection {
+func (h *core) withConnectionActions(ctx context.Context, c db.CatalogConnection) CatalogConnection {
 	out := dbCatalogConnectionToPublic(c)
 	if acts := h.catalogConnectionActions(ctx, c.ID); acts != nil {
 		out.AllowedActions = &acts
@@ -101,7 +101,7 @@ func (h *Handlers) withConnectionActions(ctx context.Context, c db.CatalogConnec
 	return out
 }
 
-func (h *Handlers) withWorkspaceActions(ctx context.Context, w db.Workspace) Workspace {
+func (h *core) withWorkspaceActions(ctx context.Context, w db.Workspace) Workspace {
 	out := dbWorkspaceToPublic(w)
 	if acts := h.workspaceActions(ctx, w.ID); acts != nil {
 		out.AllowedActions = &acts
@@ -109,7 +109,7 @@ func (h *Handlers) withWorkspaceActions(ctx context.Context, w db.Workspace) Wor
 	return out
 }
 
-func (h *Handlers) withEngineActions(ctx context.Context, e db.Engine) Engine {
+func (h *core) withEngineActions(ctx context.Context, e db.Engine) Engine {
 	out := engineToPublic(e)
 	if acts := h.engineActions(ctx, e.ID); acts != nil {
 		out.AllowedActions = &acts

@@ -25,7 +25,7 @@ import (
 )
 
 // ListSemanticModels — GET /workspaces/{id}/semantic/models
-func (h *Handlers) ListSemanticModels(ctx context.Context, request ListSemanticModelsRequestObject) (ListSemanticModelsResponseObject, error) {
+func (h *SemanticHandlers) ListSemanticModels(ctx context.Context, request ListSemanticModelsRequestObject) (ListSemanticModelsResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (h *Handlers) ListSemanticModels(ctx context.Context, request ListSemanticM
 }
 
 // GetSemanticModel — GET /workspaces/{id}/semantic/models/{model_id}
-func (h *Handlers) GetSemanticModel(ctx context.Context, request GetSemanticModelRequestObject) (GetSemanticModelResponseObject, error) {
+func (h *SemanticHandlers) GetSemanticModel(ctx context.Context, request GetSemanticModelRequestObject) (GetSemanticModelResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (h *Handlers) GetSemanticModel(ctx context.Context, request GetSemanticMode
 }
 
 // CompileExploreQuery — POST /workspaces/{id}/semantic/explore/compile
-func (h *Handlers) CompileExploreQuery(ctx context.Context, request CompileExploreQueryRequestObject) (CompileExploreQueryResponseObject, error) {
+func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request CompileExploreQueryRequestObject) (CompileExploreQueryResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -175,7 +175,7 @@ func (h *Handlers) CompileExploreQuery(ctx context.Context, request CompileExplo
 
 // semanticModelVersion returns the latest content version, or 0 when the model
 // has never been versioned (e.g. seeded outside the content service).
-func (h *Handlers) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
 	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
 		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id,
 	})
@@ -185,7 +185,7 @@ func (h *Handlers) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID)
 	return v.Version
 }
 
-func (h *Handlers) semanticModelActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
+func (h *core) semanticModelActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
 	acts := []string{"view"}
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err == nil && se == nil {
 		acts = append(acts, "update", "delete")
@@ -308,7 +308,7 @@ func derefAny(p *[]any) []any {
 }
 
 // CreateSemanticModel — POST /workspaces/{id}/semantic/models
-func (h *Handlers) CreateSemanticModel(ctx context.Context, request CreateSemanticModelRequestObject) (CreateSemanticModelResponseObject, error) {
+func (h *SemanticHandlers) CreateSemanticModel(ctx context.Context, request CreateSemanticModelRequestObject) (CreateSemanticModelResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -437,7 +437,7 @@ func (h *Handlers) CreateSemanticModel(ctx context.Context, request CreateSemant
 }
 
 // UpdateSemanticModel — PATCH /workspaces/{id}/semantic/models/{model_id}
-func (h *Handlers) UpdateSemanticModel(ctx context.Context, request UpdateSemanticModelRequestObject) (UpdateSemanticModelResponseObject, error) {
+func (h *SemanticHandlers) UpdateSemanticModel(ctx context.Context, request UpdateSemanticModelRequestObject) (UpdateSemanticModelResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -589,7 +589,7 @@ func (h *Handlers) UpdateSemanticModel(ctx context.Context, request UpdateSemant
 }
 
 // DeleteSemanticModel — DELETE /workspaces/{id}/semantic/models/{model_id}
-func (h *Handlers) DeleteSemanticModel(ctx context.Context, request DeleteSemanticModelRequestObject) (DeleteSemanticModelResponseObject, error) {
+func (h *SemanticHandlers) DeleteSemanticModel(ctx context.Context, request DeleteSemanticModelRequestObject) (DeleteSemanticModelResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -631,7 +631,7 @@ func (h *Handlers) DeleteSemanticModel(ctx context.Context, request DeleteSemant
 
 // visibleModels loads the definitions of every model visible to the caller, so
 // validation can resolve join targets and field uniqueness.
-func (h *Handlers) visibleModels(ctx context.Context, ws, userID pgtype.UUID) (map[string]semantic.Model, error) {
+func (h *core) visibleModels(ctx context.Context, ws, userID pgtype.UUID) (map[string]semantic.Model, error) {
 	rows, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{
 		WorkspaceID: ws, UserID: userID,
 	})
@@ -677,7 +677,7 @@ func validateModelFields(slug, label string) (string, bool) {
 
 // ── model versions (#34) ────────────────────────────────────────────────────────
 
-func (h *Handlers) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
+func (h *core) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
 	m, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id})
 	if err == nil {
 		return m.SpaceID, nil
@@ -695,7 +695,7 @@ func (h *Handlers) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID)
 }
 
 // ListSemanticModelVersions — GET /workspaces/{id}/semantic/models/{model_id}/versions
-func (h *Handlers) ListSemanticModelVersions(ctx context.Context, request ListSemanticModelVersionsRequestObject) (ListSemanticModelVersionsResponseObject, error) {
+func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, request ListSemanticModelVersionsRequestObject) (ListSemanticModelVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
 	spaceID, err := h.modelSpaceForHistory(ctx, ws, id)
@@ -733,7 +733,7 @@ func (h *Handlers) ListSemanticModelVersions(ctx context.Context, request ListSe
 }
 
 // GetSemanticModelVersion — GET /workspaces/{id}/semantic/models/{model_id}/versions/{version}
-func (h *Handlers) GetSemanticModelVersion(ctx context.Context, request GetSemanticModelVersionRequestObject) (GetSemanticModelVersionResponseObject, error) {
+func (h *SemanticHandlers) GetSemanticModelVersion(ctx context.Context, request GetSemanticModelVersionRequestObject) (GetSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
 	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
@@ -766,7 +766,7 @@ func (h *Handlers) GetSemanticModelVersion(ctx context.Context, request GetSeman
 }
 
 // RestoreSemanticModelVersion — POST /workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore
-func (h *Handlers) RestoreSemanticModelVersion(ctx context.Context, request RestoreSemanticModelVersionRequestObject) (RestoreSemanticModelVersionResponseObject, error) {
+func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, request RestoreSemanticModelVersionRequestObject) (RestoreSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
 	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{

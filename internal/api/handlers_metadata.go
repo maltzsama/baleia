@@ -20,7 +20,7 @@ import (
 // SyncCatalogMetadata — POST /catalogs/{catalog_id}/metadata/sync
 // Starts one metadata pass of the catalog on the worker (#15). One pass per
 // catalog runs at a time: the workflow id is the catalog's.
-func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogMetadataRequestObject) (SyncCatalogMetadataResponseObject, error) {
+func (h *CatalogHandlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogMetadataRequestObject) (SyncCatalogMetadataResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return SyncCatalogMetadata401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -60,7 +60,7 @@ func (h *Handlers) SyncCatalogMetadata(ctx context.Context, request SyncCatalogM
 
 // ListCatalogMetadataSyncRuns — GET /catalogs/{catalog_id}/metadata/sync-runs
 // Anyone who may read the catalog sees how its passes ended (codes only).
-func (h *Handlers) ListCatalogMetadataSyncRuns(ctx context.Context, request ListCatalogMetadataSyncRunsRequestObject) (ListCatalogMetadataSyncRunsResponseObject, error) {
+func (h *CatalogHandlers) ListCatalogMetadataSyncRuns(ctx context.Context, request ListCatalogMetadataSyncRunsRequestObject) (ListCatalogMetadataSyncRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogMetadataSyncRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -112,7 +112,7 @@ func intPtr(v *int32) *int {
 // was created or changed (#17), so its metadata does not wait for the
 // schedule. A pass already running is reused (same workflow id). It never
 // fails the request: a failure is logged and the schedule catches up.
-func (h *Handlers) startMetadataSync(ctx context.Context, catalogID pgtype.UUID) {
+func (h *core) startMetadataSync(ctx context.Context, catalogID pgtype.UUID) {
 	if h.temporalClient == nil {
 		return
 	}

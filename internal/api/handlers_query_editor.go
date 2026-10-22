@@ -38,7 +38,7 @@ import (
 
 // ── Folders ───────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error) {
+func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListFolders401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -83,7 +83,7 @@ func (h *Handlers) ListFolders(ctx context.Context, request ListFoldersRequestOb
 	return ListFolders200JSONResponse(result), nil
 }
 
-func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequestObject) (CreateFolderResponseObject, error) {
+func (h *QueryHandlers) CreateFolder(ctx context.Context, request CreateFolderRequestObject) (CreateFolderResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return CreateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -141,7 +141,7 @@ func (h *Handlers) CreateFolder(ctx context.Context, request CreateFolderRequest
 	return CreateFolder201JSONResponse(dbFolderToPublic(folder)), nil
 }
 
-func (h *Handlers) DeleteFolder(ctx context.Context, request DeleteFolderRequestObject) (DeleteFolderResponseObject, error) {
+func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRequestObject) (DeleteFolderResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -179,7 +179,7 @@ func (h *Handlers) DeleteFolder(ctx context.Context, request DeleteFolderRequest
 
 // ── Saved Queries ─────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQueriesRequestObject) (ListSavedQueriesResponseObject, error) {
+func (h *QueryHandlers) ListSavedQueries(ctx context.Context, request ListSavedQueriesRequestObject) (ListSavedQueriesResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListSavedQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -246,7 +246,7 @@ func (h *Handlers) ListSavedQueries(ctx context.Context, request ListSavedQuerie
 	return ListSavedQueries200JSONResponse(result), nil
 }
 
-func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQueryRequestObject) (CreateSavedQueryResponseObject, error) {
+func (h *QueryHandlers) CreateSavedQuery(ctx context.Context, request CreateSavedQueryRequestObject) (CreateSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return CreateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -324,7 +324,7 @@ func (h *Handlers) CreateSavedQuery(ctx context.Context, request CreateSavedQuer
 	return CreateSavedQuery201JSONResponse(dbSavedQueryToPublic(query, 1)), nil
 }
 
-func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryRequestObject) (GetSavedQueryResponseObject, error) {
+func (h *QueryHandlers) GetSavedQuery(ctx context.Context, request GetSavedQueryRequestObject) (GetSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -355,7 +355,7 @@ func (h *Handlers) GetSavedQuery(ctx context.Context, request GetSavedQueryReque
 	return GetSavedQuery200JSONResponse(dbSavedQueryToPublic(query, h.savedQueryVersion(ctx, ws, query.ID))), nil
 }
 
-func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQueryRequestObject) (UpdateSavedQueryResponseObject, error) {
+func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQueryRequestObject) (UpdateSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -478,7 +478,7 @@ func (h *Handlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQuer
 	return UpdateSavedQuery200JSONResponse(dbSavedQueryToPublic(updated, h.savedQueryVersion(ctx, ws, queryID))), nil
 }
 
-func (h *Handlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQueryRequestObject) (DeleteSavedQueryResponseObject, error) {
+func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQueryRequestObject) (DeleteSavedQueryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -524,7 +524,7 @@ const (
 	maxExecutionPage     = 100
 )
 
-func (h *Handlers) ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error) {
+func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -687,7 +687,7 @@ func historyRowToPublic(row db.ListExecutionHistoryRow) Execution {
 	return exec
 }
 
-func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) (RunQueryResponseObject, error) {
+func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObject) (RunQueryResponseObject, error) {
 	ev := audit.Event{Action: audit.ExecutionCreate, ResourceType: "execution", WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
@@ -894,7 +894,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	return RunQuery202JSONResponse(dbExecutionToPublic(execution)), nil
 }
 
-func (h *Handlers) GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error) {
+func (h *QueryHandlers) GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return GetExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -927,7 +927,7 @@ func agentOwnsExecution(ctx context.Context, exec db.QueryExecution) bool {
 	return exec.AgentID.Valid && exec.AgentID.Bytes == p.AgentID.Bytes
 }
 
-func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error) {
+func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error) {
 	ev := audit.Event{Action: audit.ExecutionCancel, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
@@ -989,7 +989,7 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 
 // cancelOnEngine cancels the running statements of an execution by their
 // persisted handles, best effort and bounded in time.
-func (h *Handlers) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
+func (h *core) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
 	if h.engines == nil {
 		return
 	}
@@ -1020,7 +1020,7 @@ func (h *Handlers) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
 	}
 }
 
-func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
+func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -1056,7 +1056,7 @@ func (h *Handlers) ListStatements(ctx context.Context, request ListStatementsReq
 	return ListStatements200JSONResponse(result), nil
 }
 
-func (h *Handlers) GetResults(ctx context.Context, request GetResultsRequestObject) (GetResultsResponseObject, error) {
+func (h *QueryHandlers) GetResults(ctx context.Context, request GetResultsRequestObject) (GetResultsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return GetResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -1133,7 +1133,7 @@ func (r arrowStreamResponse) write(w http.ResponseWriter) error {
 
 // GetStatementResults streams a single statement's result set, scoped to the
 // requesting workspace. Same auth and delivery model as GetResults.
-func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error) {
+func (h *QueryHandlers) GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error) {
 	ev := audit.Event{Action: audit.ResultsDownload, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
@@ -1246,7 +1246,7 @@ func (h *Handlers) GetStatementResults(ctx context.Context, request GetStatement
 // pageOf returns rows [offset, offset+limit) of a stored result. New results are
 // Arrow files (seek by footer, no full download); legacy stream results are
 // decoded and sliced.
-func (h *Handlers) pageOf(ctx context.Context, key string, offset, limit int64) ([]byte, error) {
+func (h *QueryHandlers) pageOf(ctx context.Context, key string, offset, limit int64) ([]byte, error) {
 	if ra, err := h.s3.NewReaderAt(ctx, key); err == nil {
 		if page, serr := arrowipc.SliceRows(ra, offset, limit); serr == nil {
 			return page, nil
@@ -1261,7 +1261,7 @@ func (h *Handlers) pageOf(ctx context.Context, key string, offset, limit int64) 
 
 // IssueWsTicket mints a single-use WebSocket ticket (#26) so the client never
 // puts the JWT in a URL.
-func (h *Handlers) IssueWsTicket(ctx context.Context, request IssueWsTicketRequestObject) (IssueWsTicketResponseObject, error) {
+func (h *QueryHandlers) IssueWsTicket(ctx context.Context, request IssueWsTicketRequestObject) (IssueWsTicketResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	if userID == "" {
 		return IssueWsTicket401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "not authenticated"}}, nil
@@ -1274,7 +1274,7 @@ func (h *Handlers) IssueWsTicket(ctx context.Context, request IssueWsTicketReque
 	return IssueWsTicket201JSONResponse{Ticket: ticket, ExpiresAt: expiresAt}, nil
 }
 
-func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error) {
+func (h *QueryHandlers) StreamExecution(ctx context.Context, request StreamExecutionRequestObject) (StreamExecutionResponseObject, error) {
 	return StreamExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "websocket not yet implemented"}}, nil
 }
 
@@ -1283,11 +1283,11 @@ func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionR
 // trinoIdentityFor maps a Baleia user to the Trino identity used for their
 // queries, according to BALEIA_TRINO_USER_IDENTITY ("uuid" default: u_<uuid>,
 // "email": the user's e-mail). Never an admin or service identity.
-func (h *Handlers) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
+func (h *core) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
 	return trinoIdentity(ctx, h.queries, h.settings.Execution.TrinoUserIdentity, uid)
 }
 
-// trinoIdentity is trinoIdentityFor without the Handlers, for the Lens handlers.
+// trinoIdentity is trinoIdentityFor without the API, for the Lens handlers.
 func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UUID) (string, error) {
 	switch mode {
 	case "email":
@@ -1300,7 +1300,7 @@ func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UU
 
 // savedQueryTarget validates the optional target of a saved query: the binding
 // must be a target of the workspace (its catalog granted, #16).
-func (h *Handlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t *SavedQueryTarget) (pgtype.UUID, *string, *targetError) {
+func (h *QueryHandlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t *SavedQueryTarget) (pgtype.UUID, *string, *targetError) {
 	if t == nil || t.BindingId == nil {
 		return pgtype.UUID{}, nil, nil
 	}
@@ -1369,7 +1369,7 @@ func dbSavedQueryToPublic(q db.SavedQuery, version int32) SavedQuery {
 }
 
 // savedQueryVersion returns the latest content version, or 0 when none.
-func (h *Handlers) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
 	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
 		WorkspaceID: ws, EntityType: content.EntitySavedQuery, EntityID: id,
 	})
@@ -1381,7 +1381,7 @@ func (h *Handlers) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) in
 
 // versionConflictResponse maps content.ErrVersionConflict to the 409 body with
 // the current version and who wrote it.
-func (h *Handlers) versionConflictResponse(ctx context.Context, err error) (ConflictJSONResponse, bool) {
+func (h *core) versionConflictResponse(ctx context.Context, err error) (ConflictJSONResponse, bool) {
 	var vc *content.VersionConflict
 	if !errors.As(err, &vc) {
 		return ConflictJSONResponse{}, false

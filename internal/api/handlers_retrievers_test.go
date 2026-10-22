@@ -88,7 +88,7 @@ func TestCreateRetriever_RequiresDestination(t *testing.T) {
 		req := retrieverRequest()
 		c.set(req.Body)
 
-		resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: &fakeRetrieverQuerier{}}).CreateRetriever(testContext(), req)
+		resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: &fakeRetrieverQuerier{}})).CreateRetriever(testContext(), req)
 		if err != nil {
 			t.Fatalf("[%s] unexpected error: %v", c.name, err)
 		}
@@ -107,7 +107,7 @@ func TestCreateRetriever_RejectsMultiStatementAndDDL(t *testing.T) {
 		req := retrieverRequest()
 		req.Body.DefinitionSql = def
 
-		resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: &fakeRetrieverQuerier{}}).CreateRetriever(testContext(), req)
+		resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: &fakeRetrieverQuerier{}})).CreateRetriever(testContext(), req)
 		if err != nil {
 			t.Fatalf("[%s] unexpected error: %v", name, err)
 		}
@@ -122,7 +122,7 @@ func TestCreateRetriever_IncrementalNotSupported(t *testing.T) {
 	inc := CreateRetrieverRequestRefreshType("incremental")
 	req.Body.RefreshType = &inc
 
-	resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: &fakeRetrieverQuerier{}}).CreateRetriever(testContext(), req)
+	resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: &fakeRetrieverQuerier{}})).CreateRetriever(testContext(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestCreateRetriever_IncrementalNotSupported(t *testing.T) {
 
 func TestCreateRetriever_StoresDestinationFields(t *testing.T) {
 	fake := &fakeRetrieverQuerier{}
-	resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: fake, tx: directTx{q: fake}}).CreateRetriever(testContext(), retrieverRequest())
+	resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: fake, tx: directTx{q: fake}})).CreateRetriever(testContext(), retrieverRequest())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestDeleteRetriever(t *testing.T) {
 	req := DeleteRetrieverRequestObject{Id: PathId{0xAA}, RetrieverId: [16]byte{0xBB}}
 
 	q := &fakeRetrieverDeleter{rows: 1}
-	resp, err := (&Handlers{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}}).DeleteRetriever(testContext(), req)
+	resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}})).DeleteRetriever(testContext(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestDeleteRetriever(t *testing.T) {
 		t.Fatalf("deleted %+v, want the retriever in the request's workspace", q.deleted)
 	}
 
-	resp, err = (&Handlers{dialects: dialect.NewRegistry(), queries: &fakeRetrieverDeleter{rows: 0}}).DeleteRetriever(testContext(), req)
+	resp, err = (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: &fakeRetrieverDeleter{rows: 0}})).DeleteRetriever(testContext(), req)
 	if err != nil {
 		t.Fatal(err)
 	}

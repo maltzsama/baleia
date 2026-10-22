@@ -1,6 +1,7 @@
 package api
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -37,12 +38,12 @@ func testDeps(t *testing.T) Deps {
 	}
 }
 
-// TestNewHandlers_RequiresDependencies: a missing dependency is an error at
+// TestNewAPI_RequiresDependencies: a missing dependency is an error at
 // construction, naming what is missing, not a nil found at request time.
-func TestNewHandlers_RequiresDependencies(t *testing.T) {
-	_, err := NewHandlers(Deps{})
+func TestNewAPI_RequiresDependencies(t *testing.T) {
+	_, err := NewAPI(Deps{})
 	if err == nil {
-		t.Fatal("NewHandlers with missing dependencies returned no error")
+		t.Fatal("NewAPI with missing dependencies returned no error")
 	}
 	for _, want := range []string{"Data.Pool", "Data.Queries", "Engines.Binder", "Engines.Dialer", "Storage", "Temporal"} {
 		if !strings.Contains(err.Error(), want) {
@@ -51,11 +52,11 @@ func TestNewHandlers_RequiresDependencies(t *testing.T) {
 	}
 }
 
-// TestNewHandlers_Defaults characterizes what the constructor fills in on its
+// TestNewAPI_Defaults characterizes what the constructor fills in on its
 // own: a no-op audit recorder, the caches, the content and assistant services
 // and a ticket store.
-func TestNewHandlers_Defaults(t *testing.T) {
-	h, err := NewHandlers(testDeps(t))
+func TestNewAPI_Defaults(t *testing.T) {
+	h, err := NewAPI(testDeps(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,15 +74,15 @@ func TestNewHandlers_Defaults(t *testing.T) {
 	}
 }
 
-// TestNewHandlers_Observability: the audit recorder, the metrics and the
+// TestNewAPI_Observability: the audit recorder, the metrics and the
 // ticket store given in Deps are the ones the handlers use.
-func TestNewHandlers_Observability(t *testing.T) {
+func TestNewAPI_Observability(t *testing.T) {
 	deps := testDeps(t)
 	rec := &memAudit{}
 	tickets := wsticket.New()
 	deps.Observability = ObservabilityDeps{Audit: rec, Metrics: metrics.New("api")}
 	deps.WSTickets = tickets
-	h, err := NewHandlers(deps)
+	h, err := NewAPI(deps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,4 +92,34 @@ func TestNewHandlers_Observability(t *testing.T) {
 	if h.AuthMetrics() == nil {
 		t.Error("metrics must be registered when a registry is given")
 	}
+}
+
+// assertGroupsWired: every handler group embedded in API is built and
+// shares the one core (#365); a nil group would only fail at request time.
+func assertGroupsWired(t *testing.T, h *API) {
+	t.Helper()
+	v := reflect.ValueOf(h).Elem()
+	for i := range v.NumField() {
+		f := v.Type().Field(i)
+		if !f.Anonymous || f.Name == "core" {
+			continue
+		}
+		g := v.Field(i)
+		if g.IsNil() {
+			t.Errorf("group %s is not built", f.Name)
+			continue
+		}
+		if c := g.Elem().FieldByName("core"); !c.IsValid() || c.Pointer() != reflect.ValueOf(h.core).Pointer() {
+			t.Errorf("group %s does not share the handlers' core", f.Name)
+		}
+	}
+}
+
+func TestNewAPI_GroupsShareCore(t *testing.T) {
+	h, err := NewAPI(testDeps(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertGroupsWired(t, h)
+	assertGroupsWired(t, testAPI(handlerFields{}))
 }

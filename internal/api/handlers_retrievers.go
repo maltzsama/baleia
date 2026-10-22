@@ -24,7 +24,7 @@ import (
 
 var destIdentifierRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
-func (h *Handlers) ListRetrievers(ctx context.Context, request ListRetrieversRequestObject) (ListRetrieversResponseObject, error) {
+func (h *QueryHandlers) ListRetrievers(ctx context.Context, request ListRetrieversRequestObject) (ListRetrieversResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListRetrievers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -41,7 +41,7 @@ func (h *Handlers) ListRetrievers(ctx context.Context, request ListRetrieversReq
 	return ListRetrievers200JSONResponse(result), nil
 }
 
-func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverRequestObject) (CreateRetrieverResponseObject, error) {
+func (h *QueryHandlers) CreateRetriever(ctx context.Context, request CreateRetrieverRequestObject) (CreateRetrieverResponseObject, error) {
 	ev := audit.Event{Action: audit.RetrieverCreate, ResourceType: "retriever", WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
@@ -151,7 +151,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 	return CreateRetriever201JSONResponse(h.retrieverToPublic(ctx, retriever)), nil
 }
 
-func (h *Handlers) GetRetriever(ctx context.Context, request GetRetrieverRequestObject) (GetRetrieverResponseObject, error) {
+func (h *QueryHandlers) GetRetriever(ctx context.Context, request GetRetrieverRequestObject) (GetRetrieverResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return GetRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -171,7 +171,7 @@ func (h *Handlers) GetRetriever(ctx context.Context, request GetRetrieverRequest
 	return GetRetriever200JSONResponse(h.retrieverToPublic(ctx, retriever)), nil
 }
 
-func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverRequestObject) (UpdateRetrieverResponseObject, error) {
+func (h *QueryHandlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverRequestObject) (UpdateRetrieverResponseObject, error) {
 	ev := audit.Event{Action: audit.RetrieverUpdate, ResourceType: "retriever", ResourceID: uuid.UUID(request.RetrieverId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
@@ -292,7 +292,7 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 	return UpdateRetriever200JSONResponse(h.retrieverToPublic(ctx, updated)), nil
 }
 
-func (h *Handlers) DeleteRetriever(ctx context.Context, request DeleteRetrieverRequestObject) (DeleteRetrieverResponseObject, error) {
+func (h *QueryHandlers) DeleteRetriever(ctx context.Context, request DeleteRetrieverRequestObject) (DeleteRetrieverResponseObject, error) {
 	ev := audit.Event{Action: audit.RetrieverDelete, ResourceType: "retriever", ResourceID: uuid.UUID(request.RetrieverId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
@@ -319,7 +319,7 @@ func (h *Handlers) DeleteRetriever(ctx context.Context, request DeleteRetrieverR
 	return DeleteRetriever204Response{}, nil
 }
 
-func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error) {
+func (h *QueryHandlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error) {
 	ev := audit.Event{Action: audit.RetrieverRefresh, ResourceType: "retriever", ResourceID: uuid.UUID(request.RetrieverId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
@@ -375,7 +375,7 @@ func (h *Handlers) TriggerRetrieverRefresh(ctx context.Context, request TriggerR
 	}, nil
 }
 
-func (h *Handlers) GetRetrieverHistory(ctx context.Context, request GetRetrieverHistoryRequestObject) (GetRetrieverHistoryResponseObject, error) {
+func (h *QueryHandlers) GetRetrieverHistory(ctx context.Context, request GetRetrieverHistoryRequestObject) (GetRetrieverHistoryResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return GetRetrieverHistory401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -400,7 +400,7 @@ func (h *Handlers) GetRetrieverHistory(ctx context.Context, request GetRetriever
 	return GetRetrieverHistory200JSONResponse{Data: &result}, nil
 }
 
-func (h *Handlers) ListRetrieverDestinations(ctx context.Context, request ListRetrieverDestinationsRequestObject) (ListRetrieverDestinationsResponseObject, error) {
+func (h *QueryHandlers) ListRetrieverDestinations(ctx context.Context, request ListRetrieverDestinationsRequestObject) (ListRetrieverDestinationsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListRetrieverDestinations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -428,7 +428,7 @@ func (h *Handlers) ListRetrieverDestinations(ctx context.Context, request ListRe
 
 // ValidateRetriever parses the definition and explains it on the destination
 // engine in a read-only session with the caller's identity (#118).
-func (h *Handlers) ValidateRetriever(ctx context.Context, request ValidateRetrieverRequestObject) (ValidateRetrieverResponseObject, error) {
+func (h *QueryHandlers) ValidateRetriever(ctx context.Context, request ValidateRetrieverRequestObject) (ValidateRetrieverResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ValidateRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -488,7 +488,7 @@ func (h *Handlers) ValidateRetriever(ctx context.Context, request ValidateRetrie
 
 // PreviewCron returns the next five runs from the server's parser; the browser
 // never evaluates cron itself (#118).
-func (h *Handlers) PreviewCron(ctx context.Context, request PreviewCronRequestObject) (PreviewCronResponseObject, error) {
+func (h *QueryHandlers) PreviewCron(ctx context.Context, request PreviewCronRequestObject) (PreviewCronResponseObject, error) {
 	if auth.UserIDFromContext(ctx) == "" {
 		return PreviewCron401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
@@ -519,7 +519,7 @@ func (h *Handlers) PreviewCron(ctx context.Context, request PreviewCronRequestOb
 	return PreviewCron200JSONResponse{Valid: true, Next: next, MinIntervalOk: minIntervalOK}, nil
 }
 
-func (h *Handlers) retrieverToPublic(ctx context.Context, r db.Retriever) Retriever {
+func (h *core) retrieverToPublic(ctx context.Context, r db.Retriever) Retriever {
 	id := openapi_types.UUID(r.ID.Bytes)
 	workspaceID := openapi_types.UUID(r.WorkspaceID.Bytes)
 	createdBy := openapi_types.UUID(r.CreatedBy.Bytes)
@@ -564,7 +564,7 @@ func (h *Handlers) retrieverToPublic(ctx context.Context, r db.Retriever) Retrie
 
 // retrieverDestination loads the binding, catalog and engine a retriever
 // materializes into. Nil when the binding was deleted.
-func (h *Handlers) retrieverDestination(ctx context.Context, bindingID pgtype.UUID) *RetrieverDestination {
+func (h *core) retrieverDestination(ctx context.Context, bindingID pgtype.UUID) *RetrieverDestination {
 	binding, err := h.queries.GetBinding(ctx, bindingID)
 	if err != nil {
 		return nil
@@ -597,7 +597,7 @@ func (h *Handlers) retrieverDestination(ctx context.Context, bindingID pgtype.UU
 // resolveRetrieverDestination picks the destination from a binding id or, for
 // legacy clients, from the catalogs name; it returns nil when the workspace
 // cannot write to it.
-func (h *Handlers) resolveRetrieverDestination(ctx context.Context, workspaceID pgtype.UUID, bindingID *openapi_types.UUID, catalogName string) (*RetrieverDestination, error) {
+func (h *core) resolveRetrieverDestination(ctx context.Context, workspaceID pgtype.UUID, bindingID *openapi_types.UUID, catalogName string) (*RetrieverDestination, error) {
 	rows, err := h.queries.ListRetrieverDestinations(ctx, workspaceID)
 	if err != nil {
 		return nil, err
@@ -629,7 +629,7 @@ func (h *Handlers) resolveRetrieverDestination(ctx context.Context, workspaceID 
 
 // retrieverDestinationByID is the update path: current binding first, then the
 // legacy catalog name.
-func (h *Handlers) retrieverDestinationByID(ctx context.Context, workspaceID pgtype.UUID, bindingID pgtype.UUID, catalogName string) (*RetrieverDestination, error) {
+func (h *core) retrieverDestinationByID(ctx context.Context, workspaceID pgtype.UUID, bindingID pgtype.UUID, catalogName string) (*RetrieverDestination, error) {
 	if bindingID.Valid {
 		id := openapi_types.UUID(bindingID.Bytes)
 		return h.resolveRetrieverDestination(ctx, workspaceID, &id, "")
@@ -689,7 +689,7 @@ func validateDestIdentifier(value, field string) error {
 
 // validateRetrieverDefinition requires exactly one SELECT/WITH statement and
 // rejects catalog DDL.
-func (h *Handlers) validateRetrieverDefinition(def string) error {
+func (h *core) validateRetrieverDefinition(def string) error {
 	// Retrievers refresh on the default Trino engine.
 	stmts, err := h.dialects.MustGet(dialect.Trino).SplitStatements(def)
 	if err != nil {

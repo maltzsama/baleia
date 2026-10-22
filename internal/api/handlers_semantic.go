@@ -39,7 +39,7 @@ var slugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // semanticCatalog checks the workspace may use the catalog. notFound covers a
 // foreign or missing workspace/catalog; err is anything else.
-func (h *Handlers) semanticCatalog(ctx context.Context, ws pgtype.UUID, catalogID openapi_types.UUID) (notFound bool, err error) {
+func (h *core) semanticCatalog(ctx context.Context, ws pgtype.UUID, catalogID openapi_types.UUID) (notFound bool, err error) {
 	_, ok, err := h.grantedCatalog(ctx, ws, catalogID)
 	if err != nil {
 		return false, err
@@ -61,7 +61,7 @@ func normalizeColumn(column *string) *string {
 // ── Docs ────────────────────────────────────────────────────────────────────────
 
 // ListSemanticDocs — GET /workspaces/{id}/semantic/docs
-func (h *Handlers) ListSemanticDocs(ctx context.Context, request ListSemanticDocsRequestObject) (ListSemanticDocsResponseObject, error) {
+func (h *SemanticHandlers) ListSemanticDocs(ctx context.Context, request ListSemanticDocsRequestObject) (ListSemanticDocsResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (h *Handlers) ListSemanticDocs(ctx context.Context, request ListSemanticDoc
 }
 
 // UpsertSemanticDoc — PUT /workspaces/{id}/semantic/docs
-func (h *Handlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemanticDocRequestObject) (UpsertSemanticDocResponseObject, error) {
+func (h *SemanticHandlers) UpsertSemanticDoc(ctx context.Context, request UpsertSemanticDocRequestObject) (UpsertSemanticDocResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -234,7 +234,7 @@ func normalizeSemanticTags(tags *[]string) ([]string, string) {
 }
 
 // canCertifyDocs is true for a workspace owner or a global admin (#116).
-func (h *Handlers) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
+func (h *core) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return false
@@ -243,7 +243,7 @@ func (h *Handlers) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
 	return err == nil
 }
 
-func (h *Handlers) docActions(ctx context.Context, ws pgtype.UUID) []string {
+func (h *core) docActions(ctx context.Context, ws pgtype.UUID) []string {
 	acts := []string{"view", "update"}
 	if h.canCertifyDocs(ctx, ws) {
 		acts = append(acts, "certify")
@@ -252,7 +252,7 @@ func (h *Handlers) docActions(ctx context.Context, ws pgtype.UUID) []string {
 }
 
 // DeleteSemanticDoc — DELETE /workspaces/{id}/semantic/docs
-func (h *Handlers) DeleteSemanticDoc(ctx context.Context, request DeleteSemanticDocRequestObject) (DeleteSemanticDocResponseObject, error) {
+func (h *SemanticHandlers) DeleteSemanticDoc(ctx context.Context, request DeleteSemanticDocRequestObject) (DeleteSemanticDocResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -285,7 +285,7 @@ func (h *Handlers) DeleteSemanticDoc(ctx context.Context, request DeleteSemantic
 }
 
 // SearchSemanticDocs — GET /workspaces/{id}/semantic/docs/search
-func (h *Handlers) SearchSemanticDocs(ctx context.Context, request SearchSemanticDocsRequestObject) (SearchSemanticDocsResponseObject, error) {
+func (h *SemanticHandlers) SearchSemanticDocs(ctx context.Context, request SearchSemanticDocsRequestObject) (SearchSemanticDocsResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -332,7 +332,7 @@ func (h *Handlers) SearchSemanticDocs(ctx context.Context, request SearchSemanti
 // ── Metrics ─────────────────────────────────────────────────────────────────────
 
 // ListSemanticMetrics — GET /workspaces/{id}/semantic/metrics
-func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemanticMetricsRequestObject) (ListSemanticMetricsResponseObject, error) {
+func (h *SemanticHandlers) ListSemanticMetrics(ctx context.Context, request ListSemanticMetricsRequestObject) (ListSemanticMetricsResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -399,7 +399,7 @@ func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemantic
 
 // metricActions is what the caller may do with a metric (#115): view always,
 // edit/delete for space editors, certify for space managers or admins.
-func (h *Handlers) metricActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
+func (h *core) metricActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
 	acts := []string{"view"}
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err == nil && se == nil {
 		acts = append(acts, "update", "delete")
@@ -411,7 +411,7 @@ func (h *Handlers) metricActions(ctx context.Context, ws, spaceID pgtype.UUID) [
 }
 
 // GetSemanticMetric — GET /workspaces/{id}/semantic/metrics/{metric_id}
-func (h *Handlers) GetSemanticMetric(ctx context.Context, request GetSemanticMetricRequestObject) (GetSemanticMetricResponseObject, error) {
+func (h *SemanticHandlers) GetSemanticMetric(ctx context.Context, request GetSemanticMetricRequestObject) (GetSemanticMetricResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -448,7 +448,7 @@ func (h *Handlers) GetSemanticMetric(ctx context.Context, request GetSemanticMet
 }
 
 // CreateSemanticMetric — POST /workspaces/{id}/semantic/metrics
-func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSemanticMetricRequestObject) (CreateSemanticMetricResponseObject, error) {
+func (h *SemanticHandlers) CreateSemanticMetric(ctx context.Context, request CreateSemanticMetricRequestObject) (CreateSemanticMetricResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -575,7 +575,7 @@ func (h *Handlers) CreateSemanticMetric(ctx context.Context, request CreateSeman
 }
 
 // UpdateSemanticMetric — PATCH /workspaces/{id}/semantic/metrics/{metric_id}
-func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSemanticMetricRequestObject) (UpdateSemanticMetricResponseObject, error) {
+func (h *SemanticHandlers) UpdateSemanticMetric(ctx context.Context, request UpdateSemanticMetricRequestObject) (UpdateSemanticMetricResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -735,7 +735,7 @@ func (h *Handlers) UpdateSemanticMetric(ctx context.Context, request UpdateSeman
 }
 
 // DeleteSemanticMetric — DELETE /workspaces/{id}/semantic/metrics/{metric_id}
-func (h *Handlers) DeleteSemanticMetric(ctx context.Context, request DeleteSemanticMetricRequestObject) (DeleteSemanticMetricResponseObject, error) {
+func (h *SemanticHandlers) DeleteSemanticMetric(ctx context.Context, request DeleteSemanticMetricRequestObject) (DeleteSemanticMetricResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -776,7 +776,7 @@ func (h *Handlers) DeleteSemanticMetric(ctx context.Context, request DeleteSeman
 }
 
 // GetSemanticMetricSql — GET /workspaces/{id}/semantic/metrics/{metric_id}/sql
-func (h *Handlers) GetSemanticMetricSql(ctx context.Context, request GetSemanticMetricSqlRequestObject) (GetSemanticMetricSqlResponseObject, error) {
+func (h *SemanticHandlers) GetSemanticMetricSql(ctx context.Context, request GetSemanticMetricSqlRequestObject) (GetSemanticMetricSqlResponseObject, error) { //nolint:revive // name fixed by the generated StrictServerInterface
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -896,7 +896,7 @@ func emptyUUID(v *openapi_types.UUID) pgtype.UUID {
 // semanticTarget resolves the binding a metric is validated/rendered against:
 // the explicit binding, else the metric's binding, else the catalog's only
 // enabled binding.
-func (h *Handlers) semanticTarget(ctx context.Context, ws pgtype.UUID, catalogID, bindingID pgtype.UUID) (queryengine.Target, queryengine.Engine, error) {
+func (h *SemanticHandlers) semanticTarget(ctx context.Context, ws pgtype.UUID, catalogID, bindingID pgtype.UUID) (queryengine.Target, queryengine.Engine, error) {
 	workspace, err := h.queries.GetWorkspaceByID(ctx, ws)
 	if err != nil {
 		return queryengine.Target{}, nil, err
@@ -926,7 +926,7 @@ func (h *Handlers) semanticTarget(ctx context.Context, ws pgtype.UUID, catalogID
 
 // validateSemanticMetric renders the metric for the target binding and probes
 // it with a zero-row, read-only statement in the caller's identity.
-func (h *Handlers) validateSemanticMetric(ctx context.Context, ws pgtype.UUID, catalogID, bindingID, userID pgtype.UUID, def semantic.SimpleMetricV1, namespace []string, table, slug string) error {
+func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype.UUID, catalogID, bindingID, userID pgtype.UUID, def semantic.SimpleMetricV1, namespace []string, table, slug string) error {
 	target, engine, err := h.semanticTarget(ctx, ws, catalogID, bindingID)
 	if err != nil {
 		return err
@@ -959,7 +959,7 @@ func (h *Handlers) validateSemanticMetric(ctx context.Context, ws pgtype.UUID, c
 	return nil
 }
 
-func (h *Handlers) connectionReadOnly(ctx context.Context, engineID pgtype.UUID) bool {
+func (h *core) connectionReadOnly(ctx context.Context, engineID pgtype.UUID) bool {
 	eng, err := h.queries.GetEngineByID(ctx, engineID)
 	if err != nil {
 		return false
@@ -1031,7 +1031,7 @@ func dbSemanticSearchRowToPublic(r db.SearchSemanticDocsRow) SemanticDocSearchRe
 }
 
 // semanticMetricVersion returns the latest content version, or 0 when none.
-func (h *Handlers) semanticMetricVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) semanticMetricVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
 	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
 		WorkspaceID: ws, EntityType: content.EntitySemanticMetric, EntityID: id,
 	})
@@ -1113,7 +1113,7 @@ func nonNilStrings(in []string) []string {
 
 // RenderSemanticMetric — POST /workspaces/{id}/semantic/metrics/render (#115).
 // Pure rendering: no engine call.
-func (h *Handlers) RenderSemanticMetric(ctx context.Context, request RenderSemanticMetricRequestObject) (RenderSemanticMetricResponseObject, error) {
+func (h *SemanticHandlers) RenderSemanticMetric(ctx context.Context, request RenderSemanticMetricRequestObject) (RenderSemanticMetricResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -1152,7 +1152,7 @@ func (h *Handlers) RenderSemanticMetric(ctx context.Context, request RenderSeman
 }
 
 // ValidateSemanticMetricDefinition — POST …/semantic/metrics/validate (#115).
-func (h *Handlers) ValidateSemanticMetricDefinition(ctx context.Context, request ValidateSemanticMetricDefinitionRequestObject) (ValidateSemanticMetricDefinitionResponseObject, error) {
+func (h *SemanticHandlers) ValidateSemanticMetricDefinition(ctx context.Context, request ValidateSemanticMetricDefinitionRequestObject) (ValidateSemanticMetricDefinitionResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -1189,7 +1189,7 @@ func (h *Handlers) ValidateSemanticMetricDefinition(ctx context.Context, request
 }
 
 // ListSemanticTags — GET /workspaces/{id}/semantic/tags (#116).
-func (h *Handlers) ListSemanticTags(ctx context.Context, request ListSemanticTagsRequestObject) (ListSemanticTagsResponseObject, error) {
+func (h *SemanticHandlers) ListSemanticTags(ctx context.Context, request ListSemanticTagsRequestObject) (ListSemanticTagsResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err

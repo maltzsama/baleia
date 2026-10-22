@@ -28,7 +28,7 @@ const (
 
 // ListAuditEvents — GET /audit/events (#45). A global admin sees every
 // event; anyone else only the events they performed.
-func (h *Handlers) ListAuditEvents(ctx context.Context, request ListAuditEventsRequestObject) (ListAuditEventsResponseObject, error) {
+func (h *OpsHandlers) ListAuditEvents(ctx context.Context, request ListAuditEventsRequestObject) (ListAuditEventsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListAuditEvents401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -125,7 +125,7 @@ func auditWindow(from, to *time.Time, resourceID, actorID *string) *Unprocessabl
 }
 
 // ListAuditActions returns the bounded vocabulary for the action filter.
-func (h *Handlers) ListAuditActions(ctx context.Context, _ ListAuditActionsRequestObject) (ListAuditActionsResponseObject, error) {
+func (h *OpsHandlers) ListAuditActions(ctx context.Context, _ ListAuditActionsRequestObject) (ListAuditActionsResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return ListAuditActions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
@@ -138,7 +138,7 @@ func (h *Handlers) ListAuditActions(ctx context.Context, _ ListAuditActionsReque
 }
 
 // ResolveAudit resolves ids to names, only for entities the caller can see.
-func (h *Handlers) ResolveAudit(ctx context.Context, request ResolveAuditRequestObject) (ResolveAuditResponseObject, error) {
+func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequestObject) (ResolveAuditResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ResolveAudit401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -188,7 +188,7 @@ func (h *Handlers) ResolveAudit(ctx context.Context, request ResolveAuditRequest
 }
 
 // ExportAuditCSV streams the current filter as CSV, capped at one million rows.
-func (h *Handlers) ExportAuditCSV(ctx context.Context, request ExportAuditCSVRequestObject) (ExportAuditCSVResponseObject, error) {
+func (h *OpsHandlers) ExportAuditCSV(ctx context.Context, request ExportAuditCSVRequestObject) (ExportAuditCSVResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ExportAuditCSV401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -231,7 +231,7 @@ const maxAuditExportRows = 1_000_000
 // writeAuditCSV pages through the events matching params into w. It returns
 // the first query, write or context error, so nothing keeps querying once the
 // client stops reading.
-func (h *Handlers) writeAuditCSV(ctx context.Context, w io.Writer, params db.ListAuditEventsParams) error {
+func (h *core) writeAuditCSV(ctx context.Context, w io.Writer, params db.ListAuditEventsParams) error {
 	cw := csv.NewWriter(w)
 	if err := cw.Write([]string{
 		"occurred_at", "actor_kind", "actor_id", "auth_method", "action", "resource_type",
@@ -324,7 +324,7 @@ func decodeAuditCursor(c string) (time.Time, int64, bool) {
 
 // audited records one audited operation (#43). It never fails the request:
 // the recorder logs and counts a failed write.
-func (h *Handlers) audited(ctx context.Context, e audit.Event) {
+func (h *core) audited(ctx context.Context, e audit.Event) {
 	if h.audit == nil {
 		return
 	}

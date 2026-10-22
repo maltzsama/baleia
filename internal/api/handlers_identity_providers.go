@@ -28,7 +28,7 @@ type providerConfig struct {
 	ldap *identityldap.Config
 }
 
-func (h *Handlers) ListIdentityProviders(ctx context.Context, request ListIdentityProvidersRequestObject) (ListIdentityProvidersResponseObject, error) {
+func (h *AuthHandlers) ListIdentityProviders(ctx context.Context, request ListIdentityProvidersRequestObject) (ListIdentityProvidersResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return ListIdentityProviders403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
 			Code: ErrorCodeForbidden, Message: "admin only",
@@ -51,7 +51,7 @@ func (h *Handlers) ListIdentityProviders(ctx context.Context, request ListIdenti
 	return ListIdentityProviders200JSONResponse(out), nil
 }
 
-func (h *Handlers) GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error) {
+func (h *AuthHandlers) GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return GetIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
 			Code: ErrorCodeForbidden, Message: "admin only",
@@ -72,7 +72,7 @@ func (h *Handlers) GetIdentityProvider(ctx context.Context, request GetIdentityP
 	return GetIdentityProvider200JSONResponse(detail), nil
 }
 
-func (h *Handlers) CreateIdentityProvider(ctx context.Context, request CreateIdentityProviderRequestObject) (CreateIdentityProviderResponseObject, error) {
+func (h *AuthHandlers) CreateIdentityProvider(ctx context.Context, request CreateIdentityProviderRequestObject) (CreateIdentityProviderResponseObject, error) {
 	ev := audit.Event{Action: audit.IdentityProviderCreate, ResourceType: "identity_provider"}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
@@ -200,7 +200,7 @@ func sealProviderConfig(kr *crypto.Keyring, id pgtype.UUID, cfg providerConfig) 
 
 // identityProviderToAdmin builds the redacted list item. It decrypts the
 // config only to report whether a secret is stored.
-func (h *Handlers) identityProviderToAdmin(ctx context.Context, ap db.AuthProvider) (IdentityProvider, error) {
+func (h *core) identityProviderToAdmin(ctx context.Context, ap db.AuthProvider) (IdentityProvider, error) {
 	out := IdentityProvider{
 		Id:        openapi_types.UUID(ap.ID.Bytes),
 		Name:      ap.Name,
@@ -234,7 +234,7 @@ func (h *Handlers) identityProviderToAdmin(ctx context.Context, ap db.AuthProvid
 // identityProviderDetail builds the redacted detail. The stored config is
 // marshalled and unmarshalled into the admin shape, whose secret field does not
 // exist, so the secret is dropped by construction.
-func (h *Handlers) identityProviderDetail(ctx context.Context, ap db.AuthProvider) (IdentityProviderDetail, error) {
+func (h *core) identityProviderDetail(ctx context.Context, ap db.AuthProvider) (IdentityProviderDetail, error) {
 	item, err := h.identityProviderToAdmin(ctx, ap)
 	if err != nil {
 		return IdentityProviderDetail{}, err

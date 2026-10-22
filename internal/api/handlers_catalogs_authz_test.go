@@ -175,7 +175,7 @@ func ctxAs(id, role string) context.Context {
 
 // newAuthzHandlers builds a Handlers whose single connection (and one catalog
 // under it) belongs to ownerID, with a recording fake Trino.
-func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
+func newAuthzHandlers(t *testing.T) (*API, *authzFake, *fakeTrino) {
 	t.Helper()
 	owner, err := uuidFromString(ownerID)
 	if err != nil {
@@ -200,13 +200,13 @@ func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
 		EngineCatalogName: "wh", Mode: "managed", Enabled: true, LifecycleState: "active",
 	})
 	ft := newFakeTrino(t)
-	h := &Handlers{
+	h := testAPI(handlerFields{
 		queries: q, tx: directTx{q: q},
 		keyring:      kr,
 		settings:     SettingsFromConfig(&config.Config{TrinoUserIdentity: "uuid"}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		connections:  testRegistry(t),
-	}
+	})
 	h.engines, h.binder = trinoBackends(ft.srv.URL)
 	return h, q, ft
 }

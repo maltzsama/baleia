@@ -11,7 +11,7 @@ import (
 // (#264). It calls the same pure function as login, so the preview and the
 // login-time mapping can never disagree. Nothing is persisted and no
 // directory is contacted.
-func (h *Handlers) PreviewIdentityMapping(ctx context.Context, request PreviewIdentityMappingRequestObject) (PreviewIdentityMappingResponseObject, error) {
+func (h *AuthHandlers) PreviewIdentityMapping(ctx context.Context, request PreviewIdentityMappingRequestObject) (PreviewIdentityMappingResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return PreviewIdentityMapping403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
 			Code: ErrorCodeForbidden, Message: "admin only",

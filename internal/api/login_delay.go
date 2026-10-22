@@ -133,7 +133,7 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 }
 
 // loginDelay returns the handler's delay store, creating it on first use.
-func (h *Handlers) loginDelay() *LoginDelay {
+func (h *AuthHandlers) loginDelay() *LoginDelay {
 	h.loginDelayOnce.Do(func() {
 		if h.loginDelayStore == nil {
 			h.loginDelayStore = NewLoginDelay(LoginDelayConfig{})

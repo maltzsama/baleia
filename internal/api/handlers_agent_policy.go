@@ -15,7 +15,7 @@ import (
 
 // agentCeilings are the server-side maxima (#60). A zero config value falls
 // back to the packaged default.
-func (h *Handlers) agentCeilings() agentpolicy.Ceilings {
+func (h *core) agentCeilings() agentpolicy.Ceilings {
 	c := agentpolicy.DefaultCeilings()
 	if h.settings.Agents.MaxRows > 0 {
 		c.MaxRowsReturned = h.settings.Agents.MaxRows
@@ -174,7 +174,7 @@ func sortedKeys(set map[string]bool) []string {
 	return out
 }
 
-func (h *Handlers) GetAgentPolicy(ctx context.Context, request GetAgentPolicyRequestObject) (GetAgentPolicyResponseObject, error) {
+func (h *AgentHandlers) GetAgentPolicy(ctx context.Context, request GetAgentPolicyRequestObject) (GetAgentPolicyResponseObject, error) {
 	if !h.agentsEnabled() {
 		return GetAgentPolicy404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -206,7 +206,7 @@ func (h *Handlers) GetAgentPolicy(ctx context.Context, request GetAgentPolicyReq
 	}), nil
 }
 
-func (h *Handlers) PutAgentPolicy(ctx context.Context, request PutAgentPolicyRequestObject) (PutAgentPolicyResponseObject, error) {
+func (h *AgentHandlers) PutAgentPolicy(ctx context.Context, request PutAgentPolicyRequestObject) (PutAgentPolicyResponseObject, error) {
 	if !h.agentsEnabled() {
 		return PutAgentPolicy404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}

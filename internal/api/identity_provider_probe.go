@@ -27,7 +27,7 @@ const (
 )
 
 // probeIdentityProvider uses the injected probe when a test provides one.
-func (h *Handlers) probeIdentityProvider(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult {
+func (h *AuthHandlers) probeIdentityProvider(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult {
 	if h.idpProbe != nil {
 		return h.idpProbe(ctx, cfg, testUsername)
 	}

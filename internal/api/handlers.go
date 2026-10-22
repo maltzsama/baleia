@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/assistant"
@@ -19,7 +18,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/dialect"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -33,71 +31,22 @@ import (
 
 var ErrWorkspaceNotFound = errors.New("workspace not found")
 
-type Handlers struct {
-	queries db.Querier
-	pool    *pgxpool.Pool
-	// tx runs dependent writes in one transaction (poolTx outside tests).
-	tx txRunner
-	// schema reports the applied migration version (poolSchema outside tests).
-	schema schemaVersioner
-	// settings is the resolved configuration the handlers read (#363).
-	settings       Settings
-	keyring        *crypto.Keyring
-	temporalClient client.Client
-	s3             *storage.S3Client
-	catalogCache   *TTLStore[[]workspaceCatalogEntry]
-	versionCache   *TTLStore[engineProbe] // engine id@updated_at → version and health
-	// connections holds every connection provider (docs/adr/0002).
-	connections *connections.Registry
-	// engines runs SQL (docs/adr/0002); binder binds catalogs into Trino as
-	// the admin identity (docs/adr/0005, #80). Both are built at the wiring site.
-	engines engineSource
-	kinds   engineKinds
-	// dialects describe each engine kind's SQL (built once, injected).
-	dialects *dialect.Registry
-	binder   *bindtrino.Binder
-	metrics  apiMetrics
-	// audit records security and data operations (#45; call sites #43).
-	audit audit.Recorder
-	// dialer is the SSRF-safe dialer for transient engines (#12).
-	dialer *connections.Dialer
-	// content is the only writer of saved content and its versions (#34).
-	content *content.Service
-	// assistant owns assistant settings, agents and conversations (#62).
-	assistant *assistant.Service
-	// assistantRunner holds the runner of MCP-backed turns (and its SSE hub),
-	// stored after the handlers are built; empty when not provisioned.
-	assistantRunner *assistant.RunnerSlot
-	// wsTickets issues the single-use WebSocket tickets (#26); the WS handler
-	// shares this store.
-	wsTickets *wsticket.Store
-	// systemStatusSchedule and systemStatusEngine are the status page's probe
-	// seams (#291). Tests inject them without a Temporal server or an engine.
-	systemStatusSchedule func(ctx context.Context, id string) (SystemStatusItemStatus, string)
-	systemStatusEngine   func(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string)
-	// dummyHash is compared against on the unknown-account and SSO-only paths
-	// so timing does not reveal whether an account exists (#51).
-	dummyHashOnce sync.Once
-	dummyHash     string
-	// loginDelay slows repeated login failures per account (#51).
-	loginDelayStore *LoginDelay
-	loginDelayOnce  sync.Once
-	// mailer sends password-reset and invite e-mails (#51) localized by the
-	// recipient's preference (#67). Tests inject a fake so the paths run
-	// without an SMTP server.
-	mailer MailSender
-	// oidcCache holds discovered providers keyed by id + config version (#280).
-	oidcCache sync.Map
-	// attentionCache caches the computed attention items for 30 s per user (#261).
-	attentionCache *TTLStore[[]AttentionItem]
-	attentionOnce  sync.Once
-	// ldapAuthenticate verifies directory credentials (#255). Tests inject a
-	// fake so the handler branch runs without a directory server.
-	ldapAuthenticate func(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)
-	// idpProbe probes a provider configuration without persisting anything
-	// (#286). Tests inject a fake so the handler runs without a network.
-	idpProbe func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
+type API struct {
+	// core is embedded at the top so the shared fields and helpers resolve
+	// here, not ambiguously through every group.
+	*core
+	*AuthHandlers
+	*WorkspaceHandlers
+	*CatalogHandlers
+	*QueryHandlers
+	*SemanticHandlers
+	*AgentHandlers
+	*OpsHandlers
 }
+
+// The handlers implement the whole generated strict server; the split by
+// domain (#365) keeps it composed into one value.
+var _ StrictServerInterface = (*API)(nil)
 
 // MailSender is the transactional e-mail surface (#67).
 type MailSender interface {
@@ -105,7 +54,7 @@ type MailSender interface {
 }
 
 // mailSender uses the injected mailer, or SMTP from the configuration.
-func (h *Handlers) mailSender() MailSender {
+func (h *AuthHandlers) mailSender() MailSender {
 	if h.mailer != nil {
 		return h.mailer
 	}
@@ -119,7 +68,7 @@ func (h *Handlers) mailSender() MailSender {
 	})
 }
 
-func (h *Handlers) wsTicketStore() *wsticket.Store {
+func (h *QueryHandlers) wsTicketStore() *wsticket.Store {
 	if h.wsTickets == nil {
 		h.wsTickets = wsticket.New()
 	}
@@ -127,16 +76,16 @@ func (h *Handlers) wsTicketStore() *wsticket.Store {
 }
 
 // contentService returns the content writer, constructing one for handlers
-// built by tests without NewHandlers.
-func (h *Handlers) contentService() *content.Service {
+// built by tests without NewAPI.
+func (h *core) contentService() *content.Service {
 	if h.content != nil {
 		return h.content
 	}
 	return content.New(h.pool, h.queries)
 }
 
-// apiMetrics are the API's producers (#87); all nil-safe, zero without
-// SetMetrics.
+// apiMetrics are the API's producers (#87); all nil-safe, zero without a
+// metrics registry.
 type apiMetrics struct {
 	auth      *metrics.Auth
 	authz     *metrics.Authz
@@ -145,11 +94,11 @@ type apiMetrics struct {
 }
 
 // AuthMetrics is the authentication producer (for the server's rate limiter).
-func (h *Handlers) AuthMetrics() *metrics.Auth { return h.metrics.auth }
+func (h *API) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 
 // registerMetrics registers the API's producers on reg and exports bindings
 // by lifecycle state.
-func (h *Handlers) registerMetrics(reg *metrics.Registry) {
+func (h *core) registerMetrics(reg *metrics.Registry) {
 	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory()}
 	reg.WatchBindingStates(func(ctx context.Context) (map[string]int64, error) {
 		rows, err := h.queries.CountManagedBindingsByState(ctx)
@@ -220,9 +169,9 @@ type EngineDeps struct {
 	Dialer *connections.Dialer
 }
 
-// NewHandlers builds the handlers. It fails when a required dependency is
+// NewAPI builds the handlers. It fails when a required dependency is
 // missing instead of leaving a nil to be found at request time.
-func NewHandlers(d Deps) (*Handlers, error) {
+func NewAPI(d Deps) (*API, error) {
 	var missing []string
 	for name, absent := range map[string]bool{
 		"Data.Queries":        d.Data.Queries == nil,
@@ -244,34 +193,35 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		slices.Sort(missing)
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
-	h := &Handlers{
-		connections:     d.Engines.Connections,
-		queries:         d.Data.Queries,
-		pool:            d.Data.Pool,
-		tx:              poolTx{pool: d.Data.Pool},
-		schema:          poolSchema{pool: d.Data.Pool},
-		settings:        d.Settings,
-		keyring:         d.Keyring,
-		temporalClient:  d.Temporal,
-		s3:              d.Storage,
-		engines:         d.Engines.Engines,
-		kinds:           d.Engines.Kinds,
-		dialects:        d.Engines.Dialects,
-		binder:          d.Engines.Binder,
-		dialer:          d.Engines.Dialer,
-		catalogCache:    NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
-		versionCache:    NewTTLStore[engineProbe](engineVersionTTL),
-		audit:           d.Observability.Audit,
-		content:         content.New(d.Data.Pool, d.Data.Queries),
-		assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
-		wsTickets:       d.WSTickets,
-		assistantRunner: d.Assistant,
+	c := &core{
+		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
+		s3:             d.Storage,
+		queries:        d.Data.Queries,
+		pool:           d.Data.Pool,
+		tx:             poolTx{pool: d.Data.Pool},
+		settings:       d.Settings,
+		keyring:        d.Keyring,
+		temporalClient: d.Temporal,
+		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		connections:    d.Engines.Connections,
+		engines:        d.Engines.Engines,
+		kinds:          d.Engines.Kinds,
+		dialects:       d.Engines.Dialects,
+		audit:          d.Observability.Audit,
+		content:        content.New(d.Data.Pool, d.Data.Queries),
 	}
-	if h.audit == nil {
-		h.audit = audit.Nop{}
+	if c.audit == nil {
+		c.audit = audit.Nop{}
 	}
-	if h.wsTickets == nil {
-		h.wsTickets = wsticket.New()
+	h := &API{
+		core:              c,
+		AuthHandlers:      newAuthHandlers(c),
+		WorkspaceHandlers: newWorkspaceHandlers(c),
+		CatalogHandlers:   newCatalogHandlers(c, d.Engines.Binder),
+		QueryHandlers:     newQueryHandlers(c, d.WSTickets),
+		SemanticHandlers:  newSemanticHandlers(c),
+		AgentHandlers:     newAgentHandlers(c, assistant.New(assistantdb.New(d.Data.Pool), d.Keyring), d.Assistant, d.Engines.Dialer),
+		OpsHandlers:       newOpsHandlers(c, poolSchema{pool: d.Data.Pool}),
 	}
 	if d.Observability.Metrics != nil {
 		h.registerMetrics(d.Observability.Metrics)
@@ -280,7 +230,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 }
 
 // AssistantService exposes the persistence service to the wiring site.
-func (h *Handlers) AssistantService() *assistant.Service { return h.assistant }
+func (h *AgentHandlers) AssistantService() *assistant.Service { return h.assistant }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

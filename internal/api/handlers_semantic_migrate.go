@@ -47,7 +47,7 @@ type migrationGuards struct {
 // metric with the same slug, so links keep resolving through the v1 page's
 // redirect. Upsert by slug (FD16): nothing is deleted and a metric the model
 // already has is left alone.
-func (h *Handlers) MigrateSemanticMetricsV1(ctx context.Context, request MigrateSemanticMetricsV1RequestObject) (MigrateSemanticMetricsV1ResponseObject, error) {
+func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request MigrateSemanticMetricsV1RequestObject) (MigrateSemanticMetricsV1ResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func (h *Handlers) MigrateSemanticMetricsV1(ctx context.Context, request Migrate
 	return MigrateSemanticMetricsV1200JSONResponse(MigrateV1Report{DryRun: dryRun, Items: items}), nil
 }
 
-func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards migrationGuards, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
+func (h *core) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards migrationGuards, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
 	item := MigrateV1Item{
 		CatalogId: openapi_types.UUID(t.catalogID.Bytes),
 		Namespace: t.namespace,
@@ -346,7 +346,7 @@ func (h *Handlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, gua
 // migrationColumns reads the table's columns with their portable types from
 // the metadata snapshot. Columns the semantic layer cannot type are skipped; a
 // metric over one of them fails its item with a clear message.
-func (h *Handlers) migrationColumns(ctx context.Context, t migrationTable) ([]semantic.ColumnType, error) {
+func (h *core) migrationColumns(ctx context.Context, t migrationTable) ([]semantic.ColumnType, error) {
 	tableID, err := h.queries.GetMetadataTableByName(ctx, db.GetMetadataTableByNameParams{
 		CatalogID: t.catalogID, Namespace: t.namespace, Name: t.table,
 	})
@@ -377,7 +377,7 @@ func (h *Handlers) migrationColumns(ctx context.Context, t migrationTable) ([]se
 }
 
 // migrationSlug derives a free model slug from the table name.
-func (h *Handlers) migrationSlug(ctx context.Context, ws pgtype.UUID, table string, reserved map[string]bool) (string, error) {
+func (h *core) migrationSlug(ctx context.Context, ws pgtype.UUID, table string, reserved map[string]bool) (string, error) {
 	slug, err := uniqueSlug(ctx, table, func(ctx context.Context, s string) (bool, error) {
 		if reserved[s] {
 			return true, nil

@@ -16,7 +16,7 @@ import (
 
 // ListAllCatalogs — GET /catalogs (#109). Logical catalogs the caller may
 // view, with their bindings, freshness and allowed actions.
-func (h *Handlers) ListAllCatalogs(ctx context.Context, request ListAllCatalogsRequestObject) (ListAllCatalogsResponseObject, error) {
+func (h *CatalogHandlers) ListAllCatalogs(ctx context.Context, request ListAllCatalogsRequestObject) (ListAllCatalogsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListAllCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -82,7 +82,7 @@ func (h *Handlers) ListAllCatalogs(ctx context.Context, request ListAllCatalogsR
 }
 
 // GetCatalogDetail — GET /catalogs/{catalog_id} (#109).
-func (h *Handlers) GetCatalogDetail(ctx context.Context, request GetCatalogDetailRequestObject) (GetCatalogDetailResponseObject, error) {
+func (h *CatalogHandlers) GetCatalogDetail(ctx context.Context, request GetCatalogDetailRequestObject) (GetCatalogDetailResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -110,7 +110,7 @@ func (h *Handlers) GetCatalogDetail(ctx context.Context, request GetCatalogDetai
 
 // UpdateCatalogDetail — PATCH /catalogs/{catalog_id} (#109). Renames the
 // display name; bundles and metrics reference catalogs by name.
-func (h *Handlers) UpdateCatalogDetail(ctx context.Context, request UpdateCatalogDetailRequestObject) (UpdateCatalogDetailResponseObject, error) {
+func (h *CatalogHandlers) UpdateCatalogDetail(ctx context.Context, request UpdateCatalogDetailRequestObject) (UpdateCatalogDetailResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return UpdateCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -153,7 +153,7 @@ func (h *Handlers) UpdateCatalogDetail(ctx context.Context, request UpdateCatalo
 // DeleteCatalogDetail — DELETE /catalogs/{catalog_id} (#109). Source catalogs
 // are disabled and their managed bindings deprovisioned; native catalogs
 // belong to their engine.
-func (h *Handlers) DeleteCatalogDetail(ctx context.Context, request DeleteCatalogDetailRequestObject) (DeleteCatalogDetailResponseObject, error) {
+func (h *CatalogHandlers) DeleteCatalogDetail(ctx context.Context, request DeleteCatalogDetailRequestObject) (DeleteCatalogDetailResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteCatalogDetail401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -215,7 +215,7 @@ func (h *Handlers) DeleteCatalogDetail(ctx context.Context, request DeleteCatalo
 }
 
 // GetCatalogImpact — GET /catalogs/{catalog_id}/impact (#109).
-func (h *Handlers) GetCatalogImpact(ctx context.Context, request GetCatalogImpactRequestObject) (GetCatalogImpactResponseObject, error) {
+func (h *CatalogHandlers) GetCatalogImpact(ctx context.Context, request GetCatalogImpactRequestObject) (GetCatalogImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalogImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -241,7 +241,7 @@ func (h *Handlers) GetCatalogImpact(ctx context.Context, request GetCatalogImpac
 }
 
 // GetCatalogConnectionImpact — GET /catalog-connections/{id}/impact (#109).
-func (h *Handlers) GetCatalogConnectionImpact(ctx context.Context, request GetCatalogConnectionImpactRequestObject) (GetCatalogConnectionImpactResponseObject, error) {
+func (h *CatalogHandlers) GetCatalogConnectionImpact(ctx context.Context, request GetCatalogConnectionImpactRequestObject) (GetCatalogConnectionImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalogConnectionImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -274,7 +274,7 @@ func (h *Handlers) GetCatalogConnectionImpact(ctx context.Context, request GetCa
 }
 
 // ListCatalogGrants — GET /catalogs/{catalog_id}/grants (#109).
-func (h *Handlers) ListCatalogGrants(ctx context.Context, request ListCatalogGrantsRequestObject) (ListCatalogGrantsResponseObject, error) {
+func (h *CatalogHandlers) ListCatalogGrants(ctx context.Context, request ListCatalogGrantsRequestObject) (ListCatalogGrantsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogGrants401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -309,7 +309,7 @@ func (h *Handlers) ListCatalogGrants(ctx context.Context, request ListCatalogGra
 }
 
 // GetCatalogBinding — GET /bindings/{id} (#109).
-func (h *Handlers) GetCatalogBinding(ctx context.Context, request GetCatalogBindingRequestObject) (GetCatalogBindingResponseObject, error) {
+func (h *CatalogHandlers) GetCatalogBinding(ctx context.Context, request GetCatalogBindingRequestObject) (GetCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -331,7 +331,7 @@ func (h *Handlers) GetCatalogBinding(ctx context.Context, request GetCatalogBind
 
 // GetCatalogBindingProjection — GET /bindings/{id}/projection (#109). Secret
 // values are replaced by ***; env references are shown as-is.
-func (h *Handlers) GetCatalogBindingProjection(ctx context.Context, request GetCatalogBindingProjectionRequestObject) (GetCatalogBindingProjectionResponseObject, error) {
+func (h *CatalogHandlers) GetCatalogBindingProjection(ctx context.Context, request GetCatalogBindingProjectionRequestObject) (GetCatalogBindingProjectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalogBindingProjection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -383,7 +383,7 @@ func (h *Handlers) GetCatalogBindingProjection(ctx context.Context, request GetC
 
 // catalogSummary builds the list/detail item: the catalog with its status,
 // visibility-scoped connection, bindings and attention flag.
-func (h *Handlers) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Principal) CatalogSummary {
+func (h *core) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Principal) CatalogSummary {
 	c := h.catalogWithStatus(ctx, cat)
 	out := CatalogSummary{
 		AllowedActions:        c.AllowedActions,

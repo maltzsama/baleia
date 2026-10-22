@@ -29,7 +29,7 @@ func newAuthFixture(t *testing.T) *auditFixture {
 	return f
 }
 
-func loginRefresh(t *testing.T, h *Handlers, email, password string) string {
+func loginRefresh(t *testing.T, h *API, email, password string) string {
 	t.Helper()
 	resp, err := h.Login(context.Background(), LoginRequestObject{
 		Body: &LoginRequest{Email: emailPtr(email), Password: password},
@@ -44,7 +44,7 @@ func loginRefresh(t *testing.T, h *Handlers, email, password string) string {
 	return *ok.RefreshToken
 }
 
-func refreshStatus(t *testing.T, h *Handlers, token string) int {
+func refreshStatus(t *testing.T, h *API, token string) int {
 	t.Helper()
 	resp, err := h.RefreshToken(context.Background(), RefreshTokenRequestObject{
 		Body: &RefreshRequest{RefreshToken: &token},
@@ -63,7 +63,7 @@ func refreshStatus(t *testing.T, h *Handlers, token string) int {
 	}
 }
 
-func refreshToken(t *testing.T, h *Handlers, token string) string {
+func refreshToken(t *testing.T, h *API, token string) string {
 	t.Helper()
 	resp, err := h.RefreshToken(context.Background(), RefreshTokenRequestObject{
 		Body: &RefreshRequest{RefreshToken: &token},
@@ -94,7 +94,7 @@ func TestGetMe_IncludesStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &Handlers{queries: q, pool: pool, tx: poolTx{pool: pool}}
+	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool}})
 
 	resp, err := h.GetMe(ctxAs(user.ID.String(), "admin"), GetMeRequestObject{})
 	if err != nil {
@@ -241,7 +241,7 @@ func TestLogout_CookieRevokesFamily(t *testing.T) {
 // 8-character minimum even though oapi-codegen does not validate bodies.
 func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
 	pool := testdb.New(t)
-	h := &Handlers{queries: db.New(pool), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})}
+	h := testAPI(handlerFields{queries: db.New(pool), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
 		Body: &CreateAdminRequest{Name: "Admin", Email: "admin@example.test", Password: "short"},
 	})
@@ -513,7 +513,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 // different e-mails create exactly one admin; the others get 409 (#375).
 func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
 	pool := testdb.New(t)
-	h := &Handlers{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})}
+	h := testAPI(handlerFields{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	const n = 8
 	var wg sync.WaitGroup
 	created := make(chan bool, n)

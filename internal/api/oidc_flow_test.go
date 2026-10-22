@@ -156,19 +156,19 @@ func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
 	return oidcProviderWithConfig(t, q, oidcConfig(issuer))
 }
 
-func oidcHandlers(t *testing.T, q *db.Queries) *Handlers {
+func oidcHandlers(t *testing.T, q *db.Queries) *API {
 	t.Helper()
-	return &Handlers{
+	return testAPI(handlerFields{
 		queries: q, tx: directTx{q: q},
 		keyring:  oidcTestKeyring(t),
 		settings: SettingsFromConfig(&config.Config{PublicURL: "http://localhost", JWTSecret: "test-secret"}),
-	}
+	})
 }
 
 type oidcFlowFixture struct {
 	pool     *pgxpool.Pool
 	q        *db.Queries
-	h        *Handlers
+	h        *API
 	idp      *oidctest.StubIDP
 	provider db.AuthProvider
 }

@@ -24,7 +24,7 @@ func TestLLMProvider_GoesThroughTheDialer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &Handlers{dialer: d}
+	h := testAPI(handlerFields{dialer: d})
 	provider, model, base := "openai_compatible", "m", srv.URL
 	p, err := h.llmProvider(adb.AssistantSetting{Provider: &provider, Model: &model, BaseUrl: &base}, "key")
 	if err != nil {

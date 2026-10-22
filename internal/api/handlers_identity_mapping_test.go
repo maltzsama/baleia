@@ -9,7 +9,7 @@ import (
 // TestMappingPreview: the endpoint returns exactly what login-time mapping
 // derives, teams sorted by id.
 func TestMappingPreview(t *testing.T) {
-	h := &Handlers{}
+	h := testAPI(handlerFields{})
 	body := &IdentityMappingPreviewRequest{
 		Groups: []string{"baleia-admins", "team-eng", "team-ops"},
 		RoleMapping: &[]IdentityRoleMapping{
@@ -52,7 +52,7 @@ func TestMappingPreview(t *testing.T) {
 
 // TestMappingPreview_NonAdmin403: only administrators may preview.
 func TestMappingPreview_NonAdmin403(t *testing.T) {
-	h := &Handlers{}
+	h := testAPI(handlerFields{})
 	got, err := h.PreviewIdentityMapping(idpMemberCtx(), PreviewIdentityMappingRequestObject{
 		Body: &IdentityMappingPreviewRequest{Groups: []string{"g"}},
 	})
@@ -66,7 +66,7 @@ func TestMappingPreview_NonAdmin403(t *testing.T) {
 
 // TestMappingPreview_Validation422: a malformed rule is a 422, never a guess.
 func TestMappingPreview_Validation422(t *testing.T) {
-	h := &Handlers{}
+	h := testAPI(handlerFields{})
 	got, err := h.PreviewIdentityMapping(idpAdminCtx(), PreviewIdentityMappingRequestObject{
 		Body: &IdentityMappingPreviewRequest{
 			Groups:      []string{"g"},

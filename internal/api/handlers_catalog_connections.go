@@ -30,7 +30,7 @@ import (
 // ListCatalogConnections — GET /catalog-connections (#385). The caller's own
 // connections; an admin sees every one, including the ownerless bootstrap
 // connection, as authz.Connection allows.
-func (h *Handlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
+func (h *CatalogHandlers) ListCatalogConnections(ctx context.Context, request ListCatalogConnectionsRequestObject) (ListCatalogConnectionsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -88,7 +88,7 @@ func connectionAllows(conn CatalogConnection, action string) bool {
 	return false
 }
 
-func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error) {
+func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -108,7 +108,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	if err != nil {
 		return nil, err
 	}
-	config, connURL, credsEnc, err := storedColumns(h, cfg)
+	config, connURL, credsEnc, err := storedColumns(h.core, cfg)
 	if err != nil {
 		slog.Error("encrypt connection credentials", "err", err)
 		return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
@@ -150,7 +150,7 @@ func (h *Handlers) CreateCatalogConnection(ctx context.Context, request CreateCa
 	return CreateCatalogConnection201JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
 
-func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
+func (h *CatalogHandlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -170,7 +170,7 @@ func (h *Handlers) GetCatalogConnection(ctx context.Context, request GetCatalogC
 	return GetCatalogConnection200JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
 
-func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
+func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request UpdateCatalogConnectionRequestObject) (UpdateCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return UpdateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -205,7 +205,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 		case err != nil:
 			return nil, err
 		}
-		config, connURL, credsEnc, err := storedColumns(h, cfg)
+		config, connURL, credsEnc, err := storedColumns(h.core, cfg)
 		if err != nil {
 			slog.Error("encrypt connection credentials", "err", err)
 			return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
@@ -224,7 +224,7 @@ func (h *Handlers) UpdateCatalogConnection(ctx context.Context, request UpdateCa
 	return UpdateCatalogConnection200JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
 
-func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {
+func (h *CatalogHandlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -254,7 +254,7 @@ func (h *Handlers) DeleteCatalogConnection(ctx context.Context, request DeleteCa
 	return DeleteCatalogConnection204Response{}, nil
 }
 
-func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error) {
+func (h *CatalogHandlers) TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return TestCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -294,7 +294,7 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 
 // connectionConfig returns the provider of a stored connection and its
 // decrypted config.
-func (h *Handlers) connectionConfig(conn db.CatalogConnection) (connections.Provider, connections.Config, error) {
+func (h *core) connectionConfig(conn db.CatalogConnection) (connections.Provider, connections.Config, error) {
 	plain, err := catalogs.OpenCredentials(conn, h.keyring)
 	if err != nil {
 		return nil, connections.Config{}, err
@@ -325,7 +325,7 @@ func connectionTestError(err error) string {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
+func (h *core) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
 	workspaces, err := h.queries.ListWorkspacesByUser(ctx, userID)
 	if err == nil {
 		for _, w := range workspaces {
@@ -389,7 +389,7 @@ type workspaceCatalogEntry struct {
 // truth is the catalogs table in PostgreSQL; the plugin loads them into
 // Trino at boot. No more dynamic discovery via Polaris REST, no more
 // ensureTrinoCatalogs — that was the path L1 of CR-017 removed.
-func (h *Handlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request) {
+func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.Request) {
 	wsID := chiURLParam(r, "id")
 	userID := auth.UserIDFromContext(r.Context())
 
@@ -502,7 +502,7 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, mes
 // addresses. The catalog must belong to the connection in the path, and the
 // caller must be allowed to read it; anything else is 404 (no existence oracle).
 // It writes the error response itself and returns ok=false.
-func (h *Handlers) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalog, bool) {
+func (h *core) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalog, bool) {
 	ctx := r.Context()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
@@ -548,14 +548,14 @@ const exploreMaxRows = 100000
 
 // exploreEngine returns the engine explorer statements run on (the default
 // Trino engine until targets reach the explorer, #23).
-func (h *Handlers) exploreEngine(r *http.Request) (queryengine.Engine, error) {
+func (h *core) exploreEngine(r *http.Request) (queryengine.Engine, error) {
 	return h.engines.DefaultTrino(r.Context())
 }
 
 // exploreQuery runs one metadata statement as the caller's Trino identity
 // under the request context with a 30 s deadline, so a client disconnect
 // cancels it.
-func (h *Handlers) exploreQuery(r *http.Request, eng queryengine.Engine, sql string) ([][]string, error) {
+func (h *core) exploreQuery(r *http.Request, eng queryengine.Engine, sql string) ([][]string, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "explorer", RequestID: middleware.GetReqID(ctx)}}
@@ -569,7 +569,7 @@ func (h *Handlers) exploreQuery(r *http.Request, eng queryengine.Engine, sql str
 	return queryengine.CollectStrings(ctx, eng, spec, sql, exploreMaxRows)
 }
 
-func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) {
+func (h *CatalogHandlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) {
 	cat, ok := h.explorerTarget(w, r)
 	if !ok {
 		return
@@ -599,7 +599,7 @@ func (h *Handlers) HandleListNamespaces(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, namespaces)
 }
 
-func (h *Handlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
+func (h *CatalogHandlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
 	cat, ok := h.explorerTarget(w, r)
 	if !ok {
 		return
@@ -640,7 +640,7 @@ func (h *Handlers) HandleListTables(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tables)
 }
 
-func (h *Handlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
+func (h *CatalogHandlers) HandleListColumns(w http.ResponseWriter, r *http.Request) {
 	cat, ok := h.explorerTarget(w, r)
 	if !ok {
 		return

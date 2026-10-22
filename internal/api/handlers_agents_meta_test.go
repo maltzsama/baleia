@@ -53,7 +53,7 @@ func TestAgentsMeta(t *testing.T) {
 func TestAgentEligibilityPolicyExclusion(t *testing.T) {
 	catalogID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 	engineID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
-	h := &Handlers{}
+	h := testAPI(handlerFields{})
 	engine := db.Engine{Name: "prod", Kind: "trino", Enabled: true}
 
 	excludedCatalog := agentpolicy.Effective{Catalogs: map[string]bool{"00000000-0000-0000-0000-000000000009": true}}
@@ -77,7 +77,7 @@ func TestAgentEligibilityPolicyExclusion(t *testing.T) {
 }
 
 func TestAgentEligibilityReadOnlyNotEnforced(t *testing.T) {
-	h := &Handlers{engines: fakeEngineSource{readOnly: queryengine.ReadOnlyNone}}
+	h := testAPI(handlerFields{engines: fakeEngineSource{readOnly: queryengine.ReadOnlyNone}})
 	catalogID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 	engineID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
 	got := h.engineEligibility(t.Context(), agentpolicy.Effective{}, catalogID, engineID, db.Engine{Name: "prod", Kind: "postgresql", Enabled: true})

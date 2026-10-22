@@ -210,7 +210,7 @@ var (
 // newGrantsHandlers builds on newAuthzHandlers: a team where ownerID is the team
 // owner (and owns the connection) and memberID is a plain member, and a shared
 // workspace owned by that team.
-func newGrantsHandlers(t *testing.T) (*Handlers, *authzFake) {
+func newGrantsHandlers(t *testing.T) (*API, *authzFake) {
 	t.Helper()
 	h, q, _ := newAuthzHandlers(t)
 	q.g.teams = map[[16]byte]db.Team{teamID.Bytes: {ID: teamID, Name: "data"}}
@@ -264,7 +264,7 @@ func wsCode(t *testing.T, resp any) int {
 	return rec.Code
 }
 
-func grant(t *testing.T, h *Handlers, q *authzFake, ctx context.Context, perm GrantCatalogAccessRequestPermission) int {
+func grant(t *testing.T, h *API, q *authzFake, ctx context.Context, perm GrantCatalogAccessRequestPermission) int { //nolint:revive // thelper wants t first in test helpers
 	t.Helper()
 	resp, err := h.GrantCatalogAccess(ctx, GrantCatalogAccessRequestObject{Id: wsID.Bytes, Body: grantBody(q, perm)})
 	if err != nil {

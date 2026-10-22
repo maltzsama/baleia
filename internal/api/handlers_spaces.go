@@ -36,12 +36,12 @@ func spaceError(err error) (spaceErr, bool) {
 type spaceErr struct{ status int }
 
 // requireSpace maps RequireSpace to (role, ok, handled status).
-func (h *Handlers) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, min authz.SpaceRole) (authz.SpaceRole, *spaceErr, error) {
+func (h *core) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, minRole authz.SpaceRole) (authz.SpaceRole, *spaceErr, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return authz.SpaceNone, nil, authz.ErrUnauthenticated
 	}
-	role, err := h.authz().RequireSpace(ctx, p, ws, spaceID, min)
+	role, err := h.authz().RequireSpace(ctx, p, ws, spaceID, minRole)
 	if err != nil {
 		if se, ok := spaceError(err); ok {
 			return authz.SpaceNone, &se, nil
@@ -53,14 +53,14 @@ func (h *Handlers) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, mi
 
 // contentSpace is requireSpace for a metric: it returns nil when allowed, a
 // spaceErr with 404 (invisible) or 403 (below min), or a real error.
-func (h *Handlers) contentSpace(ctx context.Context, ws, spaceID pgtype.UUID, min authz.SpaceRole) (*spaceErr, error) {
-	_, se, err := h.requireSpace(ctx, ws, spaceID, min)
+func (h *core) contentSpace(ctx context.Context, ws, spaceID pgtype.UUID, minRole authz.SpaceRole) (*spaceErr, error) {
+	_, se, err := h.requireSpace(ctx, ws, spaceID, minRole)
 	return se, err
 }
 
 // spaceForWrite resolves the space a write targets: the requested one, else the
 // workspace's default space, and requires min on it.
-func (h *Handlers) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested *openapi_types.UUID, min authz.SpaceRole) (db.Space, *spaceErr, error) {
+func (h *core) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested *openapi_types.UUID, minRole authz.SpaceRole) (db.Space, *spaceErr, error) {
 	var space db.Space
 	var err error
 	if requested != nil {
@@ -77,7 +77,7 @@ func (h *Handlers) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested 
 			return db.Space{}, nil, err
 		}
 	}
-	_, se, err := h.requireSpace(ctx, ws, space.ID, min)
+	_, se, err := h.requireSpace(ctx, ws, space.ID, minRole)
 	if err != nil {
 		return db.Space{}, nil, err
 	}
@@ -88,7 +88,7 @@ func (h *Handlers) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested 
 }
 
 // ListSpaces — GET /workspaces/{id}/spaces
-func (h *Handlers) ListSpaces(ctx context.Context, request ListSpacesRequestObject) (ListSpacesResponseObject, error) {
+func (h *WorkspaceHandlers) ListSpaces(ctx context.Context, request ListSpacesRequestObject) (ListSpacesResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
@@ -115,7 +115,7 @@ func (h *Handlers) ListSpaces(ctx context.Context, request ListSpacesRequestObje
 }
 
 // CreateSpace — POST /workspaces/{id}/spaces
-func (h *Handlers) CreateSpace(ctx context.Context, request CreateSpaceRequestObject) (CreateSpaceResponseObject, error) {
+func (h *WorkspaceHandlers) CreateSpace(ctx context.Context, request CreateSpaceRequestObject) (CreateSpaceResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateSpace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -190,7 +190,7 @@ func (h *Handlers) CreateSpace(ctx context.Context, request CreateSpaceRequestOb
 }
 
 // GetSpace — GET /workspaces/{id}/spaces/{space_id}
-func (h *Handlers) GetSpace(ctx context.Context, request GetSpaceRequestObject) (GetSpaceResponseObject, error) {
+func (h *WorkspaceHandlers) GetSpace(ctx context.Context, request GetSpaceRequestObject) (GetSpaceResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	role, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceViewer)
 	if err != nil {
@@ -215,7 +215,7 @@ func (h *Handlers) GetSpace(ctx context.Context, request GetSpaceRequestObject) 
 }
 
 // UpdateSpace — PATCH /workspaces/{id}/spaces/{space_id}
-func (h *Handlers) UpdateSpace(ctx context.Context, request UpdateSpaceRequestObject) (UpdateSpaceResponseObject, error) {
+func (h *WorkspaceHandlers) UpdateSpace(ctx context.Context, request UpdateSpaceRequestObject) (UpdateSpaceResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	ev := audit.Event{Action: audit.SpaceUpdate, ResourceType: "space", ResourceID: idString(spaceID), WorkspaceID: idString(ws)}
 	ctx = audit.WithAction(ctx, ev.Action)
@@ -281,7 +281,7 @@ func (h *Handlers) UpdateSpace(ctx context.Context, request UpdateSpaceRequestOb
 }
 
 // DeleteSpace — DELETE /workspaces/{id}/spaces/{space_id}
-func (h *Handlers) DeleteSpace(ctx context.Context, request DeleteSpaceRequestObject) (DeleteSpaceResponseObject, error) {
+func (h *WorkspaceHandlers) DeleteSpace(ctx context.Context, request DeleteSpaceRequestObject) (DeleteSpaceResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	ev := audit.Event{Action: audit.SpaceDelete, ResourceType: "space", ResourceID: idString(spaceID), WorkspaceID: idString(ws)}
 	ctx = audit.WithAction(ctx, ev.Action)
@@ -328,7 +328,7 @@ func (h *Handlers) DeleteSpace(ctx context.Context, request DeleteSpaceRequestOb
 }
 
 // ListSpaceMembers — GET /workspaces/{id}/spaces/{space_id}/members
-func (h *Handlers) ListSpaceMembers(ctx context.Context, request ListSpaceMembersRequestObject) (ListSpaceMembersResponseObject, error) {
+func (h *WorkspaceHandlers) ListSpaceMembers(ctx context.Context, request ListSpaceMembersRequestObject) (ListSpaceMembersResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceViewer)
 	if err != nil {
@@ -355,7 +355,7 @@ func (h *Handlers) ListSpaceMembers(ctx context.Context, request ListSpaceMember
 }
 
 // SetSpaceMember — PUT /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id}
-func (h *Handlers) SetSpaceMember(ctx context.Context, request SetSpaceMemberRequestObject) (SetSpaceMemberResponseObject, error) {
+func (h *WorkspaceHandlers) SetSpaceMember(ctx context.Context, request SetSpaceMemberRequestObject) (SetSpaceMemberResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	principalID := spaceIDFromRequest(request.PrincipalId)
 	ev := audit.Event{Action: audit.SpaceMemberSet, ResourceType: "space", ResourceID: idString(spaceID), WorkspaceID: idString(ws)}
@@ -406,7 +406,7 @@ func (h *Handlers) SetSpaceMember(ctx context.Context, request SetSpaceMemberReq
 }
 
 // DeleteSpaceMember — DELETE /workspaces/{id}/spaces/{space_id}/members/{principal_type}/{principal_id}
-func (h *Handlers) DeleteSpaceMember(ctx context.Context, request DeleteSpaceMemberRequestObject) (DeleteSpaceMemberResponseObject, error) {
+func (h *WorkspaceHandlers) DeleteSpaceMember(ctx context.Context, request DeleteSpaceMemberRequestObject) (DeleteSpaceMemberResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	principalID := spaceIDFromRequest(request.PrincipalId)
 	ev := audit.Event{Action: audit.SpaceMemberRemove, ResourceType: "space", ResourceID: idString(spaceID), WorkspaceID: idString(ws)}

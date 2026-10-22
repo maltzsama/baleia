@@ -11,15 +11,15 @@ import (
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
-func idpTestHandlers(t *testing.T) *Handlers {
+func idpTestHandlers(t *testing.T) *API {
 	t.Helper()
 	pool := testdb.New(t)
-	return &Handlers{
+	return testAPI(handlerFields{
 		queries: db.New(pool),
 		pool:    pool,
 		tx:      poolTx{pool: pool},
 		keyring: testKeyring(t),
-	}
+	})
 }
 
 func idpAdminCtx() context.Context {

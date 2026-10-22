@@ -19,7 +19,7 @@ import (
 
 type agentsFixture struct {
 	pool    *pgxpool.Pool
-	h       *Handlers
+	h       *API
 	owner   context.Context
 	other   context.Context
 	admin   context.Context
@@ -58,12 +58,12 @@ func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 		t.Fatal(err)
 	}
 
-	f.h = &Handlers{
+	f.h = testAPI(handlerFields{
 		queries:  db.New(pool),
 		pool:     pool,
 		tx:       poolTx{pool: pool},
 		settings: SettingsFromConfig(&config.Config{AgentsEnabled: enabled}),
-	}
+	})
 	return f
 }
 
@@ -267,13 +267,13 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 		agentBound: true,
 	}
 	temporal := &fakeTemporalClient{}
-	h := &Handlers{
+	h := testAPI(handlerFields{
 		queries: fake, tx: directTx{q: fake},
 		settings:       SettingsFromConfig(&config.Config{StatementTimeout: 30 * time.Minute}),
 		temporalClient: temporal,
 		kinds:          testKinds(t, nil),
 		dialects:       dialect.NewRegistry(),
-	}
+	})
 	agentCtx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
 	agentCtx = context.WithValue(agentCtx, auth.ContextKeyRole, "member")
 	agentCtx = context.WithValue(agentCtx, auth.ContextKeyActorKind, auth.ActorAgent)

@@ -71,7 +71,7 @@ func asUser(id, role string, next http.Handler) http.Handler {
 	})
 }
 
-func explorerRouter(h *Handlers, userID, role string) http.Handler {
+func explorerRouter(h *API, userID, role string) http.Handler {
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
 		r.Use(func(next http.Handler) http.Handler { return asUser(userID, role, next) })
@@ -89,7 +89,7 @@ func get(t *testing.T, h http.Handler, path string) (int, string) {
 	return rec.Code, rec.Body.String()
 }
 
-func newExplorerHandlers(t *testing.T) (*Handlers, *explorerFake, *fakeTrino, string) {
+func newExplorerHandlers(t *testing.T) (*API, *explorerFake, *fakeTrino, string) {
 	t.Helper()
 	h, base, ft := newAuthzHandlers(t)
 	q := &explorerFake{authzFake: base, clusterID: base.cat.ClusterID}

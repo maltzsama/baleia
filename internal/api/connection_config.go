@@ -54,7 +54,7 @@ func (e *configError) response() UnprocessableEntityJSONResponse {
 }
 
 // provider returns the provider of a kind the API may create connections for.
-func (h *Handlers) provider(kind string) (connections.Provider, error) {
+func (h *core) provider(kind string) (connections.Provider, error) {
 	p, err := h.connections.Get(connections.Kind(kind))
 	if err != nil {
 		return nil, &configError{code: ErrorCodeProviderUnsupported, fields: []connections.FieldError{{Key: "type", Message: fmt.Sprintf("%q has no provider", kind)}}}
@@ -85,7 +85,7 @@ func asConfigError(err error) error {
 }
 
 // createConfig builds and validates the config of a create request.
-func (h *Handlers) createConfig(id pgtype.UUID, body *CreateCatalogConnectionRequest) (connections.Config, error) {
+func (h *core) createConfig(id pgtype.UUID, body *CreateCatalogConnectionRequest) (connections.Config, error) {
 	p, err := h.provider(body.Type)
 	if err != nil {
 		return connections.Config{}, err
@@ -129,7 +129,7 @@ func legacyCredentials(body *CreateCatalogConnectionRequest, polarisDefault map[
 }
 
 // updateConfig merges a PATCH into the stored config and validates the result.
-func (h *Handlers) updateConfig(conn db.CatalogConnection, body UpdateCatalogConnectionRequest) (connections.Config, error) {
+func (h *core) updateConfig(conn db.CatalogConnection, body UpdateCatalogConnectionRequest) (connections.Config, error) {
 	p, err := h.provider(conn.Type)
 	if err != nil {
 		return connections.Config{}, err
@@ -160,7 +160,7 @@ func (h *Handlers) updateConfig(conn db.CatalogConnection, body UpdateCatalogCon
 // storedColumns is a validated config as catalog_connections columns: config
 // JSON, the url the Trino projection still reads, and the sealed secrets (nil
 // when there are none, which keeps any stored value on update).
-func storedColumns(h *Handlers, cfg connections.Config) (config []byte, url string, credsEnc *string, err error) {
+func storedColumns(h *core, cfg connections.Config) (config []byte, url string, credsEnc *string, err error) {
 	config, err = json.Marshal(cfg.Values)
 	if err != nil {
 		return nil, "", nil, err
@@ -183,7 +183,7 @@ func publicConfig(raw []byte) map[string]string {
 
 // ListConnectionProviders returns every provider with its config schema.
 // Static metadata: any authenticated caller may read it.
-func (h *Handlers) ListConnectionProviders(ctx context.Context, _ ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error) {
+func (h *CatalogHandlers) ListConnectionProviders(ctx context.Context, _ ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error) {
 	all := h.connections.All()
 	out := make([]ConnectionProvider, 0, len(all))
 	for _, p := range all {

@@ -15,7 +15,7 @@ import (
 
 // TestEngine — POST /engines/{id}/test (#110). Runs the checks on the
 // registered instance, so it exercises exactly the adapter a query would use.
-func (h *Handlers) TestEngine(ctx context.Context, request TestEngineRequestObject) (TestEngineResponseObject, error) {
+func (h *CatalogHandlers) TestEngine(ctx context.Context, request TestEngineRequestObject) (TestEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return TestEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -122,7 +122,7 @@ func failedTest(code, message string) TestCatalogConnectionResult {
 }
 
 // ListEngineObservations — GET /engines/{id}/observations (#110).
-func (h *Handlers) ListEngineObservations(ctx context.Context, request ListEngineObservationsRequestObject) (ListEngineObservationsResponseObject, error) {
+func (h *CatalogHandlers) ListEngineObservations(ctx context.Context, request ListEngineObservationsRequestObject) (ListEngineObservationsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListEngineObservations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -152,7 +152,7 @@ func (h *Handlers) ListEngineObservations(ctx context.Context, request ListEngin
 }
 
 // GetEngineImpact — GET /engines/{id}/impact (#110).
-func (h *Handlers) GetEngineImpact(ctx context.Context, request GetEngineImpactRequestObject) (GetEngineImpactResponseObject, error) {
+func (h *CatalogHandlers) GetEngineImpact(ctx context.Context, request GetEngineImpactRequestObject) (GetEngineImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetEngineImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -180,7 +180,7 @@ func (h *Handlers) GetEngineImpact(ctx context.Context, request GetEngineImpactR
 
 // DiscoverEngineCatalogs — POST /engines/{id}/discover (#110). Runs native
 // catalog discovery now and reports what changed.
-func (h *Handlers) DiscoverEngineCatalogs(ctx context.Context, request DiscoverEngineCatalogsRequestObject) (DiscoverEngineCatalogsResponseObject, error) {
+func (h *CatalogHandlers) DiscoverEngineCatalogs(ctx context.Context, request DiscoverEngineCatalogsRequestObject) (DiscoverEngineCatalogsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DiscoverEngineCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -266,7 +266,7 @@ func (h *Handlers) DiscoverEngineCatalogs(ctx context.Context, request DiscoverE
 }
 
 // GetReconcileRun — GET /engines/{id}/reconcile-runs/{run_id}. Admins only.
-func (h *Handlers) GetReconcileRun(ctx context.Context, request GetReconcileRunRequestObject) (GetReconcileRunResponseObject, error) {
+func (h *CatalogHandlers) GetReconcileRun(ctx context.Context, request GetReconcileRunRequestObject) (GetReconcileRunResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetReconcileRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

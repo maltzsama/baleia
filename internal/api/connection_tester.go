@@ -134,7 +134,7 @@ type testBind struct {
 // connectionTest runs the checks the intents select on one connection's
 // settings.
 type connectionTest struct {
-	h        *Handlers
+	h        *CatalogHandlers
 	provider connections.Provider
 	cfg      connections.Config
 	// connName names a MySQL server's only native catalog.
@@ -293,7 +293,7 @@ func (t connectionTest) bind(ctx context.Context, b testBind) error {
 // and a bind check on the default Trino engine for a database the binder
 // supports. A bind: intent names an engine id the caller may bind into;
 // anything else is reported as not found.
-func (h *Handlers) planTest(ctx context.Context, p authz.Principal, provider connections.Provider, cfg connections.Config, connName string, intents *[]string) (connectionTest, *string, error) {
+func (h *CatalogHandlers) planTest(ctx context.Context, p authz.Principal, provider connections.Provider, cfg connections.Config, connName string, intents *[]string) (connectionTest, *string, error) {
 	t := connectionTest{h: h, provider: provider, cfg: cfg, connName: connName}
 	roles := provider.Roles()
 	if intents == nil || len(*intents) == 0 {
@@ -372,7 +372,7 @@ func (l *testLimiter) allow(user string, now time.Time) bool {
 
 // TestConnectionDraft — POST /catalog-connections/test (#12): the checks on
 // settings not saved yet. Nothing is persisted.
-func (h *Handlers) TestConnectionDraft(ctx context.Context, request TestConnectionDraftRequestObject) (TestConnectionDraftResponseObject, error) {
+func (h *CatalogHandlers) TestConnectionDraft(ctx context.Context, request TestConnectionDraftRequestObject) (TestConnectionDraftResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return TestConnectionDraft401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

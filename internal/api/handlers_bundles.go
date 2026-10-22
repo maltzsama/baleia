@@ -49,7 +49,7 @@ func (r importReportResponse) VisitImportSpaceBundleResponse(w http.ResponseWrit
 }
 
 // ExportSpaceBundle — GET /workspaces/{id}/spaces/{space_id}/export
-func (h *Handlers) ExportSpaceBundle(ctx context.Context, request ExportSpaceBundleRequestObject) (ExportSpaceBundleResponseObject, error) {
+func (h *SemanticHandlers) ExportSpaceBundle(ctx context.Context, request ExportSpaceBundleRequestObject) (ExportSpaceBundleResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceViewer); err != nil {
 		if unauthorized(err) {
@@ -74,7 +74,7 @@ func (h *Handlers) ExportSpaceBundle(ctx context.Context, request ExportSpaceBun
 }
 
 // ImportSpaceBundle — POST /workspaces/{id}/spaces/{space_id}/import
-func (h *Handlers) ImportSpaceBundle(ctx context.Context, request ImportSpaceBundleRequestObject) (ImportSpaceBundleResponseObject, error) {
+func (h *SemanticHandlers) ImportSpaceBundle(ctx context.Context, request ImportSpaceBundleRequestObject) (ImportSpaceBundleResponseObject, error) {
 	ws, spaceID := workspaceIDFromRequest(request.Id), spaceIDFromRequest(request.SpaceId)
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err != nil {
 		if unauthorized(err) {

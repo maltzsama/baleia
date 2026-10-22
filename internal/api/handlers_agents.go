@@ -20,18 +20,18 @@ import (
 
 var errWorkspaceNotVisible = errors.New("workspace not visible")
 
-func (h *Handlers) agentsEnabled() bool {
+func (h *core) agentsEnabled() bool {
 	return h.settings.Agents.Enabled
 }
 
-func (h *Handlers) agentTokenDefaultTTL() time.Duration {
+func (h *core) agentTokenDefaultTTL() time.Duration {
 	if h.settings.Agents.TokenDefaultTTL > 0 {
 		return h.settings.Agents.TokenDefaultTTL
 	}
 	return auth.DefaultAgentTokenTTL
 }
 
-func (h *Handlers) agentTokenMaxTTL() time.Duration {
+func (h *core) agentTokenMaxTTL() time.Duration {
 	if h.settings.Agents.TokenMaxTTL > 0 {
 		return h.settings.Agents.TokenMaxTTL
 	}
@@ -45,7 +45,7 @@ func agentNotFound() NotFoundJSONResponse {
 
 // agentScope loads an external agent the caller may see: its owner or a global
 // administrator.
-func (h *Handlers) agentScope(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
+func (h *core) agentScope(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
 	agent, err := h.queries.GetAgentByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -63,7 +63,7 @@ func (h *Handlers) agentScope(ctx context.Context, p authz.Principal, id pgtype.
 }
 
 // agentOwned loads an external agent only when the caller owns it.
-func (h *Handlers) agentOwned(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
+func (h *core) agentOwned(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
 	agent, ok, err := h.agentScope(ctx, p, id)
 	if err != nil || !ok {
 		return db.Agent{}, false, err
@@ -74,7 +74,7 @@ func (h *Handlers) agentOwned(ctx context.Context, p authz.Principal, id pgtype.
 	return agent, true, nil
 }
 
-func (h *Handlers) agentActions(p authz.Principal, agent db.Agent) []AgentAllowedAction {
+func (h *core) agentActions(p authz.Principal, agent db.Agent) []AgentAllowedAction {
 	if agent.OwnerID.Bytes == p.UserID.Bytes {
 		return []AgentAllowedAction{
 			AgentAllowedActionView, AgentAllowedActionUpdate, AgentAllowedActionDisable,
@@ -89,7 +89,7 @@ func (h *Handlers) agentActions(p authz.Principal, agent db.Agent) []AgentAllowe
 
 // agentPublic builds the API view. Token summaries are computed from the
 // token list (agents own at most a handful of tokens).
-func (h *Handlers) agentPublic(ctx context.Context, p authz.Principal, agent db.Agent) (Agent, error) {
+func (h *core) agentPublic(ctx context.Context, p authz.Principal, agent db.Agent) (Agent, error) {
 	workspaces, err := h.queries.ListAgentWorkspaces(ctx, agent.ID)
 	if err != nil {
 		return Agent{}, err
@@ -160,7 +160,7 @@ func agentTokenPublic(t db.AgentToken) AgentToken {
 // validateAgentWorkspaces keeps the workspace ids the owner is a member of.
 // Any inaccessible id fails the whole request: the caller cannot probe for
 // workspaces it cannot see.
-func (h *Handlers) validateAgentWorkspaces(ctx context.Context, owner pgtype.UUID, ids []openapi_types.UUID) ([]pgtype.UUID, error) {
+func (h *core) validateAgentWorkspaces(ctx context.Context, owner pgtype.UUID, ids []openapi_types.UUID) ([]pgtype.UUID, error) {
 	out := make([]pgtype.UUID, 0, len(ids))
 	seen := make(map[[16]byte]bool, len(ids))
 	for _, id := range ids {
@@ -195,7 +195,7 @@ func addAgentWorkspaces(ctx context.Context, q db.Querier, agentID pgtype.UUID, 
 
 // ── handlers ─────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error) {
+func (h *AgentHandlers) ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error) {
 	if !h.agentsEnabled() {
 		return ListAgents404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -230,7 +230,7 @@ func (h *Handlers) ListAgents(ctx context.Context, request ListAgentsRequestObje
 	return ListAgents200JSONResponse(out), nil
 }
 
-func (h *Handlers) CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error) {
+func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return CreateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -290,7 +290,7 @@ func (h *Handlers) CreateAgent(ctx context.Context, request CreateAgentRequestOb
 	return CreateAgent201JSONResponse(pub), nil
 }
 
-func (h *Handlers) GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error) {
+func (h *AgentHandlers) GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return GetAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -316,7 +316,7 @@ func (h *Handlers) GetAgent(ctx context.Context, request GetAgentRequestObject) 
 	return GetAgent200JSONResponse(pub), nil
 }
 
-func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error) {
+func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return UpdateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -431,7 +431,7 @@ func (h *Handlers) UpdateAgent(ctx context.Context, request UpdateAgentRequestOb
 	return UpdateAgent200JSONResponse(pub), nil
 }
 
-func (h *Handlers) DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error) {
+func (h *AgentHandlers) DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error) {
 	if !h.agentsEnabled() {
 		return DeleteAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -457,7 +457,7 @@ func (h *Handlers) DeleteAgent(ctx context.Context, request DeleteAgentRequestOb
 	return DeleteAgent204Response{}, nil
 }
 
-func (h *Handlers) ListAgentTokens(ctx context.Context, request ListAgentTokensRequestObject) (ListAgentTokensResponseObject, error) {
+func (h *AgentHandlers) ListAgentTokens(ctx context.Context, request ListAgentTokensRequestObject) (ListAgentTokensResponseObject, error) {
 	if !h.agentsEnabled() {
 		return ListAgentTokens404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -487,7 +487,7 @@ func (h *Handlers) ListAgentTokens(ctx context.Context, request ListAgentTokensR
 	return ListAgentTokens200JSONResponse(out), nil
 }
 
-func (h *Handlers) CreateAgentToken(ctx context.Context, request CreateAgentTokenRequestObject) (CreateAgentTokenResponseObject, error) {
+func (h *AgentHandlers) CreateAgentToken(ctx context.Context, request CreateAgentTokenRequestObject) (CreateAgentTokenResponseObject, error) {
 	if !h.agentsEnabled() {
 		return CreateAgentToken404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
@@ -555,7 +555,7 @@ func (h *Handlers) CreateAgentToken(ctx context.Context, request CreateAgentToke
 	}), nil
 }
 
-func (h *Handlers) RevokeAgentToken(ctx context.Context, request RevokeAgentTokenRequestObject) (RevokeAgentTokenResponseObject, error) {
+func (h *AgentHandlers) RevokeAgentToken(ctx context.Context, request RevokeAgentTokenRequestObject) (RevokeAgentTokenResponseObject, error) {
 	if !h.agentsEnabled() {
 		return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}

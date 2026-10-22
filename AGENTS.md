@@ -165,6 +165,12 @@ server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWor
 
 - The OpenAPI spec (`api/swagger.yaml`) is the source of truth; regenerate
   with `make generate` and `make sqlc`.
+- `internal/api.API` composes one handler group per domain (`AuthHandlers`,
+  `WorkspaceHandlers`, `CatalogHandlers`, `QueryHandlers`, `SemanticHandlers`,
+  `AgentHandlers`, `OpsHandlers`) over a shared `core` (database, engines,
+  audit, settings). A new operation goes on its domain's group; state only
+  that group needs is a field of the group, not of `core`. Tests build the
+  API with `testAPI(handlerFields{...})`.
 - Every credential write goes through the keyring; decrypt fails closed.
 - Every outbound connection goes through `connections.Dialer`.
 - Audit events are best-effort and append-only; versions are transactional.

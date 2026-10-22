@@ -79,7 +79,7 @@ func engineNotFound() NotFoundJSONResponse {
 
 // ListEngines returns every engine to an admin, else the engines on the
 // caller's connections and those hosting a catalog granted to them.
-func (h *Handlers) ListEngines(ctx context.Context, _ ListEnginesRequestObject) (ListEnginesResponseObject, error) {
+func (h *CatalogHandlers) ListEngines(ctx context.Context, _ ListEnginesRequestObject) (ListEnginesResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -96,7 +96,7 @@ func (h *Handlers) ListEngines(ctx context.Context, _ ListEnginesRequestObject) 
 	return ListEngines200JSONResponse(h.describeEngines(ctx, engines)), nil
 }
 
-func (h *Handlers) GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error) {
+func (h *CatalogHandlers) GetEngine(ctx context.Context, request GetEngineRequestObject) (GetEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -114,7 +114,7 @@ func (h *Handlers) GetEngine(ctx context.Context, request GetEngineRequestObject
 // CreateEngine registers a direct engine on a connection the caller owns (or
 // any connection, for an admin), after checking Baleia can reach it, together
 // with the native catalogs it exposes.
-func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequestObject) (CreateEngineResponseObject, error) {
+func (h *CatalogHandlers) CreateEngine(ctx context.Context, request CreateEngineRequestObject) (CreateEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -201,7 +201,7 @@ func (h *Handlers) CreateEngine(ctx context.Context, request CreateEngineRequest
 	return CreateEngine201JSONResponse(h.withEngineActions(ctx, created)), nil
 }
 
-func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error) {
+func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return UpdateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -225,7 +225,7 @@ func (h *Handlers) UpdateEngine(ctx context.Context, request UpdateEngineRequest
 
 // DeleteEngine removes an engine with its native catalogs and bindings. It is
 // refused while managed bindings or running executions exist.
-func (h *Handlers) DeleteEngine(ctx context.Context, request DeleteEngineRequestObject) (DeleteEngineResponseObject, error) {
+func (h *CatalogHandlers) DeleteEngine(ctx context.Context, request DeleteEngineRequestObject) (DeleteEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -270,7 +270,7 @@ func (h *Handlers) DeleteEngine(ctx context.Context, request DeleteEngineRequest
 	return DeleteEngine204Response{}, nil
 }
 
-func (h *Handlers) ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error) {
+func (h *CatalogHandlers) ListEngineBindings(ctx context.Context, request ListEngineBindingsRequestObject) (ListEngineBindingsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListEngineBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -304,7 +304,7 @@ func (h *Handlers) ListEngineBindings(ctx context.Context, request ListEngineBin
 	return ListEngineBindings200JSONResponse(out), nil
 }
 
-func (h *Handlers) ListCatalogBindings(ctx context.Context, request ListCatalogBindingsRequestObject) (ListCatalogBindingsResponseObject, error) {
+func (h *CatalogHandlers) ListCatalogBindings(ctx context.Context, request ListCatalogBindingsRequestObject) (ListCatalogBindingsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

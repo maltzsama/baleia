@@ -8,7 +8,7 @@ import (
 // dummyPasswordHash returns a bcrypt hash at the configured cost for the
 // unknown-account and SSO-only paths. It is generated once per process and
 // only ever compared against, never accepted (#51).
-func (h *Handlers) dummyPasswordHash() string {
+func (h *AuthHandlers) dummyPasswordHash() string {
 	h.dummyHashOnce.Do(func() {
 		cost := bcrypt.DefaultCost
 		if h.settings.Auth.PasswordCost >= bcrypt.MinCost {

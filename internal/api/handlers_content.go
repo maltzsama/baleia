@@ -17,7 +17,7 @@ import (
 var folderSlugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // decorateSpace adds the counts and allowed actions the content UI needs (#113).
-func (h *Handlers) decorateSpace(ctx context.Context, sp *Space, role string) {
+func (h *core) decorateSpace(ctx context.Context, sp *Space, role string) {
 	counts, err := h.queries.CountSpaceContentKinds(ctx, pgtype.UUID{Bytes: [16]byte(sp.Id), Valid: true})
 	if err == nil {
 		saved, metrics, models, folders := int(counts.SavedQueries), int(counts.SemanticMetrics), int(counts.SemanticModels), int(counts.Folders)
@@ -42,7 +42,7 @@ func spaceActions(role string, isDefault bool) []string {
 }
 
 // SearchContent — GET /workspaces/{id}/content/search (#113).
-func (h *Handlers) SearchContent(ctx context.Context, request SearchContentRequestObject) (SearchContentResponseObject, error) {
+func (h *SemanticHandlers) SearchContent(ctx context.Context, request SearchContentRequestObject) (SearchContentResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
@@ -206,7 +206,7 @@ func (h *Handlers) SearchContent(ctx context.Context, request SearchContentReque
 
 // ListWorkspacePrincipals — GET /workspaces/{id}/principals (#113). Any
 // workspace member may search the people and teams they can add to a space.
-func (h *Handlers) ListWorkspacePrincipals(ctx context.Context, request ListWorkspacePrincipalsRequestObject) (ListWorkspacePrincipalsResponseObject, error) {
+func (h *SemanticHandlers) ListWorkspacePrincipals(ctx context.Context, request ListWorkspacePrincipalsRequestObject) (ListWorkspacePrincipalsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
@@ -278,7 +278,7 @@ func (h *Handlers) ListWorkspacePrincipals(ctx context.Context, request ListWork
 
 // UpdateFolder — PATCH /workspaces/{id}/folders/{folder_id} (#113). Renames a
 // folder or moves its subtree within or across spaces.
-func (h *Handlers) UpdateFolder(ctx context.Context, request UpdateFolderRequestObject) (UpdateFolderResponseObject, error) {
+func (h *SemanticHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRequestObject) (UpdateFolderResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {

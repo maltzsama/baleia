@@ -32,7 +32,7 @@ import (
 // CREATE/DROP CATALOG surfaces as a sync error instead of blocking the request.
 var catalogDDLTimeout = 30 * time.Second
 
-func (h *Handlers) authz() *authz.Checker {
+func (h *core) authz() *authz.Checker {
 	c := authz.New(h.queries)
 	if h.metrics.authz != nil {
 		c.WithDenials(h.metrics.authz.Denied)
@@ -48,7 +48,7 @@ func (h *Handlers) authz() *authz.Checker {
 }
 
 // ListCatalogs — GET /connections/{connection_id}/catalogs
-func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error) {
+func (h *CatalogHandlers) ListCatalogs(ctx context.Context, request ListCatalogsRequestObject) (ListCatalogsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -89,7 +89,7 @@ func (h *Handlers) ListCatalogs(ctx context.Context, request ListCatalogsRequest
 // Write-through flow (CR-017 §I7b) through the Trino binder (#80): the
 // catalog row and the registry row are written in one transaction, then
 // CREATE CATALOG is sent.
-func (h *Handlers) CreateCatalog(ctx context.Context, request CreateCatalogRequestObject) (CreateCatalogResponseObject, error) {
+func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatalogRequestObject) (CreateCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -205,7 +205,7 @@ func upsertPrimaryBinding(ctx context.Context, q db.Querier, cluster db.TrinoClu
 // projectBinding projects a binding of conn through the Trino binder. A
 // Hive-connector catalog of a metastore whose connection also exposes Iceberg
 // or Delta catalogs on engineID gets Trino table redirection (#86).
-func (h *Handlers) projectBinding(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, spec bindings.BindingSpec) (bindings.Projection, error) {
+func (h *CatalogHandlers) projectBinding(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, spec bindings.BindingSpec) (bindings.Projection, error) {
 	_, cfg, err := h.connectionConfig(conn)
 	if err != nil {
 		return bindings.Projection{}, err
@@ -232,7 +232,7 @@ func catalogSpec(cat db.Catalog) (bindings.BindingSpec, error) {
 }
 
 // projectCatalog projects a stored catalog.
-func (h *Handlers) projectCatalog(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, cat db.Catalog) (bindings.Projection, error) {
+func (h *CatalogHandlers) projectCatalog(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, cat db.Catalog) (bindings.Projection, error) {
 	spec, err := catalogSpec(cat)
 	if err != nil {
 		return bindings.Projection{}, err
@@ -282,7 +282,7 @@ func catalogAccessError(err error) (notFound, forbidden bool) {
 }
 
 // GetCatalog — GET /connections/{connection_id}/catalogs/{catalog_id}
-func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObject) (GetCatalogResponseObject, error) {
+func (h *CatalogHandlers) GetCatalog(ctx context.Context, request GetCatalogRequestObject) (GetCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -303,7 +303,7 @@ func (h *Handlers) GetCatalog(ctx context.Context, request GetCatalogRequestObje
 // Rename (trino_catalog_name change) → DROP old + soft-delete the old registry
 // row + UPDATE the domain row (including the new name) + re-create under the
 // new name. Other changes: UPDATE + DROP + registry upsert + CREATE.
-func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error) {
+func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatalogRequestObject) (UpdateCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return UpdateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -437,7 +437,7 @@ func (h *Handlers) UpdateCatalog(ctx context.Context, request UpdateCatalogReque
 
 // DeleteCatalog — DELETE /connections/{connection_id}/catalogs/{catalog_id}
 // Soft delete (enabled=false) + soft-delete registry row + DROP at Trino.
-func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogRequestObject) (DeleteCatalogResponseObject, error) {
+func (h *CatalogHandlers) DeleteCatalog(ctx context.Context, request DeleteCatalogRequestObject) (DeleteCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -491,7 +491,7 @@ func (h *Handlers) DeleteCatalog(ctx context.Context, request DeleteCatalogReque
 }
 
 // SyncCatalog — POST /catalogs/{catalog_id}/sync
-func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestObject) (SyncCatalogResponseObject, error) {
+func (h *CatalogHandlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestObject) (SyncCatalogResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return SyncCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -558,7 +558,7 @@ func (h *Handlers) SyncCatalog(ctx context.Context, request SyncCatalogRequestOb
 // ReconcileTrino — POST /trino/reconcile
 // Read-only comparison of the registry vs live Trino catalog list. It exposes
 // every catalog in the cluster, so it is for global administrators only.
-func (h *Handlers) ReconcileTrino(ctx context.Context, request ReconcileTrinoRequestObject) (ReconcileTrinoResponseObject, error) {
+func (h *CatalogHandlers) ReconcileTrino(ctx context.Context, request ReconcileTrinoRequestObject) (ReconcileTrinoResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ReconcileTrino401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

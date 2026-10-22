@@ -32,6 +32,6 @@ func (t poolTx) InTx(ctx context.Context, fn func(q db.Querier) error) error {
 }
 
 // inTx runs fn through the handlers' txRunner.
-func (h *Handlers) inTx(ctx context.Context, fn func(q db.Querier) error) error {
+func (h *core) inTx(ctx context.Context, fn func(q db.Querier) error) error {
 	return h.tx.InTx(ctx, fn)
 }

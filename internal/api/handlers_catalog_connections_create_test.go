@@ -81,8 +81,9 @@ func validCreateRequests() map[string]*CreateCatalogConnectionRequest {
 	}
 }
 
-func createHandlers(t *testing.T, q db.Querier, kr *crypto.Keyring) *Handlers {
-	return &Handlers{queries: q, tx: directTx{q: q}, keyring: kr, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+func createHandlers(t *testing.T, q db.Querier, kr *crypto.Keyring) *API {
+	t.Helper()
+	return testAPI(handlerFields{queries: q, tx: directTx{q: q}, keyring: kr, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 }
 
 func visitCreate(t *testing.T, resp CreateCatalogConnectionResponseObject) *httptest.ResponseRecorder {
@@ -251,7 +252,7 @@ func storedPolaris(t *testing.T, kr *crypto.Keyring) db.CatalogConnection {
 	return c
 }
 
-func runUpdate(t *testing.T, h *Handlers, body UpdateCatalogConnectionRequest) *httptest.ResponseRecorder {
+func runUpdate(t *testing.T, h *API, body UpdateCatalogConnectionRequest) *httptest.ResponseRecorder {
 	t.Helper()
 	resp, err := h.UpdateCatalogConnection(testContext(), UpdateCatalogConnectionRequestObject{Id: [16]byte{0x01}, Body: &body})
 	if err != nil {

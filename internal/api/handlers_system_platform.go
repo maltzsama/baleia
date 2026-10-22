@@ -17,7 +17,7 @@ import (
 
 func statusStringPtr(s string) *string { return &s }
 
-func (h *Handlers) probePlatform(ctx context.Context, status *SystemStatus) {
+func (h *OpsHandlers) probePlatform(ctx context.Context, status *SystemStatus) {
 	var wg sync.WaitGroup
 	wg.Add(7)
 	go func() {
@@ -56,7 +56,7 @@ func statusItems(items []SystemStatusItem) *[]SystemStatusItem { return &items }
 
 // metadataSyncEvery is the metadata-sync interval; the zero Settings means
 // the default, as SettingsFromConfig resolves it.
-func (h *Handlers) metadataSyncEvery() time.Duration {
+func (h *core) metadataSyncEvery() time.Duration {
 	if h.settings.Ops.MetadataSyncEvery <= 0 {
 		return config.DefaultMetadataSyncInterval
 	}
@@ -65,7 +65,7 @@ func (h *Handlers) metadataSyncEvery() time.Duration {
 
 // schedulesStatus reports every exported core schedule, including the
 // directory reconciler added with user suspension (#257).
-func (h *Handlers) schedulesStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) schedulesStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	describe := h.systemStatusSchedule
 	if describe == nil {
@@ -107,7 +107,7 @@ func (h *Handlers) schedulesStatus(ctx context.Context) SystemStatusResource {
 
 // enginesStatus reuses the cached engine probe: the status page never adds a
 // second round trip.
-func (h *Handlers) enginesStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) enginesStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	if h.queries == nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
@@ -138,7 +138,7 @@ func (h *Handlers) enginesStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *Handlers) bindingsStatus(ctx context.Context) SystemStatusResource {
+func (h *core) bindingsStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	if h.queries == nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
@@ -154,7 +154,7 @@ func (h *Handlers) bindingsStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *Handlers) metadataStatus(ctx context.Context) SystemStatusResource {
+func (h *core) metadataStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	if h.queries == nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
@@ -175,7 +175,7 @@ func (h *Handlers) metadataStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *Handlers) reconcileStatus(ctx context.Context) SystemStatusResource {
+func (h *core) reconcileStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	if h.queries == nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
@@ -209,7 +209,7 @@ func (h *Handlers) reconcileStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *Handlers) auditExportStatus(ctx context.Context) SystemStatusResource {
+func (h *core) auditExportStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	configured := h.settings.Ops.AuditExportURL != ""
 	configuredValue := int64(0)
@@ -232,7 +232,7 @@ func (h *Handlers) auditExportStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *Handlers) pluginStatus(ctx context.Context) SystemStatusResource {
+func (h *core) pluginStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	expected := "0.9.2"
 	if h.settings.Ops.PluginVersion != "" {

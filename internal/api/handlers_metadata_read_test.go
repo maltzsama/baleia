@@ -18,7 +18,7 @@ import (
 // not catalog "other", and its owner owns catalog "mine".
 type metaFixture struct {
 	pool            *pgxpool.Pool
-	h               *Handlers
+	h               *API
 	owner, stranger string
 	ws, strangerWS  openapi_types.UUID
 	lake, other     openapi_types.UUID
@@ -86,7 +86,7 @@ func newMetaFixture(t *testing.T) *metaFixture {
 	var deep openapi_types.UUID
 	table(&deep, f.lake, `{ops,"b.c"}`, "deep", false)
 
-	f.h = &Handlers{dialects: dialect.NewRegistry(), queries: db.New(pool), tx: poolTx{pool: pool}} // no engines: reads never call one
+	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: db.New(pool), tx: poolTx{pool: pool}}) // no engines: reads never call one
 	return f
 }
 
