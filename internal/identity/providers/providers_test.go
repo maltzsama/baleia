@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,6 +16,9 @@ type fakeStore struct {
 	providers map[[16]byte]db.AuthProvider
 	linked    map[[16]byte]int64
 	detached  map[[16]byte]bool
+	// raceLinked makes the delete fail as if a user had been linked after
+	// the count.
+	raceLinked bool
 }
 
 func newStore() *fakeStore {
@@ -72,6 +76,10 @@ func (f *fakeStore) DeleteAPIKeysByAuthProvider(context.Context, pgtype.UUID) er
 func (f *fakeStore) SuspendUsersByAuthProvider(context.Context, pgtype.UUID) error  { return nil }
 
 func (f *fakeStore) DeleteAuthProvider(_ context.Context, id pgtype.UUID) error {
+	if f.raceLinked {
+		// A login linked a user after the count: the database refuses.
+		return &pgconn.PgError{Code: "23514", ConstraintName: "chk_oidc_auth"}
+	}
 	delete(f.providers, id.Bytes)
 	return nil
 }
@@ -163,5 +171,17 @@ func TestGet_StoreFailureIsNotNotFound(t *testing.T) {
 	}
 	if err := s.Delete(context.Background(), id, true); !errors.Is(err, errDown) {
 		t.Errorf("Delete = %v, want the store error", err)
+	}
+}
+
+// TestDelete_UserLinkedDuringDelete: a user linked between the count and the
+// delete is a conflict, not a server error.
+func TestDelete_UserLinkedDuringDelete(t *testing.T) {
+	st := newStore()
+	s := New(st, st.tx)
+	ap, _ := s.Create(context.Background(), "p", "oidc", true, func(id pgtype.UUID) (string, error) { return id.String(), nil })
+	st.raceLinked = true
+	if err := s.Delete(context.Background(), ap.ID, false); !errors.Is(err, ErrInUse) {
+		t.Fatalf("Delete = %v, want ErrInUse", err)
 	}
 }

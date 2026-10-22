@@ -9,6 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -29,6 +30,7 @@ type Creator interface {
 
 // Remover detaches a provider's users and deletes it; *db.Queries implements it.
 type Remover interface {
+	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
 	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	SuspendUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
@@ -126,15 +128,10 @@ func (s *Service) Delete(ctx context.Context, id pgtype.UUID, suspendUsers bool)
 	if err != nil {
 		return err
 	}
-	linked, err := s.store.CountUsersByAuthProvider(ctx, ap.ID)
-	if err != nil {
-		return err
-	}
-	if linked > 0 && !suspendUsers {
-		return ErrInUse
-	}
 	return s.tx(ctx, func(q TxStore) error {
-		if linked > 0 {
+		if suspendUsers {
+			// Unconditional, so a user linked by a login racing this delete
+			// is detached too; with no linked users these change nothing.
 			if err := q.RevokeRefreshTokensByAuthProvider(ctx, ap.ID); err != nil {
 				return err
 			}
@@ -144,7 +141,18 @@ func (s *Service) Delete(ctx context.Context, id pgtype.UUID, suspendUsers bool)
 			if err := q.SuspendUsersByAuthProvider(ctx, ap.ID); err != nil {
 				return err
 			}
+		} else if linked, err := q.CountUsersByAuthProvider(ctx, ap.ID); err != nil {
+			return err
+		} else if linked > 0 {
+			return ErrInUse
 		}
-		return q.DeleteAuthProvider(ctx, ap.ID)
+		err := q.DeleteAuthProvider(ctx, ap.ID)
+		// A user linked after the count: the FK's ON DELETE SET NULL breaks
+		// chk_oidc_auth/chk_ldap_auth, which means the provider is in use.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23514" { // check_violation
+			return ErrInUse
+		}
+		return err
 	})
 }
