@@ -12,8 +12,16 @@ import (
 )
 
 // TestRun_CleanShutdown: cancelling the context drains and returns nil, not
-// http.ErrServerClosed, so the API exits 0 on SIGTERM (#372).
+// http.ErrServerClosed, so the API exits 0 on SIGTERM (#372), with a drain
+// deadline or without one.
 func TestRun_CleanShutdown(t *testing.T) {
+	for _, timeout := range []time.Duration{5 * time.Second, 0} {
+		t.Run(timeout.String(), func(t *testing.T) { cleanShutdown(t, timeout) })
+	}
+}
+
+// cleanShutdown runs the server with the given drain deadline (0: none).
+func cleanShutdown(t *testing.T, timeout time.Duration) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +31,7 @@ func TestRun_CleanShutdown(t *testing.T) {
 
 	mux := chi.NewRouter()
 	mux.Get("/ping", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	s := &Server{cfg: &config.Config{Port: port, HTTPReadHeaderTimeout: time.Second, HTTPShutdownTimeout: 5 * time.Second}, mux: mux}
+	s := &Server{cfg: &config.Config{Port: port, HTTPReadHeaderTimeout: time.Second, HTTPShutdownTimeout: timeout}, mux: mux}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

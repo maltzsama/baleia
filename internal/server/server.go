@@ -499,7 +499,8 @@ func extractToken(r *http.Request) string {
 }
 
 // Run serves until ctx ends, then drains in-flight requests for at most
-// HTTPShutdownTimeout (#372). A clean shutdown returns nil.
+// HTTPShutdownTimeout, or without a deadline when it is zero (#372). A clean
+// shutdown returns nil.
 func (s *Server) Run(ctx context.Context) error {
 	srv := &http.Server{
 		Addr:    ":" + s.cfg.Port,
@@ -512,7 +513,11 @@ func (s *Server) Run(ctx context.Context) error {
 	shutdown := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
-		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.cfg.HTTPShutdownTimeout)
+		// Zero drains with no deadline.
+		sctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		if s.cfg.HTTPShutdownTimeout > 0 {
+			sctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), s.cfg.HTTPShutdownTimeout)
+		}
 		defer cancel()
 		shutdown <- srv.Shutdown(sctx)
 	}()
