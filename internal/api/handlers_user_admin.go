@@ -3,11 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/identity/users"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -22,33 +24,17 @@ func (h *AuthHandlers) SuspendUser(ctx context.Context, request SuspendUserReque
 		return SuspendUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	user, err := h.queries.GetUserByID(ctx, uid)
-	if err != nil {
+	asked := ""
+	if request.Body != nil && request.Body.Reason != nil {
+		asked = string(*request.Body.Reason)
+	}
+	// The suspension, the end of its sessions and the deletion of its API keys
+	// commit together.
+	user, updated, reason, err := h.users.Suspend(ctx, uid, asked)
+	if errors.Is(err, users.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return SuspendUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
-
-	reason := "admin"
-	if request.Body != nil && request.Body.Reason != nil {
-		// Keep the metric label and the reconciliation vocabulary bounded.
-		switch r := string(*request.Body.Reason); r {
-		case "admin", "policy":
-			reason = r
-		}
-	}
-
-	var updated db.User
-	err = h.inTx(ctx, func(q db.Querier) error {
-		var err error
-		updated, err = q.SuspendUser(ctx, db.SuspendUserParams{ID: uid, SuspendedReason: &reason})
-		if err != nil {
-			return err
-		}
-		if err := q.RevokeUserRefreshTokens(ctx, uid); err != nil {
-			return err
-		}
-		return q.DeleteAPIKeysByUser(ctx, uid)
-	})
 	if err != nil {
 		return nil, err
 	}
@@ -69,13 +55,11 @@ func (h *AuthHandlers) ReinstateUser(ctx context.Context, request ReinstateUserR
 		return ReinstateUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	user, err := h.queries.GetUserByID(ctx, uid)
-	if err != nil {
+	user, updated, err := h.users.Reinstate(ctx, uid)
+	if errors.Is(err, users.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return ReinstateUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
-
-	updated, err := h.queries.ReinstateUser(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -107,9 +91,7 @@ func (h *AuthHandlers) ListDirectoryReconcileRuns(ctx context.Context, request L
 		providerID = pgtype.UUID{Bytes: *request.Params.ProviderId, Valid: true}
 	}
 
-	rows, err := h.queries.ListDirectoryReconcileRuns(ctx, db.ListDirectoryReconcileRunsParams{
-		Column1: providerID, Limit: int32(limit),
-	})
+	rows, err := h.users.ReconcileRuns(ctx, providerID, int32(limit))
 	if err != nil {
 		return nil, err
 	}

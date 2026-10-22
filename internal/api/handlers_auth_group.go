@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/session"
 	"github.com/galileostudio/baleia/internal/identity/setup"
+	"github.com/galileostudio/baleia/internal/identity/users"
 	"github.com/galileostudio/baleia/internal/mail"
 )
 
@@ -33,6 +34,8 @@ type AuthHandlers struct {
 	sessions *session.Service
 	// resets runs the e-mailed password reset (#51).
 	resets *passwordreset.Service
+	// users administers accounts (#258).
+	users *users.Service
 	// accounts is the signed-in user's own account.
 	accounts *account.Service
 	// setup creates the first administrator.
@@ -71,6 +74,13 @@ func newAuthHandlers(c *core) *AuthHandlers {
 	a.oidc = oidclogin.New(c.queries, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
 		PublicURL: c.settings.Mail.PublicURL,
 		CacheTTL:  time.Hour,
+	})
+	a.users = users.New(c.queries, func(ctx context.Context, fn func(users.TxStore) error) error {
+		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+	}, groupMailer{a}, a.sessions, users.Config{
+		PublicURL:     c.settings.Mail.PublicURL,
+		DefaultLocale: c.settings.Mail.DefaultLocale,
+		PasswordCost:  c.settings.Auth.PasswordCost,
 	})
 	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
 		PublicURL:     c.settings.Mail.PublicURL,

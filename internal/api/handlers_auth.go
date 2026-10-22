@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -518,14 +516,6 @@ func (h *AuthHandlers) ConfirmPasswordReset(ctx context.Context, request Confirm
 	return ConfirmPasswordReset204Response{}, nil
 }
 
-// revokeUserRefreshTokens ends every refresh token of a user after a lifecycle
-// event (password change/reset, role change, disable). Access tokens expire
-// within the configured access TTL. A failure is logged, not fatal: the
-// triggering change already succeeded.
-func (h *AuthHandlers) revokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) {
-	h.sessions.RevokeAll(ctx, userID)
-}
-
 // ── Profile ───────────────────────────────────────────────────────────────────
 
 func (h *AuthHandlers) GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error) {
@@ -639,14 +629,6 @@ func oidcRedirectTarget(redirect *string) string {
 		return *redirect
 	}
 	return "/"
-}
-
-func randomState() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	// RawURLEncoding: URL-safe and no '=' padding, so the token survives being
-	// embedded raw in a query string (password reset link, OIDC state).
-	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 // authOutcome classifies a strict auth handler's result for
