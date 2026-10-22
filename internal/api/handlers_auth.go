@@ -16,8 +16,8 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/session"
-	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/jackc/pgx/v5"
@@ -615,32 +615,9 @@ func (h *AuthHandlers) RequestPasswordReset(ctx context.Context, request Request
 	// not reveal it either), by the e-mail's fingerprint.
 	h.audited(audit.WithAnonymous(ctx, audit.EmailFingerprint(string(request.Body.Email))),
 		audit.Event{Action: audit.AuthPasswordResetRequest, ResourceType: "user", Outcome: audit.Allowed})
-	user, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
-	if err != nil {
-		return RequestPasswordReset204Response{}, nil
+	if err := h.resets.Request(ctx, string(request.Body.Email)); err != nil {
+		return nil, err
 	}
-
-	token := randomState()
-	expires := time.Now().Add(h.settings.Auth.ResetTTL)
-
-	// Only the hash is stored; the raw token travels in the e-mail link (#51).
-	if err := h.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
-		TokenHash: auth.HashToken(token),
-		UserID:    user.ID,
-		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
-	}); err != nil {
-		return nil, fmt.Errorf("create password reset token: %w", err)
-	}
-
-	resetURL := h.settings.Mail.PublicURL + "/reset-password?token=" + token
-	locale := mail.LocaleOrDefault(user.Locale, h.settings.Mail.DefaultLocale)
-	if err := h.mailSender().Send(ctx, user.Email, locale, mail.TemplatePasswordReset, map[string]any{
-		"Name":     user.Name,
-		"ResetURL": resetURL,
-	}); err != nil {
-		return nil, fmt.Errorf("send password reset e-mail: %w", err)
-	}
-
 	return RequestPasswordReset204Response{}, nil
 }
 
@@ -650,31 +627,18 @@ func (h *AuthHandlers) ConfirmPasswordReset(ctx context.Context, request Confirm
 	if len(request.Body.NewPassword) < minPasswordLength {
 		return ConfirmPasswordReset422JSONResponse{UnprocessableEntityJSONResponse: shortPassword()}, nil
 	}
-	// Consuming the hash makes the link single use even before it expires (#51).
-	row, err := h.queries.ConsumePasswordResetToken(ctx, auth.HashToken(request.Body.Token))
-	if err != nil {
+	userID, err := h.resets.Confirm(ctx, request.Body.Token, request.Body.NewPassword)
+	if errors.Is(err, passwordreset.ErrInvalidToken) {
 		h.audited(ctx, ev.Denied("invalid_token"))
 		return ConfirmPasswordReset401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid or expired token"},
 		}, nil
 	}
-
-	hash, err := auth.HashPasswordWithCost(request.Body.NewPassword, h.settings.Auth.PasswordCost)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := h.queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
-		ID:           row.UserID,
-		PasswordHash: &hash,
-	}); err != nil {
-		return nil, err
-	}
-
-	// A reset ends every existing session (#51).
-	h.revokeUserRefreshTokens(ctx, row.UserID)
-
-	h.audited(audit.AsUser(ctx, row.UserID.String(), audit.AuthPassword), withID(ev, row.UserID).Allowed())
+	h.audited(audit.AsUser(ctx, userID.String(), audit.AuthPassword), withID(ev, userID).Allowed())
 	return ConfirmPasswordReset204Response{}, nil
 }
 

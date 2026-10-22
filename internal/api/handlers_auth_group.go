@@ -5,7 +5,9 @@ import (
 	"sync"
 
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/session"
+	"github.com/galileostudio/baleia/internal/mail"
 )
 
 // AuthHandlers serves sign-in, sessions, users, API keys and identity providers (#365).
@@ -29,6 +31,8 @@ type AuthHandlers struct {
 	directory directoryAuthenticator
 	// sessions issues, rotates and ends sign-in sessions (#51).
 	sessions *session.Service
+	// resets runs the e-mailed password reset (#51).
+	resets *passwordreset.Service
 	// prober probes a provider configuration without persisting anything
 	// (#286); tests give a fake so the handler runs without a network.
 	prober identityProviderProber
@@ -59,12 +63,19 @@ func (networkProber) Probe(ctx context.Context, cfg providerConfig, testUsername
 }
 
 func newAuthHandlers(c *core) *AuthHandlers {
-	return &AuthHandlers{
+	a := &AuthHandlers{
 		core:      c,
 		directory: ldapDirectory{},
 		prober:    networkProber{},
 		sessions:  newSessions(c),
 	}
+	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
+		PublicURL:     c.settings.Mail.PublicURL,
+		DefaultLocale: c.settings.Mail.DefaultLocale,
+		TokenTTL:      c.settings.Auth.ResetTTL,
+		PasswordCost:  c.settings.Auth.PasswordCost,
+	})
+	return a
 }
 
 // newSessions builds the session service over the core's database and settings.
@@ -74,4 +85,12 @@ func newSessions(c *core) *session.Service {
 		AccessTTL:  c.settings.Auth.AccessTTL,
 		RefreshTTL: c.settings.Auth.RefreshTTL,
 	})
+}
+
+// groupMailer sends through the group's mailer as it is when the mail goes
+// out, so a mailer set after construction (tests) is the one used.
+type groupMailer struct{ a *AuthHandlers }
+
+func (m groupMailer) Send(ctx context.Context, to, locale string, template mail.Template, data map[string]any) error {
+	return m.a.mailSender().Send(ctx, to, locale, template, data)
 }
