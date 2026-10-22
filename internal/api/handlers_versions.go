@@ -88,7 +88,7 @@ func unauthorized(err error) bool { return errors.Is(err, authz.ErrUnauthenticat
 
 // ── saved query versions ───────────────────────────────────────────────────────
 
-func (h *Handlers) ListSavedQueryVersions(ctx context.Context, request ListSavedQueryVersionsRequestObject) (ListSavedQueryVersionsResponseObject, error) {
+func (h *SemanticHandlers) ListSavedQueryVersions(ctx context.Context, request ListSavedQueryVersionsRequestObject) (ListSavedQueryVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.QueryId, Valid: true}
 	spaceID, err := h.savedQuerySpaceForHistory(ctx, ws, id)
@@ -125,7 +125,7 @@ func (h *Handlers) ListSavedQueryVersions(ctx context.Context, request ListSaved
 	return out, nil
 }
 
-func (h *Handlers) GetSavedQueryVersion(ctx context.Context, request GetSavedQueryVersionRequestObject) (GetSavedQueryVersionResponseObject, error) {
+func (h *SemanticHandlers) GetSavedQueryVersion(ctx context.Context, request GetSavedQueryVersionRequestObject) (GetSavedQueryVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.QueryId, Valid: true}
 	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
@@ -157,7 +157,7 @@ func (h *Handlers) GetSavedQueryVersion(ctx context.Context, request GetSavedQue
 	return GetSavedQueryVersion200JSONResponse(detail), nil
 }
 
-func (h *Handlers) RestoreSavedQueryVersion(ctx context.Context, request RestoreSavedQueryVersionRequestObject) (RestoreSavedQueryVersionResponseObject, error) {
+func (h *SemanticHandlers) RestoreSavedQueryVersion(ctx context.Context, request RestoreSavedQueryVersionRequestObject) (RestoreSavedQueryVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.QueryId, Valid: true}
 	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
@@ -219,7 +219,7 @@ func (h *Handlers) RestoreSavedQueryVersion(ctx context.Context, request Restore
 
 // ── semantic metric versions ───────────────────────────────────────────────────
 
-func (h *Handlers) ListSemanticMetricVersions(ctx context.Context, request ListSemanticMetricVersionsRequestObject) (ListSemanticMetricVersionsResponseObject, error) {
+func (h *SemanticHandlers) ListSemanticMetricVersions(ctx context.Context, request ListSemanticMetricVersionsRequestObject) (ListSemanticMetricVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.MetricId, Valid: true}
 	spaceID, err := h.metricSpaceForHistory(ctx, ws, id)
@@ -256,7 +256,7 @@ func (h *Handlers) ListSemanticMetricVersions(ctx context.Context, request ListS
 	return out, nil
 }
 
-func (h *Handlers) GetSemanticMetricVersion(ctx context.Context, request GetSemanticMetricVersionRequestObject) (GetSemanticMetricVersionResponseObject, error) {
+func (h *SemanticHandlers) GetSemanticMetricVersion(ctx context.Context, request GetSemanticMetricVersionRequestObject) (GetSemanticMetricVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.MetricId, Valid: true}
 	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
@@ -288,7 +288,7 @@ func (h *Handlers) GetSemanticMetricVersion(ctx context.Context, request GetSema
 	return GetSemanticMetricVersion200JSONResponse(detail), nil
 }
 
-func (h *Handlers) RestoreSemanticMetricVersion(ctx context.Context, request RestoreSemanticMetricVersionRequestObject) (RestoreSemanticMetricVersionResponseObject, error) {
+func (h *SemanticHandlers) RestoreSemanticMetricVersion(ctx context.Context, request RestoreSemanticMetricVersionRequestObject) (RestoreSemanticMetricVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.MetricId, Valid: true}
 	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
@@ -367,7 +367,7 @@ func (h *Handlers) RestoreSemanticMetricVersion(ctx context.Context, request Res
 
 // ── trash ───────────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListTrash(ctx context.Context, request ListTrashRequestObject) (ListTrashResponseObject, error) {
+func (h *SemanticHandlers) ListTrash(ctx context.Context, request ListTrashRequestObject) (ListTrashResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListTrash404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil

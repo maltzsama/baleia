@@ -52,6 +52,9 @@ func testHandlers(f handlerFields) *Handlers {
 	}
 	return &Handlers{
 		core: c,
+		SemanticHandlers: &SemanticHandlers{
+			core: c,
+		},
 		QueryHandlers: &QueryHandlers{
 			core: c,
 		},

@@ -34,6 +34,7 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	*core
+	*SemanticHandlers
 	*QueryHandlers
 	*CatalogHandlers
 	*WorkspaceHandlers
@@ -223,6 +224,9 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	}
 	h := &Handlers{
 		core: c,
+		SemanticHandlers: &SemanticHandlers{
+			core: c,
+		},
 		QueryHandlers: &QueryHandlers{
 			core:      c,
 			wsTickets: d.WSTickets,

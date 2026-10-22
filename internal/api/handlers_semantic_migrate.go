@@ -47,7 +47,7 @@ type migrationGuards struct {
 // metric with the same slug, so links keep resolving through the v1 page's
 // redirect. Upsert by slug (FD16): nothing is deleted and a metric the model
 // already has is left alone.
-func (h *Handlers) MigrateSemanticMetricsV1(ctx context.Context, request MigrateSemanticMetricsV1RequestObject) (MigrateSemanticMetricsV1ResponseObject, error) {
+func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request MigrateSemanticMetricsV1RequestObject) (MigrateSemanticMetricsV1ResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
