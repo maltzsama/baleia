@@ -251,3 +251,25 @@ func TestInvite_FailedMailNeverLogsTheToken(t *testing.T) {
 		t.Error("the failed send must still be logged")
 	}
 }
+
+type brokenStore struct{ *fakeStore }
+
+var errDown = errors.New("connection refused")
+
+func (brokenStore) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+	return db.User{}, errDown
+}
+
+// TestStoreFailureIsNotNotFound: a database outage is an error, never a
+// missing account.
+func TestStoreFailureIsNotNotFound(t *testing.T) {
+	st := brokenStore{newStore()}
+	s := New(st, st.tx, &fakeMailer{}, &fakeSessions{}, Config{})
+	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	if _, _, err := s.ChangeRole(context.Background(), id, "admin"); !errors.Is(err, errDown) || errors.Is(err, ErrNotFound) {
+		t.Errorf("ChangeRole = %v, want the store error", err)
+	}
+	if err := s.Remove(context.Background(), id); !errors.Is(err, errDown) {
+		t.Errorf("Remove = %v, want the store error", err)
+	}
+}

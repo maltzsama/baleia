@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -237,8 +238,11 @@ func (s *Service) ReconcileRuns(ctx context.Context, providerID pgtype.UUID, lim
 
 func (s *Service) get(ctx context.Context, id pgtype.UUID) (db.User, error) {
 	user, err := s.store.GetUserByID(ctx, id)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return db.User{}, ErrNotFound
+	}
+	if err != nil {
+		return db.User{}, err
 	}
 	return user, nil
 }

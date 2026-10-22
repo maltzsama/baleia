@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -62,16 +63,26 @@ func New(store Store, sessions Sessions, cfg Config) *Service {
 // Get returns the account.
 func (s *Service) Get(ctx context.Context, id pgtype.UUID) (db.User, error) {
 	user, err := s.store.GetUserByID(ctx, id)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return db.User{}, ErrNotFound
+	}
+	if err != nil {
+		return db.User{}, err
 	}
 	return user, nil
 }
 
-// PersonalWorkspace returns the account's personal workspace, if it has one.
-func (s *Service) PersonalWorkspace(ctx context.Context, id pgtype.UUID) (pgtype.UUID, bool) {
-	ws, err := s.store.PersonalWorkspaceID(ctx, id)
-	return ws, err == nil
+// PersonalWorkspace returns the account's personal workspace; ok is false
+// when it has none. A store failure is an error, not "none".
+func (s *Service) PersonalWorkspace(ctx context.Context, id pgtype.UUID) (ws pgtype.UUID, ok bool, err error) {
+	ws, err = s.store.PersonalWorkspaceID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return pgtype.UUID{}, false, nil
+	}
+	if err != nil {
+		return pgtype.UUID{}, false, err
+	}
+	return ws, true, nil
 }
 
 // UpdateProfile applies the non-nil fields of change. The caller validates

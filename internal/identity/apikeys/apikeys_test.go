@@ -72,8 +72,9 @@ func TestDelete(t *testing.T) {
 	if err := s.Delete(context.Background(), id, id); err != nil {
 		t.Fatal(err)
 	}
-	st.deleteErr = errors.New("db down")
-	if err := s.Delete(context.Background(), id, id); !errors.Is(err, ErrNotFound) {
-		t.Errorf("failed delete = %v, want ErrNotFound", err)
+	down := errors.New("db down")
+	st.deleteErr = down
+	if err := s.Delete(context.Background(), id, id); !errors.Is(err, down) {
+		t.Errorf("failed delete = %v, want the store error", err)
 	}
 }

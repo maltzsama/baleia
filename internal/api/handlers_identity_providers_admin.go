@@ -27,9 +27,12 @@ func (h *AuthHandlers) UpdateIdentityProvider(ctx context.Context, request Updat
 	}
 
 	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
-	if err != nil {
+	if errors.Is(err, providers.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	name := ap.Name
@@ -135,8 +138,11 @@ func (h *AuthHandlers) TestIdentityProvider(ctx context.Context, request TestIde
 		return TestIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
-	if err != nil {
+	if errors.Is(err, providers.ErrNotFound) {
 		return TestIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	var cfg providerConfig

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -229,8 +230,11 @@ func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (G
 	}
 
 	user, err := h.accounts.Get(ctx, uid)
-	if err != nil {
+	if errors.Is(err, account.ErrNotFound) {
 		return GetMe401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	principal, _ := authz.PrincipalFromContext(ctx)
@@ -249,7 +253,11 @@ func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (G
 		locale := Locale(*user.Locale)
 		me.Locale = &locale
 	}
-	if ws, ok := h.accounts.PersonalWorkspace(ctx, user.ID); ok {
+	// The personal workspace is a convenience: a failed lookup omits it
+	// rather than failing the whole /auth/me.
+	if ws, ok, err := h.accounts.PersonalWorkspace(ctx, user.ID); err != nil {
+		slog.Warn("auth/me: personal workspace lookup failed", "user_id", idString(user.ID), "err", err)
+	} else if ok {
 		id := openapi_types.UUID(ws.Bytes)
 		me.PersonalWorkspaceId = &id
 	}
@@ -526,8 +534,11 @@ func (h *AuthHandlers) GetProfile(ctx context.Context, request GetProfileRequest
 	}
 
 	user, err := h.accounts.Get(ctx, uid)
-	if err != nil {
+	if errors.Is(err, account.ErrNotFound) {
 		return GetProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return GetProfile200JSONResponse(dbUserToPublic(user)), nil

@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/providers"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -59,10 +60,13 @@ func (h *AuthHandlers) GetIdentityProvider(ctx context.Context, request GetIdent
 	}
 
 	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
-	if err != nil {
+	if errors.Is(err, providers.ErrNotFound) {
 		return GetIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{
 			Code: ErrorCodeNotFound, Message: "identity provider not found",
 		}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	detail, err := h.identityProviderDetail(ctx, ap)

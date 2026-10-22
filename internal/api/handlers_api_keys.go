@@ -69,8 +69,8 @@ func (h *AuthHandlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyReq
 	}
 
 	if err := h.apiKeys.Delete(ctx, uid, keyID); err != nil {
-		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "api key not found"}}, nil
+		h.audited(ctx, ev.Failed(audit.ReasonInternal))
+		return nil, err
 	}
 
 	h.audited(ctx, ev.Allowed())

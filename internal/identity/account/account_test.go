@@ -74,12 +74,12 @@ func TestGet(t *testing.T) {
 	if _, err := s.Get(context.Background(), newID()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown = %v, want ErrNotFound", err)
 	}
-	if _, ok := s.PersonalWorkspace(context.Background(), u.ID); ok {
+	if _, ok, err := s.PersonalWorkspace(context.Background(), u.ID); ok || err != nil {
 		t.Error("no personal workspace yet")
 	}
 	ws := newID()
 	st.personal[u.ID.Bytes] = ws
-	if got, ok := s.PersonalWorkspace(context.Background(), u.ID); !ok || got != ws {
+	if got, ok, err := s.PersonalWorkspace(context.Background(), u.ID); !ok || err != nil || got != ws {
 		t.Errorf("personal workspace = %v, %v", got, ok)
 	}
 }
@@ -132,5 +132,30 @@ func TestChangePassword(t *testing.T) {
 	st.users[sso.ID.Bytes] = sso
 	if err := s.ChangePassword(ctx, sso.ID, "", "new-password"); !errors.Is(err, ErrWrongPassword) {
 		t.Errorf("account without a password = %v, want ErrWrongPassword", err)
+	}
+}
+
+// brokenStore fails every read the way a lost connection does.
+type brokenStore struct{ *fakeStore }
+
+var errDown = errors.New("connection refused")
+
+func (brokenStore) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+	return db.User{}, errDown
+}
+
+func (brokenStore) PersonalWorkspaceID(context.Context, pgtype.UUID) (pgtype.UUID, error) {
+	return pgtype.UUID{}, errDown
+}
+
+// TestStoreFailureIsNotNotFound: a database outage is an error, never a
+// missing account or workspace.
+func TestStoreFailureIsNotNotFound(t *testing.T) {
+	s := New(brokenStore{&fakeStore{}}, &fakeSessions{}, Config{})
+	if _, err := s.Get(context.Background(), newID()); !errors.Is(err, errDown) || errors.Is(err, ErrNotFound) {
+		t.Errorf("Get = %v, want the store error", err)
+	}
+	if _, ok, err := s.PersonalWorkspace(context.Background(), newID()); ok || !errors.Is(err, errDown) {
+		t.Errorf("PersonalWorkspace = %v, %v; want the store error", ok, err)
 	}
 }

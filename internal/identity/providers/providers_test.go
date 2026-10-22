@@ -143,3 +143,25 @@ func TestListEnabled(t *testing.T) {
 		t.Errorf("all = %d, want 2", len(all))
 	}
 }
+
+type brokenStore struct{ *fakeStore }
+
+var errDown = errors.New("connection refused")
+
+func (brokenStore) GetAuthProviderByID(context.Context, pgtype.UUID) (db.AuthProvider, error) {
+	return db.AuthProvider{}, errDown
+}
+
+// TestGet_StoreFailureIsNotNotFound: a database outage is an error, never a
+// missing provider.
+func TestGet_StoreFailureIsNotNotFound(t *testing.T) {
+	st := brokenStore{newStore()}
+	s := New(st, st.tx)
+	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	if _, err := s.Get(context.Background(), id); !errors.Is(err, errDown) || errors.Is(err, ErrNotFound) {
+		t.Errorf("Get = %v, want the store error", err)
+	}
+	if err := s.Delete(context.Background(), id, true); !errors.Is(err, errDown) {
+		t.Errorf("Delete = %v, want the store error", err)
+	}
+}

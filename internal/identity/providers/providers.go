@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -75,8 +76,11 @@ func (s *Service) List(ctx context.Context) ([]db.AuthProvider, error) {
 // Get returns one provider.
 func (s *Service) Get(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error) {
 	ap, err := s.store.GetAuthProviderByID(ctx, id)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return db.AuthProvider{}, ErrNotFound
+	}
+	if err != nil {
+		return db.AuthProvider{}, err
 	}
 	return ap, nil
 }

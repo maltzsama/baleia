@@ -6,7 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -20,9 +20,6 @@ type Store interface {
 	CreateAPIKey(ctx context.Context, arg db.CreateAPIKeyParams) (db.ApiKey, error)
 	DeleteAPIKey(ctx context.Context, arg db.DeleteAPIKeyParams) error
 }
-
-// ErrNotFound: the user has no key with this id.
-var ErrNotFound = errors.New("apikeys: not found")
 
 // Service manages API keys.
 type Service struct{ store Store }
@@ -57,10 +54,11 @@ func (s *Service) Create(ctx context.Context, userID pgtype.UUID, name string, e
 	return key, secret, nil
 }
 
-// Delete revokes one of the user's keys; another user's key is not found.
+// Delete revokes one of the user's keys. Deleting a key that is not the
+// user's, or no longer exists, changes nothing and is not an error.
 func (s *Service) Delete(ctx context.Context, userID, keyID pgtype.UUID) error {
 	if err := s.store.DeleteAPIKey(ctx, db.DeleteAPIKeyParams{ID: keyID, UserID: userID}); err != nil {
-		return ErrNotFound
+		return fmt.Errorf("apikeys: delete: %w", err)
 	}
 	return nil
 }
