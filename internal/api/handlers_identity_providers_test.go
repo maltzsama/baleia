@@ -17,6 +17,7 @@ func idpTestHandlers(t *testing.T) *Handlers {
 	return &Handlers{
 		queries: db.New(pool),
 		pool:    pool,
+		tx:      poolTx{pool: pool},
 		keyring: testKeyring(t),
 	}
 }

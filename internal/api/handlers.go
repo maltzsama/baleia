@@ -35,8 +35,10 @@ import (
 var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
-	queries        db.Querier
-	pool           *pgxpool.Pool
+	queries db.Querier
+	pool    *pgxpool.Pool
+	// tx runs dependent writes in one transaction (poolTx outside tests).
+	tx             txRunner
 	cfg            *config.Config
 	keyring        *crypto.Keyring
 	temporalClient client.Client
@@ -245,6 +247,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		connections:     d.Engines.Connections,
 		queries:         d.Data.Queries,
 		pool:            d.Data.Pool,
+		tx:              poolTx{pool: d.Data.Pool},
 		cfg:             d.Config,
 		keyring:         d.Keyring,
 		temporalClient:  d.Temporal,

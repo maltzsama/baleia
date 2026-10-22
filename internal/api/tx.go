@@ -5,16 +5,21 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// inTx runs fn in one transaction: every dependent write of a handler goes
-// through it (#376). Without a pool (unit tests) it runs fn on the handler's
-// querier directly.
-func (h *Handlers) inTx(ctx context.Context, fn func(q db.Querier) error) error {
-	if h.pool == nil {
-		return fn(h.queries)
-	}
-	tx, err := h.pool.BeginTx(ctx, pgx.TxOptions{})
+// txRunner runs fn in one transaction: every dependent write of a handler
+// goes through it (#376). The handlers get poolTx; tests give one that runs fn
+// on their fake querier (#363).
+type txRunner interface {
+	InTx(ctx context.Context, fn func(q db.Querier) error) error
+}
+
+// poolTx runs fn in a transaction on Baleia's pool.
+type poolTx struct{ pool *pgxpool.Pool }
+
+func (t poolTx) InTx(ctx context.Context, fn func(q db.Querier) error) error {
+	tx, err := t.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
@@ -24,4 +29,9 @@ func (h *Handlers) inTx(ctx context.Context, fn func(q db.Querier) error) error 
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// inTx runs fn through the handlers' txRunner.
+func (h *Handlers) inTx(ctx context.Context, fn func(q db.Querier) error) error {
+	return h.tx.InTx(ctx, fn)
 }

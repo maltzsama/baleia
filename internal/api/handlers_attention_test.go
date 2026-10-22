@@ -88,6 +88,7 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 	f.h = &Handlers{
 		queries:        db.New(pool),
 		pool:           pool,
+		tx:             poolTx{pool: pool},
 		cfg:            &config.Config{AuditExportURL: "https://opensearch.test"},
 		attentionCache: f.cache,
 	}

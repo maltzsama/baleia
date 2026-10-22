@@ -90,7 +90,7 @@ func runQuery(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) *h
 func runQueryWith(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) (*httptest.ResponseRecorder, *fakeTemporalClient) {
 	t.Helper()
 	tc := &fakeTemporalClient{}
-	h := &Handlers{queries: fake, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: tc, kinds: testKinds(t, nil), dialects: dialect.NewRegistry()}
+	h := &Handlers{queries: fake, tx: directTx{q: fake}, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: tc, kinds: testKinds(t, nil), dialects: dialect.NewRegistry()}
 	resp, err := h.RunQuery(testContext(), RunQueryRequestObject{Id: PathId{0xAA}, Body: &RunQueryJSONRequestBody{Sql: "SELECT 1", Target: target}})
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestListWorkspaceTargets(t *testing.T) {
 			targetRow(3, 2, "trino", "write", false),
 		},
 	}
-	resp, err := (&Handlers{queries: fake}).ListWorkspaceTargets(testContext(), ListWorkspaceTargetsRequestObject{Id: openapi_types.UUID{0xAA}})
+	resp, err := (&Handlers{queries: fake, tx: directTx{q: fake}}).ListWorkspaceTargets(testContext(), ListWorkspaceTargetsRequestObject{Id: openapi_types.UUID{0xAA}})
 	if err != nil {
 		t.Fatal(err)
 	}

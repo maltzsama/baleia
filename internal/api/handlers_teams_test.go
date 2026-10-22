@@ -16,7 +16,7 @@ import (
 func TestUpdateTeamMemberRole(t *testing.T) {
 	pool := testdb.New(t)
 	q := db.New(pool)
-	h := &Handlers{queries: q, pool: pool, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+	h := &Handlers{queries: q, pool: pool, tx: poolTx{pool: pool}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
 	ctx := context.Background()
 
 	hash, err := auth.HashPassword("correct horse")

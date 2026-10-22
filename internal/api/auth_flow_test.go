@@ -94,7 +94,7 @@ func TestGetMe_IncludesStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &Handlers{queries: q, pool: pool}
+	h := &Handlers{queries: q, pool: pool, tx: poolTx{pool: pool}}
 
 	resp, err := h.GetMe(ctxAs(user.ID.String(), "admin"), GetMeRequestObject{})
 	if err != nil {
@@ -513,7 +513,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 // different e-mails create exactly one admin; the others get 409 (#375).
 func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
 	pool := testdb.New(t)
-	h := &Handlers{queries: db.New(pool), pool: pool, cfg: &config.Config{BcryptCost: testBcryptCost}}
+	h := &Handlers{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, cfg: &config.Config{BcryptCost: testBcryptCost}}
 	const n = 8
 	var wg sync.WaitGroup
 	created := make(chan bool, n)
