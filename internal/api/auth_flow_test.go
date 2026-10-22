@@ -481,6 +481,7 @@ func TestLogout_RevokeFailureIsAnError(t *testing.T) {
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	f.mem.take()
 	f.h.queries = failingRevoke{f.h.queries}
+	f.h.sessions = newSessions(f.h.core)
 
 	if _, err := f.h.Logout(context.Background(), LogoutRequestObject{Body: &LogoutRequest{RefreshToken: &token}}); err == nil {
 		t.Fatal("logout with a failed revoke returned no error")
@@ -499,6 +500,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 	refreshToken(t, f.h, token)
 	f.mem.take()
 	f.h.queries = failingRevoke{f.h.queries}
+	f.h.sessions = newSessions(f.h.core)
 
 	if _, err := f.h.RefreshToken(context.Background(), RefreshTokenRequestObject{Body: &RefreshRequest{RefreshToken: &token}}); err == nil {
 		t.Fatal("replay with a failed revoke returned no error")

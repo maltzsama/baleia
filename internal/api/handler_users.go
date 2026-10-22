@@ -3,14 +3,10 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log/slog"
-	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/galileostudio/baleia/internal/identity/users"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -21,13 +17,13 @@ func (h *AuthHandlers) ListUsers(ctx context.Context, request ListUsersRequestOb
 		return ListUsers403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	users, err := h.queries.ListUsers(ctx)
+	all, err := h.users.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	data := make([]UserPublic, 0, len(users))
-	for _, u := range users {
+	data := make([]UserPublic, 0, len(all))
+	for _, u := range all {
 		data = append(data, dbUserToPublic(u))
 	}
 
@@ -64,58 +60,13 @@ func (h *AuthHandlers) InviteUser(ctx context.Context, request InviteUserRequest
 		return InviteUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	_, err := h.queries.GetUserByEmail(ctx, string(request.Body.Email))
-	if err == nil {
+	user, err := h.users.Invite(ctx, string(request.Body.Email), string(request.Body.Role))
+	if errors.Is(err, users.ErrEmailTaken) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return InviteUser409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "email already exists"}}, nil
 	}
-
-	tempPassword := randomState()
-	hash, err := auth.HashPasswordWithCost(tempPassword, h.settings.Auth.PasswordCost)
 	if err != nil {
 		return nil, err
-	}
-
-	token := randomState()
-	expires := time.Now().Add(72 * time.Hour)
-
-	// The user and the invite token are one write: a user without a token
-	// could neither sign in nor be invited again (#376). The e-mail goes out
-	// only after the commit.
-	var user db.User
-	err = h.inTx(ctx, func(q db.Querier) error {
-		var err error
-		user, err = q.CreateUser(ctx, db.CreateUserParams{
-			Name:         string(request.Body.Email),
-			Email:        string(request.Body.Email),
-			Role:         string(request.Body.Role),
-			AuthProvider: "local",
-			PasswordHash: &hash,
-		})
-		if err != nil {
-			return fmt.Errorf("create user: %w", err)
-		}
-		// The invite link carries the raw token; only its hash is stored (#51).
-		if err := q.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
-			TokenHash: auth.HashToken(token),
-			UserID:    user.ID,
-			ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
-		}); err != nil {
-			return fmt.Errorf("create invite token: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	inviteURL := h.settings.Mail.PublicURL + "/accept-invite?token=" + token
-	locale := mail.LocaleOrDefault(user.Locale, h.settings.Mail.DefaultLocale)
-	if err := h.mailSender().Send(ctx, user.Email, locale, mail.TemplateInvite, map[string]any{
-		"Name":      user.Name,
-		"InviteURL": inviteURL,
-	}); err != nil {
-		slog.Warn("failed to send invite email", "err", err, "url", inviteURL)
 	}
 
 	ev = withID(ev, user.ID)
@@ -136,27 +87,16 @@ func (h *AuthHandlers) UpdateUserRole(ctx context.Context, request UpdateUserRol
 	uid.Bytes = request.Id
 	uid.Valid = true
 
-	before, err := h.queries.GetUserByID(ctx, uid)
-	if err != nil {
+	// A role change takes effect on the next login: the old sessions end
+	// (#51). Access tokens carry the old role until they expire.
+	before, user, err := h.users.ChangeRole(ctx, uid, string(request.Body.Role))
+	if errors.Is(err, users.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateUserRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
-
-	if err := h.queries.UpdateUserRole(ctx, db.UpdateUserRoleParams{
-		ID:   uid,
-		Role: string(request.Body.Role),
-	}); err != nil {
-		return nil, err
-	}
-
-	user, err := h.queries.GetUserByID(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
-
-	// A role change must take effect on the next login: end the old sessions
-	// (#51). Access tokens carry the old role until they expire.
-	h.revokeUserRefreshTokens(ctx, uid)
 
 	ev.Changes = map[string]audit.Change{"role": {From: before.Role, To: user.Role}}
 	h.audited(ctx, ev.Allowed())
@@ -175,23 +115,17 @@ func (h *AuthHandlers) RemoveUser(ctx context.Context, request RemoveUserRequest
 	uid.Bytes = request.Id
 	uid.Valid = true
 
-	_, err := h.queries.GetUserByID(ctx, uid)
-	if err != nil {
-		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return RemoveUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
-	}
-
-	if err := h.queries.DeleteUser(ctx, uid); err != nil {
+	if err := h.users.Remove(ctx, uid); err != nil {
+		if errors.Is(err, users.ErrNotFound) {
+			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+			return RemoveUser404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
+		}
 		if c, ok := removeUserConflict(err); ok {
 			h.audited(ctx, ev.Failed(audit.ReasonConflict))
 			return RemoveUser409JSONResponse{ConflictJSONResponse: c}, nil
 		}
 		return nil, err
 	}
-
-	// The foreign key already cascades a delete; revoking explicitly also
-	// covers a future soft disable that keeps the row (#51).
-	h.revokeUserRefreshTokens(ctx, uid)
 
 	h.audited(ctx, ev.Allowed())
 	return RemoveUser204Response{}, nil
