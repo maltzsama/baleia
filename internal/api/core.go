@@ -25,6 +25,9 @@ type core struct {
 	keyring        *crypto.Keyring
 	temporalClient client.Client
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
+	// versionCache: engine id@updated_at → version and health, read by the
+	// engine listing, the status page and the attention items.
+	versionCache *TTLStore[engineProbe]
 	// s3 holds query results and exports (object storage).
 	s3 *storage.S3Client
 	// connections holds every connection provider (docs/adr/0002).

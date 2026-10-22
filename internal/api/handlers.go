@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/assistant"
@@ -34,21 +33,13 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	*core
+	*OpsHandlers
 	*AgentHandlers
 	*SemanticHandlers
 	*QueryHandlers
 	*CatalogHandlers
 	*WorkspaceHandlers
 	*AuthHandlers
-	// schema reports the applied migration version (poolSchema outside tests).
-	schema schemaVersioner
-	// systemStatusSchedule and systemStatusEngine are the status page's probe
-	// seams (#291). Tests inject them without a Temporal server or an engine.
-	systemStatusSchedule func(ctx context.Context, id string) (SystemStatusItemStatus, string)
-	systemStatusEngine   func(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string)
-	// attentionCache caches the computed attention items for 30 s per user (#261).
-	attentionCache *TTLStore[[]AttentionItem]
-	attentionOnce  sync.Once
 }
 
 // The handlers implement the whole generated strict server; the split by
@@ -201,6 +192,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
 	c := &core{
+		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
 		s3:             d.Storage,
 		queries:        d.Data.Queries,
 		pool:           d.Data.Pool,
@@ -218,6 +210,10 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	}
 	h := &Handlers{
 		core: c,
+		OpsHandlers: &OpsHandlers{
+			core:   c,
+			schema: poolSchema{pool: d.Data.Pool},
+		},
 		AgentHandlers: &AgentHandlers{
 			core:            c,
 			dialer:          d.Engines.Dialer,
@@ -232,15 +228,13 @@ func NewHandlers(d Deps) (*Handlers, error) {
 			wsTickets: d.WSTickets,
 		},
 		CatalogHandlers: &CatalogHandlers{
-			core:         c,
-			versionCache: NewTTLStore[engineProbe](engineVersionTTL),
-			binder:       d.Engines.Binder,
+			core:   c,
+			binder: d.Engines.Binder,
 		},
 		WorkspaceHandlers: &WorkspaceHandlers{
 			core: c,
 		},
 		AuthHandlers: &AuthHandlers{core: c},
-		schema:       poolSchema{pool: d.Data.Pool},
 	}
 	if h.audit == nil {
 		h.audit = audit.Nop{}

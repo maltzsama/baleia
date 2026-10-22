@@ -17,7 +17,7 @@ import (
 
 func statusStringPtr(s string) *string { return &s }
 
-func (h *Handlers) probePlatform(ctx context.Context, status *SystemStatus) {
+func (h *OpsHandlers) probePlatform(ctx context.Context, status *SystemStatus) {
 	var wg sync.WaitGroup
 	wg.Add(7)
 	go func() {
@@ -65,7 +65,7 @@ func (h *core) metadataSyncEvery() time.Duration {
 
 // schedulesStatus reports every exported core schedule, including the
 // directory reconciler added with user suspension (#257).
-func (h *Handlers) schedulesStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) schedulesStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	describe := h.systemStatusSchedule
 	if describe == nil {
@@ -107,7 +107,7 @@ func (h *Handlers) schedulesStatus(ctx context.Context) SystemStatusResource {
 
 // enginesStatus reuses the cached engine probe: the status page never adds a
 // second round trip.
-func (h *Handlers) enginesStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) enginesStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	if h.queries == nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}

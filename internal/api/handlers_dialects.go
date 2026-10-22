@@ -35,7 +35,7 @@ const (
 
 // describeEngines describes every engine, in order, at most
 // describeParallelism at a time.
-func (h *CatalogHandlers) describeEngines(ctx context.Context, engines []db.Engine) []Engine {
+func (h *core) describeEngines(ctx context.Context, engines []db.Engine) []Engine {
 	out := make([]Engine, len(engines))
 	sem := make(chan struct{}, describeParallelism)
 	var wg sync.WaitGroup
@@ -96,7 +96,7 @@ type engineProbe struct {
 // describeEngine is an engine row with its dialect, connection, catalog count
 // and, when its adapter is available and the engine enabled, its capabilities,
 // version and health.
-func (h *CatalogHandlers) describeEngine(ctx context.Context, e db.Engine) Engine {
+func (h *core) describeEngine(ctx context.Context, e db.Engine) Engine {
 	out := engineToPublic(e)
 	if acts := h.engineActions(ctx, e.ID); acts != nil {
 		out.AllowedActions = &acts
@@ -137,7 +137,7 @@ func (h *CatalogHandlers) describeEngine(ctx context.Context, e db.Engine) Engin
 // engineProbeFor probes the engine once per cache window. A failed version
 // probe records the classified error code instead of a version, so the list
 // can show health without another round trip.
-func (h *CatalogHandlers) engineProbeFor(ctx context.Context, e db.Engine, eng queryengine.Engine) engineProbe {
+func (h *core) engineProbeFor(ctx context.Context, e db.Engine, eng queryengine.Engine) engineProbe {
 	key := hex.EncodeToString(e.ID.Bytes[:]) + "@" + e.UpdatedAt.Time.String()
 	if h.versionCache != nil {
 		if v, ok := h.versionCache.Get(key); ok {

@@ -27,7 +27,7 @@ const (
 	attentionScheduleProbeBudget = 2 * time.Second
 )
 
-func (h *Handlers) ListAttention(ctx context.Context, _ ListAttentionRequestObject) (ListAttentionResponseObject, error) {
+func (h *OpsHandlers) ListAttention(ctx context.Context, _ ListAttentionRequestObject) (ListAttentionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListAttention401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{
@@ -51,7 +51,7 @@ func (h *Handlers) ListAttention(ctx context.Context, _ ListAttentionRequestObje
 
 // attentionCacheStore lazily builds the per-user cache. Tests may replace it
 // with a shorter TTL before the first call.
-func (h *Handlers) attentionCacheStore() *TTLStore[[]AttentionItem] {
+func (h *OpsHandlers) attentionCacheStore() *TTLStore[[]AttentionItem] {
 	h.attentionOnce.Do(func() {
 		if h.attentionCache == nil {
 			h.attentionCache = NewTTLStore[[]AttentionItem](attentionCacheTTL)
@@ -60,7 +60,7 @@ func (h *Handlers) attentionCacheStore() *TTLStore[[]AttentionItem] {
 	return h.attentionCache
 }
 
-func (h *Handlers) attentionItems(ctx context.Context, p authz.Principal) ([]AttentionItem, error) {
+func (h *OpsHandlers) attentionItems(ctx context.Context, p authz.Principal) ([]AttentionItem, error) {
 	items := make([]AttentionItem, 0)
 
 	items = append(items, h.attentionBindingErrors(ctx, p)...)
@@ -176,7 +176,7 @@ func (h *core) attentionMetadataStale(ctx context.Context, p authz.Principal) []
 	return out
 }
 
-func (h *Handlers) attentionEngineUnreachable(ctx context.Context, p authz.Principal) []AttentionItem {
+func (h *OpsHandlers) attentionEngineUnreachable(ctx context.Context, p authz.Principal) []AttentionItem {
 	if h.engines == nil {
 		return nil
 	}

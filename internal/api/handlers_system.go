@@ -23,7 +23,7 @@ var processStartedAt = time.Now().UTC()
 // GetSystemStatus — GET /admin/system/status (#260). Admins only. Each
 // dependency is probed independently: a slow or broken section becomes
 // `unknown` with a stable code, and the response is still 200.
-func (h *Handlers) GetSystemStatus(ctx context.Context, _ GetSystemStatusRequestObject) (GetSystemStatusResponseObject, error) {
+func (h *OpsHandlers) GetSystemStatus(ctx context.Context, _ GetSystemStatusRequestObject) (GetSystemStatusResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetSystemStatus401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -43,7 +43,7 @@ func (h *Handlers) GetSystemStatus(ctx context.Context, _ GetSystemStatusRequest
 
 // probeDependencies fills the three network-backed sections concurrently so a
 // slow dependency costs one section timeout, not the sum of them (#260).
-func (h *Handlers) probeDependencies(ctx context.Context, status *SystemStatus) {
+func (h *OpsHandlers) probeDependencies(ctx context.Context, status *SystemStatus) {
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() { defer wg.Done(); status.Database = h.databaseStatusSection(ctx) }()
@@ -65,7 +65,7 @@ func baleiaStatusSection() SystemStatusSection {
 	}
 }
 
-func (h *Handlers) databaseStatusSection(ctx context.Context) SystemStatusSection {
+func (h *OpsHandlers) databaseStatusSection(ctx context.Context) SystemStatusSection {
 	var migrationVersion int64
 	section := runStatusSection(ctx, "database_unavailable", func(ctx context.Context) error {
 		v, err := h.schema.SchemaVersion(ctx)
@@ -88,7 +88,7 @@ func (h *core) temporalStatusSection(ctx context.Context) SystemStatusSection {
 	})
 }
 
-func (h *Handlers) objectStorageStatusSection(ctx context.Context) SystemStatusSection {
+func (h *OpsHandlers) objectStorageStatusSection(ctx context.Context) SystemStatusSection {
 	return runStatusSection(ctx, "object_storage_unavailable", func(ctx context.Context) error {
 		if h.s3 == nil {
 			return errors.New("no object storage client")

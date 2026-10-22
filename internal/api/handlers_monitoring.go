@@ -23,7 +23,7 @@ var maintenanceOperations = []string{"optimize", "expire_snapshots", "remove_orp
 
 // ListMonitoringEngines returns the engines with runtime monitoring the caller
 // may view (#117).
-func (h *Handlers) ListMonitoringEngines(ctx context.Context, _ ListMonitoringEnginesRequestObject) (ListMonitoringEnginesResponseObject, error) {
+func (h *OpsHandlers) ListMonitoringEngines(ctx context.Context, _ ListMonitoringEnginesRequestObject) (ListMonitoringEnginesResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListMonitoringEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -67,7 +67,7 @@ func (h *core) engineForMonitoring(ctx context.Context, p authz.Principal, id pg
 }
 
 // GetEngineCluster returns the latest snapshot and a downsampled window.
-func (h *Handlers) GetEngineCluster(ctx context.Context, request GetEngineClusterRequestObject) (GetEngineClusterResponseObject, error) {
+func (h *OpsHandlers) GetEngineCluster(ctx context.Context, request GetEngineClusterRequestObject) (GetEngineClusterResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetEngineCluster401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -129,7 +129,7 @@ func clusterPoint(s db.ClusterSnapshot) ClusterPoint {
 
 // ListMonitoringQueries returns query snapshots of one engine. Members see
 // their own Trino identity; only admins may ask for everyone.
-func (h *Handlers) ListMonitoringQueries(ctx context.Context, request ListMonitoringQueriesRequestObject) (ListMonitoringQueriesResponseObject, error) {
+func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMonitoringQueriesRequestObject) (ListMonitoringQueriesResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListMonitoringQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -232,7 +232,7 @@ func firstSQLine(sql string) string {
 
 // GetMonitoringQuery returns the full statement of one query, scoped like the
 // list.
-func (h *Handlers) GetMonitoringQuery(ctx context.Context, request GetMonitoringQueryRequestObject) (GetMonitoringQueryResponseObject, error) {
+func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitoringQueryRequestObject) (GetMonitoringQueryResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -279,7 +279,7 @@ func (h *core) maySeeQuery(ctx context.Context, p authz.Principal, snapshot db.T
 }
 
 // KillMonitoringQuery cancels a running query through the engine's kill.
-func (h *Handlers) KillMonitoringQuery(ctx context.Context, request KillMonitoringQueryRequestObject) (KillMonitoringQueryResponseObject, error) {
+func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonitoringQueryRequestObject) (KillMonitoringQueryResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return KillMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -319,7 +319,7 @@ func (h *core) catalogForMonitoring(ctx context.Context, p authz.Principal, id p
 }
 
 // ListTableHealth returns the Iceberg health rows of one logical catalog.
-func (h *Handlers) ListTableHealth(ctx context.Context, request ListTableHealthRequestObject) (ListTableHealthResponseObject, error) {
+func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHealthRequestObject) (ListTableHealthResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListTableHealth401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -390,7 +390,7 @@ func tableHealth(catalog db.Catalog, s db.TableHealthSnapshot) TableHealth {
 }
 
 // CreateMaintenanceRun starts an Iceberg maintenance run and records it.
-func (h *Handlers) CreateMaintenanceRun(ctx context.Context, request CreateMaintenanceRunRequestObject) (CreateMaintenanceRunResponseObject, error) {
+func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMaintenanceRunRequestObject) (CreateMaintenanceRunResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateMaintenanceRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -481,7 +481,7 @@ func (h *Handlers) CreateMaintenanceRun(ctx context.Context, request CreateMaint
 }
 
 // ListMaintenanceRuns lists the runs of one catalog, newest first.
-func (h *Handlers) ListMaintenanceRuns(ctx context.Context, request ListMaintenanceRunsRequestObject) (ListMaintenanceRunsResponseObject, error) {
+func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaintenanceRunsRequestObject) (ListMaintenanceRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListMaintenanceRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
