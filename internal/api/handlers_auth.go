@@ -16,20 +16,14 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/session"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
-
-// newTokenFamily returns a fresh refresh-token family id (#51). Every session
-// starts a new family; rotated tokens inherit it.
-func newTokenFamily() pgtype.UUID {
-	return pgtype.UUID{Bytes: uuid.New(), Valid: true}
-}
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -95,31 +89,17 @@ func (h *AuthHandlers) CreateFirstAdmin(ctx context.Context, request CreateFirst
 		return nil, err
 	}
 
-	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.settings.Auth.JWTSecret, h.settings.Auth.AccessTTL)
+	pair, err := h.sessions.Issue(ctx, user)
 	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
-		UserID:    user.ID,
-		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
-		FamilyID:  newTokenFamily(),
-	}); err != nil {
 		return nil, err
 	}
 
 	h.ensurePersonalWorkspace(ctx, user.ID)
 
 	return CreateFirstAdmin201JSONResponse{
-		Token:        accessToken,
-		RefreshToken: &refreshToken,
-		ExpiresAt:    time.Now().Add(h.settings.Auth.AccessTTL),
+		Token:        pair.AccessToken,
+		RefreshToken: &pair.RefreshToken,
+		ExpiresAt:    pair.ExpiresAt,
 		User:         dbUserToPublic(user),
 	}, nil
 }
@@ -280,23 +260,9 @@ func (h *AuthHandlers) loginLDAP(ctx context.Context, body *LoginRequest, ev aud
 
 // issueLogin mints the access and refresh tokens after the credential check
 // succeeded, so local and directory logins behave identically.
-func (h *core) issueLogin(ctx context.Context, user db.User, ev audit.Event, method string) (LoginResponseObject, error) {
-	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.settings.Auth.JWTSecret, h.settings.Auth.AccessTTL)
+func (h *AuthHandlers) issueLogin(ctx context.Context, user db.User, ev audit.Event, method string) (LoginResponseObject, error) {
+	pair, err := h.sessions.Issue(ctx, user)
 	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
-		UserID:    user.ID,
-		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
-		FamilyID:  newTokenFamily(),
-	}); err != nil {
 		return nil, err
 	}
 
@@ -304,9 +270,9 @@ func (h *core) issueLogin(ctx context.Context, user db.User, ev audit.Event, met
 	h.audited(audit.AsUser(ctx, user.ID.String(), method), withID(ev, user.ID).Allowed())
 
 	return Login200JSONResponse{
-		Token:        accessToken,
-		RefreshToken: &refreshToken,
-		ExpiresAt:    time.Now().Add(h.settings.Auth.AccessTTL),
+		Token:        pair.AccessToken,
+		RefreshToken: &pair.RefreshToken,
+		ExpiresAt:    pair.ExpiresAt,
 		User:         dbUserToPublic(user),
 	}, nil
 }
@@ -319,20 +285,21 @@ func (h *AuthHandlers) Logout(ctx context.Context, request LogoutRequestObject) 
 		bodyToken = request.Body.RefreshToken
 	}
 	token := refreshTokenFromBody(bodyToken, ctx)
-	if token != "" {
-		hash := auth.HashRefreshToken(token)
-		if rt, err := h.queries.GetRefreshTokenByHashAny(ctx, hash); err == nil {
-			// Logout ends the whole rotation family, not only this token. A
-			// client disconnect must not cancel the revoke halfway (#370).
-			actx := audit.AsUser(ctx, idString(rt.UserID), audit.AuthRefreshTok)
-			ev := audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(rt.UserID)}
-			if err := h.queries.RevokeRefreshFamily(context.WithoutCancel(ctx), rt.FamilyID); err != nil {
-				h.audited(actx, ev.Failed(audit.ReasonInternal))
-				return nil, fmt.Errorf("logout: revoke refresh family: %w", err)
-			}
-			h.audited(actx, ev.Allowed())
-		}
+	if token == "" {
+		return Logout204Response{}, nil
 	}
+	// Logout ends the whole rotation family, not only this token.
+	userID, found, err := h.sessions.End(ctx, token)
+	if !found {
+		return Logout204Response{}, nil
+	}
+	actx := audit.AsUser(ctx, idString(userID), audit.AuthRefreshTok)
+	ev := audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(userID)}
+	if err != nil {
+		h.audited(actx, ev.Failed(audit.ReasonInternal))
+		return nil, fmt.Errorf("logout: %w", err)
+	}
+	h.audited(actx, ev.Allowed())
 	return Logout204Response{}, nil
 }
 
@@ -553,16 +520,8 @@ func (h *AuthHandlers) OidcCallback(ctx context.Context, request OidcCallbackReq
 		return fail(oidcErrorAccountSuspended, metrics.OutcomeInvalidCredentials), nil
 	}
 
-	refreshToken, refreshHash, err := auth.GenerateRefreshToken()
+	refreshToken, err := h.sessions.IssueRefresh(ctx, user)
 	if err != nil {
-		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
-	}
-	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
-		UserID:    user.ID,
-		TokenHash: refreshHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
-		FamilyID:  newTokenFamily(),
-	}); err != nil {
 		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
 	}
 
@@ -591,76 +550,44 @@ func (h *AuthHandlers) RefreshToken(ctx context.Context, request RefreshTokenReq
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "missing refresh token"},
 		}, nil
 	}
-	hash := auth.HashRefreshToken(token)
 
 	ev := audit.Event{Action: audit.AuthRefresh, ResourceType: "user"}
-	// Atomic rotation: of two concurrent refreshes with the same token,
-	// exactly one updates the row (#51).
-	rt, err := h.queries.ConsumeRefreshToken(ctx, hash)
-	if err != nil {
-		// A revoked row with this hash means a rotated token was replayed:
-		// revoke the whole family, not just this request (#51).
-		reused := false
-		if errors.Is(err, pgx.ErrNoRows) {
-			if old, lookupErr := h.queries.GetRefreshTokenByHashAny(ctx, hash); lookupErr == nil && old.Revoked {
-				// The family may be stolen: a failed revoke is a server
-				// error, never a quiet 401 that leaves it usable (#370).
-				if revokeErr := h.queries.RevokeRefreshFamily(context.WithoutCancel(ctx), old.FamilyID); revokeErr != nil {
-					h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Failed(audit.ReasonReuseDetected))
-					return nil, fmt.Errorf("refresh: revoke reused family: %w", revokeErr)
-				}
-				h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied(audit.ReasonReuseDetected))
-				reused = true
-			}
-		}
-		if !reused {
-			h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("invalid_token"))
-		}
+	actx := audit.WithAuthMethod(ctx, audit.AuthRefreshTok)
+	pair, user, err := h.sessions.Rotate(ctx, token)
+	switch {
+	case errors.Is(err, session.ErrReuseNotContained):
+		// The family may be stolen: a failed revoke is a server error, never
+		// a quiet 401 that leaves it usable (#370).
+		h.audited(actx, ev.Failed(audit.ReasonReuseDetected))
+		return nil, fmt.Errorf("refresh: %w", err)
+	case errors.Is(err, session.ErrReused):
+		h.audited(actx, ev.Denied(audit.ReasonReuseDetected))
 		return RefreshToken401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid or expired refresh token"},
 		}, nil
-	}
-
-	user, err := h.queries.GetUserByID(ctx, rt.UserID)
-	if err != nil {
+	case errors.Is(err, session.ErrInvalid):
+		h.audited(actx, ev.Denied("invalid_token"))
+		return RefreshToken401JSONResponse{
+			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid or expired refresh token"},
+		}, nil
+	case errors.Is(err, session.ErrUserNotFound):
 		return RefreshToken401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "user not found"},
 		}, nil
-	}
-	// A suspension ends every session and blocks a refresh even if a token
-	// survived (#283).
-	if err := auth.RequireActive(user.Status); err != nil {
-		h.revokeUserRefreshTokens(ctx, user.ID)
-		h.audited(audit.WithAuthMethod(ctx, audit.AuthRefreshTok), ev.Denied("account_suspended"))
+	case errors.Is(err, session.ErrSuspended):
+		h.audited(actx, ev.Denied("account_suspended"))
 		return RefreshToken401JSONResponse{
 			UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeAccountSuspended, Message: "account suspended"},
 		}, nil
-	}
-
-	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.settings.Auth.JWTSecret, h.settings.Auth.AccessTTL)
-	if err != nil {
-		return nil, err
-	}
-
-	newRefreshToken, newHash, err := auth.GenerateRefreshToken()
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
-		UserID:    user.ID,
-		TokenHash: newHash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(h.settings.Auth.RefreshTTL), Valid: true},
-		FamilyID:  rt.FamilyID,
-	}); err != nil {
+	case err != nil:
 		return nil, err
 	}
 
 	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthRefreshTok), withID(ev, user.ID).Allowed())
 	return RefreshToken200JSONResponse{
-		Token:        accessToken,
-		RefreshToken: &newRefreshToken,
-		ExpiresAt:    time.Now().Add(h.settings.Auth.AccessTTL),
+		Token:        pair.AccessToken,
+		RefreshToken: &pair.RefreshToken,
+		ExpiresAt:    pair.ExpiresAt,
 	}, nil
 }
 
@@ -755,10 +682,8 @@ func (h *AuthHandlers) ConfirmPasswordReset(ctx context.Context, request Confirm
 // event (password change/reset, role change, disable). Access tokens expire
 // within the configured access TTL. A failure is logged, not fatal: the
 // triggering change already succeeded.
-func (h *core) revokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) {
-	if err := h.queries.RevokeUserRefreshTokens(ctx, userID); err != nil {
-		slog.Error("RevokeUserRefreshTokens failed", "user_id", idString(userID), "err", err)
-	}
+func (h *AuthHandlers) revokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) {
+	h.sessions.RevokeAll(ctx, userID)
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────

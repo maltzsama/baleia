@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/session"
 )
 
 // AuthHandlers serves sign-in, sessions, users, API keys and identity providers (#365).
@@ -26,6 +27,8 @@ type AuthHandlers struct {
 	// directory verifies LDAP credentials (#255); tests give a fake so the
 	// handler branch runs without a directory server.
 	directory directoryAuthenticator
+	// sessions issues, rotates and ends sign-in sessions (#51).
+	sessions *session.Service
 	// prober probes a provider configuration without persisting anything
 	// (#286); tests give a fake so the handler runs without a network.
 	prober identityProviderProber
@@ -56,5 +59,19 @@ func (networkProber) Probe(ctx context.Context, cfg providerConfig, testUsername
 }
 
 func newAuthHandlers(c *core) *AuthHandlers {
-	return &AuthHandlers{core: c, directory: ldapDirectory{}, prober: networkProber{}}
+	return &AuthHandlers{
+		core:      c,
+		directory: ldapDirectory{},
+		prober:    networkProber{},
+		sessions:  newSessions(c),
+	}
+}
+
+// newSessions builds the session service over the core's database and settings.
+func newSessions(c *core) *session.Service {
+	return session.New(c.queries, c.queries, session.Config{
+		JWTSecret:  c.settings.Auth.JWTSecret,
+		AccessTTL:  c.settings.Auth.AccessTTL,
+		RefreshTTL: c.settings.Auth.RefreshTTL,
+	})
 }
