@@ -114,7 +114,7 @@ func (h *Handlers) wsTicketStore() *wsticket.Store {
 
 // contentService returns the content writer, constructing one for handlers
 // built by tests without NewHandlers.
-func (h *Handlers) contentService() *content.Service {
+func (h *core) contentService() *content.Service {
 	if h.content != nil {
 		return h.content
 	}
@@ -135,7 +135,7 @@ func (h *Handlers) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 
 // registerMetrics registers the API's producers on reg and exports bindings
 // by lifecycle state.
-func (h *Handlers) registerMetrics(reg *metrics.Registry) {
+func (h *core) registerMetrics(reg *metrics.Registry) {
 	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory()}
 	reg.WatchBindingStates(func(ctx context.Context) (map[string]int64, error) {
 		rows, err := h.queries.CountManagedBindingsByState(ctx)

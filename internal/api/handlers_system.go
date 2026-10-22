@@ -78,7 +78,7 @@ func (h *Handlers) databaseStatusSection(ctx context.Context) SystemStatusSectio
 	return section
 }
 
-func (h *Handlers) temporalStatusSection(ctx context.Context) SystemStatusSection {
+func (h *core) temporalStatusSection(ctx context.Context) SystemStatusSection {
 	return runStatusSection(ctx, "temporal_unavailable", func(ctx context.Context) error {
 		if h.temporalClient == nil {
 			return errors.New("no temporal client")

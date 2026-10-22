@@ -85,7 +85,7 @@ func (h *Handlers) attentionItems(ctx context.Context, p authz.Principal) ([]Att
 	return items, nil
 }
 
-func (h *Handlers) attentionBindingErrors(ctx context.Context, p authz.Principal) []AttentionItem {
+func (h *core) attentionBindingErrors(ctx context.Context, p authz.Principal) []AttentionItem {
 	rows, err := h.queries.ListAttentionBindingErrors(ctx)
 	if err != nil {
 		return nil
@@ -115,7 +115,7 @@ func (h *Handlers) attentionBindingErrors(ctx context.Context, p authz.Principal
 	return out
 }
 
-func (h *Handlers) attentionMetadataFailures(ctx context.Context, p authz.Principal) []AttentionItem {
+func (h *core) attentionMetadataFailures(ctx context.Context, p authz.Principal) []AttentionItem {
 	rows, err := h.queries.ListAttentionMetadataSyncFailed(ctx)
 	if err != nil {
 		return nil
@@ -149,7 +149,7 @@ func (h *Handlers) attentionMetadataFailures(ctx context.Context, p authz.Princi
 	return out
 }
 
-func (h *Handlers) attentionMetadataStale(ctx context.Context, p authz.Principal) []AttentionItem {
+func (h *core) attentionMetadataStale(ctx context.Context, p authz.Principal) []AttentionItem {
 	threshold := attentionStaleMultiplier * h.metadataSyncEvery()
 	rows, err := h.queries.ListAttentionMetadataStale(ctx, threshold.Seconds())
 	if err != nil {
@@ -226,7 +226,7 @@ func (h *Handlers) attentionEngineUnreachable(ctx context.Context, p authz.Princ
 	return out
 }
 
-func (h *Handlers) attentionRetrieverErrors(ctx context.Context, p authz.Principal) []AttentionItem {
+func (h *core) attentionRetrieverErrors(ctx context.Context, p authz.Principal) []AttentionItem {
 	rows, err := h.queries.ListAttentionRetrieverErrors(ctx)
 	if err != nil {
 		return nil
@@ -252,7 +252,7 @@ func (h *Handlers) attentionRetrieverErrors(ctx context.Context, p authz.Princip
 	return out
 }
 
-func (h *Handlers) attentionReconcileDrift(ctx context.Context) []AttentionItem {
+func (h *core) attentionReconcileDrift(ctx context.Context) []AttentionItem {
 	rows, err := h.queries.ListAttentionReconcileDrift(ctx)
 	if err != nil {
 		return nil
@@ -281,7 +281,7 @@ func (h *Handlers) attentionReconcileDrift(ctx context.Context) []AttentionItem 
 // attentionSchedules reports a spec schedule that is missing or paused. It is
 // admin-only and a no-op when the API has no Temporal client (tests) or the
 // worker does not ensure schedules.
-func (h *Handlers) attentionSchedules(ctx context.Context) []AttentionItem {
+func (h *core) attentionSchedules(ctx context.Context) []AttentionItem {
 	if h.temporalClient == nil || !h.settings.Ops.SchedulesEnabled {
 		return nil
 	}
@@ -321,7 +321,7 @@ func attentionScheduleItem(id, state string) AttentionItem {
 
 // expectedScheduleIDs mirrors the set cmd/worker/main.go ensures. #291 will
 // centralize the spec list; until then the IDs are the shared source of truth.
-func (h *Handlers) expectedScheduleIDs() []string {
+func (h *core) expectedScheduleIDs() []string {
 	ids := []string{
 		schedules.LensQueryPoller,
 		schedules.LensClusterPoller,
@@ -341,7 +341,7 @@ func (h *Handlers) expectedScheduleIDs() []string {
 	return ids
 }
 
-func (h *Handlers) attentionAuditExport(ctx context.Context) []AttentionItem {
+func (h *core) attentionAuditExport(ctx context.Context) []AttentionItem {
 	if h.settings.Ops.AuditExportURL == "" {
 		return nil
 	}

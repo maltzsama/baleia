@@ -32,7 +32,7 @@ import (
 // CREATE/DROP CATALOG surfaces as a sync error instead of blocking the request.
 var catalogDDLTimeout = 30 * time.Second
 
-func (h *Handlers) authz() *authz.Checker {
+func (h *core) authz() *authz.Checker {
 	c := authz.New(h.queries)
 	if h.metrics.authz != nil {
 		c.WithDenials(h.metrics.authz.Denied)

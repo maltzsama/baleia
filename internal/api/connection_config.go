@@ -54,7 +54,7 @@ func (e *configError) response() UnprocessableEntityJSONResponse {
 }
 
 // provider returns the provider of a kind the API may create connections for.
-func (h *Handlers) provider(kind string) (connections.Provider, error) {
+func (h *core) provider(kind string) (connections.Provider, error) {
 	p, err := h.connections.Get(connections.Kind(kind))
 	if err != nil {
 		return nil, &configError{code: ErrorCodeProviderUnsupported, fields: []connections.FieldError{{Key: "type", Message: fmt.Sprintf("%q has no provider", kind)}}}
@@ -85,7 +85,7 @@ func asConfigError(err error) error {
 }
 
 // createConfig builds and validates the config of a create request.
-func (h *Handlers) createConfig(id pgtype.UUID, body *CreateCatalogConnectionRequest) (connections.Config, error) {
+func (h *core) createConfig(id pgtype.UUID, body *CreateCatalogConnectionRequest) (connections.Config, error) {
 	p, err := h.provider(body.Type)
 	if err != nil {
 		return connections.Config{}, err
@@ -129,7 +129,7 @@ func legacyCredentials(body *CreateCatalogConnectionRequest, polarisDefault map[
 }
 
 // updateConfig merges a PATCH into the stored config and validates the result.
-func (h *Handlers) updateConfig(conn db.CatalogConnection, body UpdateCatalogConnectionRequest) (connections.Config, error) {
+func (h *core) updateConfig(conn db.CatalogConnection, body UpdateCatalogConnectionRequest) (connections.Config, error) {
 	p, err := h.provider(conn.Type)
 	if err != nil {
 		return connections.Config{}, err

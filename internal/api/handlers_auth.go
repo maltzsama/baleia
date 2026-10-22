@@ -284,7 +284,7 @@ func (h *Handlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.E
 
 // issueLogin mints the access and refresh tokens after the credential check
 // succeeded, so local and directory logins behave identically.
-func (h *Handlers) issueLogin(ctx context.Context, user db.User, ev audit.Event, method string) (LoginResponseObject, error) {
+func (h *core) issueLogin(ctx context.Context, user db.User, ev audit.Event, method string) (LoginResponseObject, error) {
 	accessToken, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, h.settings.Auth.JWTSecret, h.settings.Auth.AccessTTL)
 	if err != nil {
 		return nil, err
@@ -379,7 +379,7 @@ func (h *Handlers) GetMe(ctx context.Context, request GetMeRequestObject) (GetMe
 // BALEIA_AGENTS_ENABLED is on; the assistant (#62) does not exist yet;
 // retrievers exist when a Trino engine can host their destination (an enabled
 // Iceberg catalog).
-func (h *Handlers) features(ctx context.Context) Features {
+func (h *core) features(ctx context.Context) Features {
 	f := Features{Agents: h.agentsEnabled()}
 	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
 	if err != nil || !cluster.EngineID.Valid {
@@ -392,7 +392,7 @@ func (h *Handlers) features(ctx context.Context) Features {
 }
 
 // globalActions are the actions outside any resource (#104).
-func (h *Handlers) globalActions(ctx context.Context, p authz.Principal) []GlobalAction {
+func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAction {
 	acts := []GlobalAction{CreateConnection, CreateWorkspace}
 	if p.IsAdmin() {
 		return append(acts, CreateSharedWorkspace, ManageUsers, ManageIdentity, ViewAllAudit, ViewSystem, ManageAssistant)
@@ -759,7 +759,7 @@ func (h *Handlers) ConfirmPasswordReset(ctx context.Context, request ConfirmPass
 // event (password change/reset, role change, disable). Access tokens expire
 // within the configured access TTL. A failure is logged, not fatal: the
 // triggering change already succeeded.
-func (h *Handlers) revokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) {
+func (h *core) revokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) {
 	if err := h.queries.RevokeUserRefreshTokens(ctx, userID); err != nil {
 		slog.Error("RevokeUserRefreshTokens failed", "user_id", idString(userID), "err", err)
 	}
@@ -945,7 +945,7 @@ func (h *Handlers) cachedOIDCProvider(ctx context.Context, providerID string) (*
 	return provider, cfg, nil
 }
 
-func (h *Handlers) loadOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
+func (h *core) loadOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
 	var apID pgtype.UUID
 	if err := apID.Scan(providerID); err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
@@ -957,7 +957,7 @@ func (h *Handlers) loadOIDCProvider(ctx context.Context, providerID string) (*au
 	return h.newOIDCProvider(ctx, providerID, ap)
 }
 
-func (h *Handlers) newOIDCProvider(ctx context.Context, providerID string, ap db.AuthProvider) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
+func (h *core) newOIDCProvider(ctx context.Context, providerID string, ap db.AuthProvider) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
 	cfg, err := auth.OpenOIDCConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
 	if err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
@@ -981,7 +981,7 @@ var errOIDCNotProvisioned = errors.New("oidc: not provisioned")
 // provisionOIDCUser applies the provisioning policy (#251): unknown subjects
 // are denied by default, auto-create needs a verified e-mail in an allowed
 // domain, and the IdP mapping is applied on every login.
-func (h *Handlers) provisionOIDCUser(ctx context.Context, apID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
+func (h *core) provisionOIDCUser(ctx context.Context, apID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
 	mapped, err := identity.MapIdentity(identity.MappingInput{
 		Groups:      info.Groups,
 		RoleMapping: cfg.RoleMapping,
@@ -1040,7 +1040,7 @@ func (h *Handlers) provisionOIDCUser(ctx context.Context, apID pgtype.UUID, cfg 
 	return user, nil
 }
 
-func (h *Handlers) applyTeams(ctx context.Context, userID pgtype.UUID, teams []identity.TeamAssignment) {
+func (h *core) applyTeams(ctx context.Context, userID pgtype.UUID, teams []identity.TeamAssignment) {
 	for _, t := range teams {
 		teamID, err := uuidFromString(t.TeamID)
 		if err != nil {

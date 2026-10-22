@@ -39,7 +39,7 @@ var slugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // semanticCatalog checks the workspace may use the catalog. notFound covers a
 // foreign or missing workspace/catalog; err is anything else.
-func (h *Handlers) semanticCatalog(ctx context.Context, ws pgtype.UUID, catalogID openapi_types.UUID) (notFound bool, err error) {
+func (h *core) semanticCatalog(ctx context.Context, ws pgtype.UUID, catalogID openapi_types.UUID) (notFound bool, err error) {
 	_, ok, err := h.grantedCatalog(ctx, ws, catalogID)
 	if err != nil {
 		return false, err
@@ -234,7 +234,7 @@ func normalizeSemanticTags(tags *[]string) ([]string, string) {
 }
 
 // canCertifyDocs is true for a workspace owner or a global admin (#116).
-func (h *Handlers) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
+func (h *core) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return false
@@ -243,7 +243,7 @@ func (h *Handlers) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
 	return err == nil
 }
 
-func (h *Handlers) docActions(ctx context.Context, ws pgtype.UUID) []string {
+func (h *core) docActions(ctx context.Context, ws pgtype.UUID) []string {
 	acts := []string{"view", "update"}
 	if h.canCertifyDocs(ctx, ws) {
 		acts = append(acts, "certify")
@@ -399,7 +399,7 @@ func (h *Handlers) ListSemanticMetrics(ctx context.Context, request ListSemantic
 
 // metricActions is what the caller may do with a metric (#115): view always,
 // edit/delete for space editors, certify for space managers or admins.
-func (h *Handlers) metricActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
+func (h *core) metricActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
 	acts := []string{"view"}
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err == nil && se == nil {
 		acts = append(acts, "update", "delete")
@@ -959,7 +959,7 @@ func (h *Handlers) validateSemanticMetric(ctx context.Context, ws pgtype.UUID, c
 	return nil
 }
 
-func (h *Handlers) connectionReadOnly(ctx context.Context, engineID pgtype.UUID) bool {
+func (h *core) connectionReadOnly(ctx context.Context, engineID pgtype.UUID) bool {
 	eng, err := h.queries.GetEngineByID(ctx, engineID)
 	if err != nil {
 		return false
@@ -1031,7 +1031,7 @@ func dbSemanticSearchRowToPublic(r db.SearchSemanticDocsRow) SemanticDocSearchRe
 }
 
 // semanticMetricVersion returns the latest content version, or 0 when none.
-func (h *Handlers) semanticMetricVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) semanticMetricVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
 	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
 		WorkspaceID: ws, EntityType: content.EntitySemanticMetric, EntityID: id,
 	})

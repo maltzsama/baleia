@@ -31,7 +31,7 @@ const (
 
 // metadataWorkspace checks the caller is a member of the workspace. notFound
 // covers a foreign or missing workspace; err is anything else.
-func (h *Handlers) metadataWorkspace(ctx context.Context, id openapi_types.UUID) (ws pgtype.UUID, notFound bool, err error) {
+func (h *core) metadataWorkspace(ctx context.Context, id openapi_types.UUID) (ws pgtype.UUID, notFound bool, err error) {
 	err = requireWorkspaceAccess(ctx, h.queries, id)
 	if errors.Is(err, ErrWorkspaceNotFound) {
 		return pgtype.UUID{}, true, nil
@@ -92,7 +92,7 @@ func (h *Handlers) ListMetadataCatalogs(ctx context.Context, request ListMetadat
 
 // grantedCatalog loads a catalog granted to the workspace; ok is false when
 // the workspace may not see it.
-func (h *Handlers) grantedCatalog(ctx context.Context, ws pgtype.UUID, id openapi_types.UUID) (db.GetGrantedMetadataCatalogRow, bool, error) {
+func (h *core) grantedCatalog(ctx context.Context, ws pgtype.UUID, id openapi_types.UUID) (db.GetGrantedMetadataCatalogRow, bool, error) {
 	c, err := h.queries.GetGrantedMetadataCatalog(ctx, db.GetGrantedMetadataCatalogParams{WorkspaceID: ws, CatalogID: pgtype.UUID{Bytes: id, Valid: true}})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, false, nil

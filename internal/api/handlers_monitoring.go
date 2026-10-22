@@ -55,7 +55,7 @@ func (h *Handlers) ListMonitoringEngines(ctx context.Context, _ ListMonitoringEn
 	return ListMonitoringEngines200JSONResponse(out), nil
 }
 
-func (h *Handlers) engineForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Engine, bool) {
+func (h *core) engineForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Engine, bool) {
 	if h.engines == nil {
 		return db.Engine{}, false
 	}
@@ -270,7 +270,7 @@ func (h *Handlers) GetMonitoringQuery(ctx context.Context, request GetMonitoring
 	return GetMonitoringQuery200JSONResponse(detail), nil
 }
 
-func (h *Handlers) maySeeQuery(ctx context.Context, p authz.Principal, snapshot db.TrinoQuerySnapshot) bool {
+func (h *core) maySeeQuery(ctx context.Context, p authz.Principal, snapshot db.TrinoQuerySnapshot) bool {
 	if p.IsAdmin() {
 		return true
 	}
@@ -307,7 +307,7 @@ func (h *Handlers) KillMonitoringQuery(ctx context.Context, request KillMonitori
 	return KillMonitoringQuery202Response{}, nil
 }
 
-func (h *Handlers) catalogForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Catalog, bool) {
+func (h *core) catalogForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Catalog, bool) {
 	catalog, err := h.queries.GetCatalogByID(ctx, id)
 	if err != nil {
 		return db.Catalog{}, false

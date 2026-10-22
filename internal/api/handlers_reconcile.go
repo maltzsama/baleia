@@ -134,6 +134,6 @@ func reconcileRunToPublic(r db.CatalogReconcileRun) (ReconcileRun, error) {
 	return out, json.Unmarshal(r.Actions, &out.Actions)
 }
 
-func (h *Handlers) reconcileMaxActions() int {
+func (h *core) reconcileMaxActions() int {
 	return h.settings.Ops.ReconcileMaxActions // zero: bindings.DefaultMaxActions
 }

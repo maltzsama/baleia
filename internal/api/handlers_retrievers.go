@@ -519,7 +519,7 @@ func (h *Handlers) PreviewCron(ctx context.Context, request PreviewCronRequestOb
 	return PreviewCron200JSONResponse{Valid: true, Next: next, MinIntervalOk: minIntervalOK}, nil
 }
 
-func (h *Handlers) retrieverToPublic(ctx context.Context, r db.Retriever) Retriever {
+func (h *core) retrieverToPublic(ctx context.Context, r db.Retriever) Retriever {
 	id := openapi_types.UUID(r.ID.Bytes)
 	workspaceID := openapi_types.UUID(r.WorkspaceID.Bytes)
 	createdBy := openapi_types.UUID(r.CreatedBy.Bytes)
@@ -564,7 +564,7 @@ func (h *Handlers) retrieverToPublic(ctx context.Context, r db.Retriever) Retrie
 
 // retrieverDestination loads the binding, catalog and engine a retriever
 // materializes into. Nil when the binding was deleted.
-func (h *Handlers) retrieverDestination(ctx context.Context, bindingID pgtype.UUID) *RetrieverDestination {
+func (h *core) retrieverDestination(ctx context.Context, bindingID pgtype.UUID) *RetrieverDestination {
 	binding, err := h.queries.GetBinding(ctx, bindingID)
 	if err != nil {
 		return nil
@@ -597,7 +597,7 @@ func (h *Handlers) retrieverDestination(ctx context.Context, bindingID pgtype.UU
 // resolveRetrieverDestination picks the destination from a binding id or, for
 // legacy clients, from the catalogs name; it returns nil when the workspace
 // cannot write to it.
-func (h *Handlers) resolveRetrieverDestination(ctx context.Context, workspaceID pgtype.UUID, bindingID *openapi_types.UUID, catalogName string) (*RetrieverDestination, error) {
+func (h *core) resolveRetrieverDestination(ctx context.Context, workspaceID pgtype.UUID, bindingID *openapi_types.UUID, catalogName string) (*RetrieverDestination, error) {
 	rows, err := h.queries.ListRetrieverDestinations(ctx, workspaceID)
 	if err != nil {
 		return nil, err
@@ -629,7 +629,7 @@ func (h *Handlers) resolveRetrieverDestination(ctx context.Context, workspaceID 
 
 // retrieverDestinationByID is the update path: current binding first, then the
 // legacy catalog name.
-func (h *Handlers) retrieverDestinationByID(ctx context.Context, workspaceID pgtype.UUID, bindingID pgtype.UUID, catalogName string) (*RetrieverDestination, error) {
+func (h *core) retrieverDestinationByID(ctx context.Context, workspaceID pgtype.UUID, bindingID pgtype.UUID, catalogName string) (*RetrieverDestination, error) {
 	if bindingID.Valid {
 		id := openapi_types.UUID(bindingID.Bytes)
 		return h.resolveRetrieverDestination(ctx, workspaceID, &id, "")
@@ -689,7 +689,7 @@ func validateDestIdentifier(value, field string) error {
 
 // validateRetrieverDefinition requires exactly one SELECT/WITH statement and
 // rejects catalog DDL.
-func (h *Handlers) validateRetrieverDefinition(def string) error {
+func (h *core) validateRetrieverDefinition(def string) error {
 	// Retrievers refresh on the default Trino engine.
 	stmts, err := h.dialects.MustGet(dialect.Trino).SplitStatements(def)
 	if err != nil {

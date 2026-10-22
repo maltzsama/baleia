@@ -294,7 +294,7 @@ func (h *Handlers) TestCatalogConnection(ctx context.Context, request TestCatalo
 
 // connectionConfig returns the provider of a stored connection and its
 // decrypted config.
-func (h *Handlers) connectionConfig(conn db.CatalogConnection) (connections.Provider, connections.Config, error) {
+func (h *core) connectionConfig(conn db.CatalogConnection) (connections.Provider, connections.Config, error) {
 	plain, err := catalogs.OpenCredentials(conn, h.keyring)
 	if err != nil {
 		return nil, connections.Config{}, err
@@ -325,7 +325,7 @@ func connectionTestError(err error) string {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
+func (h *core) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
 	workspaces, err := h.queries.ListWorkspacesByUser(ctx, userID)
 	if err == nil {
 		for _, w := range workspaces {
@@ -502,7 +502,7 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, mes
 // addresses. The catalog must belong to the connection in the path, and the
 // caller must be allowed to read it; anything else is 404 (no existence oracle).
 // It writes the error response itself and returns ok=false.
-func (h *Handlers) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalog, bool) {
+func (h *core) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalog, bool) {
 	ctx := r.Context()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
@@ -548,14 +548,14 @@ const exploreMaxRows = 100000
 
 // exploreEngine returns the engine explorer statements run on (the default
 // Trino engine until targets reach the explorer, #23).
-func (h *Handlers) exploreEngine(r *http.Request) (queryengine.Engine, error) {
+func (h *core) exploreEngine(r *http.Request) (queryengine.Engine, error) {
 	return h.engines.DefaultTrino(r.Context())
 }
 
 // exploreQuery runs one metadata statement as the caller's Trino identity
 // under the request context with a 30 s deadline, so a client disconnect
 // cancels it.
-func (h *Handlers) exploreQuery(r *http.Request, eng queryengine.Engine, sql string) ([][]string, error) {
+func (h *core) exploreQuery(r *http.Request, eng queryengine.Engine, sql string) ([][]string, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "explorer", RequestID: middleware.GetReqID(ctx)}}

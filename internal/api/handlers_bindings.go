@@ -138,7 +138,7 @@ func syncPrimaryCatalog(ctx context.Context, q db.Querier, t bindingTarget, b db
 	return nil
 }
 
-func (h *Handlers) bindingSpec(t bindingTarget, name, connector string, extra map[string]string) bindings.BindingSpec {
+func (h *core) bindingSpec(t bindingTarget, name, connector string, extra map[string]string) bindings.BindingSpec {
 	ref := ""
 	if t.catalog.SourceRef != nil {
 		ref = *t.catalog.SourceRef

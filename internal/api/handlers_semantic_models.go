@@ -175,7 +175,7 @@ func (h *Handlers) CompileExploreQuery(ctx context.Context, request CompileExplo
 
 // semanticModelVersion returns the latest content version, or 0 when the model
 // has never been versioned (e.g. seeded outside the content service).
-func (h *Handlers) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
 	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
 		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id,
 	})
@@ -185,7 +185,7 @@ func (h *Handlers) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID)
 	return v.Version
 }
 
-func (h *Handlers) semanticModelActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
+func (h *core) semanticModelActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
 	acts := []string{"view"}
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err == nil && se == nil {
 		acts = append(acts, "update", "delete")
@@ -631,7 +631,7 @@ func (h *Handlers) DeleteSemanticModel(ctx context.Context, request DeleteSemant
 
 // visibleModels loads the definitions of every model visible to the caller, so
 // validation can resolve join targets and field uniqueness.
-func (h *Handlers) visibleModels(ctx context.Context, ws, userID pgtype.UUID) (map[string]semantic.Model, error) {
+func (h *core) visibleModels(ctx context.Context, ws, userID pgtype.UUID) (map[string]semantic.Model, error) {
 	rows, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{
 		WorkspaceID: ws, UserID: userID,
 	})
@@ -677,7 +677,7 @@ func validateModelFields(slug, label string) (string, bool) {
 
 // ── model versions (#34) ────────────────────────────────────────────────────────
 
-func (h *Handlers) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
+func (h *core) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
 	m, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id})
 	if err == nil {
 		return m.SpaceID, nil

@@ -383,7 +383,7 @@ func (h *Handlers) GetCatalogBindingProjection(ctx context.Context, request GetC
 
 // catalogSummary builds the list/detail item: the catalog with its status,
 // visibility-scoped connection, bindings and attention flag.
-func (h *Handlers) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Principal) CatalogSummary {
+func (h *core) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Principal) CatalogSummary {
 	c := h.catalogWithStatus(ctx, cat)
 	out := CatalogSummary{
 		AllowedActions:        c.AllowedActions,

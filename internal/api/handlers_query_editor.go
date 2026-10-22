@@ -989,7 +989,7 @@ func (h *Handlers) CancelExecution(ctx context.Context, request CancelExecutionR
 
 // cancelOnEngine cancels the running statements of an execution by their
 // persisted handles, best effort and bounded in time.
-func (h *Handlers) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
+func (h *core) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
 	if h.engines == nil {
 		return
 	}
@@ -1283,7 +1283,7 @@ func (h *Handlers) StreamExecution(ctx context.Context, request StreamExecutionR
 // trinoIdentityFor maps a Baleia user to the Trino identity used for their
 // queries, according to BALEIA_TRINO_USER_IDENTITY ("uuid" default: u_<uuid>,
 // "email": the user's e-mail). Never an admin or service identity.
-func (h *Handlers) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
+func (h *core) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
 	return trinoIdentity(ctx, h.queries, h.settings.Execution.TrinoUserIdentity, uid)
 }
 
@@ -1369,7 +1369,7 @@ func dbSavedQueryToPublic(q db.SavedQuery, version int32) SavedQuery {
 }
 
 // savedQueryVersion returns the latest content version, or 0 when none.
-func (h *Handlers) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
 	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
 		WorkspaceID: ws, EntityType: content.EntitySavedQuery, EntityID: id,
 	})
@@ -1381,7 +1381,7 @@ func (h *Handlers) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) in
 
 // versionConflictResponse maps content.ErrVersionConflict to the 409 body with
 // the current version and who wrote it.
-func (h *Handlers) versionConflictResponse(ctx context.Context, err error) (ConflictJSONResponse, bool) {
+func (h *core) versionConflictResponse(ctx context.Context, err error) (ConflictJSONResponse, bool) {
 	var vc *content.VersionConflict
 	if !errors.As(err, &vc) {
 		return ConflictJSONResponse{}, false

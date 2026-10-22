@@ -231,7 +231,7 @@ const maxAuditExportRows = 1_000_000
 // writeAuditCSV pages through the events matching params into w. It returns
 // the first query, write or context error, so nothing keeps querying once the
 // client stops reading.
-func (h *Handlers) writeAuditCSV(ctx context.Context, w io.Writer, params db.ListAuditEventsParams) error {
+func (h *core) writeAuditCSV(ctx context.Context, w io.Writer, params db.ListAuditEventsParams) error {
 	cw := csv.NewWriter(w)
 	if err := cw.Write([]string{
 		"occurred_at", "actor_kind", "actor_id", "auth_method", "action", "resource_type",
@@ -324,7 +324,7 @@ func decodeAuditCursor(c string) (time.Time, int64, bool) {
 
 // audited records one audited operation (#43). It never fails the request:
 // the recorder logs and counts a failed write.
-func (h *Handlers) audited(ctx context.Context, e audit.Event) {
+func (h *core) audited(ctx context.Context, e audit.Event) {
 	if h.audit == nil {
 		return
 	}

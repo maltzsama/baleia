@@ -29,7 +29,7 @@ func (h *Handlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bindings.
 
 // catalogEngine is the Trino cluster and engine a catalog's Trino columns
 // name.
-func (h *Handlers) catalogEngine(ctx context.Context, cat db.Catalog) (db.TrinoCluster, db.Engine, error) {
+func (h *core) catalogEngine(ctx context.Context, cat db.Catalog) (db.TrinoCluster, db.Engine, error) {
 	cluster, err := h.queries.GetTrinoClusterByID(ctx, cat.ClusterID)
 	if err != nil {
 		return db.TrinoCluster{}, db.Engine{}, err
@@ -74,7 +74,7 @@ func observe(ctx context.Context, l bindings.Lifecycle) {
 // bindingSyncStatus is the derived status of a binding (binding_status_v)
 // and, when the engine refused to load an active binding's catalog, its
 // message.
-func (h *Handlers) bindingSyncStatus(ctx context.Context, b db.CatalogBinding) (status, engineError string) {
+func (h *core) bindingSyncStatus(ctx context.Context, b db.CatalogBinding) (status, engineError string) {
 	st, err := h.queries.GetBindingStatus(ctx, b.ID)
 	if err != nil || st.SyncStatus == "" {
 		return "pending", ""
@@ -86,7 +86,7 @@ func (h *Handlers) bindingSyncStatus(ctx context.Context, b db.CatalogBinding) (
 const engineLoadFailed = "engine_load_failed"
 
 // catalogResponse is a catalog with its primary binding's status.
-func (h *Handlers) catalogResponse(ctx context.Context, cat db.Catalog, b db.CatalogBinding, version string) Catalog {
+func (h *core) catalogResponse(ctx context.Context, cat db.Catalog, b db.CatalogBinding, version string) Catalog {
 	c := dbCatalogToPublic(cat)
 	if acts := h.catalogActions(ctx, cat.ID); acts != nil {
 		c.AllowedActions = &acts
@@ -108,7 +108,7 @@ func (h *Handlers) catalogResponse(ctx context.Context, cat db.Catalog, b db.Cat
 // metadataFreshness fills a catalog's metadata sync fields from its latest
 // passes (#17). A read error leaves them unset rather than failing the
 // response.
-func (h *Handlers) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Catalog) {
+func (h *core) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Catalog) {
 	st, err := h.queries.GetCatalogSyncState(ctx, id)
 	if err != nil {
 		slog.Warn("catalog metadata freshness", "err", err)
@@ -130,7 +130,7 @@ func (h *Handlers) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Cat
 }
 
 // bindingResponse is a binding with its derived status and lifecycle.
-func (h *Handlers) bindingResponse(ctx context.Context, b db.CatalogBinding, version string) CatalogBinding {
+func (h *core) bindingResponse(ctx context.Context, b db.CatalogBinding, version string) CatalogBinding {
 	out := bindingToPublic(b)
 	if acts := h.catalogBindingActions(ctx, dbCatalogBindingRef{catalogID: b.CatalogID}); acts != nil {
 		out.AllowedActions = &acts
@@ -150,7 +150,7 @@ func (h *Handlers) bindingResponse(ctx context.Context, b db.CatalogBinding, ver
 
 // catalogWithStatus is a stored catalog with its primary binding's status,
 // or the bare catalog when it has none (native catalogs).
-func (h *Handlers) catalogWithStatus(ctx context.Context, cat db.Catalog) Catalog {
+func (h *core) catalogWithStatus(ctx context.Context, cat db.Catalog) Catalog {
 	bare := func() Catalog {
 		c := dbCatalogToPublic(cat)
 		if acts := h.catalogActions(ctx, cat.ID); acts != nil {

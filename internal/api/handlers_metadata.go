@@ -112,7 +112,7 @@ func intPtr(v *int32) *int {
 // was created or changed (#17), so its metadata does not wait for the
 // schedule. A pass already running is reused (same workflow id). It never
 // fails the request: a failure is logged and the schedule catches up.
-func (h *Handlers) startMetadataSync(ctx context.Context, catalogID pgtype.UUID) {
+func (h *core) startMetadataSync(ctx context.Context, catalogID pgtype.UUID) {
 	if h.temporalClient == nil {
 		return
 	}

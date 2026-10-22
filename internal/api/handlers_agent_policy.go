@@ -15,7 +15,7 @@ import (
 
 // agentCeilings are the server-side maxima (#60). A zero config value falls
 // back to the packaged default.
-func (h *Handlers) agentCeilings() agentpolicy.Ceilings {
+func (h *core) agentCeilings() agentpolicy.Ceilings {
 	c := agentpolicy.DefaultCeilings()
 	if h.settings.Agents.MaxRows > 0 {
 		c.MaxRowsReturned = h.settings.Agents.MaxRows

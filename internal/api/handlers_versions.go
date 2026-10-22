@@ -49,7 +49,7 @@ func pgUUIDFromPtr(id *uuid.UUID) pgtype.UUID {
 
 // savedQuerySpaceForHistory returns the space to authorize against: the current
 // entity's if it still exists, else the last version's.
-func (h *Handlers) savedQuerySpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
+func (h *core) savedQuerySpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
 	q, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{ID: id, WorkspaceID: ws})
 	if err == nil {
 		return q.SpaceID, nil
@@ -66,7 +66,7 @@ func (h *Handlers) savedQuerySpaceForHistory(ctx context.Context, ws, id pgtype.
 	return v.SpaceID, nil
 }
 
-func (h *Handlers) metricSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
+func (h *core) metricSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
 	m, err := h.queries.GetSemanticMetric(ctx, db.GetSemanticMetricParams{WorkspaceID: ws, ID: id})
 	if err == nil {
 		return m.SpaceID, nil

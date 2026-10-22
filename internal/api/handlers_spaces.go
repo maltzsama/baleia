@@ -36,12 +36,12 @@ func spaceError(err error) (spaceErr, bool) {
 type spaceErr struct{ status int }
 
 // requireSpace maps RequireSpace to (role, ok, handled status).
-func (h *Handlers) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, min authz.SpaceRole) (authz.SpaceRole, *spaceErr, error) {
+func (h *core) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, minRole authz.SpaceRole) (authz.SpaceRole, *spaceErr, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return authz.SpaceNone, nil, authz.ErrUnauthenticated
 	}
-	role, err := h.authz().RequireSpace(ctx, p, ws, spaceID, min)
+	role, err := h.authz().RequireSpace(ctx, p, ws, spaceID, minRole)
 	if err != nil {
 		if se, ok := spaceError(err); ok {
 			return authz.SpaceNone, &se, nil
@@ -53,14 +53,14 @@ func (h *Handlers) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, mi
 
 // contentSpace is requireSpace for a metric: it returns nil when allowed, a
 // spaceErr with 404 (invisible) or 403 (below min), or a real error.
-func (h *Handlers) contentSpace(ctx context.Context, ws, spaceID pgtype.UUID, min authz.SpaceRole) (*spaceErr, error) {
-	_, se, err := h.requireSpace(ctx, ws, spaceID, min)
+func (h *core) contentSpace(ctx context.Context, ws, spaceID pgtype.UUID, minRole authz.SpaceRole) (*spaceErr, error) {
+	_, se, err := h.requireSpace(ctx, ws, spaceID, minRole)
 	return se, err
 }
 
 // spaceForWrite resolves the space a write targets: the requested one, else the
 // workspace's default space, and requires min on it.
-func (h *Handlers) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested *openapi_types.UUID, min authz.SpaceRole) (db.Space, *spaceErr, error) {
+func (h *core) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested *openapi_types.UUID, minRole authz.SpaceRole) (db.Space, *spaceErr, error) {
 	var space db.Space
 	var err error
 	if requested != nil {
@@ -77,7 +77,7 @@ func (h *Handlers) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested 
 			return db.Space{}, nil, err
 		}
 	}
-	_, se, err := h.requireSpace(ctx, ws, space.ID, min)
+	_, se, err := h.requireSpace(ctx, ws, space.ID, minRole)
 	if err != nil {
 		return db.Space{}, nil, err
 	}
