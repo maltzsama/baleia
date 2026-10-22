@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/account"
+	"github.com/galileostudio/baleia/internal/identity/apikeys"
 	"github.com/galileostudio/baleia/internal/identity/login"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
@@ -34,6 +35,8 @@ type AuthHandlers struct {
 	sessions *session.Service
 	// resets runs the e-mailed password reset (#51).
 	resets *passwordreset.Service
+	// apiKeys manages personal API keys (#276).
+	apiKeys *apikeys.Service
 	// users administers accounts (#258).
 	users *users.Service
 	// accounts is the signed-in user's own account.
@@ -67,6 +70,7 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		}, c.settings.Auth.PasswordCost),
 	}
 	a.logins = newLogins(c, login.LDAP{})
+	a.apiKeys = apikeys.New(c.queries)
 	a.accounts = account.New(c.queries, a.sessions, account.Config{
 		PasswordCost:      c.settings.Auth.PasswordCost,
 		MinPasswordLength: minPasswordLength,

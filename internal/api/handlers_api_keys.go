@@ -2,13 +2,10 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -19,7 +16,7 @@ func (h *AuthHandlers) ListApiKeys(ctx context.Context, request ListApiKeysReque
 		return ListApiKeys401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	keys, err := h.queries.ListAPIKeysByUser(ctx, uid)
+	keys, err := h.apiKeys.List(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -38,22 +35,7 @@ func (h *AuthHandlers) CreateApiKey(ctx context.Context, request CreateApiKeyReq
 		return CreateApiKey401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	secret := generateAPIKey()
-	hash := hashAPIKey(secret)
-
-	var expiresAt pgtype.Timestamptz
-	if request.Body.ExpiresAt != nil {
-		expiresAt = pgtype.Timestamptz{Time: *request.Body.ExpiresAt, Valid: true}
-	}
-
-	key, err := h.queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
-		UserID:    uid,
-		Name:      request.Body.Name,
-		KeyHash:   hash,
-		Prefix:    secret[:8],
-		Scopes:    []string{"*"},
-		ExpiresAt: expiresAt,
-	})
+	key, secret, err := h.apiKeys.Create(ctx, uid, request.Body.Name, request.Body.ExpiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -86,10 +68,7 @@ func (h *AuthHandlers) DeleteApiKey(ctx context.Context, request DeleteApiKeyReq
 		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "api key not found"}}, nil
 	}
 
-	if err := h.queries.DeleteAPIKey(ctx, db.DeleteAPIKeyParams{
-		ID:     keyID,
-		UserID: uid,
-	}); err != nil {
+	if err := h.apiKeys.Delete(ctx, uid, keyID); err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return DeleteApiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "api key not found"}}, nil
 	}
@@ -117,14 +96,4 @@ func dbApiKeyToPublic(k db.ApiKey) ApiKey {
 		pub.ExpiresAt = &t
 	}
 	return pub
-}
-
-func generateAPIKey() string {
-	b := make([]byte, 32)
-	_, _ = rand.Read(b)
-	return "bal_" + base64.RawURLEncoding.EncodeToString(b)
-}
-
-func hashAPIKey(key string) string {
-	return auth.HashAPIKey(key)
 }
