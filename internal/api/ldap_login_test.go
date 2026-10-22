@@ -28,9 +28,9 @@ func ldapTestConfig() identityldap.Config {
 func ldapLoginFixture(t *testing.T) (*auditFixture, db.AuthProvider) {
 	t.Helper()
 	f := newAuthFixture(t)
-	f.h.SetLoginDelay(NewLoginDelay(LoginDelayConfig{
+	f.h.loginDelayStore = NewLoginDelay(LoginDelayConfig{
 		Sleep: func(context.Context, time.Duration) error { return nil },
-	}))
+	})
 	ctx := context.Background()
 
 	ap, err := f.h.queries.CreateAuthProvider(ctx, db.CreateAuthProviderParams{

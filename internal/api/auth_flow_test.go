@@ -382,7 +382,7 @@ func TestReset_RequestStoresHash(t *testing.T) {
 	f := newAuthFixture(t)
 	f.h.cfg.SMTPHost, f.h.cfg.SMTPPort = "smtp.example.test", "25"
 	var sentURL string
-	f.h.SetMailer(mailerFunc(func(_ context.Context, _, locale string, template mail.Template, data map[string]any) error {
+	f.h.mailer = mailerFunc(func(_ context.Context, _, locale string, template mail.Template, data map[string]any) error {
 		if template != mail.TemplatePasswordReset {
 			t.Fatalf("template = %q, want %q", template, mail.TemplatePasswordReset)
 		}
@@ -391,7 +391,7 @@ func TestReset_RequestStoresHash(t *testing.T) {
 		}
 		sentURL, _ = data["ResetURL"].(string)
 		return nil
-	}))
+	})
 
 	resp, err := f.h.RequestPasswordReset(context.Background(), RequestPasswordResetRequestObject{
 		Body: &PasswordResetRequestBody{Email: "owner@x.io"},

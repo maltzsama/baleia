@@ -100,9 +100,6 @@ type MailSender interface {
 	Send(ctx context.Context, to, locale string, template mail.Template, data map[string]any) error
 }
 
-// SetMailer injects the password-reset/invite mailer (tests).
-func (h *Handlers) SetMailer(m MailSender) { h.mailer = m }
-
 // mailSender uses the injected mailer, or SMTP from the configuration.
 func (h *Handlers) mailSender() MailSender {
 	if h.mailer != nil {

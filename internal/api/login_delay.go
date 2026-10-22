@@ -141,6 +141,3 @@ func (h *Handlers) loginDelay() *LoginDelay {
 	})
 	return h.loginDelayStore
 }
-
-// SetLoginDelay injects a delay store (tests).
-func (h *Handlers) SetLoginDelay(d *LoginDelay) { h.loginDelayStore = d }
