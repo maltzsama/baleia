@@ -99,6 +99,10 @@ type Handlers struct {
 	idpProbe func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
 }
 
+// The handlers implement the whole generated strict server; the split by
+// domain (#365) keeps it composed into one value.
+var _ StrictServerInterface = (*Handlers)(nil)
+
 // MailSender is the transactional e-mail surface (#67).
 type MailSender interface {
 	Send(ctx context.Context, to, locale string, template mail.Template, data map[string]any) error
