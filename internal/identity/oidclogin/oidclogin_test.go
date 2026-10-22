@@ -164,12 +164,20 @@ func TestFinish_Rejections(t *testing.T) {
 	}
 
 	// A state issued for one provider cannot finish another's login.
+	// The other provider is usable, so the rejection is the state check.
 	other := pgtype.UUID{Bytes: uuid.New(), Valid: true}
-	ap := f.store.providers[f.id.Bytes]
-	f.store.providers[other.Bytes] = db.AuthProvider{ID: other, Type: "oidc", ConfigEnc: ap.ConfigEnc}
+	kr, err := crypto.NewKeyring("test-secret-0123456789abcdef-0123456789", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := auth.SealOIDCConfig(kr, other.String(), auth.OIDCProviderConfig{IssuerURL: "https://idp.example", ClientID: "c", ClientSecret: "s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.store.providers[other.Bytes] = db.AuthProvider{ID: other, Type: "oidc", ConfigEnc: enc, Enabled: true}
 	state = begin()
-	if _, _, err := f.s.Finish(ctx, other, state, state, "good"); err == nil {
-		t.Error("a state of another provider must be rejected")
+	if _, _, err := f.s.Finish(ctx, other, state, state, "good"); !errors.Is(err, ErrStateMismatch) {
+		t.Errorf("a state of another provider = %v, want ErrStateMismatch", err)
 	}
 }
 
