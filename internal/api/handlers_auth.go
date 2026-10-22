@@ -941,18 +941,6 @@ func (h *AuthHandlers) cachedOIDCProvider(ctx context.Context, providerID string
 	return provider, cfg, nil
 }
 
-func (h *core) loadOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
-	var apID pgtype.UUID
-	if err := apID.Scan(providerID); err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	ap, err := h.queries.GetAuthProviderByID(ctx, apID)
-	if err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	return h.newOIDCProvider(ctx, providerID, ap)
-}
-
 func (h *core) newOIDCProvider(ctx context.Context, providerID string, ap db.AuthProvider) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
 	cfg, err := auth.OpenOIDCConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
 	if err != nil {
