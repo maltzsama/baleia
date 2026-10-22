@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -64,7 +63,14 @@ func (r SecretResolver) Resolve(v string) (string, error) {
 		if strings.Contains(m[2], "..") {
 			return "", fmt.Errorf("%w: invalid file name", ErrSecretReference)
 		}
-		b, err := os.ReadFile(filepath.Join(r.FileBaseDir, m[2]))
+		// os.Root confines the read to the base directory: a symlink inside it
+		// may point within it (a mounted Kubernetes Secret does), never out.
+		root, err := os.OpenRoot(r.FileBaseDir)
+		if err != nil {
+			return "", fmt.Errorf("%w: %w", ErrSecretReference, err)
+		}
+		defer func() { _ = root.Close() }()
+		b, err := root.ReadFile(m[2])
 		if err != nil {
 			return "", fmt.Errorf("%w: %w", ErrSecretReference, err)
 		}

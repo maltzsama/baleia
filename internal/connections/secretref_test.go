@@ -121,3 +121,33 @@ func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
 		t.Fatalf("Secret = %q, want from-file", got)
 	}
 }
+
+// TestSecretResolver_FileStaysUnderTheBaseDir: a symlink that escapes the base
+// directory is refused; one that stays inside it (how a Kubernetes Secret
+// volume links name -> ..data/name) resolves.
+func TestSecretResolver_FileStaysUnderTheBaseDir(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("leaked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "..data"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "..data", "token"), []byte("mounted\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..data", "token"), filepath.Join(dir, "token")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	r := SecretResolver{FileBaseDir: dir}
+	if v, err := r.Resolve("@baleia-secret[file:token]"); err != nil || v != "mounted" {
+		t.Errorf("symlink inside the base dir = %q, %v; want mounted", v, err)
+	}
+	if v, err := r.Resolve("@baleia-secret[file:escape]"); !errors.Is(err, ErrSecretReference) || v != "" {
+		t.Errorf("symlink out of the base dir = %q, %v; want ErrSecretReference", v, err)
+	}
+}
