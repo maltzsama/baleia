@@ -27,12 +27,12 @@ func findStatusItem(t *testing.T, res SystemStatusResource, name string) SystemS
 // reported as `missing`, never blank.
 func TestSystemStatus_ScheduleMissing(t *testing.T) {
 	h := testAPI(handlerFields{schema: unreachableSchema{}})
-	h.systemStatusSchedule = func(_ context.Context, id string) (SystemStatusItemStatus, string) {
+	h.schedules = scheduleFunc(func(_ context.Context, id string) (SystemStatusItemStatus, string) {
 		if id == schedules.MetadataSync {
 			return SystemStatusItemStatusMissing, "schedule_missing"
 		}
 		return SystemStatusItemStatusOk, ""
-	}
+	})
 
 	res := h.schedulesStatus(context.Background())
 	item := findStatusItem(t, res, schedules.MetadataSync)
@@ -64,12 +64,12 @@ func TestSystemStatus_EngineHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f.h.systemStatusEngine = func(_ context.Context, e db.Engine) (SystemStatusItemStatus, string) {
+	f.h.engineStatus = engineStatusFunc(func(_ context.Context, e db.Engine) (SystemStatusItemStatus, string) {
 		if e.ID == engineID {
 			return SystemStatusItemStatusUnreachable, "engine_unreachable"
 		}
 		return SystemStatusItemStatusOk, ""
-	}
+	})
 
 	res := f.h.enginesStatus(ctx)
 	item := findStatusItem(t, res, "status-engine")

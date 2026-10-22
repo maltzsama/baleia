@@ -54,13 +54,9 @@ func testAPI(f handlerFields) *API {
 		dialects:       f.dialects,
 		audit:          f.audit,
 	}
-	return &API{
-		core: c,
-		OpsHandlers: &OpsHandlers{
-			core:           c,
-			schema:         f.schema,
-			attentionCache: f.attentionCache,
-		},
+	h := &API{
+		core:        c,
+		OpsHandlers: newOpsHandlers(c, f.schema),
 		AgentHandlers: &AgentHandlers{
 			core:   c,
 			dialer: f.dialer,
@@ -80,6 +76,8 @@ func testAPI(f handlerFields) *API {
 		},
 		AuthHandlers: newAuthHandlers(c),
 	}
+	h.attentionCache = f.attentionCache
+	return h
 }
 
 // directoryFunc and proberFunc adapt a test function to the auth seams.
@@ -93,4 +91,17 @@ type proberFunc func(ctx context.Context, cfg providerConfig, testUsername strin
 
 func (f proberFunc) Probe(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult {
 	return f(ctx, cfg, testUsername)
+}
+
+// scheduleFunc and engineStatusFunc adapt a test function to the status probes.
+type scheduleFunc func(ctx context.Context, id string) (SystemStatusItemStatus, string)
+
+func (f scheduleFunc) DescribeSchedule(ctx context.Context, id string) (SystemStatusItemStatus, string) {
+	return f(ctx, id)
+}
+
+type engineStatusFunc func(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string)
+
+func (f engineStatusFunc) ProbeEngine(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string) {
+	return f(ctx, e)
 }

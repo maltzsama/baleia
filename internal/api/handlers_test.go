@@ -135,3 +135,19 @@ func TestNewAuthHandlers_RealSeams(t *testing.T) {
 		t.Errorf("prober = %T, want networkProber", a.prober)
 	}
 }
+
+// TestNewOpsHandlers_RealSeams: the status probes reach Temporal and the
+// engine manager; without a Temporal client there is no schedule probe.
+func TestNewOpsHandlers_RealSeams(t *testing.T) {
+	o := newOpsHandlers(&core{}, nil)
+	if o.schedules != nil {
+		t.Errorf("schedules = %T, want nil without a Temporal client", o.schedules)
+	}
+	if _, ok := o.engineStatus.(managedEngines); !ok {
+		t.Errorf("engineStatus = %T, want managedEngines", o.engineStatus)
+	}
+	o = newOpsHandlers(&core{temporalClient: &fakeTemporalClient{}}, nil)
+	if _, ok := o.schedules.(temporalSchedules); !ok {
+		t.Errorf("schedules = %T, want temporalSchedules", o.schedules)
+	}
+}

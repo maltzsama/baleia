@@ -2,13 +2,11 @@ package api
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
-	"go.temporal.io/api/serviceerror"
 )
 
 // Platform sections of the system status (#291). Each section is probed under
@@ -67,27 +65,13 @@ func (h *core) metadataSyncEvery() time.Duration {
 // directory reconciler added with user suspension (#257).
 func (h *OpsHandlers) schedulesStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
-	describe := h.systemStatusSchedule
-	if describe == nil {
-		if h.temporalClient == nil {
-			return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("temporal_unavailable"), Items: statusItems(items)}
-		}
-		describe = func(ctx context.Context, id string) (SystemStatusItemStatus, string) {
-			_, err := h.temporalClient.ScheduleClient().GetHandle(ctx, id).Describe(ctx)
-			if err == nil {
-				return SystemStatusItemStatusOk, ""
-			}
-			var nf *serviceerror.NotFound
-			if errors.As(err, &nf) {
-				return SystemStatusItemStatusMissing, "schedule_missing"
-			}
-			return SystemStatusItemStatusUnknown, "schedule_unknown"
-		}
+	if h.schedules == nil {
+		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("temporal_unavailable"), Items: statusItems(items)}
 	}
 
 	degraded := false
 	for _, spec := range schedulespecs.Core(h.metadataSyncEvery()) {
-		status, detail := describe(ctx, spec.ID)
+		status, detail := h.schedules.DescribeSchedule(ctx, spec.ID)
 		item := SystemStatusItem{Name: spec.ID, Status: status}
 		if detail != "" {
 			item.Detail = statusStringPtr(detail)
@@ -118,20 +102,10 @@ func (h *OpsHandlers) enginesStatus(ctx context.Context) SystemStatusResource {
 	}
 	for _, e := range engines {
 		item := SystemStatusItem{Name: e.Name, Status: SystemStatusItemStatusUnknown, Detail: statusStringPtr(e.Kind)}
-		if h.systemStatusEngine != nil {
-			status, detail := h.systemStatusEngine(ctx, e)
-			item.Status = status
-			if detail != "" {
-				item.Detail = statusStringPtr(detail)
-			}
-		} else if h.engines != nil {
-			if eng, err := h.engines.Get(ctx, e.ID); err == nil {
-				probe := h.engineProbeFor(ctx, e, eng)
-				item.Status = SystemStatusItemStatus(probe.Health.Status)
-				if probe.Version != nil {
-					item.Detail = probe.Version
-				}
-			}
+		status, detail := h.engineStatus.ProbeEngine(ctx, e)
+		item.Status = status
+		if detail != "" {
+			item.Detail = statusStringPtr(detail)
 		}
 		items = append(items, item)
 	}
