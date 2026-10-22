@@ -85,12 +85,16 @@ func New(store Store, accounts provision.Accounts, keyring *crypto.Keyring, disc
 }
 
 // Provider returns the discovered provider and its configuration, reusing a
-// discovery until the configuration changes or the cache entry expires. A
-// configuration that cannot be opened fails closed (#278).
+// discovery until the configuration changes or the cache entry expires. Only
+// an enabled OIDC provider is usable, and a configuration that cannot be
+// opened fails closed (#278).
 func (s *Service) Provider(ctx context.Context, providerID pgtype.UUID) (Provider, auth.OIDCProviderConfig, error) {
 	ap, err := s.store.GetAuthProviderByID(ctx, providerID)
 	if err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
+	}
+	if ap.Type != "oidc" || !ap.Enabled {
+		return nil, auth.OIDCProviderConfig{}, ErrUnavailable
 	}
 	version := ap.ConfigEnc
 	if ap.UpdatedAt.Valid {

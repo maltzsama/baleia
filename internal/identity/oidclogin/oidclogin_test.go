@@ -198,3 +198,33 @@ func TestProvider_FailsClosed(t *testing.T) {
 		t.Fatal("a plaintext config was accepted")
 	}
 }
+
+// TestProvider_OnlyEnabledOIDC: a disabled provider, or one of another type,
+// cannot start or finish a login.
+func TestProvider_OnlyEnabledOIDC(t *testing.T) {
+	ctx := context.Background()
+	for _, c := range []struct {
+		name    string
+		typ     string
+		enabled bool
+	}{
+		{"disabled", "oidc", false},
+		{"ldap", "ldap", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t, "active")
+			ap := f.store.providers[f.id.Bytes]
+			ap.Type, ap.Enabled = c.typ, c.enabled
+			f.store.providers[f.id.Bytes] = ap
+			if _, _, err := f.s.Begin(ctx, f.id, nil); !errors.Is(err, ErrUnavailable) {
+				t.Errorf("Begin = %v, want ErrUnavailable", err)
+			}
+			if _, _, err := f.s.Finish(ctx, f.id, "s", "s", "good"); !errors.Is(err, ErrUnavailable) {
+				t.Errorf("Finish = %v, want ErrUnavailable", err)
+			}
+			if f.discovers != 0 {
+				t.Error("an unusable provider must not be discovered")
+			}
+		})
+	}
+}
