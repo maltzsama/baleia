@@ -144,7 +144,7 @@ func TestIdP_DeleteSuspends(t *testing.T) {
 // discarded.
 func TestIdP_TransientTestPersistsNothing(t *testing.T) {
 	h := idpTestHandlers(t)
-	h.idpProbe = fakeIDPProbe
+	h.prober = proberFunc(fakeIDPProbe)
 
 	got, err := h.TestIdentityProviderTransient(idpAdminCtx(), TestIdentityProviderTransientRequestObject{
 		Body: &TestIdentityProviderRequest{Type: IdentityProviderTypeOidc, Oidc: validOIDCConfig()},
@@ -173,7 +173,7 @@ func TestIdP_TransientTestPersistsNothing(t *testing.T) {
 // returns a check list without writing.
 func TestIdP_TestStoredProvider(t *testing.T) {
 	h := idpTestHandlers(t)
-	h.idpProbe = fakeIDPProbe
+	h.prober = proberFunc(fakeIDPProbe)
 	detail := createOIDCProvider(t, h)
 
 	got, err := h.TestIdentityProvider(idpAdminCtx(), TestIdentityProviderRequestObject{Id: detail.Id})

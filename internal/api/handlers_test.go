@@ -123,3 +123,31 @@ func TestNewAPI_GroupsShareCore(t *testing.T) {
 	assertGroupsWired(t, h)
 	assertGroupsWired(t, testAPI(handlerFields{}))
 }
+
+// TestNewAuthHandlers_RealSeams: outside tests the auth seams reach the real
+// directory and the network.
+func TestNewAuthHandlers_RealSeams(t *testing.T) {
+	a := newAuthHandlers(&core{})
+	if _, ok := a.directory.(ldapDirectory); !ok {
+		t.Errorf("directory = %T, want ldapDirectory", a.directory)
+	}
+	if _, ok := a.prober.(networkProber); !ok {
+		t.Errorf("prober = %T, want networkProber", a.prober)
+	}
+}
+
+// TestNewOpsHandlers_RealSeams: the status probes reach Temporal and the
+// engine manager; without a Temporal client there is no schedule probe.
+func TestNewOpsHandlers_RealSeams(t *testing.T) {
+	o := newOpsHandlers(&core{}, nil)
+	if o.schedules != nil {
+		t.Errorf("schedules = %T, want nil without a Temporal client", o.schedules)
+	}
+	if _, ok := o.engineStatus.(managedEngines); !ok {
+		t.Errorf("engineStatus = %T, want managedEngines", o.engineStatus)
+	}
+	o = newOpsHandlers(&core{temporalClient: &fakeTemporalClient{}}, nil)
+	if _, ok := o.schedules.(temporalSchedules); !ok {
+		t.Errorf("schedules = %T, want temporalSchedules", o.schedules)
+	}
+}

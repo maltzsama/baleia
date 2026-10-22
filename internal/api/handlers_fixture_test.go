@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
+
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
@@ -51,13 +54,9 @@ func testAPI(f handlerFields) *API {
 		dialects:       f.dialects,
 		audit:          f.audit,
 	}
-	return &API{
-		core: c,
-		OpsHandlers: &OpsHandlers{
-			core:           c,
-			schema:         f.schema,
-			attentionCache: f.attentionCache,
-		},
+	h := &API{
+		core:        c,
+		OpsHandlers: newOpsHandlers(c, f.schema),
 		AgentHandlers: &AgentHandlers{
 			core:   c,
 			dialer: f.dialer,
@@ -75,6 +74,34 @@ func testAPI(f handlerFields) *API {
 		WorkspaceHandlers: &WorkspaceHandlers{
 			core: c,
 		},
-		AuthHandlers: &AuthHandlers{core: c},
+		AuthHandlers: newAuthHandlers(c),
 	}
+	h.attentionCache = f.attentionCache
+	return h
+}
+
+// directoryFunc and proberFunc adapt a test function to the auth seams.
+type directoryFunc func(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)
+
+func (f directoryFunc) Authenticate(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error) {
+	return f(ctx, cfg, username, password)
+}
+
+type proberFunc func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
+
+func (f proberFunc) Probe(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult {
+	return f(ctx, cfg, testUsername)
+}
+
+// scheduleFunc and engineStatusFunc adapt a test function to the status probes.
+type scheduleFunc func(ctx context.Context, id string) (SystemStatusItemStatus, string)
+
+func (f scheduleFunc) DescribeSchedule(ctx context.Context, id string) (SystemStatusItemStatus, string) {
+	return f(ctx, id)
+}
+
+type engineStatusFunc func(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string)
+
+func (f engineStatusFunc) ProbeEngine(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string) {
+	return f(ctx, e)
 }

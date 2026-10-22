@@ -421,8 +421,8 @@ func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := oidcHandlers(t, q)
-	if _, _, err := h.loadOIDCProvider(context.Background(), idString(provider.ID)); err == nil {
-		t.Fatal("loadOIDCProvider accepted a plaintext config")
+	if _, _, err := h.cachedOIDCProvider(context.Background(), idString(provider.ID)); err == nil {
+		t.Fatal("cachedOIDCProvider accepted a plaintext config")
 	}
 }
 

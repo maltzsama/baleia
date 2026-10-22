@@ -250,11 +250,7 @@ func (h *AuthHandlers) loginLDAP(ctx context.Context, body *LoginRequest, ev aud
 		return invalid()
 	}
 
-	authenticate := h.ldapAuthenticate
-	if authenticate == nil {
-		authenticate = identityldap.Authenticate
-	}
-	result, err := authenticate(ctx, cfg, username, body.Password)
+	result, err := h.directory.Authenticate(ctx, cfg, username, body.Password)
 	if err != nil {
 		return invalid()
 	}
@@ -943,18 +939,6 @@ func (h *AuthHandlers) cachedOIDCProvider(ctx context.Context, providerID string
 	}
 	h.oidcCache.Store(key, &oidcCacheEntry{provider: provider, cfg: cfg, expires: time.Now().Add(time.Hour)})
 	return provider, cfg, nil
-}
-
-func (h *core) loadOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
-	var apID pgtype.UUID
-	if err := apID.Scan(providerID); err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	ap, err := h.queries.GetAuthProviderByID(ctx, apID)
-	if err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	return h.newOIDCProvider(ctx, providerID, ap)
 }
 
 func (h *core) newOIDCProvider(ctx context.Context, providerID string, ap db.AuthProvider) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
