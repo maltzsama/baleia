@@ -192,3 +192,29 @@ func TestEnd(t *testing.T) {
 		t.Errorf("unknown token = %v %v, want not found", found, err)
 	}
 }
+
+// brokenTokens fails every read the way a lost connection does.
+type brokenTokens struct{ *fakeStore }
+
+var errDown = errors.New("connection refused")
+
+func (brokenTokens) ConsumeRefreshToken(context.Context, string) (db.ConsumeRefreshTokenRow, error) {
+	return db.ConsumeRefreshTokenRow{}, errDown
+}
+
+func (brokenTokens) GetRefreshTokenByHashAny(context.Context, string) (db.RefreshToken, error) {
+	return db.RefreshToken{}, errDown
+}
+
+// TestStoreFailureIsNotInvalid: a database outage is an error, never an
+// invalid token or a logout that did not happen.
+func TestStoreFailureIsNotInvalid(t *testing.T) {
+	f := newFakeStore()
+	s := New(brokenTokens{f}, f, Config{JWTSecret: "0123456789abcdef0123456789abcdef", AccessTTL: time.Minute, RefreshTTL: time.Hour})
+	if _, _, err := s.Rotate(context.Background(), "any"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalid) {
+		t.Errorf("Rotate = %v, want the store error", err)
+	}
+	if _, found, err := s.End(context.Background(), "any"); found || !errors.Is(err, errDown) {
+		t.Errorf("End = %v, %v; want the store error", found, err)
+	}
+}

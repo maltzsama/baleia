@@ -142,3 +142,21 @@ func TestConfirm(t *testing.T) {
 		t.Errorf("second use = %v, want ErrInvalidToken", err)
 	}
 }
+
+type brokenStore struct{ *fakeStore }
+
+var errDown = errors.New("connection refused")
+
+func (brokenStore) ConsumePasswordResetToken(context.Context, string) (db.PasswordResetToken, error) {
+	return db.PasswordResetToken{}, errDown
+}
+
+// TestConfirm_StoreFailureIsNotAnInvalidLink: a database outage is an error,
+// never an invalid link.
+func TestConfirm_StoreFailureIsNotAnInvalidLink(t *testing.T) {
+	_, st, m, ss, _ := setup(t)
+	s := New(brokenStore{st}, m, ss, Config{PasswordCost: bcrypt.MinCost})
+	if _, err := s.Confirm(context.Background(), "any", "new-password"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalidToken) {
+		t.Errorf("Confirm = %v, want the store error", err)
+	}
+}

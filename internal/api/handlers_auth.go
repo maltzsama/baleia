@@ -209,6 +209,9 @@ func (h *AuthHandlers) Logout(ctx context.Context, request LogoutRequestObject) 
 	}
 	// Logout ends the whole rotation family, not only this token.
 	userID, found, err := h.sessions.End(ctx, token)
+	if err != nil && !found {
+		return nil, fmt.Errorf("logout: %w", err)
+	}
 	if !found {
 		return Logout204Response{}, nil
 	}

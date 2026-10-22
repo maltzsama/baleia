@@ -92,22 +92,28 @@ func (s *Service) IssueRefresh(ctx context.Context, user db.User) (string, error
 func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.User, error) {
 	hash := auth.HashRefreshToken(refreshToken)
 	rt, err := s.tokens.ConsumeRefreshToken(ctx, hash)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Pair{}, db.User{}, err
+	}
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			if old, lookupErr := s.tokens.GetRefreshTokenByHashAny(ctx, hash); lookupErr == nil && old.Revoked {
-				// A client disconnect must not cancel the revoke halfway (#370).
-				if revokeErr := s.tokens.RevokeRefreshFamily(context.WithoutCancel(ctx), old.FamilyID); revokeErr != nil {
-					return Pair{}, db.User{}, fmt.Errorf("%w: %w", ErrReuseNotContained, revokeErr)
-				}
-				return Pair{}, db.User{}, ErrReused
+		// No live row: a revoked one with this hash means a rotated token was
+		// replayed, so the whole family goes (#51).
+		if old, lookupErr := s.tokens.GetRefreshTokenByHashAny(ctx, hash); lookupErr == nil && old.Revoked {
+			// A client disconnect must not cancel the revoke halfway (#370).
+			if revokeErr := s.tokens.RevokeRefreshFamily(context.WithoutCancel(ctx), old.FamilyID); revokeErr != nil {
+				return Pair{}, db.User{}, fmt.Errorf("%w: %w", ErrReuseNotContained, revokeErr)
 			}
+			return Pair{}, db.User{}, ErrReused
 		}
 		return Pair{}, db.User{}, ErrInvalid
 	}
 
 	user, err := s.users.GetUserByID(ctx, rt.UserID)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return Pair{}, db.User{}, ErrUserNotFound
+	}
+	if err != nil {
+		return Pair{}, db.User{}, err
 	}
 	// A suspension ends every session and blocks a refresh even if a token
 	// survived (#283).
@@ -124,11 +130,15 @@ func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.Use
 }
 
 // End revokes the whole family of refreshToken. found is false, with no
-// error, when the token is unknown.
+// error, when the token is unknown; a store failure is an error, so the
+// caller never reports a logout that did not happen.
 func (s *Service) End(ctx context.Context, refreshToken string) (userID pgtype.UUID, found bool, err error) {
 	rt, err := s.tokens.GetRefreshTokenByHashAny(ctx, auth.HashRefreshToken(refreshToken))
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return pgtype.UUID{}, false, nil
+	}
+	if err != nil {
+		return pgtype.UUID{}, false, fmt.Errorf("look up refresh token: %w", err)
 	}
 	// A client disconnect must not cancel the revoke halfway (#370).
 	if err := s.tokens.RevokeRefreshFamily(context.WithoutCancel(ctx), rt.FamilyID); err != nil {

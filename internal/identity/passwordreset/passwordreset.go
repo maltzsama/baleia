@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -94,8 +95,11 @@ func (s *Service) Request(ctx context.Context, email string) error {
 func (s *Service) Confirm(ctx context.Context, token, newPassword string) (pgtype.UUID, error) {
 	// Consuming the hash makes the link single use even before it expires (#51).
 	row, err := s.store.ConsumePasswordResetToken(ctx, auth.HashToken(token))
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return pgtype.UUID{}, ErrInvalidToken
+	}
+	if err != nil {
+		return pgtype.UUID{}, err
 	}
 
 	hash, err := auth.HashPasswordWithCost(newPassword, s.cfg.PasswordCost)
