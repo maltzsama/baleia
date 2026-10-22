@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"net/http"
 	"sync"
 	"time"
 
@@ -275,27 +274,4 @@ func requireWorkspaceAccess(ctx context.Context, queries db.Querier, workspaceID
 		}
 	}
 	return nil
-}
-
-func errUnauthorized(msg string) Error {
-	return Error{Code: ErrorCodeUnauthorized, Message: msg}
-}
-
-func errForbidden(msg string) Error {
-	return Error{Code: ErrorCodeForbidden, Message: msg}
-}
-
-func errNotFound(msg string) Error {
-	return Error{Code: ErrorCodeNotFound, Message: msg}
-}
-
-func errConflict(msg string) Error {
-	return Error{Code: ErrorCodeConflict, Message: msg}
-}
-
-// respondError is only used by the manual (OIDC) routes.
-func respondError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write([]byte(`{"code":"` + code + `","message":"` + message + `"}`))
 }

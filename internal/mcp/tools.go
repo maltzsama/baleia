@@ -42,10 +42,6 @@ type emptyIn struct{}
 type workspaceIn struct {
 	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
 }
-type catalogIn struct {
-	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
-	CatalogID   string `json:"catalog_id" jsonschema:"catalog UUID"`
-}
 type schemasIn struct {
 	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
 	CatalogID   string `json:"catalog_id" jsonschema:"catalog UUID"`

@@ -613,5 +613,3 @@ func pgTimestampToTimePtr(ts pgtype.Timestamptz) *time.Time {
 	}
 	return &t
 }
-
-func ptrSyncStatus(s CatalogSyncStatus) *CatalogSyncStatus { return &s }
