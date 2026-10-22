@@ -133,3 +133,8 @@ func (r *Registry) Transient(ctx context.Context, kind string, cfg connections.C
 	}
 	return e.factory(ctx, EngineRow{Name: "connection-test", Kind: kind, Class: e.class, IdentityMode: "connection"}, cfg, d)
 }
+
+func (r *Registry) lookup(kind string) (kindEntry, bool) {
+	e, ok := r.kinds[kind]
+	return e, ok
+}

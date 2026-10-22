@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/engines"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -154,7 +155,13 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).
 	sqliteengine.Configure(sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite})
-	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer)
+	kinds, err := engines.NewRegistry(engines.Options{
+		SQLite: sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("engine kinds: %w", err)
+	}
+	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, kinds)
 
 	if c.Storage, err = storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL); err != nil {
 		return nil, err

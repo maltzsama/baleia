@@ -31,15 +31,16 @@ type Manager struct {
 	keyring   *crypto.Keyring
 	providers *connections.Registry
 	dialer    *connections.Dialer
+	kinds     *Registry
 
 	mu    sync.Mutex
 	cache map[[16]byte]*managed
 }
 
-// NewManager returns a manager; the keyring may be nil when no stored
-// connection has credentials.
-func NewManager(store Store, keyring *crypto.Keyring, providers *connections.Registry, dialer *connections.Dialer) *Manager {
-	return &Manager{store: store, keyring: keyring, providers: providers, dialer: dialer, cache: map[[16]byte]*managed{}}
+// NewManager returns a manager that builds engines of the kinds in kinds;
+// the keyring may be nil when no stored connection has credentials.
+func NewManager(store Store, keyring *crypto.Keyring, providers *connections.Registry, dialer *connections.Dialer, kinds *Registry) *Manager {
+	return &Manager{store: store, keyring: keyring, providers: providers, dialer: dialer, kinds: kinds, cache: map[[16]byte]*managed{}}
 }
 
 // Get returns the engine of an `engines` row.
@@ -66,7 +67,7 @@ func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error)
 		delete(m.cache, engineID.Bytes)
 	}
 
-	entry, ok := lookupKind(row.Engine.Kind)
+	entry, ok := m.kinds.lookup(row.Engine.Kind)
 	if !ok {
 		return nil, fmt.Errorf("%w: %q", ErrKindNotRegistered, row.Engine.Kind)
 	}
