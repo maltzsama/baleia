@@ -171,3 +171,20 @@ func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 		t.Fatalf("last role = %s, want notice", last.Role)
 	}
 }
+
+// TestRunnerSlot: an empty or nil slot loads nil; a stored runner loads back.
+func TestRunnerSlot(t *testing.T) {
+	var none *RunnerSlot
+	if none.Load() != nil {
+		t.Fatal("a nil slot must load nil")
+	}
+	slot := &RunnerSlot{}
+	if slot.Load() != nil {
+		t.Fatal("an empty slot must load nil")
+	}
+	r := &Runner{}
+	slot.Store(r)
+	if slot.Load() != r {
+		t.Fatal("the stored runner must load back")
+	}
+}

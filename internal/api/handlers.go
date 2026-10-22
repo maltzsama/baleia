@@ -61,8 +61,9 @@ type Handlers struct {
 	content *content.Service
 	// assistant owns assistant settings, agents and conversations (#62).
 	assistant *assistant.Service
-	// assistantRunner runs the MCP-backed turns and owns the SSE hub.
-	assistantRunner *assistant.Runner
+	// assistantRunner holds the runner of MCP-backed turns (and its SSE hub),
+	// stored after the handlers are built; empty when not provisioned.
+	assistantRunner *assistant.RunnerSlot
 	// wsTickets issues the single-use WebSocket tickets (#26); the WS handler
 	// shares this store.
 	wsTickets *wsticket.Store
@@ -116,7 +117,6 @@ func (h *Handlers) mailSender() MailSender {
 		DefaultLocale: h.cfg.DefaultLocale,
 	})
 }
-
 
 func (h *Handlers) wsTicketStore() *wsticket.Store {
 	if h.wsTickets == nil {
@@ -187,6 +187,9 @@ type Deps struct {
 	Keyring  *crypto.Keyring
 	Temporal client.Client
 	Storage  *storage.S3Client
+	// Assistant receives the turn runner once the server has built it; nil
+	// when the assistant is not provisioned.
+	Assistant *assistant.RunnerSlot
 	// WSTickets issues the single-use WebSocket tickets (#26); the WebSocket
 	// handler consumes from the same store. Nil builds one.
 	WSTickets *wsticket.Store
@@ -242,24 +245,25 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
 	h := &Handlers{
-		connections:    d.Engines.Connections,
-		queries:        d.Data.Queries,
-		pool:           d.Data.Pool,
-		cfg:            d.Config,
-		keyring:        d.Keyring,
-		temporalClient: d.Temporal,
-		s3:             d.Storage,
-		engines:        d.Engines.Engines,
-		kinds:          d.Engines.Kinds,
-		dialects:       d.Engines.Dialects,
-		binder:         d.Engines.Binder,
-		dialer:         d.Engines.Dialer,
-		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
-		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
-		audit:          d.Observability.Audit,
-		content:        content.New(d.Data.Pool, d.Data.Queries),
-		assistant:      assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
-		wsTickets:      d.WSTickets,
+		connections:     d.Engines.Connections,
+		queries:         d.Data.Queries,
+		pool:            d.Data.Pool,
+		cfg:             d.Config,
+		keyring:         d.Keyring,
+		temporalClient:  d.Temporal,
+		s3:              d.Storage,
+		engines:         d.Engines.Engines,
+		kinds:           d.Engines.Kinds,
+		dialects:        d.Engines.Dialects,
+		binder:          d.Engines.Binder,
+		dialer:          d.Engines.Dialer,
+		catalogCache:    NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		versionCache:    NewTTLStore[engineProbe](engineVersionTTL),
+		audit:           d.Observability.Audit,
+		content:         content.New(d.Data.Pool, d.Data.Queries),
+		assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
+		wsTickets:       d.WSTickets,
+		assistantRunner: d.Assistant,
 	}
 	if h.audit == nil {
 		h.audit = audit.Nop{}
@@ -272,11 +276,6 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	}
 	return h, nil
 }
-
-
-
-// SetAssistantRunner wires the turn engine and its SSE hub (#62).
-func (h *Handlers) SetAssistantRunner(r *assistant.Runner) { h.assistantRunner = r }
 
 // AssistantService exposes the persistence service to the wiring site.
 func (h *Handlers) AssistantService() *assistant.Service { return h.assistant }

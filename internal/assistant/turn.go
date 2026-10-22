@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
@@ -403,3 +404,23 @@ func uuidString(id pgtype.UUID) string {
 
 // ErrRunnerUnavailable is returned when the MCP client is not wired.
 var ErrRunnerUnavailable = errors.New("assistant: runner is not configured")
+
+// RunnerSlot holds the turn runner for components built before it exists: the
+// runner needs the in-process MCP server, which needs the API handlers that
+// read the runner. The composition root creates the slot, passes it to the
+// handlers, and stores the runner once it is built (#363). Load on an empty or
+// nil slot returns nil, as if the assistant were not provisioned.
+type RunnerSlot struct {
+	runner atomic.Pointer[Runner]
+}
+
+// Load returns the runner, or nil.
+func (s *RunnerSlot) Load() *Runner {
+	if s == nil {
+		return nil
+	}
+	return s.runner.Load()
+}
+
+// Store sets the runner.
+func (s *RunnerSlot) Store(r *Runner) { s.runner.Store(r) }

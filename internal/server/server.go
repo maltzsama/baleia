@@ -61,6 +61,9 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
 	// that the WebSocket handler consumes; the JWT never appears in the URL.
 	tickets := wsticket.New()
+	// The assistant runner needs the MCP server, which needs these handlers:
+	// they get the slot now and the runner once it is built (#363).
+	runner := &assistant.RunnerSlot{}
 	h, err := api.NewHandlers(api.Deps{
 		Data:          api.DataDeps{Queries: core.Queries, Pool: core.Pool},
 		Engines:       api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder, Dialer: core.Dialer},
@@ -70,6 +73,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		Temporal:      core.Temporal,
 		Storage:       core.Storage,
 		WSTickets:     tickets,
+		Assistant:     runner,
 	})
 	if err != nil {
 		return nil, err
@@ -107,7 +111,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings(), core.Dialects)
 		gate.SetObserver(core.Metrics.Agent())
 		s.mcp = mcp.New(h, gate, core.Queries, mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
-		startAssistant(ctx, h, s.mcp, core.Dialer)
+		startAssistant(ctx, h, s.mcp, core.Dialer, runner)
 	}
 
 	s.routes()
@@ -117,7 +121,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 // startAssistant provisions the assistant (#62) when the agents feature is
 // on. It runs turns through an in-memory MCP client, so the same gate and
 // audit hooks apply.
-func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server, dialer *connections.Dialer) {
+func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server, dialer *connections.Dialer, slot *assistant.RunnerSlot) {
 	svc := h.AssistantService()
 	if svc == nil {
 		return
@@ -144,7 +148,7 @@ func startAssistant(ctx context.Context, h *api.Handlers, mcpServer *mcp.Server,
 			runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
 		}
 	}
-	h.SetAssistantRunner(runner)
+	slot.Store(runner)
 	go runner.RunSweeper(ctx, 30*time.Second)
 }
 
