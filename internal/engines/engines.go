@@ -5,6 +5,8 @@
 package engines
 
 import (
+	"errors"
+
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/clickhouse"
@@ -29,6 +31,9 @@ type Options struct {
 
 // NewRegistry builds the registry of every engine kind Baleia ships.
 func NewRegistry(o Options) (*queryengine.Registry, error) {
+	if o.Dialects == nil {
+		return nil, errors.New("engines: Options.Dialects is required")
+	}
 	d := o.Dialects
 	specs := []queryengine.KindSpec{
 		clickhouse.Spec(d.MustGet(dialect.ClickHouse)),

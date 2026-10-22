@@ -17,3 +17,9 @@ func TestNewRegistry_ListsEveryKind(t *testing.T) {
 		t.Fatalf("kinds = %v, want %v", got, expected)
 	}
 }
+
+func TestNewRegistry_RequiresDialects(t *testing.T) {
+	if _, err := NewRegistry(Options{}); err == nil {
+		t.Fatal("NewRegistry without dialects returned no error")
+	}
+}
