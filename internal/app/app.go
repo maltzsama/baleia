@@ -140,16 +140,17 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	if err != nil {
 		return nil, fmt.Errorf("invalid connection network settings: %w", err)
 	}
+	c.Dialects = dialect.NewRegistry()
 	c.Connections, err = providers.New(c.Dialer, providers.Options{
-		SQLite: sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
-		Glue:   glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.ConnectionsAllowLoopback},
+		Dialects: c.Dialects,
+		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
+		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.ConnectionsAllowLoopback},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connection providers: %w", err)
 	}
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).
-	c.Dialects = dialect.NewRegistry()
 	kinds, err := engines.NewRegistry(engines.Options{
 		Dialects: c.Dialects,
 		SQLite:   sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},

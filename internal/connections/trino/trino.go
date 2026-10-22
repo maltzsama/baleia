@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
 )
 
@@ -23,10 +24,15 @@ const (
 )
 
 type Provider struct {
-	dialer *connections.Dialer
+	dialer  *connections.Dialer
+	dialect dialect.Dialect
 }
 
-func New(d *connections.Dialer) *Provider { return &Provider{dialer: d} }
+// New returns the provider; it dials through d and quotes with dl, the Trino
+// dialect.
+func New(d *connections.Dialer, dl dialect.Dialect) *Provider {
+	return &Provider{dialer: d, dialect: dl}
+}
 
 func (*Provider) Kind() connections.Kind     { return connections.KindTrino }
 func (*Provider) Label() string              { return "Trino" }
@@ -95,12 +101,15 @@ func (p *Provider) OpenMetadata(ctx context.Context, cfg connections.Config) (co
 	if _, err := c.Execute(ctx, "SELECT 1", "", ""); err != nil {
 		return nil, err
 	}
-	return &reader{c: c}, nil
+	return &reader{c: c, dialect: p.dialect}, nil
 }
 
 // reader reads one catalog's information_schema at a time, read-only by
 // construction (SELECTs only, literals quoted by the client package).
-type reader struct{ c *trinoclient.Client }
+type reader struct {
+	c       *trinoclient.Client
+	dialect dialect.Dialect
+}
 
 func (r *reader) ListCatalogs(ctx context.Context) ([]connections.CatalogRef, error) {
 	names, err := r.c.ListCatalogs(ctx)
@@ -124,7 +133,7 @@ const catalogRef = "{catalog}"
 
 // query runs sql against catalog's information_schema.
 func (r *reader) query(ctx context.Context, catalog, sql string) ([][]any, error) {
-	q, err := trinoclient.QuoteIdent(catalog)
+	q, err := r.dialect.QuoteIdent(catalog)
 	if err != nil {
 		return nil, fmt.Errorf("%w: catalog", connections.ErrNotFound)
 	}
@@ -164,7 +173,7 @@ func (r *reader) ListTables(ctx context.Context, catalog string, ns connections.
 		return nil, "", fmt.Errorf("%w: namespace %v", connections.ErrNotFound, ns)
 	}
 	rows, err := r.query(ctx, catalog, `SELECT table_name, table_type FROM {catalog}.information_schema.tables
-		WHERE table_schema = `+trinoclient.QuoteString(ns[0])+` AND table_name > `+trinoclient.QuoteString(pageToken)+`
+		WHERE table_schema = `+r.dialect.QuoteString(ns[0])+` AND table_name > `+r.dialect.QuoteString(pageToken)+`
 		ORDER BY table_name LIMIT `+fmt.Sprint(pageSize+1))
 	if err != nil {
 		return nil, "", err
@@ -189,7 +198,7 @@ func (r *reader) LoadTable(ctx context.Context, t connections.TableRef) (*connec
 	if len(t.Namespace) != 1 {
 		return nil, fmt.Errorf("%w: namespace %v", connections.ErrNotFound, t.Namespace)
 	}
-	where := `table_schema = ` + trinoclient.QuoteString(t.Namespace[0]) + ` AND table_name = ` + trinoclient.QuoteString(t.Name)
+	where := `table_schema = ` + r.dialect.QuoteString(t.Namespace[0]) + ` AND table_name = ` + r.dialect.QuoteString(t.Name)
 	tables, err := r.query(ctx, t.Catalog, `SELECT table_type FROM {catalog}.information_schema.tables WHERE `+where)
 	if err != nil {
 		return nil, err

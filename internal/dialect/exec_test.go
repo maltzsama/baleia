@@ -120,7 +120,7 @@ func trinoRunner(raw string) runner {
 			opts.PreparedStatements = map[string]string{"q": q}
 			lits := make([]string, len(args))
 			for i, a := range args {
-				lits[i] = trino.QuoteString(a)
+				lits[i] = dialect.NewRegistry().MustGet(dialect.Trino).QuoteString(a)
 			}
 			q = "EXECUTE q USING " + strings.Join(lits, ", ")
 		}

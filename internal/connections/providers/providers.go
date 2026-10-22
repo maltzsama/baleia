@@ -20,12 +20,16 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/sqlserver"
 	"github.com/galileostudio/baleia/internal/connections/trino"
 	"github.com/galileostudio/baleia/internal/connections/unity"
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
 // Options are server-side settings of providers that need them.
 type Options struct {
 	SQLite sqlite.Options
 	Glue   glue.Options
+	// Dialects quote SQL for providers that read through an engine (Trino);
+	// nil builds a registry of its own.
+	Dialects *dialect.Registry
 }
 
 // New returns the registry of every provider, all dialing through d.
@@ -33,6 +37,9 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 	var o Options
 	if len(opts) > 0 {
 		o = opts[0]
+	}
+	if o.Dialects == nil {
+		o.Dialects = dialect.NewRegistry()
 	}
 	return connections.NewRegistry(
 		polaris.New(d),
@@ -50,7 +57,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		sqlite.New(o.SQLite),
 		clickhouse.New(d),
 		flightsql.New(d),
-		trino.New(d),
+		trino.New(d, o.Dialects.MustGet(dialect.Trino)),
 		planned.Doris(),
 		planned.StarRocks(),
 	)

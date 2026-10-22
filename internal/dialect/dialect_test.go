@@ -473,3 +473,49 @@ func TestSplitStatements_trino(t *testing.T) {
 		t.Errorf("postgresql $$: %q", got)
 	}
 }
+
+// Trino quoting cases moved from internal/trino when its package-level
+// helpers went away (#364 follow-up).
+func TestTrino_QuoteIdent(t *testing.T) {
+	trino := NewRegistry().MustGet(Trino)
+	for in, want := range map[string]string{
+		"orders":     `"orders"`,
+		`a"b`:        `"a""b"`,
+		"x; DROP":    `"x; DROP"`,
+		"with space": `"with space"`,
+		`"`:          `""""`,
+		"ünïcode":    `"ünïcode"`,
+		"new\nline":  "\"new\nline\"",
+		"semi;--/*":  `"semi;--/*"`,
+	} {
+		got, err := trino.QuoteIdent(in)
+		if err != nil || got != want {
+			t.Errorf("QuoteIdent(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "a\x00b"} {
+		if _, err := trino.QuoteIdent(bad); err == nil {
+			t.Errorf("QuoteIdent(%q) accepted", bad)
+		}
+	}
+}
+
+func TestTrino_QualifiedName(t *testing.T) {
+	trino := NewRegistry().MustGet(Trino)
+	got, err := trino.QualifiedName("cat", `we"ird`, "t")
+	if err != nil || got != `"cat"."we""ird"."t"` {
+		t.Fatalf("QualifiedName = %q, %v", got, err)
+	}
+	if _, err := trino.QualifiedName("cat", "", "t"); err == nil {
+		t.Fatal("an empty part must fail the whole name")
+	}
+}
+
+func TestTrino_QuoteString(t *testing.T) {
+	trino := NewRegistry().MustGet(Trino)
+	for in, want := range map[string]string{"7d": `'7d'`, "it's": `'it''s'`, `'; DROP`: `'''; DROP'`} {
+		if got := trino.QuoteString(in); got != want {
+			t.Errorf("QuoteString(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
