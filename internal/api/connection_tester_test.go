@@ -206,7 +206,7 @@ func TestTransient_IntentsFilter(t *testing.T) {
 func TestTransient_DirectEngineNotRegistered(t *testing.T) {
 	reg, d := loopbackRegistry(t)
 	p, _ := reg.Get(connections.KindPostgreSQL)
-	c, err := connectionTest{h: testHandlers(handlerFields{kinds: testKinds(t, d)}), provider: p}.directEngine(context.Background())
+	c, err := connectionTest{h: testHandlers(handlerFields{kinds: testKinds(t, d)}).CatalogHandlers, provider: p}.directEngine(context.Background())
 	if err != nil || c.Skipped == nil || !*c.Skipped {
 		t.Fatalf("check = %+v, %v", c, err)
 	}
@@ -249,7 +249,7 @@ func TestTransient_SQLCleanupOnClientCancel(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // the client went away
-	err = connectionTest{h: h, provider: p, cfg: cfg}.bind(ctx, testBind{
+	err = connectionTest{h: h.CatalogHandlers, provider: p, cfg: cfg}.bind(ctx, testBind{
 		engine:  db.Engine{ID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "trino"},
 		cluster: db.TrinoCluster{ID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
 	})

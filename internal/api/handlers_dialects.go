@@ -35,7 +35,7 @@ const (
 
 // describeEngines describes every engine, in order, at most
 // describeParallelism at a time.
-func (h *Handlers) describeEngines(ctx context.Context, engines []db.Engine) []Engine {
+func (h *CatalogHandlers) describeEngines(ctx context.Context, engines []db.Engine) []Engine {
 	out := make([]Engine, len(engines))
 	sem := make(chan struct{}, describeParallelism)
 	var wg sync.WaitGroup
@@ -96,7 +96,7 @@ type engineProbe struct {
 // describeEngine is an engine row with its dialect, connection, catalog count
 // and, when its adapter is available and the engine enabled, its capabilities,
 // version and health.
-func (h *Handlers) describeEngine(ctx context.Context, e db.Engine) Engine {
+func (h *CatalogHandlers) describeEngine(ctx context.Context, e db.Engine) Engine {
 	out := engineToPublic(e)
 	if acts := h.engineActions(ctx, e.ID); acts != nil {
 		out.AllowedActions = &acts
@@ -137,7 +137,7 @@ func (h *Handlers) describeEngine(ctx context.Context, e db.Engine) Engine {
 // engineProbeFor probes the engine once per cache window. A failed version
 // probe records the classified error code instead of a version, so the list
 // can show health without another round trip.
-func (h *Handlers) engineProbeFor(ctx context.Context, e db.Engine, eng queryengine.Engine) engineProbe {
+func (h *CatalogHandlers) engineProbeFor(ctx context.Context, e db.Engine, eng queryengine.Engine) engineProbe {
 	key := hex.EncodeToString(e.ID.Bytes[:]) + "@" + e.UpdatedAt.Time.String()
 	if h.versionCache != nil {
 		if v, ok := h.versionCache.Get(key); ok {
@@ -189,7 +189,7 @@ func etagMatches(header, etag string) bool {
 	return false
 }
 
-func (h *Handlers) GetDialect(ctx context.Context, request GetDialectRequestObject) (GetDialectResponseObject, error) {
+func (h *CatalogHandlers) GetDialect(ctx context.Context, request GetDialectRequestObject) (GetDialectResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return GetDialect401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
@@ -213,7 +213,7 @@ func (h *Handlers) GetDialect(ctx context.Context, request GetDialectRequestObje
 
 // SplitStatements answers statement offsets in UTF-16 code units, the
 // indices of the editor's JavaScript strings.
-func (h *Handlers) SplitStatements(ctx context.Context, request SplitStatementsRequestObject) (SplitStatementsResponseObject, error) {
+func (h *CatalogHandlers) SplitStatements(ctx context.Context, request SplitStatementsRequestObject) (SplitStatementsResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return SplitStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
@@ -257,7 +257,7 @@ func (h *Handlers) SplitStatements(ctx context.Context, request SplitStatementsR
 
 // ExplainSQL — POST /dialects/{name}/explain (#112): the dialect decides the
 // statement; the client never prefixes EXPLAIN itself.
-func (h *Handlers) ExplainSQL(ctx context.Context, request ExplainSQLRequestObject) (ExplainSQLResponseObject, error) {
+func (h *CatalogHandlers) ExplainSQL(ctx context.Context, request ExplainSQLRequestObject) (ExplainSQLResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return ExplainSQL401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}

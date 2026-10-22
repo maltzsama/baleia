@@ -61,7 +61,7 @@ func (t bindingTarget) primary() bool { return t.catalog.ClusterID == t.cluster.
 
 // bindingAccess resolves a catalog and an engine for a binding write: write
 // access to both, a source catalog and an engine with a binder.
-func (h *Handlers) bindingAccess(ctx context.Context, p authz.Principal, catalogID, engineID pgtype.UUID) (bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
+func (h *CatalogHandlers) bindingAccess(ctx context.Context, p authz.Principal, catalogID, engineID pgtype.UUID) (bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
 	cat, conn, err := h.authz().Catalog(ctx, p, catalogID, authz.ActWrite)
 	if nf, fb := catalogAccessError(err); nf || fb {
 		return bindingTarget{}, &notFoundOrForbidden{notFound: nf, what: "catalog"}, nil, nil
@@ -146,7 +146,7 @@ func (h *core) bindingSpec(t bindingTarget, name, connector string, extra map[st
 	return bindings.BindingSpec{EngineCatalog: name, Connector: connector, SourceRef: ref, ExtraProps: extra}
 }
 
-func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatalogBindingRequestObject) (CreateCatalogBindingResponseObject, error) {
+func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request CreateCatalogBindingRequestObject) (CreateCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -223,7 +223,7 @@ func (h *Handlers) CreateCatalogBinding(ctx context.Context, request CreateCatal
 
 // managedBinding loads a binding for a write: it must exist, be managed and
 // the caller must be allowed to write its catalog and engine.
-func (h *Handlers) managedBinding(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.CatalogBinding, bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
+func (h *CatalogHandlers) managedBinding(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.CatalogBinding, bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
 	b, err := h.queries.GetBinding(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.CatalogBinding{}, bindingTarget{}, &notFoundOrForbidden{notFound: true, what: "binding"}, nil, nil
@@ -245,7 +245,7 @@ func (h *Handlers) managedBinding(ctx context.Context, p authz.Principal, id pgt
 	return b, t, nil, nil, nil
 }
 
-func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatalogBindingRequestObject) (UpdateCatalogBindingResponseObject, error) {
+func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatalogBindingRequestObject) (UpdateCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return UpdateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -358,7 +358,7 @@ func (h *Handlers) UpdateCatalogBinding(ctx context.Context, request UpdateCatal
 	return UpdateCatalogBinding200JSONResponse(h.bindingResponse(ctx, updated, proj.Version)), nil
 }
 
-func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatalogBindingRequestObject) (DeleteCatalogBindingResponseObject, error) {
+func (h *CatalogHandlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatalogBindingRequestObject) (DeleteCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -412,7 +412,7 @@ func (h *Handlers) DeleteCatalogBinding(ctx context.Context, request DeleteCatal
 	return DeleteCatalogBinding204Response{}, nil
 }
 
-func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBindingRequestObject) (SyncCatalogBindingResponseObject, error) {
+func (h *CatalogHandlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBindingRequestObject) (SyncCatalogBindingResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return SyncCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -473,7 +473,7 @@ func (h *Handlers) SyncCatalogBinding(ctx context.Context, request SyncCatalogBi
 	return SyncCatalogBinding200JSONResponse(out), nil
 }
 
-func (h *Handlers) GetEngineBindingSupport(ctx context.Context, request GetEngineBindingSupportRequestObject) (GetEngineBindingSupportResponseObject, error) {
+func (h *CatalogHandlers) GetEngineBindingSupport(ctx context.Context, request GetEngineBindingSupportRequestObject) (GetEngineBindingSupportResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetEngineBindingSupport401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

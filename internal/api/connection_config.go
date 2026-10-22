@@ -160,7 +160,7 @@ func (h *core) updateConfig(conn db.CatalogConnection, body UpdateCatalogConnect
 // storedColumns is a validated config as catalog_connections columns: config
 // JSON, the url the Trino projection still reads, and the sealed secrets (nil
 // when there are none, which keeps any stored value on update).
-func storedColumns(h *Handlers, cfg connections.Config) (config []byte, url string, credsEnc *string, err error) {
+func storedColumns(h *core, cfg connections.Config) (config []byte, url string, credsEnc *string, err error) {
 	config, err = json.Marshal(cfg.Values)
 	if err != nil {
 		return nil, "", nil, err
@@ -183,7 +183,7 @@ func publicConfig(raw []byte) map[string]string {
 
 // ListConnectionProviders returns every provider with its config schema.
 // Static metadata: any authenticated caller may read it.
-func (h *Handlers) ListConnectionProviders(ctx context.Context, _ ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error) {
+func (h *CatalogHandlers) ListConnectionProviders(ctx context.Context, _ ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error) {
 	all := h.connections.All()
 	out := make([]ConnectionProvider, 0, len(all))
 	for _, p := range all {

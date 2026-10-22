@@ -34,16 +34,12 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	*core
+	*CatalogHandlers
 	*WorkspaceHandlers
 	*AuthHandlers
 	// schema reports the applied migration version (poolSchema outside tests).
 	schema schemaVersioner
 	s3     *storage.S3Client
-	// versionCache: engine id@updated_at → version and health.
-	versionCache *TTLStore[engineProbe]
-	// binder binds catalogs into Trino as the admin identity (docs/adr/0005,
-	// #80), built at the wiring site.
-	binder *bindtrino.Binder
 	// dialer is the SSRF-safe dialer for transient engines (#12).
 	dialer *connections.Dialer
 	// assistant owns assistant settings, agents and conversations (#62).
@@ -229,14 +225,17 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	}
 	h := &Handlers{
 		core: c,
+		CatalogHandlers: &CatalogHandlers{
+			core:         c,
+			versionCache: NewTTLStore[engineProbe](engineVersionTTL),
+			binder:       d.Engines.Binder,
+		},
 		WorkspaceHandlers: &WorkspaceHandlers{
 			core: c,
 		},
 		AuthHandlers:    &AuthHandlers{core: c},
 		schema:          poolSchema{pool: d.Data.Pool},
 		s3:              d.Storage,
-		versionCache:    NewTTLStore[engineProbe](engineVersionTTL),
-		binder:          d.Engines.Binder,
 		dialer:          d.Engines.Dialer,
 		assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
 		wsTickets:       d.WSTickets,

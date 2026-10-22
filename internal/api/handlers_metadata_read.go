@@ -59,7 +59,7 @@ func timePtr(t pgtype.Timestamptz) *time.Time {
 }
 
 // ListMetadataCatalogs — GET /workspaces/{id}/metadata/catalogs
-func (h *Handlers) ListMetadataCatalogs(ctx context.Context, request ListMetadataCatalogsRequestObject) (ListMetadataCatalogsResponseObject, error) {
+func (h *CatalogHandlers) ListMetadataCatalogs(ctx context.Context, request ListMetadataCatalogsRequestObject) (ListMetadataCatalogsResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (h *core) grantedCatalog(ctx context.Context, ws pgtype.UUID, id openapi_ty
 }
 
 // ListMetadataNamespaces — GET /workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces
-func (h *Handlers) ListMetadataNamespaces(ctx context.Context, request ListMetadataNamespacesRequestObject) (ListMetadataNamespacesResponseObject, error) {
+func (h *CatalogHandlers) ListMetadataNamespaces(ctx context.Context, request ListMetadataNamespacesRequestObject) (ListMetadataNamespacesResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func (h *Handlers) ListMetadataNamespaces(ctx context.Context, request ListMetad
 
 // ListMetadataTables — GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables
 // Pages by name: the cursor is the last name of the previous page, encoded.
-func (h *Handlers) ListMetadataTables(ctx context.Context, request ListMetadataTablesRequestObject) (ListMetadataTablesResponseObject, error) {
+func (h *CatalogHandlers) ListMetadataTables(ctx context.Context, request ListMetadataTablesRequestObject) (ListMetadataTablesResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -192,7 +192,7 @@ func (h *Handlers) ListMetadataTables(ctx context.Context, request ListMetadataT
 // GetMetadataTable — GET /workspaces/{id}/metadata/tables/{table_id}
 // Types and the qualified name are rendered for one of the catalog's
 // bindings: the given one, else its first enabled binding.
-func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTableRequestObject) (GetMetadataTableResponseObject, error) {
+func (h *CatalogHandlers) GetMetadataTable(ctx context.Context, request GetMetadataTableRequestObject) (GetMetadataTableResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -278,7 +278,7 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 }
 
 // SearchMetadata — GET /workspaces/{id}/metadata/search
-func (h *Handlers) SearchMetadata(ctx context.Context, request SearchMetadataRequestObject) (SearchMetadataResponseObject, error) {
+func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMetadataRequestObject) (SearchMetadataResponseObject, error) {
 	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
 	if err != nil {
 		return nil, err

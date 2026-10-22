@@ -16,7 +16,7 @@ import (
 // Trino cluster's engine), the binding endpoints on any managed binding.
 
 // lifecycleOn is the lifecycle of the bindings of one Trino engine.
-func (h *Handlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bindings.Lifecycle {
+func (h *CatalogHandlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bindings.Lifecycle {
 	return bindings.Lifecycle{
 		Store:        h.queries,
 		Binder:       h.binder.WithStore(h.queries),

@@ -17,7 +17,7 @@ import (
 
 // ReconcileEngine — POST /engines/{id}/reconcile (#37). Admins only; a dry
 // run unless dry_run=false.
-func (h *Handlers) ReconcileEngine(ctx context.Context, request ReconcileEngineRequestObject) (ReconcileEngineResponseObject, error) {
+func (h *CatalogHandlers) ReconcileEngine(ctx context.Context, request ReconcileEngineRequestObject) (ReconcileEngineResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ReconcileEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -45,7 +45,7 @@ func (h *Handlers) ReconcileEngine(ctx context.Context, request ReconcileEngineR
 }
 
 // ListReconcileRuns — GET /engines/{id}/reconcile-runs. Admins only.
-func (h *Handlers) ListReconcileRuns(ctx context.Context, request ListReconcileRunsRequestObject) (ListReconcileRunsResponseObject, error) {
+func (h *CatalogHandlers) ListReconcileRuns(ctx context.Context, request ListReconcileRunsRequestObject) (ListReconcileRunsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListReconcileRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -80,7 +80,7 @@ func (h *Handlers) ListReconcileRuns(ctx context.Context, request ListReconcileR
 
 // reconcile runs and persists one reconcile of a federated engine;
 // unsupported is set for an engine Baleia cannot reconcile.
-func (h *Handlers) reconcile(ctx context.Context, engineID pgtype.UUID, dryRun bool) (ReconcileRun, *UnprocessableEntityJSONResponse, error) {
+func (h *CatalogHandlers) reconcile(ctx context.Context, engineID pgtype.UUID, dryRun bool) (ReconcileRun, *UnprocessableEntityJSONResponse, error) {
 	eng, err := h.queries.GetEngineByID(ctx, engineID)
 	if err != nil {
 		return ReconcileRun{}, nil, err

@@ -52,14 +52,17 @@ func testHandlers(f handlerFields) *Handlers {
 	}
 	return &Handlers{
 		core: c,
+		CatalogHandlers: &CatalogHandlers{
+			core:         c,
+			versionCache: f.versionCache,
+			binder:       f.binder,
+		},
 		WorkspaceHandlers: &WorkspaceHandlers{
 			core: c,
 		},
 		AuthHandlers:   &AuthHandlers{core: c},
 		schema:         f.schema,
-		versionCache:   f.versionCache,
 		attentionCache: f.attentionCache,
-		binder:         f.binder,
 		dialer:         f.dialer,
 	}
 }
