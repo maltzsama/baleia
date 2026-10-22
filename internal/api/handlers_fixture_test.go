@@ -51,7 +51,10 @@ func testHandlers(f handlerFields) *Handlers {
 		audit:          f.audit,
 	}
 	return &Handlers{
-		core:           c,
+		core: c,
+		WorkspaceHandlers: &WorkspaceHandlers{
+			core: c,
+		},
 		AuthHandlers:   &AuthHandlers{core: c},
 		schema:         f.schema,
 		versionCache:   f.versionCache,

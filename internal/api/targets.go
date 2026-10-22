@@ -64,7 +64,7 @@ func rowTarget(r db.ListWorkspaceTargetsRow, schema string) queryengine.Target {
 // binding, engine and catalog must be enabled, else 422 target_unavailable. A
 // read grant makes the target read-only. There is no fallback to the
 // workspace owner's first catalog or to polaris_catalog_name.
-func (h *Handlers) ResolveTarget(ctx context.Context, ws db.Workspace, req *TargetRequest) (queryengine.Target, error) {
+func (h *WorkspaceHandlers) ResolveTarget(ctx context.Context, ws db.Workspace, req *TargetRequest) (queryengine.Target, error) {
 	rows, err := h.queries.ListWorkspaceTargets(ctx, ws.ID)
 	if err != nil {
 		return queryengine.Target{}, err
@@ -139,7 +139,7 @@ func (h *Handlers) ResolveTarget(ctx context.Context, ws db.Workspace, req *Targ
 }
 
 // ListWorkspaceTargets returns the usable targets of a workspace to its members.
-func (h *Handlers) ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error) {
+func (h *WorkspaceHandlers) ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return ListWorkspaceTargets404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}

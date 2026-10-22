@@ -16,7 +16,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func (h *Handlers) ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error) {
+func (h *WorkspaceHandlers) ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -35,7 +35,7 @@ func (h *Handlers) ListWorkspaces(ctx context.Context, request ListWorkspacesReq
 	return ListWorkspaces200JSONResponse(result), nil
 }
 
-func (h *Handlers) CreateWorkspace(ctx context.Context, request CreateWorkspaceRequestObject) (CreateWorkspaceResponseObject, error) {
+func (h *WorkspaceHandlers) CreateWorkspace(ctx context.Context, request CreateWorkspaceRequestObject) (CreateWorkspaceResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
 	uid, err := uuidFromString(userID)
 	if err != nil {
@@ -93,7 +93,7 @@ func (h *Handlers) CreateWorkspace(ctx context.Context, request CreateWorkspaceR
 	return CreateWorkspace201JSONResponse(h.withWorkspaceActions(ctx, workspace)), nil
 }
 
-func (h *Handlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
+func (h *WorkspaceHandlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
 	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
 		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
@@ -110,7 +110,7 @@ func (h *Handlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequest
 	return GetWorkspace200JSONResponse(h.withWorkspaceActions(ctx, workspace)), nil
 }
 
-func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error) {
+func (h *WorkspaceHandlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return UpdateWorkspace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -192,7 +192,7 @@ func (h *Handlers) UpdateWorkspace(ctx context.Context, request UpdateWorkspaceR
 
 // ListWorkspaceCatalogAccess lists the catalogs granted to a workspace. Any
 // member may read them.
-func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error) {
+func (h *WorkspaceHandlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListWorkspaceCatalogAccess401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -224,7 +224,7 @@ func (h *Handlers) ListWorkspaceCatalogAccess(ctx context.Context, request ListW
 // GrantCatalogAccess grants a catalog to a workspace. Both sides must agree:
 // the caller must own (or administer) the workspace and own (or administer) the
 // catalog's connection. Both checks run before anything is written.
-func (h *Handlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error) {
+func (h *WorkspaceHandlers) GrantCatalogAccess(ctx context.Context, request GrantCatalogAccessRequestObject) (GrantCatalogAccessResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GrantCatalogAccess401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -291,7 +291,7 @@ func grantAccessError(err error) (GrantCatalogAccessResponseObject, error) {
 
 // RevokeCatalogAccess removes a catalog grant. It needs the same two agreeing
 // parties as granting.
-func (h *Handlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error) {
+func (h *WorkspaceHandlers) RevokeCatalogAccess(ctx context.Context, request RevokeCatalogAccessRequestObject) (RevokeCatalogAccessResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return RevokeCatalogAccess401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -385,7 +385,7 @@ func msgPtr(s string) *string   { return &s }
 
 // DeleteWorkspace — DELETE /workspaces/{id} (#108). Shared workspaces only,
 // owner or admin, and never while an execution is running.
-func (h *Handlers) DeleteWorkspace(ctx context.Context, request DeleteWorkspaceRequestObject) (DeleteWorkspaceResponseObject, error) {
+func (h *WorkspaceHandlers) DeleteWorkspace(ctx context.Context, request DeleteWorkspaceRequestObject) (DeleteWorkspaceResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteWorkspace401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -428,7 +428,7 @@ func (h *Handlers) DeleteWorkspace(ctx context.Context, request DeleteWorkspaceR
 }
 
 // GetWorkspaceImpact — GET /workspaces/{id}/impact (#108).
-func (h *Handlers) GetWorkspaceImpact(ctx context.Context, request GetWorkspaceImpactRequestObject) (GetWorkspaceImpactResponseObject, error) {
+func (h *WorkspaceHandlers) GetWorkspaceImpact(ctx context.Context, request GetWorkspaceImpactRequestObject) (GetWorkspaceImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetWorkspaceImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -450,7 +450,7 @@ func (h *Handlers) GetWorkspaceImpact(ctx context.Context, request GetWorkspaceI
 }
 
 // GetCatalogAccessImpact — GET /workspaces/{id}/catalog-access/{catalog_id}/impact (#108).
-func (h *Handlers) GetCatalogAccessImpact(ctx context.Context, request GetCatalogAccessImpactRequestObject) (GetCatalogAccessImpactResponseObject, error) {
+func (h *WorkspaceHandlers) GetCatalogAccessImpact(ctx context.Context, request GetCatalogAccessImpactRequestObject) (GetCatalogAccessImpactResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetCatalogAccessImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil

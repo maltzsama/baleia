@@ -34,6 +34,7 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
 	*core
+	*WorkspaceHandlers
 	*AuthHandlers
 	// schema reports the applied migration version (poolSchema outside tests).
 	schema schemaVersioner
@@ -227,7 +228,10 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		content:        content.New(d.Data.Pool, d.Data.Queries),
 	}
 	h := &Handlers{
-		core:            c,
+		core: c,
+		WorkspaceHandlers: &WorkspaceHandlers{
+			core: c,
+		},
 		AuthHandlers:    &AuthHandlers{core: c},
 		schema:          poolSchema{pool: d.Data.Pool},
 		s3:              d.Storage,

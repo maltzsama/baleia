@@ -13,7 +13,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error) {
+func (h *WorkspaceHandlers) ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListTeams401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -36,7 +36,7 @@ func (h *Handlers) ListTeams(ctx context.Context, request ListTeamsRequestObject
 	return ListTeams200JSONResponse(result), nil
 }
 
-func (h *Handlers) CreateTeam(ctx context.Context, request CreateTeamRequestObject) (CreateTeamResponseObject, error) {
+func (h *WorkspaceHandlers) CreateTeam(ctx context.Context, request CreateTeamRequestObject) (CreateTeamResponseObject, error) {
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		return CreateTeam403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
@@ -60,7 +60,7 @@ func (h *Handlers) CreateTeam(ctx context.Context, request CreateTeamRequestObje
 	return CreateTeam201JSONResponse(dbTeamToPublic(team)), nil
 }
 
-func (h *Handlers) GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error) {
+func (h *WorkspaceHandlers) GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return GetTeam401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -76,7 +76,7 @@ func (h *Handlers) GetTeam(ctx context.Context, request GetTeamRequestObject) (G
 	return GetTeam200JSONResponse(dbTeamToPublic(team)), nil
 }
 
-func (h *Handlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObject) (DeleteTeamResponseObject, error) {
+func (h *WorkspaceHandlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObject) (DeleteTeamResponseObject, error) {
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		return DeleteTeam403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
@@ -98,7 +98,7 @@ func (h *Handlers) DeleteTeam(ctx context.Context, request DeleteTeamRequestObje
 	return DeleteTeam204Response{}, nil
 }
 
-func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersRequestObject) (ListTeamMembersResponseObject, error) {
+func (h *WorkspaceHandlers) ListTeamMembers(ctx context.Context, request ListTeamMembersRequestObject) (ListTeamMembersResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListTeamMembers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -135,7 +135,7 @@ func (h *Handlers) ListTeamMembers(ctx context.Context, request ListTeamMembersR
 	return ListTeamMembers200JSONResponse(result), nil
 }
 
-func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberRequestObject) (AddTeamMemberResponseObject, error) {
+func (h *WorkspaceHandlers) AddTeamMember(ctx context.Context, request AddTeamMemberRequestObject) (AddTeamMemberResponseObject, error) {
 	ev := audit.Event{Action: audit.TeamMemberAdd, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
@@ -186,7 +186,7 @@ func (h *Handlers) AddTeamMember(ctx context.Context, request AddTeamMemberReque
 }
 
 // UpdateTeamMemberRole — PATCH /teams/{id}/members/{user_id} (#288).
-func (h *Handlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamMemberRoleRequestObject) (UpdateTeamMemberRoleResponseObject, error) {
+func (h *WorkspaceHandlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamMemberRoleRequestObject) (UpdateTeamMemberRoleResponseObject, error) {
 	ev := audit.Event{Action: audit.TeamRoleChange, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true}),
 		Changes: map[string]audit.Change{"member": {To: idString(pgtype.UUID{Bytes: request.UserId, Valid: true})}}}
 	if auth.RoleFromContext(ctx) != "admin" {
@@ -239,7 +239,7 @@ func (h *Handlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamM
 	}), nil
 }
 
-func (h *Handlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error) {
+func (h *WorkspaceHandlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error) {
 	ev := audit.Event{Action: audit.TeamMemberRemove, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true}),
 		Changes: map[string]audit.Change{"member": {From: idString(pgtype.UUID{Bytes: request.UserId, Valid: true})}}}
 	role := auth.RoleFromContext(ctx)
