@@ -1,9 +1,12 @@
 package users
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -219,5 +222,32 @@ func TestSuspendReinstate(t *testing.T) {
 	before, after, err := s.Reinstate(ctx, u.ID)
 	if err != nil || before.Status != auth.StatusSuspended || after.Status != auth.StatusActive {
 		t.Fatalf("Reinstate = %q → %q, %v", before.Status, after.Status, err)
+	}
+}
+
+type failingMailer struct{}
+
+func (failingMailer) Send(context.Context, string, string, mail.Template, map[string]any) error {
+	return errors.New("smtp down")
+}
+
+// TestInvite_FailedMailNeverLogsTheToken: the invitation link is a bearer
+// credential; a failed send is logged without it.
+func TestInvite_FailedMailNeverLogsTheToken(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	st := newStore()
+	s := New(st, st.tx, failingMailer{}, &fakeSessions{}, Config{PublicURL: "https://baleia.example", PasswordCost: bcrypt.MinCost})
+	if _, err := s.Invite(context.Background(), "ana@x.io", "member"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(logs.String(), "token=") || strings.Contains(logs.String(), "accept-invite") {
+		t.Fatalf("log leaks the invitation link: %s", logs.String())
+	}
+	if !strings.Contains(logs.String(), "failed to send invite email") {
+		t.Error("the failed send must still be logged")
 	}
 }

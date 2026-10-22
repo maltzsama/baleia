@@ -152,7 +152,8 @@ func (s *Service) Invite(ctx context.Context, email, role string) (db.User, erro
 		"Name":      user.Name,
 		"InviteURL": inviteURL,
 	}); err != nil {
-		slog.Warn("failed to send invite email", "err", err, "url", inviteURL)
+		// The link carries the invitation token: never log it.
+		slog.Warn("failed to send invite email", "err", err, "user_id", user.ID.String())
 	}
 	return user, nil
 }
