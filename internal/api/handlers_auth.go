@@ -7,21 +7,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/identity"
 	"github.com/galileostudio/baleia/internal/identity/login"
+	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/provision"
 	"github.com/galileostudio/baleia/internal/identity/session"
 	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -328,41 +326,16 @@ func (h *AuthHandlers) ListOIDCProviders(ctx context.Context, request ListOIDCPr
 }
 
 func (h *AuthHandlers) OidcRedirect(ctx context.Context, request OidcRedirectRequestObject) (OidcRedirectResponseObject, error) {
-	providerID := request.ProviderId.String()
-	provider, _, err := h.cachedOIDCProvider(ctx, providerID)
-	if err != nil {
-		return OidcRedirect503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
-			Code: ErrorCodeIdpUnavailable, Message: "identity provider unavailable",
-		}}, nil
-	}
-
-	verifier, challenge, err := auth.GeneratePKCE()
-	if err != nil {
-		return nil, err
-	}
-	nonce, err := auth.GenerateNonce()
-	if err != nil {
-		return nil, err
-	}
-	state := randomState()
-
 	var redirect *string
 	if request.Params.Next != nil && safeRelativePath(*request.Params.Next) {
 		redirect = request.Params.Next
 	}
-	apID := pgtype.UUID{Bytes: request.ProviderId, Valid: true}
-	if err := h.queries.CreateOIDCLoginAttempt(ctx, db.CreateOIDCLoginAttemptParams{
-		State:        state,
-		ProviderID:   apID,
-		Nonce:        &nonce,
-		CodeVerifier: verifier,
-		Redirect:     redirect,
-		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(auth.OIDCAttemptTTL), Valid: true},
-	}); err != nil {
-		return nil, err
+	authURL, state, err := h.oidc.Begin(ctx, pgtype.UUID{Bytes: request.ProviderId, Valid: true}, redirect)
+	if errors.Is(err, oidclogin.ErrUnavailable) {
+		return OidcRedirect503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
+			Code: ErrorCodeIdpUnavailable, Message: "identity provider unavailable",
+		}}, nil
 	}
-
-	authURL, err := provider.AuthURL(state, challenge, nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -389,56 +362,37 @@ func (h *AuthHandlers) OidcCallback(ctx context.Context, request OidcCallbackReq
 		res.OIDCCookie = &empty
 		return OidcCallback302Response{}
 	}
+	denied := func(reason string) {
+		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: reason})
+	}
 
-	providerID := request.ProviderId.String()
-	provider, cfg, err := h.cachedOIDCProvider(ctx, providerID)
-	if err != nil {
+	user, redirect, err := h.oidc.Finish(ctx, pgtype.UUID{Bytes: request.ProviderId, Valid: true},
+		request.Params.State, auth.OIDCCookieFromContext(ctx), request.Params.Code)
+	switch {
+	case errors.Is(err, oidclogin.ErrUnavailable):
 		outcome = metrics.OutcomeError
 		return OidcCallback503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
 			Code: ErrorCodeIdpUnavailable, Message: "identity provider unavailable",
 		}}, nil
-	}
-
-	state := request.Params.State
-	if state == "" || auth.OIDCCookieFromContext(ctx) != state {
+	case errors.Is(err, oidclogin.ErrStateMismatch):
 		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
-	}
-
-	attempt, err := h.queries.ConsumeOIDCLoginAttempt(ctx, state)
-	if err != nil {
-		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "invalid_state"})
+	case errors.Is(err, oidclogin.ErrInvalidState):
+		denied("invalid_state")
 		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
-	}
-
-	apID := pgtype.UUID{Bytes: request.ProviderId, Valid: true}
-	if apID != attempt.ProviderID {
+	case errors.Is(err, oidclogin.ErrExchange):
+		denied("oidc_exchange_failed")
 		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
-	}
-
-	nonce := ""
-	if attempt.Nonce != nil {
-		nonce = *attempt.Nonce
-	}
-	info, err := provider.Exchange(ctx, request.Params.Code, attempt.CodeVerifier, nonce)
-	if err != nil {
-		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: "oidc_exchange_failed"})
-		return fail(oidcErrorSSOFailed, metrics.OutcomeInvalidCredentials), nil
-	}
-
-	user, err := h.provisionOIDCUser(ctx, apID, cfg, info)
-	if err != nil {
-		if errors.Is(err, errOIDCNotProvisioned) {
-			return fail(oidcErrorNotProvisioned, metrics.OutcomeInvalidCredentials), nil
-		}
-		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
-	}
-	// OIDC reports suspension explicitly on the login page (#284).
-	if err := auth.RequireActive(user.Status); err != nil {
+	case errors.Is(err, provision.ErrNotProvisioned):
+		return fail(oidcErrorNotProvisioned, metrics.OutcomeInvalidCredentials), nil
+	case errors.Is(err, oidclogin.ErrSuspended):
+		// OIDC reports suspension explicitly on the login page (#284).
 		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{
 			Action: audit.AuthLogin, ResourceType: "user", ResourceID: idString(user.ID),
 			Outcome: audit.Denied, Reason: "account_suspended",
 		})
 		return fail(oidcErrorAccountSuspended, metrics.OutcomeInvalidCredentials), nil
+	case err != nil:
+		return fail(oidcErrorSSOFailed, metrics.OutcomeError), nil
 	}
 
 	refreshToken, err := h.sessions.IssueRefresh(ctx, user)
@@ -449,7 +403,7 @@ func (h *AuthHandlers) OidcCallback(ctx context.Context, request OidcCallbackReq
 	empty := ""
 	res.OIDCCookie = &empty
 	res.RefreshCookie = &refreshToken
-	res.Location = oidcRedirectTarget(attempt.Redirect)
+	res.Location = oidcRedirectTarget(redirect)
 	h.audited(audit.AsUser(ctx, user.ID.String(), audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", ResourceID: idString(user.ID), Outcome: audit.Allowed})
 	return OidcCallback302Response{}, nil
 }
@@ -710,146 +664,6 @@ func oidcRedirectTarget(redirect *string) string {
 		return *redirect
 	}
 	return "/"
-}
-
-// oidcCacheEntry is one discovered provider, keyed by id + config version.
-type oidcCacheEntry struct {
-	provider *auth.OIDCProvider
-	cfg      auth.OIDCProviderConfig
-	expires  time.Time
-}
-
-// cachedOIDCProvider returns the provider from the discovery cache (#280). The
-// key includes updated_at, so a config change misses immediately; entries
-// expire after an hour.
-func (h *AuthHandlers) cachedOIDCProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
-	var apID pgtype.UUID
-	if err := apID.Scan(providerID); err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	ap, err := h.queries.GetAuthProviderByID(ctx, apID)
-	if err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	version := ap.ConfigEnc
-	if ap.UpdatedAt.Valid {
-		version = ap.UpdatedAt.Time.UTC().Format(time.RFC3339Nano)
-	}
-	key := providerID + ":" + version
-	if v, ok := h.oidcCache.Load(key); ok {
-		entry := v.(*oidcCacheEntry)
-		if time.Now().Before(entry.expires) {
-			return entry.provider, entry.cfg, nil
-		}
-		h.oidcCache.Delete(key)
-	}
-	provider, cfg, err := h.newOIDCProvider(ctx, providerID, ap)
-	if err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	h.oidcCache.Store(key, &oidcCacheEntry{provider: provider, cfg: cfg, expires: time.Now().Add(time.Hour)})
-	return provider, cfg, nil
-}
-
-func (h *core) newOIDCProvider(ctx context.Context, providerID string, ap db.AuthProvider) (*auth.OIDCProvider, auth.OIDCProviderConfig, error) {
-	cfg, err := auth.OpenOIDCConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
-	if err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	redirectURL := h.settings.Mail.PublicURL + "/api/v1/auth/oidc/" + providerID + "/callback"
-	provider, err := auth.NewOIDCProvider(ctx, auth.OIDCConfig{
-		IssuerURL:    cfg.IssuerURL,
-		ClientID:     cfg.ClientID,
-		ClientSecret: cfg.ClientSecret,
-		RedirectURL:  redirectURL,
-		Claims:       cfg.Claims,
-	})
-	if err != nil {
-		return nil, auth.OIDCProviderConfig{}, err
-	}
-	return provider, cfg, nil
-}
-
-var errOIDCNotProvisioned = errors.New("oidc: not provisioned")
-
-// provisionOIDCUser applies the provisioning policy (#251): unknown subjects
-// are denied by default, auto-create needs a verified e-mail in an allowed
-// domain, and the IdP mapping is applied on every login.
-func (h *core) provisionOIDCUser(ctx context.Context, apID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
-	mapped, err := identity.MapIdentity(identity.MappingInput{
-		Groups:      info.Groups,
-		RoleMapping: cfg.RoleMapping,
-		TeamMapping: cfg.TeamMapping,
-		DefaultRole: cfg.DefaultRole,
-	})
-	if err != nil {
-		return db.User{}, err
-	}
-
-	user, err := h.queries.GetUserByExternalID(ctx, db.GetUserByExternalIDParams{
-		AuthProviderID: apID,
-		ExternalID:     &info.Subject,
-	})
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return db.User{}, err
-		}
-		if !cfg.AutoCreate || !info.EmailVerified || len(cfg.AllowedEmailDomains) == 0 || !domainAllowed(info.Email, cfg.AllowedEmailDomains) {
-			return db.User{}, errOIDCNotProvisioned
-		}
-		user, err = h.queries.CreateUser(ctx, db.CreateUserParams{
-			Name:           info.Name,
-			Email:          info.Email,
-			AuthProvider:   "oidc",
-			AuthProviderID: apID,
-			ExternalID:     &info.Subject,
-			Role:           mapped.Role,
-		})
-		if err != nil {
-			if !isUniqueViolation(err) {
-				return db.User{}, err
-			}
-			// A concurrent login may have created the same subject; an
-			// existing e-mail account is never linked.
-			user, err = h.queries.GetUserByExternalID(ctx, db.GetUserByExternalIDParams{
-				AuthProviderID: apID,
-				ExternalID:     &info.Subject,
-			})
-			if err != nil {
-				return db.User{}, errOIDCNotProvisioned
-			}
-		} else {
-			h.applyTeams(ctx, user.ID, mapped.Teams)
-			return user, nil
-		}
-	}
-
-	if mapped.Role != user.Role {
-		if err := h.queries.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: user.ID, Role: mapped.Role}); err != nil {
-			return db.User{}, err
-		}
-		user.Role = mapped.Role
-	}
-	h.applyTeams(ctx, user.ID, mapped.Teams)
-	return user, nil
-}
-
-func (h *core) applyTeams(ctx context.Context, userID pgtype.UUID, teams []identity.TeamAssignment) {
-	provision.ApplyTeams(ctx, h.queries, userID, teams)
-}
-
-func domainAllowed(email string, domains []string) bool {
-	at := strings.LastIndex(email, "@")
-	if at <= 0 || at == len(email)-1 {
-		return false
-	}
-	domain := strings.ToLower(email[at+1:])
-	for _, d := range domains {
-		if strings.ToLower(strings.TrimPrefix(d, "@")) == domain {
-			return true
-		}
-	}
-	return false
 }
 
 func randomState() string {

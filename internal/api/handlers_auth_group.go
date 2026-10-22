@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/login"
+	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/session"
 	"github.com/galileostudio/baleia/internal/identity/setup"
@@ -22,8 +24,8 @@ type AuthHandlers struct {
 	// recipient's preference (#67). Tests inject a fake so the paths run
 	// without an SMTP server.
 	mailer MailSender
-	// oidcCache holds discovered providers keyed by id + config version (#280).
-	oidcCache sync.Map
+	// oidc runs the OIDC authorization-code login (#278).
+	oidc *oidclogin.Service
 	// logins verifies passwords and directory binds (#51, #255).
 	logins *login.Service
 	// sessions issues, rotates and ends sign-in sessions (#51).
@@ -59,6 +61,10 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		}, c.settings.Auth.PasswordCost),
 	}
 	a.logins = newLogins(c, login.LDAP{})
+	a.oidc = oidclogin.New(c.queries, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
+		PublicURL: c.settings.Mail.PublicURL,
+		CacheTTL:  time.Hour,
+	})
 	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
 		PublicURL:     c.settings.Mail.PublicURL,
 		DefaultLocale: c.settings.Mail.DefaultLocale,

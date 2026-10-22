@@ -421,8 +421,8 @@ func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := oidcHandlers(t, q)
-	if _, _, err := h.cachedOIDCProvider(context.Background(), idString(provider.ID)); err == nil {
-		t.Fatal("cachedOIDCProvider accepted a plaintext config")
+	if _, _, err := h.oidc.Provider(context.Background(), provider.ID); err == nil {
+		t.Fatal("the OIDC login accepted a plaintext config")
 	}
 }
 
@@ -440,10 +440,10 @@ func TestOIDC_ProviderCache(t *testing.T) {
 	h := oidcHandlers(t, q)
 	ctx := context.Background()
 
-	if _, _, err := h.cachedOIDCProvider(ctx, idString(provider.ID)); err != nil {
+	if _, _, err := h.oidc.Provider(ctx, provider.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := h.cachedOIDCProvider(ctx, idString(provider.ID)); err != nil {
+	if _, _, err := h.oidc.Provider(ctx, provider.ID); err != nil {
 		t.Fatal(err)
 	}
 	if got := idp.DiscoveryCount(); got != 1 {
@@ -456,7 +456,7 @@ func TestOIDC_ProviderCache(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := h.cachedOIDCProvider(ctx, idString(provider.ID)); err != nil {
+	if _, _, err := h.oidc.Provider(ctx, provider.ID); err != nil {
 		t.Fatal(err)
 	}
 	if got := idp.DiscoveryCount(); got != 2 {
