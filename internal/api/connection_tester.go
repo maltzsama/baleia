@@ -222,13 +222,13 @@ func (t connectionTest) listCatalogs(ctx context.Context) (int, error) {
 func (t connectionTest) directEngine(ctx context.Context) (ConnectionCheck, error) {
 	c := ConnectionCheck{Name: "direct_engine"}
 	kind := t.provider.EngineKind()
-	if !slices.Contains(queryengine.Kinds(), kind) {
+	if !t.h.kinds.HasKind(kind) {
 		c.Skipped, c.Detail = ptr(true), ptr("no "+kind+" engine adapter yet")
 		return c, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
-	eng, err := queryengine.Transient(ctx, kind, t.cfg, t.h.dialer)
+	eng, err := t.h.kinds.Transient(ctx, kind, t.cfg)
 	if err != nil {
 		return c, err
 	}

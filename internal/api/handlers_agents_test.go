@@ -269,6 +269,7 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 		queries:        fake,
 		cfg:            &config.Config{StatementTimeout: 30 * time.Minute},
 		temporalClient: temporal,
+		kinds:          testKinds(t, nil),
 	}
 	agentCtx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
 	agentCtx = context.WithValue(agentCtx, auth.ContextKeyRole, "member")

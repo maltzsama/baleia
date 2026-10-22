@@ -89,7 +89,7 @@ func runQuery(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) *h
 func runQueryWith(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest) (*httptest.ResponseRecorder, *fakeTemporalClient) {
 	t.Helper()
 	tc := &fakeTemporalClient{}
-	h := &Handlers{queries: fake, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: tc}
+	h := &Handlers{queries: fake, cfg: &config.Config{StatementTimeout: time.Minute}, temporalClient: tc, kinds: testKinds(t, nil)}
 	resp, err := h.RunQuery(testContext(), RunQueryRequestObject{Id: PathId{0xAA}, Body: &RunQueryJSONRequestBody{Sql: "SELECT 1", Target: target}})
 	if err != nil {
 		t.Fatal(err)

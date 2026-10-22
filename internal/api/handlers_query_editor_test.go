@@ -230,6 +230,7 @@ func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
 		queries:        fake,
 		cfg:            &config.Config{StatementTimeout: 30 * time.Minute},
 		temporalClient: &fakeTemporalClient{startErr: errors.New("temporal down")},
+		kinds:          testKinds(t, nil),
 	}
 
 	_, err := h.RunQuery(testContext(), RunQueryRequestObject{

@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -765,7 +764,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 	}
 	// A target runs where an adapter for its engine kind exists; direct
 	// engines get theirs in #81-#83.
-	if !slices.Contains(queryengine.Kinds(), target.EngineKind) {
+	if !h.kinds.HasKind(target.EngineKind) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return RunQuery422JSONResponse{UnprocessableEntityJSONResponse: (&targetError{
 			code:    ErrorCodeEngineUnsupported,
