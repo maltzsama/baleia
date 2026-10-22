@@ -347,3 +347,12 @@ func TestDependencyOrder(t *testing.T) {
 		t.Fatalf("query folder = %v, want %v", q.FolderID, folder.ID)
 	}
 }
+
+// TestImport_RequiresDialect: without a dialect the import refuses up front
+// instead of panicking on the first saved query.
+func TestImport_RequiresDialect(t *testing.T) {
+	s := New(nil, nil)
+	if _, err := s.Import(context.Background(), ImportOptions{Mode: ImportDryRun}); !errors.Is(err, ErrNoDialect) {
+		t.Fatalf("err = %v, want ErrNoDialect", err)
+	}
+}

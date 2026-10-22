@@ -215,6 +215,9 @@ type ImportReport struct {
 // ErrImportFailed means an apply had item errors; nothing was written.
 var ErrImportFailed = errors.New("import has item errors")
 
+// ErrNoDialect means ImportOptions carries no dialect to check saved queries.
+var ErrNoDialect = errors.New("content: import needs a dialect")
+
 // ImportOptions configure one import.
 type ImportOptions struct {
 	WorkspaceID pgtype.UUID
@@ -237,6 +240,9 @@ type ImportOptions struct {
 // transaction. A dry run always rolls back.
 func (s *Service) Import(ctx context.Context, opts ImportOptions) (ImportReport, error) {
 	report := ImportReport{Mode: string(opts.Mode)}
+	if opts.Dialect == nil {
+		return report, ErrNoDialect
+	}
 	var q db.Querier
 	var tx pgx.Tx
 	var err error
