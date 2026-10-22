@@ -128,8 +128,8 @@ func TestNewAPI_GroupsShareCore(t *testing.T) {
 // directory and the network.
 func TestNewAuthHandlers_RealSeams(t *testing.T) {
 	a := newAuthHandlers(&core{})
-	if _, ok := a.directory.(ldapDirectory); !ok {
-		t.Errorf("directory = %T, want ldapDirectory", a.directory)
+	if a.logins == nil || a.sessions == nil || a.resets == nil || a.setup == nil {
+		t.Error("the identity services must be built")
 	}
 	if _, ok := a.prober.(networkProber); !ok {
 		t.Errorf("prober = %T, want networkProber", a.prober)

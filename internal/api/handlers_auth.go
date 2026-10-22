@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -15,8 +14,9 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/login"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
+	"github.com/galileostudio/baleia/internal/identity/provision"
 	"github.com/galileostudio/baleia/internal/identity/session"
 	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/metrics"
@@ -119,37 +119,20 @@ func (h *AuthHandlers) Login(ctx context.Context, request LoginRequestObject) (r
 		return h.loginLDAP(ctx, request.Body, ev, identifier, failed)
 	}
 
-	email := string(*request.Body.Email)
-
-	user, err := h.queries.GetUserByEmail(ctx, email)
-	if err != nil {
-		// Unknown e-mail: compare against a dummy hash anyway so the response
-		// time does not reveal whether the account exists (#51).
-		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
+	user, err := h.logins.Password(ctx, string(*request.Body.Email), request.Body.Password)
+	switch {
+	case errors.Is(err, login.ErrInvalidCredentials):
 		h.loginDelay().Failure(identifier)
 		failed("invalid_credentials")
 		return invalidCredentialsLogin(), nil
-	}
-
-	// An SSO-only account and a wrong password are indistinguishable (#51).
-	if user.AuthProvider != "local" || user.PasswordHash == nil {
-		_ = auth.CheckPassword(h.dummyPasswordHash(), request.Body.Password)
-		h.loginDelay().Failure(identifier)
-		failed("invalid_credentials")
-		return invalidCredentialsLogin(), nil
-	}
-
-	if !auth.CheckPassword(*user.PasswordHash, request.Body.Password) {
-		h.loginDelay().Failure(identifier)
-		failed("invalid_credentials")
-		return invalidCredentialsLogin(), nil
-	}
-	// The password is correct, so revealing the suspension is safe (#283).
-	if err := auth.RequireActive(user.Status); err != nil {
+	case errors.Is(err, login.ErrSuspended):
+		// The password is correct, so revealing the suspension is safe (#283).
 		failed("account_suspended")
 		return Login403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{
 			Code: ErrorCodeAccountSuspended, Message: "account suspended",
 		}}, nil
+	case err != nil:
+		return nil, err
 	}
 	h.loginDelay().Success(identifier)
 	return h.issueLogin(ctx, user, ev, audit.AuthPassword)
@@ -179,55 +162,19 @@ func loginIdentifier(body *LoginRequest) string {
 // stable id (default deny). Every failure is the uniform
 // invalid_credentials error.
 func (h *AuthHandlers) loginLDAP(ctx context.Context, body *LoginRequest, ev audit.Event, identifier string, failed func(string)) (LoginResponseObject, error) {
-	invalid := func() (LoginResponseObject, error) {
-		h.loginDelay().Failure(identifier)
-		failed("invalid_credentials")
-		return invalidCredentialsLogin(), nil
-	}
-
 	username := ""
 	if body.Username != nil {
 		username = strings.TrimSpace(*body.Username)
 	}
-	if username == "" || body.Password == "" {
-		return invalid()
+	user, err := h.logins.Directory(ctx, pgtype.UUID{Bytes: *body.ProviderId, Valid: true}, username, body.Password)
+	if errors.Is(err, login.ErrInvalidCredentials) {
+		h.loginDelay().Failure(identifier)
+		failed("invalid_credentials")
+		return invalidCredentialsLogin(), nil
 	}
-
-	apID := pgtype.UUID{Bytes: *body.ProviderId, Valid: true}
-	ap, err := h.queries.GetAuthProviderByID(ctx, apID)
-	if err != nil || ap.Type != "ldap" || !ap.Enabled {
-		return invalid()
-	}
-	cfg, err := identityldap.OpenConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
 	if err != nil {
-		// Fail closed: an unreadable config never falls back to another method.
-		return invalid()
+		return nil, err
 	}
-
-	result, err := h.directory.Authenticate(ctx, cfg, username, body.Password)
-	if err != nil {
-		return invalid()
-	}
-
-	user, err := h.queries.GetUserByExternalID(ctx, db.GetUserByExternalIDParams{
-		AuthProviderID: ap.ID,
-		ExternalID:     &result.ExternalID,
-	})
-	if err != nil || user.AuthProvider != "ldap" {
-		return invalid()
-	}
-	// A suspended directory account is indistinguishable from bad credentials
-	// (#284): never reveal the suspension to an unauthenticated caller.
-	if err := auth.RequireActive(user.Status); err != nil {
-		return invalid()
-	}
-	if result.Role != user.Role {
-		if err := h.queries.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: user.ID, Role: result.Role}); err != nil {
-			return nil, err
-		}
-		user.Role = result.Role
-	}
-	h.applyTeams(ctx, user.ID, result.Teams)
 	h.loginDelay().Success(identifier)
 	return h.issueLogin(ctx, user, ev, audit.AuthLDAP)
 }
@@ -888,19 +835,7 @@ func (h *core) provisionOIDCUser(ctx context.Context, apID pgtype.UUID, cfg auth
 }
 
 func (h *core) applyTeams(ctx context.Context, userID pgtype.UUID, teams []identity.TeamAssignment) {
-	for _, t := range teams {
-		teamID, err := uuidFromString(t.TeamID)
-		if err != nil {
-			continue
-		}
-		if err := h.queries.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
-			TeamID: teamID,
-			UserID: userID,
-			Role:   t.TeamRole,
-		}); err != nil {
-			slog.Warn("team mapping failed", "team_id", t.TeamID, "err", err)
-		}
-	}
+	provision.ApplyTeams(ctx, h.queries, userID, teams)
 }
 
 func domainAllowed(email string, domains []string) bool {

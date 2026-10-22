@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/galileostudio/baleia/internal/db"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/identity/login"
 	"github.com/galileostudio/baleia/internal/identity/passwordreset"
 	"github.com/galileostudio/baleia/internal/identity/session"
 	"github.com/galileostudio/baleia/internal/identity/setup"
@@ -15,10 +15,6 @@ import (
 // AuthHandlers serves sign-in, sessions, users, API keys and identity providers (#365).
 type AuthHandlers struct {
 	*core
-	// dummyHash is compared against on the unknown-account and SSO-only paths
-	// so timing does not reveal whether an account exists (#51).
-	dummyHashOnce sync.Once
-	dummyHash     string
 	// loginDelay slows repeated login failures per account (#51).
 	loginDelayStore *LoginDelay
 	loginDelayOnce  sync.Once
@@ -28,9 +24,8 @@ type AuthHandlers struct {
 	mailer MailSender
 	// oidcCache holds discovered providers keyed by id + config version (#280).
 	oidcCache sync.Map
-	// directory verifies LDAP credentials (#255); tests give a fake so the
-	// handler branch runs without a directory server.
-	directory directoryAuthenticator
+	// logins verifies passwords and directory binds (#51, #255).
+	logins *login.Service
 	// sessions issues, rotates and ends sign-in sessions (#51).
 	sessions *session.Service
 	// resets runs the e-mailed password reset (#51).
@@ -40,18 +35,6 @@ type AuthHandlers struct {
 	// prober probes a provider configuration without persisting anything
 	// (#286); tests give a fake so the handler runs without a network.
 	prober identityProviderProber
-}
-
-// directoryAuthenticator verifies a user's credentials against a directory.
-type directoryAuthenticator interface {
-	Authenticate(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error)
-}
-
-// ldapDirectory binds to the configured LDAP server.
-type ldapDirectory struct{}
-
-func (ldapDirectory) Authenticate(ctx context.Context, cfg identityldap.Config, username, password string) (*identityldap.User, error) {
-	return identityldap.Authenticate(ctx, cfg, username, password)
 }
 
 // identityProviderProber checks a provider configuration end to end.
@@ -68,14 +51,14 @@ func (networkProber) Probe(ctx context.Context, cfg providerConfig, testUsername
 
 func newAuthHandlers(c *core) *AuthHandlers {
 	a := &AuthHandlers{
-		core:      c,
-		directory: ldapDirectory{},
-		prober:    networkProber{},
-		sessions:  newSessions(c),
+		core:     c,
+		prober:   networkProber{},
+		sessions: newSessions(c),
 		setup: setup.New(c.queries, func(ctx context.Context, fn func(setup.Store) error) error {
 			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 		}, c.settings.Auth.PasswordCost),
 	}
+	a.logins = newLogins(c, login.LDAP{})
 	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
 		PublicURL:     c.settings.Mail.PublicURL,
 		DefaultLocale: c.settings.Mail.DefaultLocale,
@@ -100,4 +83,10 @@ type groupMailer struct{ a *AuthHandlers }
 
 func (m groupMailer) Send(ctx context.Context, to, locale string, template mail.Template, data map[string]any) error {
 	return m.a.mailSender().Send(ctx, to, locale, template, data)
+}
+
+// newLogins builds the credential verifier over the core's database; tests
+// pass a fake directory.
+func newLogins(c *core, directory login.Directory) *login.Service {
+	return login.New(c.queries, directory, c.keyring, c.settings.Auth.PasswordCost)
 }
