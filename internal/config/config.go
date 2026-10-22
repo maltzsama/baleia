@@ -163,6 +163,9 @@ type Config struct {
 	DBStatementTimeout time.Duration
 	DBIdleInTxTimeout  time.Duration
 	DBLockTimeout      time.Duration
+	// SecretFileBaseDir is where file: secret references resolve
+	// (BALEIA_SECRET_FILE_BASE_DIR); empty refuses them.
+	SecretFileBaseDir string
 	// OracleLOBMaxBytes caps a LOB value an Oracle engine reads into Arrow
 	// (BALEIA_LOB_MAX_BYTES); 0 keeps the engine's default (1 MiB).
 	OracleLOBMaxBytes int
@@ -203,6 +206,7 @@ func Load() *Config {
 		PolarisClientSecret:   getEnv("POLARIS_CLIENT_SECRET", ""),
 		WorkerHealthPort:      getEnv("WORKER_HEALTH_PORT", "8081"),
 		OracleLOBMaxBytes:     getEnvInt("BALEIA_LOB_MAX_BYTES", 0),
+		SecretFileBaseDir:     getEnv("BALEIA_SECRET_FILE_BASE_DIR", ""),
 		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),
 		TrinoDBPassword:       getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
 		TrinoAdminUser:        getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),

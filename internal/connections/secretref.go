@@ -73,10 +73,3 @@ func (r SecretResolver) Resolve(v string) (string, error) {
 	}
 	return "", fmt.Errorf("%w: unknown origin %q", ErrSecretReference, m[1])
 }
-
-// ResolveSecretReference resolves v with the base directory read from
-// BALEIA_SECRET_FILE_BASE_DIR. It goes away once every Config carries the
-// resolver the composition root builds (#367).
-func ResolveSecretReference(v string) (string, error) {
-	return SecretResolver{FileBaseDir: os.Getenv("BALEIA_SECRET_FILE_BASE_DIR")}.Resolve(v)
-}

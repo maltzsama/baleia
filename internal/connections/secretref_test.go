@@ -33,28 +33,27 @@ func TestIsSecretReference(t *testing.T) {
 	}
 }
 
-func TestResolveSecretReference(t *testing.T) {
+func TestSecretResolver_ResolveEnvFileAndLiteral(t *testing.T) {
 	t.Setenv("BALEIA_TEST_REF", "s3cret")
-	if v, err := ResolveSecretReference("@baleia-secret[env:BALEIA_TEST_REF]"); err != nil || v != "s3cret" {
-		t.Errorf("env = %q, %v", v, err)
-	}
-	if _, err := ResolveSecretReference("@baleia-secret[env:BALEIA_DEFINITELY_MISSING]"); !errors.Is(err, ErrSecretReference) {
-		t.Errorf("missing env = %v", err)
-	}
-
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("BALEIA_SECRET_FILE_BASE_DIR", dir)
-	if v, err := ResolveSecretReference("@baleia-secret[file:token.txt]"); err != nil || v != "from-file" {
+	r := SecretResolver{FileBaseDir: dir}
+	if v, err := r.Resolve("@baleia-secret[env:BALEIA_TEST_REF]"); err != nil || v != "s3cret" {
+		t.Errorf("env = %q, %v", v, err)
+	}
+	if _, err := r.Resolve("@baleia-secret[env:BALEIA_DEFINITELY_MISSING]"); !errors.Is(err, ErrSecretReference) {
+		t.Errorf("missing env = %v", err)
+	}
+	if v, err := r.Resolve("@baleia-secret[file:token.txt]"); err != nil || v != "from-file" {
 		t.Errorf("file = %q, %v (the trailing newline is dropped)", v, err)
 	}
-	if _, err := ResolveSecretReference("@baleia-secret[file:missing.txt]"); !errors.Is(err, ErrSecretReference) {
+	if _, err := r.Resolve("@baleia-secret[file:missing.txt]"); !errors.Is(err, ErrSecretReference) {
 		t.Errorf("missing file = %v", err)
 	}
 	// A literal is returned unchanged.
-	if v, err := ResolveSecretReference("literal"); err != nil || v != "literal" {
+	if v, err := r.Resolve("literal"); err != nil || v != "literal" {
 		t.Errorf("literal = %q, %v", v, err)
 	}
 }
@@ -112,7 +111,6 @@ func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("BALEIA_SECRET_FILE_BASE_DIR", "")
 	reg, err := NewRegistry()
 	if err != nil {
 		t.Fatal(err)

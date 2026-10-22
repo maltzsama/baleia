@@ -105,19 +105,18 @@ func (c Config) Value(key string) string { return c.Values[key] }
 
 // Secret returns a secret value resolved for Baleia's own use: an external
 // reference (@baleia-secret[env:…] or @baleia-secret[file:…]) is resolved with
-// Baleia's environment; empty when it cannot be resolved.
+// the Config's resolver; empty when it cannot be resolved.
 func (c Config) Secret(key string) string {
 	v := c.Secrets[key]
 	if !IsSecretReference(v) {
 		return v
 	}
-	var resolved string
-	var err error
+	// A Config built without a registry resolves env: references only.
+	var r SecretResolver
 	if c.resolver != nil {
-		resolved, err = c.resolver.Resolve(v)
-	} else {
-		resolved, err = ResolveSecretReference(v)
+		r = *c.resolver
 	}
+	resolved, err := r.Resolve(v)
 	if err != nil {
 		return ""
 	}

@@ -143,6 +143,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.Dialects = dialect.NewRegistry()
 	c.Connections, err = providers.New(c.Dialer, providers.Options{
 		Dialects: c.Dialects,
+		Secrets:  connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir},
 		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
 		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.ConnectionsAllowLoopback},
 	})
