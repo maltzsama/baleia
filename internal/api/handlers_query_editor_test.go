@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -231,6 +232,7 @@ func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
 		cfg:            &config.Config{StatementTimeout: 30 * time.Minute},
 		temporalClient: &fakeTemporalClient{startErr: errors.New("temporal down")},
 		kinds:          testKinds(t, nil),
+		dialects:       dialect.NewRegistry(),
 	}
 
 	_, err := h.RunQuery(testContext(), RunQueryRequestObject{

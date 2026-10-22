@@ -31,6 +31,9 @@ type QueryExecutionInput struct {
 	// RerunFromPosition instead of splitting SQL again (#111).
 	RerunExecutionID  string
 	RerunFromPosition int32
+	// Dialect splits and gates the script (V3); the caller resolves it from
+	// the target's engine kind. V2 ignores it and resolves it itself.
+	Dialect string
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -49,6 +52,13 @@ func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) erro
 		dialectName = d.Name()
 	}
 	return runQueryExecution(ctx, in, dialectName)
+}
+
+// QueryExecutionWorkflowV3 is V2 with the script's dialect resolved by the
+// caller (the API's injected dialect registry) instead of inside the workflow;
+// its commands are V2's.
+func QueryExecutionWorkflowV3(ctx workflow.Context, in QueryExecutionInput) error {
+	return runQueryExecution(ctx, in, in.Dialect)
 }
 
 // runQueryExecution is the body every QueryExecutionWorkflow version shares:

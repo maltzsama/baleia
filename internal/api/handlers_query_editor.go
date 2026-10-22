@@ -20,6 +20,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
@@ -849,7 +850,13 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		TaskQueue: "baleia-task-queue",
 	}
 
-	_, err = h.temporalClient.ExecuteWorkflow(ctx, wo, workflows.QueryExecutionWorkflowV2, workflows.QueryExecutionInput{
+	// The script is split with the target engine's dialect; Trino when the
+	// kind has none (the rule V2 applied inside the workflow).
+	dialectName := dialect.Trino
+	if d, ok := h.dialects.ForEngineKind(target.EngineKind); ok {
+		dialectName = d.Name()
+	}
+	_, err = h.temporalClient.ExecuteWorkflow(ctx, wo, workflows.QueryExecutionWorkflowV3, workflows.QueryExecutionInput{
 		ExecutionID:       executionID,
 		WorkspaceID:       request.Id.String(),
 		SQL:               request.Body.Sql,
@@ -860,6 +867,7 @@ func (h *Handlers) RunQuery(ctx context.Context, request RunQueryRequestObject) 
 		ExecutionTimeout:  h.cfg.ExecutionTimeout,
 		RerunExecutionID:  rerunExecutionID,
 		RerunFromPosition: rerunFromPosition,
+		Dialect:           dialectName,
 	})
 	if err != nil {
 		// The workflow failed to start; fail the row so it does not stay
