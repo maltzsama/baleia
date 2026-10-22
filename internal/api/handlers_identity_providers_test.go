@@ -14,12 +14,12 @@ import (
 func idpTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	pool := testdb.New(t)
-	return &Handlers{
+	return testHandlers(handlerFields{
 		queries: db.New(pool),
 		pool:    pool,
 		tx:      poolTx{pool: pool},
 		keyring: testKeyring(t),
-	}
+	})
 }
 
 func idpAdminCtx() context.Context {

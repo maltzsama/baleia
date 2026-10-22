@@ -85,13 +85,13 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 	}
 
 	f.cache = NewTTLStore[[]AttentionItem](time.Hour)
-	f.h = &Handlers{
+	f.h = testHandlers(handlerFields{
 		queries:        db.New(pool),
 		pool:           pool,
 		tx:             poolTx{pool: pool},
 		settings:       SettingsFromConfig(&config.Config{AuditExportURL: "https://opensearch.test"}),
 		attentionCache: f.cache,
-	}
+	})
 	return f
 }
 

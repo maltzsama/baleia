@@ -76,12 +76,12 @@ func newAuditFixture(t *testing.T) *auditFixture {
 		t.Fatal(err)
 	}
 	f.ownerWS = openapi_types.UUID(ws.Bytes)
-	f.h = &Handlers{
+	f.h = testHandlers(handlerFields{
 		queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, schema: poolSchema{pool: pool}, keyring: testKeyring(t), connections: testRegistry(t),
 		settings:     SettingsFromConfig(&config.Config{JWTSecret: strings.Repeat("s", 40)}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		audit:        f.mem,
-	}
+	})
 	return f
 }
 

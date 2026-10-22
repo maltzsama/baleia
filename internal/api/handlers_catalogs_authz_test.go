@@ -200,13 +200,13 @@ func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
 		EngineCatalogName: "wh", Mode: "managed", Enabled: true, LifecycleState: "active",
 	})
 	ft := newFakeTrino(t)
-	h := &Handlers{
+	h := testHandlers(handlerFields{
 		queries: q, tx: directTx{q: q},
 		keyring:      kr,
 		settings:     SettingsFromConfig(&config.Config{TrinoUserIdentity: "uuid"}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		connections:  testRegistry(t),
-	}
+	})
 	h.engines, h.binder = trinoBackends(ft.srv.URL)
 	return h, q, ft
 }

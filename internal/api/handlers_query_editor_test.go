@@ -65,7 +65,7 @@ func execRequest() (PathId, openapi_types.UUID) {
 // the handler answers 404 instead of returning the foreign execution.
 func TestGetExecutionRejectsForeignWorkspace(t *testing.T) {
 	fake := &fakeQuerier{hasWorkspaceAccess: true, execErr: pgx.ErrNoRows}
-	h := &Handlers{queries: fake, tx: directTx{q: fake}}
+	h := testHandlers(handlerFields{queries: fake, tx: directTx{q: fake}})
 	wsID, execID := execRequest()
 
 	resp, err := h.GetExecution(testContext(), GetExecutionRequestObject{Id: wsID, ExecutionId: execID})
@@ -84,7 +84,7 @@ func TestGetExecutionRejectsForeignWorkspace(t *testing.T) {
 }
 
 func TestGetExecutionRequiresWorkspaceAccess(t *testing.T) {
-	h := &Handlers{queries: &fakeQuerier{hasWorkspaceAccess: false}}
+	h := testHandlers(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: false}})
 	wsID, execID := execRequest()
 
 	resp, err := h.GetExecution(testContext(), GetExecutionRequestObject{Id: wsID, ExecutionId: execID})
@@ -97,7 +97,7 @@ func TestGetExecutionRequiresWorkspaceAccess(t *testing.T) {
 }
 
 func TestGetExecutionReturnsOwnExecution(t *testing.T) {
-	h := &Handlers{queries: &fakeQuerier{hasWorkspaceAccess: true}}
+	h := testHandlers(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: true}})
 	wsID, execID := execRequest()
 
 	resp, err := h.GetExecution(testContext(), GetExecutionRequestObject{Id: wsID, ExecutionId: execID})
@@ -111,7 +111,7 @@ func TestGetExecutionReturnsOwnExecution(t *testing.T) {
 
 func TestCancelExecutionCancelsRunning(t *testing.T) {
 	fake := &fakeQuerier{hasWorkspaceAccess: true, cancelResult: db.QueryExecution{Status: "cancelled"}}
-	h := &Handlers{queries: fake, tx: directTx{q: fake}, temporalClient: &fakeTemporalClient{}}
+	h := testHandlers(handlerFields{queries: fake, tx: directTx{q: fake}, temporalClient: &fakeTemporalClient{}})
 	wsID, execID := execRequest()
 
 	resp, err := h.CancelExecution(testContext(), CancelExecutionRequestObject{Id: wsID, ExecutionId: execID})
@@ -136,7 +136,7 @@ func TestCancelExecutionDoesNotOverrideCompletion(t *testing.T) {
 		cancelErr:          pgx.ErrNoRows,
 		exec:               db.QueryExecution{Status: "finished"},
 	}
-	h := &Handlers{queries: fake, tx: directTx{q: fake}}
+	h := testHandlers(handlerFields{queries: fake, tx: directTx{q: fake}})
 	wsID, execID := execRequest()
 
 	resp, err := h.CancelExecution(testContext(), CancelExecutionRequestObject{Id: wsID, ExecutionId: execID})
@@ -153,7 +153,7 @@ func TestCancelExecutionDoesNotOverrideCompletion(t *testing.T) {
 }
 
 func TestListStatementsReturns404ForForeignExecution(t *testing.T) {
-	h := &Handlers{queries: &fakeQuerier{hasWorkspaceAccess: true, execErr: pgx.ErrNoRows}}
+	h := testHandlers(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: true, execErr: pgx.ErrNoRows}})
 	wsID, execID := execRequest()
 
 	resp, err := h.ListStatements(testContext(), ListStatementsRequestObject{Id: wsID, ExecutionId: execID})
@@ -227,13 +227,13 @@ func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
 		exec:    db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
 		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)},
 	}
-	h := &Handlers{
+	h := testHandlers(handlerFields{
 		queries: fake, tx: directTx{q: fake},
 		settings:       SettingsFromConfig(&config.Config{StatementTimeout: 30 * time.Minute}),
 		temporalClient: &fakeTemporalClient{startErr: errors.New("temporal down")},
 		kinds:          testKinds(t, nil),
 		dialects:       dialect.NewRegistry(),
-	}
+	})
 
 	_, err := h.RunQuery(testContext(), RunQueryRequestObject{
 		Id:   PathId{0xAA},
@@ -277,7 +277,7 @@ func TestCancelExecutionCancelsOnTheEngine(t *testing.T) {
 		rows:        []db.ListRunningStatementHandlesRow{{Position: 1, QueryHandle: []byte(`{"engine_id":"e","query_id":"20260101_000000_00001_abcde"}`)}},
 	}
 	rec := &cancelRecorder{}
-	h := &Handlers{queries: q, tx: directTx{q: q}, temporalClient: &fakeTemporalClient{}, engines: fixedEngines{rec}}
+	h := testHandlers(handlerFields{queries: q, tx: directTx{q: q}, temporalClient: &fakeTemporalClient{}, engines: fixedEngines{rec}})
 	wsID, execID := execRequest()
 	if _, err := h.CancelExecution(testContext(), CancelExecutionRequestObject{Id: wsID, ExecutionId: execID}); err != nil {
 		t.Fatal(err)

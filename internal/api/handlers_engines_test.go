@@ -121,7 +121,7 @@ func engineHandlers(t *testing.T, q *engineQuerier, providers ...connections.Pro
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Handlers{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+	return testHandlers(handlerFields{dialects: dialect.NewRegistry(), queries: q, tx: directTx{q: q}, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 }
 
 func ownedConnection(t *testing.T, typ string, owner string) db.CatalogConnection {

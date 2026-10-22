@@ -29,7 +29,7 @@ func (f *fakeLoginQuerier) GetUserByEmail(context.Context, string) (db.User, err
 }
 
 func loginHandlers(q db.Querier) *Handlers {
-	return &Handlers{queries: q, tx: directTx{q: q}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})}
+	return testHandlers(handlerFields{queries: q, tx: directTx{q: q}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 }
 
 func loginResponse(t *testing.T, resp LoginResponseObject, err error, name string) {

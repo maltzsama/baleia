@@ -13,7 +13,7 @@ import (
 )
 
 func TestSystemStatus_AdminOnly(t *testing.T) {
-	h := &Handlers{settings: SettingsFromConfig(&config.Config{}), schema: unreachableSchema{}}
+	h := testHandlers(handlerFields{settings: SettingsFromConfig(&config.Config{}), schema: unreachableSchema{}})
 
 	resp, err := h.GetSystemStatus(context.Background(), GetSystemStatusRequestObject{})
 	if err != nil {
@@ -67,14 +67,14 @@ func TestSystemStatus_SectionTimeout(t *testing.T) {
 }
 
 func TestSystemStatus_NoSecrets(t *testing.T) {
-	h := &Handlers{settings: SettingsFromConfig(&config.Config{
+	h := testHandlers(handlerFields{settings: SettingsFromConfig(&config.Config{
 		SMTPHost:     "smtp.internal.example",
 		SMTPFrom:     "ops@internal.example",
 		SMTPUser:     "smtp-service",
 		SMTPPassword: "smtp-secret",
 		S3Endpoint:   "s3.internal.example:9000",
 		TemporalHost: "temporal.internal:7233",
-	}), schema: unreachableSchema{}}
+	}), schema: unreachableSchema{}})
 
 	resp, err := h.GetSystemStatus(ctxAs(uuid.NewString(), "admin"), GetSystemStatusRequestObject{})
 	if err != nil {

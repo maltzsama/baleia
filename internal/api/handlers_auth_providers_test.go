@@ -15,7 +15,7 @@ import (
 func TestListAuthProviders_OnlyEnabled(t *testing.T) {
 	pool := testdb.New(t)
 	q := db.New(pool)
-	h := &Handlers{queries: q, tx: directTx{q: q}}
+	h := testHandlers(handlerFields{queries: q, tx: directTx{q: q}})
 	ctx := context.Background()
 
 	create := func(name, kind string, enabled bool) {

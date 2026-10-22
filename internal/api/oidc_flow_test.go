@@ -158,11 +158,11 @@ func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
 
 func oidcHandlers(t *testing.T, q *db.Queries) *Handlers {
 	t.Helper()
-	return &Handlers{
+	return testHandlers(handlerFields{
 		queries: q, tx: directTx{q: q},
 		keyring:  oidcTestKeyring(t),
 		settings: SettingsFromConfig(&config.Config{PublicURL: "http://localhost", JWTSecret: "test-secret"}),
-	}
+	})
 }
 
 type oidcFlowFixture struct {

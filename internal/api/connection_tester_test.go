@@ -73,7 +73,7 @@ func draftHandlers(t *testing.T, reg *connections.Registry) *Handlers {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Handlers{queries: draftQuerier{t: t}, connections: reg, settings: SettingsFromConfig(&config.Config{}), kinds: testKinds(t, d)}
+	return testHandlers(handlerFields{queries: draftQuerier{t: t}, connections: reg, settings: SettingsFromConfig(&config.Config{}), kinds: testKinds(t, d)})
 }
 
 func draft(url string, intents ...string) *TestConnectionRequest {
@@ -206,7 +206,7 @@ func TestTransient_IntentsFilter(t *testing.T) {
 func TestTransient_DirectEngineNotRegistered(t *testing.T) {
 	reg, d := loopbackRegistry(t)
 	p, _ := reg.Get(connections.KindPostgreSQL)
-	c, err := connectionTest{h: &Handlers{kinds: testKinds(t, d)}, provider: p}.directEngine(context.Background())
+	c, err := connectionTest{h: testHandlers(handlerFields{kinds: testKinds(t, d)}), provider: p}.directEngine(context.Background())
 	if err != nil || c.Skipped == nil || !*c.Skipped {
 		t.Fatalf("check = %+v, %v", c, err)
 	}

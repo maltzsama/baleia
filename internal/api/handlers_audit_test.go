@@ -28,7 +28,7 @@ func TestAuditList_Scoping(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h := &Handlers{queries: q, tx: directTx{q: q}}
+	h := testHandlers(handlerFields{queries: q, tx: directTx{q: q}})
 	list := func(ctx context.Context, p ListAuditEventsParams) ListAuditEvents200JSONResponse {
 		t.Helper()
 		r, err := h.ListAuditEvents(ctx, ListAuditEventsRequestObject{Params: p})
@@ -84,7 +84,7 @@ func TestWriteAuditCSV_StopsWhenTheClientGoes(t *testing.T) {
 	params := db.ListAuditEventsParams{Lim: 1000}
 
 	q := &endlessAudit{}
-	h := &Handlers{queries: q, tx: directTx{q: q}}
+	h := testHandlers(handlerFields{queries: q, tx: directTx{q: q}})
 	reader, writer := io.Pipe()
 	_ = reader.Close()
 	if err := h.writeAuditCSV(context.Background(), writer, params); !errors.Is(err, io.ErrClosedPipe) {
@@ -95,7 +95,7 @@ func TestWriteAuditCSV_StopsWhenTheClientGoes(t *testing.T) {
 	}
 
 	q = &endlessAudit{}
-	h = &Handlers{queries: q, tx: directTx{q: q}}
+	h = testHandlers(handlerFields{queries: q, tx: directTx{q: q}})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := h.writeAuditCSV(ctx, io.Discard, params); !errors.Is(err, context.Canceled) {
