@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -120,7 +121,7 @@ func engineHandlers(t *testing.T, q *engineQuerier, providers ...connections.Pro
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Handlers{queries: q, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+	return &Handlers{dialects: dialect.NewRegistry(), queries: q, connections: reg, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
 }
 
 func ownedConnection(t *testing.T, typ string, owner string) db.CatalogConnection {

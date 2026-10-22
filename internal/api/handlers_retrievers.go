@@ -72,7 +72,7 @@ func (h *Handlers) CreateRetriever(ctx context.Context, request CreateRetrieverR
 		}
 	}
 
-	if err := validateRetrieverDefinition(request.Body.DefinitionSql); err != nil {
+	if err := h.validateRetrieverDefinition(request.Body.DefinitionSql); err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateRetriever422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
@@ -231,7 +231,7 @@ func (h *Handlers) UpdateRetriever(ctx context.Context, request UpdateRetrieverR
 			Message: "only 'full' refresh is supported in v1; 'incremental' requires a separate design",
 		}, nil
 	}
-	if err := validateRetrieverDefinition(sql); err != nil {
+	if err := h.validateRetrieverDefinition(sql); err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateRetriever422JSONResponse{Code: ErrorCodeValidationError, Message: err.Error()}, nil
 	}
@@ -435,7 +435,7 @@ func (h *Handlers) ValidateRetriever(ctx context.Context, request ValidateRetrie
 	if request.Body == nil {
 		return ValidateRetriever422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
-	if err := validateRetrieverDefinition(request.Body.DefinitionSql); err != nil {
+	if err := h.validateRetrieverDefinition(request.Body.DefinitionSql); err != nil {
 		return ValidateRetriever422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
 
@@ -689,9 +689,9 @@ func validateDestIdentifier(value, field string) error {
 
 // validateRetrieverDefinition requires exactly one SELECT/WITH statement and
 // rejects catalog DDL.
-func validateRetrieverDefinition(def string) error {
+func (h *Handlers) validateRetrieverDefinition(def string) error {
 	// Retrievers refresh on the default Trino engine.
-	stmts, err := dialect.MustGet(dialect.Trino).SplitStatements(def)
+	stmts, err := h.dialects.MustGet(dialect.Trino).SplitStatements(def)
 	if err != nil {
 		return fmt.Errorf("definition_sql: %w", err)
 	}

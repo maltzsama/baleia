@@ -101,7 +101,7 @@ func (h *Handlers) describeEngine(ctx context.Context, e db.Engine) Engine {
 	if acts := h.engineActions(ctx, e.ID); acts != nil {
 		out.AllowedActions = &acts
 	}
-	if d, ok := dialect.ForEngineKind(e.Kind); ok {
+	if d, ok := h.dialects.ForEngineKind(e.Kind); ok {
 		out.Dialect = dialectToPublic(d)
 	}
 	if h.queries != nil && h.pool != nil {
@@ -195,7 +195,7 @@ func (h *Handlers) GetDialect(ctx context.Context, request GetDialectRequestObje
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return GetDialect401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	d, ok := dialect.Get(request.Name)
+	d, ok := h.dialects.Get(request.Name)
 	if !ok {
 		return GetDialect404JSONResponse{NotFoundJSONResponse: dialectNotFound()}, nil
 	}
@@ -219,7 +219,7 @@ func (h *Handlers) SplitStatements(ctx context.Context, request SplitStatementsR
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return SplitStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	d, ok := dialect.Get(request.Name)
+	d, ok := h.dialects.Get(request.Name)
 	if !ok {
 		return SplitStatements404JSONResponse{NotFoundJSONResponse: dialectNotFound()}, nil
 	}
@@ -263,7 +263,7 @@ func (h *Handlers) ExplainSQL(ctx context.Context, request ExplainSQLRequestObje
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return ExplainSQL401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	d, ok := dialect.Get(request.Name)
+	d, ok := h.dialects.Get(request.Name)
 	if !ok {
 		return ExplainSQL404JSONResponse{NotFoundJSONResponse: dialectNotFound()}, nil
 	}

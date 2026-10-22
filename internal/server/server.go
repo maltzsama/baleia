@@ -58,7 +58,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
 	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
 
-	h := api.NewHandlers(core.Queries, core.Pool, cfg, core.Keyring, core.Temporal, core.Storage, core.Connections, core.Engines, core.Engines, core.Binder)
+	h := api.NewHandlers(core.Queries, core.Pool, cfg, core.Keyring, core.Temporal, core.Storage, core.Connections, core.Engines, core.Engines, core.Dialects, core.Binder)
 	h.SetAudit(core.Audit)
 	h.SetDialer(core.Dialer)
 	h.SetMetrics(core.Metrics)

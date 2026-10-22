@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/galileostudio/baleia/internal/dialect"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metrics"
@@ -45,8 +46,10 @@ type Handlers struct {
 	// the admin identity (docs/adr/0005, #80). Both are built at the wiring site.
 	engines engineSource
 	kinds   engineKinds
-	binder  *bindtrino.Binder
-	metrics apiMetrics
+	// dialects describe each engine kind's SQL (built once, injected).
+	dialects *dialect.Registry
+	binder   *bindtrino.Binder
+	metrics  apiMetrics
 	// audit records security and data operations (#45; call sites #43).
 	audit audit.Recorder
 	// dialer is the SSRF-safe dialer for transient engines (#12).
@@ -172,7 +175,7 @@ type engineKinds interface {
 	Transient(ctx context.Context, kind string, cfg connections.Config) (queryengine.Engine, error)
 }
 
-func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, kinds engineKinds, binder *bindtrino.Binder) *Handlers {
+func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, temporalClient client.Client, s3 *storage.S3Client, conns *connections.Registry, engines engineSource, kinds engineKinds, dialects *dialect.Registry, binder *bindtrino.Binder) *Handlers {
 	var assistantSvc *assistant.Service
 	if pool != nil {
 		assistantSvc = assistant.New(assistantdb.New(pool), keyring)
@@ -187,6 +190,7 @@ func NewHandlers(queries db.Querier, pool *pgxpool.Pool, cfg *config.Config, key
 		s3:             s3,
 		engines:        engines,
 		kinds:          kinds,
+		dialects:       dialects,
 		binder:         binder,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
 		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),

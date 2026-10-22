@@ -247,7 +247,7 @@ func (h *Handlers) GetMetadataTable(ctx context.Context, request GetMetadataTabl
 	if hasBinding {
 		id := openapi_types.UUID(b.ID.Bytes)
 		out.BindingId = &id
-		if dd, ok := dialect.ForEngineKind(b.EngineKind); ok {
+		if dd, ok := h.dialects.ForEngineKind(b.EngineKind); ok {
 			d = dd
 			if q, err := d.Qualify(b.EngineCatalogName, t.Namespace, t.Name); err == nil {
 				out.QualifiedName = &q
