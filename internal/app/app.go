@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/engines"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
@@ -58,6 +59,8 @@ type Core struct {
 	// (docs/adr/0011).
 	Dialer      *connections.Dialer
 	Connections *connections.Registry
+	// Dialects describe the SQL of every engine kind; built once and injected.
+	Dialects *dialect.Registry
 	// Engines run SQL (docs/adr/0002).
 	Engines *queryengine.Manager
 	Storage *storage.S3Client
@@ -146,9 +149,11 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	}
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).
+	c.Dialects = dialect.NewRegistry()
 	kinds, err := engines.NewRegistry(engines.Options{
-		SQLite: sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
-		Oracle: oracle.Options{LOBMaxBytes: cfg.OracleLOBMaxBytes},
+		Dialects: c.Dialects,
+		SQLite:   sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
+		Oracle:   oracle.Options{LOBMaxBytes: cfg.OracleLOBMaxBytes},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("engine kinds: %w", err)

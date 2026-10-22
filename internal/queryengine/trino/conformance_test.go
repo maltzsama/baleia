@@ -6,6 +6,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 )
@@ -22,7 +23,7 @@ func TestConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	conformance.Run(t, func(*testing.T) queryengine.Engine {
-		return New("conformance", url, "baleia", "baleia_admin", d)
+		return New("conformance", url, "baleia", "baleia_admin", d, dialect.NewRegistry().MustGet(dialect.Trino))
 	}, conformance.Fixtures{
 		TypesSQL: `SELECT true AS "bool", BIGINT '9007199254740993' AS "int64",
 			CAST('1234567890123456789012345678.0123456789' AS DECIMAL(38,10)) AS "decimal",

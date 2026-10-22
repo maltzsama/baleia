@@ -26,22 +26,24 @@ const (
 )
 
 // Spec is the kind's entry for a queryengine.Registry (#364).
-func Spec() queryengine.KindSpec {
-	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine}
+func Spec(dl queryengine.Dialect) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine(dl)}
 }
 
 // newEngine builds the engine from its connection config (host, port, database,
 // sslmode, username; password in secrets). It dials through d.
-func newEngine(ctx context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-	pc, err := poolConfig(cfg, d)
-	if err != nil {
-		return nil, err
+func newEngine(dl queryengine.Dialect) queryengine.Factory {
+	return func(ctx context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+		pc, err := poolConfig(cfg, d)
+		if err != nil {
+			return nil, err
+		}
+		pool, err := pgxpool.NewWithConfig(ctx, pc)
+		if err != nil {
+			return nil, err
+		}
+		return &Engine{dialect: dl, id: row.ID, database: database(cfg), pool: pool}, nil
 	}
-	pool, err := pgxpool.NewWithConfig(ctx, pc)
-	if err != nil {
-		return nil, err
-	}
-	return &Engine{id: row.ID, database: database(cfg), pool: pool}, nil
 }
 
 // poolConfig builds a pgxpool config from quoted keyword/value pairs, so no
@@ -76,6 +78,7 @@ func poolConfig(cfg connections.Config, d *connections.Dialer) (*pgxpool.Config,
 
 // Engine is a PostgreSQL server reached directly.
 type Engine struct {
+	dialect  queryengine.Dialect
 	id       string
 	database string
 	pool     *pgxpool.Pool
@@ -84,7 +87,7 @@ type Engine struct {
 func (e *Engine) ID() string                   { return e.id }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassDirect }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.PostgreSQL) }
+func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
 func (e *Engine) Close() error                 { e.pool.Close(); return nil }
 
 // Capabilities of PostgreSQL in v1.

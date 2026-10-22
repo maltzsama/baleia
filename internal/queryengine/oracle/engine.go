@@ -42,19 +42,19 @@ func (o Options) lobMaxBytes() int {
 }
 
 // Spec is the kind's entry for a queryengine.Registry (#364).
-func Spec(o Options) queryengine.KindSpec {
-	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine(o)}
+func Spec(o Options, dl queryengine.Dialect) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine(o, dl)}
 }
 
 // newEngine returns the factory: it builds the engine from its connection
 // config and dials through d.
-func newEngine(o Options) queryengine.Factory {
+func newEngine(o Options, dl queryengine.Dialect) queryengine.Factory {
 	return func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-		return buildEngine(row, cfg, d, o)
+		return buildEngine(row, cfg, d, o, dl)
 	}
 }
 
-func buildEngine(row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer, o Options) (queryengine.Engine, error) {
+func buildEngine(row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer, o Options, dl queryengine.Dialect) (queryengine.Engine, error) {
 	port, err := strconv.Atoi(valueOr(cfg.Value("port"), "1521"))
 	if err != nil {
 		return nil, fmt.Errorf("oracle config: %w", connections.ErrValidation)
@@ -70,6 +70,7 @@ func buildEngine(row queryengine.EngineRow, cfg connections.Config, d *connectio
 	db.SetMaxOpenConns(8)
 	db.SetConnMaxIdleTime(time.Minute)
 	return &Engine{
+		dialect:               dl,
 		id:                    row.ID,
 		catalog:               cfg.Value("service_name"),
 		cancelWithAlterSystem: cfg.Value("cancel_with_alter_system") == "true",
@@ -80,6 +81,7 @@ func buildEngine(row queryengine.EngineRow, cfg connections.Config, d *connectio
 
 // Engine is an Oracle Database reached directly.
 type Engine struct {
+	dialect               queryengine.Dialect
 	id                    string
 	catalog               string
 	cancelWithAlterSystem bool
@@ -90,7 +92,7 @@ type Engine struct {
 func (e *Engine) ID() string                   { return e.id }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassDirect }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.Oracle) }
+func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
 func (e *Engine) Close() error                 { return e.db.Close() }
 
 // Capabilities of Oracle in v1.

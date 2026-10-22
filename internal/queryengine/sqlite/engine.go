@@ -26,15 +26,15 @@ const maxConns = 8
 
 // Spec is the kind's entry for a queryengine.Registry (#364): engines it
 // builds use o, the same confinement the SQLite provider applies.
-func Spec(o Options) queryengine.KindSpec {
+func Spec(o Options, dl queryengine.Dialect) queryengine.KindSpec {
 	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, _ *connections.Dialer) (queryengine.Engine, error) {
-		return newEngineWithOptions(row, cfg, o)
+		return newEngineWithOptions(row, cfg, o, dl)
 	}}
 }
 
 // newEngineWithOptions builds the engine from its connection config (path,
 // read_write) and the server-side options. SQLite dials nothing.
-func newEngineWithOptions(row queryengine.EngineRow, cfg connections.Config, o Options) (queryengine.Engine, error) {
+func newEngineWithOptions(row queryengine.EngineRow, cfg connections.Config, o Options, dl queryengine.Dialect) (queryengine.Engine, error) {
 	if o.Root == "" {
 		return nil, queryengine.NewError(queryengine.CodeUnavailable, Kind, "", "SQLite is not configured: BALEIA_SQLITE_ROOT is not set")
 	}
@@ -49,7 +49,7 @@ func newEngineWithOptions(row queryengine.EngineRow, cfg connections.Config, o O
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{id: row.ID, ro: ro}
+	e := &Engine{dialect: dl, id: row.ID, ro: ro}
 	if connectionssqlite.WriteAllowed(o.AllowWrite, cfg) {
 		rw, err := openPool(path, true)
 		if err != nil {
@@ -77,15 +77,16 @@ func openPool(path string, writable bool) (*sql.DB, error) {
 
 // Engine is a SQLite database file reached directly.
 type Engine struct {
-	id string
-	ro *sql.DB
-	rw *sql.DB // nil when the connection is read-only
+	dialect queryengine.Dialect
+	id      string
+	ro      *sql.DB
+	rw      *sql.DB // nil when the connection is read-only
 }
 
 func (e *Engine) ID() string                   { return e.id }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassDirect }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.SQLite) }
+func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
 
 func (e *Engine) Close() error {
 	err := e.ro.Close()

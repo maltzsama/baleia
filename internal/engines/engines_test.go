@@ -3,10 +3,12 @@ package engines
 import (
 	"slices"
 	"testing"
+
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
 func TestNewRegistry_ListsEveryKind(t *testing.T) {
-	r, err := NewRegistry(Options{})
+	r, err := NewRegistry(Options{Dialects: dialect.NewRegistry()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 	"github.com/jackc/pgx/v5"
@@ -34,7 +35,7 @@ func TestConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
-		e, err := newEngine(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
+		e, err := newEngine(dialect.NewRegistry().MustGet(dialect.PostgreSQL))(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
 		if err != nil {
 			t.Fatal(err)
 		}

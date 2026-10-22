@@ -9,6 +9,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql/example"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 	"github.com/galileostudio/baleia/internal/queryengine/flightsql/testserver"
@@ -124,7 +125,7 @@ func newEngineForTest(t *testing.T, multi bool) queryengine.Engine {
 		Kind:   connections.KindFlightSQL,
 		Values: map[string]string{"host": host, "port": port, "tls": "false", "auth": "none"},
 	}
-	e, err := newEngine(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
+	e, err := newEngine(dialect.NewRegistry().MustGet(dialect.FlightSQL))(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
 	if err != nil {
 		t.Fatal(err)
 	}

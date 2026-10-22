@@ -34,7 +34,7 @@ const maintExecID = "00000000-0000-0000-0000-00000000abcd"
 // TestLensRunMaintenance_QuotesIdentifiersAndRetention: every identifier is a
 // quoted Trino identifier and the retention a string literal.
 func TestLensRunMaintenance_QuotesIdentifiersAndRetention(t *testing.T) {
-	rec := &fakeEngine{}
+	rec := &fakeEngine{Engine: testTrino}
 	a := &Activities{engines: rec, queries: snapshotSink{}}
 	err := runMaintenance(t, a, LensRunMaintenanceParams{
 		ExecutionID: maintExecID, Catalog: "cat", Namespace: `we"ird`, Table: "t; DROP TABLE x", Retention: "7d",
@@ -66,7 +66,7 @@ func TestLensRunMaintenance_RejectsBadInputBeforeTrino(t *testing.T) {
 		"empty table":         {ExecutionID: maintExecID, Catalog: "c", Namespace: "n", Retention: "7d"},
 		"NUL in namespace":    {ExecutionID: maintExecID, Catalog: "c", Namespace: "n\x00", Table: "t", Retention: "7d"},
 	} {
-		rec := &fakeEngine{}
+		rec := &fakeEngine{Engine: testTrino}
 		a := &Activities{engines: rec, queries: snapshotSink{}}
 		err := runMaintenance(t, a, p)
 		if err == nil || len(rec.sqls) != 0 {

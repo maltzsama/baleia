@@ -17,29 +17,32 @@ import (
 const Kind = "clickhouse"
 
 // Spec is the kind's entry for a queryengine.Registry (#364).
-func Spec() queryengine.KindSpec {
-	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine}
+func Spec(dl queryengine.Dialect) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine(dl)}
 }
 
 // newEngine builds the engine from its connection config (host, port, secure,
 // database, username; password in secrets). Every dial goes through d.
-func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-	if cfg.Value("host") == "" {
-		return nil, queryengine.NewError(queryengine.CodeUnavailable, Kind, "", "connection has no host")
+func newEngine(dl queryengine.Dialect) queryengine.Factory {
+	return func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+		if cfg.Value("host") == "" {
+			return nil, queryengine.NewError(queryengine.CodeUnavailable, Kind, "", "connection has no host")
+		}
+		return &Engine{dialect: dl, id: row.ID, c: newClient(cfg, d)}, nil
 	}
-	return &Engine{id: row.ID, c: newClient(cfg, d)}, nil
 }
 
 // Engine is a ClickHouse server reached over HTTP.
 type Engine struct {
-	id string
-	c  *client
+	dialect queryengine.Dialect
+	id      string
+	c       *client
 }
 
 func (e *Engine) ID() string                   { return e.id }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassDirect }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.ClickHouse) }
+func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
 func (e *Engine) Close() error                 { return nil }
 
 // Capabilities of ClickHouse in v1.

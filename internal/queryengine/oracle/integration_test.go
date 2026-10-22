@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	goora "github.com/sijms/go-ora/v2"
 )
@@ -37,7 +38,7 @@ func oracleEngine(t *testing.T, raw string, o Options) queryengine.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := newEngine(o)(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, connections.Config{
+	e, err := newEngine(o, dialect.NewRegistry().MustGet(dialect.Oracle))(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, connections.Config{
 		Kind: connections.KindOracle,
 		Values: map[string]string{
 			"host": u.Hostname(), "port": port,

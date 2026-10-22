@@ -8,6 +8,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
 
@@ -34,7 +35,7 @@ func testEngine(t *testing.T) queryengine.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := newEngine(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, dsn(raw, u), d)
+	e, err := newEngine(dialect.NewRegistry().MustGet(dialect.PostgreSQL))(context.Background(), queryengine.EngineRow{ID: "t", Kind: Kind}, dsn(raw, u), d)
 	if err != nil {
 		t.Fatal(err)
 	}

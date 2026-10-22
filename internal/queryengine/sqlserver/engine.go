@@ -26,25 +26,28 @@ const Kind = "sqlserver"
 const connectTimeout = 10 * time.Second
 
 // Spec is the kind's entry for a queryengine.Registry (#364).
-func Spec() queryengine.KindSpec {
-	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine}
+func Spec(dl queryengine.Dialect) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassDirect, Factory: newEngine(dl)}
 }
 
 // newEngine builds the engine from its connection config. It dials through d.
-func newEngine(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
-	connector, err := connector(cfg, d)
-	if err != nil {
-		return nil, err
+func newEngine(dl queryengine.Dialect) queryengine.Factory {
+	return func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
+		connector, err := connector(cfg, d)
+		if err != nil {
+			return nil, err
+		}
+		db := sql.OpenDB(connector)
+		db.SetMaxOpenConns(8)
+		db.SetConnMaxIdleTime(time.Minute)
+		return &Engine{
+			dialect:        dl,
+			id:             row.ID,
+			database:       valueOr(cfg.Value("database"), "master"),
+			cancelWithKill: cfg.Value("cancel_with_kill") == "true",
+			db:             db,
+		}, nil
 	}
-	db := sql.OpenDB(connector)
-	db.SetMaxOpenConns(8)
-	db.SetConnMaxIdleTime(time.Minute)
-	return &Engine{
-		id:             row.ID,
-		database:       valueOr(cfg.Value("database"), "master"),
-		cancelWithKill: cfg.Value("cancel_with_kill") == "true",
-		db:             db,
-	}, nil
 }
 
 // connector builds a URL-form DSN (values escaped by net/url) and hooks the
@@ -72,6 +75,7 @@ func connector(cfg connections.Config, d *connections.Dialer) (*mssql.Connector,
 
 // Engine is a SQL Server instance reached directly.
 type Engine struct {
+	dialect        queryengine.Dialect
 	id             string
 	database       string
 	cancelWithKill bool
@@ -81,7 +85,7 @@ type Engine struct {
 func (e *Engine) ID() string                   { return e.id }
 func (e *Engine) Kind() string                 { return Kind }
 func (e *Engine) Class() queryengine.Class     { return queryengine.ClassDirect }
-func (e *Engine) Dialect() queryengine.Dialect { return dialect.MustGet(dialect.TSQL) }
+func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
 func (e *Engine) Close() error                 { return e.db.Close() }
 
 // Capabilities of SQL Server in v1.

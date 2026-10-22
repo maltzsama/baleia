@@ -11,6 +11,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/conformance"
 	goora "github.com/sijms/go-ora/v2"
@@ -49,7 +50,7 @@ func TestConformance(t *testing.T) {
 		Secrets: map[string]string{"password": pass},
 	}
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
-		e, err := newEngine(Options{})(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
+		e, err := newEngine(Options{}, dialect.NewRegistry().MustGet(dialect.Oracle))(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -5,6 +5,7 @@
 package engines
 
 import (
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/clickhouse"
 	"github.com/galileostudio/baleia/internal/queryengine/flightsql"
@@ -22,19 +23,22 @@ type Options struct {
 	// BALEIA_SQLITE_ALLOW_WRITE), like the SQLite provider.
 	SQLite sqlite.Options
 	Oracle oracle.Options
+	// Dialects gives every kind the dialect it speaks.
+	Dialects *dialect.Registry
 }
 
 // NewRegistry builds the registry of every engine kind Baleia ships.
 func NewRegistry(o Options) (*queryengine.Registry, error) {
+	d := o.Dialects
 	specs := []queryengine.KindSpec{
-		clickhouse.Spec(),
-		flightsql.Spec(),
-		oracle.Spec(o.Oracle),
-		postgresql.Spec(),
-		sqlite.Spec(o.SQLite),
-		sqlserver.Spec(),
-		trino.Spec(),
+		clickhouse.Spec(d.MustGet(dialect.ClickHouse)),
+		flightsql.Spec(d.MustGet(dialect.FlightSQL)),
+		oracle.Spec(o.Oracle, d.MustGet(dialect.Oracle)),
+		postgresql.Spec(d.MustGet(dialect.PostgreSQL)),
+		sqlite.Spec(o.SQLite, d.MustGet(dialect.SQLite)),
+		sqlserver.Spec(d.MustGet(dialect.TSQL)),
+		trino.Spec(d.MustGet(dialect.Trino)),
 	}
-	specs = append(specs, mysql.Specs()...)
+	specs = append(specs, mysql.Specs(d.MustGet(dialect.MySQL), d.MustGet(dialect.MariaDB))...)
 	return queryengine.NewRegistry(specs...)
 }

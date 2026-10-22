@@ -9,7 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
@@ -104,7 +103,7 @@ func TestRetrieverRefresh_QuotesIdentifiers(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got, err := buildRefreshSQL((*qtrino.Engine)(nil).Dialect(), c.catalog, c.namespace, c.table, c.definition)
+		got, err := buildRefreshSQL(testTrino.Dialect(), c.catalog, c.namespace, c.table, c.definition)
 		if err != nil {
 			t.Fatalf("[%s] unexpected error: %v", c.name, err)
 		}
@@ -131,7 +130,7 @@ func TestRetrieverDispatch_ReturnsDue(t *testing.T) {
 
 func TestRetrieverRefresh_SuccessTransitions(t *testing.T) {
 	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever()}
-	err := runRetrieverRefresh(fakeQuery, &fakeEngine{assignID: true})
+	err := runRetrieverRefresh(fakeQuery, &fakeEngine{Engine: testTrino, assignID: true})
 	if err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
@@ -148,7 +147,7 @@ func TestRetrieverRefresh_SuccessTransitions(t *testing.T) {
 
 func TestRetrieverRefresh_FailureTransitions(t *testing.T) {
 	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever()}
-	err := runRetrieverRefresh(fakeQuery, &fakeEngine{err: errors.New("trino down")})
+	err := runRetrieverRefresh(fakeQuery, &fakeEngine{Engine: testTrino, err: errors.New("trino down")})
 	if err == nil {
 		t.Fatal("expected a refresh error")
 	}
@@ -201,7 +200,7 @@ func TestRetrieverRefresh_RunsAsTheOwner(t *testing.T) {
 	owner := pgtype.UUID{Bytes: [16]byte{0xA1, 0xB2}, Valid: true}
 	r.CreatedBy = owner
 	fakeQuery := &retrieverFakeQuerier{retriever: r}
-	fakeTrino := &fakeEngine{ctasCount: "25"}
+	fakeTrino := &fakeEngine{Engine: testTrino, ctasCount: "25"}
 	if err := runRetrieverRefresh(fakeQuery, fakeTrino); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
@@ -218,7 +217,7 @@ func TestRetrieverRefresh_RunsAsTheOwner(t *testing.T) {
 // called.
 func TestRetrieverRefresh_MissingOwnerFailsWithoutRunning(t *testing.T) {
 	fakeQuery := &retrieverFakeQuerier{retriever: fakeRetriever(), ownerMissing: true}
-	fakeTrino := &fakeEngine{assignID: true}
+	fakeTrino := &fakeEngine{Engine: testTrino, assignID: true}
 	if err := runRetrieverRefresh(fakeQuery, fakeTrino); err == nil {
 		t.Fatal("expected an error for a missing owner")
 	}

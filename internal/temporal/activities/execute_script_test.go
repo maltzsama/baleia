@@ -200,7 +200,7 @@ func runScript(t *testing.T, a *Activities, p ExecuteScriptParams) (*ExecuteScri
 // runs on ONE session, so session state set by one statement is visible to
 // the next (it would not be with a session per statement).
 func TestExecuteScript_SessionStatePersists(t *testing.T) {
-	fake := &fakeEngine{}
+	fake := &fakeEngine{Engine: testTrino}
 	store := newStatementStore(2)
 	r, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
 		scriptParams("SET x=42", "SELECT var x"))
@@ -227,7 +227,7 @@ func TestExecuteScript_SessionStatePersists(t *testing.T) {
 // TestExecuteScript_StopsOnFailure: statement 2 fails with its engine code,
 // 3 and 4 never run and are skipped.
 func TestExecuteScript_StopsOnFailure(t *testing.T) {
-	fake := &fakeEngine{failOn: "BROKEN"}
+	fake := &fakeEngine{Engine: testTrino, failOn: "BROKEN"}
 	store := newStatementStore(4)
 	r, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
 		scriptParams("SELECT 1", "BROKEN", "SELECT 3", "SELECT 4"))
@@ -251,7 +251,7 @@ func TestExecuteScript_StopsOnFailure(t *testing.T) {
 // TestExecuteScript_RunsOnTarget: the session is opened on the target's
 // engine with its catalog, schema, read-only flag and identity.
 func TestExecuteScript_RunsOnTarget(t *testing.T) {
-	fake := &fakeEngine{}
+	fake := &fakeEngine{Engine: testTrino}
 	p := scriptParams("SELECT 1")
 	p.Target.EngineCatalog, p.Target.Schema, p.Target.ReadOnly = "sales", "eu", true
 	if _, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
@@ -269,7 +269,7 @@ func TestExecuteScript_RunsOnTarget(t *testing.T) {
 // TestExecuteScript_AgentSessionTag: an agent execution carries its agent id
 // and is tagged as an agent session (#59).
 func TestExecuteScript_AgentSessionTag(t *testing.T) {
-	fake := &fakeEngine{}
+	fake := &fakeEngine{Engine: testTrino}
 	p := scriptParams("SELECT 1")
 	p.Target.ReadOnly = true
 	p.Identity.AgentID = "a-1"
@@ -285,7 +285,7 @@ func TestExecuteScript_AgentSessionTag(t *testing.T) {
 // TestExecuteScript_NoEngineFailsFirst: a target without an engine never
 // falls back to a default engine; the first statement fails, the rest skip.
 func TestExecuteScript_NoEngineFailsFirst(t *testing.T) {
-	fake := &fakeEngine{}
+	fake := &fakeEngine{Engine: testTrino}
 	store := newStatementStore(2)
 	p := scriptParams("SELECT 1", "SELECT 2")
 	p.Target.EngineID = pgtype.UUID{}
@@ -307,7 +307,7 @@ func TestExecuteScript_HeartbeatsHandle(t *testing.T) {
 	store := newStatementStore(2)
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: store, engines: &fakeEngine{assignID: true}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
+	defaultActivities = &Activities{queries: store, engines: &fakeEngine{Engine: testTrino, assignID: true}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
 
 	var mu sync.Mutex
 	var beats []heartbeatDetails
@@ -348,7 +348,7 @@ func TestExecuteScript_HeartbeatsWhileBlocked(t *testing.T) {
 	defer func() { heartbeatInterval = intervalBefore }()
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
-	defaultActivities = &Activities{queries: newStatementStore(1), engines: &fakeEngine{block: 200 * time.Millisecond}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
+	defaultActivities = &Activities{queries: newStatementStore(1), engines: &fakeEngine{Engine: testTrino, block: 200 * time.Millisecond}, s3: &fakeS3{}, cfg: testActivitiesConfig()}
 
 	var mu sync.Mutex
 	beats := 0
@@ -380,7 +380,7 @@ func TestExecuteScript_RetriesOnlyBeforeHandle(t *testing.T) {
 	statementTransportBackoff = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
 	defer func() { statementTransportBackoff = backoffBefore }()
 
-	fake := &fakeEngine{err: queryengine.NewError(queryengine.CodeUnavailable, "trino", "", "connection refused")}
+	fake := &fakeEngine{Engine: testTrino, err: queryengine.NewError(queryengine.CodeUnavailable, "trino", "", "connection refused")}
 	store := newStatementStore(1)
 	r, err := runScript(t, &Activities{queries: store, engines: fake, cfg: testActivitiesConfig()}, scriptParams("INSERT INTO t VALUES (1)"))
 	if err != nil {
@@ -393,7 +393,7 @@ func TestExecuteScript_RetriesOnlyBeforeHandle(t *testing.T) {
 		t.Fatalf("outcome = %+v", r.Statements[0])
 	}
 
-	fake = &fakeEngine{assignID: true, err: queryengine.NewError(queryengine.CodeUnavailable, "trino", "", "connection reset")}
+	fake = &fakeEngine{Engine: testTrino, assignID: true, err: queryengine.NewError(queryengine.CodeUnavailable, "trino", "", "connection reset")}
 	if _, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, cfg: testActivitiesConfig()}, scriptParams("INSERT INTO t VALUES (1)")); err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ func TestExecuteScript_RetriesOnlyBeforeHandle(t *testing.T) {
 // TestExecuteScript_Truncates: crossing the row cap stops the stream, cancels
 // the statement and stores a truncated (not failed) result.
 func TestExecuteScript_Truncates(t *testing.T) {
-	fake := &fakeEngine{assignID: true, deliver: 5}
+	fake := &fakeEngine{Engine: testTrino, assignID: true, deliver: 5}
 	r, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{},
 		cfg: &config.Config{ResultMaxRows: 2, ResultMaxBytes: 1 << 20}}, scriptParams("SELECT 1"))
 	if err != nil {
@@ -423,7 +423,7 @@ func TestExecuteScript_Truncates(t *testing.T) {
 // TestExecuteScript_TruncatesOnBytes: the byte cap counts what was written
 // to the stored stream.
 func TestExecuteScript_TruncatesOnBytes(t *testing.T) {
-	fake := &fakeEngine{assignID: true, deliver: 50}
+	fake := &fakeEngine{Engine: testTrino, assignID: true, deliver: 50}
 	r, err := runScript(t, &Activities{queries: newStatementStore(1), engines: fake, s3: &fakeS3{},
 		cfg: &config.Config{ResultMaxRows: 1000, ResultMaxBytes: 1024}}, scriptParams("SELECT 1"))
 	if err != nil {
@@ -439,7 +439,7 @@ func TestExecuteScript_TruncatesOnBytes(t *testing.T) {
 // nothing and carry no result key.
 func TestExecuteScript_DDLNoUpload(t *testing.T) {
 	s3 := &fakeS3{}
-	r, err := runScript(t, &Activities{queries: newStatementStore(1), engines: &fakeEngine{noColumns: true}, s3: s3, cfg: testActivitiesConfig()},
+	r, err := runScript(t, &Activities{queries: newStatementStore(1), engines: &fakeEngine{Engine: testTrino, noColumns: true}, s3: s3, cfg: testActivitiesConfig()},
 		scriptParams("CREATE TABLE x (a int)"))
 	if err != nil {
 		t.Fatal(err)
@@ -453,7 +453,7 @@ func TestExecuteScript_DDLNoUpload(t *testing.T) {
 // never finishes it without a result.
 func TestExecuteScript_UploadFailureFails(t *testing.T) {
 	store := newStatementStore(2)
-	r, err := runScript(t, &Activities{queries: store, engines: &fakeEngine{assignID: true}, s3: &fakeS3{err: errors.New("s3 down")}, cfg: testActivitiesConfig()},
+	r, err := runScript(t, &Activities{queries: store, engines: &fakeEngine{Engine: testTrino, assignID: true}, s3: &fakeS3{err: errors.New("s3 down")}, cfg: testActivitiesConfig()},
 		scriptParams("SELECT 1", "SELECT 2"))
 	if err != nil {
 		t.Fatal(err)
@@ -470,7 +470,7 @@ func TestExecuteScript_UploadFailureFails(t *testing.T) {
 // TestExecuteScript_ForbiddenStatement: the editor gate runs again before
 // each statement (defense in depth) and fails it without reaching the engine.
 func TestExecuteScript_ForbiddenStatement(t *testing.T) {
-	fake := &fakeEngine{}
+	fake := &fakeEngine{Engine: testTrino}
 	store := newStatementStore(1)
 	if _, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
 		scriptParams("CREATE CATALOG evil USING memory")); err != nil {
@@ -502,7 +502,7 @@ func TestExecuteScript_CancelUsesHandle(t *testing.T) {
 	intervalBefore := heartbeatInterval
 	heartbeatInterval = 10 * time.Millisecond
 	defer func() { heartbeatInterval = intervalBefore }()
-	fake := &fakeEngine{assignID: true, block: time.Minute, started: make(chan struct{})}
+	fake := &fakeEngine{Engine: testTrino, assignID: true, block: time.Minute, started: make(chan struct{})}
 	store := newStatementStore(2)
 	before := defaultActivities
 	defer func() { defaultActivities = before }()
@@ -549,7 +549,7 @@ func TestExecuteScript_CancelUsesHandle(t *testing.T) {
 // recorded as running is stopped on the engine by its persisted handle and
 // ends interrupted; the rest are skipped. Running it twice changes nothing.
 func TestAbandonStatements_CancelsAndSkips(t *testing.T) {
-	fake := &fakeEngine{}
+	fake := &fakeEngine{Engine: testTrino}
 	store := newStatementStore(3)
 	store.rows[1].status = "finished"
 	store.rows[2].status = "running"
@@ -581,7 +581,7 @@ func TestAbandonStatements_CancelsAndSkips(t *testing.T) {
 // cancelled (the cancel endpoint killed it by handle before the workflow's
 // cancel arrived) ends cancelled, not failed, and the rest are skipped.
 func TestExecuteScript_CancelledOnEngine(t *testing.T) {
-	fake := &fakeEngine{err: queryengine.NewError(queryengine.CodeCancelled, "trino", "ADMINISTRATIVELY_KILLED", "killed")}
+	fake := &fakeEngine{Engine: testTrino, err: queryengine.NewError(queryengine.CodeCancelled, "trino", "ADMINISTRATIVELY_KILLED", "killed")}
 	store := newStatementStore(2)
 	r, err := runScript(t, &Activities{queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, scriptParams("SELECT 1", "SELECT 2"))
 	if err != nil {
@@ -603,7 +603,7 @@ func TestExecuteScript_DeadlineIsTimeout(t *testing.T) {
 	intervalBefore := heartbeatInterval
 	heartbeatInterval = 10 * time.Millisecond
 	defer func() { heartbeatInterval = intervalBefore }()
-	fake := &fakeEngine{assignID: true, beginThenBlock: true, block: time.Minute, started: make(chan struct{})}
+	fake := &fakeEngine{Engine: testTrino, assignID: true, beginThenBlock: true, block: time.Minute, started: make(chan struct{})}
 	store := newStatementStore(2)
 	s3 := &fakeS3{}
 	before := defaultActivities
