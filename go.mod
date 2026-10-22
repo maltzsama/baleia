@@ -2,7 +2,7 @@ module github.com/galileostudio/baleia
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/apache/arrow-go/v18 v18.8.0
