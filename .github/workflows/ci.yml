@@ -31,8 +31,9 @@ jobs:
           BALEIA_TEST_DATABASE_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
         run: go test -race ./...
 
-  # Existing findings are a baseline: only issues new since the merge base
-  # with main fail the job (#369).
+  # Existing findings are a baseline: only new issues fail the job (#369). A
+  # pull request is compared with its merge base on main; a push with the
+  # commit before it (a branch's first push has none and falls back).
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -47,7 +48,10 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.15.0
-          args: --new-from-merge-base=origin/main
+          args: >-
+            ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+            && format('--new-from-rev={0}', github.event.before)
+            || '--new-from-merge-base=origin/main' }}
 
   # Scans with the latest 1.26 patch, the Go the release image builds with
   # (golang:1.26-alpine), so a standard-library fix only needs a rebuild.
