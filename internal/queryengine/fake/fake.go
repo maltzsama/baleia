@@ -94,7 +94,7 @@ func (e *Engine) Ping(context.Context) error   { return nil }
 
 func (e *Engine) Capabilities() queryengine.Capabilities {
 	return queryengine.Capabilities{
-		Dialect:            dialect.FlightSQL,
+		Dialect:            e.opts.Dialect.Name(),
 		IdentityModes:      []string{"connection"},
 		ReadOnly:           e.opts.ReadOnly,
 		CancelScope:        queryengine.CancelAnyProcess,
