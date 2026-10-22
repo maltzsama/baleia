@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestIsSecretReference(t *testing.T) {
@@ -99,5 +101,25 @@ func TestConfigReferenceAndSecret(t *testing.T) {
 	}
 	if missing.Reference("password") == "" {
 		t.Error("the raw reference must still be available")
+	}
+}
+
+// TestRegistryConfig_ResolvesWithTheRegistrySecrets: a Config the registry
+// builds resolves file references under the registry's base directory, not
+// the environment's.
+func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BALEIA_SECRET_FILE_BASE_DIR", "")
+	reg, err := NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := reg.WithSecrets(SecretResolver{FileBaseDir: dir}).NewConfig(pgtype.UUID{}, KindPostgreSQL)
+	cfg.Secrets["password"] = "@baleia-secret[file:token.txt]"
+	if got := cfg.Secret("password"); got != "from-file" {
+		t.Fatalf("Secret = %q, want from-file", got)
 	}
 }

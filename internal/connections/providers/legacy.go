@@ -60,7 +60,7 @@ func Merge(reg *connections.Registry, cur connections.Config, rawURL *string, co
 	if err != nil {
 		return connections.Config{}, err
 	}
-	out := connections.Config{ConnectionID: cur.ConnectionID, Kind: cur.Kind, Values: map[string]string{}, Secrets: map[string]string{}}
+	out := reg.NewConfig(cur.ConnectionID, cur.Kind)
 	for k, v := range cur.Values {
 		out.Values[k] = v
 	}
@@ -99,7 +99,8 @@ func build(reg *connections.Registry, kind connections.Kind, id pgtype.UUID, raw
 	if err != nil {
 		return connections.Config{}, err
 	}
-	cfg := connections.Config{ConnectionID: id, Kind: kind, Values: values, Secrets: map[string]string{}}
+	cfg := reg.NewConfig(id, kind)
+	cfg.Values = values
 	// The backfilled config of a database row holds its JDBC URL under "url";
 	// it wins over the url column, which only fills what is still missing.
 	if isDatabase(kind) {

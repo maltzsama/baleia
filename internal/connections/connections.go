@@ -95,6 +95,9 @@ type Config struct {
 	Kind         Kind
 	Values       map[string]string
 	Secrets      map[string]string
+	// resolver resolves external secret references; a Config built by a
+	// Registry carries the registry's (see Registry.NewConfig).
+	resolver *SecretResolver
 }
 
 // Value returns a non-secret value, or "" when unset.
@@ -108,7 +111,13 @@ func (c Config) Secret(key string) string {
 	if !IsSecretReference(v) {
 		return v
 	}
-	resolved, err := ResolveSecretReference(v)
+	var resolved string
+	var err error
+	if c.resolver != nil {
+		resolved, err = c.resolver.Resolve(v)
+	} else {
+		resolved, err = ResolveSecretReference(v)
+	}
 	if err != nil {
 		return ""
 	}
@@ -183,6 +192,7 @@ var (
 // (docs/adr/0007) and read concurrently afterwards.
 type Registry struct {
 	providers map[Kind]Provider
+	secrets   *SecretResolver
 }
 
 // NewRegistry registers the providers; a kind registered twice is an error.
@@ -195,6 +205,18 @@ func NewRegistry(providers ...Provider) (*Registry, error) {
 		r.providers[p.Kind()] = p
 	}
 	return r, nil
+}
+
+// WithSecrets returns a registry with the same providers whose Configs
+// resolve external secret references with sr.
+func (r *Registry) WithSecrets(sr SecretResolver) *Registry {
+	return &Registry{providers: r.providers, secrets: &sr}
+}
+
+// NewConfig returns an empty Config of kind that resolves secret references
+// with the registry's resolver.
+func (r *Registry) NewConfig(id pgtype.UUID, kind Kind) Config {
+	return Config{ConnectionID: id, Kind: kind, Values: map[string]string{}, Secrets: map[string]string{}, resolver: r.secrets}
 }
 
 // Get returns the provider of a kind, or ErrUnknownKind.
