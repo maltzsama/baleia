@@ -44,6 +44,17 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
+// TestMustGetPanicsOnUnknown: MustGet is for the name constants; an unknown
+// name is a programming error.
+func TestMustGetPanicsOnUnknown(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustGet of an unknown dialect did not panic")
+		}
+	}()
+	MustGet("nope")
+}
+
 // TestForEngineKind covers the kind → dialect translation: every engine kind
 // the API can carry resolves, and a miss is (nil, false) explicitly rather
 // than through a lookup of the empty name.
