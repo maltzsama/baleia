@@ -78,8 +78,8 @@ func (h *Handlers) GetAgentsMeta(ctx context.Context, _ GetAgentsMetaRequestObje
 		label, description, readOnly := agentToolDoc(name)
 		tools = append(tools, AgentTool{Name: name, Label: label, Description: description, ReadOnly: readOnly})
 	}
-	mcpURL := h.cfg.PublicURL + "/mcp"
-	if h.cfg.PublicURL == "" {
+	mcpURL := h.settings.Mail.PublicURL + "/mcp"
+	if h.settings.Mail.PublicURL == "" {
 		mcpURL = "/mcp"
 	}
 	return GetAgentsMeta200JSONResponse(AgentsMeta{

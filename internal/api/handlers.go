@@ -13,7 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -40,8 +39,9 @@ type Handlers struct {
 	// tx runs dependent writes in one transaction (poolTx outside tests).
 	tx txRunner
 	// schema reports the applied migration version (poolSchema outside tests).
-	schema         schemaVersioner
-	cfg            *config.Config
+	schema schemaVersioner
+	// settings is the resolved configuration the handlers read (#363).
+	settings       Settings
 	keyring        *crypto.Keyring
 	temporalClient client.Client
 	s3             *storage.S3Client
@@ -110,12 +110,12 @@ func (h *Handlers) mailSender() MailSender {
 		return h.mailer
 	}
 	return mail.New(mail.Config{
-		Host:          h.cfg.SMTPHost,
-		Port:          h.cfg.SMTPPort,
-		User:          h.cfg.SMTPUser,
-		Password:      h.cfg.SMTPPassword,
-		From:          h.cfg.SMTPFrom,
-		DefaultLocale: h.cfg.DefaultLocale,
+		Host:          h.settings.Mail.SMTPHost,
+		Port:          h.settings.Mail.SMTPPort,
+		User:          h.settings.Mail.SMTPUser,
+		Password:      h.settings.Mail.SMTPPassword,
+		From:          h.settings.Mail.SMTPFrom,
+		DefaultLocale: h.settings.Mail.DefaultLocale,
 	})
 }
 
@@ -183,7 +183,7 @@ type Deps struct {
 	Data          DataDeps
 	Engines       EngineDeps
 	Observability ObservabilityDeps
-	Config        *config.Config
+	Settings      Settings
 	// Keyring seals stored credentials; nil while none is stored.
 	Keyring  *crypto.Keyring
 	Temporal client.Client
@@ -227,7 +227,6 @@ func NewHandlers(d Deps) (*Handlers, error) {
 	for name, absent := range map[string]bool{
 		"Data.Queries":        d.Data.Queries == nil,
 		"Data.Pool":           d.Data.Pool == nil,
-		"Config":              d.Config == nil,
 		"Temporal":            d.Temporal == nil,
 		"Storage":             d.Storage == nil,
 		"Engines.Connections": d.Engines.Connections == nil,
@@ -251,7 +250,7 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		pool:            d.Data.Pool,
 		tx:              poolTx{pool: d.Data.Pool},
 		schema:          poolSchema{pool: d.Data.Pool},
-		cfg:             d.Config,
+		settings:        d.Settings,
 		keyring:         d.Keyring,
 		temporalClient:  d.Temporal,
 		s3:              d.Storage,

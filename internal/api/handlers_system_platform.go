@@ -54,11 +54,13 @@ func runResource(ctx context.Context, errorCode string, probe func(context.Conte
 
 func statusItems(items []SystemStatusItem) *[]SystemStatusItem { return &items }
 
+// metadataSyncEvery is the metadata-sync interval; the zero Settings means
+// the default, as SettingsFromConfig resolves it.
 func (h *Handlers) metadataSyncEvery() time.Duration {
-	if h.cfg == nil {
+	if h.settings.Ops.MetadataSyncEvery <= 0 {
 		return config.DefaultMetadataSyncInterval
 	}
-	return h.cfg.MetadataSyncEvery()
+	return h.settings.Ops.MetadataSyncEvery
 }
 
 // schedulesStatus reports every exported core schedule, including the
@@ -209,7 +211,7 @@ func (h *Handlers) reconcileStatus(ctx context.Context) SystemStatusResource {
 
 func (h *Handlers) auditExportStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
-	configured := h.cfg != nil && h.cfg.AuditExportURL != ""
+	configured := h.settings.Ops.AuditExportURL != ""
 	configuredValue := int64(0)
 	configuredStatus := SystemStatusItemStatusMissing
 	if configured {
@@ -233,8 +235,8 @@ func (h *Handlers) auditExportStatus(ctx context.Context) SystemStatusResource {
 func (h *Handlers) pluginStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	expected := "0.9.2"
-	if h.cfg != nil && h.cfg.PluginVersion != "" {
-		expected = h.cfg.PluginVersion
+	if h.settings.Ops.PluginVersion != "" {
+		expected = h.settings.Ops.PluginVersion
 	}
 	items = append(items, SystemStatusItem{Name: "expected_version", Status: SystemStatusItemStatusOk, Detail: statusStringPtr(expected)})
 

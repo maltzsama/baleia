@@ -149,7 +149,7 @@ func (q *bindingQuerier) SoftDeleteTrinoCatalogRegistry(_ context.Context, p db.
 
 func bindingHandlers(t *testing.T, q *bindingQuerier) (*Handlers, *fakeTrino) {
 	ft := newFakeTrino(t)
-	h := &Handlers{queries: q, tx: directTx{q: q}, connections: testRegistry(t), cfg: &config.Config{}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
+	h := &Handlers{queries: q, tx: directTx{q: q}, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)}
 	h.engines, h.binder = trinoBackends(ft.srv.URL)
 	return h, ft
 }

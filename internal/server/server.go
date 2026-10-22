@@ -68,7 +68,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		Data:          api.DataDeps{Queries: core.Queries, Pool: core.Pool},
 		Engines:       api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder, Dialer: core.Dialer},
 		Observability: api.ObservabilityDeps{Audit: core.Audit, Metrics: core.Metrics},
-		Config:        cfg,
+		Settings:      api.SettingsFromConfig(cfg),
 		Keyring:       core.Keyring,
 		Temporal:      core.Temporal,
 		Storage:       core.Storage,

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
@@ -61,7 +60,7 @@ func metricFixture(t *testing.T) (*metaFixture, *probeEngine) {
 	t.Helper()
 	f := newMetaFixture(t)
 	e := &probeEngine{readOnly: queryengine.ReadOnlyEnforced}
-	f.h.cfg = &config.Config{TrinoUserIdentity: "uuid"}
+	f.h.settings.Execution.TrinoUserIdentity = "uuid"
 	f.h.engines = fixedEngines{e}
 	return f, e
 }

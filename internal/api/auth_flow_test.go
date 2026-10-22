@@ -25,7 +25,7 @@ const testBcryptCost = 10
 func newAuthFixture(t *testing.T) *auditFixture {
 	t.Helper()
 	f := newAuditFixture(t)
-	f.h.cfg.BcryptCost = testBcryptCost
+	f.h.settings.Auth.PasswordCost = testBcryptCost
 	return f
 }
 
@@ -241,7 +241,7 @@ func TestLogout_CookieRevokesFamily(t *testing.T) {
 // 8-character minimum even though oapi-codegen does not validate bodies.
 func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
 	pool := testdb.New(t)
-	h := &Handlers{queries: db.New(pool), cfg: &config.Config{BcryptCost: testBcryptCost}}
+	h := &Handlers{queries: db.New(pool), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})}
 	resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
 		Body: &CreateAdminRequest{Name: "Admin", Email: "admin@example.test", Password: "short"},
 	})
@@ -380,7 +380,7 @@ func TestReset_RevokesRefresh(t *testing.T) {
 
 func TestReset_RequestStoresHash(t *testing.T) {
 	f := newAuthFixture(t)
-	f.h.cfg.SMTPHost, f.h.cfg.SMTPPort = "smtp.example.test", "25"
+	f.h.settings.Mail.SMTPHost, f.h.settings.Mail.SMTPPort = "smtp.example.test", "25"
 	var sentURL string
 	f.h.mailer = mailerFunc(func(_ context.Context, _, locale string, template mail.Template, data map[string]any) error {
 		if template != mail.TemplatePasswordReset {
@@ -513,7 +513,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 // different e-mails create exactly one admin; the others get 409 (#375).
 func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
 	pool := testdb.New(t)
-	h := &Handlers{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, cfg: &config.Config{BcryptCost: testBcryptCost}}
+	h := &Handlers{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})}
 	const n = 8
 	var wg sync.WaitGroup
 	created := make(chan bool, n)

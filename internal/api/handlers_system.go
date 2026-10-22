@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
@@ -35,7 +34,7 @@ func (h *Handlers) GetSystemStatus(ctx context.Context, _ GetSystemStatusRequest
 
 	status := SystemStatus{
 		Baleia: baleiaStatusSection(),
-		Smtp:   smtpStatusSection(h.cfg),
+		Smtp:   smtpStatusSection(h.settings.Mail),
 	}
 	h.probeDependencies(ctx, &status)
 	h.probePlatform(ctx, &status)
@@ -98,8 +97,8 @@ func (h *Handlers) objectStorageStatusSection(ctx context.Context) SystemStatusS
 	})
 }
 
-func smtpStatusSection(cfg *config.Config) SystemStatusSection {
-	configured := cfg != nil && cfg.SMTPHost != "" && cfg.SMTPFrom != ""
+func smtpStatusSection(mail MailSettings) SystemStatusSection {
+	configured := mail.SMTPHost != "" && mail.SMTPFrom != ""
 	latency := 0
 	section := SystemStatusSection{Status: Ok, LatencyMs: &latency, Configured: &configured}
 	if !configured {

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"go.temporal.io/api/serviceerror"
@@ -151,10 +150,7 @@ func (h *Handlers) attentionMetadataFailures(ctx context.Context, p authz.Princi
 }
 
 func (h *Handlers) attentionMetadataStale(ctx context.Context, p authz.Principal) []AttentionItem {
-	threshold := attentionStaleMultiplier * config.DefaultMetadataSyncInterval
-	if h.cfg != nil {
-		threshold = attentionStaleMultiplier * h.cfg.MetadataSyncEvery()
-	}
+	threshold := attentionStaleMultiplier * h.metadataSyncEvery()
 	rows, err := h.queries.ListAttentionMetadataStale(ctx, threshold.Seconds())
 	if err != nil {
 		return nil
@@ -286,7 +282,7 @@ func (h *Handlers) attentionReconcileDrift(ctx context.Context) []AttentionItem 
 // admin-only and a no-op when the API has no Temporal client (tests) or the
 // worker does not ensure schedules.
 func (h *Handlers) attentionSchedules(ctx context.Context) []AttentionItem {
-	if h.temporalClient == nil || h.cfg == nil || !h.cfg.SchedulesEnabled {
+	if h.temporalClient == nil || !h.settings.Ops.SchedulesEnabled {
 		return nil
 	}
 	out := make([]AttentionItem, 0)
@@ -336,17 +332,17 @@ func (h *Handlers) expectedScheduleIDs() []string {
 		schedules.EphemeralCatalogSweeper,
 		schedules.TokenCleanup,
 	}
-	if h.cfg.ReconcileInterval > 0 {
+	if h.settings.Ops.ReconcileInterval > 0 {
 		ids = append(ids, schedules.CatalogReconcile)
 	}
-	if h.cfg.AuditExportURL != "" {
+	if h.settings.Ops.AuditExportURL != "" {
 		ids = append(ids, schedules.AuditExport)
 	}
 	return ids
 }
 
 func (h *Handlers) attentionAuditExport(ctx context.Context) []AttentionItem {
-	if h.cfg == nil || h.cfg.AuditExportURL == "" {
+	if h.settings.Ops.AuditExportURL == "" {
 		return nil
 	}
 	since, err := h.queries.GetAttentionAuditExportLag(ctx)

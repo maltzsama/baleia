@@ -11,8 +11,8 @@ import (
 func (h *Handlers) dummyPasswordHash() string {
 	h.dummyHashOnce.Do(func() {
 		cost := bcrypt.DefaultCost
-		if h.cfg != nil && h.cfg.PasswordCost() >= bcrypt.MinCost {
-			cost = h.cfg.PasswordCost()
+		if h.settings.Auth.PasswordCost >= bcrypt.MinCost {
+			cost = h.settings.Auth.PasswordCost
 		}
 		h.dummyHash, _ = auth.HashPasswordWithCost("baleia-dummy-password", cost)
 	})

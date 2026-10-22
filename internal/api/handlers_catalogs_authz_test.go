@@ -203,7 +203,7 @@ func newAuthzHandlers(t *testing.T) (*Handlers, *authzFake, *fakeTrino) {
 	h := &Handlers{
 		queries: q, tx: directTx{q: q},
 		keyring:      kr,
-		cfg:          &config.Config{TrinoUserIdentity: "uuid"},
+		settings:     SettingsFromConfig(&config.Config{TrinoUserIdentity: "uuid"}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		connections:  testRegistry(t),
 	}

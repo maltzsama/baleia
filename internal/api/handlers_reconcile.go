@@ -135,8 +135,5 @@ func reconcileRunToPublic(r db.CatalogReconcileRun) (ReconcileRun, error) {
 }
 
 func (h *Handlers) reconcileMaxActions() int {
-	if h.cfg == nil {
-		return 0 // bindings.DefaultMaxActions
-	}
-	return h.cfg.ReconcileMaxActions
+	return h.settings.Ops.ReconcileMaxActions // zero: bindings.DefaultMaxActions
 }

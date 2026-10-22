@@ -31,7 +31,7 @@ func testDeps(t *testing.T) Deps {
 	return Deps{
 		Data:     DataDeps{Queries: db.New(pool), Pool: pool},
 		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(nil, nil), Dialer: d},
-		Config:   &config.Config{},
+		Settings: SettingsFromConfig(&config.Config{}),
 		Temporal: &fakeTemporalClient{},
 		Storage:  s3,
 	}
@@ -40,7 +40,7 @@ func testDeps(t *testing.T) Deps {
 // TestNewHandlers_RequiresDependencies: a missing dependency is an error at
 // construction, naming what is missing, not a nil found at request time.
 func TestNewHandlers_RequiresDependencies(t *testing.T) {
-	_, err := NewHandlers(Deps{Config: &config.Config{}})
+	_, err := NewHandlers(Deps{})
 	if err == nil {
 		t.Fatal("NewHandlers with missing dependencies returned no error")
 	}
