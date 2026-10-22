@@ -443,3 +443,25 @@ func TestNoInitInEngines(t *testing.T) {
 		}
 	})
 }
+
+// TestDialectLookupOnlyInV2: dialects are injected; the deprecated
+// package-level dialect.ForEngineKind is called only by
+// QueryExecutionWorkflowV2, so its open runs replay, and goes away with it.
+func TestDialectLookupOnlyInV2(t *testing.T) {
+	const allowed = "internal/temporal/workflows/workflows.go"
+	goSources(t, func(rel string, f *ast.File) {
+		if rel == allowed || strings.HasPrefix(rel, "internal/dialect/") {
+			return
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "ForEngineKind" {
+				return true
+			}
+			if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "dialect" {
+				t.Errorf("%s calls dialect.ForEngineKind; use the injected dialect.Registry", rel)
+			}
+			return true
+		})
+	})
+}
