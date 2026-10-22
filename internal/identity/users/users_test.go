@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -26,6 +27,12 @@ type fakeStore struct {
 	revoked map[[16]byte]bool
 	keysDel map[[16]byte]bool
 	deleteE error
+	// emailRace makes CreateUser fail as if a concurrent invite had taken
+	// this e-mail after the check.
+	emailRace string
+	// readBackErr fails GetUserByID after the first call.
+	readBackErr error
+	reads       int
 }
 
 func newStore() *fakeStore {
@@ -33,6 +40,10 @@ func newStore() *fakeStore {
 }
 
 func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+	f.reads++
+	if f.readBackErr != nil && f.reads > 1 {
+		return db.User{}, f.readBackErr
+	}
 	if u, ok := f.users[id.Bytes]; ok {
 		return u, nil
 	}
@@ -83,6 +94,9 @@ func (f *fakeStore) ReinstateUser(_ context.Context, id pgtype.UUID) (db.User, e
 }
 
 func (f *fakeStore) CreateUser(_ context.Context, arg db.CreateUserParams) (db.User, error) {
+	if f.emailRace == arg.Email {
+		return db.User{}, &pgconn.PgError{Code: "23505"}
+	}
 	u := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Name: arg.Name, Email: arg.Email, Role: arg.Role, AuthProvider: arg.AuthProvider, PasswordHash: arg.PasswordHash, Status: auth.StatusActive}
 	f.users[u.ID.Bytes] = u
 	return u, nil
@@ -271,5 +285,33 @@ func TestStoreFailureIsNotNotFound(t *testing.T) {
 	}
 	if err := s.Remove(context.Background(), id); !errors.Is(err, errDown) {
 		t.Errorf("Remove = %v, want the store error", err)
+	}
+}
+
+// TestInvite_ConcurrentInviteIsAConflict: the loser of two invites for the
+// same e-mail gets ErrEmailTaken, not a raw database error.
+func TestInvite_ConcurrentInviteIsAConflict(t *testing.T) {
+	s, st, m, _ := setup()
+	st.emailRace = "ana@x.io"
+	if _, err := s.Invite(context.Background(), "ana@x.io", "member"); !errors.Is(err, ErrEmailTaken) {
+		t.Fatalf("Invite = %v, want ErrEmailTaken", err)
+	}
+	if len(m.sent) != 0 {
+		t.Error("no e-mail for an invite that lost the race")
+	}
+}
+
+// TestChangeRole_RevokesEvenIfTheReadBackFails: once the role is changed the
+// sessions end, whatever happens after.
+func TestChangeRole_RevokesEvenIfTheReadBackFails(t *testing.T) {
+	ctx := context.Background()
+	s, st, _, ss := setup()
+	u, _ := st.CreateUser(ctx, db.CreateUserParams{Email: "ana@x.io", Role: "member"})
+	st.readBackErr = errors.New("connection reset")
+	if _, _, err := s.ChangeRole(ctx, u.ID, "admin"); err == nil {
+		t.Fatal("a failed read-back is an error")
+	}
+	if len(ss.revoked) != 1 || ss.revoked[0] != u.ID {
+		t.Errorf("revoked = %v, want the sessions ended", ss.revoked)
 	}
 }

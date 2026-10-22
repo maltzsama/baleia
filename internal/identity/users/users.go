@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -130,6 +131,10 @@ func (s *Service) Invite(ctx context.Context, email, role string) (db.User, erro
 			AuthProvider: "local",
 			PasswordHash: &hash,
 		})
+		if isUniqueViolation(err) {
+			// A concurrent invite took the e-mail after the check above.
+			return ErrEmailTaken
+		}
 		if err != nil {
 			return fmt.Errorf("create user: %w", err)
 		}
@@ -169,10 +174,11 @@ func (s *Service) ChangeRole(ctx context.Context, id pgtype.UUID, role string) (
 	if err := s.store.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: id, Role: role}); err != nil {
 		return db.User{}, db.User{}, err
 	}
+	// The role changed: end the sessions before anything else can fail.
+	s.sessions.RevokeAll(ctx, id)
 	if after, err = s.store.GetUserByID(ctx, id); err != nil {
 		return db.User{}, db.User{}, err
 	}
-	s.sessions.RevokeAll(ctx, id)
 	return before, after, nil
 }
 
@@ -252,4 +258,9 @@ func newToken() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
 }
