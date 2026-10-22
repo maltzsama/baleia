@@ -32,14 +32,16 @@ import (
 var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
+	// core is embedded at the top so the shared fields and helpers resolve
+	// here, not ambiguously through every group.
 	*core
-	*OpsHandlers
-	*AgentHandlers
-	*SemanticHandlers
-	*QueryHandlers
-	*CatalogHandlers
-	*WorkspaceHandlers
 	*AuthHandlers
+	*WorkspaceHandlers
+	*CatalogHandlers
+	*QueryHandlers
+	*SemanticHandlers
+	*AgentHandlers
+	*OpsHandlers
 }
 
 // The handlers implement the whole generated strict server; the split by
@@ -208,39 +210,18 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		audit:          d.Observability.Audit,
 		content:        content.New(d.Data.Pool, d.Data.Queries),
 	}
+	if c.audit == nil {
+		c.audit = audit.Nop{}
+	}
 	h := &Handlers{
-		core: c,
-		OpsHandlers: &OpsHandlers{
-			core:   c,
-			schema: poolSchema{pool: d.Data.Pool},
-		},
-		AgentHandlers: &AgentHandlers{
-			core:            c,
-			dialer:          d.Engines.Dialer,
-			assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
-			assistantRunner: d.Assistant,
-		},
-		SemanticHandlers: &SemanticHandlers{
-			core: c,
-		},
-		QueryHandlers: &QueryHandlers{
-			core:      c,
-			wsTickets: d.WSTickets,
-		},
-		CatalogHandlers: &CatalogHandlers{
-			core:   c,
-			binder: d.Engines.Binder,
-		},
-		WorkspaceHandlers: &WorkspaceHandlers{
-			core: c,
-		},
-		AuthHandlers: &AuthHandlers{core: c},
-	}
-	if h.audit == nil {
-		h.audit = audit.Nop{}
-	}
-	if h.wsTickets == nil {
-		h.wsTickets = wsticket.New()
+		core:              c,
+		AuthHandlers:      newAuthHandlers(c),
+		WorkspaceHandlers: newWorkspaceHandlers(c),
+		CatalogHandlers:   newCatalogHandlers(c, d.Engines.Binder),
+		QueryHandlers:     newQueryHandlers(c, d.WSTickets),
+		SemanticHandlers:  newSemanticHandlers(c),
+		AgentHandlers:     newAgentHandlers(c, assistant.New(assistantdb.New(d.Data.Pool), d.Keyring), d.Assistant, d.Engines.Dialer),
+		OpsHandlers:       newOpsHandlers(c, poolSchema{pool: d.Data.Pool}),
 	}
 	if d.Observability.Metrics != nil {
 		h.registerMetrics(d.Observability.Metrics)

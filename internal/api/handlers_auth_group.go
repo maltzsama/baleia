@@ -30,3 +30,5 @@ type AuthHandlers struct {
 	// (#286). Tests inject a fake so the handler runs without a network.
 	idpProbe func(ctx context.Context, cfg providerConfig, testUsername string) IdentityProviderTestResult
 }
+
+func newAuthHandlers(c *core) *AuthHandlers { return &AuthHandlers{core: c} }

@@ -9,3 +9,7 @@ type CatalogHandlers struct {
 	// #80), built at the wiring site.
 	binder *bindtrino.Binder
 }
+
+func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
+	return &CatalogHandlers{core: c, binder: binder}
+}

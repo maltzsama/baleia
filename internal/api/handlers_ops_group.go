@@ -20,3 +20,7 @@ type OpsHandlers struct {
 	attentionCache *TTLStore[[]AttentionItem]
 	attentionOnce  sync.Once
 }
+
+func newOpsHandlers(c *core, schema schemaVersioner) *OpsHandlers {
+	return &OpsHandlers{core: c, schema: schema}
+}

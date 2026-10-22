@@ -4,3 +4,5 @@ package api
 type SemanticHandlers struct {
 	*core
 }
+
+func newSemanticHandlers(c *core) *SemanticHandlers { return &SemanticHandlers{core: c} }

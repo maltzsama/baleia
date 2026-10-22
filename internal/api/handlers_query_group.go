@@ -9,3 +9,11 @@ type QueryHandlers struct {
 	// shares this store.
 	wsTickets *wsticket.Store
 }
+
+// newQueryHandlers builds the group; a nil ticket store builds one.
+func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
+	if tickets == nil {
+		tickets = wsticket.New()
+	}
+	return &QueryHandlers{core: c, wsTickets: tickets}
+}

@@ -16,3 +16,7 @@ type AgentHandlers struct {
 	// stored after the handlers are built; empty when not provisioned.
 	assistantRunner *assistant.RunnerSlot
 }
+
+func newAgentHandlers(c *core, svc *assistant.Service, runner *assistant.RunnerSlot, dialer *connections.Dialer) *AgentHandlers {
+	return &AgentHandlers{core: c, assistant: svc, assistantRunner: runner, dialer: dialer}
+}

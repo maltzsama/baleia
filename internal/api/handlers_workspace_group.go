@@ -4,3 +4,5 @@ package api
 type WorkspaceHandlers struct {
 	*core
 }
+
+func newWorkspaceHandlers(c *core) *WorkspaceHandlers { return &WorkspaceHandlers{core: c} }
