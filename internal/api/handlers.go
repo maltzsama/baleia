@@ -34,35 +34,17 @@ import (
 var ErrWorkspaceNotFound = errors.New("workspace not found")
 
 type Handlers struct {
-	queries db.Querier
-	pool    *pgxpool.Pool
-	// tx runs dependent writes in one transaction (poolTx outside tests).
-	tx txRunner
+	*core
 	// schema reports the applied migration version (poolSchema outside tests).
 	schema schemaVersioner
-	// settings is the resolved configuration the handlers read (#363).
-	settings       Settings
-	keyring        *crypto.Keyring
-	temporalClient client.Client
-	s3             *storage.S3Client
-	catalogCache   *TTLStore[[]workspaceCatalogEntry]
-	versionCache   *TTLStore[engineProbe] // engine id@updated_at → version and health
-	// connections holds every connection provider (docs/adr/0002).
-	connections *connections.Registry
-	// engines runs SQL (docs/adr/0002); binder binds catalogs into Trino as
-	// the admin identity (docs/adr/0005, #80). Both are built at the wiring site.
-	engines engineSource
-	kinds   engineKinds
-	// dialects describe each engine kind's SQL (built once, injected).
-	dialects *dialect.Registry
-	binder   *bindtrino.Binder
-	metrics  apiMetrics
-	// audit records security and data operations (#45; call sites #43).
-	audit audit.Recorder
+	s3     *storage.S3Client
+	// versionCache: engine id@updated_at → version and health.
+	versionCache *TTLStore[engineProbe]
+	// binder binds catalogs into Trino as the admin identity (docs/adr/0005,
+	// #80), built at the wiring site.
+	binder *bindtrino.Binder
 	// dialer is the SSRF-safe dialer for transient engines (#12).
 	dialer *connections.Dialer
-	// content is the only writer of saved content and its versions (#34).
-	content *content.Service
 	// assistant owns assistant settings, agents and conversations (#62).
 	assistant *assistant.Service
 	// assistantRunner holds the runner of MCP-backed turns (and its SSE hub),
@@ -249,24 +231,26 @@ func NewHandlers(d Deps) (*Handlers, error) {
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
 	h := &Handlers{
-		connections:     d.Engines.Connections,
-		queries:         d.Data.Queries,
-		pool:            d.Data.Pool,
-		tx:              poolTx{pool: d.Data.Pool},
+		core: &core{
+			queries:        d.Data.Queries,
+			pool:           d.Data.Pool,
+			tx:             poolTx{pool: d.Data.Pool},
+			settings:       d.Settings,
+			keyring:        d.Keyring,
+			temporalClient: d.Temporal,
+			catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+			connections:    d.Engines.Connections,
+			engines:        d.Engines.Engines,
+			kinds:          d.Engines.Kinds,
+			dialects:       d.Engines.Dialects,
+			audit:          d.Observability.Audit,
+			content:        content.New(d.Data.Pool, d.Data.Queries),
+		},
 		schema:          poolSchema{pool: d.Data.Pool},
-		settings:        d.Settings,
-		keyring:         d.Keyring,
-		temporalClient:  d.Temporal,
 		s3:              d.Storage,
-		engines:         d.Engines.Engines,
-		kinds:           d.Engines.Kinds,
-		dialects:        d.Engines.Dialects,
+		versionCache:    NewTTLStore[engineProbe](engineVersionTTL),
 		binder:          d.Engines.Binder,
 		dialer:          d.Engines.Dialer,
-		catalogCache:    NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
-		versionCache:    NewTTLStore[engineProbe](engineVersionTTL),
-		audit:           d.Observability.Audit,
-		content:         content.New(d.Data.Pool, d.Data.Queries),
 		assistant:       assistant.New(assistantdb.New(d.Data.Pool), d.Keyring),
 		wsTickets:       d.WSTickets,
 		assistantRunner: d.Assistant,
