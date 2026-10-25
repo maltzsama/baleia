@@ -229,7 +229,7 @@ var operationAccess = map[string]access{
 	"ListSemanticDocs":   checked("metadataWorkspace", "semanticCatalog"),
 	"UpsertSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
 	"DeleteSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
-	"SearchSemanticDocs": checked("metadataWorkspace", "SearchSemanticDocs"),
+	"SearchSemanticDocs": checked("metadataWorkspace", "Search"),
 	// Metrics are validated against a real engine in a read-only session
 	// (validateSemanticMetric); the catalog must be granted and the caller
 	// needs the space role (contentSpace wraps requireSpace).
@@ -304,7 +304,7 @@ var operationAccess = map[string]access{
 	// Semantic metrics (#115).
 	"RenderSemanticMetric":             checked("metadataWorkspace", "semanticTarget"),
 	"ValidateSemanticMetricDefinition": checked("metadataWorkspace", "validateSemanticMetric"),
-	"ListSemanticTags":                 checked("metadataWorkspace", "ListSemanticTags"),
+	"ListSemanticTags":                 checked("metadataWorkspace", "Tags"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),

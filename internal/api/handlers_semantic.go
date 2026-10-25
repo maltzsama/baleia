@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/semantic"
+	"github.com/galileostudio/baleia/internal/semantic/docs"
 	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
@@ -32,10 +32,6 @@ import (
 // real, read-only engine session with the caller's identity. #40 moves metrics
 // into spaces and #34 versions them.
 
-const maxDocDescription = 20000
-
-var semanticTagRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
-
 // semanticCatalog checks the workspace may use the catalog. notFound covers a
 // foreign or missing workspace/catalog; err is anything else.
 func (h *core) semanticCatalog(ctx context.Context, ws pgtype.UUID, catalogID openapi_types.UUID) (notFound bool, err error) {
@@ -44,17 +40,6 @@ func (h *core) semanticCatalog(ctx context.Context, ws pgtype.UUID, catalogID op
 		return false, err
 	}
 	return !ok, nil
-}
-
-// normalizeColumn treats an empty query value as "not set" (table-level doc).
-func normalizeColumn(column *string) *string {
-	if column == nil {
-		return nil
-	}
-	if strings.TrimSpace(*column) == "" {
-		return nil
-	}
-	return column
 }
 
 // ── Docs ────────────────────────────────────────────────────────────────────────
@@ -76,35 +61,27 @@ func (h *SemanticHandlers) ListSemanticDocs(ctx context.Context, request ListSem
 		return ListSemanticDocs404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
 
-	catalogID := pgtype.UUID{Bytes: request.Params.CatalogId, Valid: true}
-	column := normalizeColumn(request.Params.Column)
-	if column != nil {
-		doc, err := h.queries.GetSemanticDoc(ctx, db.GetSemanticDocParams{
-			WorkspaceID: ws, CatalogID: catalogID, Namespace: request.Params.Ns,
-			TableName: request.Params.Table, ColumnName: column,
-		})
-		if errors.Is(err, pgx.ErrNoRows) {
+	k := docKey(ws, request.Params.CatalogId, request.Params.Ns, request.Params.Table, request.Params.Column)
+	acts := h.docActions(ctx, ws)
+	if request.Params.Column != nil && strings.TrimSpace(*request.Params.Column) != "" {
+		doc, err := h.docs.Get(ctx, k)
+		if errors.Is(err, docs.ErrNotFound) {
 			return ListSemanticDocs404JSONResponse{NotFoundJSONResponse: metadataNotFound("doc not found")}, nil
 		}
 		if err != nil {
 			return nil, err
 		}
 		out := dbSemanticDocToPublic(doc)
-		acts := h.docActions(ctx, ws)
 		out.AllowedActions = &acts
 		return ListSemanticDocs200JSONResponse{out}, nil
 	}
 
-	docs, err := h.queries.ListSemanticDocsForTable(ctx, db.ListSemanticDocsForTableParams{
-		WorkspaceID: ws, CatalogID: catalogID, Namespace: request.Params.Ns,
-		TableName: request.Params.Table, ColumnName: nil,
-	})
+	all, err := h.docs.ListForTable(ctx, k)
 	if err != nil {
 		return nil, err
 	}
-	out := make(ListSemanticDocs200JSONResponse, 0, len(docs))
-	acts := h.docActions(ctx, ws)
-	for _, d := range docs {
+	out := make(ListSemanticDocs200JSONResponse, 0, len(all))
+	for _, d := range all {
 		doc := dbSemanticDocToPublic(d)
 		doc.AllowedActions = &acts
 		out = append(out, doc)
@@ -131,74 +108,43 @@ func (h *SemanticHandlers) UpsertSemanticDoc(ctx context.Context, request Upsert
 	if request.Body == nil {
 		return nil, errors.New("semantic doc: missing body")
 	}
-	if utf8.RuneCountInString(request.Body.Description) > maxDocDescription {
-		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "description must be at most 20000 characters")}, nil
-	}
-
 	updatedBy, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	var owner pgtype.UUID
+	edit := docs.Edit{
+		Description:       request.Body.Description,
+		Tags:              request.Body.Tags,
+		Certified:         request.Body.Certified,
+		ExpectedUpdatedAt: request.Body.ExpectedUpdatedAt,
+	}
 	if request.Body.OwnerUserId != nil {
-		owner = pgtype.UUID{Bytes: *request.Body.OwnerUserId, Valid: true}
+		edit.Owner = pgtype.UUID{Bytes: *request.Body.OwnerUserId, Valid: true}
 	}
-	tags, tagErr := normalizeSemanticTags(request.Body.Tags)
-	if tagErr != "" {
-		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, tagErr)}, nil
-	}
-
-	params := db.GetSemanticDocParams{
-		WorkspaceID: ws,
-		CatalogID:   pgtype.UUID{Bytes: request.Params.CatalogId, Valid: true},
-		Namespace:   request.Params.Ns,
-		TableName:   request.Params.Table,
-		ColumnName:  normalizeColumn(request.Params.Column),
-	}
-	current, cerr := h.queries.GetSemanticDoc(ctx, params)
-	exists := cerr == nil
-	if cerr != nil && !errors.Is(cerr, pgx.ErrNoRows) {
-		return nil, cerr
-	}
-	if exists && request.Body.ExpectedUpdatedAt != nil && current.UpdatedAt.Valid &&
-		!request.Body.ExpectedUpdatedAt.Equal(current.UpdatedAt.Time) {
-		by := openapi_types.UUID(current.UpdatedBy.Bytes)
-		at := current.UpdatedAt.Time.Format(time.RFC3339Nano)
-		fields := map[string]any{"updated_by": by, "updated_at": at}
+	k := docKey(ws, request.Params.CatalogId, request.Params.Ns, request.Params.Table, request.Params.Column)
+	doc, certChanged, err := h.docs.Upsert(ctx, k, edit, updatedBy, h.canCertifyDocs(ctx, ws))
+	var (
+		invalidTags *docs.InvalidTagsError
+		conflict    *docs.ConflictError
+	)
+	switch {
+	case errors.Is(err, docs.ErrDescriptionTooLong):
+		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
+	case errors.As(err, &invalidTags):
+		return UpsertSemanticDoc422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalidTags.Msg)}, nil
+	case errors.As(err, &conflict):
+		fields := map[string]any{"updated_by": openapi_types.UUID(conflict.UpdatedBy.Bytes), "updated_at": conflict.UpdatedAt.Format(time.RFC3339Nano)}
 		return UpsertSemanticDoc409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: ErrorCodeVersionConflict, Message: "the doc changed since you loaded it", Params: &fields,
 		}}, nil
-	}
-
-	canCertify := h.canCertifyDocs(ctx, ws)
-	certified := exists && current.Certified
-	if request.Body.Certified != nil {
-		if *request.Body.Certified && !canCertify {
-			return UpsertSemanticDoc403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner or admin may certify docs"}}, nil
-		}
-		certified = *request.Body.Certified
-	} else if exists && current.Certified && current.Description != request.Body.Description && !canCertify {
-		certified = false
-	}
-
-	doc, err := h.queries.UpsertSemanticDoc(ctx, db.UpsertSemanticDocParams{
-		WorkspaceID: ws,
-		CatalogID:   pgtype.UUID{Bytes: request.Params.CatalogId, Valid: true},
-		Namespace:   request.Params.Ns,
-		TableName:   request.Params.Table,
-		ColumnName:  normalizeColumn(request.Params.Column),
-		Description: request.Body.Description,
-		Tags:        tags,
-		OwnerUserID: owner,
-		UpdatedBy:   updatedBy,
-		Certified:   certified,
-	})
-	if err != nil {
+	case errors.Is(err, docs.ErrCertifyForbidden):
+		return UpsertSemanticDoc403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: err.Error()}}, nil
+	case err != nil:
 		return nil, err
 	}
-	if certified != (exists && current.Certified) {
+	if certChanged {
 		action := audit.SemanticDocCertify
-		if !certified {
+		if !doc.Certified {
 			action = audit.SemanticDocUncertify
 		}
 		h.audited(ctx, audit.Event{Action: action, ResourceType: "semantic_doc", ResourceID: idString(doc.ID), WorkspaceID: idString(ws)}.Allowed())
@@ -207,29 +153,6 @@ func (h *SemanticHandlers) UpsertSemanticDoc(ctx context.Context, request Upsert
 	acts := h.docActions(ctx, ws)
 	out.AllowedActions = &acts
 	return UpsertSemanticDoc200JSONResponse(out), nil
-}
-
-// normalizeSemanticTags lowercases, dedupes and validates the tag list (#116).
-func normalizeSemanticTags(tags *[]string) ([]string, string) {
-	if tags == nil {
-		return []string{}, ""
-	}
-	if len(*tags) > 20 {
-		return nil, "at most 20 tags are allowed"
-	}
-	out := make([]string, 0, len(*tags))
-	seen := map[string]bool{}
-	for _, tag := range *tags {
-		t := strings.ToLower(strings.TrimSpace(tag))
-		if !semanticTagRe.MatchString(t) {
-			return nil, "tags must match " + semanticTagRe.String()
-		}
-		if !seen[t] {
-			seen[t] = true
-			out = append(out, t)
-		}
-	}
-	return out, ""
 }
 
 // canCertifyDocs is true for a workspace owner or a global admin (#116).
@@ -267,18 +190,12 @@ func (h *SemanticHandlers) DeleteSemanticDoc(ctx context.Context, request Delete
 		return DeleteSemanticDoc404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
 
-	deleted, err := h.queries.DeleteSemanticDoc(ctx, db.DeleteSemanticDocParams{
-		WorkspaceID: ws,
-		CatalogID:   pgtype.UUID{Bytes: request.Params.CatalogId, Valid: true},
-		Namespace:   request.Params.Ns,
-		TableName:   request.Params.Table,
-		ColumnName:  normalizeColumn(request.Params.Column),
-	})
+	err = h.docs.Delete(ctx, docKey(ws, request.Params.CatalogId, request.Params.Ns, request.Params.Table, request.Params.Column))
+	if errors.Is(err, docs.ErrNotFound) {
+		return DeleteSemanticDoc404JSONResponse{NotFoundJSONResponse: metadataNotFound("doc not found")}, nil
+	}
 	if err != nil {
 		return nil, err
-	}
-	if deleted == 0 {
-		return DeleteSemanticDoc404JSONResponse{NotFoundJSONResponse: metadataNotFound("doc not found")}, nil
 	}
 	return DeleteSemanticDoc204Response{}, nil
 }
@@ -304,17 +221,13 @@ func (h *SemanticHandlers) SearchSemanticDocs(ctx context.Context, request Searc
 		}
 		limit = *p.Limit
 	}
-	tag := p.Tag
-	if tag != nil && strings.TrimSpace(*tag) == "" {
-		tag = nil
-	}
 	params := db.SearchSemanticDocsParams{
-		Q: p.Q, WorkspaceID: ws, Tag: tag, Certified: p.Certified, Lim: int32(limit),
+		Q: p.Q, WorkspaceID: ws, Tag: p.Tag, Certified: p.Certified, Lim: int32(limit),
 	}
 	if p.OwnerId != nil {
 		params.OwnerID = pgtype.UUID{Bytes: *p.OwnerId, Valid: true}
 	}
-	rows, err := h.queries.SearchSemanticDocs(ctx, params)
+	rows, err := h.docs.Search(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1198,15 +1111,13 @@ func (h *SemanticHandlers) ListSemanticTags(ctx context.Context, request ListSem
 	}
 	q := ""
 	if request.Params.Q != nil {
-		q = strings.ToLower(strings.TrimSpace(*request.Params.Q))
+		q = *request.Params.Q
 	}
 	limit := 20
 	if request.Params.Limit != nil && *request.Params.Limit >= 1 && *request.Params.Limit <= 100 {
 		limit = *request.Params.Limit
 	}
-	rows, err := h.queries.ListSemanticTags(ctx, db.ListSemanticTagsParams{
-		WorkspaceID: ws, Q: q, Lim: int32(limit),
-	})
+	rows, err := h.docs.Tags(ctx, ws, q, int32(limit))
 	if err != nil {
 		return nil, err
 	}
@@ -1215,4 +1126,9 @@ func (h *SemanticHandlers) ListSemanticTags(ctx context.Context, request ListSem
 		out = append(out, SemanticTag{Tag: r.Tag, Count: int(r.Count)})
 	}
 	return out, nil
+}
+
+// docKey names a documented table, or one of its columns.
+func docKey(ws pgtype.UUID, catalogID openapi_types.UUID, ns []string, table string, column *string) docs.Key {
+	return docs.Key{WorkspaceID: ws, CatalogID: pgtype.UUID{Bytes: catalogID, Valid: true}, Namespace: ns, Table: table, Column: column}
 }
