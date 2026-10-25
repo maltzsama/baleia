@@ -63,11 +63,17 @@ type CycleError struct{ Msg string }
 
 func (e *CycleError) Error() string { return e.Msg }
 
-// Service manages folders.
-type Service struct{ store Store }
+// Tx runs fn in one transaction over a Mover.
+type Tx func(ctx context.Context, fn func(Mover) error) error
 
-// New builds the service.
-func New(store Store) *Service { return &Service{store: store} }
+// Service manages folders.
+type Service struct {
+	store Store
+	tx    Tx
+}
+
+// New builds the service; tx makes a move of a folder and its subtree atomic.
+func New(store Store, tx Tx) *Service { return &Service{store: store, tx: tx} }
 
 // List returns the folders the user can see in the workspace, of one space
 // when spaceID is valid. With a parent, only its children; without, all.
@@ -207,20 +213,25 @@ func (s *Service) Update(ctx context.Context, folder db.QueryFolder, e Edit) (db
 		}
 	}
 
-	updated, err := s.store.UpdateQueryFolder(ctx, db.UpdateQueryFolderParams{
-		Name: name, Slug: &folderSlug, ParentID: parent, SpaceID: e.SpaceID, ID: folder.ID, WorkspaceID: folder.WorkspaceID,
+	// The folder, its subtree and their saved queries move together: a
+	// failure halfway must not leave them in different spaces.
+	var updated db.QueryFolder
+	err = s.tx(ctx, func(q Mover) error {
+		var err error
+		updated, err = q.UpdateQueryFolder(ctx, db.UpdateQueryFolderParams{
+			Name: name, Slug: &folderSlug, ParentID: parent, SpaceID: e.SpaceID, ID: folder.ID, WorkspaceID: folder.WorkspaceID,
+		})
+		if err != nil || !moving {
+			return err
+		}
+		move := db.MoveQueryFolderSubtreeParams{ID: folder.ID, WorkspaceID: folder.WorkspaceID, SpaceID: e.SpaceID}
+		if err := q.MoveQueryFolderSubtree(ctx, move); err != nil {
+			return err
+		}
+		return q.MoveSavedQueriesInFolderSubtree(ctx, db.MoveSavedQueriesInFolderSubtreeParams(move))
 	})
 	if err != nil {
 		return db.QueryFolder{}, err
-	}
-	if moving {
-		move := db.MoveQueryFolderSubtreeParams{ID: folder.ID, WorkspaceID: folder.WorkspaceID, SpaceID: e.SpaceID}
-		if err := s.store.MoveQueryFolderSubtree(ctx, move); err != nil {
-			return db.QueryFolder{}, err
-		}
-		if err := s.store.MoveSavedQueriesInFolderSubtree(ctx, db.MoveSavedQueriesInFolderSubtreeParams(move)); err != nil {
-			return db.QueryFolder{}, err
-		}
 	}
 	return updated, nil
 }

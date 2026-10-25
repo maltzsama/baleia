@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/retrievers"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
@@ -40,7 +43,9 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 		trino, _ = c.dialects.Get(dialect.Trino)
 		dialects = c.dialects
 	}
-	f := folders.New(c.queries)
+	f := folders.New(c.queries, func(ctx context.Context, fn func(folders.Mover) error) error {
+		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+	})
 	return &QueryHandlers{
 		core:       c,
 		wsTickets:  tickets,

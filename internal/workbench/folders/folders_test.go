@@ -17,8 +17,10 @@ type fakeStore struct {
 	// createErr makes the insert fail, as a concurrent create of the same
 	// slug would.
 	createErr error
-	// moved and movedQueries record the subtree moves.
+	// moved and movedQueries record the subtree moves; moveErr fails the
+	// move of the saved queries.
 	moved, movedQueries []pgtype.UUID
+	moveErr             error
 }
 
 func newStore() *fakeStore { return &fakeStore{folders: map[[16]byte]db.QueryFolder{}} }
@@ -81,7 +83,7 @@ func (f *fakeStore) DeleteQueryFolder(_ context.Context, arg db.DeleteQueryFolde
 func TestCreate(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
-	s := New(st)
+	s := New(st, st.tx)
 	ws, space, otherSpace := newID(), newID(), newID()
 
 	a, err := s.Create(ctx, ws, space, nil, "Monthly Reports", "")
@@ -119,7 +121,7 @@ func TestCreate(t *testing.T) {
 func TestListGetDelete(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
-	s := New(st)
+	s := New(st, st.tx)
 	ws, space := newID(), newID()
 	root, _ := s.Create(ctx, ws, space, nil, "root", "")
 	_, _ = s.Create(ctx, ws, space, &root.ID, "child", "")
@@ -153,7 +155,7 @@ func (brokenStore) GetQueryFolderByID(context.Context, db.GetQueryFolderByIDPara
 // TestStoreFailureIsNotNotFound: a database outage is an error, never a
 // missing folder or parent.
 func TestStoreFailureIsNotNotFound(t *testing.T) {
-	s := New(brokenStore{newStore()})
+	s := New(brokenStore{newStore()}, nil)
 	if _, err := s.Get(context.Background(), newID(), newID()); !errors.Is(err, errDown) {
 		t.Errorf("Get = %v, want the store error", err)
 	}
@@ -176,14 +178,47 @@ func (f *fakeStore) MoveQueryFolderSubtree(_ context.Context, arg db.MoveQueryFo
 }
 
 func (f *fakeStore) MoveSavedQueriesInFolderSubtree(_ context.Context, arg db.MoveSavedQueriesInFolderSubtreeParams) error {
+	if f.moveErr != nil {
+		return f.moveErr
+	}
 	f.movedQueries = append(f.movedQueries, arg.ID)
 	return nil
+}
+
+// tx applies fn to a copy of the folders and commits it only on success.
+func (f *fakeStore) tx(_ context.Context, fn func(Mover) error) error {
+	saved := make(map[[16]byte]db.QueryFolder, len(f.folders))
+	for k, v := range f.folders {
+		saved[k] = v
+	}
+	if err := fn(f); err != nil {
+		f.folders = saved
+		return err
+	}
+	return nil
+}
+
+// TestUpdate_MoveIsAtomic: when moving the subtree fails, the folder stays
+// where it was.
+func TestUpdate_MoveIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	ws, space, other := newID(), newID(), newID()
+	f, _ := s.Create(ctx, ws, space, nil, "f", "")
+	st.moveErr = errors.New("connection reset")
+	if _, err := s.Update(ctx, f, Edit{SpaceID: other}); !errors.Is(err, st.moveErr) {
+		t.Fatalf("Update = %v, want the move error", err)
+	}
+	if got, _ := s.Get(ctx, ws, f.ID); got.SpaceID != space {
+		t.Errorf("space = %v, want the folder left in its space", got.SpaceID)
+	}
 }
 
 func TestUpdate(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
-	s := New(st)
+	s := New(st, st.tx)
 	ws, space, other := newID(), newID(), newID()
 	root, _ := s.Create(ctx, ws, space, nil, "root", "")
 	child, _ := s.Create(ctx, ws, space, &root.ID, "child", "")
