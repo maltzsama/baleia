@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -148,7 +149,7 @@ func (h *WorkspaceHandlers) CreateSpace(ctx context.Context, request CreateSpace
 		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "default_role must be viewer or editor")}, nil
 	}
 
-	slug, err := uniqueSlug(ctx, name, func(ctx context.Context, s string) (bool, error) {
+	slug, err := slugs.Unique(ctx, name, func(ctx context.Context, s string) (bool, error) {
 		return h.queries.SpaceSlugExists(ctx, db.SpaceSlugExistsParams{WorkspaceID: ws, Slug: s})
 	})
 	if err != nil {

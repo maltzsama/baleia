@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,18 +20,16 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
+	"github.com/galileostudio/baleia/internal/workbench/executions"
+	"github.com/galileostudio/baleia/internal/workbench/folders"
+	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -43,12 +41,6 @@ func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequ
 		return ListFolders401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var parentID pgtype.UUID
-	if request.Params.ParentId != nil {
-		parentID.Bytes = *request.Params.ParentId
-		parentID.Valid = true
-	}
-
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
@@ -57,27 +49,18 @@ func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequ
 	if request.Params.SpaceId != nil {
 		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
-	var folders []db.QueryFolder
+	// With a parent, only its children; without, every visible folder.
+	var parent *pgtype.UUID
 	if request.Params.ParentId != nil {
-		folders, err = h.queries.ListVisibleQueryFolders(ctx, db.ListVisibleQueryFoldersParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-			ParentID:    parentID,
-		})
-	} else {
-		folders, err = h.queries.ListAllVisibleQueryFolders(ctx, db.ListAllVisibleQueryFoldersParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-		})
+		parent = &pgtype.UUID{Bytes: *request.Params.ParentId, Valid: true}
 	}
+	visible, err := h.folders.List(ctx, workspaceIDFromRequest(request.Id), userID, spaceID, parent)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]QueryFolder, 0, len(folders))
-	for _, f := range folders {
+	result := make([]QueryFolder, 0, len(visible))
+	for _, f := range visible {
 		result = append(result, dbFolderToPublic(f))
 	}
 	return ListFolders200JSONResponse(result), nil
@@ -100,41 +83,23 @@ func (h *QueryHandlers) CreateFolder(ctx context.Context, request CreateFolderRe
 		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "space not found"}}, nil
 	}
 
-	var parentID pgtype.UUID
+	var parent *pgtype.UUID
 	if request.Body.ParentId != nil {
-		parentID = pgtype.UUID{Bytes: *request.Body.ParentId, Valid: true}
-		parent, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: parentID, WorkspaceID: ws})
-		if err != nil || parent.SpaceID != space.ID {
-			return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "parent folder not found"}}, nil
-		}
+		parent = &pgtype.UUID{Bytes: *request.Body.ParentId, Valid: true}
 	}
-
-	slug := ""
+	folderSlug := ""
 	if request.Body.Slug != nil {
-		slug = *request.Body.Slug
+		folderSlug = *request.Body.Slug
 	}
-	if slug == "" {
-		slug, err = uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
-			return h.queries.FolderSlugExists(ctx, db.FolderSlugExistsParams{SpaceID: space.ID, Slug: s})
-		})
-		if err != nil {
-			return nil, err
-		}
-	} else if !slugRe.MatchString(slug) {
+	folder, err := h.folders.Create(ctx, ws, space.ID, parent, request.Body.Name, folderSlug)
+	switch {
+	case errors.Is(err, folders.ErrParentNotFound):
+		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "parent folder not found"}}, nil
+	case errors.Is(err, folders.ErrInvalidSlug):
 		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
-	}
-
-	folder, err := h.queries.CreateQueryFolder(ctx, db.CreateQueryFolderParams{
-		WorkspaceID: ws,
-		SpaceID:     space.ID,
-		ParentID:    parentID,
-		Name:        request.Body.Name,
-		Slug:        slug,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, "a folder with this slug already exists in the space")}, nil
-		}
+	case errors.Is(err, folders.ErrSlugTaken):
+		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, "a folder with this slug already exists in the space")}, nil
+	case err != nil:
 		return nil, err
 	}
 
@@ -148,9 +113,12 @@ func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRe
 
 	ws := workspaceIDFromRequest(request.Id)
 	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
-	folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
-	if err != nil {
+	folder, err := h.folders.Get(ctx, ws, folderID)
+	if errors.Is(err, folders.ErrNotFound) {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	_, se, err := h.requireSpace(ctx, ws, folder.SpaceID, authz.SpaceEditor)
 	if err != nil {
@@ -166,12 +134,10 @@ func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRe
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
 
-	deleted, err := h.queries.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{WorkspaceID: ws, ID: folderID})
-	if err != nil {
-		return nil, err
-	}
-	if deleted == 0 {
+	if err := h.folders.Delete(ctx, ws, folderID); errors.Is(err, folders.ErrNotFound) {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 
 	return DeleteFolder204Response{}, nil
@@ -193,55 +159,25 @@ func (h *QueryHandlers) ListSavedQueries(ctx context.Context, request ListSavedQ
 		lim = &v
 	}
 
-	var folderID pgtype.UUID
+	filter := savedqueries.Filter{Q: request.Params.Q, Limit: lim}
 	if request.Params.FolderId != nil {
-		folderID.Bytes = *request.Params.FolderId
-		folderID.Valid = true
+		filter.FolderID = pgtype.UUID{Bytes: *request.Params.FolderId, Valid: true}
 	}
-
+	if request.Params.SpaceId != nil {
+		filter.SpaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	var spaceID pgtype.UUID
-	if request.Params.SpaceId != nil {
-		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
-	}
-	var queries []db.SavedQuery
-	if folderID.Valid {
-		queries, err = h.queries.ListVisibleSavedQueries(ctx, db.ListVisibleSavedQueriesParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-			FolderID:    folderID,
-			Q:           request.Params.Q,
-			Lim:         lim,
-		})
-	} else {
-		queries, err = h.queries.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-			Q:           request.Params.Q,
-			Lim:         lim,
-		})
-	}
+	items, err := h.saved.List(ctx, workspaceIDFromRequest(request.Id), userID, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	versions, err := h.queries.ListSavedQueryVersions(ctx, workspaceIDFromRequest(request.Id))
-	if err != nil {
-		return nil, err
-	}
-	versionByID := make(map[string]int32, len(versions))
-	for _, v := range versions {
-		versionByID[uuidStr(v.EntityID)] = v.Version
-	}
-
-	result := make([]SavedQuery, 0, len(queries))
-	for _, q := range queries {
-		result = append(result, dbSavedQueryToPublic(q, versionByID[uuidStr(q.ID)]))
+	result := make([]SavedQuery, 0, len(items))
+	for _, it := range items {
+		result = append(result, dbSavedQueryToPublic(it.Query, it.Version))
 	}
 	return ListSavedQueries200JSONResponse(result), nil
 }
@@ -269,55 +205,30 @@ func (h *QueryHandlers) CreateSavedQuery(ctx context.Context, request CreateSave
 		return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "space not found"}}, nil
 	}
 
-	var folderID pgtype.UUID
+	in := savedqueries.New{
+		SpaceID: space.ID,
+		Name:    request.Body.Name,
+		SQL:     request.Body.Sql,
+		Target:  h.savedQueryTargetFunc(ws, request.Body.Target),
+	}
 	if request.Body.FolderId != nil {
-		folderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
-		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
-		if err != nil || folder.SpaceID != space.ID {
-			return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
-		}
+		in.FolderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
 	}
-
-	slug := ""
 	if request.Body.Slug != nil {
-		slug = *request.Body.Slug
+		in.Slug = *request.Body.Slug
 	}
-	if slug == "" {
-		slug, err = uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
-			return h.queries.SavedQuerySlugExists(ctx, db.SavedQuerySlugExistsParams{WorkspaceID: ws, Slug: s})
-		})
-		if err != nil {
-			return nil, err
-		}
-	} else if !slugRe.MatchString(slug) {
+	query, err := h.saved.Create(ctx, createdBy, ws, in)
+	var te *targetError
+	switch {
+	case errors.Is(err, savedqueries.ErrFolderNotFound):
+		return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	case errors.Is(err, savedqueries.ErrInvalidSlug):
 		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
-	}
-
-	bindingID, targetSchema, te := h.savedQueryTarget(ctx, ws, request.Body.Target)
-	if te != nil {
-		code, message := ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
-		if te.code != "" {
-			code, message = te.code, te.message
-		}
-		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, message)}, nil
-	}
-
-	query, err := h.contentService().CreateSavedQuery(ctx, createdBy, db.CreateSavedQueryParams{
-		WorkspaceID:     ws,
-		SpaceID:         space.ID,
-		FolderID:        folderID,
-		CreatedBy:       createdBy,
-		UpdatedBy:       createdBy,
-		Name:            request.Body.Name,
-		Slug:            slug,
-		Sql:             request.Body.Sql,
-		TargetBindingID: bindingID,
-		TargetSchema:    targetSchema,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return savedQueryConflict("a saved query with this name already exists in this workspace"), nil
-		}
+	case errors.As(err, &te):
+		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(savedQueryTargetCode(te))}, nil
+	case errors.Is(err, savedqueries.ErrNameTaken):
+		return savedQueryConflict("a saved query with this name already exists in this workspace"), nil
+	case err != nil:
 		return nil, err
 	}
 
@@ -334,9 +245,12 @@ func (h *QueryHandlers) GetSavedQuery(ctx context.Context, request GetSavedQuery
 	queryID.Valid = true
 
 	ws := workspaceIDFromRequest(request.Id)
-	query, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
-	if err != nil {
+	query, err := h.saved.Get(ctx, ws, queryID)
+	if errors.Is(err, savedqueries.ErrNotFound) {
 		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	_, se, err := h.requireSpace(ctx, ws, query.SpaceID, authz.SpaceViewer)
 	if err != nil {
@@ -362,9 +276,12 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
-	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
-	if err != nil {
+	current, err := h.saved.Get(ctx, ws, queryID)
+	if errors.Is(err, savedqueries.ErrNotFound) {
 		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
@@ -401,74 +318,39 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 		}
 	}
 
-	name, sql := current.Name, current.Sql
-	if request.Body.Name != nil {
-		name = *request.Body.Name
-	}
-	if request.Body.Sql != nil {
-		sql = *request.Body.Sql
-	}
-
-	folderID := current.FolderID
-	if request.Body.MoveToRoot != nil && *request.Body.MoveToRoot {
-		folderID = pgtype.UUID{}
-	}
-	if request.Body.FolderId != nil {
-		folderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
-	}
-	if folderID.Valid {
-		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
-		if err != nil || folder.SpaceID != spaceID {
-			return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
-		}
-	}
-
-	slug := current.Slug
-	if request.Body.Slug != nil {
-		slug = *request.Body.Slug
-		if !slugRe.MatchString(slug) {
-			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
-		}
-	}
-
-	bindingID, targetSchema := current.TargetBindingID, current.TargetSchema
-	if request.Body.Target != nil {
-		var te *targetError
-		bindingID, targetSchema, te = h.savedQueryTarget(ctx, ws, request.Body.Target)
-		if te != nil {
-			code, message := ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
-			if te.code != "" {
-				code, message = te.code, te.message
-			}
-			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, message)}, nil
-		}
-	}
-
 	updatedBy, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	var expected *int32
+	change := savedqueries.Change{
+		Name:       request.Body.Name,
+		SQL:        request.Body.Sql,
+		Slug:       request.Body.Slug,
+		SpaceID:    &spaceID,
+		MoveToRoot: request.Body.MoveToRoot != nil && *request.Body.MoveToRoot,
+	}
+	if request.Body.FolderId != nil {
+		change.FolderID = &pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
+	}
+	if request.Body.Target != nil {
+		change.Target = h.savedQueryTargetFunc(ws, request.Body.Target)
+	}
 	if request.Body.ExpectedVersion != nil {
 		v := int32(*request.Body.ExpectedVersion)
-		expected = &v
+		change.ExpectedVersion = &v
 	}
-	updated, _, err := h.contentService().UpdateSavedQuery(ctx, updatedBy, db.UpdateSavedQueryParams{
-		WorkspaceID:     ws,
-		ID:              queryID,
-		Name:            name,
-		Sql:             sql,
-		FolderID:        folderID,
-		SpaceID:         spaceID,
-		Slug:            slug,
-		TargetBindingID: bindingID,
-		TargetSchema:    targetSchema,
-		UpdatedBy:       updatedBy,
-	}, expected)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return savedQueryUpdateConflict("a saved query with this name already exists in this workspace"), nil
-		}
+	updated, err := h.saved.Update(ctx, updatedBy, current, change)
+	var te *targetError
+	switch {
+	case errors.Is(err, savedqueries.ErrFolderNotFound):
+		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	case errors.Is(err, savedqueries.ErrInvalidSlug):
+		return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+	case errors.As(err, &te):
+		return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(savedQueryTargetCode(te))}, nil
+	case errors.Is(err, savedqueries.ErrNameTaken):
+		return savedQueryUpdateConflict("a saved query with this name already exists in this workspace"), nil
+	case err != nil:
 		if c, ok := h.versionConflictResponse(ctx, err); ok {
 			return UpdateSavedQuery409JSONResponse{ConflictJSONResponse: c}, nil
 		}
@@ -485,9 +367,12 @@ func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSave
 
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
-	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
-	if err != nil {
+	current, err := h.saved.Get(ctx, ws, queryID)
+	if errors.Is(err, savedqueries.ErrNotFound) {
 		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
 	if err != nil {
@@ -507,7 +392,7 @@ func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSave
 	if err != nil {
 		return nil, err
 	}
-	if err := h.contentService().DeleteSavedQuery(ctx, actor, ws, queryID); err != nil {
+	if err := h.saved.Delete(ctx, actor, ws, queryID); err != nil {
 		if errors.Is(err, content.ErrNotFound) {
 			return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 		}
@@ -544,20 +429,6 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 		limit = *p.Limit
 	}
 
-	// Visibility (#36): the workspace owner and global admins see every
-	// execution; everyone else sees only their own.
-	seeAll := auth.RoleFromContext(ctx) == "admin"
-	if !seeAll {
-		owner, err := h.queries.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{
-			ID:     workspaceIDFromRequest(request.Id),
-			UserID: callerID,
-		})
-		if err != nil {
-			return nil, err
-		}
-		seeAll = owner
-	}
-
 	userFilter := pgtype.UUID{}
 	if p.UserId != nil && *p.UserId != "" {
 		if *p.UserId == "me" {
@@ -570,15 +441,11 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 			userFilter = uid
 		}
 	}
-	if !seeAll {
-		userFilter = callerID
-	}
 
 	params := db.ListExecutionHistoryParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 		UserID:      userFilter,
 		Q:           p.Q,
-		Lim:         int32(limit + 1),
 	}
 	if p.Status != nil {
 		status := string(*p.Status)
@@ -605,17 +472,19 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 		params.CursorID = id
 	}
 
-	rows, err := h.queries.ListExecutionHistory(ctx, params)
+	// Visibility (#36): the workspace owner and global admins see every
+	// execution; everyone else sees only their own.
+	page, err := h.executions.History(ctx, executions.Viewer{UserID: callerID, Admin: auth.RoleFromContext(ctx) == "admin"}, params, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := ListExecutions200JSONResponse{Data: make([]Execution, 0, len(rows))}
-	if len(rows) > limit {
-		rows = rows[:limit]
-		cursor := encodeHistoryCursor(rows[limit-1].StartedAt.Time, rows[limit-1].ID)
+	out := ListExecutions200JSONResponse{Data: make([]Execution, 0, len(page.Rows))}
+	if page.More {
+		last := page.Rows[len(page.Rows)-1]
+		cursor := encodeHistoryCursor(last.StartedAt.Time, last.ID)
 		out.NextCursor = &cursor
 	}
-	for _, row := range rows {
+	for _, row := range page.Rows {
 		out.Data = append(out.Data, historyRowToPublic(row))
 	}
 	return out, nil
@@ -716,23 +585,23 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 
 	// #111: rerun copies the original statements on the server, never re-splits
 	// SQL. The target defaults to the original one unless the request names one.
-	var rerunExecutionID string
+	var rerunOf pgtype.UUID
 	var rerunFromPosition int32
 	if request.Body.Rerun != nil {
 		originalID := pgtype.UUID{Bytes: request.Body.Rerun.ExecutionId, Valid: true}
-		original, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-			ID:          originalID,
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-		})
-		if err != nil {
+		original, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), originalID)
+		if errors.Is(err, executions.ErrNotFound) {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+		}
+		if err != nil {
+			return nil, err
 		}
 		if original.UserID.Bytes != uid.Bytes && (!workspace.OwnerUserID.Valid || workspace.OwnerUserID.Bytes != uid.Bytes) {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
-		rerunExecutionID = openapi_types.UUID(original.ID.Bytes).String()
+		rerunOf = original.ID
 		rerunFromPosition = int32(request.Body.Rerun.FromPosition)
 		request.Body.Sql = original.Sql
 		if request.Body.Target == nil && original.TargetBindingID.Valid {
@@ -772,16 +641,6 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 			message: "queries on " + target.EngineKind + " engines are not available yet",
 		}).unprocessable()}, nil
 	}
-	snapshot, err := target.Snapshot()
-	if err != nil {
-		return nil, err
-	}
-	trinoCatalog := target.EngineCatalog
-	var targetSchema *string
-	if target.Schema != "" {
-		targetSchema = &target.Schema
-	}
-
 	var savedQueryID pgtype.UUID
 	if request.Body.SavedQueryId != nil {
 		savedQueryID.Bytes = *request.Body.SavedQueryId
@@ -789,12 +648,13 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		// A saved query from another workspace, or from a space the caller
 		// cannot see, must not be attached to an execution (it would leak its
 		// id into this workspace's history).
-		saved, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{
-			ID: savedQueryID, WorkspaceID: workspaceIDFromRequest(request.Id),
-		})
-		if err != nil {
+		saved, err := h.saved.Get(ctx, workspaceIDFromRequest(request.Id), savedQueryID)
+		if errors.Is(err, savedqueries.ErrNotFound) {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+		}
+		if err != nil {
+			return nil, err
 		}
 		if _, se, err := h.requireSpace(ctx, workspaceIDFromRequest(request.Id), saved.SpaceID, authz.SpaceViewer); err != nil {
 			if errors.Is(err, authz.ErrUnauthenticated) {
@@ -807,81 +667,27 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		}
 	}
 
-	// Correlate the execution with the inbound HTTP request so the row, the
-	// Temporal workflow, and the activity logs can be joined back to the
-	// request log line.
-	requestID := middleware.GetReqID(ctx)
-	var requestIDPtr *string
-	if requestID != "" {
-		requestIDPtr = &requestID
-	}
-
 	// Per-user Trino identity: user SQL reaches Trino as the Baleia user, never
 	// as the admin or service identity.
 	trinoUser, err := h.trinoIdentityFor(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
-
-	execution, err := h.queries.CreateQueryExecution(ctx, db.CreateQueryExecutionParams{
+	execution, err := h.executions.Start(ctx, executions.Run{
 		WorkspaceID:  workspaceIDFromRequest(request.Id),
 		UserID:       uid,
 		SavedQueryID: savedQueryID,
-		Status:       "running",
-		Sql:          request.Body.Sql,
-		TrinoCatalog: &trinoCatalog,
-		RequestID:    requestIDPtr,
-		// The resolved target, recorded for history (#13).
-		EngineID:        target.EngineID,
-		TargetBindingID: target.BindingID,
-		TargetCatalogID: target.CatalogID,
-		TargetSchema:    targetSchema,
-		TargetSnapshot:  snapshot,
-		AgentID:         agentID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	executionID := openapi_types.UUID(execution.ID.Bytes).String()
-
-	wo := client.StartWorkflowOptions{
-		ID:        "exec-" + executionID,
-		TaskQueue: "baleia-task-queue",
-	}
-
-	// The script is split with the target engine's dialect; Trino when the
-	// kind has none (the rule V2 applied inside the workflow).
-	dialectName := dialect.Trino
-	if d, ok := h.dialects.ForEngineKind(target.EngineKind); ok {
-		dialectName = d.Name()
-	}
-	_, err = h.temporalClient.ExecuteWorkflow(ctx, wo, workflows.QueryExecutionWorkflowV3, workflows.QueryExecutionInput{
-		ExecutionID:       executionID,
-		WorkspaceID:       request.Id.String(),
-		SQL:               request.Body.Sql,
-		Target:            target,
-		Identity:          queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID)},
-		StatementTimeout:  h.settings.Execution.StatementTimeout,
-		RequestID:         requestID,
-		ExecutionTimeout:  h.settings.Execution.ExecutionTimeout,
-		RerunExecutionID:  rerunExecutionID,
+		SQL:          request.Body.Sql,
+		Target:       target,
+		Identity:     queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID)},
+		AgentID:      agentID,
+		// Correlates the row, the workflow and the activity logs with the
+		// request log line.
+		RequestID:         middleware.GetReqID(ctx),
+		RerunOf:           rerunOf,
 		RerunFromPosition: rerunFromPosition,
-		Dialect:           dialectName,
 	})
 	if err != nil {
-		// The workflow failed to start; fail the row so it does not stay
-		// `running` forever. Use a context detached from the request in case
-		// the request was cancelled mid-call.
-		failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		if _, ferr := h.queries.UpdateQueryExecution(failCtx, db.UpdateQueryExecutionParams{
-			ID:     execution.ID,
-			Status: "failed",
-		}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
-			slog.Error("failed to mark execution failed after workflow start error",
-				"execution_id", executionID, "start_err", err, "mark_err", ferr)
-		}
 		return nil, err
 	}
 
@@ -903,12 +709,12 @@ func (h *QueryHandlers) GetExecution(ctx context.Context, request GetExecutionRe
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-	})
-	if err != nil {
+	execution, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), executionID)
+	if errors.Is(err, executions.ErrNotFound) {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if !agentOwnsExecution(ctx, execution) {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
@@ -941,83 +747,32 @@ func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecu
 
 	// Agents may cancel only the executions they created (#58).
 	if p, err := authz.PrincipalFromContext(ctx); err == nil && p.IsAgent() {
-		exec, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{ID: executionID, WorkspaceID: wsID})
+		exec, err := h.executions.Get(ctx, wsID, executionID)
+		if err != nil && !errors.Is(err, executions.ErrNotFound) {
+			return nil, err
+		}
 		if err != nil || !agentOwnsExecution(ctx, exec) {
 			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
 	}
 
-	// Conditional cancel: only a running execution transitions to cancelled, so
-	// a completion or failure that races after this call cannot be overwritten.
-	updated, err := h.queries.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{
-		ID:          executionID,
-		WorkspaceID: wsID,
-	})
-	if err == nil {
-		// Cancel the Temporal workflow so the running statement stops and its
-		// Trino query is killed. A NotFound means the workflow already ended.
-		cancelErr := h.temporalClient.CancelWorkflow(ctx, "exec-"+executionID.String(), "")
-		var notFoundErr *serviceerror.NotFound
-		if cancelErr != nil && !errors.As(cancelErr, &notFoundErr) {
-			slog.Warn("failed to cancel temporal workflow", "execution_id", executionID.String(), "err", cancelErr)
+	// Only a running execution is cancelled; a completion racing this call
+	// is never overwritten (#58).
+	execution, cancelled, err := h.executions.Cancel(ctx, wsID, executionID)
+	if err != nil {
+		if errors.Is(err, executions.ErrNotFound) {
+			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
-		// The worker running it may be gone: stop the statement on its engine
-		// through the persisted handle too. Cancelling a finished statement is
-		// not an error.
-		h.cancelOnEngine(ctx, updated)
-		h.audited(ctx, ev.Allowed())
-		return CancelExecution200JSONResponse(dbExecutionToPublic(updated)), nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
-
-	// Nothing was cancelled: the execution is gone, foreign, or already
-	// terminal. Return its current scoped state, or 404 when it is absent.
-	current, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: wsID,
-	})
-	if err != nil {
-		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+	if !cancelled {
+		// Already finished: nothing was cancelled.
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return CancelExecution200JSONResponse(dbExecutionToPublic(execution)), nil
 	}
-	// Already finished: nothing was cancelled.
-	h.audited(ctx, ev.Failed(audit.ReasonConflict))
-	return CancelExecution200JSONResponse(dbExecutionToPublic(current)), nil
-}
-
-// cancelOnEngine cancels the running statements of an execution by their
-// persisted handles, best effort and bounded in time.
-func (h *core) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
-	if h.engines == nil {
-		return
-	}
-	rows, err := h.queries.ListRunningStatementHandles(ctx, e.ID)
-	if err != nil || len(rows) == 0 {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	var eng queryengine.Engine
-	if e.EngineID.Valid {
-		eng, err = h.engines.Get(ctx, e.EngineID)
-	} else {
-		eng, err = h.engines.DefaultTrino(ctx)
-	}
-	if err != nil {
-		slog.Warn("cancel on engine: no engine", "execution_id", e.ID.String(), "err", err)
-		return
-	}
-	for _, r := range rows {
-		var handle queryengine.QueryHandle
-		if json.Unmarshal(r.QueryHandle, &handle) != nil {
-			continue
-		}
-		if err := eng.Cancel(ctx, handle); err != nil {
-			slog.Warn("cancel on engine failed", "execution_id", e.ID.String(), "position", r.Position, "err", err)
-		}
-	}
+	h.audited(ctx, ev.Allowed())
+	return CancelExecution200JSONResponse(dbExecutionToPublic(execution)), nil
 }
 
 func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
@@ -1030,20 +785,12 @@ func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatemen
 	executionID.Valid = true
 	wsID := workspaceIDFromRequest(request.Id)
 
-	// The join-based statements query returns an empty slice for a foreign or
-	// absent execution, which would hide a cross-workspace id behind a 200.
-	// Verify the execution belongs to this workspace first so we can answer 404.
-	if _, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: wsID,
-	}); err != nil {
+	// A foreign or absent execution is a 404, never an empty 200 that would
+	// hide a cross-workspace id.
+	statements, err := h.executions.Statements(ctx, wsID, executionID)
+	if errors.Is(err, executions.ErrNotFound) {
 		return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
-
-	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, db.ListQueryStatementsByWorkspaceParams{
-		ExecutionID: executionID,
-		WorkspaceID: wsID,
-	})
 	if err != nil {
 		return nil, err
 	}
@@ -1065,12 +812,12 @@ func (h *QueryHandlers) GetResults(ctx context.Context, request GetResultsReques
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-	})
-	if err != nil {
+	execution, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), executionID)
+	if errors.Is(err, executions.ErrNotFound) {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if !agentOwnsExecution(ctx, execution) {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
@@ -1144,14 +891,17 @@ func (h *QueryHandlers) GetStatementResults(ctx context.Context, request GetStat
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	statement, err := h.queries.GetQueryStatementByPosition(ctx, db.GetQueryStatementByPositionParams{
-		ExecutionID: executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		Position:    int32(request.Position),
-	})
-	if err != nil {
+	if request.Position < 0 || request.Position > math.MaxInt32 {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
+	}
+	statement, err := h.executions.Statement(ctx, workspaceIDFromRequest(request.Id), executionID, int32(request.Position))
+	if errors.Is(err, executions.ErrNotFound) {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if statement.Status != "finished" {
@@ -1300,6 +1050,26 @@ func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UU
 
 // savedQueryTarget validates the optional target of a saved query: the binding
 // must be a target of the workspace (its catalog granted, #16).
+// savedQueryTargetFunc resolves a saved query's target for the service; a
+// target error comes back as a *targetError.
+func (h *QueryHandlers) savedQueryTargetFunc(ws pgtype.UUID, t *SavedQueryTarget) savedqueries.Target {
+	return func(ctx context.Context) (pgtype.UUID, *string, error) {
+		bindingID, schema, te := h.savedQueryTarget(ctx, ws, t)
+		if te != nil {
+			return pgtype.UUID{}, nil, te
+		}
+		return bindingID, schema, nil
+	}
+}
+
+// savedQueryTargetCode is the 422 code and message of a target error.
+func savedQueryTargetCode(te *targetError) (ErrorCode, string) {
+	if te.code != "" {
+		return te.code, te.message
+	}
+	return ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
+}
+
 func (h *QueryHandlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t *SavedQueryTarget) (pgtype.UUID, *string, *targetError) {
 	if t == nil || t.BindingId == nil {
 		return pgtype.UUID{}, nil, nil
