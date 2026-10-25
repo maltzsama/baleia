@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -331,7 +332,7 @@ func (h *SemanticHandlers) RestoreSemanticMetricVersion(ctx context.Context, req
 	if err != nil {
 		return RestoreSemanticMetricVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
-	def, _, err := parseDefinitionRaw(snap.Definition)
+	def, _, err := metrics.ParseDefinitionRaw(snap.Definition)
 	if err != nil {
 		return RestoreSemanticMetricVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/galileostudio/baleia/internal/version"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -122,7 +123,7 @@ func (h *SemanticHandlers) ImportSpaceBundle(ctx context.Context, request Import
 		AllowCertification: isManager,
 		Dialect:            h.dialects.MustGet(dialect.Trino),
 		ValidateMetric: func(catalogID pgtype.UUID, namespace []string, table string, definition json.RawMessage, bindingID pgtype.UUID) error {
-			def, _, err := parseDefinitionRaw(definition)
+			def, _, err := metrics.ParseDefinitionRaw(definition)
 			if err != nil {
 				return err
 			}

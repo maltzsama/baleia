@@ -234,11 +234,11 @@ var operationAccess = map[string]access{
 	// (validateSemanticMetric); the catalog must be granted and the caller
 	// needs the space role (contentSpace wraps requireSpace).
 	"ListSemanticMetrics":  checked("metadataWorkspace"),
-	"GetSemanticMetric":    checked("metadataWorkspace", "GetSemanticMetric", "contentSpace"),
+	"GetSemanticMetric":    checked("metadataWorkspace", "Get", "contentSpace"),
 	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
-	"UpdateSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
-	"DeleteSemanticMetric": checked("metadataWorkspace", "GetSemanticMetric", "contentSpace", "DeleteSemanticMetric"),
-	"GetSemanticMetricSql": checked("metadataWorkspace", "GetSemanticMetric", "semanticCatalog", "semanticTarget", "contentSpace"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "Get", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
+	"DeleteSemanticMetric": checked("metadataWorkspace", "Get", "contentSpace", "Delete"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "Get", "semanticCatalog", "semanticTarget", "contentSpace"),
 	// Semantic models v2 (#91) are content items; compile resolves visible
 	// models and the base model's binding, then renders through the compiler.
 	"ListSemanticModels":          checked("metadataWorkspace", "ListVisibleSemanticModels"),

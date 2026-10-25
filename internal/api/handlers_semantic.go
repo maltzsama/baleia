@@ -19,9 +19,8 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/semantic/docs"
-	slugs "github.com/galileostudio/baleia/internal/slug"
+	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -263,48 +262,29 @@ func (h *SemanticHandlers) ListSemanticMetrics(ctx context.Context, request List
 		}
 		limit = *request.Params.Limit
 	}
-	metrics, err := h.queries.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{
-		WorkspaceID: ws, UserID: userID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make(ListSemanticMetrics200JSONResponse, 0, len(metrics))
-	versions, err := h.queries.ListSemanticMetricVersions(ctx, ws)
-	if err != nil {
-		return nil, err
-	}
-	versionByID := make(map[string]int32, len(versions))
-	for _, v := range versions {
-		versionByID[uuidStr(v.EntityID)] = v.Version
-	}
-	q := ""
+	f := metrics.Filter{Certified: request.Params.Certified, Limit: limit}
 	if request.Params.Q != nil {
-		q = strings.ToLower(strings.TrimSpace(*request.Params.Q))
+		f.Q = *request.Params.Q
 	}
-	for _, m := range metrics {
-		if request.Params.SpaceId != nil && m.SpaceID.Bytes != [16]byte(*request.Params.SpaceId) {
-			continue
-		}
-		if request.Params.CatalogId != nil && m.CatalogID.Bytes != [16]byte(*request.Params.CatalogId) {
-			continue
-		}
-		if request.Params.Certified != nil && m.Certified != *request.Params.Certified {
-			continue
-		}
-		if request.Params.OwnerId != nil && m.OwnerUserID.Bytes != [16]byte(*request.Params.OwnerId) {
-			continue
-		}
-		if q != "" && !strings.Contains(strings.ToLower(m.Label), q) && !strings.Contains(strings.ToLower(m.Slug), q) && !strings.Contains(strings.ToLower(m.Description), q) {
-			continue
-		}
-		metric := dbSemanticMetricToPublic(m, versionByID[uuidStr(m.ID)])
-		acts := h.metricActions(ctx, ws, m.SpaceID)
+	if request.Params.SpaceId != nil {
+		f.SpaceID = &pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+	}
+	if request.Params.CatalogId != nil {
+		f.CatalogID = &pgtype.UUID{Bytes: *request.Params.CatalogId, Valid: true}
+	}
+	if request.Params.OwnerId != nil {
+		f.OwnerID = &pgtype.UUID{Bytes: *request.Params.OwnerId, Valid: true}
+	}
+	items, err := h.metricDefs.List(ctx, ws, userID, f)
+	if err != nil {
+		return nil, err
+	}
+	out := make(ListSemanticMetrics200JSONResponse, 0, len(items))
+	for _, it := range items {
+		metric := dbSemanticMetricToPublic(it.Metric, it.Version)
+		acts := h.metricActions(ctx, ws, it.Metric.SpaceID)
 		metric.AllowedActions = &acts
 		out = append(out, metric)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
 	}
 	return out, nil
 }
@@ -331,10 +311,8 @@ func (h *SemanticHandlers) GetSemanticMetric(ctx context.Context, request GetSem
 	if nf {
 		return GetSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	metric, err := h.queries.GetSemanticMetric(ctx, db.GetSemanticMetricParams{
-		WorkspaceID: ws, ID: pgtype.UUID{Bytes: request.MetricId, Valid: true},
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	metric, err := h.metricDefs.Get(ctx, ws, pgtype.UUID{Bytes: request.MetricId, Valid: true})
+	if errors.Is(err, metrics.ErrNotFound) {
 		return GetSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
 	if err != nil {
@@ -379,29 +357,40 @@ func (h *SemanticHandlers) CreateSemanticMetric(ctx context.Context, request Cre
 		return CreateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
 
-	def, raw, err := parseDefinition(request.Body.Definition)
-	if err != nil {
-		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
+	f := metrics.Fields{
+		Slug:      request.Body.Slug,
+		Label:     request.Body.Label,
+		CatalogID: pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true},
+		Namespace: request.Body.Namespace,
+		Table:     request.Body.Table,
+		BindingID: emptyUUID(request.Body.BindingId),
+		OwnerID:   emptyUUID(request.Body.OwnerUserId),
 	}
-	if msg, ok := validateMetricFields(request.Body.Slug, request.Body.Label, request.Body.Table); !ok {
-		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, msg)}, nil
+	if request.Body.Description != nil {
+		f.Description = *request.Body.Description
+	}
+	if request.Body.Certified != nil {
+		f.Certified = *request.Body.Certified
+	}
+	prepared, err := metrics.Prepare(f, request.Body.Definition)
+	var (
+		invalidDef   *metrics.InvalidDefinitionError
+		invalidField *metrics.InvalidFieldError
+	)
+	switch {
+	case errors.As(err, &invalidDef):
+		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, invalidDef.Error())}, nil
+	case errors.As(err, &invalidField):
+		return CreateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalidField.Msg)}, nil
+	case err != nil:
+		return nil, err
 	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	bindingID := emptyUUID(request.Body.BindingId)
-	ownerID := emptyUUID(request.Body.OwnerUserId)
-	description, certified := "", false
-	if request.Body.Description != nil {
-		description = *request.Body.Description
-	}
-	if request.Body.Certified != nil {
-		certified = *request.Body.Certified
-	}
 
-	catalogID := pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}
-	if err := h.validateSemanticMetric(ctx, ws, catalogID, bindingID, userID, def, request.Body.Namespace, request.Body.Table, request.Body.Slug); err != nil {
+	if err := h.validateSemanticMetric(ctx, ws, prepared.CatalogID, prepared.BindingID, userID, prepared.Def, prepared.Namespace, prepared.Table, prepared.Slug); err != nil {
 		if te, ok := asTargetError(err); ok {
 			if te.notFound {
 				return CreateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound(te.message)}, nil
@@ -448,37 +437,14 @@ func (h *SemanticHandlers) CreateSemanticMetric(ctx context.Context, request Cre
 	if se, err := h.contentSpace(ctx, ws, space.ID, authz.SpaceManager); err == nil && se == nil {
 		isManager = true
 	}
-	if certified && !isManager {
-		return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a metric"}}, nil
-	}
-	metric, err := h.contentService().CreateSemanticMetric(ctx, userID, db.CreateSemanticMetricParams{
-		WorkspaceID:   ws,
-		SpaceID:       space.ID,
-		Slug:          request.Body.Slug,
-		Label:         request.Body.Label,
-		Description:   description,
-		Certified:     certified,
-		CatalogID:     catalogID,
-		Namespace:     request.Body.Namespace,
-		TableName:     request.Body.Table,
-		BindingID:     bindingID,
-		Definition:    raw,
-		FormatVersion: semantic.FormatVersion,
-		OwnerUserID:   ownerID,
-		UpdatedBy:     userID,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return CreateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a metric with this slug already exists in this workspace"}}, nil
-		}
+	metric, err := h.metricDefs.Create(ctx, userID, ws, space.ID, prepared, isManager)
+	switch {
+	case errors.Is(err, metrics.ErrCertifyForbidden):
+		return CreateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: err.Error()}}, nil
+	case errors.Is(err, metrics.ErrSlugTaken):
+		return CreateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	case err != nil:
 		return nil, err
-	}
-	if certified {
-		if recertified, cerr := h.queries.SetSemanticMetricCertification(ctx, db.SetSemanticMetricCertificationParams{
-			WorkspaceID: ws, ID: metric.ID, Certified: true, Actor: userID,
-		}); cerr == nil {
-			metric = recertified
-		}
 	}
 	out := dbSemanticMetricToPublic(metric, 1)
 	acts := h.metricActions(ctx, ws, metric.SpaceID)
@@ -499,8 +465,8 @@ func (h *SemanticHandlers) UpdateSemanticMetric(ctx context.Context, request Upd
 		return nil, errors.New("semantic metric: missing body")
 	}
 	metricID := pgtype.UUID{Bytes: request.MetricId, Valid: true}
-	current, err := h.queries.GetSemanticMetric(ctx, db.GetSemanticMetricParams{WorkspaceID: ws, ID: metricID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	current, err := h.metricDefs.Get(ctx, ws, metricID)
+	if errors.Is(err, metrics.ErrNotFound) {
 		return UpdateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
 	if err != nil {
@@ -523,64 +489,38 @@ func (h *SemanticHandlers) UpdateSemanticMetric(ctx context.Context, request Upd
 		isManager = true
 	}
 	body := request.Body
-	if body.Certified != nil && *body.Certified != current.Certified && !isManager {
-		return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a metric"}}, nil
-	}
-	// body.Certified is applied after the update so certified_by/at stay
-	// consistent.
-	changesDefinition := body.Definition != nil || body.CatalogId != nil || body.Namespace != nil || body.Table != nil
-	slug, label, tableName := current.Slug, current.Label, current.TableName
-	namespace := current.Namespace
-	description, certified := current.Description, current.Certified
-	catalogID := current.CatalogID
-	bindingID := current.BindingID
-	ownerID := current.OwnerUserID
-	raw := current.Definition
-	if body.Slug != nil {
-		slug = *body.Slug
-	}
-	if body.Label != nil {
-		label = *body.Label
-	}
-	if body.Description != nil {
-		description = *body.Description
-	}
-	if body.Certified != nil {
-		certified = *body.Certified
-	} else if changesDefinition && current.Certified && !isManager {
-		certified = false
+	change := metrics.Change{
+		Slug: body.Slug, Label: body.Label, Description: body.Description, Certified: body.Certified,
+		Namespace: body.Namespace, Table: body.Table, Definition: body.Definition,
 	}
 	if body.CatalogId != nil {
-		catalogID = pgtype.UUID{Bytes: *body.CatalogId, Valid: true}
-	}
-	if body.Namespace != nil {
-		namespace = *body.Namespace
-	}
-	if body.Table != nil {
-		tableName = *body.Table
+		change.CatalogID = &pgtype.UUID{Bytes: *body.CatalogId, Valid: true}
 	}
 	if body.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: *body.BindingId, Valid: true}
+		change.BindingID = &pgtype.UUID{Bytes: *body.BindingId, Valid: true}
 	}
 	if body.OwnerUserId != nil {
-		ownerID = pgtype.UUID{Bytes: *body.OwnerUserId, Valid: true}
+		change.OwnerID = &pgtype.UUID{Bytes: *body.OwnerUserId, Valid: true}
 	}
-	if body.Definition != nil {
-		if _, b, err := parseDefinition(*body.Definition); err != nil {
-			return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
-		} else {
-			raw = b
-		}
-	}
-	def, _, err := parseDefinitionRaw(raw)
-	if err != nil {
-		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
-	}
-	if msg, ok := validateMetricFields(slug, label, tableName); !ok {
-		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, msg)}, nil
+	// A certification is applied after the update so certified_by/at stay
+	// consistent.
+	merged, err := metrics.Merge(current, change, isManager)
+	var (
+		invalidDef   *metrics.InvalidDefinitionError
+		invalidField *metrics.InvalidFieldError
+	)
+	switch {
+	case errors.Is(err, metrics.ErrCertifyForbidden):
+		return UpdateSemanticMetric403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: err.Error()}}, nil
+	case errors.As(err, &invalidDef):
+		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, invalidDef.Error())}, nil
+	case errors.As(err, &invalidField):
+		return UpdateSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalidField.Msg)}, nil
+	case err != nil:
+		return nil, err
 	}
 
-	nf, err = h.semanticCatalog(ctx, ws, openapi_types.UUID(catalogID.Bytes))
+	nf, err = h.semanticCatalog(ctx, ws, openapi_types.UUID(merged.CatalogID.Bytes))
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +531,7 @@ func (h *SemanticHandlers) UpdateSemanticMetric(ctx context.Context, request Upd
 	if err != nil {
 		return nil, err
 	}
-	if err := h.validateSemanticMetric(ctx, ws, catalogID, bindingID, userID, def, namespace, tableName, slug); err != nil {
+	if err := h.validateSemanticMetric(ctx, ws, merged.CatalogID, merged.BindingID, userID, merged.Def, merged.Namespace, merged.Table, merged.Slug); err != nil {
 		if te, ok := asTargetError(err); ok {
 			if te.notFound {
 				return UpdateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound(te.message)}, nil
@@ -606,39 +546,15 @@ func (h *SemanticHandlers) UpdateSemanticMetric(ctx context.Context, request Upd
 		v := int32(*body.ExpectedVersion)
 		expected = &v
 	}
-	certificationChanged := certified != current.Certified
-	updated, _, err := h.contentService().UpdateSemanticMetric(ctx, userID, db.UpdateSemanticMetricParams{
-		WorkspaceID:   ws,
-		SpaceID:       current.SpaceID,
-		ID:            metricID,
-		Slug:          slug,
-		Label:         label,
-		Description:   description,
-		Certified:     certified,
-		CatalogID:     catalogID,
-		Namespace:     namespace,
-		TableName:     tableName,
-		BindingID:     bindingID,
-		Definition:    raw,
-		FormatVersion: semantic.FormatVersion,
-		OwnerUserID:   ownerID,
-		UpdatedBy:     userID,
-	}, expected)
+	updated, err := h.metricDefs.Update(ctx, userID, current, merged, expected)
+	if errors.Is(err, metrics.ErrSlugTaken) {
+		return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	}
 	if err != nil {
-		if isUniqueViolation(err) {
-			return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a metric with this slug already exists in this workspace"}}, nil
-		}
 		if c, ok := h.versionConflictResponse(ctx, err); ok {
 			return UpdateSemanticMetric409JSONResponse{ConflictJSONResponse: c}, nil
 		}
 		return nil, err
-	}
-	if certificationChanged || (updated.Certified && !updated.CertifiedAt.Valid) {
-		if recertified, cerr := h.queries.SetSemanticMetricCertification(ctx, db.SetSemanticMetricCertificationParams{
-			WorkspaceID: ws, ID: metricID, Certified: updated.Certified, Actor: userID,
-		}); cerr == nil {
-			updated = recertified
-		}
 	}
 	out := dbSemanticMetricToPublic(updated, h.semanticMetricVersion(ctx, ws, metricID))
 	acts := h.metricActions(ctx, ws, updated.SpaceID)
@@ -656,8 +572,8 @@ func (h *SemanticHandlers) DeleteSemanticMetric(ctx context.Context, request Del
 		return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
 	metricID := pgtype.UUID{Bytes: request.MetricId, Valid: true}
-	current, err := h.queries.GetSemanticMetric(ctx, db.GetSemanticMetricParams{WorkspaceID: ws, ID: metricID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	current, err := h.metricDefs.Get(ctx, ws, metricID)
+	if errors.Is(err, metrics.ErrNotFound) {
 		return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
 	if err != nil {
@@ -678,7 +594,7 @@ func (h *SemanticHandlers) DeleteSemanticMetric(ctx context.Context, request Del
 	if err != nil {
 		return nil, err
 	}
-	if err := h.contentService().DeleteSemanticMetric(ctx, actor, ws, metricID); err != nil {
+	if err := h.metricDefs.Delete(ctx, actor, ws, metricID); err != nil {
 		if errors.Is(err, content.ErrNotFound) {
 			return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 		}
@@ -696,10 +612,8 @@ func (h *SemanticHandlers) GetSemanticMetricSql(ctx context.Context, request Get
 	if nf {
 		return GetSemanticMetricSql404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	metric, err := h.queries.GetSemanticMetric(ctx, db.GetSemanticMetricParams{
-		WorkspaceID: ws, ID: pgtype.UUID{Bytes: request.MetricId, Valid: true},
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	metric, err := h.metricDefs.Get(ctx, ws, pgtype.UUID{Bytes: request.MetricId, Valid: true})
+	if errors.Is(err, metrics.ErrNotFound) {
 		return GetSemanticMetricSql404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
 	if err != nil {
@@ -723,7 +637,7 @@ func (h *SemanticHandlers) GetSemanticMetricSql(ctx context.Context, request Get
 		}
 		return GetSemanticMetricSql404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
-	def, _, err := parseDefinitionRaw(metric.Definition)
+	def, _, err := metrics.ParseDefinitionRaw(metric.Definition)
 	if err != nil {
 		return GetSemanticMetricSql422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
@@ -762,41 +676,6 @@ func (h *SemanticHandlers) GetSemanticMetricSql(ctx context.Context, request Get
 }
 
 // ── metric validation ───────────────────────────────────────────────────────────
-
-// parseDefinition decodes the request's free-form definition and rejects
-// unknown fields; it returns the normalized JSON stored in the database.
-func parseDefinition(in map[string]any) (semantic.SimpleMetricV1, []byte, error) {
-	raw, err := json.Marshal(in)
-	if err != nil {
-		return semantic.SimpleMetricV1{}, nil, err
-	}
-	return parseDefinitionRaw(raw)
-}
-
-func parseDefinitionRaw(raw []byte) (semantic.SimpleMetricV1, []byte, error) {
-	def, err := semantic.ParseSimpleMetricV1(raw)
-	if err != nil {
-		return semantic.SimpleMetricV1{}, nil, err
-	}
-	normalized, err := json.Marshal(def)
-	if err != nil {
-		return semantic.SimpleMetricV1{}, nil, err
-	}
-	return def, normalized, nil
-}
-
-func validateMetricFields(slug, label, table string) (string, bool) {
-	if !slugs.Valid(slug) {
-		return "slug must match ^[a-z][a-z0-9_]{0,62}$", false
-	}
-	if strings.TrimSpace(label) == "" {
-		return "label is required", false
-	}
-	if strings.TrimSpace(table) == "" {
-		return "table is required", false
-	}
-	return "", true
-}
 
 func emptyUUID(v *openapi_types.UUID) pgtype.UUID {
 	if v == nil {
@@ -1036,7 +915,7 @@ func (h *SemanticHandlers) RenderSemanticMetric(ctx context.Context, request Ren
 	if request.Body == nil {
 		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
-	def, _, err := parseDefinition(request.Body.Definition)
+	def, _, err := metrics.ParseDefinition(request.Body.Definition)
 	if err != nil {
 		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
@@ -1075,7 +954,7 @@ func (h *SemanticHandlers) ValidateSemanticMetricDefinition(ctx context.Context,
 	if request.Body == nil {
 		return ValidateSemanticMetricDefinition422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
-	def, _, err := parseDefinition(request.Body.Definition)
+	def, _, err := metrics.ParseDefinition(request.Body.Definition)
 	if err != nil {
 		return ValidateSemanticMetricDefinition422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
