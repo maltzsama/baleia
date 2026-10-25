@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata/typemap"
 	"github.com/galileostudio/baleia/internal/semantic"
+	"github.com/galileostudio/baleia/internal/semantic/models"
 	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -96,7 +97,7 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
-	visible, err := h.visibleModels(ctx, ws, userID)
+	visible, err := h.modelDefs.Visible(ctx, ws, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +165,7 @@ func (h *core) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards 
 
 	var existing *db.SemanticModel
 	for i := range modelRows {
-		def, err := parseSemanticModel(modelRows[i].Definition)
+		def, err := models.ParseStored(modelRows[i].Definition)
 		if err != nil || def.Source.Kind != semantic.SourceTable {
 			continue
 		}
@@ -177,7 +178,7 @@ func (h *core) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards 
 	var model semantic.Model
 	var spaceID pgtype.UUID
 	if existing != nil {
-		def, _ := parseSemanticModel(existing.Definition)
+		def, _ := models.ParseStored(existing.Definition)
 		model = def
 		model.Slug = existing.Slug
 		model.CatalogID = uuid.UUID(existing.CatalogID.Bytes).String()
