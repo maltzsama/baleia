@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
 	"github.com/galileostudio/baleia/internal/wsticket"
@@ -16,6 +17,8 @@ type QueryHandlers struct {
 	folders *folders.Service
 	// saved manages saved queries; writes go through content (#34).
 	saved *savedqueries.Service
+	// executions runs SQL through the execution workflow and reads the runs.
+	executions *executions.Service
 }
 
 // newQueryHandlers builds the group; a nil ticket store builds one.
@@ -29,5 +32,9 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 		wsTickets: tickets,
 		folders:   f,
 		saved:     savedqueries.NewService(c.queries, f, c.contentService()),
+		executions: executions.New(c.queries, c.temporalClient, c.engines, c.dialects, executions.Config{
+			StatementTimeout: c.settings.Execution.StatementTimeout,
+			ExecutionTimeout: c.settings.Execution.ExecutionTimeout,
+		}),
 	}
 }

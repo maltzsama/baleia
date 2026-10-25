@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,20 +20,16 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
+	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -421,20 +417,6 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 		limit = *p.Limit
 	}
 
-	// Visibility (#36): the workspace owner and global admins see every
-	// execution; everyone else sees only their own.
-	seeAll := auth.RoleFromContext(ctx) == "admin"
-	if !seeAll {
-		owner, err := h.queries.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{
-			ID:     workspaceIDFromRequest(request.Id),
-			UserID: callerID,
-		})
-		if err != nil {
-			return nil, err
-		}
-		seeAll = owner
-	}
-
 	userFilter := pgtype.UUID{}
 	if p.UserId != nil && *p.UserId != "" {
 		if *p.UserId == "me" {
@@ -447,15 +429,11 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 			userFilter = uid
 		}
 	}
-	if !seeAll {
-		userFilter = callerID
-	}
 
 	params := db.ListExecutionHistoryParams{
 		WorkspaceID: workspaceIDFromRequest(request.Id),
 		UserID:      userFilter,
 		Q:           p.Q,
-		Lim:         int32(limit + 1),
 	}
 	if p.Status != nil {
 		status := string(*p.Status)
@@ -482,17 +460,19 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 		params.CursorID = id
 	}
 
-	rows, err := h.queries.ListExecutionHistory(ctx, params)
+	// Visibility (#36): the workspace owner and global admins see every
+	// execution; everyone else sees only their own.
+	page, err := h.executions.History(ctx, executions.Viewer{UserID: callerID, Admin: auth.RoleFromContext(ctx) == "admin"}, params, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := ListExecutions200JSONResponse{Data: make([]Execution, 0, len(rows))}
-	if len(rows) > limit {
-		rows = rows[:limit]
-		cursor := encodeHistoryCursor(rows[limit-1].StartedAt.Time, rows[limit-1].ID)
+	out := ListExecutions200JSONResponse{Data: make([]Execution, 0, len(page.Rows))}
+	if page.More {
+		last := page.Rows[len(page.Rows)-1]
+		cursor := encodeHistoryCursor(last.StartedAt.Time, last.ID)
 		out.NextCursor = &cursor
 	}
-	for _, row := range rows {
+	for _, row := range page.Rows {
 		out.Data = append(out.Data, historyRowToPublic(row))
 	}
 	return out, nil
@@ -593,14 +573,11 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 
 	// #111: rerun copies the original statements on the server, never re-splits
 	// SQL. The target defaults to the original one unless the request names one.
-	var rerunExecutionID string
+	var rerunOf pgtype.UUID
 	var rerunFromPosition int32
 	if request.Body.Rerun != nil {
 		originalID := pgtype.UUID{Bytes: request.Body.Rerun.ExecutionId, Valid: true}
-		original, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-			ID:          originalID,
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-		})
+		original, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), originalID)
 		if err != nil {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
@@ -609,7 +586,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
-		rerunExecutionID = openapi_types.UUID(original.ID.Bytes).String()
+		rerunOf = original.ID
 		rerunFromPosition = int32(request.Body.Rerun.FromPosition)
 		request.Body.Sql = original.Sql
 		if request.Body.Target == nil && original.TargetBindingID.Valid {
@@ -649,16 +626,6 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 			message: "queries on " + target.EngineKind + " engines are not available yet",
 		}).unprocessable()}, nil
 	}
-	snapshot, err := target.Snapshot()
-	if err != nil {
-		return nil, err
-	}
-	trinoCatalog := target.EngineCatalog
-	var targetSchema *string
-	if target.Schema != "" {
-		targetSchema = &target.Schema
-	}
-
 	var savedQueryID pgtype.UUID
 	if request.Body.SavedQueryId != nil {
 		savedQueryID.Bytes = *request.Body.SavedQueryId
@@ -666,9 +633,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		// A saved query from another workspace, or from a space the caller
 		// cannot see, must not be attached to an execution (it would leak its
 		// id into this workspace's history).
-		saved, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{
-			ID: savedQueryID, WorkspaceID: workspaceIDFromRequest(request.Id),
-		})
+		saved, err := h.saved.Get(ctx, workspaceIDFromRequest(request.Id), savedQueryID)
 		if err != nil {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
@@ -684,81 +649,27 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		}
 	}
 
-	// Correlate the execution with the inbound HTTP request so the row, the
-	// Temporal workflow, and the activity logs can be joined back to the
-	// request log line.
-	requestID := middleware.GetReqID(ctx)
-	var requestIDPtr *string
-	if requestID != "" {
-		requestIDPtr = &requestID
-	}
-
 	// Per-user Trino identity: user SQL reaches Trino as the Baleia user, never
 	// as the admin or service identity.
 	trinoUser, err := h.trinoIdentityFor(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
-
-	execution, err := h.queries.CreateQueryExecution(ctx, db.CreateQueryExecutionParams{
+	execution, err := h.executions.Start(ctx, executions.Run{
 		WorkspaceID:  workspaceIDFromRequest(request.Id),
 		UserID:       uid,
 		SavedQueryID: savedQueryID,
-		Status:       "running",
-		Sql:          request.Body.Sql,
-		TrinoCatalog: &trinoCatalog,
-		RequestID:    requestIDPtr,
-		// The resolved target, recorded for history (#13).
-		EngineID:        target.EngineID,
-		TargetBindingID: target.BindingID,
-		TargetCatalogID: target.CatalogID,
-		TargetSchema:    targetSchema,
-		TargetSnapshot:  snapshot,
-		AgentID:         agentID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	executionID := openapi_types.UUID(execution.ID.Bytes).String()
-
-	wo := client.StartWorkflowOptions{
-		ID:        "exec-" + executionID,
-		TaskQueue: "baleia-task-queue",
-	}
-
-	// The script is split with the target engine's dialect; Trino when the
-	// kind has none (the rule V2 applied inside the workflow).
-	dialectName := dialect.Trino
-	if d, ok := h.dialects.ForEngineKind(target.EngineKind); ok {
-		dialectName = d.Name()
-	}
-	_, err = h.temporalClient.ExecuteWorkflow(ctx, wo, workflows.QueryExecutionWorkflowV3, workflows.QueryExecutionInput{
-		ExecutionID:       executionID,
-		WorkspaceID:       request.Id.String(),
-		SQL:               request.Body.Sql,
-		Target:            target,
-		Identity:          queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID)},
-		StatementTimeout:  h.settings.Execution.StatementTimeout,
-		RequestID:         requestID,
-		ExecutionTimeout:  h.settings.Execution.ExecutionTimeout,
-		RerunExecutionID:  rerunExecutionID,
+		SQL:          request.Body.Sql,
+		Target:       target,
+		Identity:     queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID)},
+		AgentID:      agentID,
+		// Correlates the row, the workflow and the activity logs with the
+		// request log line.
+		RequestID:         middleware.GetReqID(ctx),
+		RerunOf:           rerunOf,
 		RerunFromPosition: rerunFromPosition,
-		Dialect:           dialectName,
 	})
 	if err != nil {
-		// The workflow failed to start; fail the row so it does not stay
-		// `running` forever. Use a context detached from the request in case
-		// the request was cancelled mid-call.
-		failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		if _, ferr := h.queries.UpdateQueryExecution(failCtx, db.UpdateQueryExecutionParams{
-			ID:     execution.ID,
-			Status: "failed",
-		}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
-			slog.Error("failed to mark execution failed after workflow start error",
-				"execution_id", executionID, "start_err", err, "mark_err", ferr)
-		}
 		return nil, err
 	}
 
@@ -780,10 +691,7 @@ func (h *QueryHandlers) GetExecution(ctx context.Context, request GetExecutionRe
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-	})
+	execution, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), executionID)
 	if err != nil {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
@@ -818,83 +726,29 @@ func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecu
 
 	// Agents may cancel only the executions they created (#58).
 	if p, err := authz.PrincipalFromContext(ctx); err == nil && p.IsAgent() {
-		exec, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{ID: executionID, WorkspaceID: wsID})
+		exec, err := h.executions.Get(ctx, wsID, executionID)
 		if err != nil || !agentOwnsExecution(ctx, exec) {
 			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
 	}
 
-	// Conditional cancel: only a running execution transitions to cancelled, so
-	// a completion or failure that races after this call cannot be overwritten.
-	updated, err := h.queries.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{
-		ID:          executionID,
-		WorkspaceID: wsID,
-	})
-	if err == nil {
-		// Cancel the Temporal workflow so the running statement stops and its
-		// Trino query is killed. A NotFound means the workflow already ended.
-		cancelErr := h.temporalClient.CancelWorkflow(ctx, "exec-"+executionID.String(), "")
-		var notFoundErr *serviceerror.NotFound
-		if cancelErr != nil && !errors.As(cancelErr, &notFoundErr) {
-			slog.Warn("failed to cancel temporal workflow", "execution_id", executionID.String(), "err", cancelErr)
+	// Only a running execution is cancelled; a completion racing this call
+	// is never overwritten (#58).
+	execution, cancelled, err := h.executions.Cancel(ctx, wsID, executionID)
+	if err != nil {
+		if errors.Is(err, executions.ErrNotFound) {
+			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
-		// The worker running it may be gone: stop the statement on its engine
-		// through the persisted handle too. Cancelling a finished statement is
-		// not an error.
-		h.cancelOnEngine(ctx, updated)
-		h.audited(ctx, ev.Allowed())
-		return CancelExecution200JSONResponse(dbExecutionToPublic(updated)), nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
-
-	// Nothing was cancelled: the execution is gone, foreign, or already
-	// terminal. Return its current scoped state, or 404 when it is absent.
-	current, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: wsID,
-	})
-	if err != nil {
-		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+	if !cancelled {
+		// Already finished: nothing was cancelled.
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return CancelExecution200JSONResponse(dbExecutionToPublic(execution)), nil
 	}
-	// Already finished: nothing was cancelled.
-	h.audited(ctx, ev.Failed(audit.ReasonConflict))
-	return CancelExecution200JSONResponse(dbExecutionToPublic(current)), nil
-}
-
-// cancelOnEngine cancels the running statements of an execution by their
-// persisted handles, best effort and bounded in time.
-func (h *core) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
-	if h.engines == nil {
-		return
-	}
-	rows, err := h.queries.ListRunningStatementHandles(ctx, e.ID)
-	if err != nil || len(rows) == 0 {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	var eng queryengine.Engine
-	if e.EngineID.Valid {
-		eng, err = h.engines.Get(ctx, e.EngineID)
-	} else {
-		eng, err = h.engines.DefaultTrino(ctx)
-	}
-	if err != nil {
-		slog.Warn("cancel on engine: no engine", "execution_id", e.ID.String(), "err", err)
-		return
-	}
-	for _, r := range rows {
-		var handle queryengine.QueryHandle
-		if json.Unmarshal(r.QueryHandle, &handle) != nil {
-			continue
-		}
-		if err := eng.Cancel(ctx, handle); err != nil {
-			slog.Warn("cancel on engine failed", "execution_id", e.ID.String(), "position", r.Position, "err", err)
-		}
-	}
+	h.audited(ctx, ev.Allowed())
+	return CancelExecution200JSONResponse(dbExecutionToPublic(execution)), nil
 }
 
 func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
@@ -907,20 +761,12 @@ func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatemen
 	executionID.Valid = true
 	wsID := workspaceIDFromRequest(request.Id)
 
-	// The join-based statements query returns an empty slice for a foreign or
-	// absent execution, which would hide a cross-workspace id behind a 200.
-	// Verify the execution belongs to this workspace first so we can answer 404.
-	if _, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: wsID,
-	}); err != nil {
+	// A foreign or absent execution is a 404, never an empty 200 that would
+	// hide a cross-workspace id.
+	statements, err := h.executions.Statements(ctx, wsID, executionID)
+	if errors.Is(err, executions.ErrNotFound) {
 		return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
-
-	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, db.ListQueryStatementsByWorkspaceParams{
-		ExecutionID: executionID,
-		WorkspaceID: wsID,
-	})
 	if err != nil {
 		return nil, err
 	}
@@ -942,10 +788,7 @@ func (h *QueryHandlers) GetResults(ctx context.Context, request GetResultsReques
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-	})
+	execution, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), executionID)
 	if err != nil {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
@@ -1021,11 +864,11 @@ func (h *QueryHandlers) GetStatementResults(ctx context.Context, request GetStat
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
-	statement, err := h.queries.GetQueryStatementByPosition(ctx, db.GetQueryStatementByPositionParams{
-		ExecutionID: executionID,
-		WorkspaceID: workspaceIDFromRequest(request.Id),
-		Position:    int32(request.Position),
-	})
+	if request.Position < 0 || request.Position > math.MaxInt32 {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
+	}
+	statement, err := h.executions.Statement(ctx, workspaceIDFromRequest(request.Id), executionID, int32(request.Position))
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
