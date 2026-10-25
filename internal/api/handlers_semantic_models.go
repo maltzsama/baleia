@@ -12,13 +12,13 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
+	"github.com/galileostudio/baleia/internal/content/history"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/semantic/compiler"
 	"github.com/galileostudio/baleia/internal/semantic/models"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -169,13 +169,7 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 // semanticModelVersion returns the latest content version, or 0 when the model
 // has never been versioned (e.g. seeded outside the content service).
 func (h *core) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
-	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id,
-	})
-	if err != nil {
-		return 0
-	}
-	return v.Version
+	return h.history.Latest(ctx, ws, content.EntitySemanticModel, id)
 }
 
 func (h *core) semanticModelActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
@@ -535,29 +529,12 @@ func (h *SemanticHandlers) DeleteSemanticModel(ctx context.Context, request Dele
 
 // ── model versions (#34) ────────────────────────────────────────────────────────
 
-func (h *core) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
-	m, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id})
-	if err == nil {
-		return m.SpaceID, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return pgtype.UUID{}, err
-	}
-	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id,
-	})
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return v.SpaceID, nil
-}
-
 // ListSemanticModelVersions — GET /workspaces/{id}/semantic/models/{model_id}/versions
 func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, request ListSemanticModelVersionsRequestObject) (ListSemanticModelVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	spaceID, err := h.modelSpaceForHistory(ctx, ws, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	spaceID, err := h.history.SpaceOf(ctx, ws, content.EntitySemanticModel, id)
+	if errors.Is(err, history.ErrNotFound) {
 		return ListSemanticModelVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
 	if err != nil {
@@ -577,9 +554,7 @@ func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, reques
 		return ListSemanticModelVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
 	lim, off := versionPage(request.Params.Limit, request.Params.Offset)
-	rows, err := h.queries.ListContentVersions(ctx, db.ListContentVersionsParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Lim: lim, Off: off,
-	})
+	rows, err := h.history.List(ctx, ws, content.EntitySemanticModel, id, lim, off)
 	if err != nil {
 		return nil, err
 	}
@@ -594,10 +569,8 @@ func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, reques
 func (h *SemanticHandlers) GetSemanticModelVersion(ctx context.Context, request GetSemanticModelVersionRequestObject) (GetSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Version: int32(request.Version),
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	v, err := h.history.Get(ctx, ws, content.EntitySemanticModel, id, versionArg(request.Version))
+	if errors.Is(err, history.ErrNotFound) {
 		return GetSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
 	if err != nil {
@@ -627,10 +600,8 @@ func (h *SemanticHandlers) GetSemanticModelVersion(ctx context.Context, request 
 func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, request RestoreSemanticModelVersionRequestObject) (RestoreSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Version: int32(request.Version),
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	v, err := h.history.Get(ctx, ws, content.EntitySemanticModel, id, versionArg(request.Version))
+	if errors.Is(err, history.ErrNotFound) {
 		return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
 	if err != nil {

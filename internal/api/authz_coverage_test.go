@@ -248,9 +248,9 @@ var operationAccess = map[string]access{
 	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "ListVisibleSemanticMetrics", "semanticCatalog", "Visible", "contentSpace"),
 	"UpdateSemanticModel":         checked("metadataWorkspace", "Get", "semanticCatalog", "PrepareUpdate", "contentSpace"),
 	"DeleteSemanticModel":         checked("metadataWorkspace", "Get", "contentSpace", "Delete"),
-	"ListSemanticModelVersions":   checked("modelSpaceForHistory", "contentSpace", "ListContentVersions"),
-	"GetSemanticModelVersion":     checked("GetContentVersion", "contentSpace"),
-	"RestoreSemanticModelVersion": checked("GetContentVersion", "contentSpace", "RestoreSemanticModel"),
+	"ListSemanticModelVersions":   checked("SpaceOf", "contentSpace", "List"),
+	"GetSemanticModelVersion":     checked("Get", "contentSpace"),
+	"RestoreSemanticModelVersion": checked("Get", "contentSpace", "RestoreSemanticModel"),
 	// Spaces (#40): the effective role comes from the SQL function through
 	// internal/authz. Invisible is 404, below the required role is 403.
 	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "ListSpacesForPrincipal"),
@@ -263,13 +263,13 @@ var operationAccess = map[string]access{
 	"DeleteSpaceMember": checked("requireSpace", "DeleteSpaceMember"),
 	// Content versions and trash (#34): viewer reads the history, editor
 	// restores; a deleted entity is authorized against its last version's space.
-	"ListSavedQueryVersions":       checked("savedQuerySpaceForHistory", "contentSpace", "ListContentVersions"),
-	"GetSavedQueryVersion":         checked("GetContentVersion", "contentSpace"),
-	"RestoreSavedQueryVersion":     checked("GetContentVersion", "contentSpace", "RestoreSavedQuery"),
-	"ListSemanticMetricVersions":   checked("metricSpaceForHistory", "contentSpace", "ListContentVersions"),
-	"GetSemanticMetricVersion":     checked("GetContentVersion", "contentSpace"),
-	"RestoreSemanticMetricVersion": checked("GetContentVersion", "contentSpace", "ParseMetricSnapshot", "validateSemanticMetric", "RestoreSemanticMetric"),
-	"ListTrash":                    checked("requireWorkspaceAccess", "ListDeletedContent"),
+	"ListSavedQueryVersions":       checked("SpaceOf", "contentSpace", "List"),
+	"GetSavedQueryVersion":         checked("Get", "contentSpace"),
+	"RestoreSavedQueryVersion":     checked("Get", "contentSpace", "RestoreSavedQuery"),
+	"ListSemanticMetricVersions":   checked("SpaceOf", "contentSpace", "List"),
+	"GetSemanticMetricVersion":     checked("Get", "contentSpace"),
+	"RestoreSemanticMetricVersion": checked("Get", "contentSpace", "ParseMetricSnapshot", "validateSemanticMetric", "RestoreSemanticMetric"),
+	"ListTrash":                    checked("requireWorkspaceAccess", "Trash"),
 	"ExportSpaceBundle":            checked("contentSpace", "Export"),
 	"ImportSpaceBundle":            checked("contentSpace", "Import"),
 	// Audit trail (#45): admins see all, anyone else only their own events.

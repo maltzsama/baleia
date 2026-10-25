@@ -823,13 +823,7 @@ func dbSemanticSearchRowToPublic(r db.SearchSemanticDocsRow) SemanticDocSearchRe
 
 // semanticMetricVersion returns the latest content version, or 0 when none.
 func (h *core) semanticMetricVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
-	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticMetric, EntityID: id,
-	})
-	if err != nil {
-		return 0
-	}
-	return v.Version
+	return h.history.Latest(ctx, ws, content.EntitySemanticMetric, id)
 }
 
 func dbSemanticMetricToPublic(m db.SemanticMetric, version int32) SemanticMetric {

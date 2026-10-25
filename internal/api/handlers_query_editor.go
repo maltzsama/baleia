@@ -1140,13 +1140,7 @@ func dbSavedQueryToPublic(q db.SavedQuery, version int32) SavedQuery {
 
 // savedQueryVersion returns the latest content version, or 0 when none.
 func (h *core) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
-	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySavedQuery, EntityID: id,
-	})
-	if err != nil {
-		return 0
-	}
-	return v.Version
+	return h.history.Latest(ctx, ws, content.EntitySavedQuery, id)
 }
 
 // versionConflictResponse maps content.ErrVersionConflict to the 409 body with

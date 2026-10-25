@@ -4,6 +4,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/content"
+	"github.com/galileostudio/baleia/internal/content/history"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -42,4 +43,7 @@ type core struct {
 	audit audit.Recorder
 	// content is the only writer of saved content and its versions (#34).
 	content *content.Service
+	// history reads content versions and the trash (#34), for every group
+	// that shows a version.
+	history *history.Service
 }

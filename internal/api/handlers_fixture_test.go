@@ -6,6 +6,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/content/history"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -54,6 +55,7 @@ func testAPI(f handlerFields) *API {
 		dialects:       f.dialects,
 		audit:          f.audit,
 	}
+	c.history = history.New(c.queries)
 	h := &API{
 		core:        c,
 		OpsHandlers: newOpsHandlers(c, f.schema),
