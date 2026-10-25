@@ -82,7 +82,7 @@ func TestCancel_AsSoonAsTheHandleIsReported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	done := make(chan error, 1)
 	go func() {
