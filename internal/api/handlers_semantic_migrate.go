@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata/typemap"
 	"github.com/galileostudio/baleia/internal/semantic"
+	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -378,7 +379,7 @@ func (h *core) migrationColumns(ctx context.Context, t migrationTable) ([]semant
 
 // migrationSlug derives a free model slug from the table name.
 func (h *core) migrationSlug(ctx context.Context, ws pgtype.UUID, table string, reserved map[string]bool) (string, error) {
-	slug, err := uniqueSlug(ctx, table, func(ctx context.Context, s string) (bool, error) {
+	slug, err := slugs.Unique(ctx, table, func(ctx context.Context, s string) (bool, error) {
 		if reserved[s] {
 			return true, nil
 		}

@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/go-chi/chi/v5/middleware"
@@ -114,13 +115,13 @@ func (h *QueryHandlers) CreateFolder(ctx context.Context, request CreateFolderRe
 		slug = *request.Body.Slug
 	}
 	if slug == "" {
-		slug, err = uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
+		slug, err = slugs.Unique(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
 			return h.queries.FolderSlugExists(ctx, db.FolderSlugExistsParams{SpaceID: space.ID, Slug: s})
 		})
 		if err != nil {
 			return nil, err
 		}
-	} else if !slugRe.MatchString(slug) {
+	} else if !slugs.Valid(slug) {
 		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
 	}
 
@@ -283,13 +284,13 @@ func (h *QueryHandlers) CreateSavedQuery(ctx context.Context, request CreateSave
 		slug = *request.Body.Slug
 	}
 	if slug == "" {
-		slug, err = uniqueSlug(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
+		slug, err = slugs.Unique(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
 			return h.queries.SavedQuerySlugExists(ctx, db.SavedQuerySlugExistsParams{WorkspaceID: ws, Slug: s})
 		})
 		if err != nil {
 			return nil, err
 		}
-	} else if !slugRe.MatchString(slug) {
+	} else if !slugs.Valid(slug) {
 		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
 	}
 
@@ -426,7 +427,7 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 	slug := current.Slug
 	if request.Body.Slug != nil {
 		slug = *request.Body.Slug
-		if !slugRe.MatchString(slug) {
+		if !slugs.Valid(slug) {
 			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
 		}
 	}

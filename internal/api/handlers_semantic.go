@@ -19,6 +19,7 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/semantic"
+	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -34,8 +35,6 @@ import (
 const maxDocDescription = 20000
 
 var semanticTagRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
-
-var slugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // semanticCatalog checks the workspace may use the catalog. notFound covers a
 // foreign or missing workspace/catalog; err is anything else.
@@ -874,7 +873,7 @@ func parseDefinitionRaw(raw []byte) (semantic.SimpleMetricV1, []byte, error) {
 }
 
 func validateMetricFields(slug, label, table string) (string, bool) {
-	if !slugRe.MatchString(slug) {
+	if !slugs.Valid(slug) {
 		return "slug must match ^[a-z][a-z0-9_]{0,62}$", false
 	}
 	if strings.TrimSpace(label) == "" {

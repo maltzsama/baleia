@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/semantic/compiler"
+	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -666,7 +667,7 @@ func parseSemanticModelDefinition(in map[string]any) (semantic.Model, []byte, er
 }
 
 func validateModelFields(slug, label string) (string, bool) {
-	if !slugRe.MatchString(slug) {
+	if !slugs.Valid(slug) {
 		return "slug must match ^[a-z][a-z0-9_]{0,62}$", false
 	}
 	if strings.TrimSpace(label) == "" {
