@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/galileostudio/baleia/internal/content/search"
 	"github.com/galileostudio/baleia/internal/semantic/docs"
 	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/galileostudio/baleia/internal/semantic/models"
@@ -15,8 +16,10 @@ type SemanticHandlers struct {
 	metricDefs *metrics.Service
 	// modelDefs manages semantic models; writes go through content (#34).
 	modelDefs *models.Service
+	// search finds content by name or slug (#131).
+	search *search.Service
 }
 
 func newSemanticHandlers(c *core) *SemanticHandlers {
-	return &SemanticHandlers{core: c, docs: docs.New(c.queries), metricDefs: metrics.New(c.queries, c.contentService()), modelDefs: models.New(c.queries, c.contentService())}
+	return &SemanticHandlers{core: c, docs: docs.New(c.queries), metricDefs: metrics.New(c.queries, c.contentService()), modelDefs: models.New(c.queries, c.contentService()), search: search.New(c.queries)}
 }

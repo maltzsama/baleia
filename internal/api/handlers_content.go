@@ -3,10 +3,10 @@ package api
 import (
 	"context"
 	"errors"
-	"sort"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/content/search"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -51,152 +51,36 @@ func (h *SemanticHandlers) SearchContent(ctx context.Context, request SearchCont
 		}
 		return nil, err
 	}
-	q := strings.TrimSpace(request.Params.Q)
-	if len([]rune(q)) < 2 {
-		return SearchContent200JSONResponse([]ContentSearchItem{}), nil
-	}
-	limit := 20
+	sq := search.Query{Text: request.Params.Q}
 	if request.Params.Limit != nil {
-		limit = *request.Params.Limit
+		sq.Limit = *request.Params.Limit
 	}
-	if limit < 1 || limit > 50 {
-		limit = 20
-	}
-	kind := ""
 	if request.Params.Kind != nil {
-		kind = *request.Params.Kind
+		sq.Kind = *request.Params.Kind
 	}
-	var spaceID pgtype.UUID
 	if request.Params.SpaceId != nil {
-		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+		sq.SpaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
-
-	spaces, err := h.queries.ListSpacesForPrincipal(ctx, db.ListSpacesForPrincipalParams{WorkspaceID: ws, UserID: p.UserID})
+	hits, err := h.search.Search(ctx, ws, p.UserID, sq)
 	if err != nil {
 		return nil, err
 	}
-	spaceNames := make(map[[16]byte]string, len(spaces))
-	for _, s := range spaces {
-		spaceNames[s.ID.Bytes] = s.Name
-	}
-
-	folders, err := h.queries.ListAllVisibleQueryFolders(ctx, db.ListAllVisibleQueryFoldersParams{
-		WorkspaceID: ws, UserID: p.UserID, SpaceID: spaceID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	folderByID := make(map[[16]byte]db.QueryFolder, len(folders))
-	children := make(map[[16]byte][][16]byte, len(folders))
-	for _, f := range folders {
-		folderByID[f.ID.Bytes] = f
-		if f.ParentID.Valid {
-			children[f.ParentID.Bytes] = append(children[f.ParentID.Bytes], f.ID.Bytes)
+	items := make([]ContentSearchItem, 0, len(hits))
+	for _, hit := range hits {
+		path := make([]ContentSearchFolderPath, 0, len(hit.FolderPath))
+		for _, f := range hit.FolderPath {
+			path = append(path, ContentSearchFolderPath{Id: openapi_types.UUID(f.ID.Bytes), Name: f.Name})
 		}
-	}
-	pathTo := func(id pgtype.UUID) []ContentSearchFolderPath {
-		out := []ContentSearchFolderPath{}
-		seen := map[[16]byte]bool{}
-		for id.Valid && !seen[id.Bytes] {
-			seen[id.Bytes] = true
-			f, ok := folderByID[id.Bytes]
-			if !ok {
-				break
-			}
-			out = append([]ContentSearchFolderPath{{Id: openapi_types.UUID(f.ID.Bytes), Name: f.Name}}, out...)
-			id = f.ParentID
-		}
-		return out
-	}
-
-	items := make([]ContentSearchItem, 0, limit)
-	lower := strings.ToLower(q)
-	if kind == "" || kind == "folder" {
-		for _, f := range folders {
-			if !strings.Contains(strings.ToLower(f.Name), lower) && !strings.Contains(strings.ToLower(f.Slug), lower) {
-				continue
-			}
-			items = append(items, ContentSearchItem{
-				Kind:       "folder",
-				Id:         openapi_types.UUID(f.ID.Bytes),
-				Slug:       f.Slug,
-				Title:      f.Name,
-				Space:      ContentSearchSpace{Id: openapi_types.UUID(f.SpaceID.Bytes), Name: spaceNames[f.SpaceID.Bytes]},
-				FolderPath: pathTo(f.ParentID),
-				UpdatedAt:  pgTimestampToTime(f.CreatedAt),
-			})
-		}
-	}
-	if kind == "" || kind == "saved_query" {
-		queries, err := h.queries.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{
-			WorkspaceID: ws, UserID: p.UserID, SpaceID: spaceID, Q: &q,
+		items = append(items, ContentSearchItem{
+			Kind:       hit.Kind,
+			Id:         openapi_types.UUID(hit.ID.Bytes),
+			Slug:       hit.Slug,
+			Title:      hit.Title,
+			Space:      ContentSearchSpace{Id: openapi_types.UUID(hit.SpaceID.Bytes), Name: hit.SpaceName},
+			FolderPath: path,
+			UpdatedAt:  hit.UpdatedAt,
+			Certified:  hit.Certified,
 		})
-		if err != nil {
-			return nil, err
-		}
-		for _, query := range queries {
-			items = append(items, ContentSearchItem{
-				Kind:       "saved_query",
-				Id:         openapi_types.UUID(query.ID.Bytes),
-				Slug:       query.Slug,
-				Title:      query.Name,
-				Space:      ContentSearchSpace{Id: openapi_types.UUID(query.SpaceID.Bytes), Name: spaceNames[query.SpaceID.Bytes]},
-				FolderPath: pathTo(query.FolderID),
-				UpdatedAt:  pgTimestampToTime(query.UpdatedAt),
-			})
-		}
-	}
-	if kind == "" || kind == "semantic_metric" {
-		metrics, err := h.queries.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{
-			WorkspaceID: ws, UserID: p.UserID, SpaceID: spaceID,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, metric := range metrics {
-			if !strings.Contains(strings.ToLower(metric.Label), lower) && !strings.Contains(strings.ToLower(metric.Slug), lower) {
-				continue
-			}
-			certified := metric.Certified
-			items = append(items, ContentSearchItem{
-				Kind:       "semantic_metric",
-				Id:         openapi_types.UUID(metric.ID.Bytes),
-				Slug:       metric.Slug,
-				Title:      metric.Label,
-				Space:      ContentSearchSpace{Id: openapi_types.UUID(metric.SpaceID.Bytes), Name: spaceNames[metric.SpaceID.Bytes]},
-				FolderPath: []ContentSearchFolderPath{},
-				UpdatedAt:  pgTimestampToTime(metric.UpdatedAt),
-				Certified:  &certified,
-			})
-		}
-	}
-	if kind == "" || kind == "semantic_model" {
-		models, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{
-			WorkspaceID: ws, UserID: p.UserID, SpaceID: spaceID,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, model := range models {
-			if !strings.Contains(strings.ToLower(model.Label), lower) && !strings.Contains(strings.ToLower(model.Slug), lower) {
-				continue
-			}
-			certified := model.Certified
-			items = append(items, ContentSearchItem{
-				Kind:       "semantic_model",
-				Id:         openapi_types.UUID(model.ID.Bytes),
-				Slug:       model.Slug,
-				Title:      model.Label,
-				Space:      ContentSearchSpace{Id: openapi_types.UUID(model.SpaceID.Bytes), Name: spaceNames[model.SpaceID.Bytes]},
-				FolderPath: []ContentSearchFolderPath{},
-				UpdatedAt:  pgTimestampToTime(model.UpdatedAt),
-				Certified:  &certified,
-			})
-		}
-	}
-	sort.SliceStable(items, func(i, j int) bool { return strings.ToLower(items[i].Title) < strings.ToLower(items[j].Title) })
-	if len(items) > limit {
-		items = items[:limit]
 	}
 	return SearchContent200JSONResponse(items), nil
 }
