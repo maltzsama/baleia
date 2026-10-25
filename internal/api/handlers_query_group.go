@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/retrievers"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
@@ -19,6 +21,8 @@ type QueryHandlers struct {
 	saved *savedqueries.Service
 	// executions runs SQL through the execution workflow and reads the runs.
 	executions *executions.Service
+	// retrievers materializes definitions on a schedule (#118).
+	retrievers *retrievers.Service
 }
 
 // newQueryHandlers builds the group; a nil ticket store builds one.
@@ -26,12 +30,18 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 	if tickets == nil {
 		tickets = wsticket.New()
 	}
+	// Retrievers refresh on the default Trino engine.
+	var trino dialect.Dialect
+	if c.dialects != nil {
+		trino, _ = c.dialects.Get(dialect.Trino)
+	}
 	f := folders.New(c.queries)
 	return &QueryHandlers{
-		core:      c,
-		wsTickets: tickets,
-		folders:   f,
-		saved:     savedqueries.NewService(c.queries, f, c.contentService()),
+		core:       c,
+		wsTickets:  tickets,
+		folders:    f,
+		saved:      savedqueries.NewService(c.queries, f, c.contentService()),
+		retrievers: retrievers.New(c.queries, c.temporalClient, c.engines, trino),
 		executions: executions.New(c.queries, c.temporalClient, c.engines, c.dialects, executions.Config{
 			StatementTimeout: c.settings.Execution.StatementTimeout,
 			ExecutionTimeout: c.settings.Execution.ExecutionTimeout,
