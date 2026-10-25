@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/jackc/pgx/v5/pgtype"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -84,6 +85,7 @@ func TestListCatalogMetadataSyncRuns(t *testing.T) {
 	h, q, _ := newAuthzHandlers(t)
 	rf := &runsFake{authzFake: q}
 	h.queries = rf
+	h.browse = browse.New(rf)
 	_, cat := reqIDs(q)
 	resp, err := h.ListCatalogMetadataSyncRuns(ctxAs(ownerID, "member"), ListCatalogMetadataSyncRunsRequestObject{CatalogId: cat})
 	if err != nil {

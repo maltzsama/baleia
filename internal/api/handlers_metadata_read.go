@@ -2,16 +2,14 @@ package api
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"time"
-	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metadata/typemap"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -21,12 +19,10 @@ import (
 // catalogs granted to it, and anything else is a 404.
 
 const (
-	defaultTablesPage = 100
-	maxTablesPage     = 500
-	defaultSearch     = 50
-	maxSearch         = 200
-	minSearchQuery    = 2
-	maxSearchQuery    = 200
+	defaultSearch  = 50
+	maxSearch      = 200
+	minSearchQuery = 2
+	maxSearchQuery = 200
 )
 
 // metadataWorkspace checks the caller is a member of the workspace. notFound
@@ -67,7 +63,7 @@ func (h *CatalogHandlers) ListMetadataCatalogs(ctx context.Context, request List
 	if nf {
 		return ListMetadataCatalogs404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	rows, err := h.queries.ListMetadataCatalogs(ctx, ws)
+	rows, err := h.browse.Catalogs(ctx, ws)
 	if err != nil {
 		return nil, err
 	}
@@ -93,8 +89,8 @@ func (h *CatalogHandlers) ListMetadataCatalogs(ctx context.Context, request List
 // grantedCatalog loads a catalog granted to the workspace; ok is false when
 // the workspace may not see it.
 func (h *core) grantedCatalog(ctx context.Context, ws pgtype.UUID, id openapi_types.UUID) (db.GetGrantedMetadataCatalogRow, bool, error) {
-	c, err := h.queries.GetGrantedMetadataCatalog(ctx, db.GetGrantedMetadataCatalogParams{WorkspaceID: ws, CatalogID: pgtype.UUID{Bytes: id, Valid: true}})
-	if errors.Is(err, pgx.ErrNoRows) {
+	c, err := h.browse.Catalog(ctx, ws, pgtype.UUID{Bytes: id, Valid: true})
+	if errors.Is(err, browse.ErrCatalogNotFound) {
 		return c, false, nil
 	}
 	return c, err == nil, err
@@ -109,18 +105,14 @@ func (h *CatalogHandlers) ListMetadataNamespaces(ctx context.Context, request Li
 	if nf {
 		return ListMetadataNamespaces404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	cat, ok, err := h.grantedCatalog(ctx, ws, request.CatalogId)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return ListMetadataNamespaces404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
-	}
-	parent := []string{}
+	var parent []string
 	if request.Params.Parent != nil {
 		parent = *request.Params.Parent
 	}
-	rows, err := h.queries.ListChildNamespaces(ctx, db.ListChildNamespacesParams{CatalogID: cat.ID, Parent: parent})
+	cat, rows, err := h.browse.Namespaces(ctx, ws, pgtype.UUID{Bytes: request.CatalogId, Valid: true}, parent)
+	if errors.Is(err, browse.ErrCatalogNotFound) {
+		return ListMetadataNamespaces404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -144,43 +136,25 @@ func (h *CatalogHandlers) ListMetadataTables(ctx context.Context, request ListMe
 	if nf {
 		return ListMetadataTables404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	cat, ok, err := h.grantedCatalog(ctx, ws, request.CatalogId)
-	if err != nil {
-		return nil, err
+	q := browse.TablesQuery{Limit: request.Params.Limit}
+	if request.Params.Cursor != nil {
+		q.Cursor = *request.Params.Cursor
 	}
-	if !ok {
-		return ListMetadataTables404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
-	}
-	limit := defaultTablesPage
-	if l := request.Params.Limit; l != nil {
-		if *l < 1 || *l > maxTablesPage {
-			return ListMetadataTables422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 500")}, nil
-		}
-		limit = *l
-	}
-	after := ""
-	if c := request.Params.Cursor; c != nil && *c != "" {
-		raw, err := base64.RawURLEncoding.DecodeString(*c)
-		if err != nil || !utf8.Valid(raw) {
-			return ListMetadataTables422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "invalid cursor")}, nil
-		}
-		after = string(raw)
-	}
-	ns := []string{}
 	if request.Params.Ns != nil {
-		ns = *request.Params.Ns
+		q.Namespace = *request.Params.Ns
 	}
-	rows, err := h.queries.ListMetadataTablesPage(ctx, db.ListMetadataTablesPageParams{CatalogID: cat.ID, Namespace: ns, After: after, Lim: int32(limit + 1)})
-	if err != nil {
+	page, err := h.browse.Tables(ctx, ws, pgtype.UUID{Bytes: request.CatalogId, Valid: true}, q)
+	var invalid *browse.InvalidError
+	switch {
+	case errors.Is(err, browse.ErrCatalogNotFound):
+		return ListMetadataTables404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
+	case errors.As(err, &invalid):
+		return ListMetadataTables422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalid.Msg)}, nil
+	case err != nil:
 		return nil, err
 	}
-	out := ListMetadataTables200JSONResponse{Freshness: freshness(cat.MetadataSyncedAt), Items: []MetadataTableSummary{}}
-	if len(rows) > limit {
-		rows = rows[:limit]
-		next := base64.RawURLEncoding.EncodeToString([]byte(rows[limit-1].Name))
-		out.NextCursor = &next
-	}
-	for _, r := range rows {
+	out := ListMetadataTables200JSONResponse{Freshness: freshness(page.Catalog.MetadataSyncedAt), Items: []MetadataTableSummary{}, NextCursor: page.NextCursor}
+	for _, r := range page.Tables {
 		out.Items = append(out.Items, MetadataTableSummary{
 			Id: openapi_types.UUID(r.ID.Bytes), Name: r.Name, Kind: MetadataTableSummaryKind(r.Kind),
 			Comment: r.Comment, LastChangedAt: timePtr(r.LastChangedAt),
@@ -200,38 +174,21 @@ func (h *CatalogHandlers) GetMetadataTable(ctx context.Context, request GetMetad
 	if nf {
 		return GetMetadataTable404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	t, err := h.queries.GetGrantedMetadataTable(ctx, db.GetGrantedMetadataTableParams{WorkspaceID: ws, TableID: pgtype.UUID{Bytes: request.TableId, Valid: true}})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return GetMetadataTable404JSONResponse{NotFoundJSONResponse: metadataNotFound("table not found")}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
 	var bindingID pgtype.UUID
 	if request.Params.BindingId != nil {
 		bindingID = pgtype.UUID{Bytes: *request.Params.BindingId, Valid: true}
 	}
-	b, err := h.queries.GetCatalogBindingForDisplay(ctx, db.GetCatalogBindingForDisplayParams{CatalogID: t.CatalogID, BindingID: bindingID})
-	hasBinding := err == nil
+	detail, err := h.browse.Table(ctx, ws, pgtype.UUID{Bytes: request.TableId, Valid: true}, bindingID)
 	switch {
-	case errors.Is(err, pgx.ErrNoRows) && bindingID.Valid:
+	case errors.Is(err, browse.ErrTableNotFound):
+		return GetMetadataTable404JSONResponse{NotFoundJSONResponse: metadataNotFound("table not found")}, nil
+	case errors.Is(err, browse.ErrBindingNotFound):
 		return GetMetadataTable404JSONResponse{NotFoundJSONResponse: metadataNotFound("binding not found")}, nil
-	case err != nil && !errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
 		return nil, err
 	}
-	cols, err := h.queries.ListMetadataColumns(ctx, t.ID)
-	if err != nil {
-		return nil, err
-	}
-	// Semantic docs (#33) are keyed by the natural key, not by the metadata
-	// table id, so they survive a resync and are joined here at read time.
-	docs, err := h.queries.ListSemanticDocsForTable(ctx, db.ListSemanticDocsForTableParams{
-		WorkspaceID: ws, CatalogID: t.CatalogID, Namespace: t.Namespace, TableName: t.Name, ColumnName: nil,
-	})
-	if err != nil {
-		return nil, err
-	}
-	tableDoc, columnDocs := semanticDocsByColumn(docs)
+	t, cols := detail.Table, detail.Columns
+	tableDoc, columnDocs := semanticDocsByColumn(detail.Docs)
 
 	out := GetMetadataTable200JSONResponse{
 		Freshness: freshness(t.MetadataSyncedAt),
@@ -244,7 +201,7 @@ func (h *CatalogHandlers) GetMetadataTable(ctx context.Context, request GetMetad
 	}
 	decodeStored(t.Properties, &out.Properties, "metadata_tables.properties")
 	var d dialect.Dialect
-	if hasBinding {
+	if b := detail.Binding; b != nil {
 		id := openapi_types.UUID(b.ID.Bytes)
 		out.BindingId = &id
 		if dd, ok := h.dialects.ForEngineKind(b.EngineKind); ok {
@@ -287,30 +244,18 @@ func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMeta
 		return SearchMetadata404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
 	p := request.Params
-	if n := utf8.RuneCountInString(p.Q); n < minSearchQuery || n > maxSearchQuery {
-		return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "q must be 2 to 200 characters")}, nil
-	}
-	kind := "all"
+	q := browse.SearchQuery{Text: p.Q, Limit: p.Limit}
 	if p.Kind != nil {
-		switch *p.Kind {
-		case Table, Column, All:
-			kind = string(*p.Kind)
-		default:
-			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "kind must be table, column or all")}, nil
-		}
+		q.Kind = string(*p.Kind)
 	}
-	limit := defaultSearch
-	if p.Limit != nil {
-		if *p.Limit < 1 || *p.Limit > maxSearch {
-			return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "limit must be between 1 and 200")}, nil
-		}
-		limit = *p.Limit
-	}
-	var catalogID pgtype.UUID
 	if p.CatalogId != nil {
-		catalogID = pgtype.UUID{Bytes: *p.CatalogId, Valid: true}
+		q.CatalogID = pgtype.UUID{Bytes: *p.CatalogId, Valid: true}
 	}
-	rows, err := h.queries.SearchMetadata(ctx, db.SearchMetadataParams{WorkspaceID: ws, CatalogID: catalogID, Q: p.Q, Kind: kind, Lim: int32(limit)})
+	rows, err := h.browse.Search(ctx, ws, q)
+	var invalid *browse.InvalidError
+	if errors.As(err, &invalid) {
+		return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalid.Msg)}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

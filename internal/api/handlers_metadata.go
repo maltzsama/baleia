@@ -7,7 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -72,11 +71,11 @@ func (h *CatalogHandlers) ListCatalogMetadataSyncRuns(ctx context.Context, reque
 		}
 		return nil, err
 	}
-	limit := 20
-	if request.Params.Limit != nil && *request.Params.Limit >= 1 && *request.Params.Limit <= 100 {
+	limit := 0
+	if request.Params.Limit != nil {
 		limit = *request.Params.Limit
 	}
-	rows, err := h.queries.ListMetadataSyncRuns(ctx, db.ListMetadataSyncRunsParams{CatalogID: id, Limit: int32(limit)})
+	rows, err := h.browse.SyncRuns(ctx, id, limit)
 	if err != nil {
 		return nil, err
 	}
