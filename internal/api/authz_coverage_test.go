@@ -245,7 +245,7 @@ var operationAccess = map[string]access{
 	"GetSemanticModel":            checked("metadataWorkspace", "Get", "contentSpace"),
 	"CompileExploreQuery":         checked("metadataWorkspace", "List", "semanticTarget"),
 	"CreateSemanticModel":         checked("metadataWorkspace", "semanticCatalog", "PrepareNew", "contentSpace"),
-	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "ListVisibleSemanticMetrics", "semanticCatalog", "Visible", "contentSpace"),
+	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "List", "semanticCatalog", "Visible", "contentSpace"),
 	"UpdateSemanticModel":         checked("metadataWorkspace", "Get", "semanticCatalog", "PrepareUpdate", "contentSpace"),
 	"DeleteSemanticModel":         checked("metadataWorkspace", "Get", "contentSpace", "Delete"),
 	"ListSemanticModelVersions":   checked("SpaceOf", "contentSpace", "List"),

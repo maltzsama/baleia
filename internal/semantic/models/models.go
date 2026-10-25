@@ -27,6 +27,7 @@ import (
 type Store interface {
 	ListVisibleSemanticModels(ctx context.Context, arg db.ListVisibleSemanticModelsParams) ([]db.SemanticModel, error)
 	GetSemanticModel(ctx context.Context, arg db.GetSemanticModelParams) (db.SemanticModel, error)
+	GetSemanticModelBySlug(ctx context.Context, arg db.GetSemanticModelBySlugParams) (db.SemanticModel, error)
 	SetSemanticModelCertification(ctx context.Context, arg db.SetSemanticModelCertificationParams) (db.SemanticModel, error)
 }
 
@@ -81,6 +82,15 @@ func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.SemanticModel
 		return db.SemanticModel{}, ErrNotFound
 	}
 	return m, err
+}
+
+// SlugTaken reports whether the workspace has a model with this slug.
+func (s *Service) SlugTaken(ctx context.Context, ws pgtype.UUID, modelSlug string) (bool, error) {
+	_, err := s.store.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: ws, Slug: modelSlug})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // Visible returns the definitions of every model the user can see, by slug.

@@ -43,6 +43,15 @@ func (f *fakeStore) GetSemanticModel(_ context.Context, arg db.GetSemanticModelP
 	return db.SemanticModel{}, pgx.ErrNoRows
 }
 
+func (f *fakeStore) GetSemanticModelBySlug(_ context.Context, arg db.GetSemanticModelBySlugParams) (db.SemanticModel, error) {
+	for _, m := range f.models {
+		if m.Slug == arg.Slug {
+			return m, nil
+		}
+	}
+	return db.SemanticModel{}, pgx.ErrNoRows
+}
+
 func (f *fakeStore) SetSemanticModelCertification(_ context.Context, arg db.SetSemanticModelCertificationParams) (db.SemanticModel, error) {
 	m := f.models[arg.ID.Bytes]
 	m.Certified, m.CertifiedAt = arg.Certified, pgtype.Timestamptz{Valid: arg.Certified}
@@ -136,5 +145,18 @@ func TestPrepareUpdate_KeepsTheStoredDefinition(t *testing.T) {
 	p, err := s.PrepareUpdate(ctx, newID(), newID(), current, f, nil)
 	if err != nil || string(p.Raw) != string(raw) {
 		t.Fatalf("PrepareUpdate = %s, %v; want the stored definition", p.Raw, err)
+	}
+}
+
+func TestSlugTaken(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st)
+	st.models[[16]byte{1}] = db.SemanticModel{Slug: "orders"}
+	if taken, err := s.SlugTaken(ctx, newID(), "orders"); err != nil || !taken {
+		t.Errorf("orders = %v, %v", taken, err)
+	}
+	if taken, err := s.SlugTaken(ctx, newID(), "free"); err != nil || taken {
+		t.Errorf("free = %v, %v", taken, err)
 	}
 }

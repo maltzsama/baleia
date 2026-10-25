@@ -652,7 +652,7 @@ func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, requ
 	// The model being restored is not a join target for itself: drop both the
 	// snapshot slug and the live row's current slug.
 	delete(visible, def.Slug)
-	if cur, cerr := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id}); cerr == nil {
+	if cur, cerr := h.modelDefs.Get(ctx, ws, id); cerr == nil {
 		delete(visible, cur.Slug)
 	}
 	if err := def.Validate(visible); err != nil {
