@@ -16,11 +16,11 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/robfig/cron"
 	"go.temporal.io/sdk/client"
 )
 
@@ -160,7 +160,7 @@ func (s *Service) Create(ctx context.Context, ws, createdBy pgtype.UUID, in Draf
 	if err != nil {
 		return db.Retriever{}, err
 	}
-	schedule, loc, err := ParseCron(in.CronSchedule)
+	sched, loc, err := schedule.Parse(in.CronSchedule)
 	if err != nil {
 		return db.Retriever{}, invalid(err)
 	}
@@ -175,7 +175,7 @@ func (s *Service) Create(ctx context.Context, ws, createdBy pgtype.UUID, in Draf
 		DestBindingID: dest.BindingID,
 		CronSchedule:  in.CronSchedule,
 		RefreshType:   refreshType,
-		NextRefreshAt: pgtype.Timestamptz{Time: schedule.Next(time.Now().In(loc)), Valid: true},
+		NextRefreshAt: pgtype.Timestamptz{Time: sched.Next(time.Now().In(loc)), Valid: true},
 	})
 }
 
@@ -237,7 +237,7 @@ func (s *Service) Update(ctx context.Context, ws, id pgtype.UUID, change Change)
 	if err != nil {
 		return db.Retriever{}, err
 	}
-	schedule, loc, err := ParseCron(next.CronSchedule)
+	sched, loc, err := schedule.Parse(next.CronSchedule)
 	if err != nil {
 		return db.Retriever{}, invalid(err)
 	}
@@ -257,7 +257,7 @@ func (s *Service) Update(ctx context.Context, ws, id pgtype.UUID, change Change)
 		RefreshType:   next.RefreshType,
 		Status:        next.Status,
 		ErrorCode:     nil,
-		NextRefreshAt: pgtype.Timestamptz{Time: schedule.Next(time.Now().In(loc)), Valid: true},
+		NextRefreshAt: pgtype.Timestamptz{Time: sched.Next(time.Now().In(loc)), Valid: true},
 	})
 }
 
@@ -427,78 +427,4 @@ func (s *Service) ValidateDefinition(def string) error {
 		return errors.New("definition_sql must start with SELECT or WITH")
 	}
 	return nil
-}
-
-// MinInterval is the shortest time allowed between two refreshes.
-const MinInterval = 5 * time.Minute
-
-// ParseCron parses a standard five-field cron expression (minute hour
-// day-of-month month day-of-week), optionally prefixed with CRON_TZ=<IANA>,
-// and enforces MinInterval.
-func ParseCron(expr string) (cron.Schedule, *time.Location, error) {
-	loc, clean := CronLocation(expr)
-	schedule, err := cron.ParseStandard(clean)
-	if err != nil {
-		return nil, loc, errors.New("invalid cron expression: " + err.Error())
-	}
-	// Sampled across three consecutive runs.
-	ref := time.Now().In(loc)
-	t1 := schedule.Next(ref)
-	t2 := schedule.Next(t1)
-	t3 := schedule.Next(t2)
-	if t2.Sub(t1) < MinInterval || t3.Sub(t2) < MinInterval {
-		return nil, loc, errors.New("cron minimum interval is 5 minutes")
-	}
-	return schedule, loc, nil
-}
-
-// CronLocation reads the optional CRON_TZ=<IANA> prefix and returns the
-// expression the parser understands; UTC without a valid prefix.
-func CronLocation(expr string) (*time.Location, string) {
-	expr = strings.TrimSpace(expr)
-	const prefix = "CRON_TZ="
-	if strings.HasPrefix(strings.ToUpper(expr), prefix) {
-		rest := strings.TrimSpace(expr[len(prefix):])
-		parts := strings.SplitN(rest, " ", 2)
-		if len(parts) == 2 {
-			if loc, err := time.LoadLocation(strings.TrimSpace(parts[0])); err == nil {
-				return loc, strings.TrimSpace(parts[1])
-			}
-		}
-	}
-	return time.UTC, expr
-}
-
-// Preview is the next runs of an expression, for the editor (#118); the
-// browser never evaluates cron itself.
-type Preview struct {
-	Valid bool
-	// Error is why an invalid expression was rejected.
-	Error string
-	Next  []time.Time
-	// MinIntervalOK is false when two runs are closer than MinInterval.
-	MinIntervalOK bool
-}
-
-// PreviewCron returns the next five runs of expr, in UTC.
-func PreviewCron(expr string) Preview {
-	loc, clean := CronLocation(expr)
-	schedule, err := cron.ParseStandard(clean)
-	if err != nil {
-		return Preview{Error: "invalid cron expression: " + err.Error(), Next: []time.Time{}}
-	}
-	next := make([]time.Time, 0, 5)
-	ref := time.Now().In(loc)
-	for range 5 {
-		ref = schedule.Next(ref)
-		next = append(next, ref.UTC())
-	}
-	ok := true
-	for i := 1; i < len(next); i++ {
-		if next[i].Sub(next[i-1]) < MinInterval {
-			ok = false
-			break
-		}
-	}
-	return Preview{Valid: true, Next: next, MinIntervalOK: ok}
 }

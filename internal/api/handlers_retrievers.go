@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/retrievers"
+	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -260,7 +261,7 @@ func (h *QueryHandlers) PreviewCron(ctx context.Context, request PreviewCronRequ
 		return PreviewCron422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "expression is required")}, nil
 	}
 
-	p := retrievers.PreviewCron(request.Body.Expression)
+	p := schedule.Next5(request.Body.Expression)
 	if !p.Valid {
 		msg := p.Error
 		return PreviewCron200JSONResponse{Valid: false, Error: &msg, Next: []time.Time{}, MinIntervalOk: false}, nil

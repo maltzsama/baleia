@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron"
@@ -68,7 +69,7 @@ func (a *Activities) advanceRetrieverSchedule(ctx context.Context, params Advanc
 		return fmt.Errorf("get retriever: %w", err)
 	}
 
-	loc, clean := cronLocation(retriever.CronSchedule)
+	loc, clean := schedule.Location(retriever.CronSchedule)
 	schedule, err := cron.ParseStandard(clean)
 	if err != nil {
 		return fmt.Errorf("parse cron %q: %w", retriever.CronSchedule, err)
@@ -262,20 +263,4 @@ func retrieverErrorCode(err error) string {
 		return string(qe.Code)
 	}
 	return "refresh_failed"
-}
-
-// cronLocation reads the optional CRON_TZ=<IANA> prefix (#118).
-func cronLocation(expr string) (*time.Location, string) {
-	expr = strings.TrimSpace(expr)
-	const prefix = "CRON_TZ="
-	if strings.HasPrefix(strings.ToUpper(expr), prefix) {
-		rest := strings.TrimSpace(expr[len(prefix):])
-		parts := strings.SplitN(rest, " ", 2)
-		if len(parts) == 2 {
-			if loc, locErr := time.LoadLocation(strings.TrimSpace(parts[0])); locErr == nil {
-				return loc, strings.TrimSpace(parts[1])
-			}
-		}
-	}
-	return time.UTC, expr
 }
