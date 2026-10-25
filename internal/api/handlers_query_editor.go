@@ -25,6 +25,7 @@ import (
 	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
+	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -44,12 +45,6 @@ func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequ
 		return ListFolders401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var parentID pgtype.UUID
-	if request.Params.ParentId != nil {
-		parentID.Bytes = *request.Params.ParentId
-		parentID.Valid = true
-	}
-
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
@@ -58,27 +53,18 @@ func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequ
 	if request.Params.SpaceId != nil {
 		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
-	var folders []db.QueryFolder
+	// With a parent, only its children; without, every visible folder.
+	var parent *pgtype.UUID
 	if request.Params.ParentId != nil {
-		folders, err = h.queries.ListVisibleQueryFolders(ctx, db.ListVisibleQueryFoldersParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-			ParentID:    parentID,
-		})
-	} else {
-		folders, err = h.queries.ListAllVisibleQueryFolders(ctx, db.ListAllVisibleQueryFoldersParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-		})
+		parent = &pgtype.UUID{Bytes: *request.Params.ParentId, Valid: true}
 	}
+	visible, err := h.folders.List(ctx, workspaceIDFromRequest(request.Id), userID, spaceID, parent)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]QueryFolder, 0, len(folders))
-	for _, f := range folders {
+	result := make([]QueryFolder, 0, len(visible))
+	for _, f := range visible {
 		result = append(result, dbFolderToPublic(f))
 	}
 	return ListFolders200JSONResponse(result), nil
@@ -101,41 +87,23 @@ func (h *QueryHandlers) CreateFolder(ctx context.Context, request CreateFolderRe
 		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "space not found"}}, nil
 	}
 
-	var parentID pgtype.UUID
+	var parent *pgtype.UUID
 	if request.Body.ParentId != nil {
-		parentID = pgtype.UUID{Bytes: *request.Body.ParentId, Valid: true}
-		parent, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: parentID, WorkspaceID: ws})
-		if err != nil || parent.SpaceID != space.ID {
-			return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "parent folder not found"}}, nil
-		}
+		parent = &pgtype.UUID{Bytes: *request.Body.ParentId, Valid: true}
 	}
-
-	slug := ""
+	folderSlug := ""
 	if request.Body.Slug != nil {
-		slug = *request.Body.Slug
+		folderSlug = *request.Body.Slug
 	}
-	if slug == "" {
-		slug, err = slugs.Unique(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
-			return h.queries.FolderSlugExists(ctx, db.FolderSlugExistsParams{SpaceID: space.ID, Slug: s})
-		})
-		if err != nil {
-			return nil, err
-		}
-	} else if !slugs.Valid(slug) {
+	folder, err := h.folders.Create(ctx, ws, space.ID, parent, request.Body.Name, folderSlug)
+	switch {
+	case errors.Is(err, folders.ErrParentNotFound):
+		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "parent folder not found"}}, nil
+	case errors.Is(err, folders.ErrInvalidSlug):
 		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
-	}
-
-	folder, err := h.queries.CreateQueryFolder(ctx, db.CreateQueryFolderParams{
-		WorkspaceID: ws,
-		SpaceID:     space.ID,
-		ParentID:    parentID,
-		Name:        request.Body.Name,
-		Slug:        slug,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, "a folder with this slug already exists in the space")}, nil
-		}
+	case errors.Is(err, folders.ErrSlugTaken):
+		return CreateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, "a folder with this slug already exists in the space")}, nil
+	case err != nil:
 		return nil, err
 	}
 
@@ -149,7 +117,7 @@ func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRe
 
 	ws := workspaceIDFromRequest(request.Id)
 	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
-	folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
+	folder, err := h.folders.Get(ctx, ws, folderID)
 	if err != nil {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
@@ -167,12 +135,10 @@ func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRe
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
 
-	deleted, err := h.queries.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{WorkspaceID: ws, ID: folderID})
-	if err != nil {
-		return nil, err
-	}
-	if deleted == 0 {
+	if err := h.folders.Delete(ctx, ws, folderID); errors.Is(err, folders.ErrNotFound) {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 
 	return DeleteFolder204Response{}, nil
