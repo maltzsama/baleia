@@ -175,6 +175,18 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 	stmt := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(sql), ";"))
 	upper := strings.ToUpper(stmt)
 	qid := nextQueryID()
+	// The handle is cancellable from the moment it is reported, as on a real
+	// engine: register before OnStart, or a Cancel racing it is lost.
+	ctx, cancel := context.WithCancel(ctx)
+	running.Lock()
+	running.m[qid] = cancel
+	running.Unlock()
+	defer func() {
+		running.Lock()
+		delete(running.m, qid)
+		running.Unlock()
+		cancel()
+	}()
 	if cb.OnStart != nil {
 		cb.OnStart(queryengine.QueryHandle{EngineID: s.engine.ID(), QueryID: qid})
 	}
@@ -236,16 +248,6 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		}
 		return noResult(sink, nil)
 	case upper == "SLEEP":
-		ctx, cancel := context.WithCancel(ctx)
-		running.Lock()
-		running.m[qid] = cancel
-		running.Unlock()
-		defer func() {
-			running.Lock()
-			delete(running.m, qid)
-			running.Unlock()
-			cancel()
-		}()
 		<-ctx.Done()
 		return errorf(queryengine.CodeCancelled, "query cancelled")
 	case strings.HasPrefix(upper, "ROWS "):
