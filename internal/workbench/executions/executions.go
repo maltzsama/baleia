@@ -87,7 +87,8 @@ type Service struct {
 }
 
 // New builds the service. engines may be nil, in which case a cancel only
-// stops the workflow.
+// stops the workflow; dialects may be nil, in which case every script is
+// split as Trino.
 func New(store Store, workflows Workflows, engines Engines, dialects Dialects, cfg Config) *Service {
 	return &Service{store: store, workflows: workflows, engines: engines, dialects: dialects, cfg: cfg}
 }
@@ -151,8 +152,10 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	// The script is split with the target engine's dialect; Trino when the
 	// kind has none.
 	dialectName := dialect.Trino
-	if d, ok := s.dialects.ForEngineKind(r.Target.EngineKind); ok {
-		dialectName = d.Name()
+	if s.dialects != nil {
+		if d, ok := s.dialects.ForEngineKind(r.Target.EngineKind); ok {
+			dialectName = d.Name()
+		}
 	}
 	rerunOf := ""
 	if r.RerunOf.Valid {

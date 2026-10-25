@@ -30,10 +30,15 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 	if tickets == nil {
 		tickets = wsticket.New()
 	}
-	// Retrievers refresh on the default Trino engine.
-	var trino dialect.Dialect
+	// Retrievers refresh on the default Trino engine. A nil registry (some
+	// tests) must reach the services as a nil interface, not a typed nil.
+	var (
+		trino    dialect.Dialect
+		dialects executions.Dialects
+	)
 	if c.dialects != nil {
 		trino, _ = c.dialects.Get(dialect.Trino)
+		dialects = c.dialects
 	}
 	f := folders.New(c.queries)
 	return &QueryHandlers{
@@ -42,7 +47,7 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 		folders:    f,
 		saved:      savedqueries.NewService(c.queries, f, c.contentService()),
 		retrievers: retrievers.New(c.queries, c.temporalClient, c.engines, trino),
-		executions: executions.New(c.queries, c.temporalClient, c.engines, c.dialects, executions.Config{
+		executions: executions.New(c.queries, c.temporalClient, c.engines, dialects, executions.Config{
 			StatementTimeout: c.settings.Execution.StatementTimeout,
 			ExecutionTimeout: c.settings.Execution.ExecutionTimeout,
 		}),

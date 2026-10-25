@@ -237,3 +237,15 @@ func TestHistory_Visibility(t *testing.T) {
 		t.Error("an admin sees every execution")
 	}
 }
+
+// TestStart_WithoutDialects: with no registry every script splits as Trino.
+func TestStart_WithoutDialects(t *testing.T) {
+	st, wf := newStore(), &fakeWorkflows{}
+	s := New(st, wf, nil, nil, Config{})
+	if _, err := s.Start(context.Background(), Run{WorkspaceID: newID(), Target: queryengine.Target{EngineKind: "postgresql"}}); err != nil {
+		t.Fatal(err)
+	}
+	if wf.started[0].Dialect != dialect.Trino {
+		t.Errorf("dialect = %q, want trino", wf.started[0].Dialect)
+	}
+}
