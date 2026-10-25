@@ -3,18 +3,15 @@ package api
 import (
 	"context"
 	"errors"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
+	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
-
-var folderSlugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // decorateSpace adds the counts and allowed actions the content UI needs (#113).
 func (h *core) decorateSpace(ctx context.Context, sp *Space, role string) {
@@ -278,7 +275,7 @@ func (h *SemanticHandlers) ListWorkspacePrincipals(ctx context.Context, request 
 
 // UpdateFolder — PATCH /workspaces/{id}/folders/{folder_id} (#113). Renames a
 // folder or moves its subtree within or across spaces.
-func (h *SemanticHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRequestObject) (UpdateFolderResponseObject, error) {
+func (h *QueryHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRequestObject) (UpdateFolderResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
@@ -291,8 +288,8 @@ func (h *SemanticHandlers) UpdateFolder(ctx context.Context, request UpdateFolde
 		return nil, err
 	}
 	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
-	folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
-	if errors.Is(err, pgx.ErrNoRows) {
+	folder, err := h.folders.Get(ctx, ws, folderID)
+	if errors.Is(err, folders.ErrNotFound) {
 		return UpdateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
 	}
 	if err != nil {
@@ -319,65 +316,23 @@ func (h *SemanticHandlers) UpdateFolder(ctx context.Context, request UpdateFolde
 		}
 	}
 
-	name := folder.Name
-	if request.Body.Name != nil {
-		name = strings.TrimSpace(*request.Body.Name)
-	}
-	if name == "" {
-		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name cannot be empty")}, nil
-	}
-	slug := folder.Slug
-	if request.Body.Slug != nil {
-		slug = *request.Body.Slug
-	}
-	if !folderSlugRe.MatchString(slug) {
-		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match "+folderSlugRe.String())}, nil
-	}
-	exists, err := h.queries.FolderSlugExists(ctx, db.FolderSlugExistsParams{SpaceID: destSpace, Slug: slug})
-	if err != nil {
-		return nil, err
-	}
-	if exists && destSpace != folder.SpaceID {
-		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeSlugConflict, "another folder in the destination space uses this slug")}, nil
-	}
-
-	parent := folder.ParentID
+	edit := folders.Edit{Name: request.Body.Name, Slug: request.Body.Slug, SpaceID: destSpace}
 	if request.Body.ParentId != nil {
-		parent = pgtype.UUID{Bytes: [16]byte(*request.Body.ParentId), Valid: true}
+		edit.Parent = &pgtype.UUID{Bytes: [16]byte(*request.Body.ParentId), Valid: true}
 	}
-	if destSpace != folder.SpaceID && request.Body.ParentId == nil {
-		parent = pgtype.UUID{}
-	}
-	if parent.Valid {
-		if parent == folderID {
-			return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeFolderCycle, "a folder cannot be its own parent")}, nil
-		}
-		cur := parent
-		for depth := 0; depth < 128 && cur.Valid; depth++ {
-			if cur == folderID {
-				return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeFolderCycle, "cannot move a folder under its own descendant")}, nil
-			}
-			next, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: cur, WorkspaceID: ws})
-			if err != nil {
-				break
-			}
-			cur = next.ParentID
-		}
-	}
-
-	updated, err := h.queries.UpdateQueryFolder(ctx, db.UpdateQueryFolderParams{
-		Name: name, Slug: &slug, ParentID: parent, SpaceID: destSpace, ID: folderID, WorkspaceID: ws,
-	})
-	if err != nil {
+	updated, err := h.folders.Update(ctx, folder, edit)
+	var cycle *folders.CycleError
+	switch {
+	case errors.Is(err, folders.ErrEmptyName):
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
+	case errors.Is(err, folders.ErrInvalidSlug):
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+	case errors.Is(err, folders.ErrSlugConflict):
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeSlugConflict, err.Error())}, nil
+	case errors.As(err, &cycle):
+		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeFolderCycle, cycle.Msg)}, nil
+	case err != nil:
 		return nil, err
-	}
-	if destSpace != folder.SpaceID {
-		if err := h.queries.MoveQueryFolderSubtree(ctx, db.MoveQueryFolderSubtreeParams{ID: folderID, WorkspaceID: ws, SpaceID: destSpace}); err != nil {
-			return nil, err
-		}
-		if err := h.queries.MoveSavedQueriesInFolderSubtree(ctx, db.MoveSavedQueriesInFolderSubtreeParams{ID: folderID, WorkspaceID: ws, SpaceID: destSpace}); err != nil {
-			return nil, err
-		}
 	}
 	return UpdateFolder200JSONResponse(dbFolderToPublic(updated)), nil
 }

@@ -17,6 +17,8 @@ type fakeStore struct {
 	// createErr makes the insert fail, as a concurrent create of the same
 	// slug would.
 	createErr error
+	// moved and movedQueries record the subtree moves.
+	moved, movedQueries []pgtype.UUID
 }
 
 func newStore() *fakeStore { return &fakeStore{folders: map[[16]byte]db.QueryFolder{}} }
@@ -158,5 +160,62 @@ func TestStoreFailureIsNotNotFound(t *testing.T) {
 	parent := newID()
 	if _, err := s.Create(context.Background(), newID(), newID(), &parent, "x", ""); !errors.Is(err, errDown) || errors.Is(err, ErrParentNotFound) {
 		t.Errorf("Create = %v, want the store error", err)
+	}
+}
+
+func (f *fakeStore) UpdateQueryFolder(_ context.Context, arg db.UpdateQueryFolderParams) (db.QueryFolder, error) {
+	q := f.folders[arg.ID.Bytes]
+	q.Name, q.Slug, q.ParentID, q.SpaceID = arg.Name, *arg.Slug, arg.ParentID, arg.SpaceID
+	f.folders[arg.ID.Bytes] = q
+	return q, nil
+}
+
+func (f *fakeStore) MoveQueryFolderSubtree(_ context.Context, arg db.MoveQueryFolderSubtreeParams) error {
+	f.moved = append(f.moved, arg.ID)
+	return nil
+}
+
+func (f *fakeStore) MoveSavedQueriesInFolderSubtree(_ context.Context, arg db.MoveSavedQueriesInFolderSubtreeParams) error {
+	f.movedQueries = append(f.movedQueries, arg.ID)
+	return nil
+}
+
+func TestUpdate(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st)
+	ws, space, other := newID(), newID(), newID()
+	root, _ := s.Create(ctx, ws, space, nil, "root", "")
+	child, _ := s.Create(ctx, ws, space, &root.ID, "child", "")
+
+	blank, bad := "  ", "Bad Slug"
+	if _, err := s.Update(ctx, root, Edit{Name: &blank, SpaceID: space}); !errors.Is(err, ErrEmptyName) {
+		t.Errorf("blank name = %v", err)
+	}
+	if _, err := s.Update(ctx, root, Edit{Slug: &bad, SpaceID: space}); !errors.Is(err, ErrInvalidSlug) {
+		t.Errorf("bad slug = %v", err)
+	}
+	var cycle *CycleError
+	if _, err := s.Update(ctx, root, Edit{SpaceID: space, Parent: &root.ID}); !errors.As(err, &cycle) {
+		t.Errorf("own parent = %v", err)
+	}
+	if _, err := s.Update(ctx, root, Edit{SpaceID: space, Parent: &child.ID}); !errors.As(err, &cycle) {
+		t.Errorf("under a descendant = %v", err)
+	}
+
+	// Moving to another space without a parent lands at its root and takes
+	// the subtree along.
+	moved, err := s.Update(ctx, child, Edit{SpaceID: other})
+	if err != nil || moved.SpaceID != other || moved.ParentID.Valid {
+		t.Fatalf("move = %+v, %v", moved, err)
+	}
+	if len(st.moved) != 1 || len(st.movedQueries) != 1 {
+		t.Errorf("subtree moves = %d folders, %d queries; want both", len(st.moved), len(st.movedQueries))
+	}
+
+	// A slug already used in the destination space is refused.
+	_, _ = s.Create(ctx, ws, other, nil, "root", "")
+	if _, err := s.Update(ctx, root, Edit{SpaceID: other}); !errors.Is(err, ErrSlugConflict) {
+		t.Errorf("slug taken in the destination = %v", err)
 	}
 }
