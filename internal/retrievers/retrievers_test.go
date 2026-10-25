@@ -201,3 +201,19 @@ func TestHistory_ScopedToTheWorkspace(t *testing.T) {
 		t.Errorf("History from another workspace = %v, want ErrNotFound", err)
 	}
 }
+
+// TestValidateDefinition_AnyWhitespaceAfterTheKeyword: multi-line SQL from
+// the editor breaks the line right after SELECT or WITH.
+func TestValidateDefinition_AnyWhitespaceAfterTheKeyword(t *testing.T) {
+	f := setup(t)
+	for _, def := range []string{"SELECT\n  a\nFROM t", "with\tx AS (select 1) select * from x", "select 1", "  Select 1"} {
+		if err := f.s.ValidateDefinition(def); err != nil {
+			t.Errorf("ValidateDefinition(%q) = %v", def, err)
+		}
+	}
+	for _, def := range []string{"selected_view", "insert into t select 1", "withdraw"} {
+		if err := f.s.ValidateDefinition(def); err == nil {
+			t.Errorf("ValidateDefinition(%q) accepted", def)
+		}
+	}
+}

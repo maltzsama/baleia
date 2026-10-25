@@ -374,8 +374,11 @@ func (s *Service) Validate(ctx context.Context, ws, bindingID pgtype.UUID, defin
 		return errors.New("retriever validation: no engine registry")
 	}
 	binding, err := s.store.GetBinding(ctx, bindingID)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrBindingNotFound
+	}
+	if err != nil {
+		return err
 	}
 	eng, err := s.engines.Get(ctx, binding.EngineID)
 	if err != nil {
@@ -425,9 +428,10 @@ func (s *Service) ValidateDefinition(def string) error {
 	if policy.IsCatalogDDL(stmts[0]) {
 		return errors.New("catalog management is not allowed in a retriever definition")
 	}
-	lower := strings.ToLower(strings.TrimSpace(stmts[0]))
-	if !strings.HasPrefix(lower, "select ") && !strings.HasPrefix(lower, "with ") &&
-		lower != "select" && lower != "with" {
+	// The first word, whatever whitespace follows it: editors break the line
+	// after SELECT.
+	if first := strings.Fields(stmts[0]); len(first) == 0 ||
+		!strings.EqualFold(first[0], "select") && !strings.EqualFold(first[0], "with") {
 		return errors.New("definition_sql must start with SELECT or WITH")
 	}
 	return nil
