@@ -190,7 +190,10 @@ func (h *QueryHandlers) GetRetrieverHistory(ctx context.Context, request GetRetr
 		return GetRetrieverHistory401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	history, err := h.retrievers.History(ctx, pgtype.UUID{Bytes: request.RetrieverId, Valid: true})
+	history, err := h.retrievers.History(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.RetrieverId, Valid: true})
+	if errors.Is(err, retrievers.ErrNotFound) {
+		return GetRetrieverHistory404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "retriever not found"}}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

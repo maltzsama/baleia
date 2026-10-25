@@ -295,8 +295,12 @@ func (s *Service) Refresh(ctx context.Context, ws, id pgtype.UUID, refreshType s
 // HistoryLimit is how many refresh runs History returns.
 const HistoryLimit = 50
 
-// History returns the latest refresh runs of a retriever.
-func (s *Service) History(ctx context.Context, id pgtype.UUID) ([]db.RetrieverRefreshHistory, error) {
+// History returns the latest refresh runs of a retriever of the workspace;
+// a retriever of another workspace is ErrNotFound.
+func (s *Service) History(ctx context.Context, ws, id pgtype.UUID) ([]db.RetrieverRefreshHistory, error) {
+	if _, err := s.Get(ctx, ws, id); err != nil {
+		return nil, err
+	}
 	return s.store.ListRetrieverRefreshHistory(ctx, db.ListRetrieverRefreshHistoryParams{RetrieverID: id, Limit: HistoryLimit})
 }
 

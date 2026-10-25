@@ -187,3 +187,17 @@ func TestRefreshAndDelete(t *testing.T) {
 		t.Errorf("second delete = %v, want ErrNotFound", err)
 	}
 }
+
+// TestHistory_ScopedToTheWorkspace: a retriever of another workspace has no
+// history to show, even when its id is known.
+func TestHistory_ScopedToTheWorkspace(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	r, _ := f.s.Create(ctx, f.ws, newID(), f.draft())
+	if _, err := f.s.History(ctx, f.ws, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.s.History(ctx, newID(), r.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("History from another workspace = %v, want ErrNotFound", err)
+	}
+}
