@@ -200,6 +200,14 @@ func (s *Service) Update(ctx context.Context, folder db.QueryFolder, e Edit) (db
 		if parent == folder.ID {
 			return db.QueryFolder{}, &CycleError{Msg: "a folder cannot be its own parent"}
 		}
+		// The parent must exist in the workspace and in the destination space.
+		p, err := s.Get(ctx, folder.WorkspaceID, parent)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return db.QueryFolder{}, err
+		}
+		if err != nil || p.SpaceID != e.SpaceID {
+			return db.QueryFolder{}, ErrParentNotFound
+		}
 		cur := parent
 		for depth := 0; depth < maxDepth && cur.Valid; depth++ {
 			if cur == folder.ID {
@@ -230,6 +238,10 @@ func (s *Service) Update(ctx context.Context, folder db.QueryFolder, e Edit) (db
 		}
 		return q.MoveSavedQueriesInFolderSubtree(ctx, db.MoveSavedQueriesInFolderSubtreeParams(move))
 	})
+	if isUniqueViolation(err) {
+		// Another folder took the slug in the destination space.
+		return db.QueryFolder{}, ErrSlugConflict
+	}
 	if err != nil {
 		return db.QueryFolder{}, err
 	}

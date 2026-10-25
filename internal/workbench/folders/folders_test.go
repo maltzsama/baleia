@@ -21,6 +21,8 @@ type fakeStore struct {
 	// move of the saved queries.
 	moved, movedQueries []pgtype.UUID
 	moveErr             error
+	// updateErr fails the folder update.
+	updateErr error
 }
 
 func newStore() *fakeStore { return &fakeStore{folders: map[[16]byte]db.QueryFolder{}} }
@@ -166,6 +168,9 @@ func TestStoreFailureIsNotNotFound(t *testing.T) {
 }
 
 func (f *fakeStore) UpdateQueryFolder(_ context.Context, arg db.UpdateQueryFolderParams) (db.QueryFolder, error) {
+	if f.updateErr != nil {
+		return db.QueryFolder{}, f.updateErr
+	}
 	q := f.folders[arg.ID.Bytes]
 	q.Name, q.Slug, q.ParentID, q.SpaceID = arg.Name, *arg.Slug, arg.ParentID, arg.SpaceID
 	f.folders[arg.ID.Bytes] = q
@@ -252,5 +257,36 @@ func TestUpdate(t *testing.T) {
 	_, _ = s.Create(ctx, ws, other, nil, "root", "")
 	if _, err := s.Update(ctx, root, Edit{SpaceID: other}); !errors.Is(err, ErrSlugConflict) {
 		t.Errorf("slug taken in the destination = %v", err)
+	}
+}
+
+// TestUpdate_ParentMustExistInTheSpace: a missing parent, or one in another
+// space, is refused before any write.
+func TestUpdate_ParentMustExistInTheSpace(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	ws, space, other := newID(), newID(), newID()
+	f, _ := s.Create(ctx, ws, space, nil, "f", "")
+	elsewhere, _ := s.Create(ctx, ws, other, nil, "elsewhere", "")
+	missing := newID()
+	for name, parent := range map[string]pgtype.UUID{"missing": missing, "other space": elsewhere.ID} {
+		if _, err := s.Update(ctx, f, Edit{SpaceID: space, Parent: &parent}); !errors.Is(err, ErrParentNotFound) {
+			t.Errorf("%s parent = %v, want ErrParentNotFound", name, err)
+		}
+	}
+}
+
+// TestUpdate_SlugTakenIsAConflict: a slug taken in the same space, or by a
+// concurrent write, is a conflict, not a raw database error.
+func TestUpdate_SlugTakenIsAConflict(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	f, _ := s.Create(ctx, newID(), newID(), nil, "f", "")
+	st.updateErr = &pgconn.PgError{Code: "23505"}
+	taken := "taken"
+	if _, err := s.Update(ctx, f, Edit{Slug: &taken, SpaceID: f.SpaceID}); !errors.Is(err, ErrSlugConflict) {
+		t.Errorf("Update = %v, want ErrSlugConflict", err)
 	}
 }

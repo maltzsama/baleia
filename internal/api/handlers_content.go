@@ -211,6 +211,8 @@ func (h *QueryHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRe
 		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	case errors.Is(err, folders.ErrInvalidSlug):
 		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+	case errors.Is(err, folders.ErrParentNotFound):
+		return UpdateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "parent folder not found"}}, nil
 	case errors.Is(err, folders.ErrSlugConflict):
 		return UpdateFolder422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeSlugConflict, err.Error())}, nil
 	case errors.As(err, &cycle):
