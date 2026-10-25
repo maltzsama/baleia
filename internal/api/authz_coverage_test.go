@@ -229,28 +229,28 @@ var operationAccess = map[string]access{
 	"ListSemanticDocs":   checked("metadataWorkspace", "semanticCatalog"),
 	"UpsertSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
 	"DeleteSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
-	"SearchSemanticDocs": checked("metadataWorkspace", "Search"),
+	"SearchSemanticDocs": checked("metadataWorkspace", "docs.Search"),
 	// Metrics are validated against a real engine in a read-only session
 	// (validateSemanticMetric); the catalog must be granted and the caller
 	// needs the space role (contentSpace wraps requireSpace).
 	"ListSemanticMetrics":  checked("metadataWorkspace"),
-	"GetSemanticMetric":    checked("metadataWorkspace", "Get", "contentSpace"),
+	"GetSemanticMetric":    checked("metadataWorkspace", "metricDefs.Get", "contentSpace"),
 	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
-	"UpdateSemanticMetric": checked("metadataWorkspace", "Get", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
-	"DeleteSemanticMetric": checked("metadataWorkspace", "Get", "contentSpace", "Delete"),
-	"GetSemanticMetricSql": checked("metadataWorkspace", "Get", "semanticCatalog", "semanticTarget", "contentSpace"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
+	"DeleteSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "contentSpace", "metricDefs.Delete"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "semanticTarget", "contentSpace"),
 	// Semantic models v2 (#91) are content items; compile resolves visible
 	// models and the base model's binding, then renders through the compiler.
-	"ListSemanticModels":          checked("metadataWorkspace", "List"),
-	"GetSemanticModel":            checked("metadataWorkspace", "Get", "contentSpace"),
-	"CompileExploreQuery":         checked("metadataWorkspace", "List", "semanticTarget"),
-	"CreateSemanticModel":         checked("metadataWorkspace", "semanticCatalog", "PrepareNew", "contentSpace"),
-	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "List", "semanticCatalog", "Visible", "contentSpace"),
-	"UpdateSemanticModel":         checked("metadataWorkspace", "Get", "semanticCatalog", "PrepareUpdate", "contentSpace"),
-	"DeleteSemanticModel":         checked("metadataWorkspace", "Get", "contentSpace", "Delete"),
-	"ListSemanticModelVersions":   checked("SpaceOf", "contentSpace", "List"),
-	"GetSemanticModelVersion":     checked("Get", "contentSpace"),
-	"RestoreSemanticModelVersion": checked("Get", "contentSpace", "RestoreSemanticModel"),
+	"ListSemanticModels":          checked("metadataWorkspace", "modelDefs.List"),
+	"GetSemanticModel":            checked("metadataWorkspace", "modelDefs.Get", "contentSpace"),
+	"CompileExploreQuery":         checked("metadataWorkspace", "modelDefs.List", "semanticTarget"),
+	"CreateSemanticModel":         checked("metadataWorkspace", "semanticCatalog", "modelDefs.PrepareNew", "contentSpace"),
+	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "metricDefs.List", "semanticCatalog", "modelDefs.Visible", "contentSpace"),
+	"UpdateSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "semanticCatalog", "modelDefs.PrepareUpdate", "contentSpace"),
+	"DeleteSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "contentSpace", "modelDefs.Delete"),
+	"ListSemanticModelVersions":   checked("history.SpaceOf", "contentSpace", "history.List"),
+	"GetSemanticModelVersion":     checked("history.Get", "contentSpace"),
+	"RestoreSemanticModelVersion": checked("history.Get", "contentSpace", "RestoreSemanticModel"),
 	// Spaces (#40): the effective role comes from the SQL function through
 	// internal/authz. Invisible is 404, below the required role is 403.
 	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "ListSpacesForPrincipal"),
@@ -263,13 +263,13 @@ var operationAccess = map[string]access{
 	"DeleteSpaceMember": checked("requireSpace", "DeleteSpaceMember"),
 	// Content versions and trash (#34): viewer reads the history, editor
 	// restores; a deleted entity is authorized against its last version's space.
-	"ListSavedQueryVersions":       checked("SpaceOf", "contentSpace", "List"),
-	"GetSavedQueryVersion":         checked("Get", "contentSpace"),
-	"RestoreSavedQueryVersion":     checked("Get", "contentSpace", "RestoreSavedQuery"),
-	"ListSemanticMetricVersions":   checked("SpaceOf", "contentSpace", "List"),
-	"GetSemanticMetricVersion":     checked("Get", "contentSpace"),
-	"RestoreSemanticMetricVersion": checked("Get", "contentSpace", "ParseMetricSnapshot", "validateSemanticMetric", "RestoreSemanticMetric"),
-	"ListTrash":                    checked("requireWorkspaceAccess", "Trash"),
+	"ListSavedQueryVersions":       checked("history.SpaceOf", "contentSpace", "history.List"),
+	"GetSavedQueryVersion":         checked("history.Get", "contentSpace"),
+	"RestoreSavedQueryVersion":     checked("history.Get", "contentSpace", "RestoreSavedQuery"),
+	"ListSemanticMetricVersions":   checked("history.SpaceOf", "contentSpace", "history.List"),
+	"GetSemanticMetricVersion":     checked("history.Get", "contentSpace"),
+	"RestoreSemanticMetricVersion": checked("history.Get", "contentSpace", "ParseMetricSnapshot", "validateSemanticMetric", "RestoreSemanticMetric"),
+	"ListTrash":                    checked("requireWorkspaceAccess", "history.Trash"),
 	"ExportSpaceBundle":            checked("contentSpace", "Export"),
 	"ImportSpaceBundle":            checked("contentSpace", "Import"),
 	// Audit trail (#45): admins see all, anyone else only their own events.
@@ -304,7 +304,7 @@ var operationAccess = map[string]access{
 	// Semantic metrics (#115).
 	"RenderSemanticMetric":             checked("metadataWorkspace", "semanticTarget"),
 	"ValidateSemanticMetricDefinition": checked("metadataWorkspace", "validateSemanticMetric"),
-	"ListSemanticTags":                 checked("metadataWorkspace", "Tags"),
+	"ListSemanticTags":                 checked("metadataWorkspace", "docs.Tags"),
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),
@@ -419,6 +419,11 @@ func bodyOf(n ast.Node, recv string) *funcBody {
 				fb.calls[fn.Name] = true
 			case *ast.SelectorExpr:
 				fb.calls[fn.Sel.Name] = true
+				// h.svc.Method is also recorded as "svc.Method", so an entry
+				// can name the service a scoped call goes through.
+				if inner, ok := fn.X.(*ast.SelectorExpr); ok {
+					fb.calls[inner.Sel.Name+"."+fn.Sel.Name] = true
+				}
 			}
 		case *ast.Ident:
 			if recv != "" && v.Name == recv {
@@ -726,5 +731,24 @@ func TestAuthzCoverage_Detects(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("route audit did not report %q; got:\n%s", want, got)
 		}
+	}
+}
+
+// TestBodyOf_QualifiesServiceCalls: a call through a service field is
+// recorded with the field, so an entry naming modelDefs.List is not met by
+// some other List.
+func TestBodyOf_QualifiesServiceCalls(t *testing.T) {
+	f, err := parser.ParseFile(token.NewFileSet(), "x.go", `package x
+func (h *H) F() { h.other.List(); h.modelDefs.Get() }`, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fb := bodyOf(f.Decls[0].(*ast.FuncDecl).Body, "h")
+	if !fb.calls["other.List"] || !fb.calls["modelDefs.Get"] || !fb.calls["List"] {
+		t.Fatalf("calls = %v; want the qualified and the bare names", fb.calls)
+	}
+	got := strings.Join(auditOperations([]string{"F"}, map[string]access{"F": checked("modelDefs.List")}, map[string]*funcBody{"F": fb}, nil, nil), "\n")
+	if !strings.Contains(got, "body no longer calls modelDefs.List") {
+		t.Errorf("an unrelated List met modelDefs.List:\n%s", got)
 	}
 }
