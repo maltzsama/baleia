@@ -17,6 +17,12 @@ type fakeStore struct {
 	// createErr makes the insert fail, as a concurrent create of the same
 	// slug would.
 	createErr error
+	// moved and movedQueries record the subtree moves; moveErr fails the
+	// move of the saved queries.
+	moved, movedQueries []pgtype.UUID
+	moveErr             error
+	// updateErr fails the folder update.
+	updateErr error
 }
 
 func newStore() *fakeStore { return &fakeStore{folders: map[[16]byte]db.QueryFolder{}} }
@@ -79,7 +85,7 @@ func (f *fakeStore) DeleteQueryFolder(_ context.Context, arg db.DeleteQueryFolde
 func TestCreate(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
-	s := New(st)
+	s := New(st, st.tx)
 	ws, space, otherSpace := newID(), newID(), newID()
 
 	a, err := s.Create(ctx, ws, space, nil, "Monthly Reports", "")
@@ -117,7 +123,7 @@ func TestCreate(t *testing.T) {
 func TestListGetDelete(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
-	s := New(st)
+	s := New(st, st.tx)
 	ws, space := newID(), newID()
 	root, _ := s.Create(ctx, ws, space, nil, "root", "")
 	_, _ = s.Create(ctx, ws, space, &root.ID, "child", "")
@@ -151,12 +157,136 @@ func (brokenStore) GetQueryFolderByID(context.Context, db.GetQueryFolderByIDPara
 // TestStoreFailureIsNotNotFound: a database outage is an error, never a
 // missing folder or parent.
 func TestStoreFailureIsNotNotFound(t *testing.T) {
-	s := New(brokenStore{newStore()})
+	s := New(brokenStore{newStore()}, nil)
 	if _, err := s.Get(context.Background(), newID(), newID()); !errors.Is(err, errDown) {
 		t.Errorf("Get = %v, want the store error", err)
 	}
 	parent := newID()
 	if _, err := s.Create(context.Background(), newID(), newID(), &parent, "x", ""); !errors.Is(err, errDown) || errors.Is(err, ErrParentNotFound) {
 		t.Errorf("Create = %v, want the store error", err)
+	}
+}
+
+func (f *fakeStore) UpdateQueryFolder(_ context.Context, arg db.UpdateQueryFolderParams) (db.QueryFolder, error) {
+	if f.updateErr != nil {
+		return db.QueryFolder{}, f.updateErr
+	}
+	q := f.folders[arg.ID.Bytes]
+	q.Name, q.Slug, q.ParentID, q.SpaceID = arg.Name, *arg.Slug, arg.ParentID, arg.SpaceID
+	f.folders[arg.ID.Bytes] = q
+	return q, nil
+}
+
+func (f *fakeStore) MoveQueryFolderSubtree(_ context.Context, arg db.MoveQueryFolderSubtreeParams) error {
+	f.moved = append(f.moved, arg.ID)
+	return nil
+}
+
+func (f *fakeStore) MoveSavedQueriesInFolderSubtree(_ context.Context, arg db.MoveSavedQueriesInFolderSubtreeParams) error {
+	if f.moveErr != nil {
+		return f.moveErr
+	}
+	f.movedQueries = append(f.movedQueries, arg.ID)
+	return nil
+}
+
+// tx applies fn to a copy of the folders and commits it only on success.
+func (f *fakeStore) tx(_ context.Context, fn func(Mover) error) error {
+	saved := make(map[[16]byte]db.QueryFolder, len(f.folders))
+	for k, v := range f.folders {
+		saved[k] = v
+	}
+	if err := fn(f); err != nil {
+		f.folders = saved
+		return err
+	}
+	return nil
+}
+
+// TestUpdate_MoveIsAtomic: when moving the subtree fails, the folder stays
+// where it was.
+func TestUpdate_MoveIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	ws, space, other := newID(), newID(), newID()
+	f, _ := s.Create(ctx, ws, space, nil, "f", "")
+	st.moveErr = errors.New("connection reset")
+	if _, err := s.Update(ctx, f, Edit{SpaceID: other}); !errors.Is(err, st.moveErr) {
+		t.Fatalf("Update = %v, want the move error", err)
+	}
+	if got, _ := s.Get(ctx, ws, f.ID); got.SpaceID != space {
+		t.Errorf("space = %v, want the folder left in its space", got.SpaceID)
+	}
+}
+
+func TestUpdate(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	ws, space, other := newID(), newID(), newID()
+	root, _ := s.Create(ctx, ws, space, nil, "root", "")
+	child, _ := s.Create(ctx, ws, space, &root.ID, "child", "")
+
+	blank, bad := "  ", "Bad Slug"
+	if _, err := s.Update(ctx, root, Edit{Name: &blank, SpaceID: space}); !errors.Is(err, ErrEmptyName) {
+		t.Errorf("blank name = %v", err)
+	}
+	if _, err := s.Update(ctx, root, Edit{Slug: &bad, SpaceID: space}); !errors.Is(err, ErrInvalidSlug) {
+		t.Errorf("bad slug = %v", err)
+	}
+	var cycle *CycleError
+	if _, err := s.Update(ctx, root, Edit{SpaceID: space, Parent: &root.ID}); !errors.As(err, &cycle) {
+		t.Errorf("own parent = %v", err)
+	}
+	if _, err := s.Update(ctx, root, Edit{SpaceID: space, Parent: &child.ID}); !errors.As(err, &cycle) {
+		t.Errorf("under a descendant = %v", err)
+	}
+
+	// Moving to another space without a parent lands at its root and takes
+	// the subtree along.
+	moved, err := s.Update(ctx, child, Edit{SpaceID: other})
+	if err != nil || moved.SpaceID != other || moved.ParentID.Valid {
+		t.Fatalf("move = %+v, %v", moved, err)
+	}
+	if len(st.moved) != 1 || len(st.movedQueries) != 1 {
+		t.Errorf("subtree moves = %d folders, %d queries; want both", len(st.moved), len(st.movedQueries))
+	}
+
+	// A slug already used in the destination space is refused.
+	_, _ = s.Create(ctx, ws, other, nil, "root", "")
+	if _, err := s.Update(ctx, root, Edit{SpaceID: other}); !errors.Is(err, ErrSlugConflict) {
+		t.Errorf("slug taken in the destination = %v", err)
+	}
+}
+
+// TestUpdate_ParentMustExistInTheSpace: a missing parent, or one in another
+// space, is refused before any write.
+func TestUpdate_ParentMustExistInTheSpace(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	ws, space, other := newID(), newID(), newID()
+	f, _ := s.Create(ctx, ws, space, nil, "f", "")
+	elsewhere, _ := s.Create(ctx, ws, other, nil, "elsewhere", "")
+	missing := newID()
+	for name, parent := range map[string]pgtype.UUID{"missing": missing, "other space": elsewhere.ID} {
+		if _, err := s.Update(ctx, f, Edit{SpaceID: space, Parent: &parent}); !errors.Is(err, ErrParentNotFound) {
+			t.Errorf("%s parent = %v, want ErrParentNotFound", name, err)
+		}
+	}
+}
+
+// TestUpdate_SlugTakenIsAConflict: a slug taken in the same space, or by a
+// concurrent write, is a conflict, not a raw database error.
+func TestUpdate_SlugTakenIsAConflict(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	f, _ := s.Create(ctx, newID(), newID(), nil, "f", "")
+	st.updateErr = &pgconn.PgError{Code: "23505"}
+	taken := "taken"
+	if _, err := s.Update(ctx, f, Edit{Slug: &taken, SpaceID: f.SpaceID}); !errors.Is(err, ErrSlugConflict) {
+		t.Errorf("Update = %v, want ErrSlugConflict", err)
 	}
 }

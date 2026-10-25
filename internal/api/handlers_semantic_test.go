@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/semantic/docs"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -240,7 +241,7 @@ func TestSemanticDocs_Search(t *testing.T) {
 func TestSemanticDocs_DescriptionTooLong(t *testing.T) {
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
-	r := upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: strings.Repeat("x", maxDocDescription+1)})
+	r := upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: strings.Repeat("x", docs.MaxDescription+1)})
 	if _, ok := r.(UpsertSemanticDoc422JSONResponse); !ok {
 		t.Fatalf("too long: %T", r)
 	}
@@ -252,27 +253,4 @@ func isSemantic404(r any) bool {
 		return true
 	}
 	return false
-}
-
-func TestNormalizeSemanticTags(t *testing.T) {
-	tags := []string{"Sales", " sales ", "revenue-2026"}
-	got, msg := normalizeSemanticTags(&tags)
-	if msg != "" {
-		t.Fatalf("unexpected error: %s", msg)
-	}
-	want := []string{"sales", "revenue-2026"}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
-		t.Fatalf("normalizeSemanticTags = %v, want %v", got, want)
-	}
-	bad := []string{"Sales!"}
-	if _, msg := normalizeSemanticTags(&bad); msg == "" {
-		t.Fatal("invalid tag was accepted")
-	}
-	many := make([]string, 21)
-	for i := range many {
-		many[i] = "tag" + string(rune('a'+i%26))
-	}
-	if _, msg := normalizeSemanticTags(&many); msg == "" {
-		t.Fatal("21 tags were accepted")
-	}
 }

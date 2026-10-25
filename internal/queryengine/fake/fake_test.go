@@ -1,7 +1,9 @@
 package fake_test
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -66,5 +68,36 @@ func TestCapabilities_ReportTheInjectedDialect(t *testing.T) {
 	}
 	if got := fake.New(fake.Options{}).Capabilities().Dialect; got != dialect.FlightSQL {
 		t.Fatalf("default capabilities dialect = %q, want %q", got, dialect.FlightSQL)
+	}
+}
+
+// TestCancel_AsSoonAsTheHandleIsReported: a Cancel issued from OnStart, the
+// earliest a caller can hold the handle, stops the statement. Before the fix
+// the handle was registered only after OnStart, and the statement slept on.
+func TestCancel_AsSoonAsTheHandleIsReported(t *testing.T) {
+	ctx := context.Background()
+	e := fake.New(fake.Options{ID: "a"})
+	other := fake.New(fake.Options{ID: "b"})
+	s, err := e.OpenSession(ctx, queryengine.SessionSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Execute(ctx, "SLEEP", queryengine.Callbacks{OnStart: func(h queryengine.QueryHandle) {
+			if err := other.Cancel(ctx, h); err != nil {
+				t.Errorf("cancel: %v", err)
+			}
+		}}, nil)
+	}()
+	select {
+	case err := <-done:
+		if queryengine.CodeOf(err) != queryengine.CodeCancelled {
+			t.Fatalf("err = %v, want cancelled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a cancel at OnStart was lost; the statement is still running")
 	}
 }

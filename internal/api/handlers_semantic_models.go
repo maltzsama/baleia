@@ -5,22 +5,20 @@ package api
 // commit; the compiler and storage are already in place.
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
+	"github.com/galileostudio/baleia/internal/content/history"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/semantic/compiler"
-	slugs "github.com/galileostudio/baleia/internal/slug"
+	"github.com/galileostudio/baleia/internal/semantic/models"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -42,9 +40,7 @@ func (h *SemanticHandlers) ListSemanticModels(ctx context.Context, request ListS
 	if request.Params.SpaceId != nil {
 		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
-	rows, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{
-		WorkspaceID: ws, UserID: userID, SpaceID: spaceID,
-	})
+	rows, err := h.modelDefs.List(ctx, ws, userID, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -67,10 +63,8 @@ func (h *SemanticHandlers) GetSemanticModel(ctx context.Context, request GetSema
 	if nf {
 		return GetSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	model, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{
-		WorkspaceID: ws, ID: pgtype.UUID{Bytes: request.ModelId, Valid: true},
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	model, err := h.modelDefs.Get(ctx, ws, pgtype.UUID{Bytes: request.ModelId, Valid: true})
+	if errors.Is(err, models.ErrNotFound) {
 		return GetSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
 	if err != nil {
@@ -109,16 +103,14 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 	if err != nil {
 		return nil, err
 	}
-	rows, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{
-		WorkspaceID: ws, UserID: userID,
-	})
+	rows, err := h.modelDefs.List(ctx, ws, userID, pgtype.UUID{})
 	if err != nil {
 		return nil, err
 	}
-	models := make(map[string]semantic.Model, len(rows))
+	modelSet := make(map[string]semantic.Model, len(rows))
 	var baseRow *db.SemanticModel
 	for i := range rows {
-		m, err := parseSemanticModel(rows[i].Definition)
+		m, err := models.ParseStored(rows[i].Definition)
 		if err != nil {
 			return CompileExploreQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, "model "+rows[i].Slug+": "+err.Error())}, nil
 		}
@@ -129,7 +121,7 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 		if rows[i].BindingID.Valid {
 			m.BindingID = uuid.UUID(rows[i].BindingID.Bytes).String()
 		}
-		models[m.Slug] = m
+		modelSet[m.Slug] = m
 		if m.Slug == request.Body.Query.Model {
 			baseRow = &rows[i]
 		}
@@ -153,7 +145,7 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 		}
 		return nil, err
 	}
-	res, err := compiler.Compile(q, models, engine.Dialect(), compiler.Options{Catalog: target.EngineCatalog})
+	res, err := compiler.Compile(q, modelSet, engine.Dialect(), compiler.Options{Catalog: target.EngineCatalog})
 	if err != nil {
 		// The query is valid but needs something the compiler or the engine's
 		// dialect cannot express (a missing primitive, a fan-out it cannot
@@ -177,13 +169,7 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 // semanticModelVersion returns the latest content version, or 0 when the model
 // has never been versioned (e.g. seeded outside the content service).
 func (h *core) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
-	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id,
-	})
-	if err != nil {
-		return 0
-	}
-	return v.Version
+	return h.history.Latest(ctx, ws, content.EntitySemanticModel, id)
 }
 
 func (h *core) semanticModelActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
@@ -241,17 +227,6 @@ func dbSemanticModelToPublic(m db.SemanticModel, version int32) SemanticModel {
 		out.CertifiedAt = &v
 	}
 	return out
-}
-
-// parseSemanticModel decodes the stored definition and rejects unknown fields.
-func parseSemanticModel(raw []byte) (semantic.Model, error) {
-	var m semantic.Model
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&m); err != nil {
-		return semantic.Model{}, err
-	}
-	return m, nil
 }
 
 // exploreQueryFromRequest converts the OpenAPI shape into the compiler input.
@@ -328,41 +303,36 @@ func (h *SemanticHandlers) CreateSemanticModel(ctx context.Context, request Crea
 	if nf {
 		return CreateSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
-	if msg, ok := validateModelFields(request.Body.Slug, request.Body.Label); !ok {
-		return CreateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, msg)}, nil
+	f := models.Fields{
+		Slug:      request.Body.Slug,
+		Label:     request.Body.Label,
+		CatalogID: catalogID,
+		BindingID: emptyUUID(request.Body.BindingId),
+		OwnerID:   emptyUUID(request.Body.OwnerUserId),
 	}
-	bindingID := emptyUUID(request.Body.BindingId)
-	def, raw, err := parseSemanticModelDefinition(request.Body.Definition)
-	if err != nil {
-		return CreateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
+	if request.Body.Description != nil {
+		f.Description = *request.Body.Description
+	}
+	if request.Body.Certified != nil {
+		f.Certified = *request.Body.Certified
 	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	models, err := h.visibleModels(ctx, ws, userID)
-	if err != nil {
+	prepared, err := h.modelDefs.PrepareNew(ctx, ws, userID, f, request.Body.Definition)
+	var (
+		invalidDef   *models.InvalidDefinitionError
+		invalidField *models.InvalidFieldError
+	)
+	switch {
+	case errors.As(err, &invalidField):
+		return CreateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalidField.Msg)}, nil
+	case errors.As(err, &invalidDef):
+		return CreateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, invalidDef.Error())}, nil
+	case err != nil:
 		return nil, err
 	}
-	def.Slug = request.Body.Slug
-	def.CatalogID = uuid.UUID(catalogID.Bytes).String()
-	if bindingID.Valid {
-		def.BindingID = uuid.UUID(bindingID.Bytes).String()
-	} else {
-		def.BindingID = ""
-	}
-	if err := def.Validate(models); err != nil {
-		return CreateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
-	}
-
-	description, certified := "", false
-	if request.Body.Description != nil {
-		description = *request.Body.Description
-	}
-	if request.Body.Certified != nil {
-		certified = *request.Body.Certified
-	}
-	ownerID := emptyUUID(request.Body.OwnerUserId)
 
 	var space db.Space
 	if request.Body.SpaceId != nil {
@@ -401,35 +371,14 @@ func (h *SemanticHandlers) CreateSemanticModel(ctx context.Context, request Crea
 	if se, err := h.contentSpace(ctx, ws, space.ID, authz.SpaceManager); err == nil && se == nil {
 		isManager = true
 	}
-	if certified && !isManager {
-		return CreateSemanticModel403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a model"}}, nil
-	}
-	model, err := h.contentService().CreateSemanticModel(ctx, userID, db.CreateSemanticModelParams{
-		WorkspaceID:   ws,
-		SpaceID:       space.ID,
-		Slug:          request.Body.Slug,
-		Label:         request.Body.Label,
-		Description:   description,
-		Certified:     certified,
-		CatalogID:     catalogID,
-		BindingID:     bindingID,
-		Definition:    raw,
-		FormatVersion: 1,
-		OwnerUserID:   ownerID,
-		UpdatedBy:     userID,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return CreateSemanticModel409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a model with this slug already exists in this workspace"}}, nil
-		}
+	model, err := h.modelDefs.Create(ctx, userID, ws, space.ID, prepared, isManager)
+	switch {
+	case errors.Is(err, models.ErrCertifyForbidden):
+		return CreateSemanticModel403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: err.Error()}}, nil
+	case errors.Is(err, models.ErrSlugTaken):
+		return CreateSemanticModel409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	case err != nil:
 		return nil, err
-	}
-	if certified {
-		if recertified, cerr := h.queries.SetSemanticModelCertification(ctx, db.SetSemanticModelCertificationParams{
-			WorkspaceID: ws, ID: model.ID, Certified: true, Actor: userID,
-		}); cerr == nil {
-			model = recertified
-		}
 	}
 	out := dbSemanticModelToPublic(model, 1)
 	acts := h.semanticModelActions(ctx, ws, model.SpaceID)
@@ -450,8 +399,8 @@ func (h *SemanticHandlers) UpdateSemanticModel(ctx context.Context, request Upda
 		return nil, errors.New("semantic model: missing body")
 	}
 	modelID := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	current, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: modelID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	current, err := h.modelDefs.Get(ctx, ws, modelID)
+	if errors.Is(err, models.ErrNotFound) {
 		return UpdateSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
 	if err != nil {
@@ -473,77 +422,47 @@ func (h *SemanticHandlers) UpdateSemanticModel(ctx context.Context, request Upda
 		isManager = true
 	}
 	body := request.Body
-	if body.Certified != nil && *body.Certified != current.Certified && !isManager {
-		return UpdateSemanticModel403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a space manager may certify a model"}}, nil
-	}
-	changesDefinition := body.Definition != nil || body.CatalogId != nil || body.BindingId != nil
-	slug, label := current.Slug, current.Label
-	description, certified := current.Description, current.Certified
-	catalogID, bindingID := current.CatalogID, current.BindingID
-	ownerID := current.OwnerUserID
-	raw := current.Definition
-	if body.Slug != nil {
-		slug = *body.Slug
-	}
-	if body.Label != nil {
-		label = *body.Label
-	}
-	if body.Description != nil {
-		description = *body.Description
-	}
-	if body.Certified != nil {
-		certified = *body.Certified
-	} else if changesDefinition && current.Certified && !isManager {
-		certified = false
+	change := models.Change{
+		Slug: body.Slug, Label: body.Label, Description: body.Description, Certified: body.Certified,
+		ChangesDefinition: body.Definition != nil,
 	}
 	if body.CatalogId != nil {
-		catalogID = pgtype.UUID{Bytes: *body.CatalogId, Valid: true}
+		change.CatalogID = &pgtype.UUID{Bytes: *body.CatalogId, Valid: true}
 	}
 	if body.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: *body.BindingId, Valid: true}
+		change.BindingID = &pgtype.UUID{Bytes: *body.BindingId, Valid: true}
 	}
 	if body.OwnerUserId != nil {
-		ownerID = pgtype.UUID{Bytes: *body.OwnerUserId, Valid: true}
+		change.OwnerID = &pgtype.UUID{Bytes: *body.OwnerUserId, Valid: true}
+	}
+	fields, err := models.MergeFields(current, change, isManager)
+	var invalidField *models.InvalidFieldError
+	switch {
+	case errors.Is(err, models.ErrCertifyForbidden):
+		return UpdateSemanticModel403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: err.Error()}}, nil
+	case errors.As(err, &invalidField):
+		return UpdateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalidField.Msg)}, nil
+	case err != nil:
+		return nil, err
 	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	if msg, ok := validateModelFields(slug, label); !ok {
-		return UpdateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, msg)}, nil
-	}
-	nf, err = h.semanticCatalog(ctx, ws, openapi_types.UUID(catalogID.Bytes))
+	nf, err = h.semanticCatalog(ctx, ws, openapi_types.UUID(fields.CatalogID.Bytes))
 	if err != nil {
 		return nil, err
 	}
 	if nf {
 		return UpdateSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
-	var def semantic.Model
-	if body.Definition != nil {
-		var parsed []byte
-		def, parsed, err = parseSemanticModelDefinition(*body.Definition)
-		if err != nil {
-			return UpdateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
-		}
-		raw = parsed
-	} else if err := json.Unmarshal(raw, &def); err != nil {
-		return UpdateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
+	prepared, err := h.modelDefs.PrepareUpdate(ctx, ws, userID, current, fields, body.Definition)
+	var invalidDef *models.InvalidDefinitionError
+	if errors.As(err, &invalidDef) {
+		return UpdateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, invalidDef.Error())}, nil
 	}
-	models, err := h.visibleModels(ctx, ws, userID)
 	if err != nil {
 		return nil, err
-	}
-	delete(models, current.Slug)
-	def.Slug = slug
-	def.CatalogID = uuid.UUID(catalogID.Bytes).String()
-	if bindingID.Valid {
-		def.BindingID = uuid.UUID(bindingID.Bytes).String()
-	} else {
-		def.BindingID = ""
-	}
-	if err := def.Validate(models); err != nil {
-		return UpdateSemanticModel422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 
 	var expected *int32
@@ -551,37 +470,15 @@ func (h *SemanticHandlers) UpdateSemanticModel(ctx context.Context, request Upda
 		v := int32(*body.ExpectedVersion)
 		expected = &v
 	}
-	certificationChanged := certified != current.Certified
-	updated, _, err := h.contentService().UpdateSemanticModel(ctx, userID, db.UpdateSemanticModelParams{
-		WorkspaceID:   ws,
-		SpaceID:       current.SpaceID,
-		ID:            modelID,
-		Slug:          slug,
-		Label:         label,
-		Description:   description,
-		Certified:     certified,
-		CatalogID:     catalogID,
-		BindingID:     bindingID,
-		Definition:    raw,
-		FormatVersion: 1,
-		OwnerUserID:   ownerID,
-		UpdatedBy:     userID,
-	}, expected)
+	updated, err := h.modelDefs.Update(ctx, userID, current, prepared, expected)
+	if errors.Is(err, models.ErrSlugTaken) {
+		return UpdateSemanticModel409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	}
 	if err != nil {
-		if isUniqueViolation(err) {
-			return UpdateSemanticModel409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a model with this slug already exists in this workspace"}}, nil
-		}
 		if c, ok := h.versionConflictResponse(ctx, err); ok {
 			return UpdateSemanticModel409JSONResponse{ConflictJSONResponse: c}, nil
 		}
 		return nil, err
-	}
-	if certificationChanged || (updated.Certified && !updated.CertifiedAt.Valid) {
-		if recertified, cerr := h.queries.SetSemanticModelCertification(ctx, db.SetSemanticModelCertificationParams{
-			WorkspaceID: ws, ID: modelID, Certified: updated.Certified, Actor: userID,
-		}); cerr == nil {
-			updated = recertified
-		}
 	}
 	out := dbSemanticModelToPublic(updated, h.semanticModelVersion(ctx, ws, modelID))
 	acts := h.semanticModelActions(ctx, ws, updated.SpaceID)
@@ -599,8 +496,8 @@ func (h *SemanticHandlers) DeleteSemanticModel(ctx context.Context, request Dele
 		return DeleteSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
 	modelID := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	current, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: modelID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	current, err := h.modelDefs.Get(ctx, ws, modelID)
+	if errors.Is(err, models.ErrNotFound) {
 		return DeleteSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
 	if err != nil {
@@ -621,7 +518,7 @@ func (h *SemanticHandlers) DeleteSemanticModel(ctx context.Context, request Dele
 	if err != nil {
 		return nil, err
 	}
-	if err := h.contentService().DeleteSemanticModel(ctx, actor, ws, modelID); err != nil {
+	if err := h.modelDefs.Delete(ctx, actor, ws, modelID); err != nil {
 		if errors.Is(err, content.ErrNotFound) {
 			return DeleteSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 		}
@@ -630,77 +527,14 @@ func (h *SemanticHandlers) DeleteSemanticModel(ctx context.Context, request Dele
 	return DeleteSemanticModel204Response{}, nil
 }
 
-// visibleModels loads the definitions of every model visible to the caller, so
-// validation can resolve join targets and field uniqueness.
-func (h *core) visibleModels(ctx context.Context, ws, userID pgtype.UUID) (map[string]semantic.Model, error) {
-	rows, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{
-		WorkspaceID: ws, UserID: userID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]semantic.Model, len(rows))
-	for i := range rows {
-		m, err := parseSemanticModel(rows[i].Definition)
-		if err != nil {
-			continue // a malformed sibling must not block a valid edit
-		}
-		m.Slug = rows[i].Slug
-		m.CatalogID = uuid.UUID(rows[i].CatalogID.Bytes).String()
-		out[m.Slug] = m
-	}
-	return out, nil
-}
-
-func parseSemanticModelDefinition(in map[string]any) (semantic.Model, []byte, error) {
-	raw, err := json.Marshal(in)
-	if err != nil {
-		return semantic.Model{}, nil, err
-	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	var m semantic.Model
-	if err := dec.Decode(&m); err != nil {
-		return semantic.Model{}, nil, err
-	}
-	return m, raw, nil
-}
-
-func validateModelFields(slug, label string) (string, bool) {
-	if !slugs.Valid(slug) {
-		return "slug must match ^[a-z][a-z0-9_]{0,62}$", false
-	}
-	if strings.TrimSpace(label) == "" {
-		return "label is required", false
-	}
-	return "", true
-}
-
 // ── model versions (#34) ────────────────────────────────────────────────────────
-
-func (h *core) modelSpaceForHistory(ctx context.Context, ws, id pgtype.UUID) (pgtype.UUID, error) {
-	m, err := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id})
-	if err == nil {
-		return m.SpaceID, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return pgtype.UUID{}, err
-	}
-	v, err := h.queries.LatestContentVersion(ctx, db.LatestContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id,
-	})
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return v.SpaceID, nil
-}
 
 // ListSemanticModelVersions — GET /workspaces/{id}/semantic/models/{model_id}/versions
 func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, request ListSemanticModelVersionsRequestObject) (ListSemanticModelVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	spaceID, err := h.modelSpaceForHistory(ctx, ws, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	spaceID, err := h.history.SpaceOf(ctx, ws, content.EntitySemanticModel, id)
+	if errors.Is(err, history.ErrNotFound) {
 		return ListSemanticModelVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
 	if err != nil {
@@ -720,9 +554,7 @@ func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, reques
 		return ListSemanticModelVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
 	lim, off := versionPage(request.Params.Limit, request.Params.Offset)
-	rows, err := h.queries.ListContentVersions(ctx, db.ListContentVersionsParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Lim: lim, Off: off,
-	})
+	rows, err := h.history.List(ctx, ws, content.EntitySemanticModel, id, lim, off)
 	if err != nil {
 		return nil, err
 	}
@@ -737,10 +569,8 @@ func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, reques
 func (h *SemanticHandlers) GetSemanticModelVersion(ctx context.Context, request GetSemanticModelVersionRequestObject) (GetSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Version: int32(request.Version),
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	v, err := h.history.Get(ctx, ws, content.EntitySemanticModel, id, versionArg(request.Version))
+	if errors.Is(err, history.ErrNotFound) {
 		return GetSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
 	if err != nil {
@@ -770,10 +600,8 @@ func (h *SemanticHandlers) GetSemanticModelVersion(ctx context.Context, request 
 func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, request RestoreSemanticModelVersionRequestObject) (RestoreSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
 	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
-	v, err := h.queries.GetContentVersion(ctx, db.GetContentVersionParams{
-		WorkspaceID: ws, EntityType: content.EntitySemanticModel, EntityID: id, Version: int32(request.Version),
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	v, err := h.history.Get(ctx, ws, content.EntitySemanticModel, id, versionArg(request.Version))
+	if errors.Is(err, history.ErrNotFound) {
 		return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
 	if err != nil {
@@ -807,7 +635,7 @@ func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, requ
 	if err != nil {
 		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
-	def, err := parseSemanticModel(snap.Definition)
+	def, err := models.ParseStored(snap.Definition)
 	if err != nil {
 		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
@@ -817,17 +645,17 @@ func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, requ
 	if err != nil {
 		return nil, err
 	}
-	models, err := h.visibleModels(ctx, ws, actor)
+	visible, err := h.modelDefs.Visible(ctx, ws, actor)
 	if err != nil {
 		return nil, err
 	}
 	// The model being restored is not a join target for itself: drop both the
 	// snapshot slug and the live row's current slug.
-	delete(models, def.Slug)
-	if cur, cerr := h.queries.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id}); cerr == nil {
-		delete(models, cur.Slug)
+	delete(visible, def.Slug)
+	if cur, cerr := h.modelDefs.Get(ctx, ws, id); cerr == nil {
+		delete(visible, cur.Slug)
 	}
-	if err := def.Validate(models); err != nil {
+	if err := def.Validate(visible); err != nil {
 		return RestoreSemanticModelVersion422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
 	var newSlug *string

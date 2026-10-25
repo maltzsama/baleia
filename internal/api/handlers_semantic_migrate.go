@@ -14,6 +14,8 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata/typemap"
 	"github.com/galileostudio/baleia/internal/semantic"
+	"github.com/galileostudio/baleia/internal/semantic/metrics"
+	"github.com/galileostudio/baleia/internal/semantic/models"
 	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -74,14 +76,18 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 		}
 	}
 
-	metrics, err := h.queries.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{WorkspaceID: ws, UserID: userID})
+	visibleMetrics, err := h.metricDefs.List(ctx, ws, userID, metrics.Filter{})
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(metrics, func(i, j int) bool { return metrics[i].Slug < metrics[j].Slug })
+	all := make([]db.SemanticMetric, 0, len(visibleMetrics))
+	for _, it := range visibleMetrics {
+		all = append(all, it.Metric)
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].Slug < all[j].Slug })
 	var tables []*migrationTable
 	byKey := map[string]*migrationTable{}
-	for _, m := range metrics {
+	for _, m := range all {
 		t := migrationTable{catalogID: m.CatalogID, namespace: m.Namespace, table: m.TableName}
 		if existing, ok := byKey[t.key()]; ok {
 			existing.metrics = append(existing.metrics, m)
@@ -92,11 +98,11 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 		tables = append(tables, &t)
 	}
 
-	modelRows, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{WorkspaceID: ws, UserID: userID})
+	modelRows, err := h.modelDefs.List(ctx, ws, userID, pgtype.UUID{})
 	if err != nil {
 		return nil, err
 	}
-	visible, err := h.visibleModels(ctx, ws, userID)
+	visible, err := h.modelDefs.Visible(ctx, ws, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +133,7 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 	return MigrateSemanticMetricsV1200JSONResponse(MigrateV1Report{DryRun: dryRun, Items: items}), nil
 }
 
-func (h *core) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards migrationGuards, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
+func (h *SemanticHandlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards migrationGuards, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
 	item := MigrateV1Item{
 		CatalogId: openapi_types.UUID(t.catalogID.Bytes),
 		Namespace: t.namespace,
@@ -164,7 +170,7 @@ func (h *core) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards 
 
 	var existing *db.SemanticModel
 	for i := range modelRows {
-		def, err := parseSemanticModel(modelRows[i].Definition)
+		def, err := models.ParseStored(modelRows[i].Definition)
 		if err != nil || def.Source.Kind != semantic.SourceTable {
 			continue
 		}
@@ -177,7 +183,7 @@ func (h *core) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards 
 	var model semantic.Model
 	var spaceID pgtype.UUID
 	if existing != nil {
-		def, _ := parseSemanticModel(existing.Definition)
+		def, _ := models.ParseStored(existing.Definition)
 		model = def
 		model.Slug = existing.Slug
 		model.CatalogID = uuid.UUID(existing.CatalogID.Bytes).String()
@@ -347,7 +353,7 @@ func (h *core) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards 
 // migrationColumns reads the table's columns with their portable types from
 // the metadata snapshot. Columns the semantic layer cannot type are skipped; a
 // metric over one of them fails its item with a clear message.
-func (h *core) migrationColumns(ctx context.Context, t migrationTable) ([]semantic.ColumnType, error) {
+func (h *SemanticHandlers) migrationColumns(ctx context.Context, t migrationTable) ([]semantic.ColumnType, error) {
 	tableID, err := h.queries.GetMetadataTableByName(ctx, db.GetMetadataTableByNameParams{
 		CatalogID: t.catalogID, Namespace: t.namespace, Name: t.table,
 	})
@@ -378,16 +384,12 @@ func (h *core) migrationColumns(ctx context.Context, t migrationTable) ([]semant
 }
 
 // migrationSlug derives a free model slug from the table name.
-func (h *core) migrationSlug(ctx context.Context, ws pgtype.UUID, table string, reserved map[string]bool) (string, error) {
+func (h *SemanticHandlers) migrationSlug(ctx context.Context, ws pgtype.UUID, table string, reserved map[string]bool) (string, error) {
 	slug, err := slugs.Unique(ctx, table, func(ctx context.Context, s string) (bool, error) {
 		if reserved[s] {
 			return true, nil
 		}
-		_, err := h.queries.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: ws, Slug: s})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
-		return err == nil, err
+		return h.modelDefs.SlugTaken(ctx, ws, s)
 	})
 	if err != nil {
 		return "", err
