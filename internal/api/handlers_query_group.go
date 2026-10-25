@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/galileostudio/baleia/internal/workbench/folders"
+	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
 	"github.com/galileostudio/baleia/internal/wsticket"
 )
 
@@ -13,6 +14,8 @@ type QueryHandlers struct {
 	wsTickets *wsticket.Store
 	// folders organizes saved queries in a space.
 	folders *folders.Service
+	// saved manages saved queries; writes go through content (#34).
+	saved *savedqueries.Service
 }
 
 // newQueryHandlers builds the group; a nil ticket store builds one.
@@ -20,5 +23,11 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 	if tickets == nil {
 		tickets = wsticket.New()
 	}
-	return &QueryHandlers{core: c, wsTickets: tickets, folders: folders.New(c.queries)}
+	f := folders.New(c.queries)
+	return &QueryHandlers{
+		core:      c,
+		wsTickets: tickets,
+		folders:   f,
+		saved:     savedqueries.NewService(c.queries, f, c.contentService()),
+	}
 }

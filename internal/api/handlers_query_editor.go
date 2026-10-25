@@ -22,10 +22,10 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
+	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -160,55 +160,25 @@ func (h *QueryHandlers) ListSavedQueries(ctx context.Context, request ListSavedQ
 		lim = &v
 	}
 
-	var folderID pgtype.UUID
+	filter := savedqueries.Filter{Q: request.Params.Q, Limit: lim}
 	if request.Params.FolderId != nil {
-		folderID.Bytes = *request.Params.FolderId
-		folderID.Valid = true
+		filter.FolderID = pgtype.UUID{Bytes: *request.Params.FolderId, Valid: true}
 	}
-
+	if request.Params.SpaceId != nil {
+		filter.SpaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	var spaceID pgtype.UUID
-	if request.Params.SpaceId != nil {
-		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
-	}
-	var queries []db.SavedQuery
-	if folderID.Valid {
-		queries, err = h.queries.ListVisibleSavedQueries(ctx, db.ListVisibleSavedQueriesParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-			FolderID:    folderID,
-			Q:           request.Params.Q,
-			Lim:         lim,
-		})
-	} else {
-		queries, err = h.queries.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{
-			WorkspaceID: workspaceIDFromRequest(request.Id),
-			UserID:      userID,
-			SpaceID:     spaceID,
-			Q:           request.Params.Q,
-			Lim:         lim,
-		})
-	}
+	items, err := h.saved.List(ctx, workspaceIDFromRequest(request.Id), userID, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	versions, err := h.queries.ListSavedQueryVersions(ctx, workspaceIDFromRequest(request.Id))
-	if err != nil {
-		return nil, err
-	}
-	versionByID := make(map[string]int32, len(versions))
-	for _, v := range versions {
-		versionByID[uuidStr(v.EntityID)] = v.Version
-	}
-
-	result := make([]SavedQuery, 0, len(queries))
-	for _, q := range queries {
-		result = append(result, dbSavedQueryToPublic(q, versionByID[uuidStr(q.ID)]))
+	result := make([]SavedQuery, 0, len(items))
+	for _, it := range items {
+		result = append(result, dbSavedQueryToPublic(it.Query, it.Version))
 	}
 	return ListSavedQueries200JSONResponse(result), nil
 }
@@ -236,55 +206,30 @@ func (h *QueryHandlers) CreateSavedQuery(ctx context.Context, request CreateSave
 		return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "space not found"}}, nil
 	}
 
-	var folderID pgtype.UUID
+	in := savedqueries.New{
+		SpaceID: space.ID,
+		Name:    request.Body.Name,
+		SQL:     request.Body.Sql,
+		Target:  h.savedQueryTargetFunc(ws, request.Body.Target),
+	}
 	if request.Body.FolderId != nil {
-		folderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
-		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
-		if err != nil || folder.SpaceID != space.ID {
-			return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
-		}
+		in.FolderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
 	}
-
-	slug := ""
 	if request.Body.Slug != nil {
-		slug = *request.Body.Slug
+		in.Slug = *request.Body.Slug
 	}
-	if slug == "" {
-		slug, err = slugs.Unique(ctx, request.Body.Name, func(ctx context.Context, s string) (bool, error) {
-			return h.queries.SavedQuerySlugExists(ctx, db.SavedQuerySlugExistsParams{WorkspaceID: ws, Slug: s})
-		})
-		if err != nil {
-			return nil, err
-		}
-	} else if !slugs.Valid(slug) {
+	query, err := h.saved.Create(ctx, createdBy, ws, in)
+	var te *targetError
+	switch {
+	case errors.Is(err, savedqueries.ErrFolderNotFound):
+		return CreateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	case errors.Is(err, savedqueries.ErrInvalidSlug):
 		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
-	}
-
-	bindingID, targetSchema, te := h.savedQueryTarget(ctx, ws, request.Body.Target)
-	if te != nil {
-		code, message := ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
-		if te.code != "" {
-			code, message = te.code, te.message
-		}
-		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, message)}, nil
-	}
-
-	query, err := h.contentService().CreateSavedQuery(ctx, createdBy, db.CreateSavedQueryParams{
-		WorkspaceID:     ws,
-		SpaceID:         space.ID,
-		FolderID:        folderID,
-		CreatedBy:       createdBy,
-		UpdatedBy:       createdBy,
-		Name:            request.Body.Name,
-		Slug:            slug,
-		Sql:             request.Body.Sql,
-		TargetBindingID: bindingID,
-		TargetSchema:    targetSchema,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return savedQueryConflict("a saved query with this name already exists in this workspace"), nil
-		}
+	case errors.As(err, &te):
+		return CreateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(savedQueryTargetCode(te))}, nil
+	case errors.Is(err, savedqueries.ErrNameTaken):
+		return savedQueryConflict("a saved query with this name already exists in this workspace"), nil
+	case err != nil:
 		return nil, err
 	}
 
@@ -301,7 +246,7 @@ func (h *QueryHandlers) GetSavedQuery(ctx context.Context, request GetSavedQuery
 	queryID.Valid = true
 
 	ws := workspaceIDFromRequest(request.Id)
-	query, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
+	query, err := h.saved.Get(ctx, ws, queryID)
 	if err != nil {
 		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
@@ -329,7 +274,7 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
-	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
+	current, err := h.saved.Get(ctx, ws, queryID)
 	if err != nil {
 		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
@@ -368,74 +313,39 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 		}
 	}
 
-	name, sql := current.Name, current.Sql
-	if request.Body.Name != nil {
-		name = *request.Body.Name
-	}
-	if request.Body.Sql != nil {
-		sql = *request.Body.Sql
-	}
-
-	folderID := current.FolderID
-	if request.Body.MoveToRoot != nil && *request.Body.MoveToRoot {
-		folderID = pgtype.UUID{}
-	}
-	if request.Body.FolderId != nil {
-		folderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
-	}
-	if folderID.Valid {
-		folder, err := h.queries.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: folderID, WorkspaceID: ws})
-		if err != nil || folder.SpaceID != spaceID {
-			return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
-		}
-	}
-
-	slug := current.Slug
-	if request.Body.Slug != nil {
-		slug = *request.Body.Slug
-		if !slugs.Valid(slug) {
-			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
-		}
-	}
-
-	bindingID, targetSchema := current.TargetBindingID, current.TargetSchema
-	if request.Body.Target != nil {
-		var te *targetError
-		bindingID, targetSchema, te = h.savedQueryTarget(ctx, ws, request.Body.Target)
-		if te != nil {
-			code, message := ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
-			if te.code != "" {
-				code, message = te.code, te.message
-			}
-			return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, message)}, nil
-		}
-	}
-
 	updatedBy, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	var expected *int32
+	change := savedqueries.Change{
+		Name:       request.Body.Name,
+		SQL:        request.Body.Sql,
+		Slug:       request.Body.Slug,
+		SpaceID:    &spaceID,
+		MoveToRoot: request.Body.MoveToRoot != nil && *request.Body.MoveToRoot,
+	}
+	if request.Body.FolderId != nil {
+		change.FolderID = &pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
+	}
+	if request.Body.Target != nil {
+		change.Target = h.savedQueryTargetFunc(ws, request.Body.Target)
+	}
 	if request.Body.ExpectedVersion != nil {
 		v := int32(*request.Body.ExpectedVersion)
-		expected = &v
+		change.ExpectedVersion = &v
 	}
-	updated, _, err := h.contentService().UpdateSavedQuery(ctx, updatedBy, db.UpdateSavedQueryParams{
-		WorkspaceID:     ws,
-		ID:              queryID,
-		Name:            name,
-		Sql:             sql,
-		FolderID:        folderID,
-		SpaceID:         spaceID,
-		Slug:            slug,
-		TargetBindingID: bindingID,
-		TargetSchema:    targetSchema,
-		UpdatedBy:       updatedBy,
-	}, expected)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return savedQueryUpdateConflict("a saved query with this name already exists in this workspace"), nil
-		}
+	updated, err := h.saved.Update(ctx, updatedBy, current, change)
+	var te *targetError
+	switch {
+	case errors.Is(err, savedqueries.ErrFolderNotFound):
+		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	case errors.Is(err, savedqueries.ErrInvalidSlug):
+		return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "slug must match ^[a-z][a-z0-9_]{0,62}$")}, nil
+	case errors.As(err, &te):
+		return UpdateSavedQuery422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(savedQueryTargetCode(te))}, nil
+	case errors.Is(err, savedqueries.ErrNameTaken):
+		return savedQueryUpdateConflict("a saved query with this name already exists in this workspace"), nil
+	case err != nil:
 		if c, ok := h.versionConflictResponse(ctx, err); ok {
 			return UpdateSavedQuery409JSONResponse{ConflictJSONResponse: c}, nil
 		}
@@ -452,7 +362,7 @@ func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSave
 
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
-	current, err := h.queries.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: queryID})
+	current, err := h.saved.Get(ctx, ws, queryID)
 	if err != nil {
 		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 	}
@@ -474,7 +384,7 @@ func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSave
 	if err != nil {
 		return nil, err
 	}
-	if err := h.contentService().DeleteSavedQuery(ctx, actor, ws, queryID); err != nil {
+	if err := h.saved.Delete(ctx, actor, ws, queryID); err != nil {
 		if errors.Is(err, content.ErrNotFound) {
 			return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
 		}
@@ -1267,6 +1177,26 @@ func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UU
 
 // savedQueryTarget validates the optional target of a saved query: the binding
 // must be a target of the workspace (its catalog granted, #16).
+// savedQueryTargetFunc resolves a saved query's target for the service; a
+// target error comes back as a *targetError.
+func (h *QueryHandlers) savedQueryTargetFunc(ws pgtype.UUID, t *SavedQueryTarget) savedqueries.Target {
+	return func(ctx context.Context) (pgtype.UUID, *string, error) {
+		bindingID, schema, te := h.savedQueryTarget(ctx, ws, t)
+		if te != nil {
+			return pgtype.UUID{}, nil, te
+		}
+		return bindingID, schema, nil
+	}
+}
+
+// savedQueryTargetCode is the 422 code and message of a target error.
+func savedQueryTargetCode(te *targetError) (ErrorCode, string) {
+	if te.code != "" {
+		return te.code, te.message
+	}
+	return ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
+}
+
 func (h *QueryHandlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t *SavedQueryTarget) (pgtype.UUID, *string, *targetError) {
 	if t == nil || t.BindingId == nil {
 		return pgtype.UUID{}, nil, nil
