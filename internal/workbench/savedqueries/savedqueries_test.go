@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -103,7 +104,27 @@ func (f fakeFolders) Get(_ context.Context, ws, id pgtype.UUID) (db.QueryFolder,
 	if q, ok := f[id.Bytes]; ok && q.WorkspaceID == ws {
 		return q, nil
 	}
-	return db.QueryFolder{}, errors.New("folder not found")
+	return db.QueryFolder{}, folders.ErrNotFound
+}
+
+// brokenFolders fails every lookup the way a lost connection does.
+type brokenFolders struct{}
+
+var errDown = errors.New("connection refused")
+
+func (brokenFolders) Get(context.Context, pgtype.UUID, pgtype.UUID) (db.QueryFolder, error) {
+	return db.QueryFolder{}, errDown
+}
+
+// TestFolderLookupFailureIsNotNotFound: a database outage is an error, never
+// a missing folder.
+func TestFolderLookupFailureIsNotNotFound(t *testing.T) {
+	st := newStore()
+	s := NewService(st, brokenFolders{}, st)
+	_, err := s.Create(context.Background(), newID(), newID(), New{SpaceID: newID(), FolderID: newID(), Name: "x"})
+	if !errors.Is(err, errDown) || errors.Is(err, ErrFolderNotFound) {
+		t.Errorf("Create = %v, want the store error", err)
+	}
 }
 
 type fixture struct {

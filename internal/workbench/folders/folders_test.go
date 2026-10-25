@@ -138,3 +138,25 @@ func TestListGetDelete(t *testing.T) {
 		t.Errorf("second delete = %v, want ErrNotFound", err)
 	}
 }
+
+// brokenStore fails folder reads the way a lost connection does.
+type brokenStore struct{ *fakeStore }
+
+var errDown = errors.New("connection refused")
+
+func (brokenStore) GetQueryFolderByID(context.Context, db.GetQueryFolderByIDParams) (db.QueryFolder, error) {
+	return db.QueryFolder{}, errDown
+}
+
+// TestStoreFailureIsNotNotFound: a database outage is an error, never a
+// missing folder or parent.
+func TestStoreFailureIsNotNotFound(t *testing.T) {
+	s := New(brokenStore{newStore()})
+	if _, err := s.Get(context.Background(), newID(), newID()); !errors.Is(err, errDown) {
+		t.Errorf("Get = %v, want the store error", err)
+	}
+	parent := newID()
+	if _, err := s.Create(context.Background(), newID(), newID(), &parent, "x", ""); !errors.Is(err, errDown) || errors.Is(err, ErrParentNotFound) {
+		t.Errorf("Create = %v, want the store error", err)
+	}
+}

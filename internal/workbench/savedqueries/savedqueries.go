@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/slug"
+	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -24,7 +25,8 @@ type Store interface {
 	SavedQuerySlugExists(ctx context.Context, arg db.SavedQuerySlugExistsParams) (bool, error)
 }
 
-// Folders finds a folder of the workspace; *folders.Service implements it.
+// Folders finds a folder of the workspace; *folders.Service implements it
+// and reports a missing folder as folders.ErrNotFound.
 type Folders interface {
 	Get(ctx context.Context, ws, id pgtype.UUID) (db.QueryFolder, error)
 }
@@ -263,6 +265,9 @@ func (s *Service) checkFolder(ctx context.Context, ws, folderID, spaceID pgtype.
 		return nil
 	}
 	f, err := s.folders.Get(ctx, ws, folderID)
+	if err != nil && !errors.Is(err, folders.ErrNotFound) {
+		return err
+	}
 	if err != nil || f.SpaceID != spaceID {
 		return ErrFolderNotFound
 	}

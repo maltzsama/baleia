@@ -114,8 +114,11 @@ func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRe
 	ws := workspaceIDFromRequest(request.Id)
 	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
 	folder, err := h.folders.Get(ctx, ws, folderID)
-	if err != nil {
+	if errors.Is(err, folders.ErrNotFound) {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	_, se, err := h.requireSpace(ctx, ws, folder.SpaceID, authz.SpaceEditor)
 	if err != nil {
@@ -243,8 +246,11 @@ func (h *QueryHandlers) GetSavedQuery(ctx context.Context, request GetSavedQuery
 
 	ws := workspaceIDFromRequest(request.Id)
 	query, err := h.saved.Get(ctx, ws, queryID)
-	if err != nil {
+	if errors.Is(err, savedqueries.ErrNotFound) {
 		return GetSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	_, se, err := h.requireSpace(ctx, ws, query.SpaceID, authz.SpaceViewer)
 	if err != nil {
@@ -271,8 +277,11 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
 	current, err := h.saved.Get(ctx, ws, queryID)
-	if err != nil {
+	if errors.Is(err, savedqueries.ErrNotFound) {
 		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
@@ -359,8 +368,11 @@ func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSave
 	ws := workspaceIDFromRequest(request.Id)
 	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
 	current, err := h.saved.Get(ctx, ws, queryID)
-	if err != nil {
+	if errors.Is(err, savedqueries.ErrNotFound) {
 		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	_, se, err := h.requireSpace(ctx, ws, current.SpaceID, authz.SpaceEditor)
 	if err != nil {
@@ -578,9 +590,12 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 	if request.Body.Rerun != nil {
 		originalID := pgtype.UUID{Bytes: request.Body.Rerun.ExecutionId, Valid: true}
 		original, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), originalID)
-		if err != nil {
+		if errors.Is(err, executions.ErrNotFound) {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+		}
+		if err != nil {
+			return nil, err
 		}
 		if original.UserID.Bytes != uid.Bytes && (!workspace.OwnerUserID.Valid || workspace.OwnerUserID.Bytes != uid.Bytes) {
 			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
@@ -634,9 +649,12 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		// cannot see, must not be attached to an execution (it would leak its
 		// id into this workspace's history).
 		saved, err := h.saved.Get(ctx, workspaceIDFromRequest(request.Id), savedQueryID)
-		if err != nil {
+		if errors.Is(err, savedqueries.ErrNotFound) {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
+		}
+		if err != nil {
+			return nil, err
 		}
 		if _, se, err := h.requireSpace(ctx, workspaceIDFromRequest(request.Id), saved.SpaceID, authz.SpaceViewer); err != nil {
 			if errors.Is(err, authz.ErrUnauthenticated) {
@@ -692,8 +710,11 @@ func (h *QueryHandlers) GetExecution(ctx context.Context, request GetExecutionRe
 	executionID.Valid = true
 
 	execution, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), executionID)
-	if err != nil {
+	if errors.Is(err, executions.ErrNotFound) {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if !agentOwnsExecution(ctx, execution) {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
@@ -727,6 +748,9 @@ func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecu
 	// Agents may cancel only the executions they created (#58).
 	if p, err := authz.PrincipalFromContext(ctx); err == nil && p.IsAgent() {
 		exec, err := h.executions.Get(ctx, wsID, executionID)
+		if err != nil && !errors.Is(err, executions.ErrNotFound) {
+			return nil, err
+		}
 		if err != nil || !agentOwnsExecution(ctx, exec) {
 			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 		}
@@ -789,8 +813,11 @@ func (h *QueryHandlers) GetResults(ctx context.Context, request GetResultsReques
 	executionID.Valid = true
 
 	execution, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), executionID)
-	if err != nil {
+	if errors.Is(err, executions.ErrNotFound) {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if !agentOwnsExecution(ctx, execution) {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
@@ -869,9 +896,12 @@ func (h *QueryHandlers) GetStatementResults(ctx context.Context, request GetStat
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
 	}
 	statement, err := h.executions.Statement(ctx, workspaceIDFromRequest(request.Id), executionID, int32(request.Position))
-	if err != nil {
+	if errors.Is(err, executions.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if statement.Status != "finished" {

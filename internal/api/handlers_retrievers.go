@@ -82,8 +82,11 @@ func (h *QueryHandlers) GetRetriever(ctx context.Context, request GetRetrieverRe
 	}
 
 	retriever, err := h.retrievers.Get(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.RetrieverId, Valid: true})
-	if err != nil {
+	if errors.Is(err, retrievers.ErrNotFound) {
 		return GetRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "retriever not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return GetRetriever200JSONResponse(h.retrieverToPublic(ctx, retriever)), nil

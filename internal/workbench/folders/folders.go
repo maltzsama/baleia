@@ -78,6 +78,9 @@ func (s *Service) Create(ctx context.Context, ws, spaceID pgtype.UUID, parent *p
 	var parentID pgtype.UUID
 	if parent != nil {
 		p, err := s.Get(ctx, ws, *parent)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return db.QueryFolder{}, err
+		}
 		if err != nil || p.SpaceID != spaceID {
 			return db.QueryFolder{}, ErrParentNotFound
 		}
