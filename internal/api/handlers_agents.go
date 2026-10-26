@@ -3,22 +3,19 @@ package api
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
+	agentmanage "github.com/galileostudio/baleia/internal/agents/manage"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Agents (#59). External agents only: assistant agents are managed by #62 and
 // are never listed or minted here.
-
-var errWorkspaceNotVisible = errors.New("workspace not visible")
 
 func (h *core) agentsEnabled() bool {
 	return h.settings.Agents.Enabled
@@ -45,33 +42,13 @@ func agentNotFound() NotFoundJSONResponse {
 
 // agentScope loads an external agent the caller may see: its owner or a global
 // administrator.
-func (h *core) agentScope(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
-	agent, err := h.queries.GetAgentByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return db.Agent{}, false, nil
-		}
-		return db.Agent{}, false, err
-	}
-	if agent.Kind != "external" {
-		return db.Agent{}, false, nil
-	}
-	if agent.OwnerID.Bytes == p.UserID.Bytes || p.IsAdmin() {
-		return agent, true, nil
-	}
-	return db.Agent{}, false, nil
+func (h *AgentHandlers) agentScope(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
+	return h.agents.Visible(ctx, agentmanage.Viewer{UserID: p.UserID, Admin: p.IsAdmin()}, id)
 }
 
 // agentOwned loads an external agent only when the caller owns it.
-func (h *core) agentOwned(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
-	agent, ok, err := h.agentScope(ctx, p, id)
-	if err != nil || !ok {
-		return db.Agent{}, false, err
-	}
-	if agent.OwnerID.Bytes != p.UserID.Bytes {
-		return db.Agent{}, false, nil
-	}
-	return agent, true, nil
+func (h *AgentHandlers) agentOwned(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
+	return h.agents.Owned(ctx, agentmanage.Viewer{UserID: p.UserID, Admin: p.IsAdmin()}, id)
 }
 
 func (h *core) agentActions(p authz.Principal, agent db.Agent) []AgentAllowedAction {
@@ -89,12 +66,12 @@ func (h *core) agentActions(p authz.Principal, agent db.Agent) []AgentAllowedAct
 
 // agentPublic builds the API view. Token summaries are computed from the
 // token list (agents own at most a handful of tokens).
-func (h *core) agentPublic(ctx context.Context, p authz.Principal, agent db.Agent) (Agent, error) {
-	workspaces, err := h.queries.ListAgentWorkspaces(ctx, agent.ID)
+func (h *AgentHandlers) agentPublic(ctx context.Context, p authz.Principal, agent db.Agent) (Agent, error) {
+	workspaces, err := h.agents.Workspaces(ctx, agent.ID)
 	if err != nil {
 		return Agent{}, err
 	}
-	tokens, err := h.queries.ListAgentTokensByAgent(ctx, agent.ID)
+	tokens, err := h.agents.Tokens(ctx, agent.ID)
 	if err != nil {
 		return Agent{}, err
 	}
@@ -160,37 +137,12 @@ func agentTokenPublic(t db.AgentToken) AgentToken {
 // validateAgentWorkspaces keeps the workspace ids the owner is a member of.
 // Any inaccessible id fails the whole request: the caller cannot probe for
 // workspaces it cannot see.
-func (h *core) validateAgentWorkspaces(ctx context.Context, owner pgtype.UUID, ids []openapi_types.UUID) ([]pgtype.UUID, error) {
-	out := make([]pgtype.UUID, 0, len(ids))
-	seen := make(map[[16]byte]bool, len(ids))
+func (h *AgentHandlers) validateAgentWorkspaces(ctx context.Context, owner pgtype.UUID, ids []openapi_types.UUID) ([]pgtype.UUID, error) {
+	ws := make([]pgtype.UUID, 0, len(ids))
 	for _, id := range ids {
-		ws := pgtype.UUID{Bytes: id, Valid: true}
-		if seen[ws.Bytes] {
-			continue
-		}
-		seen[ws.Bytes] = true
-		ok, err := h.queries.CheckWorkspaceAccess(ctx, db.CheckWorkspaceAccessParams{ID: ws, UserID: owner})
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, errWorkspaceNotVisible
-		}
-		out = append(out, ws)
+		ws = append(ws, pgtype.UUID{Bytes: id, Valid: true})
 	}
-	return out, nil
-}
-
-func addAgentWorkspaces(ctx context.Context, q db.Querier, agentID pgtype.UUID, ws []pgtype.UUID) error {
-	if err := q.ClearAgentWorkspaces(ctx, agentID); err != nil {
-		return err
-	}
-	for _, id := range ws {
-		if err := q.AddAgentWorkspace(ctx, db.AddAgentWorkspaceParams{AgentID: agentID, WorkspaceID: id}); err != nil {
-			return err
-		}
-	}
-	return nil
+	return h.agents.CheckWorkspaces(ctx, owner, ws)
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────
@@ -209,12 +161,7 @@ func (h *AgentHandlers) ListAgents(ctx context.Context, request ListAgentsReques
 		return ListAgents403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	var agents []db.Agent
-	if all {
-		agents, err = h.queries.ListAllAgents(ctx)
-	} else {
-		agents, err = h.queries.ListAgentsByOwner(ctx, p.UserID)
-	}
+	agents, err := h.agents.List(ctx, p.UserID, all)
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +188,9 @@ func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequ
 	if request.Body == nil {
 		return CreateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
-	name := strings.TrimSpace(request.Body.Name)
-	if name == "" || len(name) > 80 {
-		return CreateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "name must be 1-80 characters"}}, nil
+	name, err := agentmanage.Name(request.Body.Name)
+	if err != nil {
+		return CreateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: err.Error()}}, nil
 	}
 	description := ""
 	if request.Body.Description != nil {
@@ -254,7 +201,7 @@ func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequ
 	if request.Body.WorkspaceIds != nil {
 		workspaceIDs, err = h.validateAgentWorkspaces(ctx, p.UserID, *request.Body.WorkspaceIds)
 		if err != nil {
-			if errors.Is(err, errWorkspaceNotVisible) {
+			if errors.Is(err, agentmanage.ErrWorkspaceNotVisible) {
 				return CreateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 			}
 			return nil, err
@@ -263,20 +210,7 @@ func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequ
 
 	// The agent and its workspace set are one write: a partial set would
 	// silently widen or narrow the agent's reach.
-	var agent db.Agent
-	err = h.inTx(ctx, func(q db.Querier) error {
-		var err error
-		agent, err = q.CreateAgent(ctx, db.CreateAgentParams{
-			OwnerID:     p.UserID,
-			Kind:        "external",
-			Name:        name,
-			Description: description,
-		})
-		if err != nil {
-			return err
-		}
-		return addAgentWorkspaces(ctx, q, agent.ID, workspaceIDs)
-	})
+	agent, err := h.agents.Create(ctx, p.UserID, name, description, workspaceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -351,9 +285,8 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 
 	name := agent.Name
 	if request.Body.Name != nil {
-		name = strings.TrimSpace(*request.Body.Name)
-		if name == "" || len(name) > 80 {
-			return UpdateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "name must be 1-80 characters"}}, nil
+		if name, err = agentmanage.Name(*request.Body.Name); err != nil {
+			return UpdateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: err.Error()}}, nil
 		}
 	}
 	description := agent.Description
@@ -367,7 +300,7 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 	if request.Body.WorkspaceIds != nil {
 		workspaceIDs, err = h.validateAgentWorkspaces(ctx, agent.OwnerID, *request.Body.WorkspaceIds)
 		if err != nil {
-			if errors.Is(err, errWorkspaceNotVisible) {
+			if errors.Is(err, agentmanage.ErrWorkspaceNotVisible) {
 				return UpdateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 			}
 			return nil, err
@@ -379,7 +312,7 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 		changes["status"] = audit.Change{From: agent.Status, To: string(*request.Body.Status)}
 	}
 	if request.Body.WorkspaceIds != nil {
-		current, err := h.queries.ListAgentWorkspaces(ctx, agent.ID)
+		current, err := h.agents.Workspaces(ctx, agent.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -395,20 +328,15 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 	}
 
 	// Name, status and workspace set change together or not at all (#376).
-	err = h.inTx(ctx, func(q db.Querier) error {
-		if _, err := q.UpdateAgent(ctx, db.UpdateAgentParams{ID: agent.ID, Name: name, Description: description}); err != nil {
-			return err
-		}
-		if request.Body.Status != nil && string(*request.Body.Status) != agent.Status {
-			if _, err := q.SetAgentStatus(ctx, db.SetAgentStatusParams{ID: agent.ID, Status: string(*request.Body.Status)}); err != nil {
-				return err
-			}
-		}
-		if request.Body.WorkspaceIds != nil {
-			return addAgentWorkspaces(ctx, q, agent.ID, workspaceIDs)
-		}
-		return nil
-	})
+	edit := agentmanage.Edit{Name: name, Description: description}
+	if request.Body.Status != nil {
+		status := string(*request.Body.Status)
+		edit.Status = &status
+	}
+	if request.Body.WorkspaceIds != nil {
+		edit.Workspaces = &workspaceIDs
+	}
+	updated, err := h.agents.Update(ctx, agent, edit)
 	if err != nil {
 		return nil, err
 	}
@@ -420,11 +348,7 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 	h.audited(ctx, audit.Event{Action: action, ResourceType: "agent", ResourceID: idString(agent.ID), Outcome: audit.Allowed,
 		Changes: changes})
 
-	agent, err = h.queries.GetAgentByID(ctx, agent.ID)
-	if err != nil {
-		return nil, err
-	}
-	pub, err := h.agentPublic(ctx, p, agent)
+	pub, err := h.agentPublic(ctx, p, updated)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +374,7 @@ func (h *AgentHandlers) DeleteAgent(ctx context.Context, request DeleteAgentRequ
 	if !ok {
 		return DeleteAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
-	if err := h.queries.DeleteAgent(ctx, agent.ID); err != nil {
+	if err := h.agents.Delete(ctx, agent.ID); err != nil {
 		return nil, err
 	}
 	h.audited(ctx, audit.Event{Action: audit.AgentDelete, ResourceType: "agent", ResourceID: idString(agent.ID), Outcome: audit.Allowed})
@@ -476,7 +400,7 @@ func (h *AgentHandlers) ListAgentTokens(ctx context.Context, request ListAgentTo
 	if !ok {
 		return ListAgentTokens404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
-	tokens, err := h.queries.ListAgentTokensByAgent(ctx, agent.ID)
+	tokens, err := h.agents.Tokens(ctx, agent.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -498,9 +422,9 @@ func (h *AgentHandlers) CreateAgentToken(ctx context.Context, request CreateAgen
 	if request.Body == nil {
 		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
-	name := strings.TrimSpace(request.Body.Name)
-	if name == "" || len(name) > 80 {
-		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "name must be 1-80 characters"}}, nil
+	name, err := agentmanage.Name(request.Body.Name)
+	if err != nil {
+		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: err.Error()}}, nil
 	}
 	id, err := uuidFromString(request.AgentId.String())
 	if err != nil {
@@ -514,32 +438,16 @@ func (h *AgentHandlers) CreateAgentToken(ctx context.Context, request CreateAgen
 		return CreateAgentToken404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
 
-	ttl := h.agentTokenDefaultTTL()
-	if request.Body.ExpiresInDays != nil {
-		days := *request.Body.ExpiresInDays
-		if days < 1 {
-			return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "expires_in_days must be at least 1"}}, nil
-		}
-		ttl = time.Duration(days) * 24 * time.Hour
-		if ttl > h.agentTokenMaxTTL() {
-			return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "expires_in_days exceeds the server maximum"}}, nil
-		}
+	ttl, err := agentmanage.TokenTTL(request.Body.ExpiresInDays, h.agentTokenDefaultTTL(), h.agentTokenMaxTTL())
+	if err != nil {
+		return CreateAgentToken422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: err.Error()}}, nil
 	}
 
-	secret, hash, prefix := auth.NewAgentToken()
-	token, err := h.queries.CreateAgentToken(ctx, db.CreateAgentTokenParams{
-		AgentID:   agent.ID,
-		Name:      name,
-		TokenHash: hash,
-		Prefix:    prefix,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(ttl), Valid: true},
-		CreatedBy: p.UserID,
-	})
+	token, secret, err := h.agents.IssueToken(ctx, agent.ID, name, ttl, p.UserID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Never audit the secret, only its name and prefix.
 	h.audited(ctx, audit.Event{Action: audit.AgentTokenCreate, ResourceType: "agent_token", ResourceID: idString(token.ID), Outcome: audit.Allowed,
 		Changes: map[string]audit.Change{"name": {To: token.Name}, "prefix": {To: token.Prefix}}})
 	pub := agentTokenPublic(token)
@@ -578,13 +486,11 @@ func (h *AgentHandlers) RevokeAgentToken(ctx context.Context, request RevokeAgen
 	if err != nil {
 		return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "agent token not found"}}, nil
 	}
-	if _, err := h.queries.GetAgentTokenByID(ctx, db.GetAgentTokenByIDParams{ID: tokenID, AgentID: agent.ID}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "agent token not found"}}, nil
-		}
-		return nil, err
+	err = h.agents.RevokeToken(ctx, agent.ID, tokenID)
+	if errors.Is(err, agentmanage.ErrTokenNotFound) {
+		return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
 	}
-	if err := h.queries.RevokeAgentToken(ctx, db.RevokeAgentTokenParams{ID: tokenID, AgentID: agent.ID}); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	h.audited(ctx, audit.Event{Action: audit.AgentTokenRevoke, ResourceType: "agent_token", ResourceID: idString(tokenID), Outcome: audit.Allowed})
