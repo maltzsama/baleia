@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/content/history"
@@ -104,7 +105,7 @@ func (h *API) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 func (h *core) registerMetrics(reg *metrics.Registry) {
 	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory()}
 	reg.WatchBindingStates(func(ctx context.Context) (map[string]int64, error) {
-		rows, err := h.queries.CountManagedBindingsByState(ctx)
+		rows, err := h.topology.BindingStates(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -220,6 +221,7 @@ func NewAPI(d Deps) (*API, error) {
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
 	c.access = wsaccess.New(c.queries)
+	c.topology = topology.New(c.queries)
 	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),

@@ -27,7 +27,7 @@ func (h *CatalogHandlers) ReconcileEngine(ctx context.Context, request Reconcile
 		return ReconcileEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, err := h.queries.GetEngineByID(ctx, id); errors.Is(err, pgx.ErrNoRows) {
+	if _, err := h.topology.Engine(ctx, id); errors.Is(err, pgx.ErrNoRows) {
 		return ReconcileEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	} else if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (h *CatalogHandlers) ListReconcileRuns(ctx context.Context, request ListRec
 // reconcile runs and persists one reconcile of a federated engine;
 // unsupported is set for an engine Baleia cannot reconcile.
 func (h *CatalogHandlers) reconcile(ctx context.Context, engineID pgtype.UUID, dryRun bool) (ReconcileRun, *UnprocessableEntityJSONResponse, error) {
-	eng, err := h.queries.GetEngineByID(ctx, engineID)
+	eng, err := h.topology.Engine(ctx, engineID)
 	if err != nil {
 		return ReconcileRun{}, nil, err
 	}
@@ -87,7 +87,7 @@ func (h *CatalogHandlers) reconcile(ctx context.Context, engineID pgtype.UUID, d
 		u := unprocessable(ErrorCodeEngineUnsupported, "engine kind "+eng.Kind+" has no binder: only federated engines with bindings are reconciled")
 		return ReconcileRun{}, &u, nil
 	}
-	cluster, err := h.queries.GetTrinoClusterByEngine(ctx, eng.ID)
+	cluster, err := h.topology.ClusterOfEngine(ctx, eng.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		u := unprocessable(ErrorCodeEngineUnsupported, "the engine has no Trino cluster")
 		return ReconcileRun{}, &u, nil
@@ -97,8 +97,8 @@ func (h *CatalogHandlers) reconcile(ctx context.Context, engineID pgtype.UUID, d
 	}
 	r := bindings.Reconciler{
 		Lifecycle:  h.lifecycleOn(cluster, eng),
-		Store:      h.queries,
-		Project:    stored.Projector{Store: h.queries, Keyring: h.keyring, Providers: h.connections, Binder: h.binder}.Project,
+		Store:      h.stores.reconcile,
+		Project:    stored.Projector{Store: h.stores.projector, Keyring: h.keyring, Providers: h.connections, Binder: h.binder}.Project,
 		MaxActions: h.reconcileMaxActions(),
 		OnAction: func(ctx context.Context, a bindings.Action) {
 			ev := audit.Event{Action: audit.CatalogReconcile, ResourceType: "engine", ResourceID: idString(eng.ID),
@@ -112,7 +112,7 @@ func (h *CatalogHandlers) reconcile(ctx context.Context, engineID pgtype.UUID, d
 	}
 	rep, runErr := r.Run(ctx, dryRun)
 	h.catalogCache.Clear()
-	row, err := stored.SaveRun(ctx, h.queries, eng.ID, rep, runErr)
+	row, err := stored.SaveRun(ctx, h.stores.runs, eng.ID, rep, runErr)
 	if err != nil {
 		return ReconcileRun{}, nil, err
 	}

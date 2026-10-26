@@ -82,7 +82,7 @@ func (h *CatalogHandlers) bindingAccess(ctx context.Context, p authz.Principal, 
 		u := unprocessable(ErrorCodeBindingUnsupported, "engine kind "+eng.Kind+" has no binder")
 		return bindingTarget{}, nil, &u, nil
 	}
-	cluster, err := h.queries.GetTrinoClusterByEngine(ctx, eng.ID)
+	cluster, err := h.topology.ClusterOfEngine(ctx, eng.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		u := unprocessable(ErrorCodeBindingUnsupported, "the engine has no Trino cluster")
 		return bindingTarget{}, nil, &u, nil
@@ -120,7 +120,7 @@ func bindingConflict(err error) (ConflictJSONResponse, bool) {
 
 // syncPrimaryCatalog keeps the catalog's Trino columns in step with its
 // primary binding.
-func syncPrimaryCatalog(ctx context.Context, q db.Querier, t bindingTarget, b db.CatalogBinding) error {
+func syncPrimaryCatalog(ctx context.Context, q primaryCatalogStore, t bindingTarget, b db.CatalogBinding) error {
 	if !t.primary() {
 		return nil
 	}
@@ -224,7 +224,7 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 // managedBinding loads a binding for a write: it must exist, be managed and
 // the caller must be allowed to write its catalog and engine.
 func (h *CatalogHandlers) managedBinding(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.CatalogBinding, bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
-	b, err := h.queries.GetBinding(ctx, id)
+	b, err := h.topology.Binding(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.CatalogBinding{}, bindingTarget{}, &notFoundOrForbidden{notFound: true, what: "binding"}, nil, nil
 	}
@@ -340,7 +340,7 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 	case name != cur.EngineCatalogName:
 		updated, err = l.Rename(ctx, updated, cur.EngineCatalogName, cur.DesiredVersion, proj)
 		if err == nil && updated.EngineCatalogName == cur.EngineCatalogName && t.primary() {
-			err = syncPrimaryCatalog(ctx, h.queries, t, updated) // the rename was reverted
+			err = syncPrimaryCatalog(ctx, h.stores.primary, t, updated) // the rename was reverted
 		}
 	default:
 		updated, err = l.Update(ctx, updated, proj)
@@ -404,7 +404,7 @@ func (h *CatalogHandlers) DeleteCatalogBinding(ctx context.Context, request Dele
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return DeleteCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeDropFailed, Message: msg}}, nil
 	}
-	if err := h.queries.DeleteBinding(ctx, cur.ID); err != nil {
+	if err := h.topology.DeleteBinding(ctx, cur.ID); err != nil {
 		return nil, err
 	}
 	h.catalogCache.Clear()

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
@@ -87,6 +88,7 @@ func TestListCatalogMetadataSyncRuns(t *testing.T) {
 	rf := &runsFake{authzFake: q}
 	h.queries = rf
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	h.browse = browse.New(rf)
 	_, cat := reqIDs(q)
 	resp, err := h.ListCatalogMetadataSyncRuns(ctxAs(ownerID, "member"), ListCatalogMetadataSyncRunsRequestObject{CatalogId: cat})

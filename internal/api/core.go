@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/content/history"
@@ -60,6 +61,8 @@ type core struct {
 	// access answers whether a caller may use a workspace, its targets and
 	// principals, and the /auth/me flags.
 	access *wsaccess.Service
+	// topology reads and edits how catalogs sit on engines.
+	topology *topology.Service
 }
 
 // spacesOver builds the spaces service over store, creating a space and its

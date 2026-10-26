@@ -156,7 +156,7 @@ func (h *AgentHandlers) engineEligibility(ctx context.Context, effective agentpo
 		return out
 	}
 	readOnly, err := h.EngineReadOnly(ctx, engineID)
-	if err != nil || (readOnly != queryengine.ReadOnlyEnforced && (h.queries == nil || !h.connectionReadOnly(ctx, engineID))) {
+	if err != nil || (readOnly != queryengine.ReadOnlyEnforced && (!h.topology.Available() || !h.connectionReadOnly(ctx, engineID))) {
 		out.Status = AgentEngineEligibilityStatusReadOnlyNotEnforced
 	}
 	return out

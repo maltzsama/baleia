@@ -5,6 +5,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/content/history"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -61,6 +62,7 @@ func testAPI(f handlerFields) *API {
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
 	c.access = wsaccess.New(c.queries)
+	c.topology = topology.New(c.queries)
 	h := &API{
 		core:              c,
 		OpsHandlers:       newOpsHandlers(c, f.schema),

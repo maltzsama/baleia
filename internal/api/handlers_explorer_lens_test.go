@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -96,6 +97,7 @@ func newExplorerHandlers(t *testing.T) (*API, *explorerFake, *fakeTrino, string)
 	q := &explorerFake{authzFake: base, clusterID: base.cat.ClusterID}
 	h.queries = q
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	return h, q, ft, uuidString(q.conn.ID)
 }
 
@@ -152,6 +154,7 @@ func TestExplorer_CatalogMustBelongToConnection(t *testing.T) {
 	otherConn := db.CatalogConnection{ID: pgtype.UUID{Bytes: [16]byte{0xC2}, Valid: true}, CreatedBy: owner}
 	h.queries = &twoConns{explorerFake: q, second: otherConn}
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	router := explorerRouter(h, ownerID, "member")
 	code, _ := get(t, router, "/connections/"+uuidString(otherConn.ID)+"/catalogs/wh/namespaces")
 	if code != 404 {

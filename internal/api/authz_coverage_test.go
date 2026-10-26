@@ -284,7 +284,7 @@ var operationAccess = map[string]access{
 	"DiscoverEngineCatalogs": checked("PrincipalFromContext", "Engine"),
 	"GetReconcileRun":        checked("PrincipalFromContext", "RequireAdmin"),
 	// Sources pages (#109).
-	"ListAllCatalogs":             checked("PrincipalFromContext", "ListVisibleCatalogs"),
+	"ListAllCatalogs":             checked("PrincipalFromContext", "topology.VisibleCatalogs"),
 	"GetCatalogDetail":            checked("PrincipalFromContext", "Catalog"),
 	"UpdateCatalogDetail":         checked("PrincipalFromContext", "Catalog"),
 	"DeleteCatalogDetail":         checked("PrincipalFromContext", "Catalog"),

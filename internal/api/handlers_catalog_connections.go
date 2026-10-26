@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -308,28 +307,7 @@ func connectionTestError(err error) string {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func (h *core) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
-	workspaces, err := h.queries.ListWorkspacesByUser(ctx, userID)
-	if err == nil {
-		for _, w := range workspaces {
-			if w.Type == "personal" && w.OwnerUserID.Valid && w.OwnerUserID.Bytes == userID.Bytes {
-				return &w
-			}
-		}
-	}
-
-	polarisName := fmt.Sprintf("personal_%x_%d", userID.Bytes[:8], time.Now().UnixMilli()%10000)
-
-	wsName := "Personal"
-	if user, err := h.queries.GetUserByID(ctx, userID); err == nil && user.Name != "" {
-		wsName = user.Name + " - workspace"
-	}
-
-	ws, err := h.queries.CreateWorkspace(ctx, db.CreateWorkspaceParams{
-		Name:               wsName,
-		Type:               "personal",
-		PolarisCatalogName: polarisName,
-		OwnerUserID:        userID,
-	})
+	ws, err := h.access.PersonalWorkspace(ctx, userID)
 	if err != nil {
 		slog.Warn("auto-create personal workspace failed", "err", err)
 		return nil
@@ -408,7 +386,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 
 	// Catalogs of the connections the workspace's own user created (personal workspaces).
 	if ws.OwnerUserID.Valid {
-		conns, err := h.queries.ListCatalogConnections(r.Context(), ws.OwnerUserID)
+		conns, err := h.topology.ConnectionsOf(r.Context(), ws.OwnerUserID)
 		if err != nil {
 			slog.Error("list connections for workspace", "err", err)
 			writeJSON(w, http.StatusOK, []workspaceCatalogEntry{})
@@ -416,7 +394,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 		}
 		for _, conn := range conns {
 			// The catalogs table is the source of truth — no Polaris REST call.
-			rows, err := h.queries.ListCatalogsByConnection(r.Context(), conn.ID)
+			rows, err := h.topology.CatalogsOfConnection(r.Context(), conn.ID)
 			if err != nil {
 				slog.Warn("list catalogs for connection", "conn", conn.Name, "err", err)
 				continue
@@ -440,7 +418,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 	}
 
 	// Catalogs granted to the workspace, whoever owns their connection.
-	granted, err := h.queries.ListGrantedCatalogsOfWorkspace(r.Context(), wsUUID)
+	granted, err := h.topology.GrantedToWorkspace(r.Context(), wsUUID)
 	if err != nil {
 		slog.Error("list granted catalogs for workspace", "err", err)
 		writeJSON(w, http.StatusOK, []workspaceCatalogEntry{})
@@ -496,12 +474,12 @@ func (h *core) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalo
 		writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
 		return db.Catalog{}, false
 	}
-	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
+	cluster, err := h.topology.DefaultCluster(ctx)
 	if err != nil {
 		writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
 		return db.Catalog{}, false
 	}
-	found, err := h.queries.GetCatalogByTrinoName(ctx, db.GetCatalogByTrinoNameParams{
+	found, err := h.topology.CatalogByTrinoName(ctx, db.GetCatalogByTrinoNameParams{
 		ClusterID:        cluster.ID,
 		TrinoCatalogName: chiURLParam(r, "catalog_name"),
 	})

@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
@@ -483,6 +484,7 @@ func TestLogout_RevokeFailureIsAnError(t *testing.T) {
 	f.mem.take()
 	f.h.queries = failingRevoke{f.h.queries}
 	f.h.access = wsaccess.New(f.h.queries)
+	f.h.topology = topology.New(f.h.queries)
 	f.h.sessions = newSessions(f.h.core)
 
 	if _, err := f.h.Logout(context.Background(), LogoutRequestObject{Body: &LogoutRequest{RefreshToken: &token}}); err == nil {
@@ -503,6 +505,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 	f.mem.take()
 	f.h.queries = failingRevoke{f.h.queries}
 	f.h.access = wsaccess.New(f.h.queries)
+	f.h.topology = topology.New(f.h.queries)
 	f.h.sessions = newSessions(f.h.core)
 
 	if _, err := f.h.RefreshToken(context.Background(), RefreshTokenRequestObject{Body: &RefreshRequest{RefreshToken: &token}}); err == nil {

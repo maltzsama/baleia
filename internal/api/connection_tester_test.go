@@ -14,6 +14,7 @@ import (
 	"time"
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/icebergrest"
@@ -243,6 +244,7 @@ func TestTransient_SQLCleanupOnClientCancel(t *testing.T) {
 	ef := &ephemeralFake{authzFake: q}
 	h.queries = ef
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	reg, _ := loopbackRegistry(t)
 	p, _ := reg.Get(connections.KindPostgreSQL)
 	cfg, err := p.Validate(connections.Config{Kind: connections.KindPostgreSQL,

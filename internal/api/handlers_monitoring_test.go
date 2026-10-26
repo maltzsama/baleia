@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -37,6 +38,7 @@ func TestMonitoringQuery_LookupErrors(t *testing.T) {
 
 	h.queries = snapshotFake{authzFake: q, err: pgx.ErrNoRows}
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	h.monitor = monitoring.New(h.queries)
 	if resp, err := h.GetMonitoringQuery(admin, GetMonitoringQueryRequestObject{Id: engine, QueryId: "q1"}); err != nil || !isType[GetMonitoringQuery404JSONResponse](resp) {
 		t.Errorf("unknown query = %T, %v; want 404", resp, err)
@@ -47,6 +49,7 @@ func TestMonitoringQuery_LookupErrors(t *testing.T) {
 
 	h.queries = snapshotFake{authzFake: q, err: errors.New("connection reset")}
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	h.monitor = monitoring.New(h.queries)
 	if _, err := h.GetMonitoringQuery(admin, GetMonitoringQueryRequestObject{Id: engine, QueryId: "q1"}); err == nil {
 		t.Error("GetMonitoringQuery answered a store failure with a response")
@@ -70,6 +73,7 @@ func TestCatalogForMonitoring_LookupFailureIsAnError(t *testing.T) {
 	h, q, _ := newAuthzHandlers(t)
 	h.queries = brokenCatalogLookup{q}
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	h.monitor = monitoring.New(h.queries)
 	admin := ctxAs(ownerID, "admin")
 	cat := q.cat.ID.Bytes

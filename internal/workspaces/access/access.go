@@ -7,8 +7,10 @@ package access
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
@@ -32,6 +34,8 @@ type Principals interface {
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]db.ListTeamMembersRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
+	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]db.Workspace, error)
+	CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams) (db.Workspace, error)
 }
 
 // Platform reads what the navigation flags depend on; *db.Queries
@@ -200,6 +204,29 @@ func (s *Service) RetrieversAvailable(ctx context.Context) bool {
 	}
 	cats, err := s.store.ListEnabledIcebergCatalogs(ctx)
 	return err == nil && len(cats) > 0
+}
+
+// PersonalWorkspace returns the user's personal workspace, creating it when
+// it does not exist yet (named after the user).
+func (s *Service) PersonalWorkspace(ctx context.Context, userID pgtype.UUID) (db.Workspace, error) {
+	workspaces, err := s.store.ListWorkspacesByUser(ctx, userID)
+	if err == nil {
+		for _, w := range workspaces {
+			if w.Type == "personal" && w.OwnerUserID.Valid && w.OwnerUserID.Bytes == userID.Bytes {
+				return w, nil
+			}
+		}
+	}
+	name := "Personal"
+	if u, err := s.store.GetUserByID(ctx, userID); err == nil && u.Name != "" {
+		name = u.Name + " - workspace"
+	}
+	return s.store.CreateWorkspace(ctx, db.CreateWorkspaceParams{
+		Name:               name,
+		Type:               "personal",
+		PolarisCatalogName: fmt.Sprintf("personal_%x_%d", userID.Bytes[:8], time.Now().UnixMilli()%10000),
+		OwnerUserID:        userID,
+	})
 }
 
 // OwnsTeam reports whether the user owns a team, which lets them create

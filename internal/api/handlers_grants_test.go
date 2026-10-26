@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/go-chi/chi/v5"
@@ -664,6 +665,7 @@ func TestGetWorkspace_StoreFailureIsAnError(t *testing.T) {
 	h, q := newGrantsHandlers(t)
 	h.queries = brokenWorkspaces{q}
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	h.WorkspaceHandlers = newWorkspaceHandlers(h.core)
 	if _, err := h.GetWorkspace(ctxAs(ownerID, "member"), GetWorkspaceRequestObject{Id: wsID.Bytes}); err == nil {
 		t.Fatal("GetWorkspace answered a store failure with a response")
@@ -683,6 +685,7 @@ func TestListWorkspaceTargets_AccessFailureIsAnError(t *testing.T) {
 	h, q := newGrantsHandlers(t)
 	h.queries = brokenAccess{q}
 	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
 	if _, err := h.ListWorkspaceTargets(ctxAs(ownerID, "member"), ListWorkspaceTargetsRequestObject{Id: wsID.Bytes}); err == nil {
 		t.Fatal("ListWorkspaceTargets answered a store failure with a response")
 	}

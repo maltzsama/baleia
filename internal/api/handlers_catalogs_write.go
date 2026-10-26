@@ -59,7 +59,7 @@ func (h *CatalogHandlers) ListCatalogs(ctx context.Context, request ListCatalogs
 		}
 		// Not the connection's owner: a member of a workspace it was granted to sees
 		// only the granted catalogs of this connection, never their siblings.
-		granted, gerr := h.queries.ListCatalogsGrantedToUser(ctx, db.ListCatalogsGrantedToUserParams{ConnectionID: connID, UserID: p.UserID})
+		granted, gerr := h.topology.GrantedToUser(ctx, connID, p.UserID)
 		if gerr != nil {
 			return nil, gerr
 		}
@@ -72,7 +72,7 @@ func (h *CatalogHandlers) ListCatalogs(ctx context.Context, request ListCatalogs
 		}
 		return ListCatalogs200JSONResponse(out), nil
 	}
-	rows, err := h.queries.ListCatalogsByConnection(ctx, connID)
+	rows, err := h.topology.CatalogsOfConnection(ctx, connID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "trino_catalog_name, name and warehouse are required"}}, nil
 	}
 
-	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
+	cluster, err := h.topology.DefaultCluster(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get default cluster: %w", err)
 	}
@@ -140,7 +140,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	if !cluster.EngineID.Valid {
 		return nil, errors.New("the default Trino cluster has no engine")
 	}
-	eng, err := h.queries.GetEngineByID(ctx, cluster.EngineID)
+	eng, err := h.topology.Engine(ctx, cluster.EngineID)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func (h *CatalogHandlers) projectBinding(ctx context.Context, conn db.CatalogCon
 	if spec.ExtraProps == nil {
 		spec.ExtraProps = map[string]string{}
 	}
-	if err := bindings.HiveRedirection(ctx, h.queries, connections.Kind(conn.Type), conn.ID, engineID, catalogID, spec.Connector, spec.ExtraProps); err != nil {
+	if err := bindings.HiveRedirection(ctx, h.stores.redirect, connections.Kind(conn.Type), conn.ID, engineID, catalogID, spec.Connector, spec.ExtraProps); err != nil {
 		return bindings.Projection{}, err
 	}
 	return h.binder.Project(spec, cfg)
@@ -371,7 +371,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 		return nil, err
 	}
 
-	cur, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: existing.ID, EngineID: eng.ID})
+	cur, err := h.topology.ManagedBinding(ctx, existing.ID, eng.ID)
 	if err != nil {
 		return nil, fmt.Errorf("catalog binding: %w", err)
 	}
@@ -411,7 +411,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 		if err == nil && binding.EngineCatalogName == existing.TrinoName() {
 			// The new name could not be created: the catalog keeps its old one.
 			old := existing.TrinoName()
-			updated, err = h.queries.UpdateCatalog(ctx, db.UpdateCatalogParams{
+			updated, err = h.topology.UpdateCatalog(ctx, db.UpdateCatalogParams{
 				ID: id, Name: updated.Name, Description: updated.Description, Warehouse: updated.Warehouse,
 				Connector: updated.Connector, ExtraProps: updated.ExtraProps, TrinoCatalogName: &old,
 			})
@@ -464,7 +464,7 @@ func (h *CatalogHandlers) DeleteCatalog(ctx context.Context, request DeleteCatal
 	if err != nil {
 		return nil, err
 	}
-	binding, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: cat.ID, EngineID: eng.ID})
+	binding, err := h.topology.ManagedBinding(ctx, cat.ID, eng.ID)
 	if err != nil {
 		return nil, fmt.Errorf("catalog binding: %w", err)
 	}
@@ -516,7 +516,7 @@ func (h *CatalogHandlers) SyncCatalog(ctx context.Context, request SyncCatalogRe
 	if err != nil {
 		return nil, err
 	}
-	binding, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: cat.ID, EngineID: eng.ID})
+	binding, err := h.topology.ManagedBinding(ctx, cat.ID, eng.ID)
 	if err != nil {
 		return nil, fmt.Errorf("catalog binding: %w", err)
 	}
@@ -564,7 +564,7 @@ func (h *CatalogHandlers) ReconcileTrino(ctx context.Context, request ReconcileT
 	if err := p.RequireAdmin(); err != nil {
 		return ReconcileTrino403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
-	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
+	cluster, err := h.topology.DefaultCluster(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("default trino cluster: %w", err)
 	}

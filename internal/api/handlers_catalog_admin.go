@@ -22,7 +22,7 @@ func (h *CatalogHandlers) ListAllCatalogs(ctx context.Context, request ListAllCa
 	if err != nil {
 		return ListAllCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	rows, err := h.queries.ListVisibleCatalogs(ctx, db.ListVisibleCatalogsParams{IsAdmin: p.IsAdmin(), UserID: p.UserID})
+	rows, err := h.topology.VisibleCatalogs(ctx, p.UserID, p.IsAdmin())
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +167,11 @@ func (h *CatalogHandlers) DeleteCatalogDetail(ctx context.Context, request Delet
 		return nil, err
 	}
 	for _, b := range managed {
-		eng, err := h.queries.GetEngineByID(ctx, b.EngineID)
+		eng, err := h.topology.Engine(ctx, b.EngineID)
 		if err != nil {
 			continue
 		}
-		cluster, err := h.queries.GetTrinoClusterByEngine(ctx, b.EngineID)
+		cluster, err := h.topology.ClusterOfEngine(ctx, b.EngineID)
 		if err != nil {
 			continue
 		}
@@ -250,7 +250,7 @@ func (h *CatalogHandlers) ListCatalogGrants(ctx context.Context, request ListCat
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := h.queries.ListCatalogGrants(ctx, id)
+	rows, err := h.topology.Grants(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func (h *CatalogHandlers) GetCatalogBinding(ctx context.Context, request GetCata
 	if err != nil {
 		return GetCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	b, err := h.queries.GetBinding(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
+	b, err := h.topology.Binding(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return GetCatalogBinding404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil
 	}
@@ -301,7 +301,7 @@ func (h *CatalogHandlers) GetCatalogBindingProjection(ctx context.Context, reque
 	if err != nil {
 		return GetCatalogBindingProjection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	b, err := h.queries.GetBinding(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
+	b, err := h.topology.Binding(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return GetCatalogBindingProjection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil
 	}
@@ -317,7 +317,7 @@ func (h *CatalogHandlers) GetCatalogBindingProjection(ctx context.Context, reque
 	case err != nil:
 		return nil, err
 	}
-	conn, err := h.queries.GetCatalogConnectionByID(ctx, cat.ConnectionID)
+	conn, err := h.topology.Connection(ctx, cat.ConnectionID)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +383,7 @@ func (h *core) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Princ
 		kind := conn.Type
 		out.ProviderKind = &kind
 	}
-	rows, err := h.queries.ListBindingsByCatalog(ctx, cat.ID)
+	rows, err := h.topology.BindingsOfCatalog(ctx, cat.ID)
 	if err == nil {
 		for _, b := range rows {
 			ref := CatalogBindingRef{
@@ -394,7 +394,7 @@ func (h *core) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Princ
 				LifecycleState:    b.LifecycleState,
 				StateChangedAt:    pgTimestampToTimePtr(b.StateChangedAt),
 			}
-			if eng, err := h.queries.GetEngineByID(ctx, b.EngineID); err == nil {
+			if eng, err := h.topology.Engine(ctx, b.EngineID); err == nil {
 				ref.Engine = CatalogEngineRef{
 					Id: openapi_types.UUID(eng.ID.Bytes), Name: eng.Name, Kind: eng.Kind, Class: eng.Class,
 				}

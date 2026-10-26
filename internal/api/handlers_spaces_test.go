@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -295,6 +296,7 @@ func TestSetSpaceMember_LookupFailureIsAnError(t *testing.T) {
 	broken := brokenPrincipals{db.New(f.pool)}
 	f.h.queries = broken
 	f.h.access = wsaccess.New(f.h.queries)
+	f.h.topology = topology.New(f.h.queries)
 	f.h.spaces = spacesOver(f.h.core, broken)
 	for _, kind := range []string{"user", "team"} {
 		_, err := f.h.SetSpaceMember(owner, SetSpaceMemberRequestObject{
