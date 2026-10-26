@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
@@ -10,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -118,50 +116,21 @@ func (h *AgentHandlers) GetAgentEligibility(ctx context.Context, request GetAgen
 	}
 	effective := stored.Effective(h.agentCeilings())
 
-	workspaces, err := h.queries.ListAgentWorkspaces(ctx, agent.ID)
+	reach, err := h.agents.Reach(ctx, agent.ID)
 	if err != nil {
 		return nil, err
 	}
-
-	out := make([]AgentCatalogEligibility, 0)
-	seen := make(map[[16]byte]bool)
-	for _, ws := range workspaces {
-		grants, err := h.queries.ListWorkspaceCatalogGrants(ctx, ws.ID)
-		if err != nil {
-			return nil, err
+	out := make([]AgentCatalogEligibility, 0, len(reach))
+	for _, c := range reach {
+		entry := AgentCatalogEligibility{
+			CatalogId:   openapi_types.UUID(c.CatalogID.Bytes),
+			CatalogName: c.CatalogName,
+			Engines:     make([]AgentEngineEligibility, 0, len(c.Engines)),
 		}
-		for _, g := range grants {
-			if !g.CatalogID.Valid || seen[g.CatalogID.Bytes] {
-				continue
-			}
-			seen[g.CatalogID.Bytes] = true
-			entry := AgentCatalogEligibility{
-				CatalogId:   openapi_types.UUID(g.CatalogID.Bytes),
-				CatalogName: g.CatalogName,
-				Engines:     []AgentEngineEligibility{},
-			}
-			bindings, err := h.queries.ListBindingsByCatalog(ctx, g.CatalogID)
-			if err != nil {
-				return nil, err
-			}
-			for _, b := range bindings {
-				if !b.Enabled || !b.EngineID.Valid {
-					continue
-				}
-				engine, err := h.queries.GetEngineByID(ctx, b.EngineID)
-				if err != nil {
-					if errors.Is(err, pgx.ErrNoRows) {
-						continue
-					}
-					return nil, err
-				}
-				if !engine.Enabled {
-					continue
-				}
-				entry.Engines = append(entry.Engines, h.engineEligibility(ctx, effective, g.CatalogID, b.EngineID, engine))
-			}
-			out = append(out, entry)
+		for _, e := range c.Engines {
+			entry.Engines = append(entry.Engines, h.engineEligibility(ctx, effective, c.CatalogID, e.EngineID, e.Engine))
 		}
+		out = append(out, entry)
 	}
 	return GetAgentEligibility200JSONResponse(out), nil
 }

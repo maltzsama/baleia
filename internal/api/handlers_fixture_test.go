@@ -60,12 +60,9 @@ func testAPI(f handlerFields) *API {
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
 	h := &API{
-		core:        c,
-		OpsHandlers: newOpsHandlers(c, f.schema),
-		AgentHandlers: &AgentHandlers{
-			core:   c,
-			dialer: f.dialer,
-		},
+		core:              c,
+		OpsHandlers:       newOpsHandlers(c, f.schema),
+		AgentHandlers:     newAgentHandlers(c, nil, nil, f.dialer),
 		SemanticHandlers:  newSemanticHandlers(c),
 		QueryHandlers:     newQueryHandlers(c, nil),
 		CatalogHandlers:   newCatalogHandlers(c, f.binder),

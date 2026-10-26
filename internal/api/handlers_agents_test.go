@@ -238,6 +238,24 @@ func TestUpdateAgent_InvalidWorkspaceLeavesNoWrite(t *testing.T) {
 	}
 }
 
+// TestUpdateAgent_UnknownStatusIs422: a status outside the enum is refused
+// before any write, not passed to the table's CHECK as a 500.
+func TestUpdateAgent_UnknownStatusIs422(t *testing.T) {
+	f := newAgentsFixture(t, true)
+	agent := f.createAgent(t, f.owner, "etl-agent")
+	status := UpdateAgentRequestStatus("paused")
+	got, err := f.h.UpdateAgent(f.owner, UpdateAgentRequestObject{
+		AgentId: openapi_types.UUID(agent.Id),
+		Body:    &UpdateAgentJSONRequestBody{Status: &status},
+	})
+	if err != nil {
+		t.Fatalf("UpdateAgent = %v, want a 422", err)
+	}
+	if _, ok := got.(UpdateAgent422JSONResponse); !ok {
+		t.Fatalf("unknown status = %T, want 422", got)
+	}
+}
+
 // TestRequireWorkspaceAccess_AgentBinding: the execution path applies the
 // agent's workspace binding, not only its owner's membership (#59 review).
 func TestRequireWorkspaceAccess_AgentBinding(t *testing.T) {
