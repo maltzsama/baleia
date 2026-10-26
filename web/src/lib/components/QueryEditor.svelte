@@ -916,7 +916,11 @@
 	}
 </script>
 
-<div bind:this={rootEl} class="flex-1 flex flex-col overflow-hidden min-w-0">
+<div
+	bind:this={rootEl}
+	class="flex-1 flex flex-col overflow-hidden min-w-0"
+	style:--font-editor="'Sometype Mono', var(--font-mono)"
+>
 	<div
 		class="flex items-stretch bg-bg-toolbar pt-1.5 px-2 gap-0.5 border-b border-border shrink-0 overflow-x-auto"
 	>

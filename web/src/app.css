@@ -135,8 +135,10 @@
 	.cm-editor.cm-focused {
 		outline: none;
 	}
+	/* The editor font defaults to the global mono; the query editor overrides
+	   --font-editor to render its SQL text and autocomplete in Sometype Mono. */
 	.cm-scroller {
-		font-family: var(--font-mono);
+		font-family: var(--font-editor, var(--font-mono));
 	}
 
 	.cm-editor .cm-gutters {
