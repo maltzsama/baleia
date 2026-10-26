@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	catalogs "github.com/galileostudio/baleia/internal/catalogs"
+	"github.com/galileostudio/baleia/internal/catalogs/conns"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
@@ -22,7 +23,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -36,7 +36,8 @@ func (h *CatalogHandlers) ListCatalogConnections(ctx context.Context, request Li
 		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	conns, err := h.queries.ListVisibleCatalogConnections(ctx, db.ListVisibleCatalogConnectionsParams{IsAdmin: p.IsAdmin(), UserID: p.UserID})
+	filter := conns.Filter{WithoutEngine: request.Params.WithoutEngine != nil && *request.Params.WithoutEngine}
+	visible, err := h.conns.List(ctx, p.UserID, p.IsAdmin(), filter)
 	if err != nil {
 		return nil, err
 	}
@@ -45,29 +46,11 @@ func (h *CatalogHandlers) ListCatalogConnections(ctx context.Context, request Li
 	if request.Params.Action != nil {
 		action = *request.Params.Action
 	}
-	withoutEngine := request.Params.WithoutEngine != nil && *request.Params.WithoutEngine
-	var engineConnections map[[16]byte]struct{}
-	if withoutEngine {
-		engines, err := h.queries.ListEngines(ctx)
-		if err != nil {
-			return nil, err
-		}
-		engineConnections = make(map[[16]byte]struct{}, len(engines))
-		for _, e := range engines {
-			engineConnections[e.ConnectionID.Bytes] = struct{}{}
-		}
-	}
-
-	result := make([]CatalogConnection, 0, len(conns))
-	for _, c := range conns {
+	result := make([]CatalogConnection, 0, len(visible))
+	for _, c := range visible {
 		conn := h.withConnectionActions(ctx, c)
 		if action != "" && !connectionAllows(conn, action) {
 			continue
-		}
-		if withoutEngine {
-			if _, used := engineConnections[c.ID.Bytes]; used {
-				continue
-			}
 		}
 		result = append(result, conn)
 	}
@@ -123,7 +106,7 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		credentialsReadOnly = *request.Body.CredentialsReadOnly
 	}
 
-	conn, err := h.queries.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+	conn, err := h.conns.Create(ctx, db.CreateCatalogConnectionParams{
 		ID:                  connID,
 		Name:                request.Body.Name,
 		Type:                string(cfg.Kind),
@@ -134,13 +117,12 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		CredentialsReadOnly: credentialsReadOnly,
 		CreatedBy:           uid,
 	})
+	if errors.Is(err, conns.ErrNameTaken) {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return catalogConnectionConflictJSONResponse{Message: err.Error()}, nil
+	}
 	if err != nil {
 		slog.Error("CreateCatalogConnection failed", "err", err)
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			h.audited(ctx, ev.Failed(audit.ReasonConflict))
-			return catalogConnectionConflictJSONResponse{Message: "a connection with this name already exists"}, nil
-		}
 		return nil, err
 	}
 
@@ -213,7 +195,7 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 		params.Config, params.Url, params.CredentialsEnc = config, &connURL, credsEnc
 	}
 
-	conn, err := h.queries.UpdateCatalogConnection(ctx, params)
+	conn, err := h.conns.Update(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -240,12 +222,12 @@ func (h *CatalogHandlers) DeleteCatalogConnection(ctx context.Context, request D
 		return nil, err
 	}
 
-	if err := h.queries.DeleteCatalogConnection(ctx, connID); err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && isFKViolation(pgErr) && pgErr.ConstraintName == "engines_connection_id_fkey" {
-			h.audited(ctx, ev.Failed(audit.ReasonConflict))
-			return DeleteCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConnectionInUse, Message: "an engine runs on this connection; delete the engine first"}}, nil
-		}
+	err = h.conns.Delete(ctx, connID)
+	if errors.Is(err, conns.ErrBacksEngine) {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return DeleteCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConnectionInUse, Message: err.Error()}}, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 

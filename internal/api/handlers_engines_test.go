@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/catalogs"
+	"github.com/galileostudio/baleia/internal/catalogs/conns"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -328,6 +329,7 @@ func TestDeleteConnectionBackingEngine409(t *testing.T) {
 	}
 	h := engineHandlers(t, nil)
 	h.queries = q
+	h.conns = conns.New(q)
 	resp, err := h.DeleteCatalogConnection(testContext(), DeleteCatalogConnectionRequestObject{Id: [16]byte{0xC1}})
 	if err != nil {
 		t.Fatal(err)
