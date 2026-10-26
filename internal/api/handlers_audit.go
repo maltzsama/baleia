@@ -99,29 +99,29 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 	catalogs := map[string]AuditResolvedName{}
 
 	if request.Body != nil {
-		for _, id := range *request.Body.Users {
-			user, err := h.trail.User(ctx, pgtype.UUID{Bytes: [16]byte(id), Valid: true})
+		for _, id := range ptrSlice(request.Body.Users) {
+			user, err := h.trail.User(ctx, p.UserID, p.IsAdmin(), pgtype.UUID{Bytes: [16]byte(id), Valid: true})
 			if err != nil {
 				continue
 			}
 			email := user.Email
 			users[uuid.UUID(id).String()] = AuditResolvedUser{Name: user.Name, Email: &email}
 		}
-		for _, id := range *request.Body.Workspaces {
+		for _, id := range ptrSlice(request.Body.Workspaces) {
 			ws, err := h.authz().Workspace(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
 			if err != nil {
 				continue
 			}
 			workspaces[uuid.UUID(id).String()] = AuditResolvedName{Name: ws.Name}
 		}
-		for _, id := range *request.Body.Connections {
+		for _, id := range ptrSlice(request.Body.Connections) {
 			conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
 			if err != nil {
 				continue
 			}
 			connections[uuid.UUID(id).String()] = AuditResolvedName{Name: conn.Name}
 		}
-		for _, id := range *request.Body.Catalogs {
+		for _, id := range ptrSlice(request.Body.Catalogs) {
 			catalog, err := h.trail.Catalog(ctx, pgtype.UUID{Bytes: [16]byte(id), Valid: true})
 			if err != nil {
 				continue
@@ -135,6 +135,14 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 	return ResolveAudit200JSONResponse(AuditResolveResult{
 		Users: &users, Workspaces: &workspaces, Connections: &connections, Catalogs: &catalogs,
 	}), nil
+}
+
+// ptrSlice is the list an optional field holds, empty when it is absent.
+func ptrSlice[T any](s *[]T) []T {
+	if s == nil {
+		return nil
+	}
+	return *s
 }
 
 // ExportAuditCSV streams the current filter as CSV, capped at one million rows.

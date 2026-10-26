@@ -20,6 +20,8 @@ type fakeStore struct {
 	endless bool
 	calls   int
 	last    db.ListAuditEventsParams
+	// shared are the users the caller shares a workspace with.
+	shared map[pgtype.UUID]bool
 }
 
 func (f *fakeStore) ListAuditEvents(ctx context.Context, p db.ListAuditEventsParams) ([]db.ListAuditEventsRow, error) {
@@ -39,7 +41,13 @@ func (f *fakeStore) ListAuditEvents(ctx context.Context, p db.ListAuditEventsPar
 	return rows, nil
 }
 
-func (f *fakeStore) GetUserByID(context.Context, pgtype.UUID) (db.User, error) { return db.User{}, nil }
+func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+	return db.User{ID: id, Email: "someone@x.io"}, nil
+}
+
+func (f *fakeStore) SharesWorkspace(_ context.Context, arg db.SharesWorkspaceParams) (bool, error) {
+	return f.shared[arg.UserID], nil
+}
 
 func (f *fakeStore) GetCatalogByID(context.Context, pgtype.UUID) (db.Catalog, error) {
 	return db.Catalog{}, nil
@@ -140,3 +148,24 @@ func TestExport_NeutralizesFormulas(t *testing.T) {
 		t.Errorf("plain cells changed: %q", row)
 	}
 }
+
+// TestUser_OnlyVisibleUsers: a non-admin resolves themselves and the users
+// they share a workspace with, never anyone else's e-mail (#432).
+func TestUser_OnlyVisibleUsers(t *testing.T) {
+	ctx := context.Background()
+	caller, peer, stranger := uid(1), uid(2), uid(3)
+	s := New(&fakeStore{shared: map[pgtype.UUID]bool{peer: true}})
+	for name, id := range map[string]pgtype.UUID{"themselves": caller, "a workspace peer": peer} {
+		if u, err := s.User(ctx, caller, false, id); err != nil || u.ID != id {
+			t.Errorf("%s = %+v, %v; want the user", name, u, err)
+		}
+	}
+	if u, err := s.User(ctx, caller, false, stranger); !errors.Is(err, ErrUserHidden) || u.Email != "" {
+		t.Errorf("stranger = %+v, %v; want ErrUserHidden and no e-mail", u, err)
+	}
+	if _, err := s.User(ctx, caller, true, stranger); err != nil {
+		t.Errorf("admin = %v; want every user", err)
+	}
+}
+
+func uid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }

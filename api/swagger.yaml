@@ -4610,6 +4610,10 @@ paths:
       tags: [Audit]
       operationId: resolveAudit
       summary: "Resolve audit ids to names, only entities the caller can see"
+      description: >-
+        Ids the caller cannot see are left out of the answer. A non-admin
+        resolves only themselves and the users they share a workspace with;
+        an administrator resolves every user. Every list is optional.
       requestBody:
         required: true
         content:

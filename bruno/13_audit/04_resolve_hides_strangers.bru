@@ -1,0 +1,45 @@
+meta {
+  name: Resolve Audit Ids (member cannot resolve a stranger)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/audit/resolve
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{other_token}}
+}
+
+body:json {
+  {
+    "users": ["{{admin_user_id}}"]
+  }
+}
+
+script:pre-request {
+  // The admin shares no workspace with the outsider.
+  const axios = require("axios");
+  const me = await axios.get(bru.getEnvVar("base_url") + "/auth/me", {
+    headers: { Authorization: "Bearer " + bru.getVar("token") }
+  });
+  bru.setVar("admin_user_id", me.data.id);
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the stranger's name and e-mail stay hidden", function () {
+    expect(res.body.users).to.not.have.property(bru.getVar("admin_user_id"));
+  });
+}
+
+docs {
+  POST /audit/resolve resolves a user for a non-admin only when it is the
+  caller or someone they share a workspace with (#432).
+}

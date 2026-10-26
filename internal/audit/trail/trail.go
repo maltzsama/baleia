@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/csv"
+	"errors"
 	"io"
 	"net/netip"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 type Store interface {
 	ListAuditEvents(ctx context.Context, arg db.ListAuditEventsParams) ([]db.ListAuditEventsRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	SharesWorkspace(ctx context.Context, arg db.SharesWorkspaceParams) (bool, error)
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
 }
 
@@ -36,6 +38,9 @@ const (
 	ExportPage    = 1000
 	MaxExportRows = 1_000_000
 )
+
+// ErrUserHidden: the caller may not resolve this user.
+var ErrUserHidden = errors.New("trail: user not visible to the caller")
 
 // WindowError: the time window is missing or too wide.
 type WindowError struct{ Msg string }
@@ -184,8 +189,19 @@ func (s *Service) Export(ctx context.Context, w io.Writer, f Filter) error {
 	return cw.Error()
 }
 
-// User returns a user an event names.
-func (s *Service) User(ctx context.Context, id pgtype.UUID) (db.User, error) {
+// User returns a user an event names, if the caller may see them: an
+// administrator sees everyone, anyone else themselves and the users they
+// share a workspace with (#432). Anyone else is ErrUserHidden.
+func (s *Service) User(ctx context.Context, caller pgtype.UUID, admin bool, id pgtype.UUID) (db.User, error) {
+	if !admin && caller != id {
+		shares, err := s.store.SharesWorkspace(ctx, db.SharesWorkspaceParams{CallerID: caller, UserID: id})
+		if err != nil {
+			return db.User{}, err
+		}
+		if !shares {
+			return db.User{}, ErrUserHidden
+		}
+	}
 	return s.store.GetUserByID(ctx, id)
 }
 
