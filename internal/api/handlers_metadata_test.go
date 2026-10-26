@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
@@ -85,6 +86,7 @@ func TestListCatalogMetadataSyncRuns(t *testing.T) {
 	h, q, _ := newAuthzHandlers(t)
 	rf := &runsFake{authzFake: q}
 	h.queries = rf
+	h.access = wsaccess.New(h.queries)
 	h.browse = browse.New(rf)
 	_, cat := reqIDs(q)
 	resp, err := h.ListCatalogMetadataSyncRuns(ctxAs(ownerID, "member"), ListCatalogMetadataSyncRunsRequestObject{CatalogId: cat})

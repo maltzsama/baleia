@@ -21,7 +21,6 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
@@ -37,7 +36,7 @@ import (
 // ── Folders ───────────────────────────────────────────────────────────────────
 
 func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return ListFolders401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -67,7 +66,7 @@ func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequ
 }
 
 func (h *QueryHandlers) CreateFolder(ctx context.Context, request CreateFolderRequestObject) (CreateFolderResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return CreateFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -107,7 +106,7 @@ func (h *QueryHandlers) CreateFolder(ctx context.Context, request CreateFolderRe
 }
 
 func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRequestObject) (DeleteFolderResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return DeleteFolder401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -146,7 +145,7 @@ func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRe
 // ── Saved Queries ─────────────────────────────────────────────────────────────
 
 func (h *QueryHandlers) ListSavedQueries(ctx context.Context, request ListSavedQueriesRequestObject) (ListSavedQueriesResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return ListSavedQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -183,7 +182,7 @@ func (h *QueryHandlers) ListSavedQueries(ctx context.Context, request ListSavedQ
 }
 
 func (h *QueryHandlers) CreateSavedQuery(ctx context.Context, request CreateSavedQueryRequestObject) (CreateSavedQueryResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return CreateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -236,7 +235,7 @@ func (h *QueryHandlers) CreateSavedQuery(ctx context.Context, request CreateSave
 }
 
 func (h *QueryHandlers) GetSavedQuery(ctx context.Context, request GetSavedQueryRequestObject) (GetSavedQueryResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -270,7 +269,7 @@ func (h *QueryHandlers) GetSavedQuery(ctx context.Context, request GetSavedQuery
 }
 
 func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSavedQueryRequestObject) (UpdateSavedQueryResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return UpdateSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -361,7 +360,7 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 }
 
 func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSavedQueryRequestObject) (DeleteSavedQueryResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return DeleteSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -410,7 +409,7 @@ const (
 )
 
 func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutionsRequestObject) (ListExecutionsResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return ListExecutions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -558,7 +557,7 @@ func historyRowToPublic(row db.ListExecutionHistoryRow) Execution {
 
 func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObject) (RunQueryResponseObject, error) {
 	ev := audit.Event{Action: audit.ExecutionCreate, ResourceType: "execution", WorkspaceID: request.Id.String()}
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return RunQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -573,7 +572,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 	wsID.Bytes = request.Id
 	wsID.Valid = true
 
-	workspace, err := h.queries.GetWorkspaceByID(ctx, wsID)
+	workspace, err := h.access.Workspace(ctx, wsID)
 	if err != nil {
 		return RunQuery422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
@@ -701,7 +700,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 }
 
 func (h *QueryHandlers) GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return GetExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -735,7 +734,7 @@ func agentOwnsExecution(ctx context.Context, exec db.QueryExecution) bool {
 
 func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error) {
 	ev := audit.Event{Action: audit.ExecutionCancel, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return CancelExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -776,7 +775,7 @@ func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecu
 }
 
 func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return ListStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -804,7 +803,7 @@ func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatemen
 }
 
 func (h *QueryHandlers) GetResults(ctx context.Context, request GetResultsRequestObject) (GetResultsResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return GetResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
@@ -882,7 +881,7 @@ func (r arrowStreamResponse) write(w http.ResponseWriter) error {
 // requesting workspace. Same auth and delivery model as GetResults.
 func (h *QueryHandlers) GetStatementResults(ctx context.Context, request GetStatementResultsRequestObject) (GetStatementResultsResponseObject, error) {
 	ev := audit.Event{Action: audit.ResultsDownload, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return GetStatementResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
@@ -1034,18 +1033,7 @@ func (h *QueryHandlers) StreamExecution(ctx context.Context, request StreamExecu
 // queries, according to BALEIA_TRINO_USER_IDENTITY ("uuid" default: u_<uuid>,
 // "email": the user's e-mail). Never an admin or service identity.
 func (h *core) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
-	return trinoIdentity(ctx, h.queries, h.settings.Execution.TrinoUserIdentity, uid)
-}
-
-// trinoIdentity is trinoIdentityFor without the API, for the Lens handlers.
-func trinoIdentity(ctx context.Context, q db.Querier, mode string, uid pgtype.UUID) (string, error) {
-	switch mode {
-	case "email":
-		return trinoidentity.For(ctx, q, mode, uid)
-	default:
-		// The API derives the uuid identity from the token without a lookup.
-		return "u_" + uid.String(), nil
-	}
+	return h.access.TrinoIdentity(ctx, h.settings.Execution.TrinoUserIdentity, uid)
 }
 
 // savedQueryTarget validates the optional target of a saved query: the binding
@@ -1074,7 +1062,7 @@ func (h *QueryHandlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t 
 	if t == nil || t.BindingId == nil {
 		return pgtype.UUID{}, nil, nil
 	}
-	workspace, err := h.queries.GetWorkspaceByID(ctx, ws)
+	workspace, err := h.access.Workspace(ctx, ws)
 	if err != nil {
 		return pgtype.UUID{}, nil, &targetError{code: ErrorCodeWorkspaceNotFound, message: "workspace not found"}
 	}
@@ -1156,8 +1144,8 @@ func (h *core) versionConflictResponse(ctx context.Context, err error) (Conflict
 	}
 	if vc.UpdatedBy.Valid {
 		by := map[string]any{"id": uuidStr(vc.UpdatedBy)}
-		if user, uerr := h.queries.GetUserByID(ctx, vc.UpdatedBy); uerr == nil {
-			by["name"] = user.Name
+		if name := h.access.UserName(ctx, vc.UpdatedBy); name != "" {
+			by["name"] = name
 		}
 		params["updated_by"] = by
 	}

@@ -84,7 +84,7 @@ func (h *WorkspaceHandlers) CreateWorkspace(ctx context.Context, request CreateW
 }
 
 func (h *WorkspaceHandlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); errors.Is(err, ErrWorkspaceNotFound) {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); errors.Is(err, ErrWorkspaceNotFound) {
 		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	} else if err != nil {
 		return nil, err

@@ -331,7 +331,7 @@ func (h *SemanticHandlers) RestoreSemanticMetricVersion(ctx context.Context, req
 
 func (h *SemanticHandlers) ListTrash(ctx context.Context, request ListTrashRequestObject) (ListTrashResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
 		return ListTrash404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
 	lim, off := versionPage(request.Params.Limit, request.Params.Offset)

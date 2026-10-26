@@ -28,7 +28,7 @@ const (
 // metadataWorkspace checks the caller is a member of the workspace. notFound
 // covers a foreign or missing workspace; err is anything else.
 func (h *core) metadataWorkspace(ctx context.Context, id openapi_types.UUID) (ws pgtype.UUID, notFound bool, err error) {
-	err = requireWorkspaceAccess(ctx, h.queries, id)
+	err = requireWorkspaceAccess(ctx, h.access, id)
 	if errors.Is(err, ErrWorkspaceNotFound) {
 		return pgtype.UUID{}, true, nil
 	}

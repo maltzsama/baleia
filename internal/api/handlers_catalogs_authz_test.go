@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -648,6 +649,7 @@ func (brokenCatalogList) ListCatalogsByConnection(context.Context, pgtype.UUID) 
 func TestListCatalogs_StoreFailureIsAnError(t *testing.T) {
 	h, q, _ := newAuthzHandlers(t)
 	h.queries = brokenCatalogList{q}
+	h.access = wsaccess.New(h.queries)
 	conn, _ := reqIDs(q)
 	if _, err := h.ListCatalogs(ctxAs(ownerID, "member"), ListCatalogsRequestObject{ConnectionId: conn}); err == nil {
 		t.Fatal("ListCatalogs hid the store failure behind an empty list")

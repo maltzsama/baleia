@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -94,6 +95,7 @@ func newExplorerHandlers(t *testing.T) (*API, *explorerFake, *fakeTrino, string)
 	h, base, ft := newAuthzHandlers(t)
 	q := &explorerFake{authzFake: base, clusterID: base.cat.ClusterID}
 	h.queries = q
+	h.access = wsaccess.New(h.queries)
 	return h, q, ft, uuidString(q.conn.ID)
 }
 
@@ -149,6 +151,7 @@ func TestExplorer_CatalogMustBelongToConnection(t *testing.T) {
 	owner, _ := uuidFromString(ownerID)
 	otherConn := db.CatalogConnection{ID: pgtype.UUID{Bytes: [16]byte{0xC2}, Valid: true}, CreatedBy: owner}
 	h.queries = &twoConns{explorerFake: q, second: otherConn}
+	h.access = wsaccess.New(h.queries)
 	router := explorerRouter(h, ownerID, "member")
 	code, _ := get(t, router, "/connections/"+uuidString(otherConn.ID)+"/catalogs/wh/namespaces")
 	if code != 404 {

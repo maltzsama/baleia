@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/storage"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
@@ -56,6 +57,9 @@ type core struct {
 	// spaces stores spaces and their access lists (#131); every group that
 	// writes content resolves its target space through it.
 	spaces *spaces.Service
+	// access answers whether a caller may use a workspace, its targets and
+	// principals, and the /auth/me flags.
+	access *wsaccess.Service
 }
 
 // spacesOver builds the spaces service over store, creating a space and its

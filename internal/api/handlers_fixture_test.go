@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
@@ -59,6 +60,7 @@ func testAPI(f handlerFields) *API {
 	c.history = history.New(c.queries)
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
+	c.access = wsaccess.New(c.queries)
 	h := &API{
 		core:              c,
 		OpsHandlers:       newOpsHandlers(c, f.schema),

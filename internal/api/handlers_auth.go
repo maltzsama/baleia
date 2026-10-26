@@ -273,13 +273,7 @@ func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (G
 // Iceberg catalog).
 func (h *core) features(ctx context.Context) Features {
 	f := Features{Agents: h.agentsEnabled()}
-	cluster, err := h.queries.GetDefaultTrinoCluster(ctx)
-	if err != nil || !cluster.EngineID.Valid {
-		return f
-	}
-	if cats, err := h.queries.ListEnabledIcebergCatalogs(ctx); err == nil && len(cats) > 0 {
-		f.Retrievers = true
-	}
+	f.Retrievers = h.access.RetrieversAvailable(ctx)
 	return f
 }
 
@@ -289,7 +283,7 @@ func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAct
 	if p.IsAdmin() {
 		return append(acts, CreateSharedWorkspace, ManageUsers, ManageIdentity, ViewAllAudit, ViewSystem, ManageAssistant)
 	}
-	if owns, err := h.queries.UserOwnsTeam(ctx, p.UserID); err == nil && owns {
+	if h.access.OwnsTeam(ctx, p.UserID) {
 		acts = append(acts, CreateSharedWorkspace)
 	}
 	return acts

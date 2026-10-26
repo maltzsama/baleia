@@ -24,6 +24,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -218,6 +219,7 @@ func NewAPI(d Deps) (*API, error) {
 	c.history = history.New(c.queries)
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
+	c.access = wsaccess.New(c.queries)
 	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),
@@ -275,40 +277,22 @@ func workspaceIDFromRequest(id openapi_types.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: id, Valid: true}
 }
 
-func requireWorkspaceAccess(ctx context.Context, queries db.Querier, workspaceID openapi_types.UUID) error {
-	userID := auth.UserIDFromContext(ctx)
-	uid, err := uuidFromString(userID)
+func requireWorkspaceAccess(ctx context.Context, svc *wsaccess.Service, workspaceID openapi_types.UUID) error {
+	uid, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
 		return err
 	}
-
-	hasAccess, err := queries.CheckWorkspaceAccess(ctx, db.CheckWorkspaceAccessParams{
-		ID:     workspaceIDFromRequest(workspaceID),
-		UserID: uid,
-	})
-	if err != nil {
-		return err
-	}
-	if !hasAccess {
-		return ErrWorkspaceNotFound
-	}
-	// An agent acts only in the workspaces it is bound to, even though its owner
-	// remains a member of them (#59).
+	actor := wsaccess.Actor{User: uid}
 	if auth.ActorKindFromContext(ctx) == auth.ActorAgent {
 		agentID, err := uuidFromString(auth.AgentIDFromContext(ctx))
 		if err != nil {
 			return ErrWorkspaceNotFound
 		}
-		bound, err := queries.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{
-			AgentID:     agentID,
-			WorkspaceID: workspaceIDFromRequest(workspaceID),
-		})
-		if err != nil {
-			return err
-		}
-		if !bound {
-			return ErrWorkspaceNotFound
-		}
+		actor.Agent = agentID
 	}
-	return nil
+	err = svc.Check(ctx, workspaceIDFromRequest(workspaceID), actor)
+	if errors.Is(err, wsaccess.ErrNotFound) {
+		return ErrWorkspaceNotFound
+	}
+	return err
 }

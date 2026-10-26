@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/testdb"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -266,11 +267,11 @@ func TestRequireWorkspaceAccess_AgentBinding(t *testing.T) {
 	ctx = context.WithValue(ctx, auth.ContextKeyAgentID, "22222222-2222-2222-2222-222222222222")
 	ws := openapi_types.UUID{0xAA}
 
-	if err := requireWorkspaceAccess(ctx, fake, ws); !errors.Is(err, ErrWorkspaceNotFound) {
+	if err := requireWorkspaceAccess(ctx, wsaccess.New(fake), ws); !errors.Is(err, ErrWorkspaceNotFound) {
 		t.Fatalf("unbound agent = %v, want ErrWorkspaceNotFound", err)
 	}
 	fake.agentBound = true
-	if err := requireWorkspaceAccess(ctx, fake, ws); err != nil {
+	if err := requireWorkspaceAccess(ctx, wsaccess.New(fake), ws); err != nil {
 		t.Fatalf("bound agent = %v", err)
 	}
 }
