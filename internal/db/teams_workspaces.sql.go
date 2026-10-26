@@ -788,7 +788,7 @@ func (q *Queries) PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UU
 	return id, err
 }
 
-const removeTeamMember = `-- name: RemoveTeamMember :exec
+const removeTeamMember = `-- name: RemoveTeamMember :execrows
 DELETE FROM team_members WHERE team_id = $1 AND user_id = $2
 `
 
@@ -797,9 +797,12 @@ type RemoveTeamMemberParams struct {
 	UserID pgtype.UUID `json:"user_id"`
 }
 
-func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error {
-	_, err := q.db.Exec(ctx, removeTeamMember, arg.TeamID, arg.UserID)
-	return err
+func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeTeamMember, arg.TeamID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateTeam = `-- name: UpdateTeam :one

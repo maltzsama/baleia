@@ -478,7 +478,7 @@ type Querier interface {
 	ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) error
 	ReinstateUser(ctx context.Context, id pgtype.UUID) (User, error)
 	ReleaseMetadataSyncLock(ctx context.Context, catalogID string) error
-	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
+	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
 	// Recreate a deleted saved query with its old id, so links and execution
 	// history still line up.
 	RestoreSavedQuery(ctx context.Context, arg RestoreSavedQueryParams) (SavedQuery, error)

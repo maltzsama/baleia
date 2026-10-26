@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -87,8 +88,11 @@ func (h *WorkspaceHandlers) DeleteTeam(ctx context.Context, request DeleteTeamRe
 	uid.Valid = true
 
 	_, err := h.queries.GetTeamByID(ctx, uid)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return DeleteTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if err := h.queries.DeleteTeam(ctx, uid); err != nil {
@@ -148,6 +152,9 @@ func (h *WorkspaceHandlers) AddTeamMember(ctx context.Context, request AddTeamMe
 	teamID.Valid = true
 
 	_, err := h.queries.GetTeamByID(ctx, teamID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
 	if err != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
@@ -164,9 +171,17 @@ func (h *WorkspaceHandlers) AddTeamMember(ctx context.Context, request AddTeamMe
 		UserID: userID,
 		Role:   memberRole,
 	})
-	if err != nil {
+	var pgErr *pgconn.PgError
+	switch {
+	case errors.As(err, &pgErr) && pgErr.Code == "23505":
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return AddTeamMember409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "user already in team"}}, nil
+	case errors.As(err, &pgErr) && pgErr.Code == "23503":
+		// The only other reference is the user.
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
+	case err != nil:
+		return nil, err
 	}
 	// Team membership decides who is a member of the team's workspaces.
 	h.catalogCache.Clear()
@@ -200,6 +215,9 @@ func (h *WorkspaceHandlers) UpdateTeamMemberRole(ctx context.Context, request Up
 	teamID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	userID := pgtype.UUID{Bytes: request.UserId, Valid: true}
 	if _, err := h.queries.GetTeamByID(ctx, teamID); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
 	}
@@ -256,10 +274,14 @@ func (h *WorkspaceHandlers) RemoveTeamMember(ctx context.Context, request Remove
 	userID.Bytes = request.UserId
 	userID.Valid = true
 
-	if err := h.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
+	n, err := h.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
 		TeamID: teamID,
 		UserID: userID,
-	}); err != nil {
+	})
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return RemoveTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "member not found"}}, nil
 	}
