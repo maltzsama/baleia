@@ -5666,7 +5666,10 @@ export interface components {
             table: string;
             operations: string[];
             retention?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The binding whose engine runs the statements. It must be an enabled binding of this catalog on an engine with Iceberg maintenance, or the request is a 422. Omitted, the first such binding is used.
+             */
             binding_id?: string | null;
         };
         Retriever: {

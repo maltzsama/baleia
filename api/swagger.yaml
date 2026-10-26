@@ -3079,7 +3079,14 @@ components:
           type: array
           items: { type: string }
         retention: { type: string, nullable: true }
-        binding_id: { type: string, format: uuid, nullable: true }
+        binding_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The binding whose engine runs the statements. It must be an enabled
+            binding of this catalog on an engine with Iceberg maintenance, or the
+            request is a 422. Omitted, the first such binding is used.
 
     Retriever:
       type: object

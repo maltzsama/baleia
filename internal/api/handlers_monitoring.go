@@ -375,7 +375,7 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 		return CreateMaintenanceRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
-	catalog, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
+	_, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
 	if err != nil {
 		return nil, err
 	}
@@ -413,11 +413,11 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 	if err != nil {
 		return nil, err
 	}
-	trinoName := catalog.TrinoName()
 	if h.temporalClient != nil {
 		_, err = h.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 			ID: workflowID, TaskQueue: "baleia-task-queue",
-		}, workflows.MaintenanceRunWorkflow, runID.String(), uuid.UUID(plan.Binding.Bytes).String(), trinoName, plan.Namespace, plan.Table, plan.Retention, plan.Operations)
+		}, workflows.MaintenanceRunWorkflow, runID.String(), uuid.UUID(plan.Binding.EngineID.Bytes).String(),
+			plan.Binding.EngineCatalogName, plan.Namespace, plan.Table, plan.Retention, plan.Operations)
 		if err != nil {
 			h.monitor.Fail(ctx, run.ID, err)
 			return nil, err

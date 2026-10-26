@@ -431,7 +431,7 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 	// The identifiers and retention reach this activity from an HTTP request:
 	// rendering validates them again (the API checks first, but a workflow
 	// input is not a trust boundary) and quotes instead of concatenating.
-	eng, err := a.engines.DefaultTrino(ctx)
+	eng, err := a.maintenanceEngine(ctx, params.EngineID)
 	if err != nil {
 		return err
 	}
@@ -489,6 +489,19 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 
 	finishMaintenanceRun(a.queries, ctx, params.RunID, "finished", "", "")
 	return nil
+}
+
+// maintenanceEngine is the engine a run was planned on; the legacy Lens route
+// names none and runs on the default Trino.
+func (a *Activities) maintenanceEngine(ctx context.Context, engineID string) (queryengine.Engine, error) {
+	if engineID == "" {
+		return a.engines.DefaultTrino(ctx)
+	}
+	id := engineUUID(engineID)
+	if !id.Valid {
+		return nil, fmt.Errorf("invalid engine id %q", engineID)
+	}
+	return a.engines.Get(ctx, id)
 }
 
 // finishMaintenanceRun records the terminal state of an engine-aware run.

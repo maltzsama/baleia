@@ -78,3 +78,28 @@ func TestLensRunMaintenance_RejectsBadInputBeforeTrino(t *testing.T) {
 		}
 	}
 }
+
+// TestLensRunMaintenance_RunsOnPlannedEngine: an engine-aware run uses the
+// engine it was planned on; only the legacy Lens route falls back to the
+// default Trino.
+func TestLensRunMaintenance_RunsOnPlannedEngine(t *testing.T) {
+	const engineID = "00000000-0000-0000-0000-0000000000e1"
+	for name, tc := range map[string]struct{ engine, want string }{
+		"planned engine": {engineID, engineID},
+		"legacy route":   {"", "default"},
+	} {
+		rec := &fakeEngine{Engine: testTrino}
+		a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{}}
+		err := runMaintenance(t, a, LensRunMaintenanceParams{
+			ExecutionID: maintExecID, EngineID: tc.engine, Catalog: "c", Namespace: "n", Table: "t", Operations: []string{"optimize"},
+		})
+		if err != nil || len(rec.gotEngine) != 1 || rec.gotEngine[0] != tc.want {
+			t.Errorf("%s: err=%v engines=%q, want [%s]", name, err, rec.gotEngine, tc.want)
+		}
+	}
+	rec := &fakeEngine{Engine: testTrino}
+	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{}}
+	if err := runMaintenance(t, a, LensRunMaintenanceParams{ExecutionID: maintExecID, EngineID: "nope", Catalog: "c", Namespace: "n", Table: "t"}); err == nil || len(rec.sqls) != 0 {
+		t.Errorf("invalid engine id: err=%v statements=%q, want an error and no statements", err, rec.sqls)
+	}
+}

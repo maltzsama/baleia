@@ -11,6 +11,7 @@ import (
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // snapshotFake answers the query snapshot lookup with err.
@@ -85,5 +86,28 @@ func TestCatalogForMonitoring_LookupFailureIsAnError(t *testing.T) {
 	}
 	if _, err := h.CreateMaintenanceRun(admin, CreateMaintenanceRunRequestObject{CatalogId: cat}); err == nil {
 		t.Error("CreateMaintenanceRun answered a store failure with a response")
+	}
+}
+
+// catalogBindings lists one enabled binding for the fake's catalog.
+type catalogBindings struct{ *authzFake }
+
+func (q catalogBindings) ListBindingsByCatalog(_ context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error) {
+	return []db.CatalogBinding{{ID: pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: catalogID, EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Enabled: true}}, nil
+}
+
+// TestCreateMaintenanceRun_RejectsForeignBinding: an explicit binding_id that
+// is not a binding of the catalog is a 422, and no run is recorded.
+func TestCreateMaintenanceRun_RejectsForeignBinding(t *testing.T) {
+	h, q, _ := newAuthzHandlers(t)
+	h.monitor = monitoring.New(catalogBindings{q})
+	admin := ctxAs(ownerID, "admin")
+	foreign := openapi_types.UUID{0xB1}
+	resp, err := h.CreateMaintenanceRun(admin, CreateMaintenanceRunRequestObject{
+		CatalogId: q.cat.ID.Bytes,
+		Body:      &CreateMaintenanceRunJSONRequestBody{Namespace: "n", Table: "t", Operations: []string{"optimize"}, BindingId: &foreign},
+	})
+	if err != nil || !isType[CreateMaintenanceRun422JSONResponse](resp) {
+		t.Fatalf("foreign binding = %T, %v; want 422", resp, err)
 	}
 }

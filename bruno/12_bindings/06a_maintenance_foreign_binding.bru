@@ -1,0 +1,35 @@
+meta {
+  name: Maintenance (binding of another catalog)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/maintenance
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "namespace": "default",
+    "table": "t",
+    "operations": ["optimize"],
+    "binding_id": "00000000-0000-0000-0000-000000000000"
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq validation_error
+}
+
+docs {
+  POST /catalogs/{id}/maintenance runs on the engine of the named binding.
+  A binding_id that is not an enabled binding of this catalog is a 422,
+  and no run is recorded.
+}
