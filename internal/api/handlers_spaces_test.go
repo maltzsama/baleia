@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -268,5 +270,35 @@ func TestSpaces_ForeignWorkspace404(t *testing.T) {
 	}
 	if _, ok := c.(CreateSpace404JSONResponse); !ok {
 		t.Fatalf("foreign create: %T", c)
+	}
+}
+
+// brokenPrincipals fails every user and team lookup.
+type brokenPrincipals struct{ *db.Queries }
+
+func (brokenPrincipals) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+	return db.User{}, errors.New("connection reset")
+}
+
+func (brokenPrincipals) GetTeamByID(context.Context, pgtype.UUID) (db.Team, error) {
+	return db.Team{}, errors.New("connection reset")
+}
+
+// TestSetSpaceMember_LookupFailureIsAnError: a failed principal lookup is a
+// server error, not "user not found".
+func TestSetSpaceMember_LookupFailureIsAnError(t *testing.T) {
+	f := newMetaFixture(t)
+	ws := sharedWorkspace(t, f)
+	owner := f.as(f.owner)
+	space := createSpaceIn(t, f, owner, ws, CreateSpaceRequest{Name: "Shared", Visibility: CreateSpaceRequestVisibilityWorkspace})
+	f.h.queries = brokenPrincipals{db.New(f.pool)}
+	for _, kind := range []string{"user", "team"} {
+		_, err := f.h.SetSpaceMember(owner, SetSpaceMemberRequestObject{
+			Id: ws, SpaceId: space.Id, PrincipalType: kind, PrincipalId: oid(t, f.stranger),
+			Body: &SetSpaceMemberJSONRequestBody{Role: SetSpaceMemberRequestRoleViewer},
+		})
+		if err == nil {
+			t.Errorf("%s lookup failure was answered with a response", kind)
+		}
 	}
 }

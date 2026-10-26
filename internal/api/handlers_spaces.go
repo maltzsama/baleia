@@ -382,12 +382,16 @@ func (h *WorkspaceHandlers) SetSpaceMember(ctx context.Context, request SetSpace
 	principalType := request.PrincipalType
 	switch principalType {
 	case "user":
-		if _, err := h.queries.GetUserByID(ctx, principalID); err != nil {
+		if _, err := h.queries.GetUserByID(ctx, principalID); errors.Is(err, pgx.ErrNoRows) {
 			return SetSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("user not found")}, nil
+		} else if err != nil {
+			return nil, err
 		}
 	case "team":
-		if _, err := h.queries.GetTeamByID(ctx, principalID); err != nil {
+		if _, err := h.queries.GetTeamByID(ctx, principalID); errors.Is(err, pgx.ErrNoRows) {
 			return SetSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("team not found")}, nil
+		} else if err != nil {
+			return nil, err
 		}
 	default:
 		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "principal_type must be user or team")}, nil
