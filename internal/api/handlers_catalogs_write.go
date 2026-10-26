@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -75,8 +74,7 @@ func (h *CatalogHandlers) ListCatalogs(ctx context.Context, request ListCatalogs
 	}
 	rows, err := h.queries.ListCatalogsByConnection(ctx, connID)
 	if err != nil {
-		slog.Error("list catalogs by connection", "err", err)
-		return ListCatalogs200JSONResponse([]Catalog{}), nil
+		return nil, err
 	}
 	out := make([]Catalog, 0, len(rows))
 	for _, r := range rows {
