@@ -35,7 +35,7 @@ export const completionTheme = EditorView.theme({
 		fontFamily: 'var(--font-ui)'
 	},
 	[`${popup} > ul`]: {
-		fontFamily: 'var(--font-mono)',
+		fontFamily: 'var(--font-editor, var(--font-mono))',
 		fontSize: '12px',
 		minWidth: '320px',
 		maxWidth: 'min(560px, 90vw)',
@@ -116,7 +116,7 @@ export const completionTheme = EditorView.theme({
 		display: 'flex',
 		alignItems: 'baseline',
 		gap: '8px',
-		fontFamily: 'var(--font-mono)'
+		fontFamily: 'var(--font-editor, var(--font-mono))'
 	},
 	[`${popup} .cm-baleia-info-type`]: {
 		color: 'var(--color-text-muted)',

@@ -1,5 +1,14 @@
 <script lang="ts">
 	import '../app.css';
+	// Query-editor code font (Sometype Mono), self-hosted via Fontsource.
+	// Only the query editor uses it; everything else stays on --font-mono.
+	import '@fontsource/sometype-mono/400.css';
+	import '@fontsource/sometype-mono/500.css';
+	import '@fontsource/sometype-mono/600.css';
+	import '@fontsource/sometype-mono/700.css';
+	// Results-grid data cell code font (DM Mono); 400-italic renders NULL cells.
+	import '@fontsource/dm-mono/400.css';
+	import '@fontsource/dm-mono/400-italic.css';
 	import { onMount } from 'svelte';
 	import { configureSession } from '$lib/auth/session';
 	import { initLocale } from '$lib/i18n/locale.svelte';
