@@ -166,19 +166,23 @@ func queryGone(qe *trinoclient.QueryError) bool {
 
 // MaintenanceStatements renders an Iceberg maintenance run: optimize, then
 // expire snapshots and remove orphan files older than retention (a Trino
-// duration such as "7d").
+// duration such as "7d"). An empty retention renders optimize only.
 func (e *Engine) MaintenanceStatements(table []string, retention string) ([]string, error) {
-	if err := trinoclient.ValidateRetention(retention); err != nil {
-		return nil, fmt.Errorf("invalid retention: %w", err)
-	}
 	d := e.Dialect()
 	name, err := d.QualifiedName(table...)
 	if err != nil {
 		return nil, fmt.Errorf("invalid table name: %w", err)
 	}
+	optimize := fmt.Sprintf("ALTER TABLE %s EXECUTE optimize", name)
+	if retention == "" {
+		return []string{optimize}, nil
+	}
+	if err := trinoclient.ValidateRetention(retention); err != nil {
+		return nil, fmt.Errorf("invalid retention: %w", err)
+	}
 	r := d.QuoteString(retention)
 	return []string{
-		fmt.Sprintf("ALTER TABLE %s EXECUTE optimize", name),
+		optimize,
 		fmt.Sprintf("ALTER TABLE %s EXECUTE expire_snapshots(retention_threshold => %s)", name, r),
 		fmt.Sprintf("ALTER TABLE %s EXECUTE remove_orphan_files(retention_threshold => %s)", name, r),
 	}, nil

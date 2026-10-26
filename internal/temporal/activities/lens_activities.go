@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -438,6 +439,14 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 	if !ok {
 		return fmt.Errorf("engine %s has no Iceberg maintenance", eng.Kind())
 	}
+	selected := map[string]bool{}
+	for _, op := range params.Operations {
+		selected[op] = true
+	}
+	// No selection is the legacy Lens route, which runs all three.
+	if params.Retention == "" && (len(selected) == 0 || selected["expire_snapshots"] || selected["remove_orphan_files"]) {
+		return errors.New("invalid retention: expire_snapshots and remove_orphan_files need one")
+	}
 	commands, err := maintainer.MaintenanceStatements([]string{params.Catalog, params.Namespace, params.Table}, params.Retention)
 	if err != nil {
 		return err
@@ -456,10 +465,6 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 	}}
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "maintenance", ExecutionID: params.ExecutionID}}
 
-	selected := map[string]bool{}
-	for _, op := range params.Operations {
-		selected[op] = true
-	}
 	names := []string{"optimize", "expire_snapshots", "remove_orphan_files"}
 
 	for i, cmd := range commands {
