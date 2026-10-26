@@ -315,15 +315,21 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 	return KillMonitoringQuery202Response{}, nil
 }
 
-func (h *core) catalogForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Catalog, bool) {
+func (h *core) catalogForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Catalog, bool, error) {
 	catalog, err := h.queries.GetCatalogByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.Catalog{}, false, nil
+	}
 	if err != nil {
-		return db.Catalog{}, false
+		return db.Catalog{}, false, err
 	}
 	if _, _, err := h.authz().CatalogOfConnection(ctx, p, catalog.ConnectionID, id, act); err != nil {
-		return db.Catalog{}, false
+		if errors.Is(err, authz.ErrNotFound) || errors.Is(err, authz.ErrForbidden) {
+			return db.Catalog{}, false, nil
+		}
+		return db.Catalog{}, false, err
 	}
-	return catalog, true
+	return catalog, true, nil
 }
 
 // ListTableHealth returns the Iceberg health rows of one logical catalog.
@@ -333,7 +339,10 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 		return ListTableHealth401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
-	catalog, ok := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead)
+	catalog, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return ListTableHealth404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
@@ -404,7 +413,10 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 		return CreateMaintenanceRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
-	catalog, ok := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
+	catalog, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return CreateMaintenanceRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
@@ -495,7 +507,9 @@ func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaint
 		return ListMaintenanceRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
-	if _, ok := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead); !ok {
+	if _, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead); err != nil {
+		return nil, err
+	} else if !ok {
 		return ListMaintenanceRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
 	limit, offset := 20, 0

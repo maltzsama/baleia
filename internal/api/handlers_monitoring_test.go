@@ -49,3 +49,29 @@ func TestMonitoringQuery_LookupErrors(t *testing.T) {
 		t.Error("KillMonitoringQuery answered a store failure with a response")
 	}
 }
+
+// brokenCatalogLookup fails the catalog lookup.
+type brokenCatalogLookup struct{ *authzFake }
+
+func (brokenCatalogLookup) GetCatalogByID(context.Context, pgtype.UUID) (db.Catalog, error) {
+	return db.Catalog{}, errors.New("connection reset")
+}
+
+// TestCatalogForMonitoring_LookupFailureIsAnError: table health and
+// maintenance answer a failed catalog lookup with a server error, not
+// "catalog not found".
+func TestCatalogForMonitoring_LookupFailureIsAnError(t *testing.T) {
+	h, q, _ := newAuthzHandlers(t)
+	h.queries = brokenCatalogLookup{q}
+	admin := ctxAs(ownerID, "admin")
+	cat := q.cat.ID.Bytes
+	if _, err := h.ListTableHealth(admin, ListTableHealthRequestObject{CatalogId: cat}); err == nil {
+		t.Error("ListTableHealth answered a store failure with a response")
+	}
+	if _, err := h.ListMaintenanceRuns(admin, ListMaintenanceRunsRequestObject{CatalogId: cat}); err == nil {
+		t.Error("ListMaintenanceRuns answered a store failure with a response")
+	}
+	if _, err := h.CreateMaintenanceRun(admin, CreateMaintenanceRunRequestObject{CatalogId: cat}); err == nil {
+		t.Error("CreateMaintenanceRun answered a store failure with a response")
+	}
+}
