@@ -5,11 +5,10 @@ import (
 	"errors"
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
+	agentmanage "github.com/galileostudio/baleia/internal/agents/manage"
 	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/results"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -25,7 +24,7 @@ func (h *AgentHandlers) AgentWorkspaces(ctx context.Context) ([]Workspace, error
 	if !p.IsAgent() {
 		return nil, authz.ErrUnauthenticated
 	}
-	rows, err := h.queries.ListAgentWorkspaces(ctx, p.AgentID)
+	rows, err := h.agents.Workspaces(ctx, p.AgentID)
 	if err != nil {
 		return nil, err
 	}
@@ -44,14 +43,11 @@ func (h *AgentHandlers) MCPResults(ctx context.Context, workspaceID, executionID
 	var id pgtype.UUID
 	id.Bytes = executionID
 	id.Valid = true
-	exec, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{
-		ID:          id,
-		WorkspaceID: workspaceIDFromRequest(workspaceID),
-	})
+	exec, err := h.agents.Execution(ctx, workspaceIDFromRequest(workspaceID), id)
+	if errors.Is(err, agentmanage.ErrExecutionNotFound) {
+		return results.Result{}, ErrWorkspaceNotFound
+	}
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return results.Result{}, ErrWorkspaceNotFound
-		}
 		return results.Result{}, err
 	}
 	if !agentOwnsExecution(ctx, exec) {

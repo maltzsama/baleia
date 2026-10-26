@@ -8,7 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -238,11 +237,7 @@ func (h *AgentHandlers) PutAgentPolicy(ctx context.Context, request PutAgentPoli
 	if err != nil {
 		return nil, err
 	}
-	updated, err := h.queries.UpdateAgentPolicy(ctx, db.UpdateAgentPolicyParams{
-		ID:              agent.ID,
-		Policy:          raw,
-		PolicyUpdatedBy: p.UserID,
-	})
+	updated, err := h.agents.SetPolicy(ctx, agent.ID, raw, p.UserID)
 	if err != nil {
 		return nil, err
 	}

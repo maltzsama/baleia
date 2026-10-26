@@ -22,6 +22,10 @@ type fakeStore struct {
 	tokens   map[[16]byte]db.AgentToken
 	revoked  []pgtype.UUID
 	bindFail error
+	grants   []db.ListWorkspaceCatalogGrantsRow
+	bindings []db.CatalogBinding
+	engines  map[[16]byte]db.Engine
+	wsList   []db.Workspace
 }
 
 func newStore() *fakeStore {
@@ -42,7 +46,7 @@ func (f *fakeStore) ListAgentsByOwner(context.Context, pgtype.UUID) ([]db.Agent,
 }
 
 func (f *fakeStore) ListAgentWorkspaces(context.Context, pgtype.UUID) ([]db.Workspace, error) {
-	return nil, nil
+	return f.wsList, nil
 }
 
 func (f *fakeStore) ListAgentTokensByAgent(context.Context, pgtype.UUID) ([]db.AgentToken, error) {
@@ -58,6 +62,29 @@ func (f *fakeStore) GetAgentTokenByID(_ context.Context, arg db.GetAgentTokenByI
 
 func (f *fakeStore) CheckWorkspaceAccess(_ context.Context, arg db.CheckWorkspaceAccessParams) (bool, error) {
 	return f.visible[arg.ID.Bytes], nil
+}
+
+func (f *fakeStore) ListWorkspaceCatalogGrants(context.Context, pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
+	return f.grants, nil
+}
+
+func (f *fakeStore) ListBindingsByCatalog(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+	return f.bindings, nil
+}
+
+func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+	if e, ok := f.engines[id.Bytes]; ok {
+		return e, nil
+	}
+	return db.Engine{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) GetQueryExecutionByIDAndWorkspace(context.Context, db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error) {
+	return db.QueryExecution{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) UpdateAgentPolicy(_ context.Context, arg db.UpdateAgentPolicyParams) (db.Agent, error) {
+	return db.Agent{ID: arg.ID, Policy: arg.Policy}, nil
 }
 
 func (f *fakeStore) DeleteAgent(_ context.Context, id pgtype.UUID) error {
@@ -224,5 +251,31 @@ func TestTokens(t *testing.T) {
 	}
 	if err := s.RevokeToken(ctx, agent, tok.ID); err != nil || len(st.revoked) != 1 {
 		t.Errorf("RevokeToken = %v, %d revoked", err, len(st.revoked))
+	}
+}
+
+// TestReach: each granted catalog once, with only enabled bindings on
+// enabled, existing engines.
+func TestReach(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	cat := newID()
+	on, off, gone := newID(), newID(), newID()
+	st.wsList = []db.Workspace{{ID: newID()}, {ID: newID()}}
+	st.grants = []db.ListWorkspaceCatalogGrantsRow{{CatalogID: cat, CatalogName: "lake"}}
+	st.engines = map[[16]byte]db.Engine{on.Bytes: {ID: on, Enabled: true}, off.Bytes: {ID: off}}
+	st.bindings = []db.CatalogBinding{
+		{EngineID: on, Enabled: true}, {EngineID: off, Enabled: true}, {EngineID: gone, Enabled: true}, {EngineID: on},
+	}
+	reach, err := s.Reach(ctx, newID())
+	if err != nil || len(reach) != 1 {
+		t.Fatalf("Reach = %+v, %v; want the catalog once across both workspaces", reach, err)
+	}
+	if e := reach[0].Engines; len(e) != 1 || e[0].EngineID != on {
+		t.Errorf("engines = %+v; want only the enabled binding on the enabled engine", e)
+	}
+	if _, err := s.Execution(ctx, newID(), newID()); !errors.Is(err, ErrExecutionNotFound) {
+		t.Errorf("unknown execution = %v", err)
 	}
 }
