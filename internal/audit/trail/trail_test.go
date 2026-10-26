@@ -2,8 +2,10 @@ package trail
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,5 +107,36 @@ func TestExport_StopsWhenTheClientGoes(t *testing.T) {
 	}
 	if st.calls != 0 {
 		t.Fatalf("cancelled request: %d pages queried, want 0", st.calls)
+	}
+}
+
+// oneEvent returns a single event carrying client-controlled text.
+type oneEvent struct{ fakeStore }
+
+func (oneEvent) ListAuditEvents(context.Context, db.ListAuditEventsParams) ([]db.ListAuditEventsRow, error) {
+	ua, req := `=HYPERLINK("http://evil","x")`, "+1"
+	return []db.ListAuditEventsRow{{ActorKind: "user", Action: "login", UserAgent: &ua, RequestID: &req}}, nil
+}
+
+// TestExport_NeutralizesFormulas: a value a spreadsheet would run as a
+// formula is exported with a leading quote.
+func TestExport_NeutralizesFormulas(t *testing.T) {
+	var out strings.Builder
+	if err := New(&oneEvent{}).Export(context.Background(), &out, Filter{}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(strings.NewReader(out.String())).ReadAll()
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("csv = %q, %v", out.String(), err)
+	}
+	row := rows[1]
+	if ua := row[len(row)-1]; ua != `'=HYPERLINK("http://evil","x")` {
+		t.Errorf("user agent cell = %q; want a leading quote", ua)
+	}
+	if req := row[10]; req != "'+1" {
+		t.Errorf("request id cell = %q; want a leading quote", req)
+	}
+	if row[1] != "user" || row[4] != "login" {
+		t.Errorf("plain cells changed: %q", row)
 	}
 }

@@ -153,13 +153,13 @@ func (s *Service) Export(ctx context.Context, w io.Writer, f Filter) error {
 			break
 		}
 		for _, r := range rows {
-			if err := cw.Write([]string{
+			if err := cw.Write(cells(
 				r.OccurredAt.Time.UTC().Format(time.RFC3339),
 				r.ActorKind, str(r.ActorID), str(r.AuthMethod), r.Action,
 				r.ResourceType, str(r.ResourceID), id(r.WorkspaceID), r.Outcome,
 				str(r.Reason), str(r.RequestID), str(r.TraceID),
 				ip(r.ClientIp), str(r.UserAgent),
-			}); err != nil {
+			)); err != nil {
 				return err
 			}
 			written++
@@ -193,6 +193,19 @@ func (s *Service) User(ctx context.Context, id pgtype.UUID) (db.User, error) {
 // access to its connection.
 func (s *Service) Catalog(ctx context.Context, id pgtype.UUID) (db.Catalog, error) {
 	return s.store.GetCatalogByID(ctx, id)
+}
+
+// cells neutralizes values a spreadsheet would run as a formula: a cell
+// starting with =, +, -, @, a tab or a carriage return gets a leading
+// quote. Several columns carry client-controlled text (user agent, request
+// and trace ids, reasons).
+func cells(values ...string) []string {
+	for i, v := range values {
+		if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
+			values[i] = "'" + v
+		}
+	}
+	return values
 }
 
 func params(f Filter, lim int32) db.ListAuditEventsParams {
