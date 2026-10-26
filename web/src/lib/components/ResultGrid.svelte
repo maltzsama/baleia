@@ -290,7 +290,7 @@
 							tabindex={selected?.row === row && selected?.col === layout.index ? 0 : -1}
 							aria-selected={selected?.row === row && selected?.col === layout.index}
 							style="position: absolute; left: {layout.start}px; width: {layout.width}px; height: {ROW_HEIGHT}px; display: flex; align-items: center; padding: 0 10px; box-sizing: border-box; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); cursor: default;"
-							class="font-mono text-xs {display.null
+							class="font-data text-xs {display.null
 								? 'italic text-text-muted'
 								: ''} {selected?.row === row && selected?.col === layout.index
 								? 'bg-blue-50 dark:bg-[#152236]'

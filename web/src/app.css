@@ -49,6 +49,8 @@
 
 	--font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	/* Code font for the results grid data cells (self-hosted, monospace). */
+	--font-data: 'DM Mono', var(--font-mono);
 }
 
 .dark {
