@@ -8,8 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/galileostudio/baleia/internal/workspaces/teams"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -20,18 +19,13 @@ func (h *WorkspaceHandlers) ListTeams(ctx context.Context, request ListTeamsRequ
 		return ListTeams401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	// A global admin sees every team; anyone else sees only the teams they belong to.
-	var teams []db.Team
-	if p.IsAdmin() {
-		teams, err = h.queries.ListTeams(ctx)
-	} else {
-		teams, err = h.queries.ListTeamsByUser(ctx, p.UserID)
-	}
+	list, err := h.teams.List(ctx, p.UserID, p.IsAdmin())
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]Team, 0, len(teams))
-	for _, t := range teams {
+	result := make([]Team, 0, len(list))
+	for _, t := range list {
 		result = append(result, dbTeamToPublic(t))
 	}
 	return ListTeams200JSONResponse(result), nil
@@ -49,11 +43,7 @@ func (h *WorkspaceHandlers) CreateTeam(ctx context.Context, request CreateTeamRe
 		return nil, err
 	}
 
-	team, err := h.queries.CreateTeam(ctx, db.CreateTeamParams{
-		Name:        request.Body.Name,
-		Description: request.Body.Description,
-		CreatedBy:   uid,
-	})
+	team, err := h.teams.Create(ctx, request.Body.Name, request.Body.Description, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -87,15 +77,11 @@ func (h *WorkspaceHandlers) DeleteTeam(ctx context.Context, request DeleteTeamRe
 	uid.Bytes = request.Id
 	uid.Valid = true
 
-	_, err := h.queries.GetTeamByID(ctx, uid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return DeleteTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
+	err := h.teams.Delete(ctx, uid)
+	if errors.Is(err, teams.ErrNotFound) {
+		return DeleteTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
 	}
 	if err != nil {
-		return nil, err
-	}
-
-	if err := h.queries.DeleteTeam(ctx, uid); err != nil {
 		return nil, err
 	}
 
@@ -115,7 +101,7 @@ func (h *WorkspaceHandlers) ListTeamMembers(ctx context.Context, request ListTea
 		return nil, err
 	}
 
-	members, err := h.queries.ListTeamMembers(ctx, uid)
+	members, err := h.teams.Members(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -151,44 +137,31 @@ func (h *WorkspaceHandlers) AddTeamMember(ctx context.Context, request AddTeamMe
 	teamID.Bytes = request.Id
 	teamID.Valid = true
 
-	_, err := h.queries.GetTeamByID(ctx, teamID)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
-	}
-	if err != nil {
-		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
-	}
-
 	var userID pgtype.UUID
 	userID.Bytes = request.Body.UserId
 	userID.Valid = true
 
 	memberRole := string(request.Body.Role)
 
-	member, err := h.queries.AddTeamMember(ctx, db.AddTeamMemberParams{
-		TeamID: teamID,
-		UserID: userID,
-		Role:   memberRole,
-	})
-	var pgErr *pgconn.PgError
+	member, err := h.teams.AddMember(ctx, teamID, userID, memberRole)
 	switch {
-	case errors.As(err, &pgErr) && pgErr.Code == "23505":
-		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return AddTeamMember409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "user already in team"}}, nil
-	case errors.As(err, &pgErr) && pgErr.Code == "23503":
-		// The only other reference is the user.
+	case errors.Is(err, teams.ErrNotFound):
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
+		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	case errors.Is(err, teams.ErrAlreadyMember):
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return AddTeamMember409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	case errors.Is(err, teams.ErrUserNotFound):
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return AddTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
 	case err != nil:
 		return nil, err
 	}
-	// Team membership decides who is a member of the team's workspaces.
 	h.catalogCache.Clear()
 	ev.Changes = map[string]audit.Change{"member": {To: idString(userID)}, "role": {To: memberRole}}
 	h.audited(ctx, ev.Allowed())
 
-	user, err := h.queries.GetUserByID(ctx, userID)
+	user, err := h.teams.User(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -214,39 +187,26 @@ func (h *WorkspaceHandlers) UpdateTeamMemberRole(ctx context.Context, request Up
 
 	teamID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	userID := pgtype.UUID{Bytes: request.UserId, Valid: true}
-	if _, err := h.queries.GetTeamByID(ctx, teamID); err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, err
-		}
-		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
-	}
-
 	memberRole := string(request.Body.Role)
-	// The generated enum is not validated at decode time; reject anything
-	// outside the team role vocabulary before touching the database.
-	if memberRole != "owner" && memberRole != "member" {
-		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "role must be owner or member")}, nil
-	}
-
-	member, err := h.queries.UpdateTeamMemberRole(ctx, db.UpdateTeamMemberRoleParams{
-		TeamID: teamID, UserID: userID, Role: memberRole,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	member, err := h.teams.SetRole(ctx, teamID, userID, memberRole)
+	switch {
+	case errors.Is(err, teams.ErrNotFound):
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "member not found"}}, nil
-	}
-	if err != nil {
+		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	case errors.Is(err, teams.ErrInvalidRole):
+		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
+	case errors.Is(err, teams.ErrMemberNotFound):
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return UpdateTeamMemberRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	case err != nil:
 		return nil, err
 	}
 
-	// Side effects of a persisted mutation happen before the response-only user
-	// lookup, matching AddTeamMember.
 	h.catalogCache.Clear()
 	ev.Changes["role"] = audit.Change{To: memberRole}
 	h.audited(ctx, ev.Allowed())
 
-	user, err := h.queries.GetUserByID(ctx, userID)
+	user, err := h.teams.User(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -274,16 +234,13 @@ func (h *WorkspaceHandlers) RemoveTeamMember(ctx context.Context, request Remove
 	userID.Bytes = request.UserId
 	userID.Valid = true
 
-	n, err := h.queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{
-		TeamID: teamID,
-		UserID: userID,
-	})
+	err := h.teams.RemoveMember(ctx, teamID, userID)
+	if errors.Is(err, teams.ErrMemberNotFound) {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return RemoveTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	}
 	if err != nil {
 		return nil, err
-	}
-	if n == 0 {
-		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return RemoveTeamMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "member not found"}}, nil
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())

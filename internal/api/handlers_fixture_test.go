@@ -65,13 +65,11 @@ func testAPI(f handlerFields) *API {
 			core:   c,
 			dialer: f.dialer,
 		},
-		SemanticHandlers: newSemanticHandlers(c),
-		QueryHandlers:    newQueryHandlers(c, nil),
-		CatalogHandlers:  newCatalogHandlers(c, f.binder),
-		WorkspaceHandlers: &WorkspaceHandlers{
-			core: c,
-		},
-		AuthHandlers: newAuthHandlers(c),
+		SemanticHandlers:  newSemanticHandlers(c),
+		QueryHandlers:     newQueryHandlers(c, nil),
+		CatalogHandlers:   newCatalogHandlers(c, f.binder),
+		WorkspaceHandlers: newWorkspaceHandlers(c),
+		AuthHandlers:      newAuthHandlers(c),
 	}
 	h.attentionCache = f.attentionCache
 	return h
