@@ -1,7 +1,8 @@
 import { expect, test, type Page } from './fixtures';
 
 // #395: ⌘/Ctrl+Enter and the Run button execute the selection, or the
-// statement at the cursor; ⇧⌘/Ctrl+Shift+Enter and Run all execute the script.
+// statement at the cursor; ⇧⌘/Ctrl+Shift+Enter executes the script, and the
+// toolbar has no Run all button (#417).
 // The editor/results split is resizable.
 
 async function setScript(page: Page, text: string) {
@@ -52,6 +53,7 @@ test('@issue-395 Ctrl+Enter runs the statement at the cursor or the selection', 
 
 	// Shift adds the whole script; the button keeps saying Run.
 	await expect(page.getByTestId('run-current')).toContainText('Run');
+	await expect(page.getByTestId('run-all')).toHaveCount(0);
 	await expect(page.getByTestId('results-area').getByText('first', { exact: true })).toBeVisible({
 		timeout: 30_000
 	});

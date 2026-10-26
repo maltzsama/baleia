@@ -1034,7 +1034,6 @@
 	"components_resultspanel_statements": "Statements",
 	"components_queryeditor_run_all": "Run all",
 	"components_queryeditor_run_hint": "Runs the selection, or the statement at the cursor (⌘/Ctrl+Enter)",
-	"components_queryeditor_run_all_hint": "Runs every statement of the script (⇧⌘/Ctrl+Shift+Enter)",
 	"workbench_split_resize_results": "Resize the results",
 	"workbench_split_hint": "Drag, or use the arrow keys; double-click to reset",
 	"common_just_now": "just now",

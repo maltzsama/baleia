@@ -1016,8 +1016,8 @@
 	</div>
 
 	<div class="flex items-center py-1.5 px-3 gap-1.5 border-b border-border bg-bg-toolbar shrink-0">
-		<!-- Run is the selection, or the statement at the cursor, like ⌘↵;
-		     Run all is the whole script (#395). -->
+		<!-- Run is the selection, or the statement at the cursor, like ⌘↵ (#395).
+		     ⇧⌘↵ and the palette run the whole script (#417). -->
 		<button
 			onclick={() => void runCurrent()}
 			disabled={executing}
@@ -1030,16 +1030,6 @@
 			>
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
-		</button>
-		<button
-			onclick={() => void runAll()}
-			disabled={executing}
-			title={m.components_queryeditor_run_all_hint()}
-			data-testid="run-all"
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-		>
-			{m.components_queryeditor_run_all()}
-			<span class="text-[10px] opacity-70 font-normal">⇧⌘↵</span>
 		</button>
 		{#if executing && canCancel}
 			<button
