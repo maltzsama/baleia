@@ -283,6 +283,12 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 		}
 	}
 
+	// Requests are not validated against the spec, so an unknown status
+	// would reach the table's CHECK and fail as a 500.
+	if s := request.Body.Status; s != nil && *s != UpdateAgentRequestStatusActive && *s != UpdateAgentRequestStatusDisabled {
+		return UpdateAgent422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "status must be active or disabled"}}, nil
+	}
+
 	name := agent.Name
 	if request.Body.Name != nil {
 		if name, err = agentmanage.Name(*request.Body.Name); err != nil {
