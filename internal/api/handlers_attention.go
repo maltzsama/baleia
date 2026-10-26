@@ -85,8 +85,8 @@ func (h *OpsHandlers) attentionItems(ctx context.Context, p authz.Principal) ([]
 	return items, nil
 }
 
-func (h *core) attentionBindingErrors(ctx context.Context, p authz.Principal) []AttentionItem {
-	rows, err := h.queries.ListAttentionBindingErrors(ctx)
+func (h *OpsHandlers) attentionBindingErrors(ctx context.Context, p authz.Principal) []AttentionItem {
+	rows, err := h.signals.BindingErrors(ctx)
 	if err != nil {
 		return nil
 	}
@@ -115,8 +115,8 @@ func (h *core) attentionBindingErrors(ctx context.Context, p authz.Principal) []
 	return out
 }
 
-func (h *core) attentionMetadataFailures(ctx context.Context, p authz.Principal) []AttentionItem {
-	rows, err := h.queries.ListAttentionMetadataSyncFailed(ctx)
+func (h *OpsHandlers) attentionMetadataFailures(ctx context.Context, p authz.Principal) []AttentionItem {
+	rows, err := h.signals.MetadataFailures(ctx)
 	if err != nil {
 		return nil
 	}
@@ -149,9 +149,9 @@ func (h *core) attentionMetadataFailures(ctx context.Context, p authz.Principal)
 	return out
 }
 
-func (h *core) attentionMetadataStale(ctx context.Context, p authz.Principal) []AttentionItem {
+func (h *OpsHandlers) attentionMetadataStale(ctx context.Context, p authz.Principal) []AttentionItem {
 	threshold := attentionStaleMultiplier * h.metadataSyncEvery()
-	rows, err := h.queries.ListAttentionMetadataStale(ctx, threshold.Seconds())
+	rows, err := h.signals.MetadataStale(ctx, threshold.Seconds())
 	if err != nil {
 		return nil
 	}
@@ -180,13 +180,7 @@ func (h *OpsHandlers) attentionEngineUnreachable(ctx context.Context, p authz.Pr
 	if h.engines == nil {
 		return nil
 	}
-	var engines []db.Engine
-	var err error
-	if p.IsAdmin() {
-		engines, err = h.queries.ListEngines(ctx)
-	} else {
-		engines, err = h.queries.ListEnginesVisibleToUser(ctx, p.UserID)
-	}
+	engines, err := h.signals.Engines(ctx, p.UserID, p.IsAdmin())
 	if err != nil {
 		return nil
 	}
@@ -226,8 +220,8 @@ func (h *OpsHandlers) attentionEngineUnreachable(ctx context.Context, p authz.Pr
 	return out
 }
 
-func (h *core) attentionRetrieverErrors(ctx context.Context, p authz.Principal) []AttentionItem {
-	rows, err := h.queries.ListAttentionRetrieverErrors(ctx)
+func (h *OpsHandlers) attentionRetrieverErrors(ctx context.Context, p authz.Principal) []AttentionItem {
+	rows, err := h.signals.RetrieverErrors(ctx)
 	if err != nil {
 		return nil
 	}
@@ -252,8 +246,8 @@ func (h *core) attentionRetrieverErrors(ctx context.Context, p authz.Principal) 
 	return out
 }
 
-func (h *core) attentionReconcileDrift(ctx context.Context) []AttentionItem {
-	rows, err := h.queries.ListAttentionReconcileDrift(ctx)
+func (h *OpsHandlers) attentionReconcileDrift(ctx context.Context) []AttentionItem {
+	rows, err := h.signals.ReconcileDrift(ctx)
 	if err != nil {
 		return nil
 	}
@@ -341,11 +335,11 @@ func (h *core) expectedScheduleIDs() []string {
 	return ids
 }
 
-func (h *core) attentionAuditExport(ctx context.Context) []AttentionItem {
+func (h *OpsHandlers) attentionAuditExport(ctx context.Context) []AttentionItem {
 	if h.settings.Ops.AuditExportURL == "" {
 		return nil
 	}
-	since, err := h.queries.GetAttentionAuditExportLag(ctx)
+	since, err := h.signals.AuditExportSince(ctx)
 	if err != nil || !since.Valid {
 		return nil
 	}

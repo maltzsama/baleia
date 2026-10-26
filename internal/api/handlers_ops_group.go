@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit/trail"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
+	"github.com/galileostudio/baleia/internal/ops/signals"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
@@ -30,6 +31,8 @@ type OpsHandlers struct {
 	monitor *monitoring.Service
 	// trail reads and exports the audit trail (#43).
 	trail *trail.Service
+	// signals reads what the status page and the attention list show.
+	signals *signals.Service
 }
 
 // scheduleDescriber reports whether a Temporal schedule exists; detail is a
@@ -79,7 +82,7 @@ func (m managedEngines) ProbeEngine(ctx context.Context, e db.Engine) (SystemSta
 }
 
 func newOpsHandlers(c *core, schema schemaVersioner) *OpsHandlers {
-	o := &OpsHandlers{core: c, schema: schema, engineStatus: managedEngines{c: c}, monitor: monitoring.New(c.queries), trail: trail.New(c.queries)}
+	o := &OpsHandlers{core: c, schema: schema, engineStatus: managedEngines{c: c}, monitor: monitoring.New(c.queries), trail: trail.New(c.queries), signals: signals.New(c.queries)}
 	if c.temporalClient != nil {
 		o.schedules = temporalSchedules{client: c.temporalClient}
 	}

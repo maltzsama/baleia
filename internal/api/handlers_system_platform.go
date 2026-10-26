@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Platform sections of the system status (#291). Each section is probed under
@@ -93,10 +94,10 @@ func (h *OpsHandlers) schedulesStatus(ctx context.Context) SystemStatusResource 
 // second round trip.
 func (h *OpsHandlers) enginesStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
-	if h.queries == nil {
+	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	engines, err := h.queries.ListEngines(ctx)
+	engines, err := h.signals.Engines(ctx, pgtype.UUID{}, true)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
@@ -112,12 +113,12 @@ func (h *OpsHandlers) enginesStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *core) bindingsStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) bindingsStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
-	if h.queries == nil {
+	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	rows, err := h.queries.CountManagedBindingsByState(ctx)
+	rows, err := h.signals.BindingStates(ctx)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
@@ -128,16 +129,16 @@ func (h *core) bindingsStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *core) metadataStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) metadataStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
-	if h.queries == nil {
+	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
 	threshold := int32(2 * h.metadataSyncEvery().Seconds())
 	if threshold < 60 {
 		threshold = 60
 	}
-	counts, err := h.queries.MetadataStatusCounts(ctx, threshold)
+	counts, err := h.signals.MetadataCounts(ctx, threshold)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
@@ -149,16 +150,16 @@ func (h *core) metadataStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *core) reconcileStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) reconcileStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
-	if h.queries == nil {
+	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	engines, err := h.queries.ListEngines(ctx)
+	engines, err := h.signals.Engines(ctx, pgtype.UUID{}, true)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	runs, err := h.queries.LatestReconcileRuns(ctx)
+	runs, err := h.signals.LatestReconcileRuns(ctx)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
@@ -183,7 +184,7 @@ func (h *core) reconcileStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *core) auditExportStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) auditExportStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	configured := h.settings.Ops.AuditExportURL != ""
 	configuredValue := int64(0)
@@ -194,10 +195,10 @@ func (h *core) auditExportStatus(ctx context.Context) SystemStatusResource {
 	}
 	items = append(items, SystemStatusItem{Name: "configured", Status: configuredStatus, Value: &configuredValue})
 
-	if h.queries == nil {
+	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	lag, err := h.queries.AuditExportLagSeconds(ctx)
+	lag, err := h.signals.AuditExportLag(ctx)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
@@ -206,7 +207,7 @@ func (h *core) auditExportStatus(ctx context.Context) SystemStatusResource {
 	return SystemStatusResource{Status: SystemStatusResourceStatusOk, Items: statusItems(items)}
 }
 
-func (h *core) pluginStatus(ctx context.Context) SystemStatusResource {
+func (h *OpsHandlers) pluginStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
 	expected := "0.9.2"
 	if h.settings.Ops.PluginVersion != "" {
@@ -214,10 +215,10 @@ func (h *core) pluginStatus(ctx context.Context) SystemStatusResource {
 	}
 	items = append(items, SystemStatusItem{Name: "expected_version", Status: SystemStatusItemStatusOk, Detail: statusStringPtr(expected)})
 
-	if h.queries == nil {
+	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	last, err := h.queries.PluginLastConfirmation(ctx, "trino")
+	last, err := h.signals.PluginLastConfirmation(ctx)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
