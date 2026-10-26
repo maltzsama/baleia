@@ -24,7 +24,17 @@ func runMaintenance(t *testing.T, a *Activities, p LensRunMaintenanceParams) err
 	return err
 }
 
-type snapshotSink struct{ db.Querier }
+type snapshotSink struct {
+	db.Querier
+	finished *[]db.UpdateMaintenanceRunParams
+}
+
+func (s snapshotSink) UpdateMaintenanceRun(_ context.Context, arg db.UpdateMaintenanceRunParams) (db.MaintenanceRun, error) {
+	if s.finished != nil {
+		*s.finished = append(*s.finished, arg)
+	}
+	return db.MaintenanceRun{}, nil
+}
 
 func (snapshotSink) UpsertTrinoQuerySnapshot(context.Context, db.UpsertTrinoQuerySnapshotParams) (db.TrinoQuerySnapshot, error) {
 	return db.TrinoQuerySnapshot{}, nil
@@ -98,8 +108,13 @@ func TestLensRunMaintenance_RunsOnPlannedEngine(t *testing.T) {
 		}
 	}
 	rec := &fakeEngine{Engine: testTrino}
-	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{}}
-	if err := runMaintenance(t, a, LensRunMaintenanceParams{ExecutionID: maintExecID, EngineID: "nope", Catalog: "c", Namespace: "n", Table: "t"}); err == nil || len(rec.sqls) != 0 {
+	var finished []db.UpdateMaintenanceRunParams
+	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{finished: &finished}}
+	if err := runMaintenance(t, a, LensRunMaintenanceParams{ExecutionID: maintExecID, RunID: maintExecID, EngineID: "nope", Catalog: "c", Namespace: "n", Table: "t"}); err == nil || len(rec.sqls) != 0 {
 		t.Errorf("invalid engine id: err=%v statements=%q, want an error and no statements", err, rec.sqls)
+	}
+	// The run does not stay "running" when nothing could run.
+	if len(finished) != 1 || finished[0].Status != "failed" {
+		t.Errorf("run updates = %+v, want one failed", finished)
 	}
 }

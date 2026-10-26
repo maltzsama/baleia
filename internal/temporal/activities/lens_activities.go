@@ -428,27 +428,10 @@ func LensRunMaintenance(ctx context.Context, params LensRunMaintenanceParams) er
 func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaintenanceParams) error {
 	logger := activity.GetLogger(ctx)
 
-	// The identifiers and retention reach this activity from an HTTP request:
-	// rendering validates them again (the API checks first, but a workflow
-	// input is not a trust boundary) and quotes instead of concatenating.
-	eng, err := a.maintenanceEngine(ctx, params.EngineID)
+	eng, commands, selected, err := a.planMaintenance(ctx, params)
 	if err != nil {
-		return err
-	}
-	maintainer, ok := queryengine.As[queryengine.IcebergMaintainer](eng)
-	if !ok {
-		return fmt.Errorf("engine %s has no Iceberg maintenance", eng.Kind())
-	}
-	selected := map[string]bool{}
-	for _, op := range params.Operations {
-		selected[op] = true
-	}
-	// No selection is the legacy Lens route, which runs all three.
-	if params.Retention == "" && (len(selected) == 0 || selected["expire_snapshots"] || selected["remove_orphan_files"]) {
-		return errors.New("invalid retention: expire_snapshots and remove_orphan_files need one")
-	}
-	commands, err := maintainer.MaintenanceStatements([]string{params.Catalog, params.Namespace, params.Table}, params.Retention)
-	if err != nil {
+		// Nothing ran: the run row must not stay "running".
+		finishMaintenanceRun(a.queries, ctx, params.RunID, "failed", "maintenance_failed", err.Error())
 		return err
 	}
 	engineID := engineUUID(params.EngineID)
@@ -489,6 +472,34 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 
 	finishMaintenanceRun(a.queries, ctx, params.RunID, "finished", "", "")
 	return nil
+}
+
+// planMaintenance resolves the run's engine and renders its statements.
+// The identifiers and retention reach this activity from an HTTP request:
+// rendering validates them again (the API checks first, but a workflow
+// input is not a trust boundary) and quotes instead of concatenating.
+func (a *Activities) planMaintenance(ctx context.Context, params LensRunMaintenanceParams) (queryengine.Engine, []string, map[string]bool, error) {
+	eng, err := a.maintenanceEngine(ctx, params.EngineID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	maintainer, ok := queryengine.As[queryengine.IcebergMaintainer](eng)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("engine %s has no Iceberg maintenance", eng.Kind())
+	}
+	selected := map[string]bool{}
+	for _, op := range params.Operations {
+		selected[op] = true
+	}
+	// No selection is the legacy Lens route, which runs all three.
+	if params.Retention == "" && (len(selected) == 0 || selected["expire_snapshots"] || selected["remove_orphan_files"]) {
+		return nil, nil, nil, errors.New("invalid retention: expire_snapshots and remove_orphan_files need one")
+	}
+	commands, err := maintainer.MaintenanceStatements([]string{params.Catalog, params.Namespace, params.Table}, params.Retention)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return eng, commands, selected, nil
 }
 
 // maintenanceEngine is the engine a run was planned on; the legacy Lens route
