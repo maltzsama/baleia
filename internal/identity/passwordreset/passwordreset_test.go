@@ -56,11 +56,19 @@ type sentMail struct {
 	data       map[string]any
 }
 
-type fakeMailer struct{ sent []sentMail }
+type fakeMailer struct {
+	sent []sentMail
+	err  error
+	// release, when set, holds every send until it is closed.
+	release chan struct{}
+}
 
 func (m *fakeMailer) Send(_ context.Context, to, locale string, template mail.Template, data map[string]any) error {
+	if m.release != nil {
+		<-m.release
+	}
 	m.sent = append(m.sent, sentMail{to, locale, template, data})
-	return nil
+	return m.err
 }
 
 type fakeSessions struct{ revoked []pgtype.UUID }
@@ -97,6 +105,7 @@ func TestRequest_MailsAHashedSingleUseLink(t *testing.T) {
 	if err := s.Request(context.Background(), u.Email); err != nil {
 		t.Fatal(err)
 	}
+	s.Wait()
 	if len(m.sent) != 1 || m.sent[0].to != u.Email || m.sent[0].locale != "pt-BR" || m.sent[0].template != mail.TemplatePasswordReset {
 		t.Fatalf("sent = %+v", m.sent)
 	}
@@ -119,12 +128,30 @@ func TestRequest_UnknownEmailIsSilent(t *testing.T) {
 	}
 }
 
+// TestRequest_DeliveryNeverShapesTheAnswer: Request returns before the
+// e-mail goes out, and a failed send is not an error, so an existing account
+// answers like an unknown address (#422).
+func TestRequest_DeliveryNeverShapesTheAnswer(t *testing.T) {
+	s, _, m, _, u := setup(t)
+	m.release = make(chan struct{})
+	m.err = errors.New("smtp: connection refused")
+	if err := s.Request(context.Background(), u.Email); err != nil {
+		t.Fatalf("Request = %v, want nil while the send is pending", err)
+	}
+	close(m.release)
+	s.Wait()
+	if len(m.sent) != 1 {
+		t.Fatalf("sent = %d, want the delivery to run in the background", len(m.sent))
+	}
+}
+
 func TestConfirm(t *testing.T) {
 	ctx := context.Background()
 	s, st, m, ss, u := setup(t)
 	if err := s.Request(ctx, u.Email); err != nil {
 		t.Fatal(err)
 	}
+	s.Wait()
 	token := linkToken(t, m.sent[0])
 
 	id, err := s.Confirm(ctx, token, "new-password-123")
@@ -172,6 +199,7 @@ func TestRequest_OnlyLocalActiveAccounts(t *testing.T) {
 			t.Errorf("Request(%s) = %v, want nil", email, err)
 		}
 	}
+	s.Wait()
 	if len(m.sent) != 0 || len(st.resets) != 0 {
 		t.Errorf("sent %d e-mails and stored %d links, want none", len(m.sent), len(st.resets))
 	}

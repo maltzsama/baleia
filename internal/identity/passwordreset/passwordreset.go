@@ -9,6 +9,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -48,12 +50,17 @@ type Config struct {
 // ErrInvalidToken: the link is unknown, expired or already used.
 var ErrInvalidToken = errors.New("passwordreset: invalid or expired token")
 
+// deliveryTimeout bounds the background token insert and e-mail send.
+const deliveryTimeout = time.Minute
+
 // Service requests and confirms password resets.
 type Service struct {
 	store    Store
 	mailer   Mailer
 	sessions Sessions
 	cfg      Config
+	// pending tracks the deliveries running in the background.
+	pending sync.WaitGroup
 }
 
 // New builds the service.
@@ -65,6 +72,10 @@ func New(store Store, mailer Mailer, sessions Sessions, cfg Config) *Service {
 // local, active account gets one: an SSO account cannot sign in with a
 // password and a suspended one cannot sign in at all. Any other address is not
 // an error, so the answer never reveals whether it exists.
+//
+// Request returns right after the lookup: the token insert and the e-mail
+// send run in the background, so neither their time nor their failure
+// reveals the account (#422). A failed delivery is only logged.
 func (s *Service) Request(ctx context.Context, email string) error {
 	user, err := s.store.GetUserByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -77,6 +88,22 @@ func (s *Service) Request(ctx context.Context, email string) error {
 		return nil
 	}
 
+	s.pending.Go(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliveryTimeout)
+		defer cancel()
+		// The error never carries the link; log the account, not the address.
+		if err := s.deliver(ctx, user); err != nil {
+			slog.Error("password reset delivery failed", "user_id", user.ID.String(), "err", err)
+		}
+	})
+	return nil
+}
+
+// Wait blocks until every background delivery has finished.
+func (s *Service) Wait() { s.pending.Wait() }
+
+// deliver stores a new token for user and e-mails its link.
+func (s *Service) deliver(ctx context.Context, user db.User) error {
 	token := newToken()
 	// Only the hash is stored; the raw token travels in the e-mail link (#51).
 	if err := s.store.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
