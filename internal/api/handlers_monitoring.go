@@ -3,25 +3,19 @@ package api
 import (
 	"context"
 	"errors"
-	"regexp"
 	"strings"
-	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
 )
-
-var maintenanceRetentionRe = regexp.MustCompile(`^[1-9][0-9]{0,4}[dhm]$`)
-
-var maintenanceOperations = []string{"optimize", "expire_snapshots", "remove_orphan_files"}
 
 // ListMonitoringEngines returns the engines with runtime monitoring the caller
 // may view (#117).
@@ -30,7 +24,7 @@ func (h *OpsHandlers) ListMonitoringEngines(ctx context.Context, _ ListMonitorin
 	if err != nil {
 		return ListMonitoringEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	engines, err := h.queries.ListEngines(ctx)
+	engines, err := h.monitor.Engines(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -79,32 +73,20 @@ func (h *OpsHandlers) GetEngineCluster(ctx context.Context, request GetEngineClu
 		return GetEngineCluster404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}
 
-	window := "1h"
+	window := ""
 	if request.Params.Window != nil {
 		window = string(*request.Params.Window)
 	}
-	duration := time.Hour
-	switch window {
-	case "6h":
-		duration = 6 * time.Hour
-	case "24h":
-		duration = 24 * time.Hour
-	}
-
-	series := ClusterSeries{Series: []ClusterPoint{}}
-	if latest, err := h.queries.GetLatestClusterSnapshotByEngine(ctx, engineID); err == nil {
-		point := clusterPoint(latest)
-		series.Latest = &point
-	}
-	rows, err := h.queries.ListClusterSnapshotsByEngine(ctx, db.ListClusterSnapshotsByEngineParams{
-		EngineID: engineID,
-		FromTime: pgtype.Timestamptz{Time: time.Now().Add(-duration), Valid: true},
-		Lim:      300,
-	})
+	cluster, err := h.monitor.Cluster(ctx, engineID, window)
 	if err != nil {
 		return nil, err
 	}
-	for _, row := range rows {
+	series := ClusterSeries{Series: make([]ClusterPoint, 0, len(cluster.Series))}
+	if cluster.Latest != nil {
+		point := clusterPoint(*cluster.Latest)
+		series.Latest = &point
+	}
+	for _, row := range cluster.Series {
 		series.Series = append(series.Series, clusterPoint(row))
 	}
 	return GetEngineCluster200JSONResponse(series), nil
@@ -158,24 +140,21 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 		userName = &identity
 	}
 
-	limit, offset := 20, 0
+	filter := monitoring.QueryFilter{UserName: userName, Q: request.Params.Q, Limit: request.Params.Limit, Offset: request.Params.Offset}
+	if request.Params.State != nil {
+		state := string(*request.Params.State)
+		filter.State = &state
+	}
+	rows, err := h.monitor.Queries(ctx, engineID, filter)
+	if err != nil {
+		return nil, err
+	}
+	limit, offset := monitoring.DefaultQueries, 0
 	if request.Params.Limit != nil {
 		limit = *request.Params.Limit
 	}
 	if request.Params.Offset != nil {
 		offset = *request.Params.Offset
-	}
-	params := db.ListTrinoQuerySnapshotsByEngineParams{
-		EngineID: engineID, UserName: userName, Q: request.Params.Q,
-		Lim: int32(limit), Off: int32(offset),
-	}
-	if request.Params.State != nil {
-		state := string(*request.Params.State)
-		params.State = &state
-	}
-	rows, err := h.queries.ListTrinoQuerySnapshotsByEngine(ctx, params)
-	if err != nil {
-		return nil, err
 	}
 	page := MonitoringQueryPage{Items: make([]MonitoringQuery, 0, len(rows))}
 	for _, row := range rows {
@@ -243,11 +222,9 @@ func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitor
 	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
 		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
-	snapshot, err := h.queries.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
-		EngineID: engineID, TrinoQueryID: request.QueryId,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
+	snapshot, err := h.monitor.Query(ctx, engineID, request.QueryId)
+	if errors.Is(err, monitoring.ErrQueryNotFound) {
+		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -293,10 +270,8 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
 		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
-	snapshot, err := h.queries.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
-		EngineID: engineID, TrinoQueryID: request.QueryId,
-	})
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	snapshot, err := h.monitor.Query(ctx, engineID, request.QueryId)
+	if err != nil && !errors.Is(err, monitoring.ErrQueryNotFound) {
 		return nil, err
 	}
 	if err != nil || !h.maySeeQuery(ctx, p, snapshot) {
@@ -315,9 +290,9 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 	return KillMonitoringQuery202Response{}, nil
 }
 
-func (h *core) catalogForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Catalog, bool, error) {
-	catalog, err := h.queries.GetCatalogByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+func (h *OpsHandlers) catalogForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Catalog, bool, error) {
+	catalog, err := h.monitor.Catalog(ctx, id)
+	if errors.Is(err, monitoring.ErrCatalogNotFound) {
 		return db.Catalog{}, false, nil
 	}
 	if err != nil {
@@ -346,25 +321,12 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 	if !ok {
 		return ListTableHealth404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
-	limit, offset := 50, 0
-	if request.Params.Limit != nil {
-		limit = *request.Params.Limit
-	}
-	if request.Params.Offset != nil {
-		offset = *request.Params.Offset
-	}
-	params := db.ListTableHealthByCatalogParams{
-		CatalogID: catalogID, Ns: request.Params.Ns, Lim: int32(limit), Off: int32(offset),
-	}
+	filter := monitoring.HealthFilter{Namespace: request.Params.Ns, MaxScore: request.Params.MaxScore, Limit: request.Params.Limit, Offset: request.Params.Offset}
 	if request.Params.Needs != nil {
 		needs := string(*request.Params.Needs)
-		params.Needs = &needs
+		filter.Needs = &needs
 	}
-	if request.Params.MaxScore != nil {
-		score := int32(*request.Params.MaxScore)
-		params.MaxScore = &score
-	}
-	rows, err := h.queries.ListTableHealthByCatalog(ctx, params)
+	rows, err := h.monitor.TableHealth(ctx, catalogID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -423,62 +385,31 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 	if request.Body == nil {
 		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
-	ops := request.Body.Operations
-	if len(ops) == 0 {
-		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "operations are required")}, nil
+	m := monitoring.Maintenance{
+		CatalogID: catalogID, Namespace: request.Body.Namespace, Table: request.Body.Table,
+		Operations: request.Body.Operations, Retention: request.Body.Retention, StartedBy: p.UserID,
 	}
-	selected := map[string]bool{}
-	for _, op := range ops {
-		if !containsString(maintenanceOperations, op) {
-			return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "unknown operation "+op)}, nil
-		}
-		selected[op] = true
-	}
-	retention := ""
-	if request.Body.Retention != nil {
-		retention = strings.TrimSpace(*request.Body.Retention)
-	}
-	needsRetention := selected["expire_snapshots"] || selected["remove_orphan_files"]
-	if needsRetention && !maintenanceRetentionRe.MatchString(retention) {
-		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "retention must match ^[1-9][0-9]{0,4}[dhm]$ for expire_snapshots and remove_orphan_files")}, nil
-	}
-
-	var bindingID pgtype.UUID
 	if request.Body.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: [16]byte(*request.Body.BindingId), Valid: true}
-	} else {
-		bindings, err := h.queries.ListBindingsByCatalog(ctx, catalogID)
-		if err != nil {
-			return nil, err
-		}
-		for _, binding := range bindings {
-			eng, err := h.engines.Get(ctx, binding.EngineID)
-			if err == nil && eng.Capabilities().IcebergMaintenance {
-				bindingID = binding.ID
-				break
-			}
-		}
+		b := pgtype.UUID{Bytes: [16]byte(*request.Body.BindingId), Valid: true}
+		m.Binding = &b
 	}
-	if !bindingID.Valid {
-		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotSupported, "no enabled binding of this catalog supports Iceberg maintenance")}, nil
+	plan, err := h.monitor.Prepare(ctx, m, func(ctx context.Context, engineID pgtype.UUID) bool {
+		eng, err := h.engines.Get(ctx, engineID)
+		return err == nil && eng.Capabilities().IcebergMaintenance
+	})
+	var invalid *monitoring.InvalidError
+	switch {
+	case errors.As(err, &invalid):
+		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalid.Msg)}, nil
+	case errors.Is(err, monitoring.ErrNoCapableBinding):
+		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotSupported, err.Error())}, nil
+	case err != nil:
+		return nil, err
 	}
 
 	runID := uuid.New()
 	workflowID := "maintenance-" + runID.String()
-	var retentionPtr *string
-	if retention != "" {
-		retentionPtr = &retention
-	}
-	run, err := h.queries.CreateMaintenanceRun(ctx, db.CreateMaintenanceRunParams{
-		CatalogID:  catalogID,
-		BindingID:  bindingID,
-		Namespace:  request.Body.Namespace,
-		TableName:  request.Body.Table,
-		Operations: ops,
-		Retention:  retentionPtr,
-		StartedBy:  p.UserID,
-		WorkflowID: workflowID,
-	})
+	run, err := h.monitor.Record(ctx, plan, workflowID)
 	if err != nil {
 		return nil, err
 	}
@@ -486,12 +417,9 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 	if h.temporalClient != nil {
 		_, err = h.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 			ID: workflowID, TaskQueue: "baleia-task-queue",
-		}, workflows.MaintenanceRunWorkflow, runID.String(), uuid.UUID(bindingID.Bytes).String(), trinoName, request.Body.Namespace, request.Body.Table, retention, ops)
+		}, workflows.MaintenanceRunWorkflow, runID.String(), uuid.UUID(plan.Binding.Bytes).String(), trinoName, plan.Namespace, plan.Table, plan.Retention, plan.Operations)
 		if err != nil {
-			// Best effort: the start error below is what the caller sees.
-			_, _ = h.queries.UpdateMaintenanceRun(ctx, db.UpdateMaintenanceRunParams{
-				ID: run.ID, Status: "failed", ErrorCode: monitoringStringPtr("workflow_start_failed"), ErrorMessage: monitoringStringPtr(err.Error()),
-			})
+			h.monitor.Fail(ctx, run.ID, err)
 			return nil, err
 		}
 	}
@@ -512,16 +440,7 @@ func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaint
 	} else if !ok {
 		return ListMaintenanceRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
-	limit, offset := 20, 0
-	if request.Params.Limit != nil {
-		limit = *request.Params.Limit
-	}
-	if request.Params.Offset != nil {
-		offset = *request.Params.Offset
-	}
-	rows, err := h.queries.ListMaintenanceRuns(ctx, db.ListMaintenanceRunsParams{
-		CatalogID: catalogID, Lim: int32(limit), Off: int32(offset),
-	})
+	rows, err := h.monitor.Runs(ctx, catalogID, request.Params.Limit, request.Params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -560,16 +479,5 @@ func maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
 	}
 	return out
 }
-
-func containsString(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
-}
-
-func monitoringStringPtr(value string) *string { return &value }
 
 func intPtrValue(value int) *int { return &value }
