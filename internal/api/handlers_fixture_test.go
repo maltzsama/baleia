@@ -67,10 +67,7 @@ func testAPI(f handlerFields) *API {
 		},
 		SemanticHandlers: newSemanticHandlers(c),
 		QueryHandlers:    newQueryHandlers(c, nil),
-		CatalogHandlers: &CatalogHandlers{
-			core:   c,
-			binder: f.binder,
-		},
+		CatalogHandlers:  newCatalogHandlers(c, f.binder),
 		WorkspaceHandlers: &WorkspaceHandlers{
 			core: c,
 		},
