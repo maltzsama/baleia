@@ -12,6 +12,7 @@ import (
 	"regexp"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -30,10 +31,21 @@ type Writer interface {
 	UpdateEngine(ctx context.Context, arg db.UpdateEngineParams) (db.Engine, error)
 }
 
-// Store is Reader and Writer.
+// Ops reads what an engine reports and its reconcile runs; *db.Queries
+// implements it.
+type Ops interface {
+	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
+	ListEngineObservations(ctx context.Context, engineID pgtype.UUID) ([]db.EngineCatalogObservation, error)
+	CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (db.CountEngineImpactRow, error)
+	GetReconcileRun(ctx context.Context, arg db.GetReconcileRunParams) (db.CatalogReconcileRun, error)
+	ListReconcileRuns(ctx context.Context, arg db.ListReconcileRunsParams) ([]db.CatalogReconcileRun, error)
+}
+
+// Store is Reader, Writer and Ops.
 type Store interface {
 	Reader
 	Writer
+	Ops
 }
 
 // TxStore creates and deletes an engine with its native catalogs, in one
@@ -52,7 +64,17 @@ type Tx func(ctx context.Context, fn func(TxStore) error) error
 // NameRe mirrors the engines.name CHECK.
 var NameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`)
 
+// Reconcile run listing limits.
+const (
+	DefaultRuns = 20
+	MaxRuns     = 100
+)
+
 var (
+	// ErrNotFound: no engine has the id.
+	ErrNotFound = errors.New("engine not found")
+	// ErrRunNotFound: the engine has no reconcile run with the id.
+	ErrRunNotFound = errors.New("reconcile run not found")
 	// ErrInvalidName: the name does not match NameRe.
 	ErrInvalidName = errors.New("must match " + NameRe.String())
 	// ErrNameTaken: another engine has the name.
@@ -184,6 +206,48 @@ func (s *Service) Bindings(ctx context.Context, engineID pgtype.UUID) ([]db.Cata
 // CatalogBindings lists the bindings of a catalog.
 func (s *Service) CatalogBindings(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error) {
 	return s.store.ListBindingsByCatalog(ctx, catalogID)
+}
+
+// Observations lists the catalogs the engine reported, present or gone.
+func (s *Service) Observations(ctx context.Context, engineID pgtype.UUID) ([]db.EngineCatalogObservation, error) {
+	return s.store.ListEngineObservations(ctx, engineID)
+}
+
+// Impact counts what depends on an engine.
+func (s *Service) Impact(ctx context.Context, engineID pgtype.UUID) (db.CountEngineImpactRow, error) {
+	return s.store.CountEngineImpact(ctx, engineID)
+}
+
+// ReconcileRun returns one reconcile run of an engine.
+func (s *Service) ReconcileRun(ctx context.Context, engineID, runID pgtype.UUID) (db.CatalogReconcileRun, error) {
+	if err := s.exists(ctx, engineID); err != nil {
+		return db.CatalogReconcileRun{}, err
+	}
+	run, err := s.store.GetReconcileRun(ctx, db.GetReconcileRunParams{EngineID: engineID, ID: runID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.CatalogReconcileRun{}, ErrRunNotFound
+	}
+	return run, err
+}
+
+// ReconcileRuns lists an engine's latest reconcile runs. A limit outside
+// 1..MaxRuns is DefaultRuns.
+func (s *Service) ReconcileRuns(ctx context.Context, engineID pgtype.UUID, limit int) ([]db.CatalogReconcileRun, error) {
+	if err := s.exists(ctx, engineID); err != nil {
+		return nil, err
+	}
+	if limit < 1 || limit > MaxRuns {
+		limit = DefaultRuns
+	}
+	return s.store.ListReconcileRuns(ctx, db.ListReconcileRunsParams{EngineID: engineID, Limit: int32(limit)})
+}
+
+func (s *Service) exists(ctx context.Context, id pgtype.UUID) error {
+	_, err := s.store.GetEngineByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
 }
 
 // IsFKViolation reports a delete blocked by a foreign key: 23503 for NO

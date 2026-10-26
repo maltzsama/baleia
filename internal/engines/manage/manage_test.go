@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -22,6 +23,7 @@ type fakeStore struct {
 	// DeleteEngine.
 	createErr, bindErr, deleteErr error
 	admin                         bool
+	runsLimit                     int32
 }
 
 func newStore() *fakeStore {
@@ -88,6 +90,30 @@ func (f *fakeStore) DeleteEngine(_ context.Context, id pgtype.UUID) error {
 	}
 	delete(f.engines, id.Bytes)
 	return nil
+}
+
+func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+	if e, ok := f.engines[id.Bytes]; ok {
+		return e, nil
+	}
+	return db.Engine{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) ListEngineObservations(context.Context, pgtype.UUID) ([]db.EngineCatalogObservation, error) {
+	return nil, nil
+}
+
+func (f *fakeStore) CountEngineImpact(context.Context, pgtype.UUID) (db.CountEngineImpactRow, error) {
+	return db.CountEngineImpactRow{}, nil
+}
+
+func (f *fakeStore) GetReconcileRun(context.Context, db.GetReconcileRunParams) (db.CatalogReconcileRun, error) {
+	return db.CatalogReconcileRun{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) ListReconcileRuns(_ context.Context, arg db.ListReconcileRunsParams) ([]db.CatalogReconcileRun, error) {
+	f.runsLimit = arg.Limit
+	return nil, nil
 }
 
 func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error {
@@ -179,5 +205,21 @@ func TestList(t *testing.T) {
 	_, _ = s.List(ctx, newID(), false)
 	if st.admin {
 		t.Error("a member lists the engines visible to them")
+	}
+}
+
+func TestReconcileRuns(t *testing.T) {
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	if _, err := s.ReconcileRuns(ctx, newID(), 10); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown engine = %v, want ErrNotFound", err)
+	}
+	e, _, _ := s.Create(ctx, NewEngine{Name: "pg"})
+	if _, err := s.ReconcileRuns(ctx, e.ID, 1000); err != nil || st.runsLimit != DefaultRuns {
+		t.Errorf("out-of-range limit = %d, %v; want DefaultRuns", st.runsLimit, err)
+	}
+	if _, err := s.ReconcileRun(ctx, e.ID, newID()); !errors.Is(err, ErrRunNotFound) {
+		t.Errorf("unknown run = %v, want ErrRunNotFound", err)
 	}
 }

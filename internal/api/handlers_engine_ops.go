@@ -8,8 +8,8 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/engines/manage"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -133,7 +133,7 @@ func (h *CatalogHandlers) ListEngineObservations(ctx context.Context, request Li
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := h.queries.ListEngineObservations(ctx, id)
+	rows, err := h.engineAdmin.Observations(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (h *CatalogHandlers) GetEngineImpact(ctx context.Context, request GetEngine
 	} else if err != nil {
 		return nil, err
 	}
-	row, err := h.queries.CountEngineImpact(ctx, id)
+	row, err := h.engineAdmin.Impact(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -274,19 +274,13 @@ func (h *CatalogHandlers) GetReconcileRun(ctx context.Context, request GetReconc
 	if err := p.RequireAdmin(); err != nil {
 		return GetReconcileRun403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
-	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, err := h.queries.GetEngineByID(ctx, engineID); errors.Is(err, pgx.ErrNoRows) {
+	row, err := h.engineAdmin.ReconcileRun(ctx, pgtype.UUID{Bytes: request.Id, Valid: true}, pgtype.UUID{Bytes: request.RunId, Valid: true})
+	switch {
+	case errors.Is(err, manage.ErrNotFound):
 		return GetReconcileRun404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
-	} else if err != nil {
-		return nil, err
-	}
-	row, err := h.queries.GetReconcileRun(ctx, db.GetReconcileRunParams{
-		EngineID: engineID, ID: pgtype.UUID{Bytes: request.RunId, Valid: true},
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return GetReconcileRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "reconcile run not found"}}, nil
-	}
-	if err != nil {
+	case errors.Is(err, manage.ErrRunNotFound):
+		return GetReconcileRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	case err != nil:
 		return nil, err
 	}
 	run, err := reconcileRunToPublic(row)

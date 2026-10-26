@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/bindings/stored"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/engines/manage"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -53,17 +54,14 @@ func (h *CatalogHandlers) ListReconcileRuns(ctx context.Context, request ListRec
 	if err := p.RequireAdmin(); err != nil {
 		return ListReconcileRuns403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, err := h.queries.GetEngineByID(ctx, id); errors.Is(err, pgx.ErrNoRows) {
-		return ListReconcileRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
-	} else if err != nil {
-		return nil, err
-	}
-	limit := 20
-	if request.Params.Limit != nil && *request.Params.Limit >= 1 && *request.Params.Limit <= 100 {
+	limit := 0
+	if request.Params.Limit != nil {
 		limit = *request.Params.Limit
 	}
-	rows, err := h.queries.ListReconcileRuns(ctx, db.ListReconcileRunsParams{EngineID: id, Limit: int32(limit)})
+	rows, err := h.engineAdmin.ReconcileRuns(ctx, pgtype.UUID{Bytes: request.Id, Valid: true}, limit)
+	if errors.Is(err, manage.ErrNotFound) {
+		return ListReconcileRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
