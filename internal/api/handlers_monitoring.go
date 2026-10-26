@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
@@ -244,8 +246,11 @@ func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitor
 	snapshot, err := h.queries.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: engineID, TrinoQueryID: request.QueryId,
 	})
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if !h.maySeeQuery(ctx, p, snapshot) {
 		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
@@ -291,6 +296,9 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 	snapshot, err := h.queries.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: engineID, TrinoQueryID: request.QueryId,
 	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
 	if err != nil || !h.maySeeQuery(ctx, p, snapshot) {
 		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
