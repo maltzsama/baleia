@@ -15,7 +15,7 @@ import (
 
 // decorateSpace adds the counts and allowed actions the content UI needs (#113).
 func (h *core) decorateSpace(ctx context.Context, sp *Space, role string) {
-	counts, err := h.queries.CountSpaceContentKinds(ctx, pgtype.UUID{Bytes: [16]byte(sp.Id), Valid: true})
+	counts, err := h.spaces.ContentKinds(ctx, pgtype.UUID{Bytes: [16]byte(sp.Id), Valid: true})
 	if err == nil {
 		saved, metrics, models, folders := int(counts.SavedQueries), int(counts.SemanticMetrics), int(counts.SemanticModels), int(counts.Folders)
 		sp.Counts = &SpaceCounts{SavedQueries: &saved, SemanticMetrics: &metrics, SemanticModels: &models, Folders: &folders}

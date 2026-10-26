@@ -217,6 +217,7 @@ func NewAPI(d Deps) (*API, error) {
 	}
 	c.history = history.New(c.queries)
 	c.browse = browse.New(c.queries)
+	c.spaces = spacesOver(c, c.queries)
 	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),

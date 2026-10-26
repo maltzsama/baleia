@@ -417,7 +417,7 @@ func (h *SemanticHandlers) CreateSemanticMetric(ctx context.Context, request Cre
 			return CreateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 		}
 	} else {
-		space, err = h.queries.GetDefaultSpace(ctx, ws)
+		space, err = h.spaces.Default(ctx, ws)
 		if err != nil {
 			return nil, err
 		}

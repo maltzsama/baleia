@@ -291,7 +291,9 @@ func TestSetSpaceMember_LookupFailureIsAnError(t *testing.T) {
 	ws := sharedWorkspace(t, f)
 	owner := f.as(f.owner)
 	space := createSpaceIn(t, f, owner, ws, CreateSpaceRequest{Name: "Shared", Visibility: CreateSpaceRequestVisibilityWorkspace})
-	f.h.queries = brokenPrincipals{db.New(f.pool)}
+	broken := brokenPrincipals{db.New(f.pool)}
+	f.h.queries = broken
+	f.h.spaces = spacesOver(f.h.core, broken)
 	for _, kind := range []string{"user", "team"} {
 		_, err := f.h.SetSpaceMember(owner, SetSpaceMemberRequestObject{
 			Id: ws, SpaceId: space.Id, PrincipalType: kind, PrincipalId: oid(t, f.stranger),

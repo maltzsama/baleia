@@ -58,6 +58,7 @@ func testAPI(f handlerFields) *API {
 	}
 	c.history = history.New(c.queries)
 	c.browse = browse.New(c.queries)
+	c.spaces = spacesOver(c, c.queries)
 	h := &API{
 		core:        c,
 		OpsHandlers: newOpsHandlers(c, f.schema),

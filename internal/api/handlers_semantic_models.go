@@ -351,7 +351,7 @@ func (h *SemanticHandlers) CreateSemanticModel(ctx context.Context, request Crea
 			return CreateSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 		}
 	} else {
-		space, err = h.queries.GetDefaultSpace(ctx, ws)
+		space, err = h.spaces.Default(ctx, ws)
 		if err != nil {
 			return nil, err
 		}

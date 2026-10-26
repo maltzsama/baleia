@@ -253,14 +253,14 @@ var operationAccess = map[string]access{
 	"RestoreSemanticModelVersion": checked("history.Get", "contentSpace", "RestoreSemanticModel"),
 	// Spaces (#40): the effective role comes from the SQL function through
 	// internal/authz. Invisible is 404, below the required role is 403.
-	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "ListSpacesForPrincipal"),
-	"CreateSpace":       checked("PrincipalFromContext", "Workspace", "CreateSpace", "SetSpaceMember"),
-	"GetSpace":          checked("requireSpace", "GetSpace"),
-	"UpdateSpace":       checked("requireSpace", "GetSpace", "UpdateSpace"),
-	"DeleteSpace":       checked("requireSpace", "GetSpace", "CountSpaceContent", "DeleteSpace"),
-	"ListSpaceMembers":  checked("requireSpace", "ListSpaceMembers"),
-	"SetSpaceMember":    checked("PrincipalFromContext", "requireSpace", "GetUserByID", "GetTeamByID", "SetSpaceMember"),
-	"DeleteSpaceMember": checked("requireSpace", "DeleteSpaceMember"),
+	"ListSpaces":        checked("PrincipalFromContext", "Workspace", "spaces.List"),
+	"CreateSpace":       checked("PrincipalFromContext", "Workspace", "spaces.Create"),
+	"GetSpace":          checked("requireSpace", "spaces.Get"),
+	"UpdateSpace":       checked("requireSpace", "spaces.Update"),
+	"DeleteSpace":       checked("requireSpace", "spaces.Delete"),
+	"ListSpaceMembers":  checked("requireSpace", "spaces.Members"),
+	"SetSpaceMember":    checked("PrincipalFromContext", "requireSpace", "spaces.SetMember"),
+	"DeleteSpaceMember": checked("requireSpace", "spaces.RemoveMember"),
 	// Content versions and trash (#34): viewer reads the history, editor
 	// restores; a deleted entity is authorized against its last version's space.
 	"ListSavedQueryVersions":       checked("history.SpaceOf", "contentSpace", "history.List"),
