@@ -824,9 +824,9 @@
 			case 'finished':
 				return m.components_queryeditor_complete();
 			case 'failed':
-				return 'Failed';
+				return m.components_queryeditor_failed();
 			case 'cancelled':
-				return 'Cancelled';
+				return m.components_queryeditor_cancelled();
 			default:
 				return m.components_queryeditor_running();
 		}
@@ -857,7 +857,7 @@
 					event
 				);
 				if (event.type === 'statement_status' && event.status === 'running') {
-					tab.statusText = `Running statement ${event.position}…`;
+					tab.statusText = m.components_queryeditor_running_statement({ position: event.position });
 					return;
 				}
 				// A snapshot can already be final (the run ended before the socket).
