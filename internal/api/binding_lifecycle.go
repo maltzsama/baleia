@@ -18,8 +18,8 @@ import (
 // lifecycleOn is the lifecycle of the bindings of one Trino engine.
 func (h *CatalogHandlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bindings.Lifecycle {
 	return bindings.Lifecycle{
-		Store:        h.queries,
-		Binder:       h.binder.WithStore(h.queries),
+		Store:        h.stores.lifecycle,
+		Binder:       h.binder.WithStore(h.stores.registry),
 		Engine:       bindings.EngineRef{ID: eng.ID, ClusterID: cluster.ID},
 		ConnectionID: eng.ConnectionID,
 		DDLTimeout:   catalogDDLTimeout,
@@ -30,14 +30,14 @@ func (h *CatalogHandlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bi
 // catalogEngine is the Trino cluster and engine a catalog's Trino columns
 // name.
 func (h *core) catalogEngine(ctx context.Context, cat db.Catalog) (db.TrinoCluster, db.Engine, error) {
-	cluster, err := h.queries.GetTrinoClusterByID(ctx, cat.ClusterID)
+	cluster, err := h.topology.Cluster(ctx, cat.ClusterID)
 	if err != nil {
 		return db.TrinoCluster{}, db.Engine{}, err
 	}
 	if !cluster.EngineID.Valid {
 		return db.TrinoCluster{}, db.Engine{}, errors.New("the catalog's Trino cluster has no engine")
 	}
-	eng, err := h.queries.GetEngineByID(ctx, cluster.EngineID)
+	eng, err := h.topology.Engine(ctx, cluster.EngineID)
 	return cluster, eng, err
 }
 
@@ -75,7 +75,7 @@ func observe(ctx context.Context, l bindings.Lifecycle) {
 // and, when the engine refused to load an active binding's catalog, its
 // message.
 func (h *core) bindingSyncStatus(ctx context.Context, b db.CatalogBinding) (status, engineError string) {
-	st, err := h.queries.GetBindingStatus(ctx, b.ID)
+	st, err := h.topology.BindingStatus(ctx, b.ID)
 	if err != nil || st.SyncStatus == "" {
 		return "pending", ""
 	}
@@ -109,7 +109,7 @@ func (h *core) catalogResponse(ctx context.Context, cat db.Catalog, b db.Catalog
 // passes (#17). A read error leaves them unset rather than failing the
 // response.
 func (h *core) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Catalog) {
-	st, err := h.queries.GetCatalogSyncState(ctx, id)
+	st, err := h.topology.SyncState(ctx, id)
 	if err != nil {
 		slog.Warn("catalog metadata freshness", "err", err)
 		return
@@ -166,7 +166,7 @@ func (h *core) catalogWithStatus(ctx context.Context, cat db.Catalog) Catalog {
 	if err != nil {
 		return bare()
 	}
-	b, err := h.queries.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: cat.ID, EngineID: eng.ID})
+	b, err := h.topology.ManagedBinding(ctx, cat.ID, eng.ID)
 	if err != nil {
 		return bare()
 	}

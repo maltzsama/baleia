@@ -3,12 +3,11 @@ package api
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content/search"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -103,56 +102,28 @@ func (h *SemanticHandlers) ListWorkspacePrincipals(ctx context.Context, request 
 	if request.Params.Limit != nil && *request.Params.Limit >= 1 && *request.Params.Limit <= 50 {
 		limit = *request.Params.Limit
 	}
-	q := ""
+	f := wsaccess.PrincipalFilter{Limit: limit}
 	if request.Params.Q != nil {
-		q = strings.ToLower(strings.TrimSpace(*request.Params.Q))
+		f.Q = *request.Params.Q
 	}
-	kind := ""
 	if request.Params.Type != nil {
-		kind = *request.Params.Type
+		f.Kind = *request.Params.Type
 	}
-	out := make([]WorkspacePrincipal, 0, limit)
-	if kind == "" || kind == "user" {
-		users, err := h.queries.ListWorkspacePrincipalUsers(ctx, db.ListWorkspacePrincipalUsersParams{
-			WorkspaceID: ws, Lim: int32(limit),
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, user := range users {
-			if q != "" && !strings.Contains(strings.ToLower(user.Name), q) && !strings.Contains(strings.ToLower(user.Email), q) {
-				continue
-			}
-			email := user.Email
-			out = append(out, WorkspacePrincipal{
-				Type: "user", Id: openapi_types.UUID(user.ID.Bytes), Name: user.Name, Email: &email,
-			})
-			if len(out) >= limit {
-				break
-			}
-		}
+	principals, err := h.access.Principals(ctx, ws, p.UserID, f)
+	if err != nil {
+		return nil, err
 	}
-	if (kind == "" || kind == "team") && len(out) < limit {
-		teams, err := h.queries.ListTeamsByUser(ctx, p.UserID)
-		if err != nil {
-			return nil, err
+	out := make([]WorkspacePrincipal, 0, len(principals))
+	for _, pr := range principals {
+		item := WorkspacePrincipal{Type: pr.Kind, Id: openapi_types.UUID(pr.ID.Bytes), Name: pr.Name}
+		if pr.Kind == "user" {
+			email := pr.Email
+			item.Email = &email
+		} else {
+			count := pr.Members
+			item.MemberCount = &count
 		}
-		for _, team := range teams {
-			if q != "" && !strings.Contains(strings.ToLower(team.Name), q) {
-				continue
-			}
-			members, err := h.queries.ListTeamMembers(ctx, team.ID)
-			if err != nil {
-				continue
-			}
-			count := len(members)
-			out = append(out, WorkspacePrincipal{
-				Type: "team", Id: openapi_types.UUID(team.ID.Bytes), Name: team.Name, MemberCount: &count,
-			})
-			if len(out) >= limit {
-				break
-			}
-		}
+		out = append(out, item)
 	}
 	return ListWorkspacePrincipals200JSONResponse(out), nil
 }

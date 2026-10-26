@@ -37,7 +37,7 @@ func (h *AgentHandlers) AgentWorkspaces(ctx context.Context) ([]Workspace, error
 
 // MCPResults reads a bounded page of a stored Arrow result for an agent tool
 func (h *AgentHandlers) MCPResults(ctx context.Context, workspaceID, executionID openapi_types.UUID, offset, limit, maxRows, maxBytes int) (results.Result, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, workspaceID); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, workspaceID); err != nil {
 		return results.Result{}, err
 	}
 	var id pgtype.UUID

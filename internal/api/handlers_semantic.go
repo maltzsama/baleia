@@ -688,7 +688,7 @@ func emptyUUID(v *openapi_types.UUID) pgtype.UUID {
 // the explicit binding, else the metric's binding, else the catalog's only
 // enabled binding.
 func (h *SemanticHandlers) semanticTarget(ctx context.Context, ws pgtype.UUID, catalogID, bindingID pgtype.UUID) (queryengine.Target, queryengine.Engine, error) {
-	workspace, err := h.queries.GetWorkspaceByID(ctx, ws)
+	workspace, err := h.access.Workspace(ctx, ws)
 	if err != nil {
 		return queryengine.Target{}, nil, err
 	}
@@ -751,11 +751,11 @@ func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype
 }
 
 func (h *core) connectionReadOnly(ctx context.Context, engineID pgtype.UUID) bool {
-	eng, err := h.queries.GetEngineByID(ctx, engineID)
+	eng, err := h.topology.Engine(ctx, engineID)
 	if err != nil {
 		return false
 	}
-	conn, err := h.queries.GetCatalogConnectionByID(ctx, eng.ConnectionID)
+	conn, err := h.topology.Connection(ctx, eng.ConnectionID)
 	if err != nil {
 		return false
 	}

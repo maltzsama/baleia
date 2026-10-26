@@ -10,8 +10,10 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/monitoring/lens"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
@@ -26,7 +28,10 @@ func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, 
 		rec = audit.Nop{}
 	}
 	mux.Group(func(r chi.Router) {
-		h := &lensHandlers{queries: queries, temporalClient: temporalClient, identityMode: cfg.TrinoUserIdentity, engines: engines, audit: rec}
+		h := &lensHandlers{
+			snapshots: lens.New(queries), access: wsaccess.New(queries), checker: authz.New(queries),
+			temporalClient: temporalClient, identityMode: cfg.TrinoUserIdentity, engines: engines, audit: rec,
+		}
 
 		r.Get("/lens/queries", h.listQueries)
 		r.Get("/lens/queries/{id}", h.getQuery)
@@ -40,7 +45,9 @@ func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, 
 }
 
 type lensHandlers struct {
-	queries        db.Querier
+	snapshots      *lens.Service
+	access         *wsaccess.Service
+	checker        *authz.Checker
 	temporalClient client.Client
 	identityMode   string // BALEIA_TRINO_USER_IDENTITY
 	engines        engineSource
@@ -66,7 +73,7 @@ func (h *lensHandlers) visibleUser(w http.ResponseWriter, r *http.Request) (user
 	if p.IsAdmin() {
 		return "", true
 	}
-	id, err := trinoIdentity(r.Context(), h.queries, h.identityMode, p.UserID)
+	id, err := h.access.TrinoIdentity(r.Context(), h.identityMode, p.UserID)
 	if err != nil {
 		h.internalError(w, r, err)
 		return "", false
@@ -82,20 +89,7 @@ func (h *lensHandlers) listQueries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var snapshots []db.TrinoQuerySnapshot
-	var err error
-	if user == "" {
-		snapshots, err = h.queries.ListTrinoQuerySnapshots(r.Context(), db.ListTrinoQuerySnapshotsParams{
-			Limit:  int32(perPage),
-			Offset: int32((page - 1) * perPage),
-		})
-	} else {
-		snapshots, err = h.queries.ListTrinoQuerySnapshotsByUser(r.Context(), db.ListTrinoQuerySnapshotsByUserParams{
-			User:   user,
-			Limit:  int32(perPage),
-			Offset: int32((page - 1) * perPage),
-		})
-	}
+	snapshots, err := h.snapshots.Queries(r.Context(), user, int32(perPage), int32((page-1)*perPage))
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -119,7 +113,7 @@ func (h *lensHandlers) getQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 
-	snapshot, err := h.queries.GetTrinoQuerySnapshot(r.Context(), id)
+	snapshot, err := h.snapshots.Query(r.Context(), id)
 	// Someone else's query is indistinguishable from a missing one.
 	if err != nil || (user != "" && snapshot.User != user) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "query not found"})
@@ -130,7 +124,7 @@ func (h *lensHandlers) getQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *lensHandlers) getCluster(w http.ResponseWriter, r *http.Request) {
-	snapshot, err := h.queries.GetLatestClusterSnapshot(r.Context())
+	snapshot, err := h.snapshots.LatestCluster(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "no cluster data available"})
 		return
@@ -148,10 +142,7 @@ func (h *lensHandlers) getCluster(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *lensHandlers) listClusterHistory(w http.ResponseWriter, r *http.Request) {
-	snapshots, err := h.queries.ListClusterSnapshots(r.Context(), db.ListClusterSnapshotsParams{
-		Limit:  100,
-		Offset: 0,
-	})
+	snapshots, err := h.snapshots.ClusterHistory(r.Context(), 100)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -173,10 +164,7 @@ func (h *lensHandlers) listClusterHistory(w http.ResponseWriter, r *http.Request
 }
 
 func (h *lensHandlers) listTableHealth(w http.ResponseWriter, r *http.Request) {
-	snapshots, err := h.queries.ListTableHealthSnapshots(r.Context(), db.ListTableHealthSnapshotsParams{
-		Limit:  50,
-		Offset: 0,
-	})
+	snapshots, err := h.snapshots.TableHealth(r.Context(), pgtype.UUID{}, 50)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -198,11 +186,7 @@ func (h *lensHandlers) listTableHealthByConnection(w http.ResponseWriter, r *htt
 		return
 	}
 
-	snapshots, err := h.queries.ListTableHealthByConnection(r.Context(), db.ListTableHealthByConnectionParams{
-		CatalogConnectionID: uid,
-		Limit:               50,
-		Offset:              0,
-	})
+	snapshots, err := h.snapshots.TableHealth(r.Context(), uid, 50)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -237,7 +221,7 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "catalog connection not found"})
 		return
 	}
-	if _, err := authz.New(h.queries).Connection(r.Context(), p, connID, authz.ActWrite); err != nil {
+	if _, err := h.checker.Connection(r.Context(), p, connID, authz.ActWrite); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			record(ev.Denied(audit.ReasonNotFound))
 			writeJSON(w, http.StatusNotFound, map[string]string{"code": "not_found", "message": "catalog connection not found"})
@@ -249,25 +233,10 @@ func (h *lensHandlers) triggerMaintenance(w http.ResponseWriter, r *http.Request
 
 	// {catalog} names a catalog of THIS connection (its Trino name, else its
 	// display name); its stored Trino name is what reaches the SQL.
-	cats, err := h.queries.ListCatalogsByConnection(r.Context(), connID)
+	trinoName, err := h.snapshots.TrinoCatalog(r.Context(), connID, catalog)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
-	}
-	trinoName := ""
-	for _, c := range cats {
-		if c.TrinoName() != "" && c.TrinoName() == catalog {
-			trinoName = c.TrinoName()
-			break
-		}
-	}
-	if trinoName == "" {
-		for _, c := range cats {
-			if c.Name == catalog {
-				trinoName = c.TrinoName()
-				break
-			}
-		}
 	}
 	if trinoName == "" {
 		record(ev.Failed(audit.ReasonNotFound))
@@ -335,13 +304,7 @@ func (h *lensHandlers) queryAnalytics(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var snapshots []db.TrinoQuerySnapshot
-	var err error
-	if user == "" {
-		snapshots, err = h.queries.ListTrinoQuerySnapshots(r.Context(), db.ListTrinoQuerySnapshotsParams{Limit: 1000, Offset: 0})
-	} else {
-		snapshots, err = h.queries.ListTrinoQuerySnapshotsByUser(r.Context(), db.ListTrinoQuerySnapshotsByUserParams{User: user, Limit: 1000, Offset: 0})
-	}
+	snapshots, err := h.snapshots.Queries(r.Context(), user, 1000, 0)
 	if err != nil {
 		h.internalError(w, r, err)
 		return

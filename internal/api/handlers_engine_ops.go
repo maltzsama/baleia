@@ -209,7 +209,7 @@ func (h *CatalogHandlers) DiscoverEngineCatalogs(ctx context.Context, request Di
 		return DiscoverEngineCatalogs422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnreachable, connectionTestError(err))}, nil
 	}
 
-	existing, err := h.queries.ListBindingsByEngine(ctx, id)
+	existing, err := h.topology.BindingsOfEngine(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (h *CatalogHandlers) DiscoverEngineCatalogs(ctx context.Context, request Di
 		if _, ok := present[name]; ok {
 			continue
 		}
-		if err := h.queries.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: b.CatalogID, Enabled: false}); err != nil {
+		if err := h.topology.Disable(ctx, b.CatalogID); err != nil {
 			return nil, err
 		}
 		disabled = append(disabled, name)

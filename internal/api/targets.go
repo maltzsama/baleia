@@ -65,7 +65,7 @@ func rowTarget(r db.ListWorkspaceTargetsRow, schema string) queryengine.Target {
 // read grant makes the target read-only. There is no fallback to the
 // workspace owner's first catalog or to polaris_catalog_name.
 func (h *core) ResolveTarget(ctx context.Context, ws db.Workspace, req *TargetRequest) (queryengine.Target, error) {
-	rows, err := h.queries.ListWorkspaceTargets(ctx, ws.ID)
+	rows, err := h.access.Targets(ctx, ws.ID)
 	if err != nil {
 		return queryengine.Target{}, err
 	}
@@ -140,17 +140,17 @@ func (h *core) ResolveTarget(ctx context.Context, ws db.Workspace, req *TargetRe
 
 // ListWorkspaceTargets returns the usable targets of a workspace to its members.
 func (h *WorkspaceHandlers) ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); errors.Is(err, ErrWorkspaceNotFound) {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Id); errors.Is(err, ErrWorkspaceNotFound) {
 		return ListWorkspaceTargets404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	} else if err != nil {
 		return nil, err
 	}
 	wsID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	ws, err := h.queries.GetWorkspaceByID(ctx, wsID)
+	ws, err := h.access.Workspace(ctx, wsID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := h.queries.ListWorkspaceTargets(ctx, wsID)
+	rows, err := h.access.Targets(ctx, wsID)
 	if err != nil {
 		return nil, err
 	}

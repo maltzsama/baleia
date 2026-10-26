@@ -274,7 +274,7 @@ func (h *AgentHandlers) ListAssistantConversations(ctx context.Context, request 
 		return ListAssistantConversations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	wsID := pgtype.UUID{Bytes: [16]byte(request.Params.WorkspaceId), Valid: true}
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Params.WorkspaceId); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Params.WorkspaceId); err != nil {
 		return ListAssistantConversations404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
 	svc, err := h.assistantService()
@@ -302,7 +302,7 @@ func (h *AgentHandlers) CreateAssistantConversation(ctx context.Context, request
 		return CreateAssistantConversation422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	wsID := pgtype.UUID{Bytes: [16]byte(request.Body.WorkspaceId), Valid: true}
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Body.WorkspaceId); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.access, request.Body.WorkspaceId); err != nil {
 		return CreateAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
 	svc, err := h.assistantService()

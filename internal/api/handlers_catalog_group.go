@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 
+	"github.com/galileostudio/baleia/internal/bindings"
+	"github.com/galileostudio/baleia/internal/bindings/stored"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/catalogs/admin"
 	"github.com/galileostudio/baleia/internal/catalogs/conns"
@@ -23,6 +25,26 @@ type CatalogHandlers struct {
 	catalogAdmin *admin.Service
 	// conns stores catalog connections (#360).
 	conns *conns.Service
+	// stores are the parts of the database the binding procedures,
+	// reconcile and Hive redirection use, injected here once.
+	stores catalogStores
+}
+
+// catalogStores hands each binding package the store it declares.
+type catalogStores struct {
+	lifecycle bindings.LifecycleStore
+	registry  bindtrino.RegistryStore
+	reconcile bindings.ReconcileStore
+	projector stored.Store
+	runs      stored.RunStore
+	redirect  bindings.RedirectionStore
+	primary   primaryCatalogStore
+}
+
+// primaryCatalogStore mirrors a primary binding onto its catalog.
+type primaryCatalogStore interface {
+	UpdateCatalog(ctx context.Context, arg db.UpdateCatalogParams) (db.Catalog, error)
+	SetCatalogEnabled(ctx context.Context, arg db.SetCatalogEnabledParams) error
 }
 
 func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
@@ -32,5 +54,9 @@ func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
 	catalogTx := func(ctx context.Context, fn func(admin.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	}
-	return &CatalogHandlers{core: c, binder: binder, engineAdmin: manage.New(c.queries, tx), catalogAdmin: admin.New(c.queries, catalogTx), conns: conns.New(c.queries)}
+	q := c.queries
+	return &CatalogHandlers{
+		core: c, binder: binder, engineAdmin: manage.New(q, tx), catalogAdmin: admin.New(q, catalogTx), conns: conns.New(q),
+		stores: catalogStores{lifecycle: q, registry: q, reconcile: q, projector: q, runs: q, redirect: q, primary: q},
+	}
 }

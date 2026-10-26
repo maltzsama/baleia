@@ -354,16 +354,12 @@ func (h *SemanticHandlers) migrateTable(ctx context.Context, ws, userID pgtype.U
 // the metadata snapshot. Columns the semantic layer cannot type are skipped; a
 // metric over one of them fails its item with a clear message.
 func (h *SemanticHandlers) migrationColumns(ctx context.Context, t migrationTable) ([]semantic.ColumnType, error) {
-	tableID, err := h.queries.GetMetadataTableByName(ctx, db.GetMetadataTableByNameParams{
+	rows, err := h.topology.Columns(ctx, db.GetMetadataTableByNameParams{
 		CatalogID: t.catalogID, Namespace: t.namespace, Name: t.table,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	rows, err := h.queries.ListMetadataColumns(ctx, tableID)
 	if err != nil {
 		return nil, err
 	}
