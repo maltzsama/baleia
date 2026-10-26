@@ -1,0 +1,31 @@
+meta {
+  name: Update Catalog Connection (name taken)
+  type: http
+  seq: 18
+}
+
+patch {
+  url: {{base_url}}/catalog-connections/{{postgresql_connection_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Local Polaris Updated"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq conflict
+}
+
+docs {
+  Renaming a connection to a name another connection has is a 409 with
+  the conflict code, like creating one with a taken name.
+}

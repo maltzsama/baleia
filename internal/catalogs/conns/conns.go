@@ -69,16 +69,27 @@ func (s *Service) List(ctx context.Context, userID pgtype.UUID, admin bool, f Fi
 // Create stores a connection.
 func (s *Service) Create(ctx context.Context, arg db.CreateCatalogConnectionParams) (db.CatalogConnection, error) {
 	c, err := s.store.CreateCatalogConnection(ctx, arg)
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if isUniqueViolation(err) {
 		return db.CatalogConnection{}, ErrNameTaken
 	}
 	return c, err
 }
 
-// Update changes a connection; nil fields keep their value.
+// Update changes a connection; nil fields keep their value. A name another
+// connection has is ErrNameTaken.
 func (s *Service) Update(ctx context.Context, arg db.UpdateCatalogConnectionParams) (db.CatalogConnection, error) {
-	return s.store.UpdateCatalogConnection(ctx, arg)
+	c, err := s.store.UpdateCatalogConnection(ctx, arg)
+	if isUniqueViolation(err) {
+		return db.CatalogConnection{}, ErrNameTaken
+	}
+	return c, err
+}
+
+// isUniqueViolation reports a unique index violation; the name is the only
+// unique column a write can collide on.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // Delete removes a connection and, by cascade, its catalogs. A connection

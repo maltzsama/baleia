@@ -118,7 +118,7 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 	})
 	if errors.Is(err, conns.ErrNameTaken) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return catalogConnectionConflictJSONResponse{Message: err.Error()}, nil
+		return CreateCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
 	}
 	if err != nil {
 		slog.Error("CreateCatalogConnection failed", "err", err)
@@ -195,6 +195,10 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 	}
 
 	conn, err := h.conns.Update(ctx, params)
+	if errors.Is(err, conns.ErrNameTaken) {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return UpdateCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -679,15 +683,5 @@ func (r catalogConnectionEncryptionFailedJSONResponse) VisitCreateCatalogConnect
 func (r catalogConnectionEncryptionFailedJSONResponse) VisitUpdateCatalogConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
-	return json.NewEncoder(w).Encode(r)
-}
-
-type catalogConnectionConflictJSONResponse struct {
-	Message string `json:"message"`
-}
-
-func (r catalogConnectionConflictJSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusConflict)
 	return json.NewEncoder(w).Encode(r)
 }

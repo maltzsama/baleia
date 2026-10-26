@@ -13593,6 +13593,15 @@ func (response CreateCatalogConnection403JSONResponse) VisitCreateCatalogConnect
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateCatalogConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateCatalogConnection409JSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateCatalogConnection422JSONResponse struct {
 	UnprocessableEntityJSONResponse
 }
@@ -13786,6 +13795,15 @@ type UpdateCatalogConnection404JSONResponse struct{ NotFoundJSONResponse }
 func (response UpdateCatalogConnection404JSONResponse) VisitUpdateCatalogConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCatalogConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateCatalogConnection409JSONResponse) VisitUpdateCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
 
 	return json.NewEncoder(w).Encode(response)
 }
