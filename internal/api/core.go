@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/content"
@@ -10,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/workspaces/spaces"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
@@ -50,4 +53,15 @@ type core struct {
 	// browse reads the stored metadata of granted catalogs (#18); semantic
 	// handlers use it to check a catalog is granted.
 	browse *browse.Service
+	// spaces stores spaces and their access lists (#131); every group that
+	// writes content resolves its target space through it.
+	spaces *spaces.Service
+}
+
+// spacesOver builds the spaces service over store, creating a space and its
+// first manager in one transaction of c.
+func spacesOver(c *core, store spaces.Store) *spaces.Service {
+	return spaces.New(store, func(ctx context.Context, fn func(spaces.TxStore) error) error {
+		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+	})
 }

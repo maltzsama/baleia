@@ -3,14 +3,11 @@ package api
 import (
 	"context"
 	"errors"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	slugs "github.com/galileostudio/baleia/internal/slug"
-	"github.com/jackc/pgx/v5"
+	"github.com/galileostudio/baleia/internal/workspaces/spaces"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -65,15 +62,15 @@ func (h *core) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested *ope
 	var space db.Space
 	var err error
 	if requested != nil {
-		space, err = h.queries.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws, ID: spaceIDFromRequest(*requested)})
-		if errors.Is(err, pgx.ErrNoRows) {
+		space, err = h.spaces.Get(ctx, ws, spaceIDFromRequest(*requested))
+		if errors.Is(err, spaces.ErrNotFound) {
 			return db.Space{}, &spaceErr{status: 404}, nil
 		}
 		if err != nil {
 			return db.Space{}, nil, err
 		}
 	} else {
-		space, err = h.queries.GetDefaultSpace(ctx, ws)
+		space, err = h.spaces.Default(ctx, ws)
 		if err != nil {
 			return db.Space{}, nil, err
 		}
@@ -101,7 +98,7 @@ func (h *WorkspaceHandlers) ListSpaces(ctx context.Context, request ListSpacesRe
 		}
 		return nil, err
 	}
-	rows, err := h.queries.ListSpacesForPrincipal(ctx, db.ListSpacesForPrincipalParams{WorkspaceID: ws, UserID: p.UserID})
+	rows, err := h.spaces.List(ctx, ws, p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -133,55 +130,22 @@ func (h *WorkspaceHandlers) CreateSpace(ctx context.Context, request CreateSpace
 	if request.Body == nil {
 		return nil, errors.New("space: missing body")
 	}
-	name := strings.TrimSpace(request.Body.Name)
-	if name == "" || utf8.RuneCountInString(name) > 120 {
-		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name must be 1 to 120 characters")}, nil
+	var defaultRole *string
+	if request.Body.DefaultRole != nil {
+		r := string(*request.Body.DefaultRole)
+		defaultRole = &r
 	}
 	visibility := string(request.Body.Visibility)
-	if visibility != "workspace" && visibility != "restricted" {
-		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "visibility must be workspace or restricted")}, nil
-	}
-	defaultRole := "viewer"
-	if request.Body.DefaultRole != nil {
-		defaultRole = string(*request.Body.DefaultRole)
-	}
-	if defaultRole != "viewer" && defaultRole != "editor" {
-		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "default_role must be viewer or editor")}, nil
-	}
-
-	slug, err := slugs.Unique(ctx, name, func(ctx context.Context, s string) (bool, error) {
-		return h.queries.SpaceSlugExists(ctx, db.SpaceSlugExistsParams{WorkspaceID: ws, Slug: s})
+	space, err := h.spaces.Create(ctx, ws, p.UserID, spaces.Fields{
+		Name: &request.Body.Name, Description: request.Body.Description, Visibility: &visibility, DefaultRole: defaultRole,
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	var space db.Space
-	err = h.inTx(ctx, func(q db.Querier) error {
-		var err error
-		space, err = q.CreateSpace(ctx, db.CreateSpaceParams{
-			WorkspaceID: ws,
-			Name:        name,
-			Slug:        slug,
-			Description: request.Body.Description,
-			Visibility:  visibility,
-			DefaultRole: defaultRole,
-			CreatedBy:   p.UserID,
-		})
-		if err != nil {
-			return err
-		}
-		// The creator is an explicit manager, so a restricted space is not
-		// invisible to the person who just made it.
-		_, err = q.SetSpaceMember(ctx, db.SetSpaceMemberParams{
-			SpaceID: space.ID, PrincipalType: "user", PrincipalID: p.UserID, Role: "manager", GrantedBy: p.UserID,
-		})
-		return err
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return CreateSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a space with this name already exists in this workspace"}}, nil
-		}
+	var invalid *spaces.InvalidError
+	switch {
+	case errors.As(err, &invalid):
+		return CreateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalid.Msg)}, nil
+	case errors.Is(err, spaces.ErrNameTaken):
+		return CreateSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	case err != nil:
 		return nil, err
 	}
 
@@ -203,8 +167,8 @@ func (h *WorkspaceHandlers) GetSpace(ctx context.Context, request GetSpaceReques
 	if se != nil {
 		return GetSpace404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
-	space, err := h.queries.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws, ID: spaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	space, err := h.spaces.Get(ctx, ws, spaceID)
+	if errors.Is(err, spaces.ErrNotFound) {
 		return GetSpace404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
 	if err != nil {
@@ -237,44 +201,23 @@ func (h *WorkspaceHandlers) UpdateSpace(ctx context.Context, request UpdateSpace
 	if request.Body == nil {
 		return nil, errors.New("space: missing body")
 	}
-	current, err := h.queries.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws, ID: spaceID})
-	if err != nil {
-		return nil, err
-	}
-	name, description := current.Name, current.Description
-	visibility, defaultRole := current.Visibility, current.DefaultRole
-	if request.Body.Name != nil {
-		name = strings.TrimSpace(*request.Body.Name)
-	}
-	if request.Body.Description != nil {
-		description = request.Body.Description
-	}
+	f := spaces.Fields{Name: request.Body.Name, Description: request.Body.Description}
 	if request.Body.Visibility != nil {
-		visibility = string(*request.Body.Visibility)
+		v := string(*request.Body.Visibility)
+		f.Visibility = &v
 	}
 	if request.Body.DefaultRole != nil {
-		defaultRole = string(*request.Body.DefaultRole)
+		r := string(*request.Body.DefaultRole)
+		f.DefaultRole = &r
 	}
-	if name == "" || utf8.RuneCountInString(name) > 120 {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name must be 1 to 120 characters")}, nil
-	}
-	if visibility != "workspace" && visibility != "restricted" {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "visibility must be workspace or restricted")}, nil
-	}
-	if defaultRole != "viewer" && defaultRole != "editor" {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "default_role must be viewer or editor")}, nil
-	}
-	if current.IsDefault && visibility != "workspace" {
-		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "the default space must stay workspace-visible")}, nil
-	}
-	space, err := h.queries.UpdateSpace(ctx, db.UpdateSpaceParams{
-		WorkspaceID: ws, ID: spaceID, Name: name, Description: description,
-		Visibility: visibility, DefaultRole: defaultRole,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, "a space with this name already exists in this workspace")}, nil
-		}
+	space, err := h.spaces.Update(ctx, ws, spaceID, f)
+	var invalid *spaces.InvalidError
+	switch {
+	case errors.As(err, &invalid):
+		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalid.Msg)}, nil
+	case errors.Is(err, spaces.ErrNameTaken):
+		return UpdateSpace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeConflict, err.Error())}, nil
+	case err != nil:
 		return nil, err
 	}
 	h.audited(ctx, ev.Allowed())
@@ -300,29 +243,15 @@ func (h *WorkspaceHandlers) DeleteSpace(ctx context.Context, request DeleteSpace
 		}
 		return DeleteSpace404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
-	current, err := h.queries.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws, ID: spaceID})
-	if err != nil {
-		return nil, err
-	}
-	if current.IsDefault {
+	err = h.spaces.Delete(ctx, ws, spaceID, request.Params.Force != nil && *request.Params.Force)
+	switch {
+	case errors.Is(err, spaces.ErrDefaultSpace), errors.Is(err, spaces.ErrNotEmpty):
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return DeleteSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "the default space cannot be deleted"}}, nil
-	}
-	n, err := h.queries.CountSpaceContent(ctx, spaceID)
-	if err != nil {
-		return nil, err
-	}
-	force := request.Params.Force != nil && *request.Params.Force
-	if n > 0 && !force {
-		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return DeleteSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "the space is not empty; pass force=true to delete it and its content"}}, nil
-	}
-	deleted, err := h.queries.DeleteSpace(ctx, db.DeleteSpaceParams{WorkspaceID: ws, ID: spaceID})
-	if err != nil {
-		return nil, err
-	}
-	if deleted == 0 {
+		return DeleteSpace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
+	case errors.Is(err, spaces.ErrNotFound):
 		return DeleteSpace404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
+	case err != nil:
+		return nil, err
 	}
 	h.audited(ctx, ev.Allowed())
 	return DeleteSpace204Response{}, nil
@@ -344,7 +273,7 @@ func (h *WorkspaceHandlers) ListSpaceMembers(ctx context.Context, request ListSp
 		}
 		return ListSpaceMembers404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
-	rows, err := h.queries.ListSpaceMembers(ctx, spaceID)
+	rows, err := h.spaces.Members(ctx, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -379,27 +308,14 @@ func (h *WorkspaceHandlers) SetSpaceMember(ctx context.Context, request SetSpace
 	if request.Body == nil {
 		return nil, errors.New("space member: missing body")
 	}
-	principalType := request.PrincipalType
-	switch principalType {
-	case "user":
-		if _, err := h.queries.GetUserByID(ctx, principalID); err != nil {
-			return SetSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("user not found")}, nil
-		}
-	case "team":
-		if _, err := h.queries.GetTeamByID(ctx, principalID); err != nil {
-			return SetSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("team not found")}, nil
-		}
-	default:
-		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "principal_type must be user or team")}, nil
-	}
-	role := string(request.Body.Role)
-	if role != "viewer" && role != "editor" && role != "manager" {
-		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "role must be viewer, editor or manager")}, nil
-	}
-	member, err := h.queries.SetSpaceMember(ctx, db.SetSpaceMemberParams{
-		SpaceID: spaceID, PrincipalType: principalType, PrincipalID: principalID, Role: role, GrantedBy: p.UserID,
-	})
-	if err != nil {
+	member, err := h.spaces.SetMember(ctx, spaceID, request.PrincipalType, principalID, string(request.Body.Role), p.UserID)
+	var invalid *spaces.InvalidError
+	switch {
+	case errors.Is(err, spaces.ErrUserNotFound), errors.Is(err, spaces.ErrTeamNotFound):
+		return SetSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound(err.Error())}, nil
+	case errors.As(err, &invalid):
+		return SetSpaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, invalid.Msg)}, nil
+	case err != nil:
 		return nil, err
 	}
 	h.audited(ctx, ev.Allowed())
@@ -426,14 +342,12 @@ func (h *WorkspaceHandlers) DeleteSpaceMember(ctx context.Context, request Delet
 		}
 		return DeleteSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("space not found")}, nil
 	}
-	deleted, err := h.queries.DeleteSpaceMember(ctx, db.DeleteSpaceMemberParams{
-		SpaceID: spaceID, PrincipalType: request.PrincipalType, PrincipalID: principalID,
-	})
+	err = h.spaces.RemoveMember(ctx, spaceID, request.PrincipalType, principalID)
+	if errors.Is(err, spaces.ErrMemberNotFound) {
+		return DeleteSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound(err.Error())}, nil
+	}
 	if err != nil {
 		return nil, err
-	}
-	if deleted == 0 {
-		return DeleteSpaceMember404JSONResponse{NotFoundJSONResponse: metadataNotFound("space member not found")}, nil
 	}
 	h.audited(ctx, ev.Allowed())
 	return DeleteSpaceMember204Response{}, nil

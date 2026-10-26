@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -605,5 +606,81 @@ func TestListTeamMembers_UserFields(t *testing.T) {
 	second := members[1]
 	if second.User.Id != uuidOf(memberID).Bytes || second.User.Role != UserPublicRole("member") {
 		t.Errorf("member row = %+v", second)
+	}
+}
+
+// failingClear fails clearing a workspace default, inside a transaction.
+type failingClear struct{ *authzFake }
+
+func (failingClear) ClearWorkspaceDefaultForCatalog(context.Context, db.ClearWorkspaceDefaultForCatalogParams) error {
+	return errors.New("connection reset")
+}
+
+// rollbackTx runs fn over failingClear and restores the grants when it
+// fails, as a rolled-back transaction would.
+type rollbackTx struct{ q *authzFake }
+
+func (r rollbackTx) InTx(_ context.Context, fn func(db.Querier) error) error {
+	r.q.g.mu.Lock()
+	saved := append([]db.WorkspaceCatalogGrant(nil), r.q.g.grants...)
+	r.q.g.mu.Unlock()
+	if err := fn(failingClear{r.q}); err != nil {
+		r.q.g.mu.Lock()
+		r.q.g.grants = saved
+		r.q.g.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
+// TestRevokeCatalogAccess_Atomic: when clearing the workspace default fails,
+// the grant is kept, not revoked with a default still on its catalog.
+func TestRevokeCatalogAccess_Atomic(t *testing.T) {
+	h, q := newGrantsHandlers(t)
+	owner := ctxAs(ownerID, "member")
+	if got := grant(t, h, q, owner, GrantCatalogAccessRequestPermissionRead); got != 201 {
+		t.Fatalf("grant: %d", got)
+	}
+	h.tx = rollbackTx{q: q}
+	if _, err := h.RevokeCatalogAccess(owner, RevokeCatalogAccessRequestObject{Id: wsID.Bytes, CatalogId: q.cat.ID.Bytes}); err == nil {
+		t.Fatal("revoke succeeded although clearing the default failed")
+	}
+	if len(q.g.grants) != 1 {
+		t.Errorf("grants = %d; the failed revoke must keep the grant", len(q.g.grants))
+	}
+}
+
+// brokenWorkspaces fails the workspace lookup after the access check.
+type brokenWorkspaces struct{ *authzFake }
+
+func (brokenWorkspaces) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Workspace, error) {
+	return db.Workspace{}, errors.New("connection reset")
+}
+
+// TestGetWorkspace_StoreFailureIsAnError: a failed lookup is a server error,
+// not "workspace not found".
+func TestGetWorkspace_StoreFailureIsAnError(t *testing.T) {
+	h, q := newGrantsHandlers(t)
+	h.queries = brokenWorkspaces{q}
+	h.WorkspaceHandlers = newWorkspaceHandlers(h.core)
+	if _, err := h.GetWorkspace(ctxAs(ownerID, "member"), GetWorkspaceRequestObject{Id: wsID.Bytes}); err == nil {
+		t.Fatal("GetWorkspace answered a store failure with a response")
+	}
+}
+
+// brokenAccess fails the workspace access check.
+type brokenAccess struct{ *authzFake }
+
+func (brokenAccess) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAccessParams) (bool, error) {
+	return false, errors.New("connection reset")
+}
+
+// TestListWorkspaceTargets_AccessFailureIsAnError: a failed access check is
+// a server error, not "workspace not found".
+func TestListWorkspaceTargets_AccessFailureIsAnError(t *testing.T) {
+	h, q := newGrantsHandlers(t)
+	h.queries = brokenAccess{q}
+	if _, err := h.ListWorkspaceTargets(ctxAs(ownerID, "member"), ListWorkspaceTargetsRequestObject{Id: wsID.Bytes}); err == nil {
+		t.Fatal("ListWorkspaceTargets answered a store failure with a response")
 	}
 }

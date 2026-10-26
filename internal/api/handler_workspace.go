@@ -3,15 +3,13 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	wsmanage "github.com/galileostudio/baleia/internal/workspaces/manage"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -23,7 +21,7 @@ func (h *WorkspaceHandlers) ListWorkspaces(ctx context.Context, request ListWork
 		return ListWorkspaces401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	workspaces, err := h.queries.ListWorkspacesByUser(ctx, uid)
+	workspaces, err := h.workspaces.ListForUser(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -71,20 +69,12 @@ func (h *WorkspaceHandlers) CreateWorkspace(ctx context.Context, request CreateW
 		ownerUserID = uid
 	}
 
-	polarisCatalogName := toPolarisName(request.Body.Name)
-
-	var desc *string
-	if request.Body.Description != nil {
-		desc = request.Body.Description
-	}
-
-	workspace, err := h.queries.CreateWorkspace(ctx, db.CreateWorkspaceParams{
-		Name:               request.Body.Name,
-		Description:        desc,
-		Type:               wsType,
-		PolarisCatalogName: polarisCatalogName,
-		OwnerUserID:        ownerUserID,
-		OwnerTeamID:        ownerTeamID,
+	workspace, err := h.workspaces.Create(ctx, wsmanage.NewWorkspace{
+		Name:        request.Body.Name,
+		Description: request.Body.Description,
+		Type:        wsType,
+		OwnerUser:   ownerUserID,
+		OwnerTeam:   ownerTeamID,
 	})
 	if err != nil {
 		return nil, err
@@ -94,17 +84,22 @@ func (h *WorkspaceHandlers) CreateWorkspace(ctx context.Context, request CreateW
 }
 
 func (h *WorkspaceHandlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); errors.Is(err, ErrWorkspaceNotFound) {
 		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 
 	var uid pgtype.UUID
 	uid.Bytes = request.Id
 	uid.Valid = true
 
-	workspace, err := h.queries.GetWorkspaceByID(ctx, uid)
+	workspace, err := h.workspaces.Get(ctx, uid)
+	if errors.Is(err, wsmanage.ErrNotFound) {
+		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	}
 	if err != nil {
-		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+		return nil, err
 	}
 
 	return GetWorkspace200JSONResponse(h.withWorkspaceActions(ctx, workspace)), nil
@@ -129,16 +124,6 @@ func (h *WorkspaceHandlers) UpdateWorkspace(ctx context.Context, request UpdateW
 		return nil, err
 	}
 
-	name := current.Name
-	desc := current.Description
-	if request.Body.Name != nil {
-		name = *request.Body.Name
-	}
-	if request.Body.Description != nil {
-		desc = request.Body.Description
-	}
-
-	// A new default target must be a usable target of this workspace.
 	var newDefault, clearDefault bool
 	var defaultBinding pgtype.UUID
 	var defaultSchema *string
@@ -164,23 +149,11 @@ func (h *WorkspaceHandlers) UpdateWorkspace(ctx context.Context, request UpdateW
 		}
 	}
 
-	var workspace db.Workspace
-	err = h.inTx(ctx, func(q db.Querier) error {
-		var err error
-		workspace, err = q.UpdateWorkspace(ctx, db.UpdateWorkspaceParams{
-			ID:          uid,
-			Name:        name,
-			Description: desc,
-		})
-		if err != nil || (!newDefault && !clearDefault) {
-			return err
-		}
-		if err := q.SetWorkspaceDefaultTarget(ctx, db.SetWorkspaceDefaultTargetParams{ID: uid, DefaultBindingID: defaultBinding, DefaultSchema: defaultSchema}); err != nil {
-			return err
-		}
-		workspace.DefaultBindingID, workspace.DefaultSchema = defaultBinding, defaultSchema
-		return nil
-	})
+	edit := wsmanage.Edit{Name: request.Body.Name, Description: request.Body.Description}
+	if newDefault || clearDefault {
+		edit.Default = &wsmanage.Default{Binding: defaultBinding, Schema: defaultSchema}
+	}
+	workspace, err := h.workspaces.Update(ctx, current, edit)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +177,7 @@ func (h *WorkspaceHandlers) ListWorkspaceCatalogAccess(ctx context.Context, requ
 		}
 		return nil, err
 	}
-	rows, err := h.queries.ListWorkspaceCatalogGrants(ctx, wsID)
+	rows, err := h.workspaces.Grants(ctx, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -240,12 +213,13 @@ func (h *WorkspaceHandlers) GrantCatalogAccess(ctx context.Context, request Gran
 	if err != nil {
 		return grantAccessError(err)
 	}
-	if request.Body.Permission != GrantCatalogAccessRequestPermissionRead && request.Body.Permission != GrantCatalogAccessRequestPermissionWrite {
+	grant, err := h.workspaces.Grant(ctx, wsID, cat.ID, string(request.Body.Permission), p.UserID)
+	if errors.Is(err, wsmanage.ErrInvalidPermission) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return GrantCatalogAccess422JSONResponse{
 			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
 				Code:    ErrorCodeValidationError,
-				Message: "permission must be read or write",
+				Message: err.Error(),
 				Errors: []struct {
 					Field   *string `json:"field,omitempty"`
 					Message *string `json:"message,omitempty"`
@@ -253,13 +227,6 @@ func (h *WorkspaceHandlers) GrantCatalogAccess(ctx context.Context, request Gran
 			},
 		}, nil
 	}
-
-	grant, err := h.queries.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
-		WorkspaceID: wsID,
-		CatalogID:   cat.ID,
-		Permission:  string(request.Body.Permission),
-		GrantedBy:   p.UserID,
-	})
 	if err != nil {
 		return nil, err
 	}
@@ -306,17 +273,12 @@ func (h *WorkspaceHandlers) RevokeCatalogAccess(ctx context.Context, request Rev
 	if _, _, err := h.authz().Catalog(ctx, p, catalogID, authz.ActAdmin); err != nil {
 		return revokeAccessError(err)
 	}
-	n, err := h.queries.DeleteWorkspaceCatalogGrant(ctx, db.DeleteWorkspaceCatalogGrantParams{WorkspaceID: wsID, CatalogID: catalogID})
-	if err != nil {
-		return nil, err
-	}
-	if n == 0 {
+	err = h.workspaces.Revoke(ctx, wsID, catalogID)
+	if errors.Is(err, wsmanage.ErrGrantNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "grant not found"}}, nil
+		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
 	}
-	if err := h.queries.ClearWorkspaceDefaultForCatalog(ctx, db.ClearWorkspaceDefaultForCatalogParams{
-		WorkspaceID: wsID, CatalogID: catalogID,
-	}); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	h.catalogCache.Clear()
@@ -365,21 +327,6 @@ func dbWorkspaceToPublic(w db.Workspace) Workspace {
 	return ws
 }
 
-// toPolarisName
-// Ex: "My Workspace" → "my_workspace_1234"
-func toPolarisName(name string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(name) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-		} else {
-			b.WriteRune('_')
-		}
-	}
-	suffix := fmt.Sprintf("_%d", time.Now().UnixMilli()%10000)
-	return b.String() + suffix
-}
-
 func fieldPtr(s string) *string { return &s }
 func msgPtr(s string) *string   { return &s }
 
@@ -402,25 +349,19 @@ func (h *WorkspaceHandlers) DeleteWorkspace(ctx context.Context, request DeleteW
 	case err != nil:
 		return nil, err
 	}
-	if ws.Type == "personal" {
+	err = h.workspaces.Delete(ctx, ws)
+	switch {
+	case errors.Is(err, wsmanage.ErrPersonal):
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return DeleteWorkspace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeWorkspacePersonal, Message: "personal workspaces cannot be deleted"}}, nil
-	}
-	running, err := h.queries.CountWorkspaceRunningExecutions(ctx, wsID)
-	if err != nil {
-		return nil, err
-	}
-	if running > 0 {
+		return DeleteWorkspace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeWorkspacePersonal, Message: err.Error()}}, nil
+	case errors.Is(err, wsmanage.ErrExecutionsRunning):
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return DeleteWorkspace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeExecutionsRunning, Message: "wait for the workspace's running executions to finish"}}, nil
-	}
-	n, err := h.queries.DeleteWorkspace(ctx, wsID)
-	if err != nil {
-		return nil, err
-	}
-	if n == 0 {
+		return DeleteWorkspace409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeExecutionsRunning, Message: err.Error()}}, nil
+	case errors.Is(err, wsmanage.ErrNotFound):
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
-		return DeleteWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+		return DeleteWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
+	case err != nil:
+		return nil, err
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
@@ -439,7 +380,7 @@ func (h *WorkspaceHandlers) GetWorkspaceImpact(ctx context.Context, request GetW
 	} else if err != nil {
 		return nil, err
 	}
-	row, err := h.queries.CountWorkspaceImpact(ctx, wsID)
+	row, err := h.workspaces.Impact(ctx, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +408,7 @@ func (h *WorkspaceHandlers) GetCatalogAccessImpact(ctx context.Context, request 
 	} else if err != nil {
 		return nil, err
 	}
-	row, err := h.queries.CountCatalogAccessImpact(ctx, db.CountCatalogAccessImpactParams{WorkspaceID: wsID, CatalogID: catalogID})
+	row, err := h.workspaces.CatalogAccessImpact(ctx, wsID, catalogID)
 	if err != nil {
 		return nil, err
 	}

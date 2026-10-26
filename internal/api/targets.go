@@ -140,8 +140,10 @@ func (h *core) ResolveTarget(ctx context.Context, ws db.Workspace, req *TargetRe
 
 // ListWorkspaceTargets returns the usable targets of a workspace to its members.
 func (h *WorkspaceHandlers) ListWorkspaceTargets(ctx context.Context, request ListWorkspaceTargetsRequestObject) (ListWorkspaceTargetsResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); errors.Is(err, ErrWorkspaceNotFound) {
 		return ListWorkspaceTargets404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 	wsID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	ws, err := h.queries.GetWorkspaceByID(ctx, wsID)
