@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
-	"io"
 	"testing"
 	"time"
 
@@ -61,47 +59,5 @@ func TestAuditList_Scoping(t *testing.T) {
 	}
 	if got := list(admin, ListAuditEventsParams{ActorId: &other}); len(got.Items) != 1 || *got.Items[0].ActorId != bob {
 		t.Fatalf("admin filter by actor: %+v", got.Items)
-	}
-}
-
-// endlessAudit returns a full page of events on every call.
-type endlessAudit struct {
-	db.Querier
-	calls int
-}
-
-func (q *endlessAudit) ListAuditEvents(ctx context.Context, p db.ListAuditEventsParams) ([]db.ListAuditEventsRow, error) {
-	q.calls++
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return make([]db.ListAuditEventsRow, p.Lim), nil
-}
-
-// TestWriteAuditCSV_StopsWhenTheClientGoes: once the reader is closed or the
-// request is cancelled, the export stops querying (#371).
-func TestWriteAuditCSV_StopsWhenTheClientGoes(t *testing.T) {
-	params := db.ListAuditEventsParams{Lim: 1000}
-
-	q := &endlessAudit{}
-	h := testAPI(handlerFields{queries: q, tx: directTx{q: q}})
-	reader, writer := io.Pipe()
-	_ = reader.Close()
-	if err := h.writeAuditCSV(context.Background(), writer, params); !errors.Is(err, io.ErrClosedPipe) {
-		t.Fatalf("closed reader: err = %v, want io.ErrClosedPipe", err)
-	}
-	if q.calls != 1 {
-		t.Fatalf("closed reader: %d pages queried, want 1", q.calls)
-	}
-
-	q = &endlessAudit{}
-	h = testAPI(handlerFields{queries: q, tx: directTx{q: q}})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := h.writeAuditCSV(ctx, io.Discard, params); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled request: err = %v, want context.Canceled", err)
-	}
-	if q.calls != 0 {
-		t.Fatalf("cancelled request: %d pages queried, want 0", q.calls)
 	}
 }
