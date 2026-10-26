@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -94,8 +95,10 @@ func (h *WorkspaceHandlers) CreateWorkspace(ctx context.Context, request CreateW
 }
 
 func (h *WorkspaceHandlers) GetWorkspace(ctx context.Context, request GetWorkspaceRequestObject) (GetWorkspaceResponseObject, error) {
-	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); err != nil {
+	if err := requireWorkspaceAccess(ctx, h.queries, request.Id); errors.Is(err, ErrWorkspaceNotFound) {
 		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 
 	var uid pgtype.UUID
@@ -103,8 +106,11 @@ func (h *WorkspaceHandlers) GetWorkspace(ctx context.Context, request GetWorkspa
 	uid.Valid = true
 
 	workspace, err := h.queries.GetWorkspaceByID(ctx, uid)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return GetWorkspace404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return GetWorkspace200JSONResponse(h.withWorkspaceActions(ctx, workspace)), nil
@@ -306,18 +312,22 @@ func (h *WorkspaceHandlers) RevokeCatalogAccess(ctx context.Context, request Rev
 	if _, _, err := h.authz().Catalog(ctx, p, catalogID, authz.ActAdmin); err != nil {
 		return revokeAccessError(err)
 	}
-	n, err := h.queries.DeleteWorkspaceCatalogGrant(ctx, db.DeleteWorkspaceCatalogGrantParams{WorkspaceID: wsID, CatalogID: catalogID})
+	// The grant and a default target on the catalog go together: a failure
+	// halfway must not leave the workspace defaulting to a revoked catalog.
+	var n int64
+	err = h.inTx(ctx, func(q db.Querier) error {
+		var err error
+		if n, err = q.DeleteWorkspaceCatalogGrant(ctx, db.DeleteWorkspaceCatalogGrantParams{WorkspaceID: wsID, CatalogID: catalogID}); err != nil || n == 0 {
+			return err
+		}
+		return q.ClearWorkspaceDefaultForCatalog(ctx, db.ClearWorkspaceDefaultForCatalogParams{WorkspaceID: wsID, CatalogID: catalogID})
+	})
 	if err != nil {
 		return nil, err
 	}
 	if n == 0 {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return RevokeCatalogAccess404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "grant not found"}}, nil
-	}
-	if err := h.queries.ClearWorkspaceDefaultForCatalog(ctx, db.ClearWorkspaceDefaultForCatalogParams{
-		WorkspaceID: wsID, CatalogID: catalogID,
-	}); err != nil {
-		return nil, err
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
