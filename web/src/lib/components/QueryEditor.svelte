@@ -71,8 +71,18 @@
 	);
 	const activeTab = $derived(editor.activeTab);
 
-	let executing = $state(false);
-	let runState = $state<RunState | null>(null);
+	// Runs are per tab (#413): a run in one tab neither blocks Run nor shows
+	// its status in another, and each tab keeps its own event stream.
+	let runs = $state<Record<string, RunState>>({});
+	let executingTabs = $state<Record<string, boolean>>({});
+	// Not state: the streams never feed the template.
+	const streams: Record<string, ExecutionStream> = {};
+	const executing = $derived(!!executingTabs[activeTab.id]);
+	// Only the run of the tab's current execution, never a stale one.
+	const runState = $derived.by(() => {
+		const run = runs[activeTab.id];
+		return run && run.executionId === activeTab.executionId ? run : null;
+	});
 	let baseTitle = '';
 	let dark = $state(browser && document.body.classList.contains('dark'));
 	let cursorLine = $state(1);
@@ -288,14 +298,24 @@
 			closeOpen = true;
 			return;
 		}
-		editor.closeTab(tab.id);
+		removeTab(tab.id);
+	}
+
+	/** Closes a tab and drops its run and event stream. */
+	function removeTab(id: string) {
+		if (tabs.length <= 1) return;
+		streams[id]?.close();
+		delete streams[id];
+		delete runs[id];
+		delete executingTabs[id];
+		editor.closeTab(id);
 	}
 
 	function discardAndClose() {
 		if (closingIdx === null) return;
 		flushSql();
 		const id = tabs[closingIdx]?.id;
-		if (id) editor.closeTab(id);
+		if (id) removeTab(id);
 		closingIdx = null;
 		closeOpen = false;
 	}
@@ -620,7 +640,7 @@
 			unregisterProvider('models');
 			unregisterProvider('queries');
 			unregisterProvider('tables');
-			stream?.close();
+			for (const stream of Object.values(streams)) stream.close();
 		};
 	});
 
@@ -678,7 +698,7 @@
 			tab.statusText = m.components_queryeditor_no_target();
 			return;
 		}
-		executing = true;
+		executingTabs[tab.id] = true;
 		tab.errorMsg = '';
 		tab.results = [];
 		tab.statusText = m.components_queryeditor_running();
@@ -701,11 +721,11 @@
 			}
 			tab.runTarget = data.target ?? null;
 			editor.setExecution(tab.id, data.id);
-			runState = initialRunState(data.id);
-			connectWS(data.id, idx);
+			runs[tab.id] = initialRunState(data.id);
+			connectWS(data.id, tab);
 		} catch (e) {
 			tab.errorMsg = errorMessage(e);
-			executing = false;
+			executingTabs[tab.id] = false;
 			tab.statusText = m.components_queryeditor_error();
 		}
 	}
@@ -759,8 +779,6 @@
 		}
 	}
 
-	let stream: ExecutionStream | null = null;
-
 	// The results load once the run ended, from its state, never from the
 	// translated status line (#387).
 	const runEnded = $derived(
@@ -796,14 +814,17 @@
 		}
 	}
 
-	function connectWS(execId: string, idx: number) {
-		stream?.close();
-		const tab = tabs[idx];
-		stream = subscribeExecution({
+	function connectWS(execId: string, tab: (typeof tabs)[number]) {
+		streams[tab.id]?.close();
+		const stream = subscribeExecution({
 			workspaceId,
 			executionId: execId,
 			onEvent: (event: ExecutionEvent) => {
-				runState = applyEvent(runState ?? initialRunState(execId), event);
+				const run = runs[tab.id];
+				runs[tab.id] = applyEvent(
+					run?.executionId === execId ? run : initialRunState(execId),
+					event
+				);
 				if (event.type === 'statement_status' && event.status === 'running') {
 					tab.statusText = `Running statement ${event.position}…`;
 					return;
@@ -812,17 +833,18 @@
 				const done = terminalStatus(event);
 				if (done) {
 					tab.statusText = executionStatusText(done);
-					executing = false;
+					executingTabs[tab.id] = false;
 					notifyBackground(done);
 					return;
 				}
 				if (event.type === 'execution_status') tab.statusText = executionStatusText(event.status);
 			},
 			onGaveUp: () => {
-				executing = false;
+				executingTabs[tab.id] = false;
 				tab.statusText = m.components_queryeditor_connection_lost();
 			}
 		});
+		streams[tab.id] = stream;
 	}
 
 	async function rerun(fromPosition: number) {
@@ -841,10 +863,10 @@
 			tab.results = [];
 			tab.errorMsg = '';
 			tab.statusText = m.components_queryeditor_running();
-			executing = true;
+			executingTabs[tab.id] = true;
 			editor.setExecution(tab.id, data.id);
-			runState = initialRunState(data.id);
-			connectWS(data.id, activeIdx);
+			runs[tab.id] = initialRunState(data.id);
+			connectWS(data.id, tab);
 		} catch (e) {
 			tab.errorMsg = errorMessage(e);
 		}

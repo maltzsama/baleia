@@ -106,6 +106,7 @@ describe('QueryEditor', () => {
 		clearEnginesCache();
 		clearMetadataCache();
 		localStorage.clear();
+		editor.resetTabs();
 		vi.stubGlobal('WebSocket', FakeWebSocket);
 	});
 
@@ -238,5 +239,35 @@ describe('QueryEditor', () => {
 		const tab = editor.activeTab;
 		expect(tab.bindingId).toBe(BINDING);
 		expect(tab.schema).toBe('sales');
+	});
+
+	// #413: a run belongs to its tab.
+	it('keeps a run in its own tab', async () => {
+		mockWorkbench();
+		const sent: string[] = [];
+		captureRuns(sent);
+		editor.updateSql(editor.activeId, 'SELECT 1');
+		const first = editor.activeId;
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		await fireEvent.click(screen.getByTestId('run-current'));
+		await waitFor(() => expect(sent).toHaveLength(1));
+		await waitFor(() =>
+			expect((screen.getByTestId('run-current') as HTMLButtonElement).disabled).toBe(true)
+		);
+		expect(screen.getByTestId('results-area')).toBeTruthy();
+
+		await fireEvent.click(screen.getByText('+'));
+		// The new tab can run, and shows no run of the other tab.
+		await waitFor(() =>
+			expect((screen.getByTestId('run-current') as HTMLButtonElement).disabled).toBe(false)
+		);
+		expect(screen.queryByTestId('results-area')).toBeNull();
+
+		const idx = editor.tabs.findIndex((tab) => tab.id === first);
+		await fireEvent.click(screen.getAllByText(editor.tabs[idx].name)[0]);
+		await waitFor(() => expect(screen.getByTestId('results-area')).toBeTruthy());
+		expect((screen.getByTestId('run-current') as HTMLButtonElement).disabled).toBe(true);
 	});
 });
