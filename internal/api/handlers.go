@@ -20,6 +20,7 @@ import (
 	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -215,6 +216,7 @@ func NewAPI(d Deps) (*API, error) {
 		c.audit = audit.Nop{}
 	}
 	c.history = history.New(c.queries)
+	c.browse = browse.New(c.queries)
 	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),

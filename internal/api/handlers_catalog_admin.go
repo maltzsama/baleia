@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/bindings"
+	"github.com/galileostudio/baleia/internal/catalogs/admin"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -95,16 +96,8 @@ func (h *CatalogHandlers) GetCatalogDetail(ctx context.Context, request GetCatal
 		return nil, err
 	}
 	sum := h.catalogSummary(ctx, cat, p)
-	ns, err := h.queries.CountNamespacesByCatalog(ctx, cat.ID)
-	if err == nil {
-		n := int(ns)
-		sum.NamespaceCount = &n
-	}
-	tables, err := h.queries.CountTablesByCatalog(ctx, cat.ID)
-	if err == nil {
-		n := int(tables)
-		sum.TableCount = &n
-	}
+	size := h.catalogAdmin.Size(ctx, cat.ID)
+	sum.NamespaceCount, sum.TableCount = size.Namespaces, size.Tables
 	return GetCatalogDetail200JSONResponse(sum), nil
 }
 
@@ -128,24 +121,16 @@ func (h *CatalogHandlers) UpdateCatalogDetail(ctx context.Context, request Updat
 	if request.Body == nil {
 		return UpdateCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
-	name := cat.Name
-	if request.Body.Name != nil {
-		name = strings.TrimSpace(*request.Body.Name)
+	updated, err := h.catalogAdmin.Update(ctx, cat, admin.Edit{Name: request.Body.Name, Description: request.Body.Description})
+	if errors.Is(err, admin.ErrEmptyName) {
+		return UpdateCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
-	if name == "" {
-		return UpdateCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "name cannot be empty")}, nil
-	}
-	description := cat.Description
-	if request.Body.Description != nil {
-		description = request.Body.Description
-	}
-	updated, err := h.queries.UpdateCatalogMeta(ctx, db.UpdateCatalogMetaParams{ID: id, Name: name, Description: description})
 	if err != nil {
 		return nil, err
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, audit.Event{Action: audit.CatalogUpdate, ResourceType: "catalog", ResourceID: idString(id),
-		Changes: map[string]audit.Change{"name": {From: cat.Name, To: name}}}.Allowed())
+		Changes: map[string]audit.Change{"name": {From: cat.Name, To: updated.Name}}}.Allowed())
 	out := h.catalogWithStatus(ctx, updated)
 	return UpdateCatalogDetail200JSONResponse(out), nil
 }
@@ -170,32 +155,18 @@ func (h *CatalogHandlers) DeleteCatalogDetail(ctx context.Context, request Delet
 	case err != nil:
 		return nil, err
 	}
-	if cat.Origin != "source" {
+	managed, err := h.catalogAdmin.Retire(ctx, cat)
+	switch {
+	case errors.Is(err, admin.ErrNotManaged):
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return DeleteCatalogDetail422JSONResponse{UnprocessableEntityJSONResponse: notManaged()}, nil
-	}
-	bindingRows, err := h.queries.ListBindingsByCatalog(ctx, id)
-	if err != nil {
+	case errors.Is(err, admin.ErrBindingBusy):
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
+		return DeleteCatalogDetail409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeBindingBusy, Message: err.Error()}}, nil
+	case err != nil:
 		return nil, err
 	}
-	for _, b := range bindingRows {
-		if b.LifecycleState == "provisioning" || b.LifecycleState == "updating" {
-			h.audited(ctx, ev.Failed(audit.ReasonConflict))
-			return DeleteCatalogDetail409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeBindingBusy, Message: "a binding of this catalog is provisioning or updating"}}, nil
-		}
-	}
-	if err := h.inTx(ctx, func(q db.Querier) error {
-		if err := q.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: id, Enabled: false}); err != nil {
-			return err
-		}
-		return q.DisableManagedBindingsOfCatalog(ctx, id)
-	}); err != nil {
-		return nil, err
-	}
-	for _, b := range bindingRows {
-		if b.Mode != "managed" {
-			continue
-		}
+	for _, b := range managed {
 		eng, err := h.queries.GetEngineByID(ctx, b.EngineID)
 		if err != nil {
 			continue
@@ -226,7 +197,7 @@ func (h *CatalogHandlers) GetCatalogImpact(ctx context.Context, request GetCatal
 	} else if err != nil {
 		return nil, err
 	}
-	row, err := h.queries.CountCatalogImpact(ctx, id)
+	row, err := h.catalogAdmin.Impact(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -252,23 +223,17 @@ func (h *CatalogHandlers) GetCatalogConnectionImpact(ctx context.Context, reques
 	} else if err != nil {
 		return nil, err
 	}
-	row, err := h.queries.CountConnectionImpact(ctx, id)
+	impact, err := h.catalogAdmin.ConnectionImpact(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	out := CatalogConnectionImpact{
-		Catalogs:          int(row.Catalogs),
-		Bindings:          int(row.Bindings),
-		RunningExecutions: int(row.RunningExecutions),
+		Catalogs:          int(impact.Catalogs),
+		Bindings:          int(impact.Bindings),
+		RunningExecutions: int(impact.RunningExecutions),
 	}
-	engines, err := h.queries.ListEngines(ctx)
-	if err == nil {
-		for _, e := range engines {
-			if e.ConnectionID.Bytes == id.Bytes {
-				out.Engine = &EngineConnectionRef{Id: openapi_types.UUID(e.ID.Bytes), Name: e.Name}
-				break
-			}
-		}
+	if e := impact.Engine; e != nil {
+		out.Engine = &EngineConnectionRef{Id: openapi_types.UUID(e.ID.Bytes), Name: e.Name}
 	}
 	return GetCatalogConnectionImpact200JSONResponse(out), nil
 }

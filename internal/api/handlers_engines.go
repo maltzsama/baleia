@@ -5,20 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/engines/manage"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
-
-// engineNameRe mirrors the engines.name CHECK.
-var engineNameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`)
 
 // enginePingTimeout bounds the reachability check of a new engine.
 const enginePingTimeout = 15 * time.Second
@@ -26,7 +23,7 @@ const enginePingTimeout = 15 * time.Second
 // isFKViolation reports a delete blocked by a foreign key: 23503 for NO
 // ACTION, 23001 for ON DELETE RESTRICT (engines use RESTRICT).
 func isFKViolation(e *pgconn.PgError) bool {
-	return e.Code == "23503" || e.Code == "23001"
+	return manage.IsFKViolation(e)
 }
 
 func engineToPublic(e db.Engine) Engine {
@@ -84,12 +81,7 @@ func (h *CatalogHandlers) ListEngines(ctx context.Context, _ ListEnginesRequestO
 	if err != nil {
 		return ListEngines401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	var engines []db.Engine
-	if p.IsAdmin() {
-		engines, err = h.queries.ListEngines(ctx)
-	} else {
-		engines, err = h.queries.ListEnginesVisibleToUser(ctx, p.UserID)
-	}
+	engines, err := h.engineAdmin.List(ctx, p.UserID, p.IsAdmin())
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +115,8 @@ func (h *CatalogHandlers) CreateEngine(ctx context.Context, request CreateEngine
 	invalid := func(code ErrorCode, field, msg string) CreateEngineResponseObject {
 		return CreateEngine422JSONResponse{UnprocessableEntityJSONResponse: (&configError{code: code, fields: []connections.FieldError{{Key: field, Message: msg}}}).response()}
 	}
-	if !engineNameRe.MatchString(body.Name) {
-		return invalid("validation_error", "name", "must match "+engineNameRe.String()), nil
+	if err := manage.CheckName(body.Name); err != nil {
+		return invalid("validation_error", "name", err.Error()), nil
 	}
 
 	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: body.ConnectionId, Valid: true}, authz.ActWrite)
@@ -157,40 +149,11 @@ func (h *CatalogHandlers) CreateEngine(ctx context.Context, request CreateEngine
 		return invalid("engine_unreachable", "connection_id", connectionTestError(err)), nil
 	}
 
-	var created db.Engine
-	var nativeIDs []pgtype.UUID
-	err = h.inTx(ctx, func(q db.Querier) error {
-		eng, err := q.CreateEngine(ctx, db.CreateEngineParams{
-			Name:         body.Name,
-			Kind:         provider.EngineKind(),
-			Class:        "direct",
-			ConnectionID: conn.ID,
-			IdentityMode: "connection", // v1: the connection's credentials (docs/adr/0011)
-			CreatedBy:    p.UserID,
-		})
-		if err != nil {
-			return err
-		}
-		created = eng
-		for _, name := range natives {
-			cat, err := q.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{ConnectionID: conn.ID, Name: name})
-			if err != nil {
-				return err
-			}
-			nativeIDs = append(nativeIDs, cat.ID)
-			if _, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{CatalogID: cat.ID, EngineID: eng.ID, EngineCatalogName: name}); err != nil {
-				return err
-			}
-		}
-		return nil
+	created, nativeIDs, err := h.engineAdmin.Create(ctx, manage.NewEngine{
+		Name: body.Name, Kind: provider.EngineKind(), ConnectionID: conn.ID, CreatedBy: p.UserID, Natives: natives,
 	})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		msg := "an engine with this name already exists"
-		if pgErr.ConstraintName == "engines_connection_id_key" {
-			msg = "this connection already backs an engine"
-		}
-		return CreateEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: msg}}, nil
+	if errors.Is(err, manage.ErrNameTaken) || errors.Is(err, manage.ErrConnectionTaken) {
+		return CreateEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -216,7 +179,7 @@ func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngine
 	case err != nil:
 		return nil, err
 	}
-	eng, err := h.queries.UpdateEngine(ctx, db.UpdateEngineParams{ID: id, Enabled: request.Body.Enabled})
+	eng, err := h.engineAdmin.SetEnabled(ctx, id, request.Body.Enabled)
 	if err != nil {
 		return nil, err
 	}
@@ -241,27 +204,10 @@ func (h *CatalogHandlers) DeleteEngine(ctx context.Context, request DeleteEngine
 		return nil, err
 	}
 
-	inUse := func(msg string) DeleteEngineResponseObject {
-		return DeleteEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeEngineInUse, Message: msg}}
-	}
-	blockers, err := h.queries.CountEngineBlockers(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if blockers.ManagedBindings > 0 || blockers.RunningExecutions > 0 {
-		return inUse(fmt.Sprintf("the engine has %d managed bindings and %d running executions", blockers.ManagedBindings, blockers.RunningExecutions)), nil
-	}
-
-	err = h.inTx(ctx, func(q db.Querier) error {
-		if err := q.DeleteNativeCatalogsOfEngine(ctx, id); err != nil {
-			return err
-		}
-		return q.DeleteEngine(ctx, id)
-	})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && isFKViolation(pgErr) {
-		// Still referenced, e.g. by a Trino cluster (the plugin's table).
-		return inUse("the engine is still referenced"), nil
+	var inUse *manage.InUseError
+	err = h.engineAdmin.Delete(ctx, id)
+	if errors.As(err, &inUse) {
+		return DeleteEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeEngineInUse, Message: inUse.Msg}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -283,7 +229,7 @@ func (h *CatalogHandlers) ListEngineBindings(ctx context.Context, request ListEn
 	if err != nil {
 		return nil, err
 	}
-	bindings, err := h.queries.ListBindingsByEngine(ctx, id)
+	bindings, err := h.engineAdmin.Bindings(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +262,7 @@ func (h *CatalogHandlers) ListCatalogBindings(ctx context.Context, request ListC
 		}
 		return nil, err
 	}
-	bindings, err := h.queries.ListBindingsByCatalog(ctx, id)
+	bindings, err := h.engineAdmin.CatalogBindings(ctx, id)
 	if err != nil {
 		return nil, err
 	}

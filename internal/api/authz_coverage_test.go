@@ -219,10 +219,10 @@ var operationAccess = map[string]access{
 	// Metadata snapshot reads (#18): workspace members (metadataWorkspace
 	// wraps requireWorkspaceAccess), granted catalogs only (in each query).
 	"ListMetadataCatalogs":   checked("metadataWorkspace"),
-	"ListMetadataNamespaces": checked("metadataWorkspace", "grantedCatalog"),
-	"ListMetadataTables":     checked("metadataWorkspace", "grantedCatalog"),
-	"GetMetadataTable":       checked("metadataWorkspace", "GetGrantedMetadataTable"),
-	"SearchMetadata":         checked("metadataWorkspace", "SearchMetadata"),
+	"ListMetadataNamespaces": checked("metadataWorkspace", "browse.Namespaces"),
+	"ListMetadataTables":     checked("metadataWorkspace", "browse.Tables"),
+	"GetMetadataTable":       checked("metadataWorkspace", "browse.Table"),
+	"SearchMetadata":         checked("metadataWorkspace", "browse.Search"),
 	// Semantic layer v1 (#33): workspace members; docs only on catalogs the
 	// workspace may use (semanticCatalog wraps grantedCatalog). Docs are not
 	// content items, so #40 does not add a space check here.

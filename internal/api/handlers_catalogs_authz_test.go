@@ -635,3 +635,21 @@ func TestNativeCatalogsAreNotManaged(t *testing.T) {
 		t.Errorf("trino = %v", ft.statements())
 	}
 }
+
+// brokenCatalogList fails the catalog list of a connection.
+type brokenCatalogList struct{ *authzFake }
+
+func (brokenCatalogList) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
+	return nil, errors.New("connection reset")
+}
+
+// TestListCatalogs_StoreFailureIsAnError: a failed read is a server error,
+// not an empty list the client would take for "no catalogs".
+func TestListCatalogs_StoreFailureIsAnError(t *testing.T) {
+	h, q, _ := newAuthzHandlers(t)
+	h.queries = brokenCatalogList{q}
+	conn, _ := reqIDs(q)
+	if _, err := h.ListCatalogs(ctxAs(ownerID, "member"), ListCatalogsRequestObject{ConnectionId: conn}); err == nil {
+		t.Fatal("ListCatalogs hid the store failure behind an empty list")
+	}
+}

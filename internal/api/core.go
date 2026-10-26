@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
@@ -46,4 +47,7 @@ type core struct {
 	// history reads content versions and the trash (#34), for every group
 	// that shows a version.
 	history *history.Service
+	// browse reads the stored metadata of granted catalogs (#18); semantic
+	// handlers use it to check a catalog is granted.
+	browse *browse.Service
 }
