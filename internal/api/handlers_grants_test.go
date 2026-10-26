@@ -667,3 +667,20 @@ func TestGetWorkspace_StoreFailureIsAnError(t *testing.T) {
 		t.Fatal("GetWorkspace answered a store failure with a response")
 	}
 }
+
+// brokenAccess fails the workspace access check.
+type brokenAccess struct{ *authzFake }
+
+func (brokenAccess) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAccessParams) (bool, error) {
+	return false, errors.New("connection reset")
+}
+
+// TestListWorkspaceTargets_AccessFailureIsAnError: a failed access check is
+// a server error, not "workspace not found".
+func TestListWorkspaceTargets_AccessFailureIsAnError(t *testing.T) {
+	h, q := newGrantsHandlers(t)
+	h.queries = brokenAccess{q}
+	if _, err := h.ListWorkspaceTargets(ctxAs(ownerID, "member"), ListWorkspaceTargetsRequestObject{Id: wsID.Bytes}); err == nil {
+		t.Fatal("ListWorkspaceTargets answered a store failure with a response")
+	}
+}
