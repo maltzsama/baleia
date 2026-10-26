@@ -662,6 +662,7 @@ func (brokenWorkspaces) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Works
 func TestGetWorkspace_StoreFailureIsAnError(t *testing.T) {
 	h, q := newGrantsHandlers(t)
 	h.queries = brokenWorkspaces{q}
+	h.WorkspaceHandlers = newWorkspaceHandlers(h.core)
 	if _, err := h.GetWorkspace(ctxAs(ownerID, "member"), GetWorkspaceRequestObject{Id: wsID.Bytes}); err == nil {
 		t.Fatal("GetWorkspace answered a store failure with a response")
 	}
