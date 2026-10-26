@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { editor } from '$lib/stores/editor.svelte';
 import { clearEnginesCache } from '$lib/engines/client';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
-import { makeWorkspace } from '../../test/factories';
+import { makeSavedQuery, makeSpace, makeWorkspace } from '../../test/factories';
 import QueryEditor from './QueryEditor.svelte';
 
 const WS = '00000000-0000-0000-0000-000000000001';
@@ -239,6 +239,83 @@ describe('QueryEditor', () => {
 		const tab = editor.activeTab;
 		expect(tab.bindingId).toBe(BINDING);
 		expect(tab.schema).toBe('sales');
+	});
+
+	function mockSavedQueries() {
+		server.use(
+			http.get('/workspaces/{id}/spaces', ({ response }) =>
+				response(200).json([makeSpace({ id: 'sp1', my_role: 'manager' })])
+			),
+			http.get('/workspaces/{id}/queries', ({ response }) => response(200).json([])),
+			http.get('/workspaces/{id}/folders', ({ response }) => response(200).json([]))
+		);
+	}
+
+	// A second, dirty tab on a saved query, opened in the background.
+	function dirtySavedTab() {
+		const first = editor.activeId;
+		const tab = editor.openSavedQuery(
+			makeSavedQuery({ id: 'q1', name: 'Revenue', version: 1, sql: 'SELECT 1', space_id: 'sp1' })
+		);
+		editor.updateSql(tab.id, 'SELECT 42');
+		editor.activate(first);
+		return tab.id;
+	}
+
+	// The modal is found by its heading: its <dialog> carries no name.
+	async function dialogTitled(title: string) {
+		const heading = await screen.findByRole('heading', { name: title });
+		return heading.closest('dialog') as HTMLElement;
+	}
+
+	async function closeWithSave(tabId: string) {
+		const idx = editor.tabs.findIndex((tab) => tab.id === tabId);
+		await fireEvent.click(screen.getAllByLabelText('Close tab')[idx]);
+		const closeDialog = await dialogTitled('Close this tab?');
+		await fireEvent.click(within(closeDialog).getByRole('button', { name: 'Save' }));
+		return dialogTitled('Save query');
+	}
+
+	// #411: Save on the close dialog saves the tab being closed, then closes it.
+	it('saves a dirty tab before closing it', async () => {
+		mockWorkbench();
+		mockSavedQueries();
+		const patched: { sql?: string } = {};
+		server.use(
+			http.patch('/workspaces/{id}/queries/{query_id}', async ({ request, response }) => {
+				patched.sql = ((await request.json()) as { sql: string }).sql;
+				return response(200).json(
+					makeSavedQuery({ id: 'q1', name: 'Revenue', version: 2, sql: 'SELECT 42' })
+				);
+			})
+		);
+		const tabId = dirtySavedTab();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		const saveDialog = await closeWithSave(tabId);
+		// The tab stays open, and active, until it is saved.
+		expect(editor.activeId).toBe(tabId);
+		await fireEvent.click(within(saveDialog).getByRole('button', { name: 'Save' }));
+
+		await waitFor(() => expect(editor.tabs.some((tab) => tab.id === tabId)).toBe(false));
+		expect(patched.sql).toBe('SELECT 42');
+	});
+
+	it('keeps the tab and its SQL when the save is cancelled', async () => {
+		mockWorkbench();
+		mockSavedQueries();
+		const tabId = dirtySavedTab();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		const saveDialog = await closeWithSave(tabId);
+		await fireEvent.click(within(saveDialog).getByRole('button', { name: 'Cancel' }));
+
+		await waitFor(() => expect(screen.queryByRole('heading', { name: 'Save query' })).toBeNull());
+		const tab = editor.tabs.find((item) => item.id === tabId);
+		expect(tab?.sql).toBe('SELECT 42');
+		expect(tab?.dirty).toBe(true);
 	});
 
 	// #413: a run belongs to its tab.

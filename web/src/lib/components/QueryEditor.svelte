@@ -106,6 +106,8 @@
 	let conflictOpen = $state(false);
 	let closingIdx = $state<number | null>(null);
 	let closeOpen = $state(false);
+	// The tab "Save" on the close dialog closes once it is saved (#411).
+	let closeAfterSave: string | null = null;
 	let paletteOpen = $state(false);
 	let paletteMode = $state<'commands' | 'quick'>('commands');
 	let shortcutsOpen = $state(false);
@@ -320,9 +322,27 @@
 		closeOpen = false;
 	}
 
+	// Save opens on the tab being closed, which stays open until it is saved:
+	// cancelling the save keeps it and its SQL (#411).
 	function saveAndClose() {
-		discardAndClose();
-		openSave('save');
+		if (closingIdx === null) return;
+		const idx = closingIdx;
+		const tab = tabs[idx];
+		closingIdx = null;
+		closeOpen = false;
+		if (!tab) return;
+		if (tab.id !== editor.activeId) switchTab(idx);
+		openSave(tab.readOnly ? 'copy' : 'save');
+		closeAfterSave = tab.id;
+	}
+
+	// A save that ends without saving (cancelled, or a conflict dismissed)
+	// forgets the pending close. A conflict hands over from one dialog to the
+	// other, so the check waits for both to settle.
+	function settleCloseAfterSave() {
+		queueMicrotask(() => {
+			if (!saveOpen && !conflictOpen) closeAfterSave = null;
+		});
 	}
 
 	function isTextTarget(target: EventTarget | null): boolean {
@@ -557,7 +577,9 @@
 			clearTimeout(sqlSyncTimer);
 			sqlSyncTimer = undefined;
 		}
-		editor.updateSql(editor.activeId, editorView.state.doc.toString());
+		// The view holds the tab it last mirrored, which lags the store's active
+		// tab until the sync effect runs: never write one tab's SQL into another.
+		editor.updateSql(syncedTabId, editorView.state.doc.toString());
 	}
 
 	function scheduleSqlSync() {
@@ -628,6 +650,7 @@
 
 		const state = EditorState.create({ doc: editor.activeTab?.sql ?? '', extensions });
 		editorView = new EditorView({ state, parent: editorEl });
+		syncedTabId = editor.activeId;
 		editorReady = true;
 
 		return () => {
@@ -928,8 +951,13 @@
 	}
 
 	function onSaved(query: SavedQuery) {
-		editor.markSaved(editor.activeId, query);
+		const id = editor.activeId;
+		editor.markSaved(id, query);
 		savedQueries.onSaved(query);
+		if (closeAfterSave === id) {
+			closeAfterSave = null;
+			removeTab(id);
+		}
 	}
 
 	function onConflict(details: Conflict) {
@@ -1188,7 +1216,13 @@
 	{/if}
 
 	<SaveQueryDialog
-		bind:open={saveOpen}
+		bind:open={
+			() => saveOpen,
+			(open) => {
+				saveOpen = open;
+				if (!open) settleCloseAfterSave();
+			}
+		}
 		tab={activeTab}
 		{workspaceId}
 		spaces={savedQueries.spaces}
@@ -1201,7 +1235,13 @@
 
 	{#if conflict}
 		<SaveConflictDialog
-			bind:open={conflictOpen}
+			bind:open={
+				() => conflictOpen,
+				(open) => {
+					conflictOpen = open;
+					if (!open) settleCloseAfterSave();
+				}
+			}
 			tab={activeTab}
 			{workspaceId}
 			{conflict}
