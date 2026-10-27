@@ -92,15 +92,30 @@ func (s *Service) Request(ctx context.Context, email string) error {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliveryTimeout)
 		defer cancel()
 		// The error never carries the link; log the account, not the address.
+		// The context keeps the request's trace.
 		if err := s.deliver(ctx, user); err != nil {
-			slog.Error("password reset delivery failed", "user_id", user.ID.String(), "err", err)
+			slog.ErrorContext(ctx, "password reset delivery failed", "user_id", user.ID.String(), "err", err)
 		}
 	})
 	return nil
 }
 
-// Wait blocks until every background delivery has finished.
-func (s *Service) Wait() { s.pending.Wait() }
+// Drain waits for the background deliveries until ctx ends, and returns
+// ctx's error if some are still running then. A delivery left running ends
+// at its own timeout.
+func (s *Service) Drain(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		s.pending.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 // deliver stores a new token for user and e-mails its link.
 func (s *Service) deliver(ctx context.Context, user db.User) error {

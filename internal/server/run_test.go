@@ -63,3 +63,44 @@ func cleanShutdown(t *testing.T, timeout time.Duration) {
 		t.Fatal("Run did not return after shutdown")
 	}
 }
+
+// drainRecorder records the deadline Drain got.
+type drainRecorder struct{ deadlines chan bool }
+
+func (d drainRecorder) Drain(ctx context.Context) error {
+	_, ok := ctx.Deadline()
+	d.deadlines <- ok
+	return nil
+}
+
+// TestRun_DrainsBackgroundWork: after the HTTP drain, Run waits for the
+// handlers' background work (the password-reset deliveries, #422) under
+// the same deadline.
+func TestRun_DrainsBackgroundWork(t *testing.T) {
+	t.Parallel()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, _ := net.SplitHostPort(l.Addr().String())
+	_ = l.Close()
+	bg := drainRecorder{deadlines: make(chan bool, 1)}
+	s := &Server{
+		cfg:        &config.Config{Port: port, HTTPReadHeaderTimeout: time.Second, HTTPShutdownTimeout: 5 * time.Second},
+		mux:        chi.NewRouter(),
+		background: bg,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := s.Run(ctx); err != nil {
+		t.Fatalf("Run = %v, want nil", err)
+	}
+	select {
+	case hasDeadline := <-bg.deadlines:
+		if !hasDeadline {
+			t.Error("Drain got no deadline; want HTTPShutdownTimeout")
+		}
+	default:
+		t.Fatal("Run returned without draining the background work")
+	}
+}

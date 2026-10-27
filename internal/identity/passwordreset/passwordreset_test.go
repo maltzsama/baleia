@@ -106,7 +106,7 @@ func TestRequest_MailsAHashedSingleUseLink(t *testing.T) {
 	if err := s.Request(context.Background(), u.Email); err != nil {
 		t.Fatal(err)
 	}
-	s.Wait()
+	drain(t, s)
 	if len(m.sent) != 1 || m.sent[0].to != u.Email || m.sent[0].locale != "pt-BR" || m.sent[0].template != mail.TemplatePasswordReset {
 		t.Fatalf("sent = %+v", m.sent)
 	}
@@ -142,7 +142,7 @@ func TestRequest_DeliveryNeverShapesTheAnswer(t *testing.T) {
 		t.Fatalf("Request = %v, want nil while the send is pending", err)
 	}
 	close(m.release)
-	s.Wait()
+	drain(t, s)
 	if len(m.sent) != 1 {
 		t.Fatalf("sent = %d, want the delivery to run in the background", len(m.sent))
 	}
@@ -155,7 +155,7 @@ func TestConfirm(t *testing.T) {
 	if err := s.Request(ctx, u.Email); err != nil {
 		t.Fatal(err)
 	}
-	s.Wait()
+	drain(t, s)
 	token := linkToken(t, m.sent[0])
 
 	id, err := s.Confirm(ctx, token, "new-password-123")
@@ -205,7 +205,7 @@ func TestRequest_OnlyLocalActiveAccounts(t *testing.T) {
 			t.Errorf("Request(%s) = %v, want nil", email, err)
 		}
 	}
-	s.Wait()
+	drain(t, s)
 	if len(m.sent) != 0 || len(st.resets) != 0 {
 		t.Errorf("sent %d e-mails and stored %d links, want none", len(m.sent), len(st.resets))
 	}
@@ -226,5 +226,34 @@ func TestRequest_StoreFailureIsAnError(t *testing.T) {
 	}
 	if len(m.sent) != 0 {
 		t.Error("no e-mail on a store failure")
+	}
+}
+
+// drain waits for the service's background deliveries.
+func drain(t *testing.T, s *Service) {
+	t.Helper()
+	if err := s.Drain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDrain_StopsAtTheDeadline: Drain returns once the deliveries end, or
+// with the context's error while one is still running.
+func TestDrain_StopsAtTheDeadline(t *testing.T) {
+	t.Parallel()
+	s, _, m, _, u := setup(t)
+	m.release = make(chan struct{})
+	if err := s.Request(context.Background(), u.Email); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := s.Drain(ctx); !errors.Is(err, context.Canceled) {
+		t.Errorf("Drain with a delivery running = %v, want context.Canceled", err)
+	}
+	close(m.release)
+	drain(t, s)
+	if len(m.sent) != 1 {
+		t.Errorf("sent = %d, want the delivery to finish", len(m.sent))
 	}
 }
