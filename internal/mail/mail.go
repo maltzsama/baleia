@@ -124,7 +124,7 @@ func (s *Sender) Send(ctx context.Context, to, locale string, name Template, dat
 		return err
 	}
 	if s.cfg.Host == "" || s.cfg.Port == "" {
-		slog.Warn("SMTP not configured, skipping email", "to", to, "template", name)
+		slog.Warn("SMTP not configured, skipping email", "template", name)
 		return nil
 	}
 
