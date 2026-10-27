@@ -9,9 +9,12 @@ package mail
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"embed"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/smtp"
 	"strings"
 	"text/template"
@@ -136,6 +139,64 @@ func (s *Sender) Send(ctx context.Context, to, locale string, name Template, dat
 		auth = smtp.PlainAuth("", s.cfg.User, s.cfg.Password, s.cfg.Host)
 	}
 
-	addr := s.cfg.Host + ":" + s.cfg.Port
-	return smtp.SendMail(addr, auth, s.cfg.From, []string{to}, []byte(raw))
+	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
+	return sendMail(ctx, addr, s.cfg.Host, auth, s.cfg.From, to, []byte(raw))
+}
+
+// sendMail is smtp.SendMail bounded by ctx. smtp.SendMail takes no context
+// and sets no deadline, so a server that accepts and stops answering held a
+// delivery, and the shutdown that waits for it, forever (#422). Here the
+// connection carries ctx's deadline and is closed when ctx ends.
+func sendMail(ctx context.Context, addr, host string, auth smtp.Auth, from, to string, msg []byte) error {
+	// As smtp.SendMail: a CR or LF in an address would inject commands.
+	if strings.ContainsAny(from, "\r\n") || strings.ContainsAny(to, "\r\n") {
+		return errors.New("smtp: address contains CR or LF")
+	}
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("smtp dial: %w", err)
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("smtp greeting: %w", err)
+	}
+	defer func() { _ = c.Close() }()
+	if ok, _ := c.Extension("STARTTLS"); ok {
+		if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return fmt.Errorf("smtp starttls: %w", err)
+		}
+	}
+	if auth != nil {
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server does not support AUTH")
+		}
+		if err := c.Auth(auth); err != nil {
+			return fmt.Errorf("smtp auth: %w", err)
+		}
+	}
+	if err := c.Mail(from); err != nil {
+		return fmt.Errorf("smtp mail from: %w", err)
+	}
+	if err := c.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp rcpt to: %w", err)
+	}
+	w, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err := w.Write(msg); err != nil {
+		return fmt.Errorf("smtp write: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("smtp data end: %w", err)
+	}
+	return c.Quit()
 }
