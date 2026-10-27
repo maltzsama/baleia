@@ -104,7 +104,7 @@ func New(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	u.Path = "/" + name
-	if err := migrate(ctx, u.String()); err != nil {
+	if err := migrate(ctx, adminPool, u.String()); err != nil {
 		t.Fatal(err)
 	}
 	pool, err := newPool(ctx, u.String(), poolConns)
@@ -115,9 +115,28 @@ func New(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+// migrationLock is the advisory lock that serializes test migrations on the
+// server, across the processes of a `go test ./...` run.
+const migrationLock = 0x6261_6c65_6961 // "baleia"
+
 // migrate runs every migration through a goose Provider, which keeps no
-// package state: parallel tests migrate their databases at once.
-func migrate(ctx context.Context, dsn string) error {
+// package state. One migration runs at a time on the server: the migrations
+// create cluster-wide roles (00018 creates baleia_trino), and two databases
+// migrating at once raced to create the same role.
+func migrate(ctx context.Context, admin *pgxpool.Pool, dsn string) error {
+	conn, err := admin.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration lock connection: %w", err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", migrationLock); err != nil {
+		return fmt.Errorf("take migration lock: %w", err)
+	}
+	defer func() {
+		// Best effort: the lock also ends with the session.
+		_, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", migrationLock)
+	}()
+
 	// sql.Open, not goose.OpenDBWithDriver: that one sets goose's global
 	// dialect, which raced between parallel tests.
 	sqlDB, err := sql.Open("pgx", dsn)
