@@ -19,9 +19,15 @@ linters:
     # stay serial says why in a //nolint:paralleltest comment.
     - paralleltest
     - revive
+    # Components log through an injected logger, with the context when one
+    # is in scope, so every line carries its trace (#379).
+    - sloglint
     - thelper
     - tparallel
   settings:
+    sloglint:
+      no-global: all
+      context: scope
     staticcheck:
       checks:
         - all
