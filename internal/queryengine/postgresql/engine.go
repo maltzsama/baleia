@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -72,6 +73,8 @@ func poolConfig(cfg connections.Config, d *connections.Dialer) (*pgxpool.Config,
 	// Close cannot invalidate a cached plan.
 	cc.DefaultQueryExecMode = pgx.QueryExecModeExec
 	cc.RuntimeParams["application_name"] = "baleia"
+	// A user's statements are spans under the engine.execute span (#380).
+	cc.Tracer = obs.PGXTracer(nil)
 	pc.MaxConns = maxConns
 	return pc, nil
 }

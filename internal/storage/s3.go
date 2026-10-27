@@ -13,6 +13,8 @@ import (
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // S3Client is the storage adapter for query results. It talks to any
@@ -97,12 +99,14 @@ func (c *S3Client) SetMetrics(m *metrics.Storage) { c.metrics = m }
 
 // Put uploads already-buffered bytes.
 func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType string) (err error) {
+	ctx, span := tracer.Start(ctx, "s3.put")
 	defer func() {
 		var n int64
 		if err == nil {
 			n = int64(len(data))
 		}
 		c.metrics.Op("put", err, n)
+		endSpan(span, n, err)
 	}()
 	_, err = c.client.PutObject(ctx, c.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: contentType,
@@ -117,7 +121,11 @@ func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType
 // unbounded-stream results are not held in memory. It returns the number of
 // bytes written.
 func (c *S3Client) PutStream(ctx context.Context, key string, r io.Reader, contentType string) (n int64, err error) {
-	defer func() { c.metrics.Op("put", err, n) }()
+	ctx, span := tracer.Start(ctx, "s3.put")
+	defer func() {
+		c.metrics.Op("put", err, n)
+		endSpan(span, n, err)
+	}()
 	// size -1 tells minio-go to use multipart and read until EOF.
 	info, err := c.client.PutObject(ctx, c.bucket, key, r, -1, minio.PutObjectOptions{
 		ContentType: contentType,
@@ -130,7 +138,11 @@ func (c *S3Client) PutStream(ctx context.Context, key string, r io.Reader, conte
 
 // Get downloads the object into memory and also returns its content type.
 func (c *S3Client) Get(ctx context.Context, key string) (data []byte, contentType string, err error) {
-	defer func() { c.metrics.Op("get", err, int64(len(data))) }()
+	ctx, span := tracer.Start(ctx, "s3.get")
+	defer func() {
+		c.metrics.Op("get", err, int64(len(data)))
+		endSpan(span, int64(len(data)), err)
+	}()
 	r, contentType, err := c.getReader(ctx, key)
 	if err != nil {
 		return nil, "", err
@@ -148,7 +160,12 @@ func (c *S3Client) Get(ctx context.Context, key string) (data []byte, contentTyp
 // stored content type. The caller owns the reader and must close it.
 // GetReader's bytes are not counted: the caller streams them.
 func (c *S3Client) GetReader(ctx context.Context, key string) (_ io.ReadCloser, _ string, err error) {
-	defer func() { c.metrics.Op("get", err, 0) }()
+	// The span covers opening the object; the caller streams the body.
+	ctx, span := tracer.Start(ctx, "s3.get")
+	defer func() {
+		c.metrics.Op("get", err, 0)
+		endSpan(span, 0, err)
+	}()
 	return c.getReader(ctx, key)
 }
 
@@ -253,4 +270,15 @@ func (r *ObjectReaderAt) Seek(offset int64, whence int) (int64, error) {
 		return 0, fmt.Errorf("s3 seek: invalid whence %d", whence)
 	}
 	return r.pos, nil
+}
+
+// tracer names the result store's spans (#380). Object keys are not span
+// attributes: they name a user's executions.
+var tracer = obs.Tracer("storage")
+
+// endSpan records the bytes moved and ends span, failed when err is set.
+func endSpan(span trace.Span, n int64, err error) {
+	span.SetAttributes(attribute.Int64("baleia.bytes", n))
+	obs.FailSpan(span, err, "object store operation failed")
+	span.End()
 }

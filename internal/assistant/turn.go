@@ -16,8 +16,11 @@ import (
 	"github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/auth"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const systemPrompt = `You are Baleia's data assistant. You answer questions about the user's
@@ -199,6 +202,15 @@ func (r *Runner) RunSweeper(ctx context.Context, interval time.Duration) {
 }
 
 func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation, settings adb.AssistantSetting) {
+	// One span per turn (#380): the provider calls inside it are HTTP client
+	// spans. Neither the prompt nor the reply is an attribute.
+	var used int
+	ctx, span := tracer.Start(ctx, "assistant.turn",
+		trace.WithAttributes(attribute.String("baleia.assistant.data_sharing", settings.DataSharing)))
+	defer func() {
+		span.SetAttributes(attribute.Int("baleia.assistant.tool_calls", used))
+		span.End()
+	}()
 	over, err := r.svc.OverBudget(ctx, conversation.UserID, settings.DailyTokenBudgetPerUser)
 	if err != nil || over {
 		r.notice(ctx, conversation.ID, "budget_exhausted", "The daily token budget is exhausted.")
@@ -223,7 +235,6 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 		return
 	}
 	toolCtx := auth.WithAgentPrincipal(ctx, uuidString(conversation.UserID), uuidString(conversation.AgentID))
-	used := 0
 	for {
 		if ctx.Err() != nil {
 			r.notice(context.Background(), conversation.ID, "interrupted", "The turn was interrupted and can be retried.")
@@ -236,6 +247,7 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 		})
 		close(heartbeatStop)
 		if err != nil {
+			obs.FailSpan(span, err, "provider request failed")
 			if ctx.Err() != nil {
 				r.notice(context.Background(), conversation.ID, "interrupted", "The turn was interrupted and can be retried.")
 			} else {
@@ -427,3 +439,6 @@ func (s *RunnerSlot) Load() *Runner {
 
 // Store sets the runner.
 func (s *RunnerSlot) Store(r *Runner) { s.runner.Store(r) }
+
+// tracer names the assistant's spans (#380).
+var tracer = obs.Tracer("assistant")

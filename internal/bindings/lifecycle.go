@@ -27,8 +27,11 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Lifecycle states.
@@ -159,10 +162,12 @@ func (l Lifecycle) Provision(ctx context.Context, b db.CatalogBinding, p Project
 // create applies a new catalog. When the engine already has one of that
 // name — which Baleia may not own — nothing on the engine is touched; only
 // the bookkeeping this Create wrote is undone.
-func (l Lifecycle) create(ctx context.Context, p Projection) error {
+func (l Lifecycle) create(ctx context.Context, p Projection) (err error) {
+	ctx, span := ddlSpan(ctx, "create", p.EngineCatalog, p.Connector)
+	defer endDDLSpan(span, &err)
 	ectx, cancel := l.engine(ctx)
 	defer cancel()
-	err := l.Binder.Create(ectx, l.Engine, p)
+	err = l.Binder.Create(ectx, l.Engine, p)
 	l.ddl("create", err)
 	if errors.Is(err, ErrCatalogExists) {
 		if u, ok := l.Binder.(Unstager); ok {
@@ -175,18 +180,22 @@ func (l Lifecycle) create(ctx context.Context, p Projection) error {
 	return err
 }
 
-func (l Lifecycle) drop(ctx context.Context, name string) error {
+func (l Lifecycle) drop(ctx context.Context, name string) (err error) {
+	ctx, span := ddlSpan(ctx, "drop", name, "")
+	defer endDDLSpan(span, &err)
 	ectx, cancel := l.engine(ctx)
 	defer cancel()
-	err := l.Binder.Drop(ectx, l.Engine, name)
+	err = l.Binder.Drop(ectx, l.Engine, name)
 	l.ddl("drop", err)
 	return err
 }
 
-func (l Lifecycle) replace(ctx context.Context, p Projection) error {
+func (l Lifecycle) replace(ctx context.Context, p Projection) (err error) {
+	ctx, span := ddlSpan(ctx, "replace", p.EngineCatalog, p.Connector)
+	defer endDDLSpan(span, &err)
 	ectx, cancel := l.engine(ctx)
 	defer cancel()
-	err := l.Binder.Replace(ectx, l.Engine, p)
+	err = l.Binder.Replace(ectx, l.Engine, p)
 	l.ddl("replace", err)
 	return err
 }
@@ -322,4 +331,26 @@ func (l Lifecycle) adopt(ctx context.Context, name string, connector *string) er
 	return l.Store.UpsertAdoptedBinding(ctx, db.UpsertAdoptedBindingParams{
 		CatalogID: cat.ID, EngineID: l.Engine.ID, EngineCatalogName: name, Connector: connector,
 	})
+}
+
+// tracer names the catalog DDL spans (#380).
+var tracer = obs.Tracer("bindings")
+
+// ddlSpan starts the span of one catalog DDL: the action, the catalog and its
+// connector, never the properties, which carry secrets.
+func ddlSpan(ctx context.Context, action, catalog, connector string) (context.Context, trace.Span) {
+	attrs := []attribute.KeyValue{
+		attribute.String("baleia.binding.action", action),
+		attribute.String("baleia.catalog", catalog),
+	}
+	if connector != "" {
+		attrs = append(attrs, attribute.String("baleia.connector", connector))
+	}
+	return tracer.Start(ctx, "binding."+action, trace.WithAttributes(attrs...))
+}
+
+// endDDLSpan ends span, failed when *err is set.
+func endDDLSpan(span trace.Span, err *error) {
+	obs.FailSpan(span, *err, "catalog ddl failed")
+	span.End()
 }

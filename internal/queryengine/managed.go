@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // managed wraps an engine built by the Manager. It enforces the read-only rule
@@ -26,7 +28,13 @@ type managed struct {
 // OpenSession refuses a read-only session on an engine that cannot enforce it,
 // unless the connection asserts read-only credentials (docs/adr/0011). It
 // never downgrades silently.
-func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (Session, error) {
+func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session, err error) {
+	ctx, span := tracer.Start(ctx, "engine.open_session",
+		trace.WithAttributes(attrKind.String(m.Kind()), attrReadOnly.Bool(spec.ReadOnly)))
+	defer func() {
+		failSpan(span, err)
+		span.End()
+	}()
 	if spec.ReadOnly && m.Capabilities().ReadOnly != ReadOnlyEnforced && !m.credentialsReadOnly {
 		return nil, NewError(CodeReadOnly, m.Kind(), "",
 			"this engine cannot enforce a read-only session and its connection does not assert read-only credentials")
@@ -94,6 +102,18 @@ type managedSession struct {
 	Session
 	owner *managed
 	once  sync.Once
+}
+
+// Execute runs the statement inside an engine.execute span that records how
+// many rows and result sets it returned (#380).
+func (s *managedSession) Execute(ctx context.Context, sql string, cb Callbacks, sink RecordSink) error {
+	ctx, span := tracer.Start(ctx, "engine.execute", trace.WithAttributes(attrKind.String(s.owner.Kind())))
+	defer span.End()
+	counted := &countingSink{RecordSink: sink}
+	err := s.Session.Execute(ctx, sql, cb, counted)
+	span.SetAttributes(attrRows.Int64(counted.rows), attrResultSets.Int(counted.sets))
+	failSpan(span, err)
+	return err
 }
 
 func (s *managedSession) Close() error {
