@@ -1039,5 +1039,13 @@
 	"common_just_now": "just now",
 	"components_queryeditor_failed": "Failed",
 	"components_queryeditor_cancelled": "Cancelled",
-	"components_queryeditor_running_statement": "Running statement {position}…"
+	"components_queryeditor_running_statement": "Running statement {position}…",
+	"history_actions": "Actions",
+	"history_cancel_execution": "Cancel execution",
+	"history_cancel_execution_named": "Cancel execution: {sql}",
+	"history_cancel_this_execution": "Cancel this execution?",
+	"history_cancel_consequence_engine": "The statement running now is stopped on the engine, and the statements after it do not run.",
+	"history_cancel_consequence_results": "Statements that already finished keep their results.",
+	"history_execution_cancelled": "Execution cancelled",
+	"history_execution_already_ended": "The execution had already ended"
 }

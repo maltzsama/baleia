@@ -16,6 +16,7 @@
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
+	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import CopyButton from '$lib/ui/patterns/CopyButton.svelte';
 	import Duration from '$lib/ui/patterns/Duration.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
@@ -162,6 +163,33 @@
 		void goto(resolve('/sql'));
 	}
 
+	// ── Cancel (#405) ────────────────────────────────────────────────────
+	// Any workspace member may cancel a running execution, the same request the
+	// workbench makes. Only a running one offers it.
+	let cancelling = $state<Execution | null>(null);
+	let cancelOpen = $state(false);
+
+	function askCancel(execution: Execution) {
+		cancelling = execution;
+		cancelOpen = true;
+	}
+
+	async function cancelExecution() {
+		const target = cancelling;
+		if (!target) return;
+		const { data, error: cancelError } = await client.POST(
+			'/workspaces/{id}/executions/{execution_id}/cancel',
+			{ params: { path: { id: workspaceId, execution_id: target.id } } }
+		);
+		// ConfirmDialog renders a thrown API error through the catalog (FD7).
+		if (cancelError || !data) throw cancelError ?? new Error(m.error_cancel_failed());
+		items = items.map((item) => (item.id === data.id ? data : item));
+		if (selected?.id === data.id) selected = data;
+		// A run that ended while the dialog was open comes back as it ended.
+		if (data.status === 'cancelled') toasts.success(m.history_execution_cancelled());
+		else toasts.show(m.history_execution_already_ended());
+	}
+
 	function showResults(position: number) {
 		resultsPosition = position;
 		resultsOpen = true;
@@ -268,6 +296,9 @@
 								<th class="px-3 py-2 font-semibold">User</th>
 								<th class="px-3 py-2 font-semibold">Engine</th>
 								<th class="px-3 py-2 font-semibold">SQL</th>
+								<th class="px-3 py-2 font-semibold"
+									><span class="sr-only">{m.history_actions()}</span></th
+								>
 							</tr>
 						</thead>
 						<tbody>
@@ -328,6 +359,24 @@
 											class="block overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px]"
 											>{firstLine(execution.sql)}</span
 										>
+									</td>
+									<td class="px-3 py-2 text-right">
+										{#if execution.status === 'running'}
+											<!-- The row opens the details on click, Enter and Space: the
+											     action keeps its events to itself. -->
+											<button
+												type="button"
+												class="rounded border border-border px-2 py-0.5 text-[11px] font-semibold text-text-muted hover:border-danger hover:text-danger"
+												aria-label={m.history_cancel_execution_named({
+													sql: firstLine(execution.sql)
+												})}
+												onclick={(e) => {
+													e.stopPropagation();
+													askCancel(execution);
+												}}
+												onkeydown={(e) => e.stopPropagation()}>{m.common_cancel()}</button
+											>
+										{/if}
 									</td>
 								</tr>
 							{/each}
@@ -391,6 +440,11 @@
 					onclick={() => openInEditor(true)}>{m.history_re_run()}</Button
 				>
 				<CopyButton value={selected.sql} label={m.common_sql()} />
+				{#if selected.status === 'running'}
+					<Button variant="danger" size="sm" onclick={() => selected && askCancel(selected)}
+						>{m.history_cancel_execution()}</Button
+					>
+				{/if}
 			</div>
 
 			<div>
@@ -472,4 +526,16 @@
 			<ResultsPanel executionId={selected.id} enabled={true} initialPosition={resultsPosition} />
 		</div>
 	</div>
+{/if}
+
+{#if cancelling}
+	<ConfirmDialog
+		bind:open={cancelOpen}
+		title={m.history_cancel_this_execution()}
+		resourceName={firstLine(cancelling.sql)}
+		consequences={[m.history_cancel_consequence_engine(), m.history_cancel_consequence_results()]}
+		confirmLabel={m.history_cancel_execution()}
+		danger
+		onconfirm={cancelExecution}
+	/>
 {/if}
