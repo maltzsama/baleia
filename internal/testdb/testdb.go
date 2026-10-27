@@ -7,12 +7,14 @@ package testdb
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,21 +22,54 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// Parallel tests share one server (#374). Each process holds at most
-// maxDatabases test databases at a time, each reached through at most
-// adminConns+poolConns connections: with every package of the module in its
-// own process, the total stays under Postgres' default max_connections.
+// Parallel tests share one server (#374). At most maxTests top-level tests
+// of a process hold test databases at a time, each database reached through
+// at most adminConns+poolConns connections: with every package of the module
+// in its own process, the total stays under Postgres' default
+// max_connections.
 const (
-	maxDatabases = 2
-	adminConns   = 1
-	poolConns    = 4
+	maxTests   = 4
+	adminConns = 1
+	poolConns  = 4
 )
 
-// slots bounds the databases this process holds at once.
-var slots = make(chan struct{}, maxDatabases)
+// slots bounds the top-level tests that hold databases at once. A test and
+// its subtests share one slot however many databases they open: a test that
+// opens a second database while holding the first must not wait for itself.
+var (
+	slots   = make(chan struct{}, maxTests)
+	holders sync.Map // top-level test name -> *holder
+)
+
+type holder struct {
+	mu sync.Mutex
+	n  int // databases the test holds
+}
+
+// acquire takes the test's slot, if it does not hold it yet, and gives it
+// back with the test's last database.
+func acquire(t *testing.T) {
+	t.Helper()
+	root, _, _ := strings.Cut(t.Name(), "/")
+	v, _ := holders.LoadOrStore(root, &holder{})
+	h, _ := v.(*holder) // only *holder is ever stored
+	h.mu.Lock()
+	if h.n == 0 {
+		slots <- struct{}{}
+	}
+	h.n++
+	h.mu.Unlock()
+	t.Cleanup(func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if h.n--; h.n == 0 {
+			<-slots
+		}
+	})
+}
 
 // New creates the database, migrates it and drops it when the test ends.
-// Parallel tests wait for a free slot.
+// Parallel tests wait for a free slot; see acquire.
 func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
@@ -44,9 +79,8 @@ func New(t *testing.T) *pgxpool.Pool {
 		}
 		t.Skip("BALEIA_TEST_DATABASE_URL not set")
 	}
-	slots <- struct{}{}
-	// Registered first, so it runs last: after the drop below.
-	t.Cleanup(func() { <-slots })
+	// Registered first, so the slot is given back last: after the drop below.
+	acquire(t)
 	ctx := context.Background()
 	adminPool, err := newPool(ctx, admin, adminConns)
 	if err != nil {
@@ -84,7 +118,9 @@ func New(t *testing.T) *pgxpool.Pool {
 // migrate runs every migration through a goose Provider, which keeps no
 // package state: parallel tests migrate their databases at once.
 func migrate(ctx context.Context, dsn string) error {
-	sqlDB, err := goose.OpenDBWithDriver("pgx", dsn)
+	// sql.Open, not goose.OpenDBWithDriver: that one sets goose's global
+	// dialect, which raced between parallel tests.
+	sqlDB, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return err
 	}
