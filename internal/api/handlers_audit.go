@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -101,33 +102,49 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 	if request.Body != nil {
 		for _, id := range ptrSlice(request.Body.Users) {
 			user, err := h.trail.User(ctx, p.UserID, p.IsAdmin(), pgtype.UUID{Bytes: [16]byte(id), Valid: true})
-			if err != nil {
+			if hidden(err) {
 				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("resolve user: %w", err)
 			}
 			email := user.Email
 			users[uuid.UUID(id).String()] = AuditResolvedUser{Name: user.Name, Email: &email}
 		}
 		for _, id := range ptrSlice(request.Body.Workspaces) {
 			ws, err := h.authz().Workspace(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
-			if err != nil {
+			if hidden(err) {
 				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("resolve workspace: %w", err)
 			}
 			workspaces[uuid.UUID(id).String()] = AuditResolvedName{Name: ws.Name}
 		}
 		for _, id := range ptrSlice(request.Body.Connections) {
 			conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
-			if err != nil {
+			if hidden(err) {
 				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("resolve connection: %w", err)
 			}
 			connections[uuid.UUID(id).String()] = AuditResolvedName{Name: conn.Name}
 		}
 		for _, id := range ptrSlice(request.Body.Catalogs) {
 			catalog, err := h.trail.Catalog(ctx, pgtype.UUID{Bytes: [16]byte(id), Valid: true})
-			if err != nil {
+			if hidden(err) {
 				continue
 			}
-			if _, err := h.authz().Connection(ctx, p, catalog.ConnectionID, authz.ActRead); err != nil {
+			if err != nil {
+				return nil, fmt.Errorf("resolve catalog: %w", err)
+			}
+			_, err = h.authz().Connection(ctx, p, catalog.ConnectionID, authz.ActRead)
+			if hidden(err) {
 				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("resolve catalog connection: %w", err)
 			}
 			catalogs[uuid.UUID(id).String()] = AuditResolvedName{Name: catalog.Name}
 		}
@@ -135,6 +152,13 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 	return ResolveAudit200JSONResponse(AuditResolveResult{
 		Users: &users, Workspaces: &workspaces, Connections: &connections, Catalogs: &catalogs,
 	}), nil
+}
+
+// hidden reports an id the caller may not resolve, or that does not exist:
+// it is left out of the answer. Any other error is a failure, not a gap.
+func hidden(err error) bool {
+	return errors.Is(err, trail.ErrUserHidden) || errors.Is(err, pgx.ErrNoRows) ||
+		errors.Is(err, authz.ErrNotFound) || errors.Is(err, authz.ErrForbidden)
 }
 
 // ptrSlice is the list an optional field holds, empty when it is absent.
