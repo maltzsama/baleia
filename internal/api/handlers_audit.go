@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sort"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -235,7 +236,7 @@ func testOutcome(ev audit.Event, ok bool) audit.Event {
 
 // connectionChanges lists what an update changed: name, read-only default,
 // URL and config values as they are; credentials only by key, as "***".
-func connectionChanges(before, after db.CatalogConnection, creds *map[string]any) map[string]audit.Change {
+func connectionChanges(logger *slog.Logger, before, after db.CatalogConnection, creds *map[string]any) map[string]audit.Change {
 	changes := map[string]audit.Change{}
 	if before.Name != after.Name {
 		changes["name"] = audit.Change{From: before.Name, To: after.Name}
@@ -250,8 +251,8 @@ func connectionChanges(before, after db.CatalogConnection, creds *map[string]any
 		changes["url"] = audit.Change{From: before.Url, To: after.Url}
 	}
 	var was, is map[string]any
-	decodeStored(before.Config, &was, "connections.config")
-	decodeStored(after.Config, &is, "connections.config")
+	decodeStored(logger, before.Config, &was, "connections.config")
+	decodeStored(logger, after.Config, &is, "connections.config")
 	for k, v := range is {
 		if old, ok := was[k]; !ok || fmt.Sprint(old) != fmt.Sprint(v) {
 			changes["config."+k] = audit.Change{From: was[k], To: v}
@@ -280,7 +281,7 @@ func withID(ev audit.Event, id pgtype.UUID) audit.Event {
 }
 
 // catalogChanges lists what a catalog update changes.
-func catalogChanges(c db.Catalog, name, trinoName, warehouse, connector string, extraProps []byte) map[string]audit.Change {
+func catalogChanges(logger *slog.Logger, c db.Catalog, name, trinoName, warehouse, connector string, extraProps []byte) map[string]audit.Change {
 	changes := map[string]audit.Change{}
 	add := func(k string, from, to string) {
 		if from != to {
@@ -293,7 +294,7 @@ func catalogChanges(c db.Catalog, name, trinoName, warehouse, connector string, 
 	add("connector", c.ConnectorName(), connector)
 	// Extra properties may carry engine secrets: only their keys are kept.
 	if string(c.ExtraProps) != string(extraProps) {
-		changes["extra_props"] = audit.Change{From: propKeys(c.ExtraProps), To: propKeys(extraProps)}
+		changes["extra_props"] = audit.Change{From: propKeys(logger, c.ExtraProps), To: propKeys(logger, extraProps)}
 	}
 	if len(changes) == 0 {
 		return nil
@@ -302,9 +303,9 @@ func catalogChanges(c db.Catalog, name, trinoName, warehouse, connector string, 
 }
 
 // propKeys lists the keys of a JSON object, sorted.
-func propKeys(raw []byte) []string {
+func propKeys(logger *slog.Logger, raw []byte) []string {
 	var m map[string]any
-	decodeStored(raw, &m, "extra_props")
+	decodeStored(logger, raw, &m, "extra_props")
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

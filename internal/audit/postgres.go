@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,7 @@ type Inserter interface {
 
 // Postgres records events into audit_events.
 type Postgres struct {
+	logger  *slog.Logger
 	q       Inserter
 	secret  map[string]bool
 	failed  func()
@@ -32,12 +34,12 @@ type Postgres struct {
 // NewPostgres returns a recorder. secretKeys are field names whose values are
 // redacted (the connection providers' secret fields); onFailure counts failed
 // writes (metrics.Audit.WriteFailed), nil for none.
-func NewPostgres(q Inserter, secretKeys []string, onFailure func()) *Postgres {
+func NewPostgres(logger *slog.Logger, q Inserter, secretKeys []string, onFailure func()) *Postgres {
 	s := make(map[string]bool, len(secretKeys))
 	for _, k := range secretKeys {
 		s[k] = true
 	}
-	return &Postgres{q: q, secret: s, failed: onFailure, timeout: writeTimeout}
+	return &Postgres{logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), q: q, secret: s, failed: onFailure, timeout: writeTimeout}
 }
 
 // Record writes e with the actor, auth method, request id and client found
@@ -46,7 +48,7 @@ func NewPostgres(q Inserter, secretKeys []string, onFailure func()) *Postgres {
 func (p *Postgres) Record(ctx context.Context, e Event) error {
 	err := p.record(ctx, e)
 	if err != nil {
-		slog.Error("audit write failed", "error_code", "audit_write_failed", "action", string(e.Action), "err", err)
+		p.logger.ErrorContext(ctx, "audit write failed", "error_code", "audit_write_failed", "action", string(e.Action), "err", err)
 		if p.failed != nil {
 			p.failed()
 		}

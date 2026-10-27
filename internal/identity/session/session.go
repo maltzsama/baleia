@@ -4,6 +4,7 @@
 package session
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -36,6 +37,8 @@ type Config struct {
 	JWTSecret  string
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
+	// Logger receives the logs; nil discards them (#379).
+	Logger *slog.Logger
 }
 
 var (
@@ -62,6 +65,7 @@ type Pair struct {
 
 // Service issues, rotates and ends sessions.
 type Service struct {
+	logger *slog.Logger
 	tokens Tokens
 	users  Users
 	cfg    Config
@@ -69,7 +73,7 @@ type Service struct {
 
 // New builds the service.
 func New(tokens Tokens, users Users, cfg Config) *Service {
-	return &Service{tokens: tokens, users: users, cfg: cfg}
+	return &Service{tokens: tokens, users: users, cfg: cfg, logger: cmp.Or(cfg.Logger, slog.New(slog.DiscardHandler))}
 }
 
 // Issue starts a session for user in a new refresh-token family.
@@ -156,7 +160,7 @@ func (s *Service) End(ctx context.Context, refreshToken string) (userID pgtype.U
 // logged, not returned: the triggering change already succeeded.
 func (s *Service) RevokeAll(ctx context.Context, userID pgtype.UUID) {
 	if err := s.tokens.RevokeUserRefreshTokens(ctx, userID); err != nil {
-		slog.Error("RevokeUserRefreshTokens failed", "user_id", userID.String(), "err", err)
+		s.logger.ErrorContext(ctx, "RevokeUserRefreshTokens failed", "user_id", userID.String(), "err", err)
 	}
 }
 

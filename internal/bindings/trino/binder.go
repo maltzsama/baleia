@@ -1,6 +1,7 @@
 package trino
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,8 +31,9 @@ type RegistryStore interface {
 // admin identity (the only one the catalog guard lets manage catalogs,
 // docs/adr/0005).
 type Binder struct {
-	admin *trinoclient.Client
-	store RegistryStore
+	logger *slog.Logger
+	admin  *trinoclient.Client
+	store  RegistryStore
 	// registry seals catalog-origin secret values before they are written to
 	// trino_catalog_registry (Phase B of #31 / D4). Nil keeps Phase A: rows
 	// carry plaintext.
@@ -41,8 +43,8 @@ type Binder struct {
 var _ bindings.Binder = (*Binder)(nil)
 
 // New is built at the wiring sites.
-func New(admin *trinoclient.Client, store RegistryStore) *Binder {
-	return &Binder{admin: admin, store: store}
+func New(logger *slog.Logger, admin *trinoclient.Client, store RegistryStore) *Binder {
+	return &Binder{logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), admin: admin, store: store}
 }
 
 // WithRegistryKeyring enables Phase B encryption of registry values. A nil
@@ -215,7 +217,7 @@ func (b *Binder) Create(ctx context.Context, eng bindings.EngineRef, p bindings.
 // is upserted (re-enabled, new properties) between DROP and CREATE.
 func (b *Binder) Replace(ctx context.Context, eng bindings.EngineRef, p bindings.Projection) error {
 	if err := b.admin.DropCatalog(ctx, p.EngineCatalog); err != nil {
-		slog.Warn("drop catalog before re-create", "catalog", p.EngineCatalog, "err", err)
+		b.logger.WarnContext(ctx, "drop catalog before re-create", "catalog", p.EngineCatalog, "err", err)
 	}
 	return b.Create(ctx, eng, p)
 }

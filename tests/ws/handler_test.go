@@ -3,6 +3,7 @@ package ws_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -62,7 +63,7 @@ func finishedStatements() []ws.QuerierQueryStatement {
 
 // newHandler returns a handler wired to a fresh ticket store.
 func newHandler(mock *mockQuerier) (*ws.Handler, *wsticket.Store) {
-	handler := ws.New(mock, "test-secret", "", "", "", "", false)
+	handler := ws.New(slog.New(slog.DiscardHandler), mock, "test-secret", "", "", "", "", false)
 	tickets := wsticket.New()
 	handler.SetTickets(tickets)
 	return handler, tickets

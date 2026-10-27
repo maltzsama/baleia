@@ -1,9 +1,11 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -76,6 +78,7 @@ func (h *AuthHandlers) mailSender() MailSender {
 		Password:      h.settings.Mail.SMTPPassword,
 		From:          h.settings.Mail.SMTPFrom,
 		DefaultLocale: h.settings.Mail.DefaultLocale,
+		Logger:        h.logger,
 	})
 }
 
@@ -111,7 +114,7 @@ func (h *API) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 // by lifecycle state.
 func (h *core) registerMetrics(reg *metrics.Registry) {
 	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory()}
-	reg.WatchBindingStates(func(ctx context.Context) (map[string]int64, error) {
+	reg.WatchBindingStates(h.logger, func(ctx context.Context) (map[string]int64, error) {
 		rows, err := h.topology.BindingStates(ctx)
 		if err != nil {
 			return nil, err
@@ -156,11 +159,12 @@ type Deps struct {
 	WSTickets *wsticket.Store
 }
 
-// ObservabilityDeps are optional: a nil Audit records nothing and a nil
-// Metrics registers nothing.
+// ObservabilityDeps are optional: a nil Audit records nothing, a nil
+// Metrics registers nothing and a nil Logger discards.
 type ObservabilityDeps struct {
 	Audit   audit.Recorder
 	Metrics *metrics.Registry
+	Logger  *slog.Logger
 }
 
 // DataDeps is Baleia's own database.
@@ -205,6 +209,7 @@ func NewAPI(d Deps) (*API, error) {
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
 	c := &core{
+		logger:         cmp.Or(d.Observability.Logger, slog.New(slog.DiscardHandler)),
 		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
 		s3:             d.Storage,
 		queries:        d.Data.Queries,

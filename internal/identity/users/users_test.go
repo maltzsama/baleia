@@ -254,12 +254,12 @@ func (failingMailer) Send(context.Context, string, string, mail.Template, map[st
 func TestInvite_FailedMailNeverLogsTheToken(t *testing.T) {
 	t.Parallel()
 	var logs bytes.Buffer
-	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
-	t.Cleanup(func() { slog.SetDefault(prev) })
-
 	st := newStore()
-	s := New(st, st.tx, failingMailer{}, &fakeSessions{}, Config{PublicURL: "https://baleia.example", PasswordCost: bcrypt.MinCost})
+	s := New(st, st.tx, failingMailer{}, &fakeSessions{}, Config{
+		PublicURL:    "https://baleia.example",
+		PasswordCost: bcrypt.MinCost,
+		Logger:       slog.New(slog.NewTextHandler(&logs, nil)),
+	})
 	if _, err := s.Invite(context.Background(), "ana@x.io", "member"); err != nil {
 		t.Fatal(err)
 	}

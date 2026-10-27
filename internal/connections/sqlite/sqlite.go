@@ -6,6 +6,7 @@
 package sqlite
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -30,14 +31,17 @@ const Catalog = "main"
 type Options struct {
 	Root       string // BALEIA_SQLITE_ROOT; empty disables the provider
 	AllowWrite bool   // BALEIA_SQLITE_ALLOW_WRITE
+	// Logger receives the logs; nil discards them (#379).
+	Logger *slog.Logger
 }
 
 type Provider struct {
-	opts Options
+	logger *slog.Logger
+	opts   Options
 }
 
 func New(o Options) *Provider {
-	p := &Provider{opts: o}
+	p := &Provider{opts: o, logger: cmp.Or(o.Logger, slog.New(slog.DiscardHandler))}
 	p.WarnIfRootWritable()
 	return p
 }
@@ -187,7 +191,7 @@ func (p *Provider) WarnIfRootWritable() {
 	}
 	info, err := os.Stat(p.opts.Root)
 	if err == nil && info.Mode().Perm()&0o022 != 0 {
-		slog.Warn("BALEIA_SQLITE_ROOT is writable by group or others; SQLite confinement assumes only operators can change files under it", "root", p.opts.Root)
+		p.logger.Warn("BALEIA_SQLITE_ROOT is writable by group or others; SQLite confinement assumes only operators can change files under it", "root", p.opts.Root)
 	}
 }
 

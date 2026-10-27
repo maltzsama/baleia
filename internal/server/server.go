@@ -35,6 +35,7 @@ import (
 )
 
 type Server struct {
+	logger  *slog.Logger
 	cfg     *config.Config
 	mux     *chi.Mux
 	pool    *pgxpool.Pool
@@ -64,7 +65,7 @@ type drainer interface {
 // session and sweeper) ends with it.
 func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
-	s := &Server{cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
+	s := &Server{logger: core.Logger, cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
 
 	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
 	// that the WebSocket handler consumes; the JWT never appears in the URL.
@@ -75,7 +76,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	h, err := api.NewAPI(api.Deps{
 		Data:          api.DataDeps{Queries: core.Queries, Pool: core.Pool},
 		Engines:       api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder, Dialer: core.Dialer},
-		Observability: api.ObservabilityDeps{Audit: core.Audit, Metrics: core.Metrics},
+		Observability: api.ObservabilityDeps{Audit: core.Audit, Metrics: core.Metrics, Logger: core.Logger},
 		Settings:      api.SettingsFromConfig(cfg),
 		Keyring:       core.Keyring,
 		Temporal:      core.Temporal,
@@ -101,7 +102,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
 	}, func(kind string) { authMetrics.Attempt(kind, metrics.OutcomeRateLimited) })
 
-	s.ws = ws.New(core.Queries.AsWSQuerier(), cfg.JWTSecret, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
+	s.ws = ws.New(s.logger, core.Queries.AsWSQuerier(), cfg.JWTSecret, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
 	s.ws.SetTickets(tickets)
 
 	s.strict = api.NewStrictHandlerWithOptions(h, []api.StrictMiddlewareFunc{
@@ -111,7 +112,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		oidcMiddleware(cfg),
 	}, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  strictRequestError,
-		ResponseErrorHandlerFunc: strictResponseError,
+		ResponseErrorHandlerFunc: s.strictResponseError,
 	})
 
 	// The MCP surface is mounted outside /api/v1: agent tokens are valid only
@@ -119,8 +120,8 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	if cfg.AgentsEnabled {
 		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings(), core.Dialects)
 		gate.SetObserver(core.Metrics.Agent())
-		s.mcp = mcp.New(h, gate, core.Queries, mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
-		startAssistant(ctx, h, s.mcp, core.Dialer, runner)
+		s.mcp = mcp.New(s.logger, h, gate, core.Queries, mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
+		startAssistant(ctx, s.logger, h, s.mcp, core.Dialer, runner)
 	}
 
 	s.routes()
@@ -130,17 +131,24 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 // startAssistant provisions the assistant (#62) when the agents feature is
 // on. It runs turns through an in-memory MCP client, so the same gate and
 // audit hooks apply.
-func startAssistant(ctx context.Context, h *api.API, mcpServer *mcp.Server, dialer *connections.Dialer, slot *assistant.RunnerSlot) {
+func startAssistant(
+	ctx context.Context,
+	logger *slog.Logger,
+	h *api.API,
+	mcpServer *mcp.Server,
+	dialer *connections.Dialer,
+	slot *assistant.RunnerSlot,
+) {
 	svc := h.AssistantService()
 	if svc == nil {
 		return
 	}
 	session, err := mcpServer.InProcessClient(ctx)
 	if err != nil {
-		slog.WarnContext(ctx, "assistant disabled: in-process MCP client", "err", err)
+		logger.WarnContext(ctx, "assistant disabled: in-process MCP client", "err", err)
 		return
 	}
-	runner := assistant.NewRunner(svc, nil, assistant.NewMCPToolCaller(session))
+	runner := assistant.NewRunner(logger, svc, nil, assistant.NewMCPToolCaller(session))
 	// Without stored settings the runner starts with no provider; saving the
 	// settings sets one.
 	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -148,10 +156,10 @@ func startAssistant(ctx context.Context, h *api.API, mcpServer *mcp.Server, dial
 	settings, err := svc.Settings(sctx)
 	switch {
 	case err != nil:
-		slog.WarnContext(ctx, "assistant: settings not loaded at startup", "err", err)
+		logger.WarnContext(ctx, "assistant: settings not loaded at startup", "err", err)
 	case settings.Enabled && settings.Provider != nil && settings.Model != nil:
 		if key, err := svc.APIKey(sctx); err != nil {
-			slog.WarnContext(ctx, "assistant: API key not loaded at startup", "err", err)
+			logger.WarnContext(ctx, "assistant: API key not loaded at startup", "err", err)
 		} else {
 			client := obs.WrapHTTPClient(dialer.HTTPClient(assistantllm.ClientTimeout))
 			runner.SetProvider(assistantllm.NewHTTPProvider(client, *settings.Provider, derefString(settings.BaseUrl), key, *settings.Model))
@@ -167,7 +175,7 @@ func (s *Server) routes() {
 	s.mux.Use(obs.RouteName)               // names the tracing span after chi has routed (#47)
 	s.mux.Use(s.metrics.HTTP().Middleware) // route templates, never raw paths (#87)
 	s.mux.Use(RequestIDHeader)
-	s.mux.Use(StructuredLogger(slog.Default()))
+	s.mux.Use(StructuredLogger(s.logger))
 	s.mux.Use(middleware.Recoverer)
 
 	s.mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -488,7 +496,7 @@ func (s *Server) Run(ctx context.Context) error {
 		err := srv.Shutdown(sctx)
 		if s.background != nil {
 			if derr := s.background.Drain(sctx); derr != nil {
-				slog.WarnContext(sctx, "background work still running at shutdown", "err", derr)
+				s.logger.WarnContext(sctx, "background work still running at shutdown", "err", derr)
 			}
 		}
 		shutdown <- err

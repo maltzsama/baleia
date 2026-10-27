@@ -3,6 +3,7 @@ package login
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -86,7 +87,7 @@ func TestPassword(t *testing.T) {
 	st.byEmail["ana@x.io"] = db.User{ID: newID(), Email: "ana@x.io", AuthProvider: "local", PasswordHash: hash(t, "right"), Status: "active"}
 	st.byEmail["sso@x.io"] = db.User{ID: newID(), Email: "sso@x.io", AuthProvider: "oidc", Status: "active"}
 	st.byEmail["off@x.io"] = db.User{ID: newID(), Email: "off@x.io", AuthProvider: "local", PasswordHash: hash(t, "right"), Status: "suspended"}
-	s := New(st, fakeDirectory{}, nil, bcrypt.MinCost)
+	s := New(slog.New(slog.DiscardHandler), st, fakeDirectory{}, nil, bcrypt.MinCost)
 
 	if u, err := s.Password(ctx, "ana@x.io", "right"); err != nil || u.Email != "ana@x.io" {
 		t.Fatalf("right password = %v, %v", u.Email, err)
@@ -137,7 +138,7 @@ func TestDirectory(t *testing.T) {
 		"ana:right": {ExternalID: "uid=ana", Role: "admin", Teams: []identity.TeamAssignment{{TeamID: team, TeamRole: "member"}}},
 		"off:right": {ExternalID: "uid=off", Role: "member"},
 	}}
-	s := New(st, dir, kr, bcrypt.MinCost)
+	s := New(slog.New(slog.DiscardHandler), st, dir, kr, bcrypt.MinCost)
 
 	u, err := s.Directory(ctx, ap.ID, "ana", "right")
 	if err != nil {
@@ -188,7 +189,7 @@ func (brokenStore) GetAuthProviderByID(context.Context, pgtype.UUID) (db.AuthPro
 // a failed login that is audited as denied and slows the account down.
 func TestStoreFailureIsNotInvalidCredentials(t *testing.T) {
 	t.Parallel()
-	s := New(brokenStore{newStore()}, fakeDirectory{}, nil, bcrypt.MinCost)
+	s := New(slog.New(slog.DiscardHandler), brokenStore{newStore()}, fakeDirectory{}, nil, bcrypt.MinCost)
 	if _, err := s.Password(context.Background(), "ana@x.io", "right"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("Password = %v, want the store error", err)
 	}

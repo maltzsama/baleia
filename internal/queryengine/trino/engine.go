@@ -5,9 +5,11 @@
 package trino
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -31,15 +33,16 @@ const (
 // requestTimeout bounds one HTTP request (one page), not a statement.
 const requestTimeout = 60 * time.Second
 
-// Spec is the kind's entry for a queryengine.Registry (#364).
-func Spec(dl queryengine.Dialect) queryengine.KindSpec {
-	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassFederated, Factory: newEngine(dl)}
+// Spec is the kind's entry for a queryengine.Registry (#364). Its engines
+// log through logger; nil discards.
+func Spec(dl queryengine.Dialect, logger *slog.Logger) queryengine.KindSpec {
+	return queryengine.KindSpec{Name: Kind, Class: queryengine.ClassFederated, Factory: newEngine(dl, logger)}
 }
 
 // newEngine builds the engine from its connection config: url, and the
 // service_user (fallback identity) and admin_user (kills queries by handle)
 // that bootstrap keeps in step with the environment.
-func newEngine(dl queryengine.Dialect) queryengine.Factory {
+func newEngine(dl queryengine.Dialect, logger *slog.Logger) queryengine.Factory {
 	return func(_ context.Context, row queryengine.EngineRow, cfg connections.Config, d *connections.Dialer) (queryengine.Engine, error) {
 		url := cfg.Value("url")
 		if url == "" {
@@ -49,6 +52,7 @@ func newEngine(dl queryengine.Dialect) queryengine.Factory {
 		admin := valueOr(cfg.Value("admin_user"), defaultAdminUser)
 		hc := obs.WrapHTTPClient(trinoprovider.HTTPClient(d, cfg, requestTimeout))
 		return &Engine{
+			logger:  cmp.Or(logger, slog.New(slog.DiscardHandler)),
 			dialect: dl,
 			id:      row.ID,
 			client:  trinoclient.NewWithHTTPClient(url, service, hc),
@@ -62,6 +66,7 @@ func newEngine(dl queryengine.Dialect) queryengine.Factory {
 func New(id, url, serviceUser, adminUser string, d *connections.Dialer, dl queryengine.Dialect) *Engine {
 	hc := obs.WrapHTTPClient(d.HTTPClient(requestTimeout))
 	return &Engine{
+		logger:  slog.New(slog.DiscardHandler),
 		dialect: dl,
 		id:      id,
 		client:  trinoclient.NewWithHTTPClient(url, valueOr(serviceUser, defaultServiceUser), hc),
@@ -78,6 +83,7 @@ func valueOr(v, def string) string {
 
 // Engine is a Trino coordinator.
 type Engine struct {
+	logger  *slog.Logger
 	dialect queryengine.Dialect
 	id      string
 	client  *trinoclient.Client // runs statements; identity set per session

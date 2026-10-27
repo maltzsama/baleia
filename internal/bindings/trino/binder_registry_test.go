@@ -3,6 +3,7 @@ package trino
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -61,7 +62,7 @@ func stageProps(t *testing.T, b *Binder, p bindings.Projection) map[string]strin
 func TestStageSealsRegistrySecrets(t *testing.T) {
 	t.Parallel()
 	kr := registryKeyring(t)
-	b := New(nil, nil).WithRegistryKeyring(kr)
+	b := New(slog.New(slog.DiscardHandler), nil, nil).WithRegistryKeyring(kr)
 	p := bindings.Projection{
 		EngineCatalog: "lake",
 		Connector:     "iceberg",
@@ -93,7 +94,7 @@ func TestStageSealsRegistrySecrets(t *testing.T) {
 // means the registry keeps its current shape.
 func TestStageKeepsPlaintextWithoutKeyring(t *testing.T) {
 	t.Parallel()
-	b := New(nil, nil)
+	b := New(slog.New(slog.DiscardHandler), nil, nil)
 	props := stageProps(t, b, bindings.Projection{
 		EngineCatalog: "lake",
 		Connector:     "iceberg",
@@ -109,7 +110,7 @@ func TestStageKeepsPlaintextWithoutKeyring(t *testing.T) {
 // secret and must survive unchanged.
 func TestStageLeavesReferencesAlone(t *testing.T) {
 	t.Parallel()
-	b := New(nil, nil).WithRegistryKeyring(registryKeyring(t))
+	b := New(slog.New(slog.DiscardHandler), nil, nil).WithRegistryKeyring(registryKeyring(t))
 	props := stageProps(t, b, bindings.Projection{
 		EngineCatalog: "lake",
 		Connector:     "iceberg",

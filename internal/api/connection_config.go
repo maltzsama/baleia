@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"sort"
 
@@ -175,9 +176,9 @@ func storedColumns(h *core, cfg connections.Config) (config []byte, url string, 
 }
 
 // publicConfig returns the stored non-secret values for responses.
-func publicConfig(raw []byte) map[string]string {
+func publicConfig(logger *slog.Logger, raw []byte) map[string]string {
 	out := map[string]string{}
-	decodeStored(raw, &out, "connections.config")
+	decodeStored(logger, raw, &out, "connections.config")
 	return out
 }
 

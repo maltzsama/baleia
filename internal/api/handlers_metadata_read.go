@@ -199,7 +199,7 @@ func (h *CatalogHandlers) GetMetadataTable(ctx context.Context, request GetMetad
 		Columns: make([]MetadataColumn, 0, len(cols)),
 		Doc:     tableDoc,
 	}
-	decodeStored(t.Properties, &out.Properties, "metadata_tables.properties")
+	decodeStored(h.logger, t.Properties, &out.Properties, "metadata_tables.properties")
 	var d dialect.Dialect
 	if b := detail.Binding; b != nil {
 		id := openapi_types.UUID(b.ID.Bytes)

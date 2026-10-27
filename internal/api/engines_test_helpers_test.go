@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
@@ -29,7 +30,7 @@ func trinoBackends(url string) (engineSource, *bindtrino.Binder) {
 		panic(err)
 	}
 	eng := queryengine.Guard(qtrino.New("test-trino", url, "baleia", "baleia_admin", d, dialect.NewRegistry().MustGet(dialect.Trino)), false)
-	return fixedEngines{eng}, bindtrino.New(trino.NewWithHTTPClient(url, "baleia_admin", d.HTTPClient(0)), nil)
+	return fixedEngines{eng}, bindtrino.New(slog.New(slog.DiscardHandler), trino.NewWithHTTPClient(url, "baleia_admin", d.HTTPClient(0)), nil)
 }
 
 // testEngines is a Trino engine whose coordinator is never reached.
@@ -55,7 +56,7 @@ func (k registryKinds) Transient(ctx context.Context, kind string, cfg connectio
 // (before #364 their init() registered them as a side effect of the import).
 func testKinds(t *testing.T, d *connections.Dialer) engineKinds {
 	t.Helper()
-	r, err := queryengine.NewRegistry(fake.Spec(), qtrino.Spec(dialect.NewRegistry().MustGet(dialect.Trino)))
+	r, err := queryengine.NewRegistry(fake.Spec(), qtrino.Spec(dialect.NewRegistry().MustGet(dialect.Trino), nil))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ package engines
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -27,6 +28,8 @@ type Options struct {
 	Oracle oracle.Options
 	// Dialects gives every kind the dialect it speaks.
 	Dialects *dialect.Registry
+	// Logger receives the engines' logs; nil discards.
+	Logger *slog.Logger
 }
 
 // NewRegistry builds the registry of every engine kind Baleia ships.
@@ -42,7 +45,7 @@ func NewRegistry(o Options) (*queryengine.Registry, error) {
 		postgresql.Spec(d.MustGet(dialect.PostgreSQL)),
 		sqlite.Spec(o.SQLite, d.MustGet(dialect.SQLite)),
 		sqlserver.Spec(d.MustGet(dialect.TSQL)),
-		trino.Spec(d.MustGet(dialect.Trino)),
+		trino.Spec(d.MustGet(dialect.Trino), o.Logger),
 	}
 	specs = append(specs, mysql.Specs(d.MustGet(dialect.MySQL), d.MustGet(dialect.MariaDB))...)
 	return queryengine.NewRegistry(specs...)

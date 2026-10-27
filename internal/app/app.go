@@ -150,7 +150,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.Connections, err = providers.New(c.Dialer, providers.Options{
 		Dialects: c.Dialects,
 		Secrets:  connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir},
-		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
+		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite, Logger: c.Logger},
 		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.ConnectionsAllowLoopback},
 	})
 	if err != nil {
@@ -162,6 +162,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		Dialects: c.Dialects,
 		SQLite:   sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
 		Oracle:   oracle.Options{LOBMaxBytes: cfg.OracleLOBMaxBytes},
+		Logger:   c.Logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("engine kinds: %w", err)
@@ -174,8 +175,8 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.Storage.SetMetrics(c.Metrics.Storage())
 
 	c.TrinoAdmin = trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, obs.WrapHTTPClient(c.Dialer.HTTPClient(60*time.Second)))
-	c.Binder = bindtrino.New(c.TrinoAdmin, c.Queries).WithRegistryKeyring(c.RegistryKeyring)
-	c.Audit = audit.NewPostgres(c.Queries, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)
+	c.Binder = bindtrino.New(c.Logger, c.TrinoAdmin, c.Queries).WithRegistryKeyring(c.RegistryKeyring)
+	c.Audit = audit.NewPostgres(c.Logger, c.Queries, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)
 	return c, nil
 }
 

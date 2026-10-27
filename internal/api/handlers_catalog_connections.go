@@ -92,7 +92,7 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 	}
 	config, connURL, credsEnc, err := storedColumns(h.core, cfg)
 	if err != nil {
-		slog.Error("encrypt connection credentials", "err", err)
+		h.logger.ErrorContext(ctx, "encrypt connection credentials", "err", err)
 		return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
 	}
 
@@ -121,7 +121,7 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		return CreateCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
 	}
 	if err != nil {
-		slog.Error("CreateCatalogConnection failed", "err", err)
+		h.logger.ErrorContext(ctx, "CreateCatalogConnection failed", "err", err)
 		return nil, err
 	}
 
@@ -181,14 +181,14 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 			h.audited(ctx, ev.Failed(audit.ReasonValidation))
 			return UpdateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
 		case errors.Is(err, catalogs.ErrCredentialsUnreadable):
-			slog.Error("open connection credentials", "err", err)
+			h.logger.ErrorContext(ctx, "open connection credentials", "err", err)
 			return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not open the stored connection credentials"}, nil
 		case err != nil:
 			return nil, err
 		}
 		config, connURL, credsEnc, err := storedColumns(h.core, cfg)
 		if err != nil {
-			slog.Error("encrypt connection credentials", "err", err)
+			h.logger.ErrorContext(ctx, "encrypt connection credentials", "err", err)
 			return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
 		}
 		params.Config, params.Url, params.CredentialsEnc = config, &connURL, credsEnc
@@ -204,7 +204,7 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 	}
 
 	h.catalogCache.Clear()
-	ev.Changes = connectionChanges(stored, conn, body.Credentials)
+	ev.Changes = connectionChanges(h.logger, stored, conn, body.Credentials)
 	h.audited(ctx, ev.Allowed())
 	return UpdateCatalogConnection200JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
@@ -313,20 +313,20 @@ func connectionTestError(err error) string {
 func (h *core) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
 	ws, err := h.access.PersonalWorkspace(ctx, userID)
 	if err != nil {
-		slog.Warn("auto-create personal workspace failed", "err", err)
+		h.logger.WarnContext(ctx, "auto-create personal workspace failed", "err", err)
 		return nil
 	}
 	return &ws
 }
 
-func dbCatalogConnectionToPublic(c db.CatalogConnection) CatalogConnection {
+func dbCatalogConnectionToPublic(logger *slog.Logger, c db.CatalogConnection) CatalogConnection {
 	id := openapi_types.UUID(c.ID.Bytes)
 	return CatalogConnection{
 		Id:                  id,
 		Name:                c.Name,
 		Type:                c.Type,
 		Url:                 redactURLSecrets(c.Url),
-		Config:              publicConfig(c.Config),
+		Config:              publicConfig(logger, c.Config),
 		HasCredentials:      c.CredentialsEnc != nil && *c.CredentialsEnc != "",
 		DefaultReadonly:     c.DefaultReadonly,
 		CredentialsReadOnly: c.CredentialsReadOnly,
@@ -366,21 +366,21 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 
 	p, err := authz.PrincipalFromContext(r.Context())
 	if err != nil {
-		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "invalid user", nil)
+		h.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "invalid user", nil)
 		return
 	}
 	var wsUUID pgtype.UUID
 	if err := wsUUID.Scan(wsID); err != nil || !wsUUID.Valid {
-		writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
+		h.writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
 		return
 	}
 	// Any member (or a global admin) may list; anyone else is told it does not exist.
 	ws, err := h.authz().Workspace(r.Context(), p, wsUUID, authz.ActRead)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
+			h.writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
 		} else {
-			writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
+			h.writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
 		}
 		return
 	}
@@ -392,7 +392,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 	if ws.OwnerUserID.Valid {
 		conns, err := h.topology.ConnectionsOf(r.Context(), ws.OwnerUserID)
 		if err != nil {
-			slog.Error("list connections for workspace", "err", err)
+			h.logger.ErrorContext(r.Context(), "list connections for workspace", "err", err)
 			writeJSON(w, http.StatusOK, []workspaceCatalogEntry{})
 			return
 		}
@@ -400,7 +400,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 			// The catalogs table is the source of truth — no Polaris REST call.
 			rows, err := h.topology.CatalogsOfConnection(r.Context(), conn.ID)
 			if err != nil {
-				slog.Warn("list catalogs for connection", "conn", conn.Name, "err", err)
+				h.logger.WarnContext(r.Context(), "list catalogs for connection", "conn", conn.Name, "err", err)
 				continue
 			}
 			for _, row := range rows {
@@ -424,7 +424,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 	// Catalogs granted to the workspace, whoever owns their connection.
 	granted, err := h.topology.GrantedToWorkspace(r.Context(), wsUUID)
 	if err != nil {
-		slog.Error("list granted catalogs for workspace", "err", err)
+		h.logger.ErrorContext(r.Context(), "list granted catalogs for workspace", "err", err)
 		writeJSON(w, http.StatusOK, []workspaceCatalogEntry{})
 		return
 	}
@@ -454,10 +454,10 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 // writeAPIError answers with a JSON error built by json.Marshal. The cause is
 // logged, never returned: Trino and database error text can carry identifiers,
 // paths and credentials.
-func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, message string, cause error) {
+func (h *core) writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, message string, cause error) {
 	rid := middleware.GetReqID(r.Context())
 	if cause != nil {
-		slog.Error("explorer request failed", "code", code, "request_id", rid, "err", cause)
+		h.logger.ErrorContext(r.Context(), "explorer request failed", "code", code, "request_id", rid, "err", cause)
 	}
 	writeJSON(w, status, map[string]string{"code": code, "message": message, "request_id": rid})
 }
@@ -470,17 +470,17 @@ func (h *core) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalo
 	ctx := r.Context()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "invalid user", nil)
+		h.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "invalid user", nil)
 		return db.Catalog{}, false
 	}
 	var connID pgtype.UUID
 	if err := connID.Scan(chiURLParam(r, "connection_id")); err != nil || !connID.Valid {
-		writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
+		h.writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
 		return db.Catalog{}, false
 	}
 	cluster, err := h.topology.DefaultCluster(ctx)
 	if err != nil {
-		writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
+		h.writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
 		return db.Catalog{}, false
 	}
 	found, err := h.topology.CatalogByTrinoName(ctx, db.GetCatalogByTrinoNameParams{
@@ -489,18 +489,18 @@ func (h *core) explorerTarget(w http.ResponseWriter, r *http.Request) (db.Catalo
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
+			h.writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
 		} else {
-			writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
+			h.writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
 		}
 		return db.Catalog{}, false
 	}
 	cat, _, err := h.authz().CatalogOfConnection(ctx, p, connID, found.ID, authz.ActRead)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
-			writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
+			h.writeAPIError(w, r, http.StatusNotFound, "not_found", "catalog not found", nil)
 		} else {
-			writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
+			h.writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "internal error", err)
 		}
 		return db.Catalog{}, false
 	}
@@ -540,18 +540,18 @@ func (h *CatalogHandlers) HandleListNamespaces(w http.ResponseWriter, r *http.Re
 	}
 	eng, err := h.exploreEngine(r)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
+		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
 		return
 	}
 	target, err := eng.Dialect().QualifiedName(cat.TrinoName())
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid catalog name", err)
+		h.writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid catalog name", err)
 		return
 	}
 
 	rows, err := h.exploreQuery(r, eng, "SHOW SCHEMAS FROM "+target)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
+		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
 		return
 	}
 	namespaces := make([][]string, 0, len(rows))
@@ -570,23 +570,23 @@ func (h *CatalogHandlers) HandleListTables(w http.ResponseWriter, r *http.Reques
 	}
 	namespace, err := pathParam(r, "namespace")
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
+		h.writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
 	}
 	eng, err := h.exploreEngine(r)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
+		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
 		return
 	}
 	target, err := eng.Dialect().QualifiedName(cat.TrinoName(), namespace)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
+		h.writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
 	}
 
 	rows, err := h.exploreQuery(r, eng, "SHOW TABLES FROM "+target)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
+		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
 		return
 	}
 	type tableEntry struct {
@@ -611,28 +611,28 @@ func (h *CatalogHandlers) HandleListColumns(w http.ResponseWriter, r *http.Reque
 	}
 	namespace, err := pathParam(r, "namespace")
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
+		h.writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace", err)
 		return
 	}
 	table, err := pathParam(r, "table")
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid table", err)
+		h.writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid table", err)
 		return
 	}
 	eng, err := h.exploreEngine(r)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
+		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
 		return
 	}
 	target, err := eng.Dialect().QualifiedName(cat.TrinoName(), namespace, table)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace or table", err)
+		h.writeAPIError(w, r, http.StatusBadRequest, "invalid_identifier", "invalid namespace or table", err)
 		return
 	}
 
 	meta, err := h.exploreQuery(r, eng, "DESCRIBE "+target)
 	if err != nil {
-		writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
+		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
 		return
 	}
 	type colEntry struct {

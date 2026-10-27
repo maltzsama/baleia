@@ -1,11 +1,13 @@
 package activities
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -37,6 +39,7 @@ type engineSource interface {
 }
 
 type Activities struct {
+	logger *slog.Logger
 	// dialects split and gate scripts by the target engine's dialect.
 	dialects *dialect.Registry
 	metrics  workerMetrics
@@ -77,8 +80,9 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
+func New(logger *slog.Logger, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
 	a := &Activities{
+		logger:      cmp.Or(logger, slog.New(slog.DiscardHandler)),
 		dialects:    dialects,
 		queries:     db.New(pool),
 		pool:        pool,

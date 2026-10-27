@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -72,9 +73,9 @@ func assistantConversationToPublic(c adb.AssistantConversation) AssistantConvers
 	}
 }
 
-func assistantMessageToPublic(m adb.AssistantMessage) AssistantMessage {
+func assistantMessageToPublic(logger *slog.Logger, m adb.AssistantMessage) AssistantMessage {
 	var content any
-	decodeStored(m.Content, &content, "assistant_messages.content")
+	decodeStored(logger, m.Content, &content, "assistant_messages.content")
 	out := AssistantMessage{
 		Seq:       int(m.Seq),
 		Role:      AssistantMessageRole(m.Role),
@@ -350,7 +351,7 @@ func (h *AgentHandlers) GetAssistantConversation(ctx context.Context, request Ge
 		Messages:    make([]AssistantMessage, 0, len(msgs)),
 	}
 	for _, m := range msgs {
-		out.Messages = append(out.Messages, assistantMessageToPublic(m))
+		out.Messages = append(out.Messages, assistantMessageToPublic(h.logger, m))
 	}
 	return GetAssistantConversation200JSONResponse(out), nil
 }
@@ -444,7 +445,7 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 	}
 	replay := make([]AssistantMessage, 0, len(rows))
 	for _, row := range rows {
-		replay = append(replay, assistantMessageToPublic(row))
+		replay = append(replay, assistantMessageToPublic(h.logger, row))
 	}
 	stream := &assistantSSE{ctx: ctx, replay: replay, lastSeq: after, ping: time.NewTicker(15 * time.Second)}
 	if runner := h.assistantRunner.Load(); runner != nil {

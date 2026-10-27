@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
@@ -122,6 +121,6 @@ func (h *core) startMetadataSync(ctx context.Context, catalogID pgtype.UUID) {
 		WorkflowIDConflictPolicy: enumspb.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING,
 	}, workflows.MetadataSyncWorkflow, workflows.MetadataSyncInput{CatalogID: id})
 	if err != nil {
-		slog.Warn("start metadata sync", "catalog_id", id, "err", err)
+		h.logger.WarnContext(ctx, "start metadata sync", "catalog_id", id, "err", err)
 	}
 }

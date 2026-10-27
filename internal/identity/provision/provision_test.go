@@ -3,6 +3,7 @@ package provision
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -33,7 +34,7 @@ func TestApplyTeams(t *testing.T) {
 	ok, broken, failing := uuid.NewString(), "not-a-uuid", uuid.NewString()
 	f := &fakeMembers{fail: map[string]bool{failing: true}}
 
-	ApplyTeams(context.Background(), f, user, []identity.TeamAssignment{
+	ApplyTeams(context.Background(), slog.New(slog.DiscardHandler), f, user, []identity.TeamAssignment{
 		{TeamID: ok, TeamRole: "owner"},
 		{TeamID: broken, TeamRole: "member"},
 		{TeamID: failing, TeamRole: "member"},
@@ -97,7 +98,7 @@ func TestOIDCUser(t *testing.T) {
 	t.Run("creates an allowed verified account with its teams", func(t *testing.T) {
 		t.Parallel()
 		st := newAccounts()
-		u, err := OIDCUser(ctx, st, provider, cfg, info("s1", "ana@x.io", true, "data"))
+		u, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, cfg, info("s1", "ana@x.io", true, "data"))
 		if err != nil || u.AuthProvider != "oidc" || u.Role != identity.RoleMember {
 			t.Fatalf("user = %+v, %v", u, err)
 		}
@@ -119,7 +120,7 @@ func TestOIDCUser(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			st := newAccounts()
-			if _, err := OIDCUser(ctx, st, provider, c.cfg, c.info); !errors.Is(err, ErrNotProvisioned) {
+			if _, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, c.cfg, c.info); !errors.Is(err, ErrNotProvisioned) {
 				t.Errorf("err = %v, want ErrNotProvisioned", err)
 			}
 			if len(st.bySubject) != 0 {
@@ -133,7 +134,7 @@ func TestOIDCUser(t *testing.T) {
 		st := newAccounts()
 		existing := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Role: identity.RoleMember}
 		st.bySubject["s6"] = existing
-		u, err := OIDCUser(ctx, st, provider, auth.OIDCProviderConfig{RoleMapping: cfg.RoleMapping}, info("s6", "ana@x.io", true, "admins"))
+		u, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, auth.OIDCProviderConfig{RoleMapping: cfg.RoleMapping}, info("s6", "ana@x.io", true, "admins"))
 		if err != nil || u.Role != identity.RoleAdmin || st.roles[existing.ID.Bytes] != identity.RoleAdmin {
 			t.Fatalf("user = %+v (stored %q), %v", u, st.roles[existing.ID.Bytes], err)
 		}
@@ -143,7 +144,7 @@ func TestOIDCUser(t *testing.T) {
 		t.Parallel()
 		st := newAccounts()
 		st.raceSubject = "s7"
-		u, err := OIDCUser(ctx, st, provider, cfg, info("s7", "ana@x.io", true))
+		u, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, cfg, info("s7", "ana@x.io", true))
 		if err != nil || u.ExternalID == nil || *u.ExternalID != "s7" {
 			t.Fatalf("user = %+v, %v", u, err)
 		}

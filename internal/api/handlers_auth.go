@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -259,7 +258,7 @@ func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (G
 	// The personal workspace is a convenience: a failed lookup omits it
 	// rather than failing the whole /auth/me.
 	if ws, ok, err := h.accounts.PersonalWorkspace(ctx, user.ID); err != nil {
-		slog.Warn("auth/me: personal workspace lookup failed", "user_id", idString(user.ID), "err", err)
+		h.logger.WarnContext(ctx, "auth/me: personal workspace lookup failed", "user_id", idString(user.ID), "err", err)
 	} else if ok {
 		id := openapi_types.UUID(ws.Bytes)
 		me.PersonalWorkspaceId = &id

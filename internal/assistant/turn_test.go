@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -80,7 +81,7 @@ func TestTurnToolCallsGoThroughTheCaller(t *testing.T) {
 		{Text: "done", InputTokens: 1, OutputTokens: 1},
 	}}
 	tools := &fakeTools{result: map[string]any{"rows": []any{1, 2}, "row_count": 2}}
-	runner := NewRunner(svc, provider, tools)
+	runner := NewRunner(slog.New(slog.DiscardHandler), svc, provider, tools)
 
 	seq, err := runner.Start(context.Background(), userID, conv.ID, "how many?")
 	if err != nil {
@@ -156,7 +157,7 @@ func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := &llm.Fake{Responses: []llm.Response{{Text: "should not run"}}}
-	runner := NewRunner(svc, provider, &fakeTools{})
+	runner := NewRunner(slog.New(slog.DiscardHandler), svc, provider, &fakeTools{})
 	if _, err := runner.Start(context.Background(), userID, conv.ID, "hello"); err != nil {
 		t.Fatal(err)
 	}

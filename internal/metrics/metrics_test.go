@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -39,7 +40,7 @@ func registry(t *testing.T) *Registry {
 	}
 	r.Metadata().Synced(time.Second, nil)
 	r.Audit().WriteFailed()
-	r.WatchMetadataStaleness(func(context.Context) (float64, error) { return 42, nil })
+	r.WatchMetadataStaleness(slog.New(slog.DiscardHandler), func(context.Context) (float64, error) { return 42, nil })
 	return r
 }
 

@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -84,6 +85,7 @@ func (h *Hub) Publish(id [16]byte, ev Event) {
 
 // Runner owns one assistant turn at a time per conversation.
 type Runner struct {
+	logger   *slog.Logger
 	svc      *Service
 	provider llm.Provider
 	tools    ToolCaller
@@ -94,10 +96,11 @@ type Runner struct {
 }
 
 // NewRunner builds the turn engine.
-func NewRunner(svc *Service, provider llm.Provider, tools ToolCaller) *Runner {
+func NewRunner(logger *slog.Logger, svc *Service, provider llm.Provider, tools ToolCaller) *Runner {
 	host, _ := os.Hostname()
 	return &Runner{
-		svc: svc, provider: provider, tools: tools, hub: NewHub(),
+		logger: cmp.Or(logger, slog.New(slog.DiscardHandler)),
+		svc:    svc, provider: provider, tools: tools, hub: NewHub(),
 		instance: fmt.Sprintf("%s-%d", host, os.Getpid()),
 		cancels:  make(map[[16]byte]context.CancelFunc),
 	}
@@ -208,7 +211,7 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 	}
 	req := llm.Request{
 		System:    systemPrompt,
-		Messages:  historyToLLM(history),
+		Messages:  historyToLLM(r.logger, history),
 		Tools:     toolSpecs(),
 		MaxTokens: int(settings.MaxOutputTokensPerTurn),
 	}
@@ -251,7 +254,7 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 		}
 		if resp.Text != "" {
 			if _, err := r.append(ctx, conversation.ID, "assistant", map[string]any{"text": resp.Text}, in, out); err != nil {
-				slog.WarnContext(ctx, "assistant: reply not stored", "err", err)
+				r.logger.WarnContext(ctx, "assistant: reply not stored", "err", err)
 			}
 		}
 		if len(resp.ToolCalls) == 0 {
@@ -271,7 +274,7 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 			// then reports what is missing to the model.
 			args := map[string]any{}
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				slog.WarnContext(ctx, "assistant: tool arguments do not decode", "tool", call.Name, "err", err)
+				r.logger.WarnContext(ctx, "assistant: tool arguments do not decode", "tool", call.Name, "err", err)
 			}
 			_, _ = r.append(ctx, conversation.ID, "tool_call", map[string]any{
 				"call_id": call.ID, "tool": call.Name, "arguments": json.RawMessage(call.Arguments),
@@ -326,12 +329,12 @@ func (r *Runner) notice(ctx context.Context, id pgtype.UUID, kind, detail string
 	_, _ = r.append(ctx, id, "notice", map[string]any{"kind": kind, "detail": detail}, nil, nil)
 }
 
-func historyToLLM(rows []adb.AssistantMessage) []llm.Message {
+func historyToLLM(logger *slog.Logger, rows []adb.AssistantMessage) []llm.Message {
 	out := make([]llm.Message, 0, len(rows))
 	for _, row := range rows {
 		var content map[string]any
 		if err := json.Unmarshal(row.Content, &content); err != nil {
-			slog.Warn("assistant: stored message does not decode", "seq", row.Seq, "err", err)
+			logger.Warn("assistant: stored message does not decode", "seq", row.Seq, "err", err)
 		}
 		switch row.Role {
 		case "user":

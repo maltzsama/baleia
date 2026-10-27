@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -46,7 +47,7 @@ func userCtx() context.Context {
 func TestRecorderFillsContext(t *testing.T) {
 	t.Parallel()
 	q := &recordedInserter{}
-	r := NewPostgres(q, nil, nil)
+	r := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	err := r.Record(userCtx(), Event{Action: CatalogCreate, ResourceType: "catalog", ResourceID: "c1", WorkspaceID: "22222222-2222-2222-2222-222222222222", Outcome: Allowed})
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +79,7 @@ func TestRecorderFillsContext(t *testing.T) {
 func TestRedactsSecrets(t *testing.T) {
 	t.Parallel()
 	q := &recordedInserter{}
-	r := NewPostgres(q, []string{"sas"}, nil)
+	r := NewPostgres(slog.New(slog.DiscardHandler), q, []string{"sas"}, nil)
 	err := r.Record(userCtx(), Event{Action: ConnectionUpdate, ResourceType: "connection", Outcome: Allowed, Changes: map[string]Change{
 		"client_secret": {From: "old", To: "new"},
 		"sas":           {From: nil, To: "sig"},
@@ -105,13 +106,13 @@ func TestRedactsSecrets(t *testing.T) {
 func TestRecordFailureDoesNotFailRequest(t *testing.T) {
 	t.Parallel()
 	failures := 0
-	r := NewPostgres(&recordedInserter{block: true}, nil, func() { failures++ })
+	r := NewPostgres(slog.New(slog.DiscardHandler), &recordedInserter{block: true}, nil, func() { failures++ })
 	start := time.Now()
 	err := r.Record(userCtx(), Event{Action: CatalogDelete, ResourceType: "catalog", Outcome: Allowed})
 	if err == nil || time.Since(start) > time.Second || failures != 1 {
 		t.Fatalf("err %v after %s, failures %d", err, time.Since(start), failures)
 	}
-	r = NewPostgres(&recordedInserter{err: errors.New("down")}, nil, func() { failures++ })
+	r = NewPostgres(slog.New(slog.DiscardHandler), &recordedInserter{err: errors.New("down")}, nil, func() { failures++ })
 	if err := r.Record(userCtx(), Event{Action: CatalogDelete, ResourceType: "catalog", Outcome: Allowed}); err == nil || failures != 2 {
 		t.Fatalf("err %v failures %d", err, failures)
 	}
@@ -119,7 +120,7 @@ func TestRecordFailureDoesNotFailRequest(t *testing.T) {
 	q := &recordedInserter{}
 	ctx, cancel := context.WithCancel(userCtx())
 	cancel()
-	if err := NewPostgres(q, nil, nil).Record(ctx, Event{Action: ExecutionCancel, ResourceType: "execution", Outcome: Allowed}); err != nil || len(q.rows) != 1 {
+	if err := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil).Record(ctx, Event{Action: ExecutionCancel, ResourceType: "execution", Outcome: Allowed}); err != nil || len(q.rows) != 1 {
 		t.Fatalf("cancelled request: %v, %d rows", err, len(q.rows))
 	}
 }
@@ -127,7 +128,7 @@ func TestRecordFailureDoesNotFailRequest(t *testing.T) {
 func TestUnknownActionIsAnError(t *testing.T) {
 	t.Parallel()
 	failures := 0
-	r := NewPostgres(&recordedInserter{}, nil, func() { failures++ })
+	r := NewPostgres(slog.New(slog.DiscardHandler), &recordedInserter{}, nil, func() { failures++ })
 	if err := r.Record(userCtx(), Event{Action: "catalog.explode", ResourceType: "catalog", Outcome: Allowed}); err == nil || failures != 1 {
 		t.Fatalf("err %v failures %d", err, failures)
 	}
@@ -168,7 +169,7 @@ func TestAppendOnly(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
-	if err := NewPostgres(q, nil, nil).Record(userCtx(), Event{Action: CatalogCreate, ResourceType: "catalog", Outcome: Allowed}); err != nil {
+	if err := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil).Record(userCtx(), Event{Action: CatalogCreate, ResourceType: "catalog", Outcome: Allowed}); err != nil {
 		t.Fatal(err)
 	}
 	for _, stmt := range []string{`UPDATE audit_events SET outcome = 'denied'`, `DELETE FROM audit_events`} {

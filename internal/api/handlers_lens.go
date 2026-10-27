@@ -23,12 +23,13 @@ import (
 
 // RegisterLensRoutes mounts the Lens routes. The caller wraps them in the
 // shared auth middleware; handlers read the caller from the request context.
-func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, temporalClient client.Client, engines engineSource, rec audit.Recorder) {
+func RegisterLensRoutes(mux chi.Router, logger *slog.Logger, queries db.Querier, cfg *config.Config, temporalClient client.Client, engines engineSource, rec audit.Recorder) {
 	if rec == nil {
 		rec = audit.Nop{}
 	}
 	mux.Group(func(r chi.Router) {
 		h := &lensHandlers{
+			logger:    logger,
 			snapshots: lens.New(queries), access: wsaccess.New(queries), checker: authz.New(queries),
 			temporalClient: temporalClient, identityMode: cfg.TrinoUserIdentity, engines: engines, audit: rec,
 		}
@@ -45,6 +46,7 @@ func RegisterLensRoutes(mux chi.Router, queries db.Querier, cfg *config.Config, 
 }
 
 type lensHandlers struct {
+	logger         *slog.Logger
 	snapshots      *lens.Service
 	access         *wsaccess.Service
 	checker        *authz.Checker
@@ -57,7 +59,7 @@ type lensHandlers struct {
 // internalError logs err and answers a generic 500: database errors are not
 // for clients.
 func (h *lensHandlers) internalError(w http.ResponseWriter, r *http.Request, err error) {
-	slog.Error("lens request failed", "path", r.URL.Path, "request_id", middleware.GetReqID(r.Context()), "err", err)
+	h.logger.ErrorContext(r.Context(), "lens request failed", "path", r.URL.Path, "request_id", middleware.GetReqID(r.Context()), "err", err)
 	writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "internal_error", "message": "internal error", "request_id": middleware.GetReqID(r.Context())})
 }
 

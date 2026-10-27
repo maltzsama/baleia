@@ -55,6 +55,7 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 		executions: executions.New(c.queries, c.temporalClient, c.engines, dialects, executions.Config{
 			StatementTimeout: c.settings.Execution.StatementTimeout,
 			ExecutionTimeout: c.settings.Execution.ExecutionTimeout,
+			Logger:           c.logger,
 		}),
 	}
 }

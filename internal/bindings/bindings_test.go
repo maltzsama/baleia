@@ -2,6 +2,7 @@ package bindings_test
 
 import (
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/bindings"
@@ -11,7 +12,7 @@ import (
 
 func TestRegistryAndConnector(t *testing.T) {
 	t.Parallel()
-	b := bindtrino.New(nil, nil)
+	b := bindtrino.New(slog.New(slog.DiscardHandler), nil, nil)
 	bindings.Register(b)
 	got, ok := bindings.For("trino")
 	if !ok || got != b {

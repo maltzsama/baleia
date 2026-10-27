@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -31,7 +32,7 @@ func testDeps(t *testing.T) Deps {
 	}
 	return Deps{
 		Data:     DataDeps{Queries: db.New(pool), Pool: pool},
-		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(nil, nil), Dialer: d},
+		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(slog.New(slog.DiscardHandler), nil, nil), Dialer: d},
 		Settings: SettingsFromConfig(&config.Config{}),
 		Temporal: &fakeTemporalClient{},
 		Storage:  s3,

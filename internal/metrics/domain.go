@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
 	"time"
@@ -196,14 +197,15 @@ func (c *Catalog) DDL(action string, err error) {
 
 // WatchBindingStates exports baleia_catalogs_by_state{state} from count,
 // which returns managed bindings per lifecycle state (#38).
-func (r *Registry) WatchBindingStates(count func(ctx context.Context) (map[string]int64, error)) {
-	r.reg.MustRegister(&statesCollector{count: count})
+func (r *Registry) WatchBindingStates(logger *slog.Logger, count func(ctx context.Context) (map[string]int64, error)) {
+	r.reg.MustRegister(&statesCollector{logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), count: count})
 }
 
 var catalogsByState = prometheus.NewDesc(Namespace+"_catalogs_by_state", "Managed catalog bindings by lifecycle state.", []string{"state"}, nil)
 
 type statesCollector struct {
-	count func(ctx context.Context) (map[string]int64, error)
+	logger *slog.Logger
+	count  func(ctx context.Context) (map[string]int64, error)
 }
 
 func (c *statesCollector) Describe(ch chan<- *prometheus.Desc) { ch <- catalogsByState }
@@ -213,7 +215,7 @@ func (c *statesCollector) Collect(ch chan<- prometheus.Metric) {
 	defer cancel()
 	counts, err := c.count(ctx)
 	if err != nil {
-		slog.Warn("catalogs_by_state", "err", err)
+		c.logger.WarnContext(ctx, "catalogs_by_state", "err", err)
 		return
 	}
 	for _, state := range []string{"provisioning", "active", "updating", "error", "deprovisioning", "disabled"} {
@@ -270,15 +272,16 @@ func (m *Metadata) Synced(d time.Duration, err error) {
 
 // WatchMetadataStaleness exports baleia_metadata_staleness_seconds_max: the
 // seconds since the stalest enabled catalog last finished a metadata pass,
-// read from max at each scrape.
-func (r *Registry) WatchMetadataStaleness(max func(ctx context.Context) (float64, error)) {
-	r.reg.MustRegister(&stalenessCollector{max: max})
+// read from stalest at each scrape.
+func (r *Registry) WatchMetadataStaleness(logger *slog.Logger, stalest func(ctx context.Context) (float64, error)) {
+	r.reg.MustRegister(&stalenessCollector{logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), max: stalest})
 }
 
 var metadataStaleness = prometheus.NewDesc(Namespace+"_metadata_staleness_seconds_max", "Seconds since the stalest enabled catalog last finished a metadata pass.", nil, nil)
 
 type stalenessCollector struct {
-	max func(ctx context.Context) (float64, error)
+	logger *slog.Logger
+	max    func(ctx context.Context) (float64, error)
 }
 
 func (c *stalenessCollector) Describe(ch chan<- *prometheus.Desc) { ch <- metadataStaleness }
@@ -288,7 +291,7 @@ func (c *stalenessCollector) Collect(ch chan<- prometheus.Metric) {
 	defer cancel()
 	v, err := c.max(ctx)
 	if err != nil {
-		slog.Warn("metadata_staleness_seconds_max", "err", err)
+		c.logger.WarnContext(ctx, "metadata_staleness_seconds_max", "err", err)
 		return
 	}
 	ch <- prometheus.MustNewConstMetric(metadataStaleness, prometheus.GaugeValue, v)

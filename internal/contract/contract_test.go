@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -67,7 +68,7 @@ func TestPlaceholderCases(t *testing.T) {
 		Key     string `json:"key"`
 	}
 	fixture(t, "placeholder_cases.json", &cases)
-	reserved := bindtrino.New(nil, nil).ReservedNames()
+	reserved := bindtrino.New(slog.New(slog.DiscardHandler), nil, nil).ReservedNames()
 	n := 0
 	for _, c := range cases {
 		// Baleia only writes catalog-origin placeholders; env and file origins
@@ -130,7 +131,7 @@ func migratedDB(t *testing.T) (*sql.DB, string) {
 func TestReservedNames(t *testing.T) {
 	var want []string
 	fixture(t, "reserved_catalog_names.json", &want)
-	got := bindtrino.New(nil, nil).ReservedNames()
+	got := bindtrino.New(slog.New(slog.DiscardHandler), nil, nil).ReservedNames()
 	slices.Sort(want)
 	slices.Sort(got)
 	if !slices.Equal(got, want) {

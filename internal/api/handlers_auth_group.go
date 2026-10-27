@@ -84,6 +84,7 @@ func newAuthHandlers(c *core) *AuthHandlers {
 	a.oidc = oidclogin.New(c.queries, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
 		PublicURL: c.settings.Mail.PublicURL,
 		CacheTTL:  time.Hour,
+		Logger:    c.logger,
 	})
 	a.users = users.New(c.queries, func(ctx context.Context, fn func(users.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
@@ -91,12 +92,14 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		PublicURL:     c.settings.Mail.PublicURL,
 		DefaultLocale: c.settings.Mail.DefaultLocale,
 		PasswordCost:  c.settings.Auth.PasswordCost,
+		Logger:        c.logger,
 	})
 	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
 		PublicURL:     c.settings.Mail.PublicURL,
 		DefaultLocale: c.settings.Mail.DefaultLocale,
 		TokenTTL:      c.settings.Auth.ResetTTL,
 		PasswordCost:  c.settings.Auth.PasswordCost,
+		Logger:        c.logger,
 	})
 	return a
 }
@@ -107,6 +110,7 @@ func newSessions(c *core) *session.Service {
 		JWTSecret:  c.settings.Auth.JWTSecret,
 		AccessTTL:  c.settings.Auth.AccessTTL,
 		RefreshTTL: c.settings.Auth.RefreshTTL,
+		Logger:     c.logger,
 	})
 }
 
@@ -121,5 +125,5 @@ func (m groupMailer) Send(ctx context.Context, to, locale string, template mail.
 // newLogins builds the credential verifier over the core's database; tests
 // pass a fake directory.
 func newLogins(c *core, directory login.Directory) *login.Service {
-	return login.New(c.queries, directory, c.keyring, c.settings.Auth.PasswordCost)
+	return login.New(c.logger, c.queries, directory, c.keyring, c.settings.Auth.PasswordCost)
 }

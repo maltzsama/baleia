@@ -94,7 +94,7 @@ func (h *core) workspaceActions(ctx context.Context, id pgtype.UUID) []Workspace
 }
 
 func (h *core) withConnectionActions(ctx context.Context, c db.CatalogConnection) CatalogConnection {
-	out := dbCatalogConnectionToPublic(c)
+	out := dbCatalogConnectionToPublic(h.logger, c)
 	if acts := h.catalogConnectionActions(ctx, c.ID); acts != nil {
 		out.AllowedActions = &acts
 	}

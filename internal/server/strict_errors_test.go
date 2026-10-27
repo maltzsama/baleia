@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +14,7 @@ import (
 func TestStrictResponseError(t *testing.T) {
 	t.Parallel()
 	rec := httptest.NewRecorder()
-	strictResponseError(rec, httptest.NewRequest(http.MethodGet, "/api/v1/x", nil), errors.New(`pq: relation "secret_table" does not exist`))
+	(&Server{logger: slog.New(slog.DiscardHandler)}).strictResponseError(rec, httptest.NewRequest(http.MethodGet, "/api/v1/x", nil), errors.New(`pq: relation "secret_table" does not exist`))
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}

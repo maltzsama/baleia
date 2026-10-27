@@ -180,7 +180,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	if err != nil {
 		return nil, err
 	}
-	observe(ctx, l)
+	h.observe(ctx, l)
 	h.catalogCache.Clear()
 	h.startMetadataSync(ctx, cat.ID)
 	ev = withID(ev, cat.ID)
@@ -353,7 +353,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 	if newTrinoName != existing.TrinoName() {
 		ev.Action = audit.CatalogRename
 	}
-	ev.Changes = catalogChanges(existing, newName, newTrinoName, newWarehouse, newConnector, extraProps)
+	ev.Changes = catalogChanges(h.logger, existing, newName, newTrinoName, newWarehouse, newConnector, extraProps)
 
 	// The new binding must project before anything changes.
 	cluster, eng, err := h.catalogEngine(ctx, existing)
@@ -426,7 +426,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 	if err != nil {
 		return nil, err
 	}
-	observe(ctx, l)
+	h.observe(ctx, l)
 	h.catalogCache.Clear()
 	h.startMetadataSync(ctx, updated.ID)
 	h.audited(ctx, ev.Allowed())
@@ -482,7 +482,7 @@ func (h *CatalogHandlers) DeleteCatalog(ctx context.Context, request DeleteCatal
 	if _, err := l.Deprovision(ctx, binding); err != nil && !errors.Is(err, bindings.ErrConcurrentChange) {
 		return nil, err
 	}
-	observe(ctx, l)
+	h.observe(ctx, l)
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
 	return DeleteCatalog204Response{}, nil
@@ -543,7 +543,7 @@ func (h *CatalogHandlers) SyncCatalog(ctx context.Context, request SyncCatalogRe
 		return nil, err
 	}
 	binding = synced
-	observe(ctx, l)
+	h.observe(ctx, l)
 	c := h.catalogResponse(ctx, cat, binding, proj.Version)
 	if binding.LifecycleState != bindings.StateActive {
 		h.audited(ctx, ev.Failed(audit.ReasonEngineError))

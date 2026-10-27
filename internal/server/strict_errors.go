@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -14,8 +13,8 @@ import (
 // strictResponseError is where an error a handler returns is handled (#373):
 // logged once, with the request id, and answered with a stable code, never
 // with the error text, which may carry SQL or internal addresses.
-func strictResponseError(w http.ResponseWriter, r *http.Request, err error) {
-	slog.ErrorContext(r.Context(), "handler error",
+func (s *Server) strictResponseError(w http.ResponseWriter, r *http.Request, err error) {
+	s.logger.ErrorContext(r.Context(), "handler error",
 		"method", r.Method, "path", r.URL.Path, "request_id", middleware.GetReqID(r.Context()), "err", err)
 	writeStrictError(w, http.StatusInternalServerError, "internal_error", "internal error")
 }

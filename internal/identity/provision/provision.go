@@ -23,7 +23,7 @@ type TeamMembers interface {
 
 // ApplyTeams adds userID to every mapped team with its mapped role. A team
 // that cannot be applied is logged and skipped: the login still succeeds.
-func ApplyTeams(ctx context.Context, store TeamMembers, userID pgtype.UUID, teams []identity.TeamAssignment) {
+func ApplyTeams(ctx context.Context, logger *slog.Logger, store TeamMembers, userID pgtype.UUID, teams []identity.TeamAssignment) {
 	for _, t := range teams {
 		var teamID pgtype.UUID
 		if err := teamID.Scan(t.TeamID); err != nil {
@@ -34,7 +34,7 @@ func ApplyTeams(ctx context.Context, store TeamMembers, userID pgtype.UUID, team
 			UserID: userID,
 			Role:   t.TeamRole,
 		}); err != nil {
-			slog.Warn("team mapping failed", "team_id", t.TeamID, "err", err)
+			logger.WarnContext(ctx, "team mapping failed", "team_id", t.TeamID, "err", err)
 		}
 	}
 }
@@ -55,7 +55,7 @@ var ErrNotProvisioned = errors.New("provision: not provisioned")
 // provider allows (#251): auto-create on, a verified e-mail, and an allowed
 // domain. An existing e-mail account is never linked. The mapped role and
 // teams are applied on every login.
-func OIDCUser(ctx context.Context, store Accounts, providerID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
+func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, providerID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
 	mapped, err := identity.MapIdentity(identity.MappingInput{
 		Groups:      info.Groups,
 		RoleMapping: cfg.RoleMapping,
@@ -84,7 +84,7 @@ func OIDCUser(ctx context.Context, store Accounts, providerID pgtype.UUID, cfg a
 			Role:           mapped.Role,
 		})
 		if err == nil {
-			ApplyTeams(ctx, store, user.ID, mapped.Teams)
+			ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
 			return user, nil
 		}
 		if !isUniqueViolation(err) {
@@ -103,7 +103,7 @@ func OIDCUser(ctx context.Context, store Accounts, providerID pgtype.UUID, cfg a
 		}
 		user.Role = mapped.Role
 	}
-	ApplyTeams(ctx, store, user.ID, mapped.Teams)
+	ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
 	return user, nil
 }
 

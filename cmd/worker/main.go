@@ -82,7 +82,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	// Lens reads the Trino coordinator's runtime state as the service identity.
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.Dialer.HTTPClient(60*time.Second)))
 
-	act := activities.New(pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
+	act := activities.New(logger, pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
 	act.SetMetrics(reg)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(core.Queries, core.Keyring, core.Connections, core.Engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones
@@ -97,7 +97,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		_, err := q.DisableMissingAdoptedBindings(ctx, eng.ID)
 		return err
 	})
-	reg.WatchMetadataStaleness(core.Queries.MaxMetadataStalenessSeconds)
+	reg.WatchMetadataStaleness(logger, core.Queries.MaxMetadataStalenessSeconds)
 	// Binding reconciliation (#37): managed drift only; adopted catalogs are
 	// reported, never changed.
 	act.SetEphemeralSweeper(func(ctx context.Context) (int, error) { return binder.SweepEphemeral(ctx, core.Queries) })

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -41,9 +42,9 @@ func unprocessableFields(msg string, fields ...FieldError) UnprocessableEntityJS
 	return out
 }
 
-func extraPropsOf(raw []byte) map[string]string {
+func extraPropsOf(logger *slog.Logger, raw []byte) map[string]string {
 	out := map[string]string{}
-	decodeStored(raw, &out, "extra_props")
+	decodeStored(logger, raw, &out, "extra_props")
 	return out
 }
 
@@ -215,7 +216,7 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 	if err != nil {
 		return nil, err
 	}
-	observe(ctx, l)
+	h.observe(ctx, l)
 	h.catalogCache.Clear()
 	h.audited(ctx, withID(ev, created.ID).Allowed())
 	return CreateCatalogBinding201JSONResponse(h.bindingResponse(ctx, created, proj.Version)), nil
@@ -269,7 +270,7 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	body := *request.Body
-	name, extra, enabled := cur.EngineCatalogName, extraPropsOf(cur.ExtraProps), cur.Enabled
+	name, extra, enabled := cur.EngineCatalogName, extraPropsOf(h.logger, cur.ExtraProps), cur.Enabled
 	if body.EngineCatalogName != nil {
 		name = *body.EngineCatalogName
 	}
@@ -352,7 +353,7 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 	if err != nil {
 		return nil, err
 	}
-	observe(ctx, l)
+	h.observe(ctx, l)
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
 	return UpdateCatalogBinding200JSONResponse(h.bindingResponse(ctx, updated, proj.Version)), nil
@@ -395,7 +396,7 @@ func (h *CatalogHandlers) DeleteCatalogBinding(ctx context.Context, request Dele
 	if err != nil {
 		return nil, err
 	}
-	observe(ctx, l)
+	h.observe(ctx, l)
 	if gone.LifecycleState != bindings.StateDisabled {
 		msg := "the engine did not drop the catalog; the binding stays deprovisioning and is retried"
 		if gone.LastErrorMessage != nil {
@@ -439,7 +440,7 @@ func (h *CatalogHandlers) SyncCatalogBinding(ctx context.Context, request SyncCa
 	if cur.Connector != nil {
 		connector = *cur.Connector
 	}
-	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(cur.ExtraProps)))
+	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(h.logger, cur.ExtraProps)))
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -463,7 +464,7 @@ func (h *CatalogHandlers) SyncCatalogBinding(ctx context.Context, request SyncCa
 	if err != nil {
 		return nil, err
 	}
-	observe(ctx, l)
+	h.observe(ctx, l)
 	out := h.bindingResponse(ctx, synced, proj.Version)
 	if synced.LifecycleState != bindings.StateActive {
 		h.audited(ctx, ev.Failed(audit.ReasonEngineError))

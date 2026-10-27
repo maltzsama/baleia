@@ -4,9 +4,11 @@
 package login
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -53,6 +55,7 @@ var (
 
 // Service verifies credentials.
 type Service struct {
+	logger    *slog.Logger
 	store     Store
 	directory Directory
 	keyring   *crypto.Keyring
@@ -64,8 +67,8 @@ type Service struct {
 
 // New builds the service. passwordCost is the bcrypt cost of the dummy hash
 // compared on the unknown-account paths; keyring opens LDAP configurations.
-func New(store Store, directory Directory, keyring *crypto.Keyring, passwordCost int) *Service {
-	return &Service{store: store, directory: directory, keyring: keyring, cost: passwordCost}
+func New(logger *slog.Logger, store Store, directory Directory, keyring *crypto.Keyring, passwordCost int) *Service {
+	return &Service{logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), store: store, directory: directory, keyring: keyring, cost: passwordCost}
 }
 
 // Password verifies a local account's e-mail and password.
@@ -138,7 +141,7 @@ func (s *Service) Directory(ctx context.Context, providerID pgtype.UUID, usernam
 		}
 		user.Role = result.Role
 	}
-	provision.ApplyTeams(ctx, s.store, user.ID, result.Teams)
+	provision.ApplyTeams(ctx, s.logger, s.store, user.ID, result.Teams)
 	return user, nil
 }
 

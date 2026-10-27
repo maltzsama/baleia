@@ -4,6 +4,7 @@
 package passwordreset
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -45,6 +46,8 @@ type Config struct {
 	DefaultLocale string
 	TokenTTL      time.Duration
 	PasswordCost  int
+	// Logger receives the logs; nil discards them (#379).
+	Logger *slog.Logger
 }
 
 // ErrInvalidToken: the link is unknown, expired or already used.
@@ -55,6 +58,7 @@ const deliveryTimeout = time.Minute
 
 // Service requests and confirms password resets.
 type Service struct {
+	logger   *slog.Logger
 	store    Store
 	mailer   Mailer
 	sessions Sessions
@@ -65,7 +69,7 @@ type Service struct {
 
 // New builds the service.
 func New(store Store, mailer Mailer, sessions Sessions, cfg Config) *Service {
-	return &Service{store: store, mailer: mailer, sessions: sessions, cfg: cfg}
+	return &Service{store: store, mailer: mailer, sessions: sessions, cfg: cfg, logger: cmp.Or(cfg.Logger, slog.New(slog.DiscardHandler))}
 }
 
 // Request e-mails a reset link to the account with this address. Only a
@@ -94,7 +98,7 @@ func (s *Service) Request(ctx context.Context, email string) error {
 		// The error never carries the link; log the account, not the address.
 		// The context keeps the request's trace.
 		if err := s.deliver(ctx, user); err != nil {
-			slog.ErrorContext(ctx, "password reset delivery failed", "user_id", user.ID.String(), "err", err)
+			s.logger.ErrorContext(ctx, "password reset delivery failed", "user_id", user.ID.String(), "err", err)
 		}
 	})
 	return nil
