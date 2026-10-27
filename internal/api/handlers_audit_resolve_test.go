@@ -12,6 +12,7 @@ import (
 // themselves and the users they share a workspace with; a stranger's name
 // and e-mail stay hidden, and an admin resolves everyone (#432).
 func TestResolveAudit_UsersAreScopedToSharedWorkspaces(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	ctx := context.Background()
 	var peer, team string

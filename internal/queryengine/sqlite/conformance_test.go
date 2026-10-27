@@ -16,7 +16,6 @@ import (
 // a temporary root. The suite needs writes for the transaction case, so writes
 // are enabled; the read-only case still exercises the read-only pool.
 func TestConformance(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "conformance.db")
 	setupConformance(t, path)

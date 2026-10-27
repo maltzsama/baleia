@@ -20,7 +20,6 @@ import (
 // TestConformance runs the engine suite against a real Oracle Database. Set
 // BALEIA_TEST_ORACLE_URL (oracle://user:pass@host:port/SERVICE).
 func TestConformance(t *testing.T) {
-	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_ORACLE_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_ORACLE_URL not set")

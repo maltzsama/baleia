@@ -155,6 +155,7 @@ func TestExport_NeutralizesFormulas(t *testing.T) {
 // TestUser_OnlyVisibleUsers: a non-admin resolves themselves and the users
 // they share a workspace with, never anyone else's e-mail (#432).
 func TestUser_OnlyVisibleUsers(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	caller, peer, stranger := uid(1), uid(2), uid(3)
 	s := New(&fakeStore{shared: map[pgtype.UUID]bool{peer: true}})

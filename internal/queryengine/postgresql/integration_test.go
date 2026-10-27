@@ -47,7 +47,6 @@ func testEngine(t *testing.T) queryengine.Engine {
 // DDL. The connection's user may write; the wrapping read-only transaction
 // stops it.
 func TestReadOnlyBlocksWrites(t *testing.T) {
-	t.Parallel()
 	setup(t, requirePostgres(t))
 	e := testEngine(t)
 	s, err := e.OpenSession(context.Background(), queryengine.SessionSpec{ReadOnly: true})
@@ -70,7 +69,6 @@ func TestReadOnlyBlocksWrites(t *testing.T) {
 // TestSingleStatementProtocol: the extended protocol rejects a multi-statement
 // string, so a splitter mistake cannot run a second statement.
 func TestSingleStatementProtocol(t *testing.T) {
-	t.Parallel()
 	e := testEngine(t)
 	s, err := e.OpenSession(context.Background(), queryengine.SessionSpec{})
 	if err != nil {

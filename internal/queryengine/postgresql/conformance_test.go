@@ -18,7 +18,6 @@ import (
 // TestConformance runs the engine suite against a real PostgreSQL server.
 // Set BALEIA_TEST_POSTGRES_URL.
 func TestConformance(t *testing.T) {
-	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_POSTGRES_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_POSTGRES_URL not set")

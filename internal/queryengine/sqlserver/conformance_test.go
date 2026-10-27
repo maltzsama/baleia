@@ -21,7 +21,6 @@ const confDB = "baleia_conformance"
 // TestConformance runs the engine suite against a real SQL Server. Set
 // BALEIA_TEST_SQLSERVER_URL (sqlserver://sa:pass@host:port).
 func TestConformance(t *testing.T) {
-	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_SQLSERVER_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_SQLSERVER_URL not set")
