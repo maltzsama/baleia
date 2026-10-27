@@ -29,7 +29,8 @@ jobs:
       - name: Test
         env:
           BALEIA_TEST_DATABASE_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
-        run: go test -race ./...
+        # Tests are independent and parallel (#374): a random order keeps them so.
+        run: go test -race -shuffle=on ./...
 
   # Existing findings are a baseline: only new issues fail the job (#369). A
   # pull request is compared with its merge base on main; a push with the
