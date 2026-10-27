@@ -6,6 +6,7 @@ package monitor
 import (
 	"context"
 
+	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/trino"
 )
 
@@ -31,4 +32,27 @@ func (m *Monitor) ListQueries(ctx context.Context) ([]QueryInfo, error) { return
 // ClusterStats returns the coordinator's cluster summary.
 func (m *Monitor) ClusterStats(ctx context.Context) (*ClusterStats, error) {
 	return m.c.GetClusterStats(ctx)
+}
+
+// Observable reports whether a statement belongs in the query snapshots.
+// Catalog DDL is infrastructure, not user activity, and it can carry
+// credentials in clear (I4, CR-017); the cluster poller's own statement is
+// not user activity either. The poller and the event ingestion (#406) both
+// apply it.
+func Observable(sql string) bool {
+	return !policy.IsCatalogDDL(sql) && sql != ClusterNodesSQL
+}
+
+// SnapshotState maps a Trino query state to a snapshot state: running,
+// finished or failed.
+func SnapshotState(trinoState string) string {
+	switch trinoState {
+	case "FINISHED":
+		return "finished"
+	case "FAILED":
+		return "failed"
+	default:
+		// RUNNING, QUEUED, PLANNING, STARTING, and anything newer.
+		return "running"
+	}
 }
