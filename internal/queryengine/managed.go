@@ -29,7 +29,7 @@ type managed struct {
 // unless the connection asserts read-only credentials (docs/adr/0011). It
 // never downgrades silently.
 func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session, err error) {
-	ctx, span := tracer.Start(ctx, "engine.open_session",
+	ctx, span := tracer().Start(ctx, "engine.open_session",
 		trace.WithAttributes(attrKind.String(m.Kind()), attrReadOnly.Bool(spec.ReadOnly)))
 	defer func() {
 		failSpan(span, err)
@@ -107,7 +107,7 @@ type managedSession struct {
 // Execute runs the statement inside an engine.execute span that records how
 // many rows and result sets it returned (#380).
 func (s *managedSession) Execute(ctx context.Context, sql string, cb Callbacks, sink RecordSink) error {
-	ctx, span := tracer.Start(ctx, "engine.execute", trace.WithAttributes(attrKind.String(s.owner.Kind())))
+	ctx, span := tracer().Start(ctx, "engine.execute", trace.WithAttributes(attrKind.String(s.owner.Kind())))
 	defer span.End()
 	counted := &countingSink{RecordSink: sink}
 	err := s.Session.Execute(ctx, sql, cb, counted)

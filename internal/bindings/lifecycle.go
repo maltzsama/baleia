@@ -334,7 +334,7 @@ func (l Lifecycle) adopt(ctx context.Context, name string, connector *string) er
 }
 
 // tracer names the catalog DDL spans (#380).
-var tracer = obs.Tracer("bindings")
+func tracer() trace.Tracer { return obs.Tracer("bindings") }
 
 // ddlSpan starts the span of one catalog DDL: the action, the catalog and its
 // connector, never the properties, which carry secrets.
@@ -346,7 +346,7 @@ func ddlSpan(ctx context.Context, action, catalog, connector string) (context.Co
 	if connector != "" {
 		attrs = append(attrs, attribute.String("baleia.connector", connector))
 	}
-	return tracer.Start(ctx, "binding."+action, trace.WithAttributes(attrs...))
+	return tracer().Start(ctx, "binding."+action, trace.WithAttributes(attrs...))
 }
 
 // endDDLSpan ends span, failed when *err is set.

@@ -99,7 +99,7 @@ func (c *S3Client) SetMetrics(m *metrics.Storage) { c.metrics = m }
 
 // Put uploads already-buffered bytes.
 func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType string) (err error) {
-	ctx, span := tracer.Start(ctx, "s3.put")
+	ctx, span := tracer().Start(ctx, "s3.put")
 	defer func() {
 		var n int64
 		if err == nil {
@@ -121,7 +121,7 @@ func (c *S3Client) Put(ctx context.Context, key string, data []byte, contentType
 // unbounded-stream results are not held in memory. It returns the number of
 // bytes written.
 func (c *S3Client) PutStream(ctx context.Context, key string, r io.Reader, contentType string) (n int64, err error) {
-	ctx, span := tracer.Start(ctx, "s3.put")
+	ctx, span := tracer().Start(ctx, "s3.put")
 	defer func() {
 		c.metrics.Op("put", err, n)
 		endSpan(span, n, err)
@@ -138,7 +138,7 @@ func (c *S3Client) PutStream(ctx context.Context, key string, r io.Reader, conte
 
 // Get downloads the object into memory and also returns its content type.
 func (c *S3Client) Get(ctx context.Context, key string) (data []byte, contentType string, err error) {
-	ctx, span := tracer.Start(ctx, "s3.get")
+	ctx, span := tracer().Start(ctx, "s3.get")
 	defer func() {
 		c.metrics.Op("get", err, int64(len(data)))
 		endSpan(span, int64(len(data)), err)
@@ -161,7 +161,7 @@ func (c *S3Client) Get(ctx context.Context, key string) (data []byte, contentTyp
 // GetReader's bytes are not counted: the caller streams them.
 func (c *S3Client) GetReader(ctx context.Context, key string) (_ io.ReadCloser, _ string, err error) {
 	// The span covers opening the object; the caller streams the body.
-	ctx, span := tracer.Start(ctx, "s3.get")
+	ctx, span := tracer().Start(ctx, "s3.get")
 	defer func() {
 		c.metrics.Op("get", err, 0)
 		endSpan(span, 0, err)
@@ -274,7 +274,7 @@ func (r *ObjectReaderAt) Seek(offset int64, whence int) (int64, error) {
 
 // tracer names the result store's spans (#380). Object keys are not span
 // attributes: they name a user's executions.
-var tracer = obs.Tracer("storage")
+func tracer() trace.Tracer { return obs.Tracer("storage") }
 
 // endSpan records the bytes moved and ends span, failed when err is set.
 func endSpan(span trace.Span, n int64, err error) {

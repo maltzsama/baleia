@@ -2,6 +2,8 @@ package obs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,6 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/exaring/otelpgx"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -110,4 +115,34 @@ func TestNoSQLInSpanAttributes(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestSpanSafeError: a query error reaches the span as its SQLSTATE or kind,
+// never with a PostgreSQL message that can quote a submitted value (#380).
+func TestSpanSafeError(t *testing.T) {
+	pg := &pgconn.PgError{Code: "22P02", Message: `invalid input syntax for type integer: "p4ssw0rd"`}
+	for name, tc := range map[string]struct {
+		err  error
+		want string
+	}{
+		"postgres": {fmt.Errorf("query: %w", pg), "postgres error 22P02"},
+		"canceled": {context.Canceled, context.Canceled.Error()},
+		"other":    {errors.New(`dial "secret-host"`), "query failed"},
+	} {
+		got := spanSafeError(tc.err)
+		if got == nil || got.Error() != tc.want || strings.Contains(got.Error(), "p4ssw0rd") {
+			t.Errorf("%s = %v, want %q", name, got, tc.want)
+		}
+	}
+	if spanSafeError(nil) != nil {
+		t.Error("nil error was not kept nil")
+	}
+}
+
+// TestPGXTracer_NilBase: a direct engine's pool has no metrics tracer; the
+// combined tracer must not call through a nil base.
+func TestPGXTracer_NilBase(t *testing.T) {
+	tr := &pgxTracer{otel: otelpgx.NewTracer(otelpgx.WithDisableSQLStatementInAttributes())}
+	ctx := tr.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{SQL: "SELECT 1"})
+	tr.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: &pgconn.PgError{Code: "42P01"}})
 }

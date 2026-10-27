@@ -30,7 +30,14 @@ func ServePprof(ctx context.Context, logger *slog.Logger, addr string) {
 	if addr == "" {
 		return
 	}
-	srv := &http.Server{Addr: addr, Handler: PprofMux(), ReadHeaderTimeout: 5 * time.Second}
+	// No WriteTimeout: a CPU profile or trace streams for its ?seconds=.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           PprofMux(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

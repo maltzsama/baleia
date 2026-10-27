@@ -147,7 +147,12 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 		// Cosmetic: an untitled conversation still works.
 		_ = r.svc.SetTitle(ctx, id, titleFrom(text))
 	}
-	turnCtx, cancel := context.WithTimeout(context.Background(), time.Duration(settings.MaxTurnSeconds)*time.Second)
+	// The turn outlives the request but stays in its trace (#380): only the
+	// span is carried over, none of the request's other values.
+	turnCtx, cancel := context.WithTimeout(
+		trace.ContextWithSpanContext(context.Background(), trace.SpanContextFromContext(ctx)),
+		time.Duration(settings.MaxTurnSeconds)*time.Second,
+	)
 	r.mu.Lock()
 	r.cancels[id.Bytes] = cancel
 	r.mu.Unlock()
@@ -205,7 +210,7 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 	// One span per turn (#380): the provider calls inside it are HTTP client
 	// spans. Neither the prompt nor the reply is an attribute.
 	var used int
-	ctx, span := tracer.Start(ctx, "assistant.turn",
+	ctx, span := tracer().Start(ctx, "assistant.turn",
 		trace.WithAttributes(attribute.String("baleia.assistant.data_sharing", settings.DataSharing)))
 	defer func() {
 		span.SetAttributes(attribute.Int("baleia.assistant.tool_calls", used))
@@ -441,4 +446,4 @@ func (s *RunnerSlot) Load() *Runner {
 func (s *RunnerSlot) Store(r *Runner) { s.runner.Store(r) }
 
 // tracer names the assistant's spans (#380).
-var tracer = obs.Tracer("assistant")
+func tracer() trace.Tracer { return obs.Tracer("assistant") }

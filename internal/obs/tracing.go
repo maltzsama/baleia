@@ -10,6 +10,8 @@ package obs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +19,7 @@ import (
 	"github.com/exaring/otelpgx"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -166,19 +169,15 @@ func WorkerInterceptors() []interceptor.WorkerInterceptor {
 }
 
 // PGXTracer returns the connection tracer to install on a pool: the otelpgx
-// tracer fanned out with base (the pool metrics tracer), or base unchanged when
-// tracing is off. pgx allows a single tracer, so this combines the two; a nil
-// base (a direct engine's pool, #380) gets the otelpgx tracer alone. The SQL
-// text is never an attribute.
+// tracer fanned out with base (the pool metrics tracer; nil for a direct
+// engine's pool, #380), or base unchanged when tracing is off. pgx allows a
+// single tracer, so this combines the two. The span never gets the SQL text
+// nor a query error's text (see spanSafeError).
 func PGXTracer(base pgx.QueryTracer) pgx.QueryTracer {
 	if !enabled {
 		return base
 	}
-	ot := otelpgx.NewTracer(otelpgx.WithDisableSQLStatementInAttributes())
-	if base == nil {
-		return ot
-	}
-	return &pgxTracer{base: base, otel: ot}
+	return &pgxTracer{base: base, otel: otelpgx.NewTracer(otelpgx.WithDisableSQLStatementInAttributes())}
 }
 
 // pgxTracer fans the QueryTracer and pool AcquireTracer calls out to both
@@ -191,13 +190,39 @@ type pgxTracer struct {
 }
 
 func (t *pgxTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	ctx = t.base.TraceQueryStart(ctx, conn, data)
+	if t.base != nil {
+		ctx = t.base.TraceQueryStart(ctx, conn, data)
+	}
 	return t.otel.TraceQueryStart(ctx, conn, data)
 }
 
 func (t *pgxTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
-	t.base.TraceQueryEnd(ctx, conn, data)
+	if t.base != nil {
+		t.base.TraceQueryEnd(ctx, conn, data)
+	}
+	// otelpgx records the error's text on the span; a PostgreSQL message can
+	// quote a value the user sent. The span gets the SQLSTATE only.
+	data.Err = spanSafeError(data.Err)
 	t.otel.TraceQueryEnd(ctx, conn, data)
+}
+
+// spanSafeError replaces err with one naming its SQLSTATE, or its kind, and
+// none of its text.
+func spanSafeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return fmt.Errorf("postgres error %s", pgErr.Code)
+	}
+	switch {
+	case errors.Is(err, context.Canceled):
+		return context.Canceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return context.DeadlineExceeded
+	}
+	return errors.New("query failed")
 }
 
 func (t *pgxTracer) TraceAcquireStart(ctx context.Context, pool *pgxpool.Pool, data pgxpool.TraceAcquireStartData) context.Context {
@@ -215,7 +240,9 @@ func (t *pgxTracer) TraceAcquireEnd(ctx context.Context, pool *pgxpool.Pool, dat
 }
 
 // Tracer is the tracer of one Baleia package, named after its path under
-// internal/ (#380). Until Setup installs a provider its spans are no-ops.
+// internal/ (#380). Call it when starting a span, not once into a variable: a
+// tracer taken from the global provider stays bound to the first provider
+// installed. Until Setup installs a provider its spans are no-ops.
 func Tracer(pkg string) trace.Tracer {
 	return otel.Tracer("github.com/galileostudio/baleia/internal/" + pkg)
 }

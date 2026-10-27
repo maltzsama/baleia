@@ -7,9 +7,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// tracer names the engines' spans (#380). With tracing off the global
-// provider is the no-op one and a span costs nothing.
-var tracer = otel.Tracer("github.com/galileostudio/baleia/internal/queryengine")
+// tracer names the engines' spans (#380). It is resolved at each span, not
+// once: a tracer taken from the global provider stays bound to the first
+// provider installed. With tracing off it is the no-op one.
+func tracer() trace.Tracer {
+	return otel.Tracer("github.com/galileostudio/baleia/internal/queryengine")
+}
 
 // Span attributes. They are bounded: never the SQL text, which can carry
 // literals and user data.

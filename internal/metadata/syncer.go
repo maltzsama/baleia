@@ -48,7 +48,7 @@ func NewSyncer(pool *pgxpool.Pool, opener Opener) *Syncer {
 // sync per catalog runs at a time; a second caller gets ErrSyncInProgress.
 // progress, when set, is called after each table with the tables seen.
 func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(seen int)) (out RunStats, err error) {
-	ctx, span := tracer.Start(ctx, "metadata.sync",
+	ctx, span := tracer().Start(ctx, "metadata.sync",
 		trace.WithAttributes(attribute.String("baleia.catalog.id", uuid.UUID(catalogID.Bytes).String())))
 	defer func() {
 		span.SetAttributes(
@@ -303,4 +303,4 @@ func nonNilMap(m map[string]string) map[string]string {
 }
 
 // tracer names the metadata sync spans (#380).
-var tracer = obs.Tracer("metadata")
+func tracer() trace.Tracer { return obs.Tracer("metadata") }
