@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
@@ -327,7 +326,6 @@ func TestLensRoutesRequireAnIdentity(t *testing.T) {
 			t.Errorf("%s without identity: %d, want 401", p, code)
 		}
 	}
-	time.Sleep(0)
 }
 
 // TestExplorer_PathParametersArePercentDecoded pins #134: %24 and %3B survive

@@ -159,6 +159,7 @@ func TestCreateCatalog_RejectsInvalidNameBeforeExecute(t *testing.T) {
 // one DELETE to the last nextUri before returning ctx.Err().
 func TestExecute_CancelSendsDelete(t *testing.T) {
 	var deleteCalls int32
+	polling := make(chan struct{}, 1)
 
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +172,10 @@ func TestExecute_CancelSendsDelete(t *testing.T) {
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"nextUri":%q}`, srv.URL+"/next2"))
 		case r.Method == http.MethodGet && r.URL.Path == "/next2":
 			// Simulate a long-running query: block until the client aborts.
+			select {
+			case polling <- struct{}{}:
+			default:
+			}
 			<-r.Context().Done()
 		case r.Method == http.MethodDelete && r.URL.Path == "/next2":
 			atomic.AddInt32(&deleteCalls, 1)
@@ -183,9 +188,10 @@ func TestExecute_CancelSendsDelete(t *testing.T) {
 
 	c := New(srv.URL, "testuser")
 
+	// Cancel once the client is polling the running query, not after a guess.
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		<-polling
 		cancel()
 	}()
 

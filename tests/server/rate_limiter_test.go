@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/server"
@@ -33,27 +34,29 @@ func TestRateLimiterAllow(t *testing.T) {
 	}
 }
 
+// TestRateLimiterRefill runs on the bubble's clock: the refill second
+// passes at once (#374).
 func TestRateLimiterRefill(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping refill test in short mode")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		rl := server.NewRateLimiter(testConfig())
+		defer rl.Stop()
 
-	cfg := testConfig()
-	rl := server.NewRateLimiter(cfg)
-	defer rl.Stop()
+		ip := "192.168.1.2"
 
-	ip := "192.168.1.2"
+		rl.Allow(ip)
+		if rl.Allow(ip) {
+			t.Fatal("second request should be rate-limited")
+		}
 
-	rl.Allow(ip)
-	if rl.Allow(ip) {
-		t.Fatal("second request should be rate-limited")
-	}
-
-	time.Sleep(time.Second + 50*time.Millisecond)
-
-	if !rl.Allow(ip) {
-		t.Fatal("request should be allowed after refill interval")
-	}
+		time.Sleep(time.Second - time.Millisecond)
+		if rl.Allow(ip) {
+			t.Fatal("request allowed before the refill interval")
+		}
+		time.Sleep(time.Millisecond)
+		if !rl.Allow(ip) {
+			t.Fatal("request should be allowed after refill interval")
+		}
+	})
 }
 
 func TestRateLimiterPerIP(t *testing.T) {
@@ -172,21 +175,23 @@ func TestRateLimiterMiddlewareBlocksResults(t *testing.T) {
 }
 
 func TestRateLimiterCleanup(t *testing.T) {
-	rl := server.NewRateLimiter(testConfig())
-	defer rl.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		rl := server.NewRateLimiter(testConfig())
+		defer rl.Stop()
 
-	rl.Allow("stale-ip")
-	time.Sleep(10 * time.Millisecond)
+		rl.Allow("stale-ip")
+		time.Sleep(10 * time.Millisecond)
 
-	if rl.IPCount() != 1 {
-		t.Fatal("expected 1 entry")
-	}
+		if rl.IPCount() != 1 {
+			t.Fatal("expected 1 entry")
+		}
 
-	rl.Cleanup(1 * time.Millisecond)
+		rl.Cleanup(1 * time.Millisecond)
 
-	if rl.IPCount() != 0 {
-		t.Fatalf("expected 0 entries after cleanup, got %d", rl.IPCount())
-	}
+		if rl.IPCount() != 0 {
+			t.Fatalf("expected 0 entries after cleanup, got %d", rl.IPCount())
+		}
+	})
 }
 
 func TestRateLimiterConcurrent(t *testing.T) {

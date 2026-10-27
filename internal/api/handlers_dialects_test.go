@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 	"unicode/utf16"
 
@@ -142,23 +143,26 @@ func (s slowEngines) DefaultTrino(context.Context) (queryengine.Engine, error) {
 }
 
 // TestDescribeEngines_ParallelInOrder: slow engines overlap and the list
-// keeps its order.
+// keeps its order. The bubble's clock makes the overlap exact (#374).
 func TestDescribeEngines_ParallelInOrder(t *testing.T) {
-	h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: 100 * time.Millisecond}})
-	rows := make([]db.Engine, 8)
-	for i := range rows {
-		rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
-	}
-	start := time.Now()
-	out := h.describeEngines(context.Background(), rows)
-	if d := time.Since(start); d > 500*time.Millisecond {
-		t.Errorf("8 slow engines took %s; lookups must overlap", d)
-	}
-	for i, e := range out {
-		if e.Name != rows[i].Name {
-			t.Fatalf("order lost: %d is %s", i, e.Name)
+	synctest.Test(t, func(t *testing.T) {
+		const delay = 100 * time.Millisecond
+		h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: delay}})
+		rows := make([]db.Engine, 8)
+		for i := range rows {
+			rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
 		}
-	}
+		start := time.Now()
+		out := h.describeEngines(context.Background(), rows)
+		if d := time.Since(start); d != delay {
+			t.Errorf("8 slow engines took %s, want %s: lookups must overlap", d, delay)
+		}
+		for i, e := range out {
+			if e.Name != rows[i].Name {
+				t.Fatalf("order lost: %d is %s", i, e.Name)
+			}
+		}
+	})
 }
 
 func TestExplainSQL(t *testing.T) {
