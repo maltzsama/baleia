@@ -20,6 +20,7 @@ import (
 // a file reader can seek through, which is what makes block pagination (#238)
 // possible.
 func TestFileWriterIndexesBatches(t *testing.T) {
+	t.Parallel()
 	cols := []ColumnInfo{{Name: "n", Type: "bigint"}}
 	b, err := NewBatcher(cols)
 	require.NoError(t, err)
@@ -119,6 +120,7 @@ func mustDecimal(t *testing.T, s string, p, sc int32) decimal128.Num {
 }
 
 func TestTypeMapping(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2024, 2, 29, 13, 45, 1, 123000000, time.UTC)
 	saoPauloTS := time.Date(2024, 2, 29, 16, 45, 1, 123456000, time.UTC) // 13:45 -0300 == 16:45 UTC
 
@@ -222,6 +224,7 @@ func TestTypeMapping(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			got := roundTrip(t, c.cols, [][]any{c.row})
 			require.Equal(t, 1, len(got))
 			for i := range c.want {
@@ -232,6 +235,7 @@ func TestTypeMapping(t *testing.T) {
 }
 
 func TestParseFailureIsError(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	sw, err := NewStreamWriter(&buf, []ColumnInfo{{"n", "bigint"}})
 	require.NoError(t, err)
@@ -242,6 +246,7 @@ func TestParseFailureIsError(t *testing.T) {
 }
 
 func TestStreamingBatches(t *testing.T) {
+	t.Parallel()
 	const rows = 20000
 	// 20000 / 8192 = 2 full batches + 3616 remainder = 3 batches.
 	const wantBatches = 3

@@ -69,6 +69,7 @@ func newHandler(mock *mockQuerier) (*ws.Handler, *wsticket.Store) {
 }
 
 func TestWebSocketMissingTicket(t *testing.T) {
+	t.Parallel()
 	handler, _ := newHandler(&mockQuerier{})
 
 	req := httptest.NewRequest("GET", "/ws/workspaces/ws1/executions/exec1", nil)
@@ -84,6 +85,7 @@ func TestWebSocketMissingTicket(t *testing.T) {
 }
 
 func TestWebSocketInvalidTicket(t *testing.T) {
+	t.Parallel()
 	handler, _ := newHandler(&mockQuerier{})
 
 	req := httptest.NewRequest("GET", "/ws/workspaces/ws1/executions/exec1?ticket=invalid", nil)
@@ -99,6 +101,7 @@ func TestWebSocketInvalidTicket(t *testing.T) {
 }
 
 func TestWebSocketTicketScopedToAnotherExecution(t *testing.T) {
+	t.Parallel()
 	handler, tickets := newHandler(&mockQuerier{})
 	ticket, _ := tickets.Issue("00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000099")
 
@@ -115,6 +118,7 @@ func TestWebSocketTicketScopedToAnotherExecution(t *testing.T) {
 }
 
 func TestWebSocketNoAccess(t *testing.T) {
+	t.Parallel()
 	mock := &mockQuerier{
 		accessCheck: func(ctx context.Context, arg ws.QuerierCheckWorkspaceAccessParams) (bool, error) {
 			return false, nil
@@ -138,6 +142,7 @@ func TestWebSocketNoAccess(t *testing.T) {
 }
 
 func TestWebSocketStreamFinished(t *testing.T) {
+	t.Parallel()
 	execID := "00000000-0000-0000-0000-000000000004"
 	wsID := "00000000-0000-0000-0000-000000000005"
 	userID := "00000000-0000-0000-0000-000000000006"
@@ -201,6 +206,7 @@ func TestWebSocketStreamFinished(t *testing.T) {
 }
 
 func TestWebSocketWithStatements(t *testing.T) {
+	t.Parallel()
 	execID := "00000000-0000-0000-0000-000000000007"
 	wsID := "00000000-0000-0000-0000-000000000008"
 	userID := "00000000-0000-0000-0000-000000000009"
@@ -291,6 +297,7 @@ loop:
 }
 
 func TestWebSocketEventsJSON(t *testing.T) {
+	t.Parallel()
 	evt := ws.WSEvent{
 		Type:        "execution_status",
 		ExecutionID: "test-id",

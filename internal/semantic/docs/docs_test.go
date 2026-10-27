@@ -14,6 +14,7 @@ import (
 )
 
 func TestNormalizeTags(t *testing.T) {
+	t.Parallel()
 	tags := []string{"Sales", " sales ", "revenue-2026"}
 	got, err := NormalizeTags(&tags)
 	if err != nil {
@@ -87,6 +88,7 @@ func (f *fakeStore) DeleteSemanticDoc(_ context.Context, arg db.DeleteSemanticDo
 func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
 
 func TestUpsert_Certification(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := New(&fakeStore{docs: map[string]db.SemanticDoc{}})
 	k := Key{WorkspaceID: newID(), CatalogID: newID(), Table: "orders"}
@@ -110,6 +112,7 @@ func TestUpsert_Certification(t *testing.T) {
 }
 
 func TestUpsert_Validation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := New(&fakeStore{docs: map[string]db.SemanticDoc{}})
 	k := Key{WorkspaceID: newID(), CatalogID: newID(), Table: "orders"}
@@ -132,6 +135,7 @@ func TestUpsert_Validation(t *testing.T) {
 }
 
 func TestColumnKeyAndDelete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := New(&fakeStore{docs: map[string]db.SemanticDoc{}})
 	blank, col := " ", "amount"

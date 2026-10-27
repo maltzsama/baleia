@@ -7,6 +7,7 @@ import (
 )
 
 func TestHashPassword(t *testing.T) {
+	t.Parallel()
 	hash, err := auth.HashPassword("my-secret-password")
 	if err != nil {
 		t.Fatalf("HashPassword failed: %v", err)
@@ -20,6 +21,7 @@ func TestHashPassword(t *testing.T) {
 }
 
 func TestCheckPasswordSuccess(t *testing.T) {
+	t.Parallel()
 	hash, _ := auth.HashPassword("my-password")
 	if !auth.CheckPassword(hash, "my-password") {
 		t.Fatal("CheckPassword should return true for correct password")
@@ -27,6 +29,7 @@ func TestCheckPasswordSuccess(t *testing.T) {
 }
 
 func TestCheckPasswordWrong(t *testing.T) {
+	t.Parallel()
 	hash, _ := auth.HashPassword("my-password")
 	if auth.CheckPassword(hash, "wrong-password") {
 		t.Fatal("CheckPassword should return false for wrong password")
@@ -34,6 +37,7 @@ func TestCheckPasswordWrong(t *testing.T) {
 }
 
 func TestHashPasswordDeterministic(t *testing.T) {
+	t.Parallel()
 	h1, _ := auth.HashPassword("same-password")
 	h2, _ := auth.HashPassword("same-password")
 	if h1 == h2 {

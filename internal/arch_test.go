@@ -70,6 +70,7 @@ var skippedDirs = map[string]bool{
 }
 
 func TestAdapterConstructionOnlyInWiring(t *testing.T) {
+	t.Parallel()
 	root, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatal(err)
@@ -237,6 +238,7 @@ func moduleImports(t *testing.T) map[string][]string {
 // pgx is also Baleia's own database driver and is guarded by
 // TestAdapterConstructionOnlyInWiring instead.
 func TestNoDriversOutsideAdapters(t *testing.T) {
+	t.Parallel()
 	drivers := []string{
 		"github.com/go-sql-driver/mysql",
 		"github.com/microsoft/go-mssqldb",
@@ -277,6 +279,7 @@ var trinoInDomain = map[string]string{}
 // TestNoTrinoImportsInDomain: internal/api and internal/temporal run SQL
 // through internal/queryengine, never through the Trino client.
 func TestNoTrinoImportsInDomain(t *testing.T) {
+	t.Parallel()
 	const trinoPkg = "github.com/galileostudio/baleia/internal/trino"
 	offending := map[string]bool{}
 	for file, imports := range moduleImports(t) {
@@ -310,6 +313,7 @@ var executionPath = []string{
 // TestNoTrinoInExecutionPath: the execution path runs any engine through
 // internal/queryengine; it imports no Trino package, not even the adapter.
 func TestNoTrinoInExecutionPath(t *testing.T) {
+	t.Parallel()
 	imports := moduleImports(t)
 	for _, file := range executionPath {
 		got, ok := imports[file]
@@ -366,6 +370,7 @@ func goSources(t *testing.T, fn func(rel string, f *ast.File)) {
 // TestGateNotCapabilityDriven: the editor gate is a policy on users, never
 // derived from what an engine supports (#14).
 func TestGateNotCapabilityDriven(t *testing.T) {
+	t.Parallel()
 	goSources(t, func(rel string, f *ast.File) {
 		if !strings.HasPrefix(rel, "internal/temporal/") && !strings.HasPrefix(rel, "internal/policy/") {
 			return
@@ -386,6 +391,7 @@ var limitClause = regexp.MustCompile(`(?i)\bLIMIT\s+([0-9]|\$|\?|\{|%|:)`)
 // engine), generated queries and the audit subsystem (which reads Baleia's own
 // Postgres, not a user engine) may spell one.
 func TestSQLDialectsOwnLimit(t *testing.T) {
+	t.Parallel()
 	allowed := func(rel string) bool {
 		if strings.HasPrefix(rel, "internal/dialect/") || strings.HasPrefix(rel, "internal/db/") {
 			return true
@@ -416,6 +422,7 @@ var catalogPropertyRe = regexp.MustCompile(`"(iceberg\.rest-catalog\.|iceberg\.c
 // TestProjectionOnlyInBinders: engine catalog properties are written only by
 // binders (#80); providers and handlers never spell them.
 func TestProjectionOnlyInBinders(t *testing.T) {
+	t.Parallel()
 	goSources(t, func(rel string, f *ast.File) {
 		if strings.HasPrefix(rel, "internal/bindings/") {
 			return
@@ -432,6 +439,7 @@ func TestProjectionOnlyInBinders(t *testing.T) {
 // TestNoInitInEngines: engine kinds are listed explicitly by internal/engines
 // and injected (#364); an adapter never registers itself from init().
 func TestNoInitInEngines(t *testing.T) {
+	t.Parallel()
 	goSources(t, func(rel string, f *ast.File) {
 		if !strings.HasPrefix(rel, "internal/queryengine/") && !strings.HasPrefix(rel, "internal/engines/") {
 			return
@@ -448,6 +456,7 @@ func TestNoInitInEngines(t *testing.T) {
 // package-level dialect.ForEngineKind is called only inside
 // QueryExecutionWorkflowV2, so its open runs replay, and goes away with it.
 func TestDialectLookupOnlyInV2(t *testing.T) {
+	t.Parallel()
 	const allowedFile, allowedFunc = "internal/temporal/workflows/workflows.go", "QueryExecutionWorkflowV2"
 	goSources(t, func(rel string, f *ast.File) {
 		if strings.HasPrefix(rel, "internal/dialect/") {

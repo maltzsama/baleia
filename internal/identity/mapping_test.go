@@ -6,6 +6,7 @@ import (
 )
 
 func TestMapIdentity_SingleRoleGroup(t *testing.T) {
+	t.Parallel()
 	got, err := MapIdentity(MappingInput{
 		Groups:      []string{"baleia-admins"},
 		RoleMapping: []RoleMapping{{Group: "baleia-admins", Role: RoleAdmin}},
@@ -22,6 +23,7 @@ func TestMapIdentity_SingleRoleGroup(t *testing.T) {
 }
 
 func TestMapIdentity_MultipleRoleGroups(t *testing.T) {
+	t.Parallel()
 	// The most privileged role wins regardless of rule order.
 	for _, mappings := range [][]RoleMapping{
 		{{Group: "members", Role: RoleMember}, {Group: "admins", Role: RoleAdmin}},
@@ -41,6 +43,7 @@ func TestMapIdentity_MultipleRoleGroups(t *testing.T) {
 }
 
 func TestMapIdentity_DefaultRole(t *testing.T) {
+	t.Parallel()
 	got, err := MapIdentity(MappingInput{
 		Groups:      []string{"unmapped"},
 		RoleMapping: []RoleMapping{{Group: "admins", Role: RoleAdmin}},
@@ -63,6 +66,7 @@ func TestMapIdentity_DefaultRole(t *testing.T) {
 }
 
 func TestMapIdentity_TeamMapping(t *testing.T) {
+	t.Parallel()
 	got, err := MapIdentity(MappingInput{
 		Groups: []string{"data-eng"},
 		TeamMapping: []TeamMapping{
@@ -83,6 +87,7 @@ func TestMapIdentity_TeamMapping(t *testing.T) {
 }
 
 func TestMapIdentity_TeamRoleMostPrivilegedWins(t *testing.T) {
+	t.Parallel()
 	got, err := MapIdentity(MappingInput{
 		Groups: []string{"a", "b"},
 		TeamMapping: []TeamMapping{
@@ -100,6 +105,7 @@ func TestMapIdentity_TeamRoleMostPrivilegedWins(t *testing.T) {
 }
 
 func TestMapIdentity_InvalidRole(t *testing.T) {
+	t.Parallel()
 	cases := []MappingInput{
 		{RoleMapping: []RoleMapping{{Group: "g", Role: "superuser"}}},
 		{DefaultRole: "superuser"},
@@ -116,6 +122,7 @@ func TestMapIdentity_InvalidRole(t *testing.T) {
 }
 
 func TestMapIdentity_Deterministic(t *testing.T) {
+	t.Parallel()
 	in := MappingInput{
 		Groups: []string{"a", "b", "c"},
 		TeamMapping: []TeamMapping{

@@ -34,6 +34,7 @@ func upsertDoc(t *testing.T, f *metaFixture, ctx context.Context, catalog openap
 }
 
 func TestSemanticDocs_UpsertListDelete(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 
@@ -117,6 +118,7 @@ func TestSemanticDocs_UpsertListDelete(t *testing.T) {
 }
 
 func TestSemanticDocs_UngrantedCatalog404(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 	if r := upsertDoc(t, f, ctx, f.other, nil, SemanticDocUpsert{Description: "secret"}); !isSemantic404(r) {
@@ -143,6 +145,7 @@ func TestSemanticDocs_UngrantedCatalog404(t *testing.T) {
 }
 
 func TestSemanticDocs_ForeignWorkspace404(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.stranger)
 	list, err := f.h.ListSemanticDocs(ctx, ListSemanticDocsRequestObject{
@@ -169,6 +172,7 @@ func TestSemanticDocs_ForeignWorkspace404(t *testing.T) {
 // TestSemanticDocs_SurviveResync: docs use the natural key, so a metadata
 // resync that drops and recreates the table row does not lose them.
 func TestSemanticDocs_SurviveResync(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 	upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: "Survives."})
@@ -194,6 +198,7 @@ func TestSemanticDocs_SurviveResync(t *testing.T) {
 }
 
 func TestSemanticDocs_Search(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 	upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: "Orders, one row per order.", Tags: tags("certified")})
@@ -239,6 +244,7 @@ func TestSemanticDocs_Search(t *testing.T) {
 }
 
 func TestSemanticDocs_DescriptionTooLong(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 	r := upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: strings.Repeat("x", docs.MaxDescription+1)})

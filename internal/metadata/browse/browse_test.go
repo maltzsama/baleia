@@ -93,6 +93,7 @@ func newStore() *fakeStore {
 }
 
 func TestNamespaces_CatalogMustBeGranted(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st)
@@ -105,6 +106,7 @@ func TestNamespaces_CatalogMustBeGranted(t *testing.T) {
 }
 
 func TestTables_Pages(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st)
@@ -143,6 +145,7 @@ func TestTables_Pages(t *testing.T) {
 }
 
 func TestTable_Binding(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st)
@@ -164,6 +167,7 @@ func TestTable_Binding(t *testing.T) {
 }
 
 func TestSearch_Validates(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st)

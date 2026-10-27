@@ -17,6 +17,7 @@ import (
 // own source; Trino connections (adopted catalogs), Flight SQL and kinds with
 // no direct metadata role (Hive Metastore, #86) go through an engine.
 func TestSourceFor(t *testing.T) {
+	t.Parallel()
 	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -123,6 +124,7 @@ func (r *recorder) Table(t TableSnapshot) error { r.tables = append(r.tables, t)
 // walked; a table whose stored ETag still matches is reported unchanged
 // without a load, and the fingerprint is the metadata-location.
 func TestIcebergSource_ConditionalLoads(t *testing.T) {
+	t.Parallel()
 	r := &fakeReader{etag: `W/"1"`}
 	src := &icebergSource{r: r, catalog: "wh"}
 	none := func([]string, string) (Known, bool) { return Known{}, false }
@@ -155,6 +157,7 @@ func TestIcebergSource_ConditionalLoads(t *testing.T) {
 // one walk query, never a load per table; an unchanged table is reported
 // unchanged.
 func TestProviderSource_DatabaseSingleQuery(t *testing.T) {
+	t.Parallel()
 	r := &fakeReader{}
 	src := &walkerSource{r: r, w: r, catalog: "sales", typeSystem: "postgresql"}
 	rec := &recorder{}
@@ -238,6 +241,7 @@ func emitStrings(sink queryengine.RecordSink, rows [][]string) error {
 // session with the engine's service identity, in the binding's catalog, with
 // two queries per catalog (schemas, then every column): never one per table.
 func TestEngineSource_ReadOnlySession(t *testing.T) {
+	t.Parallel()
 	eng := &fakeIntrospectEngine{}
 	src := &engineSource{eng: eng, catalog: "lake", queries: eng.Dialect().MetadataQueries(), typeSystem: "trino"}
 	rec := &recorder{}
@@ -263,6 +267,7 @@ func TestEngineSource_ReadOnlySession(t *testing.T) {
 }
 
 func TestTruncateKeepsUTF8(t *testing.T) {
+	t.Parallel()
 	got := truncate("aé", 2) // "é" is 2 bytes: cutting at 2 splits it
 	if got != "a" {
 		t.Fatalf("truncate = %q", got)

@@ -54,6 +54,7 @@ func (f *fakeStore) GetCatalogByID(context.Context, pgtype.UUID) (db.Catalog, er
 }
 
 func TestPage(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{n: 3}
 	s := New(st)
@@ -97,6 +98,7 @@ func TestPage(t *testing.T) {
 // TestExport_StopsWhenTheClientGoes: once the reader is closed or the
 // request is cancelled, the export stops querying (#371).
 func TestExport_StopsWhenTheClientGoes(t *testing.T) {
+	t.Parallel()
 	st := &fakeStore{endless: true}
 	reader, writer := io.Pipe()
 	_ = reader.Close()
@@ -129,6 +131,7 @@ func (oneEvent) ListAuditEvents(context.Context, db.ListAuditEventsParams) ([]db
 // TestExport_NeutralizesFormulas: a value a spreadsheet would run as a
 // formula is exported with a leading quote.
 func TestExport_NeutralizesFormulas(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	if err := New(&oneEvent{}).Export(context.Background(), &out, Filter{}); err != nil {
 		t.Fatal(err)
@@ -152,6 +155,7 @@ func TestExport_NeutralizesFormulas(t *testing.T) {
 // TestUser_OnlyVisibleUsers: a non-admin resolves themselves and the users
 // they share a workspace with, never anyone else's e-mail (#432).
 func TestUser_OnlyVisibleUsers(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	caller, peer, stranger := uid(1), uid(2), uid(3)
 	s := New(&fakeStore{shared: map[pgtype.UUID]bool{peer: true}})

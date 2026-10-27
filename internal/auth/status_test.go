@@ -6,6 +6,7 @@ import (
 )
 
 func TestRequireActive(t *testing.T) {
+	t.Parallel()
 	if err := RequireActive(StatusActive); err != nil {
 		t.Fatalf("active status rejected: %v", err)
 	}

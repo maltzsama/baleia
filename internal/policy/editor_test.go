@@ -8,6 +8,7 @@ import (
 )
 
 func TestIsCatalogDDL(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		sql  string
@@ -54,6 +55,7 @@ func TestIsCatalogDDL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if got := IsCatalogDDL(tt.sql); got != tt.want {
 				t.Errorf("IsCatalogDDL(%q) = %v; want %v", tt.sql, got, tt.want)
 			}
@@ -62,6 +64,7 @@ func TestIsCatalogDDL(t *testing.T) {
 }
 
 func TestStatementForbidden(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		sql  string
@@ -93,6 +96,7 @@ func TestStatementForbidden(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if got := statementForbidden(tt.sql); got != tt.want {
 				t.Errorf("statementForbidden(%q) = %v; want %v", tt.sql, got, tt.want)
 			}
@@ -104,6 +108,7 @@ func TestStatementForbidden(t *testing.T) {
 // the engine supports, including when hidden after another statement with
 // that engine's own separators.
 func TestForbiddenInEditor(t *testing.T) {
+	t.Parallel()
 	for _, name := range dialect.NewRegistry().Names() {
 		d := dialect.NewRegistry().MustGet(name)
 		for _, sql := range []string{

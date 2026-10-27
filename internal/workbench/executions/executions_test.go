@@ -128,6 +128,7 @@ func setup() (*Service, *fakeStore, *fakeWorkflows, *fakeEngine) {
 }
 
 func TestStart(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, wf, _ := setup()
 	ws := newID()
@@ -160,6 +161,7 @@ func TestStart(t *testing.T) {
 }
 
 func TestStart_WorkflowFailureFailsTheRow(t *testing.T) {
+	t.Parallel()
 	s, st, wf, _ := setup()
 	wf.startErr = errors.New("temporal down")
 	if _, err := s.Start(context.Background(), Run{WorkspaceID: newID()}); !errors.Is(err, wf.startErr) {
@@ -173,6 +175,7 @@ func TestStart_WorkflowFailureFailsTheRow(t *testing.T) {
 }
 
 func TestCancel(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, wf, eng := setup()
 	ws := newID()
@@ -203,6 +206,7 @@ func TestCancel(t *testing.T) {
 }
 
 func TestStatements_ForeignExecutionIsNotFound(t *testing.T) {
+	t.Parallel()
 	s, _, _, _ := setup()
 	if _, err := s.Statements(context.Background(), newID(), newID()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Statements = %v, want ErrNotFound", err)
@@ -213,6 +217,7 @@ func TestStatements_ForeignExecutionIsNotFound(t *testing.T) {
 }
 
 func TestHistory_Visibility(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, _, _ := setup()
 	me, other := newID(), newID()
@@ -240,6 +245,7 @@ func TestHistory_Visibility(t *testing.T) {
 
 // TestStart_WithoutDialects: with no registry every script splits as Trino.
 func TestStart_WithoutDialects(t *testing.T) {
+	t.Parallel()
 	st, wf := newStore(), &fakeWorkflows{}
 	s := New(st, wf, nil, nil, Config{})
 	if _, err := s.Start(context.Background(), Run{WorkspaceID: newID(), Target: queryengine.Target{EngineKind: "postgresql"}}); err != nil {

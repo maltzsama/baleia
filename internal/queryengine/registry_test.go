@@ -18,6 +18,7 @@ func fakeSpec(name string) queryengine.KindSpec {
 }
 
 func TestNewRegistry(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		specs   []queryengine.KindSpec
@@ -31,6 +32,7 @@ func TestNewRegistry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, err := queryengine.NewRegistry(tt.specs...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, want error %v", err, tt.wantErr)
@@ -40,6 +42,7 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestRegistry_HasAndKinds(t *testing.T) {
+	t.Parallel()
 	r, err := queryengine.NewRegistry(fakeSpec("b"), fakeSpec("a"))
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +56,7 @@ func TestRegistry_HasAndKinds(t *testing.T) {
 }
 
 func TestRegistry_Transient(t *testing.T) {
+	t.Parallel()
 	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -62,11 +66,13 @@ func TestRegistry_Transient(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Run("unknown kind", func(t *testing.T) {
+		t.Parallel()
 		if _, err := r.Transient(context.Background(), "nope", connections.Config{}, d); !errors.Is(err, queryengine.ErrKindNotRegistered) {
 			t.Fatalf("err = %v, want ErrKindNotRegistered", err)
 		}
 	})
 	t.Run("registered kind", func(t *testing.T) {
+		t.Parallel()
 		e, err := r.Transient(context.Background(), "a", connections.Config{}, d)
 		if err != nil {
 			t.Fatal(err)

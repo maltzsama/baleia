@@ -20,6 +20,7 @@ import (
 // BALEIA_TEST_ORACLE_URL (oracle://user:pass@host:port/SERVICE) to enable it;
 // the user owns the fixture objects.
 func TestMetadataReader_oracle(t *testing.T) {
+	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_ORACLE_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_ORACLE_URL not set")
@@ -114,6 +115,7 @@ func TestMetadataReader_oracle(t *testing.T) {
 
 // TestListTables_pagination: the second page starts after the token.
 func TestListTables_pagination(t *testing.T) {
+	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_ORACLE_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_ORACLE_URL not set")

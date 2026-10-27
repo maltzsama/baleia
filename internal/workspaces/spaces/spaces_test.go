@@ -147,6 +147,7 @@ func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error {
 }
 
 func TestCreate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -183,6 +184,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestUpdateAndDelete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -212,6 +214,7 @@ func TestUpdateAndDelete(t *testing.T) {
 }
 
 func TestMembers(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestLogin_RateLimitedPerIP(t *testing.T) {
+	t.Parallel()
 	var limited int
 	var limitedKind string
 	rl := server.NewAuthRouteLimiter([]server.AuthRouteLimit{
@@ -55,6 +56,7 @@ func TestLogin_RateLimitedPerIP(t *testing.T) {
 }
 
 func TestReset_RateLimitedPerIP(t *testing.T) {
+	t.Parallel()
 	rl := server.NewAuthRouteLimiter([]server.AuthRouteLimit{
 		{Path: "/api/v1/auth/password-reset/request", Kind: "password_reset_request", Every: 15 * time.Minute, Burst: 5},
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: "password_reset_confirm", Every: 15 * time.Minute, Burst: 10},
@@ -102,6 +104,7 @@ func TestReset_RateLimitedPerIP(t *testing.T) {
 }
 
 func TestAuthRouteLimiterIgnoresOtherRoutes(t *testing.T) {
+	t.Parallel()
 	rl := server.NewAuthRouteLimiter([]server.AuthRouteLimit{
 		{Path: "/api/v1/auth/login", Kind: "password", Every: time.Minute, Burst: 1},
 	}, nil)

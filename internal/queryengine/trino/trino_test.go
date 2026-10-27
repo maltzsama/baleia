@@ -19,6 +19,7 @@ import (
 )
 
 func TestErrorMapping(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, typ string
 		want      queryengine.ErrorCode
@@ -119,6 +120,7 @@ func testEngine(t *testing.T, f *fakeCoordinator) *Engine {
 }
 
 func TestSessionAppliesResponseHeaders(t *testing.T) {
+	t.Parallel()
 	f := &fakeCoordinator{respond: func(sql string) (http.Header, map[string]any) {
 		h := http.Header{}
 		switch sql {
@@ -198,6 +200,7 @@ func TestSessionAppliesResponseHeaders(t *testing.T) {
 }
 
 func TestExecuteStreamsArrowAndReportsHandle(t *testing.T) {
+	t.Parallel()
 	f := &fakeCoordinator{respond: func(sql string) (http.Header, map[string]any) {
 		return nil, map[string]any{
 			"id":      "20260101_000000_00002_abcde",
@@ -221,6 +224,7 @@ func TestExecuteStreamsArrowAndReportsHandle(t *testing.T) {
 }
 
 func TestStatementWithoutColumnsHasOneResultSet(t *testing.T) {
+	t.Parallel()
 	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
 		return nil, map[string]any{"id": "20260101_000000_00003_abcde"}
 	}}
@@ -235,6 +239,7 @@ func TestStatementWithoutColumnsHasOneResultSet(t *testing.T) {
 }
 
 func TestQueryErrorsAreTyped(t *testing.T) {
+	t.Parallel()
 	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
 		return nil, map[string]any{"id": "x", "error": map[string]any{"message": "Table 'x' does not exist", "errorName": "TABLE_NOT_FOUND", "errorType": "USER_ERROR"}}
 	}}
@@ -247,6 +252,7 @@ func TestQueryErrorsAreTyped(t *testing.T) {
 }
 
 func TestQueryGone(t *testing.T) {
+	t.Parallel()
 	cases := map[string]bool{
 		"NOT_SUPPORTED|Target query is not running: 20261014_183149_00019_5wabn": true,
 		"NOT_FOUND|Query not found":        true,
@@ -262,6 +268,7 @@ func TestQueryGone(t *testing.T) {
 }
 
 func TestSubSecondTimeoutRoundsUp(t *testing.T) {
+	t.Parallel()
 	s := newSession(&Engine{}, queryengine.SessionSpec{Timeout: 300 * time.Millisecond})
 	if got := s.properties["query_max_execution_time"]; got != "1s" {
 		t.Fatalf("query_max_execution_time = %q, want 1s", got)
@@ -275,6 +282,7 @@ func TestSubSecondTimeoutRoundsUp(t *testing.T) {
 // TestMaintenanceStatementsWithoutRetention: an empty retention renders
 // optimize only, and a bad one is still refused.
 func TestMaintenanceStatementsWithoutRetention(t *testing.T) {
+	t.Parallel()
 	e := testEngine(t, &fakeCoordinator{})
 	got, err := e.MaintenanceStatements([]string{"c", "n", "t"}, "")
 	if err != nil || len(got) != 1 || got[0] != `ALTER TABLE "c"."n"."t" EXECUTE optimize` {

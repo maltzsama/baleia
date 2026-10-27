@@ -159,7 +159,8 @@ func runDialect(t *testing.T, name string, fx fixture) {
 	t.Helper()
 	d := dialect.NewRegistry().MustGet(name)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+	// Not defer: the subtests are parallel and run after this returns.
+	t.Cleanup(cancel)
 	one := func(t *testing.T, expr string) string {
 		t.Helper()
 		rows, err := fx.run(ctx, "SELECT "+expr+" "+fx.from)
@@ -176,6 +177,7 @@ func runDialect(t *testing.T, name string, fx fixture) {
 	}
 
 	t.Run("literals", func(t *testing.T) {
+		t.Parallel()
 		ts := time.Date(2024, 3, 6, 10, 20, 30, 123456000, time.UTC)
 		values := map[dialect.LogicalType]any{
 			dialect.TypeBoolean: true, dialect.TypeInt64: int64(42), dialect.Decimal(18, 2): "12.50",
@@ -200,6 +202,7 @@ func runDialect(t *testing.T, name string, fx fixture) {
 	})
 
 	t.Run("quoting", func(t *testing.T) {
+		t.Parallel()
 		alias, err := d.QuoteIdent("a\"b]`c")
 		if errors.Is(err, dialect.ErrInvalid) {
 			alias, err = d.QuoteIdent("a b]`c") // the engine cannot quote " at all
@@ -213,6 +216,7 @@ func runDialect(t *testing.T, name string, fx fixture) {
 	})
 
 	t.Run("time_trunc", func(t *testing.T) {
+		t.Parallel()
 		lit, _ := d.Literal(time.Date(2024, 5, 15, 10, 20, 30, 0, time.UTC), dialect.TypeTimestamp) // a Wednesday
 		want := map[dialect.TimeGrain]string{
 			dialect.GrainSecond: "2024-05-15 10:20:30", dialect.GrainMinute: "2024-05-15 10:20", dialect.GrainHour: "2024-05-15 10:00",
@@ -231,6 +235,7 @@ func runDialect(t *testing.T, name string, fx fixture) {
 	})
 
 	t.Run("cast_divide_limit", func(t *testing.T) {
+		t.Parallel()
 		for _, typ := range []dialect.LogicalType{dialect.TypeInt64, dialect.Decimal(18, 2), dialect.TypeFloat64, dialect.TypeString} {
 			expr, err := d.Cast("1", typ)
 			if err != nil {
@@ -255,6 +260,7 @@ func runDialect(t *testing.T, name string, fx fixture) {
 	})
 
 	t.Run("aggregates", func(t *testing.T) {
+		t.Parallel()
 		rows := "SELECT 1 AS x " + fx.from + " UNION ALL SELECT 2 " + fx.from + " UNION ALL SELECT 2 " + fx.from
 		for fn, want := range map[dialect.AggFunc]string{
 			dialect.AggCountDistinct: "2", dialect.AggApproxCountDistinct: "2", dialect.AggSum: "5", dialect.AggMax: "2",
@@ -275,6 +281,7 @@ func runDialect(t *testing.T, name string, fx fixture) {
 	})
 
 	t.Run("metadata_queries", func(t *testing.T) {
+		t.Parallel()
 		m := d.MetadataQueries()
 		if _, err := fx.run(ctx, m.Schemas); err != nil {
 			t.Errorf("schemas: %v", err)
@@ -320,11 +327,12 @@ func runDialect(t *testing.T, name string, fx fixture) {
 }
 
 func TestExecute_sqlite(t *testing.T) {
+	t.Parallel()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	db.SetMaxOpenConns(1) // one in-memory database
 	if _, err := db.Exec(`CREATE TABLE orders (id INTEGER)`); err != nil {
 		t.Fatal(err)
@@ -333,6 +341,7 @@ func TestExecute_sqlite(t *testing.T) {
 }
 
 func TestExecute_postgresql(t *testing.T) {
+	t.Parallel()
 	run := openSQL(t, "pgx", env(t, "BALEIA_TEST_POSTGRES_URL"))
 	runDialect(t, dialect.PostgreSQL, fixture{run: run, schema: "information_schema", table: "tables"})
 }
@@ -347,16 +356,19 @@ func mysqlDSN(t *testing.T, raw string) string {
 }
 
 func TestExecute_mysql(t *testing.T) {
+	t.Parallel()
 	run := openSQL(t, "mysql", mysqlDSN(t, env(t, "BALEIA_TEST_MYSQL_URL")))
 	runDialect(t, dialect.MySQL, fixture{run: run, schema: "mysql", table: "user", unsupTZ: true})
 }
 
 func TestExecute_mariadb(t *testing.T) {
+	t.Parallel()
 	run := openSQL(t, "mysql", mysqlDSN(t, env(t, "BALEIA_TEST_MARIADB_URL")))
 	runDialect(t, dialect.MariaDB, fixture{run: run, schema: "mysql", table: "user", unsupTZ: true})
 }
 
 func TestExecute_tsql(t *testing.T) {
+	t.Parallel()
 	run := openSQL(t, "sqlserver", env(t, "BALEIA_TEST_SQLSERVER_URL")+"?encrypt=disable&database=master")
 	runDialect(t, dialect.TSQL, fixture{run: run, schema: "dbo", table: "spt_values"})
 }
@@ -372,6 +384,7 @@ func openOracle(t *testing.T, raw string) runner {
 }
 
 func TestExecute_oracle(t *testing.T) {
+	t.Parallel()
 	run := openOracle(t, env(t, "BALEIA_TEST_ORACLE_URL"))
 	// SYS.DUAL exists on every server: the test creates nothing, so it cannot
 	// disturb the provider tests that share the user's schema.
@@ -379,11 +392,13 @@ func TestExecute_oracle(t *testing.T) {
 }
 
 func TestExecute_clickhouse(t *testing.T) {
+	t.Parallel()
 	run := clickhouseRunner(t, env(t, "BALEIA_TEST_CLICKHOUSE_URL"))
 	runDialect(t, dialect.ClickHouse, fixture{run: run, schema: "system", table: "tables"})
 }
 
 func TestExecute_trino(t *testing.T) {
+	t.Parallel()
 	run := trinoRunner(env(t, "BALEIA_TEST_TRINO_URL"))
 	runDialect(t, dialect.Trino, fixture{run: run, schema: "information_schema", table: "tables"})
 }

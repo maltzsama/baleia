@@ -132,6 +132,7 @@ func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error {
 }
 
 func TestCreate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -157,6 +158,7 @@ func TestCreate(t *testing.T) {
 // TestCreate_Atomic: a failed binding leaves neither the engine nor its
 // catalogs behind.
 func TestCreate_Atomic(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -170,6 +172,7 @@ func TestCreate_Atomic(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -195,6 +198,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -209,6 +213,7 @@ func TestList(t *testing.T) {
 }
 
 func TestReconcileRuns(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)

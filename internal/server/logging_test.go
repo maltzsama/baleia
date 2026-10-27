@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -33,62 +34,67 @@ func logEntry(t *testing.T, buf *bytes.Buffer) map[string]any {
 }
 
 func TestStructuredLoggerFieldsAndRedaction(t *testing.T) {
-	logger, buf := newTestLogger()
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		logger, buf := newTestLogger()
 
-	router := chi.NewRouter()
-	router.Use(middleware.RequestID)
-	router.Use(RequestIDHeader)
-	router.Use(StructuredLogger(logger))
-	router.Get("/api/v1/workspaces/{id}/executions", func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(11 * time.Millisecond)
-		w.WriteHeader(http.StatusTeapot)
-		_, _ = w.Write([]byte("ok"))
+		router := chi.NewRouter()
+		router.Use(middleware.RequestID)
+		router.Use(RequestIDHeader)
+		router.Use(StructuredLogger(logger))
+		router.Get("/api/v1/workspaces/{id}/executions", func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(11 * time.Millisecond)
+			w.WriteHeader(http.StatusTeapot)
+			_, _ = w.Write([]byte("ok"))
+		})
+
+		req := httptest.NewRequest("GET", "/api/v1/workspaces/ws-1/executions?token=supersecret", nil)
+		req.Header.Set("X-Request-ID", "req-123")
+		req = req.WithContext(context.WithValue(req.Context(), auth.ContextKeyUserID, "user-42"))
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("X-Request-ID"); got != "req-123" {
+			t.Fatalf("X-Request-ID response header = %q, want req-123", got)
+		}
+
+		entry := logEntry(t, buf)
+		if entry["request_id"] != "req-123" {
+			t.Fatalf("request_id = %v", entry["request_id"])
+		}
+		if entry["route"] != "/api/v1/workspaces/{id}/executions" {
+			t.Fatalf("route = %v (want the low-cardinality pattern)", entry["route"])
+		}
+		if entry["status"] != float64(http.StatusTeapot) {
+			t.Fatalf("status = %v", entry["status"])
+		}
+		if entry["actor_id"] != "user-42" {
+			t.Fatalf("actor_id = %v", entry["actor_id"])
+		}
+		if entry["method"] != "GET" {
+			t.Fatalf("method = %v", entry["method"])
+		}
+
+		// duration_ms must reflect the elapsed time: the handler slept 11ms of
+		// the bubble's clock (#374).
+		dur, ok := entry["duration_ms"].(float64)
+		if !ok {
+			t.Fatalf("duration_ms = %v (not numeric)", entry["duration_ms"])
+		}
+		if dur != 11 {
+			t.Fatalf("duration_ms = %v, want 11 (handler slept 11ms)", dur)
+		}
+
+		// Query parameters (which can carry secrets) must never reach the log.
+		if strings.Contains(buf.String(), "supersecret") {
+			t.Fatalf("query secret leaked into the log: %s", buf.String())
+		}
 	})
-
-	req := httptest.NewRequest("GET", "/api/v1/workspaces/ws-1/executions?token=supersecret", nil)
-	req.Header.Set("X-Request-ID", "req-123")
-	req = req.WithContext(context.WithValue(req.Context(), auth.ContextKeyUserID, "user-42"))
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	if got := rec.Header().Get("X-Request-ID"); got != "req-123" {
-		t.Fatalf("X-Request-ID response header = %q, want req-123", got)
-	}
-
-	entry := logEntry(t, buf)
-	if entry["request_id"] != "req-123" {
-		t.Fatalf("request_id = %v", entry["request_id"])
-	}
-	if entry["route"] != "/api/v1/workspaces/{id}/executions" {
-		t.Fatalf("route = %v (want the low-cardinality pattern)", entry["route"])
-	}
-	if entry["status"] != float64(http.StatusTeapot) {
-		t.Fatalf("status = %v", entry["status"])
-	}
-	if entry["actor_id"] != "user-42" {
-		t.Fatalf("actor_id = %v", entry["actor_id"])
-	}
-	if entry["method"] != "GET" {
-		t.Fatalf("method = %v", entry["method"])
-	}
-
-	// duration_ms must actually reflect elapsed time (the handler slept 11ms).
-	dur, ok := entry["duration_ms"].(float64)
-	if !ok {
-		t.Fatalf("duration_ms = %v (not numeric)", entry["duration_ms"])
-	}
-	if dur < 11 {
-		t.Fatalf("duration_ms = %v, want >= 11 (handler slept 11ms)", dur)
-	}
-
-	// Query parameters (which can carry secrets) must never reach the log.
-	if strings.Contains(buf.String(), "supersecret") {
-		t.Fatalf("query secret leaked into the log: %s", buf.String())
-	}
 }
 
 func TestStructuredLoggerRecordsFinalStatusAfterInformational(t *testing.T) {
+	t.Parallel()
 	logger, buf := newTestLogger()
 
 	router := chi.NewRouter()
@@ -109,11 +115,13 @@ func TestStructuredLoggerRecordsFinalStatusAfterInformational(t *testing.T) {
 // TestResponseRecorderAllowsUpgrades: the logger wrapper must let a WebSocket
 // upgrade hijack the connection (the execution event channel).
 func TestResponseRecorderAllowsUpgrades(t *testing.T) {
+	t.Parallel()
 	var _ http.Hijacker = &responseRecorder{}
 	var _ http.Flusher = &responseRecorder{}
 }
 
 func TestStructuredLoggerRecordsActorFromHandler(t *testing.T) {
+	t.Parallel()
 	logger, buf := newTestLogger()
 
 	router := chi.NewRouter()
@@ -139,6 +147,7 @@ func TestStructuredLoggerRecordsActorFromHandler(t *testing.T) {
 // TestStructuredLoggerCarriesTraceID: a request handled inside a span logs the
 // span's trace_id and span_id (#47).
 func TestStructuredLoggerCarriesTraceID(t *testing.T) {
+	t.Parallel()
 	exp := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
 	defer func() { _ = tp.Shutdown(context.Background()) }()

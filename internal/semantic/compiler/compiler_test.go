@@ -59,6 +59,7 @@ func pg(t *testing.T) dialect.Dialect {
 }
 
 func TestCompileSingleModel(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"status"},
@@ -86,6 +87,7 @@ func TestCompileSingleModel(t *testing.T) {
 }
 
 func TestCompileTimeGrain(t *testing.T) {
+	t.Parallel()
 	d := pg(t)
 	trunc, err := d.TimeTrunc(`"created_at"`, dialect.GrainDay)
 	if err != nil {
@@ -110,6 +112,7 @@ func TestCompileTimeGrain(t *testing.T) {
 }
 
 func TestCompileMetricFilterUsesHaving(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{
 		Model:   "orders",
 		Metrics: []string{"revenue"},
@@ -125,6 +128,7 @@ func TestCompileMetricFilterUsesHaving(t *testing.T) {
 }
 
 func TestCompileJoinDimension(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"status", "segment"},
@@ -150,6 +154,7 @@ func TestCompileJoinDimension(t *testing.T) {
 }
 
 func TestCompileJoinFilterOnJoinedDimension(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"segment"},
@@ -166,6 +171,7 @@ func TestCompileJoinFilterOnJoinedDimension(t *testing.T) {
 }
 
 func TestCompileRejectsJoinedMetrics(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"segment"}, Metrics: []string{"customer_count"}}
 	_, err := Compile(q, models(), pg(t), Options{})
 	if !errors.Is(err, ErrUnsupported) {
@@ -174,6 +180,7 @@ func TestCompileRejectsJoinedMetrics(t *testing.T) {
 }
 
 func TestCompileRejectsOneToManyJoin(t *testing.T) {
+	t.Parallel()
 	m := models()
 	orders := m["orders"]
 	orders.Joins[0].Relationship = semantic.OneToMany
@@ -186,6 +193,7 @@ func TestCompileRejectsOneToManyJoin(t *testing.T) {
 }
 
 func TestCompileRejectsChainedJoin(t *testing.T) {
+	t.Parallel()
 	m := models()
 	customers := m["customers"]
 	customers.Joins = []semantic.Join{{To: "regions", Relationship: semantic.ManyToOne, On: []semantic.JoinKey{{From: "region_id", To: "region_id"}}}}
@@ -204,6 +212,7 @@ func TestCompileRejectsChainedJoin(t *testing.T) {
 }
 
 func TestCompileDerivedMetric(t *testing.T) {
+	t.Parallel()
 	d := pg(t)
 	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"aov"}}
 	got, err := Compile(q, models(), d, Options{})
@@ -224,6 +233,7 @@ func TestCompileDerivedMetric(t *testing.T) {
 }
 
 func TestCompileDerivedMetricFilter(t *testing.T) {
+	t.Parallel()
 	d := pg(t)
 	q := semantic.ExploreQuery{
 		Model:   "orders",
@@ -241,6 +251,7 @@ func TestCompileDerivedMetricFilter(t *testing.T) {
 }
 
 func TestCompileRejectsNestedDerived(t *testing.T) {
+	t.Parallel()
 	m := models()
 	orders := m["orders"]
 	orders.Metrics = append(orders.Metrics, semantic.Metric{
@@ -254,6 +265,7 @@ func TestCompileRejectsNestedDerived(t *testing.T) {
 }
 
 func TestCompileRejectsUnselectedSort(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"status"},
@@ -269,6 +281,7 @@ func TestCompileRejectsUnselectedSort(t *testing.T) {
 // TestCompileEveryDialect is the conformance gate: the same query renders for
 // every registered dialect without a per-dialect special case.
 func TestCompileEveryDialect(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"status", "segment"},
@@ -289,6 +302,7 @@ func TestCompileEveryDialect(t *testing.T) {
 }
 
 func TestCompileMetricFiltersAreConditionalAggregates(t *testing.T) {
+	t.Parallel()
 	m := models()
 	orders := m["orders"]
 	orders.Metrics[0].Filters = []semantic.Filter{{Column: "status", Op: semantic.OpEq, Values: []any{"paid"}}}
@@ -305,6 +319,7 @@ func TestCompileMetricFiltersAreConditionalAggregates(t *testing.T) {
 }
 
 func TestCompileMigratedV1MetricWithFilter(t *testing.T) {
+	t.Parallel()
 	model, _, err := semantic.MigrateV1(semantic.MigrateV1Input{
 		CatalogID:  "cat",
 		ModelSlug:  "orders",
@@ -335,6 +350,7 @@ func TestCompileMigratedV1MetricWithFilter(t *testing.T) {
 }
 
 func TestCompilePortableGroupBy(t *testing.T) {
+	t.Parallel()
 	q := semantic.ExploreQuery{Model: "orders", Dimensions: []string{"status"}, Metrics: []string{"orders"}}
 	for _, name := range []string{dialect.TSQL, dialect.Oracle, dialect.PostgreSQL} {
 		d, ok := dialect.NewRegistry().Get(name)
@@ -354,6 +370,7 @@ func TestCompilePortableGroupBy(t *testing.T) {
 func strPtr(s string) *string { return &s }
 
 func TestCompileCalculatedField(t *testing.T) {
+	t.Parallel()
 	m := models()
 	orders := m["orders"]
 	orders.CalculatedFields = []semantic.CalculatedField{{Name: "margin", SQL: `"revenue" / 2`}}
@@ -372,6 +389,7 @@ func TestCompileCalculatedField(t *testing.T) {
 }
 
 func TestCompileOneToManyJoinedMetric(t *testing.T) {
+	t.Parallel()
 	m := models()
 	orders := m["orders"]
 	orders.Joins = append(orders.Joins, semantic.Join{
@@ -403,6 +421,7 @@ func TestCompileOneToManyJoinedMetric(t *testing.T) {
 }
 
 func TestCompileRejectsBaseMetricWithOneToMany(t *testing.T) {
+	t.Parallel()
 	m := models()
 	orders := m["orders"]
 	orders.Joins[0].Relationship = semantic.OneToMany

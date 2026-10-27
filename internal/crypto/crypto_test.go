@@ -27,6 +27,7 @@ func mustKeyring(t *testing.T, current, previous string) *Keyring {
 }
 
 func TestNewKeyringRejectsWeakKeys(t *testing.T) {
+	t.Parallel()
 	for _, bad := range []string{"", "short", strings.Repeat("x", MinKeyLen-1)} {
 		if _, err := NewKeyring(bad, ""); err == nil {
 			t.Errorf("NewKeyring accepted current key %q", bad)
@@ -43,6 +44,7 @@ func TestNewKeyringRejectsWeakKeys(t *testing.T) {
 // TestRegistryKeyringIsDomainSeparated proves the registry keyring never opens
 // a credential envelope and vice versa, even with the same secret.
 func TestRegistryKeyringIsDomainSeparated(t *testing.T) {
+	t.Parallel()
 	cred := mustKeyring(t, keyA, "")
 	reg, err := NewRegistryKeyring(keyA, "")
 	if err != nil {
@@ -68,6 +70,7 @@ func TestRegistryKeyringIsDomainSeparated(t *testing.T) {
 }
 
 func TestSealOpen_RoundTrip(t *testing.T) {
+	t.Parallel()
 	k := mustKeyring(t, keyA, "")
 	env, err := k.Seal([]byte(`{"password":"s3cr3t"}`), "catalog_connections:1")
 	if err != nil {
@@ -83,6 +86,7 @@ func TestSealOpen_RoundTrip(t *testing.T) {
 }
 
 func TestSealIsRandomised(t *testing.T) {
+	t.Parallel()
 	k := mustKeyring(t, keyA, "")
 	a, _ := k.Seal([]byte("x"), "aad")
 	b, _ := k.Seal([]byte("x"), "aad")
@@ -92,6 +96,7 @@ func TestSealIsRandomised(t *testing.T) {
 }
 
 func TestOpen_WrongAAD(t *testing.T) {
+	t.Parallel()
 	k := mustKeyring(t, keyA, "")
 	env, _ := k.Seal([]byte("secret"), "catalog_connections:A")
 	if _, err := k.Open(env, "catalog_connections:B"); !errors.Is(err, ErrCorrupt) {
@@ -100,6 +105,7 @@ func TestOpen_WrongAAD(t *testing.T) {
 }
 
 func TestOpen_Tampered(t *testing.T) {
+	t.Parallel()
 	k := mustKeyring(t, keyA, "")
 	env, _ := k.Seal([]byte("secret"), "aad")
 	parts := strings.SplitN(env, ":", 3)
@@ -117,6 +123,7 @@ func TestOpen_Tampered(t *testing.T) {
 }
 
 func TestOpen_PreviousKey(t *testing.T) {
+	t.Parallel()
 	old := mustKeyring(t, keyA, "")
 	env, _ := old.Seal([]byte("secret"), "aad")
 
@@ -134,6 +141,7 @@ func TestOpen_PreviousKey(t *testing.T) {
 }
 
 func TestOpen_UnknownKey(t *testing.T) {
+	t.Parallel()
 	env, _ := mustKeyring(t, keyA, "").Seal([]byte("secret"), "aad")
 	if _, err := mustKeyring(t, keyB, "").Open(env, "aad"); !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("want ErrUnknownKey, got %v", err)
@@ -155,6 +163,7 @@ func legacySeal(t *testing.T, plaintext []byte, secret string) string {
 }
 
 func TestOpen_Legacy(t *testing.T) {
+	t.Parallel()
 	legacy := legacySeal(t, []byte("secret"), "jwt-secret-0123456789")
 	if _, err := mustKeyring(t, keyA, "").Open(legacy, "aad"); !errors.Is(err, ErrLegacyFormat) {
 		t.Fatalf("request-time Open must refuse legacy values, got %v", err)

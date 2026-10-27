@@ -16,6 +16,7 @@ import (
 // BALEIA_TEST_POSTGRES_URL (postgres://user:pass@host:port/db) to enable it;
 // the user needs CREATE on the database.
 func TestMetadataReader_postgresql(t *testing.T) {
+	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_POSTGRES_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_POSTGRES_URL not set")

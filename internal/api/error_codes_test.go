@@ -18,9 +18,11 @@ import (
 //
 // The UI translates code+params, so a code without a message is a broken UI.
 func TestErrorCodesClosed(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..")
 
 	t.Run("no string literal codes", func(t *testing.T) {
+		t.Parallel()
 		literal := regexp.MustCompile(`\bCode:\s*"`)
 		err := filepath.WalkDir(filepath.Join(root, "internal"), func(path string, d fs.DirEntry, err error) error {
 			if err != nil {

@@ -13,6 +13,7 @@ import (
 // TestPostgres_EventsAndCursor: events after the cursor come back in order
 // with empty strings for NULLs, and the cursor round-trips.
 func TestPostgres_EventsAndCursor(t *testing.T) {
+	t.Parallel()
 	q := db.New(testdb.New(t))
 	ctx := context.Background()
 	rec := audit.NewPostgres(q, nil, nil)

@@ -9,6 +9,7 @@ import (
 // upsert, and table_health_snapshots is UNIQUE per table, so a second capture
 // must update the row instead of failing with a duplicate key.
 func TestUpsertTableHealthSnapshotUpdatesOnConflict(t *testing.T) {
+	t.Parallel()
 	q := upsertTableHealthSnapshot
 	for _, want := range []string{
 		"ON CONFLICT (catalog_id, namespace, table_name) DO UPDATE",

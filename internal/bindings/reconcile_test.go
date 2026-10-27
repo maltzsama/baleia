@@ -150,6 +150,7 @@ func newSim() (*manyStore, *engineSim) {
 // TestReconcile_AdoptedNeverDropped: a catalog the engine has without a
 // managed binding is reported and recorded as adopted, never dropped.
 func TestReconcile_AdoptedNeverDropped(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	eng.loaded["customer_hive"] = "theirs"
 	rep, err := reconciler(st, eng).Run(context.Background(), false)
@@ -172,6 +173,7 @@ func TestReconcile_AdoptedNeverDropped(t *testing.T) {
 // TestReconcile_MissingManagedCreated: an active catalog missing in the
 // engine is created again and ends active.
 func TestReconcile_MissingManagedCreated(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	st.add("sales", bindings.StateActive)
 	rep, err := reconciler(st, eng).Run(context.Background(), false)
@@ -189,6 +191,7 @@ func TestReconcile_MissingManagedCreated(t *testing.T) {
 // TestReconcile_VersionMismatchRecreated: an active catalog loaded with an
 // older version is applied again.
 func TestReconcile_VersionMismatchRecreated(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	st.add("sales", bindings.StateActive)
 	eng.loaded["sales"] = "v1"
@@ -201,6 +204,7 @@ func TestReconcile_VersionMismatchRecreated(t *testing.T) {
 // TestReconcile_PendingDrop: a deprovisioning catalog still in the engine
 // is dropped and ends disabled; one already gone just ends disabled.
 func TestReconcile_PendingDrop(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	st.add("old", bindings.StateDeprovisioning)
 	st.add("gone", bindings.StateDeprovisioning)
@@ -224,6 +228,7 @@ func TestReconcile_PendingDrop(t *testing.T) {
 // TestReconcile_DryRunNoMutations: a dry run reports what it would do and
 // changes nothing.
 func TestReconcile_DryRunNoMutations(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	st.add("sales", bindings.StateActive)
 	st.add("old", bindings.StateDeprovisioning)
@@ -249,6 +254,7 @@ func TestReconcile_DryRunNoMutations(t *testing.T) {
 // TestReconcile_MaxActions: past the limit the remaining actions are
 // reported, not applied.
 func TestReconcile_MaxActions(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	for i := range 30 {
 		st.add(fmt.Sprintf("c%02d", i), bindings.StateActive)
@@ -275,6 +281,7 @@ func TestReconcile_MaxActions(t *testing.T) {
 // TestReconcile_Idempotent: after a successful run the next one finds
 // nothing to change.
 func TestReconcile_Idempotent(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	st.add("sales", bindings.StateActive)
 	st.add("old", bindings.StateDeprovisioning)
@@ -292,6 +299,7 @@ func TestReconcile_Idempotent(t *testing.T) {
 // TestReconcile_LeftoverDropped: a name Baleia managed that no binding owns
 // any more (a rename's old name) is dropped; it is not adopted.
 func TestReconcile_LeftoverDropped(t *testing.T) {
+	t.Parallel()
 	st, eng := newSim()
 	st.leftovers = []string{"sales_old"}
 	eng.loaded["sales_old"] = "v1"

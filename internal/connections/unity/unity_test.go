@@ -10,6 +10,7 @@ import (
 )
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	p := New(nil)
 	cfg, err := p.Validate(connections.Config{Values: map[string]string{"url": "http://unity:8080/"}})
 	if err != nil {
@@ -33,6 +34,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestRESTURI(t *testing.T) {
+	t.Parallel()
 	p := New(nil)
 	cases := map[string]string{
 		"http://unity:8080": "http://unity:8080/api/2.1/unity-catalog/iceberg",
@@ -51,6 +53,7 @@ func TestRESTURI(t *testing.T) {
 // TestUnityIntegration runs against a real Unity Catalog OSS (the compose
 // `sources` service works: BALEIA_TEST_UNITY_URL=http://localhost:18080).
 func TestUnityIntegration(t *testing.T) {
+	t.Parallel()
 	base := os.Getenv("BALEIA_TEST_UNITY_URL")
 	if base == "" {
 		t.Skip("BALEIA_TEST_UNITY_URL not set")

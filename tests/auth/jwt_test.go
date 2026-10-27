@@ -10,6 +10,7 @@ import (
 )
 
 func TestNewAccessToken(t *testing.T) {
+	t.Parallel()
 	secret := "test-secret"
 	token, err := auth.NewAccessToken("user-1", "admin", secret)
 	if err != nil {
@@ -41,6 +42,7 @@ func TestNewAccessToken(t *testing.T) {
 }
 
 func TestParseTokenInvalid(t *testing.T) {
+	t.Parallel()
 	_, err := auth.ParseToken("not.a.token", "secret")
 	if err == nil {
 		t.Fatal("expected error for invalid token")
@@ -48,6 +50,7 @@ func TestParseTokenInvalid(t *testing.T) {
 }
 
 func TestParseTokenWrongSecret(t *testing.T) {
+	t.Parallel()
 	token, err := auth.NewAccessToken("user-1", "member", "secret-a")
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +62,7 @@ func TestParseTokenWrongSecret(t *testing.T) {
 }
 
 func TestGenerateRefreshToken(t *testing.T) {
+	t.Parallel()
 	token, hash, err := auth.GenerateRefreshToken()
 	if err != nil {
 		t.Fatalf("GenerateRefreshToken failed: %v", err)
@@ -75,6 +79,7 @@ func TestGenerateRefreshToken(t *testing.T) {
 }
 
 func TestHashRefreshToken(t *testing.T) {
+	t.Parallel()
 	token, _, _ := auth.GenerateRefreshToken()
 	hash1 := auth.HashRefreshToken(token)
 	hash2 := auth.HashRefreshToken(token)
@@ -84,6 +89,7 @@ func TestHashRefreshToken(t *testing.T) {
 }
 
 func TestGenerateRefreshTokenUnique(t *testing.T) {
+	t.Parallel()
 	tokens := make(map[string]bool)
 	for i := 0; i < 100; i++ {
 		token, _, err := auth.GenerateRefreshToken()
@@ -98,6 +104,7 @@ func TestGenerateRefreshTokenUnique(t *testing.T) {
 }
 
 func TestExpiredToken(t *testing.T) {
+	t.Parallel()
 	secret := "test-secret"
 	claims := auth.Claims{
 		UserID: "user-1",

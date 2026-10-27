@@ -68,9 +68,11 @@ func defaultEngine(url string, owner pgtype.UUID) *db.GetDefaultTrinoEngineRow {
 }
 
 func TestEnsureDefaultTrinoEngine(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("creates the engine when the cluster has none", func(t *testing.T) {
+		t.Parallel()
 		f := &fakeEngineStore{cluster: &db.TrinoCluster{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Name: "default"}, takenNames: map[string]bool{"trino-default": true}}
 		if err := EnsureDefaultTrinoEngine(ctx, f, DefaultTrinoEngine{URL: "http://trino:8080"}); err != nil {
 			t.Fatal(err)
@@ -88,6 +90,7 @@ func TestEnsureDefaultTrinoEngine(t *testing.T) {
 	})
 
 	t.Run("updates the system engine's url", func(t *testing.T) {
+		t.Parallel()
 		f := &fakeEngineStore{engine: defaultEngine("http://trino:8080", pgtype.UUID{})}
 		if err := EnsureDefaultTrinoEngine(ctx, f, DefaultTrinoEngine{URL: "http://localhost:8088"}); err != nil {
 			t.Fatal(err)
@@ -98,6 +101,7 @@ func TestEnsureDefaultTrinoEngine(t *testing.T) {
 	})
 
 	t.Run("no write when the url already matches", func(t *testing.T) {
+		t.Parallel()
 		f := &fakeEngineStore{engine: defaultEngine("http://trino:8080", pgtype.UUID{})}
 		if err := EnsureDefaultTrinoEngine(ctx, f, DefaultTrinoEngine{URL: "http://trino:8080"}); err != nil {
 			t.Fatal(err)
@@ -108,6 +112,7 @@ func TestEnsureDefaultTrinoEngine(t *testing.T) {
 	})
 
 	t.Run("a user-owned connection is left alone", func(t *testing.T) {
+		t.Parallel()
 		f := &fakeEngineStore{engine: defaultEngine("https://trino.prod", pgtype.UUID{Bytes: [16]byte{7}, Valid: true})}
 		if err := EnsureDefaultTrinoEngine(ctx, f, DefaultTrinoEngine{URL: "http://localhost:8088"}); err != nil {
 			t.Fatal(err)
@@ -118,6 +123,7 @@ func TestEnsureDefaultTrinoEngine(t *testing.T) {
 	})
 
 	t.Run("no cluster, nothing to do", func(t *testing.T) {
+		t.Parallel()
 		f := &fakeEngineStore{}
 		if err := EnsureDefaultTrinoEngine(ctx, f, DefaultTrinoEngine{URL: "http://trino:8080"}); err != nil {
 			t.Fatal(err)
@@ -129,6 +135,7 @@ func TestEnsureDefaultTrinoEngine(t *testing.T) {
 }
 
 func TestEnsureDefaultTrinoEngine_Identities(t *testing.T) {
+	t.Parallel()
 	f := &fakeEngineStore{engine: defaultEngine("http://trino:8080", pgtype.UUID{})}
 	env := DefaultTrinoEngine{URL: "http://trino:8080", ServiceUser: "svc", AdminUser: "adm"}
 	if err := EnsureDefaultTrinoEngine(context.Background(), f, env); err != nil {

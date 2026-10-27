@@ -9,6 +9,7 @@ import (
 // TestLogin_ProgressiveDelay: the sixth failure waits at least 1s, then the
 // delay doubles and caps at 60s (#51).
 func TestLogin_ProgressiveDelay(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(0, 0)
 	var slept []time.Duration
 	d := NewLoginDelay(LoginDelayConfig{
@@ -52,6 +53,7 @@ func TestLogin_ProgressiveDelay(t *testing.T) {
 }
 
 func TestLoginDelayWindowExpires(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(0, 0)
 	slept := 0
 	d := NewLoginDelay(LoginDelayConfig{
@@ -72,6 +74,7 @@ func TestLoginDelayWindowExpires(t *testing.T) {
 }
 
 func TestLoginDelaySuccessClears(t *testing.T) {
+	t.Parallel()
 	slept := 0
 	d := NewLoginDelay(LoginDelayConfig{
 		Sleep: func(context.Context, time.Duration) error { slept++; return nil },
@@ -89,6 +92,7 @@ func TestLoginDelaySuccessClears(t *testing.T) {
 }
 
 func TestLoginDelayContextCancelled(t *testing.T) {
+	t.Parallel()
 	d := NewLoginDelay(LoginDelayConfig{
 		Sleep: func(ctx context.Context, _ time.Duration) error {
 			<-ctx.Done()

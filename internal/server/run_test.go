@@ -15,8 +15,12 @@ import (
 // http.ErrServerClosed, so the API exits 0 on SIGTERM (#372), with a drain
 // deadline or without one.
 func TestRun_CleanShutdown(t *testing.T) {
+	t.Parallel()
 	for _, timeout := range []time.Duration{5 * time.Second, 0} {
-		t.Run(timeout.String(), func(t *testing.T) { cleanShutdown(t, timeout) })
+		t.Run(timeout.String(), func(t *testing.T) {
+			t.Parallel()
+			cleanShutdown(t, timeout)
+		})
 	}
 }
 

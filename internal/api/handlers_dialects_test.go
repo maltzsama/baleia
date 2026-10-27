@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 	"unicode/utf16"
 
@@ -19,6 +20,7 @@ import (
 )
 
 func TestGetDialect(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
 	resp, err := h.GetDialect(testContext(), GetDialectRequestObject{Name: "tsql"})
 	if err != nil {
@@ -48,6 +50,7 @@ func TestGetDialect(t *testing.T) {
 }
 
 func TestSplitStatements_UTF16Offsets(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
 	sql := "SELECT 'é😀';\n  SELECT \"a;b\" -- x\n"
 	resp, err := h.SplitStatements(testContext(), SplitStatementsRequestObject{Name: "trino", Body: &SplitStatementsRequest{Sql: sql}})
@@ -92,6 +95,7 @@ func (failingEngines) DefaultTrino(context.Context) (queryengine.Engine, error) 
 }
 
 func TestDescribeEngine(t *testing.T) {
+	t.Parallel()
 	var infoCalls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/info" {
@@ -142,26 +146,31 @@ func (s slowEngines) DefaultTrino(context.Context) (queryengine.Engine, error) {
 }
 
 // TestDescribeEngines_ParallelInOrder: slow engines overlap and the list
-// keeps its order.
+// keeps its order. The bubble's clock makes the overlap exact (#374).
 func TestDescribeEngines_ParallelInOrder(t *testing.T) {
-	h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: 100 * time.Millisecond}})
-	rows := make([]db.Engine, 8)
-	for i := range rows {
-		rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
-	}
-	start := time.Now()
-	out := h.describeEngines(context.Background(), rows)
-	if d := time.Since(start); d > 500*time.Millisecond {
-		t.Errorf("8 slow engines took %s; lookups must overlap", d)
-	}
-	for i, e := range out {
-		if e.Name != rows[i].Name {
-			t.Fatalf("order lost: %d is %s", i, e.Name)
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const delay = 100 * time.Millisecond
+		h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: delay}})
+		rows := make([]db.Engine, 8)
+		for i := range rows {
+			rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
 		}
-	}
+		start := time.Now()
+		out := h.describeEngines(context.Background(), rows)
+		if d := time.Since(start); d != delay {
+			t.Errorf("8 slow engines took %s, want %s: lookups must overlap", d, delay)
+		}
+		for i, e := range out {
+			if e.Name != rows[i].Name {
+				t.Fatalf("order lost: %d is %s", i, e.Name)
+			}
+		}
+	})
 }
 
 func TestExplainSQL(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
 	resp, err := h.ExplainSQL(testContext(), ExplainSQLRequestObject{Name: "sqlite", Body: &ExplainRequest{Sql: "SELECT 1;"}})
 	if err != nil {
@@ -203,6 +212,7 @@ func mustExplain(t *testing.T, h *API, req ExplainSQLRequestObject) ExplainSQLRe
 // TestEngineHealth_FromProbe guards #110: a failed version probe is cached as
 // unreachable with its error code instead of leaving health unknown.
 func TestEngineHealth_FromProbe(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "down", http.StatusInternalServerError)
 	}))
@@ -229,6 +239,7 @@ func TestEngineHealth_FromProbe(t *testing.T) {
 }
 
 func TestConnectionAllows_ChecksComputedActions(t *testing.T) {
+	t.Parallel()
 	actions := []CatalogConnectionAllowedAction{CatalogConnectionAllowedActionRegisterEngine}
 	conn := CatalogConnection{AllowedActions: &actions}
 	if !connectionAllows(conn, "register_engine") {

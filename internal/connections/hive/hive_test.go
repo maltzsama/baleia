@@ -11,6 +11,7 @@ import (
 )
 
 func TestMetastoreAddr(t *testing.T) {
+	t.Parallel()
 	ok := map[string]string{
 		"thrift://hms:9083":       "hms:9083",
 		"thrift://hms.internal:1": "hms.internal:1",
@@ -33,6 +34,7 @@ func TestMetastoreAddr(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	p := New(nil)
 	cfg, err := p.Validate(connections.Config{Values: map[string]string{
 		"metastore_uri": "thrift://hms:9083", "storage.endpoint": "http://rustfs:9000", "storage.access_key": "k",
@@ -52,6 +54,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestPingDeniedByDialer(t *testing.T) {
+	t.Parallel()
 	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +70,7 @@ func TestPingDeniedByDialer(t *testing.T) {
 }
 
 func TestPingReachable(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -89,6 +93,7 @@ func TestPingReachable(t *testing.T) {
 // OpenMetadata is unsupported: HMS metadata is read through the federated
 // engine (#15).
 func TestOpenMetadataUnsupported(t *testing.T) {
+	t.Parallel()
 	if _, err := New(nil).OpenMetadata(context.Background(), connections.Config{}); !errors.Is(err, connections.ErrUnsupported) {
 		t.Errorf("OpenMetadata = %v, want ErrUnsupported", err)
 	}
@@ -97,6 +102,7 @@ func TestOpenMetadataUnsupported(t *testing.T) {
 // TestPingHMS runs against a real Hive Metastore (the compose `sources`
 // service works: BALEIA_TEST_HIVE_METASTORE_URI=thrift://localhost:19083).
 func TestPingHMS(t *testing.T) {
+	t.Parallel()
 	uri := os.Getenv("BALEIA_TEST_HIVE_METASTORE_URI")
 	if uri == "" {
 		t.Skip("BALEIA_TEST_HIVE_METASTORE_URI not set")

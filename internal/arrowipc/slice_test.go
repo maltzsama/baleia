@@ -49,6 +49,7 @@ func writeInt64File(t *testing.T, total int) []byte {
 }
 
 func TestSliceRowsAcrossBatches(t *testing.T) {
+	t.Parallel()
 	file := writeInt64File(t, recordBatchSize+10)
 
 	// Starts inside batch 0 and continues into batch 1.
@@ -62,6 +63,7 @@ func TestSliceRowsAcrossBatches(t *testing.T) {
 }
 
 func TestSliceRowsAtBatchBoundary(t *testing.T) {
+	t.Parallel()
 	file := writeInt64File(t, 2*recordBatchSize)
 
 	page, err := SliceRows(bytes.NewReader(file), int64(recordBatchSize), 3)
@@ -72,6 +74,7 @@ func TestSliceRowsAtBatchBoundary(t *testing.T) {
 }
 
 func TestSliceRowsPastEndIsEmpty(t *testing.T) {
+	t.Parallel()
 	file := writeInt64File(t, 100)
 
 	page, err := SliceRows(bytes.NewReader(file), 500, 10)
@@ -81,6 +84,7 @@ func TestSliceRowsPastEndIsEmpty(t *testing.T) {
 }
 
 func TestSliceStreamSlicesLegacyStream(t *testing.T) {
+	t.Parallel()
 	// Legacy results were written as IPC streams (no footer); they still page.
 	var stream bytes.Buffer
 	sw, err := NewStreamWriter(&stream, []ColumnInfo{{Name: "n", Type: "bigint"}})

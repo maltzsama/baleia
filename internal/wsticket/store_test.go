@@ -6,6 +6,7 @@ import (
 )
 
 func TestTicketSingleUse(t *testing.T) {
+	t.Parallel()
 	store := New()
 	token, expires := store.Issue("user-1", "exec-1")
 	if token == "" {
@@ -29,6 +30,7 @@ func TestTicketSingleUse(t *testing.T) {
 }
 
 func TestTicketExpires(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	store := NewWithClock(func() time.Time { return now })
 

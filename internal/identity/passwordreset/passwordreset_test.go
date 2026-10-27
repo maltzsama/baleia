@@ -101,6 +101,7 @@ func linkToken(t *testing.T, m sentMail) string {
 }
 
 func TestRequest_MailsAHashedSingleUseLink(t *testing.T) {
+	t.Parallel()
 	s, st, m, _, u := setup(t)
 	if err := s.Request(context.Background(), u.Email); err != nil {
 		t.Fatal(err)
@@ -119,6 +120,7 @@ func TestRequest_MailsAHashedSingleUseLink(t *testing.T) {
 }
 
 func TestRequest_UnknownEmailIsSilent(t *testing.T) {
+	t.Parallel()
 	s, _, m, _, _ := setup(t)
 	if err := s.Request(context.Background(), "nobody@x.io"); err != nil {
 		t.Fatalf("unknown e-mail = %v, want nil", err)
@@ -132,6 +134,7 @@ func TestRequest_UnknownEmailIsSilent(t *testing.T) {
 // e-mail goes out, and a failed send is not an error, so an existing account
 // answers like an unknown address (#422).
 func TestRequest_DeliveryNeverShapesTheAnswer(t *testing.T) {
+	t.Parallel()
 	s, _, m, _, u := setup(t)
 	m.release = make(chan struct{})
 	m.err = errors.New("smtp: connection refused")
@@ -146,6 +149,7 @@ func TestRequest_DeliveryNeverShapesTheAnswer(t *testing.T) {
 }
 
 func TestConfirm(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, m, ss, u := setup(t)
 	if err := s.Request(ctx, u.Email); err != nil {
@@ -181,6 +185,7 @@ func (brokenStore) ConsumePasswordResetToken(context.Context, string) (db.Passwo
 // TestConfirm_StoreFailureIsNotAnInvalidLink: a database outage is an error,
 // never an invalid link.
 func TestConfirm_StoreFailureIsNotAnInvalidLink(t *testing.T) {
+	t.Parallel()
 	_, st, m, ss, _ := setup(t)
 	s := New(brokenStore{st}, m, ss, Config{PasswordCost: bcrypt.MinCost})
 	if _, err := s.Confirm(context.Background(), "any", "new-password"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalidToken) {
@@ -191,6 +196,7 @@ func TestConfirm_StoreFailureIsNotAnInvalidLink(t *testing.T) {
 // TestRequest_OnlyLocalActiveAccounts: an SSO or suspended account gets no
 // link, and the answer is the same as for an unknown address.
 func TestRequest_OnlyLocalActiveAccounts(t *testing.T) {
+	t.Parallel()
 	s, st, m, _, _ := setup(t)
 	st.users["sso@x.io"] = db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "sso@x.io", AuthProvider: "oidc", Status: "active"}
 	st.users["off@x.io"] = db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "off@x.io", AuthProvider: "local", Status: "suspended"}
@@ -212,6 +218,7 @@ func (brokenStore) GetUserByEmail(context.Context, string) (db.User, error) {
 // TestRequest_StoreFailureIsAnError: a database outage is an error, and no
 // e-mail goes out.
 func TestRequest_StoreFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	_, st, m, ss, _ := setup(t)
 	s := New(brokenStore{st}, m, ss, Config{PasswordCost: bcrypt.MinCost})
 	if err := s.Request(context.Background(), "ana@x.io"); !errors.Is(err, errDown) {

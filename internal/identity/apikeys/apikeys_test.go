@@ -37,6 +37,7 @@ func (f *fakeStore) CreateAPIKey(_ context.Context, arg db.CreateAPIKeyParams) (
 func (f *fakeStore) DeleteAPIKey(context.Context, db.DeleteAPIKeyParams) error { return f.deleteErr }
 
 func TestCreate_StoresOnlyTheHash(t *testing.T) {
+	t.Parallel()
 	st := &fakeStore{}
 	s := New(st)
 	user := pgtype.UUID{Bytes: uuid.New(), Valid: true}
@@ -66,6 +67,7 @@ func TestCreate_StoresOnlyTheHash(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	t.Parallel()
 	st := &fakeStore{}
 	s := New(st)
 	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}

@@ -47,6 +47,7 @@ func loginResponse(t *testing.T, resp LoginResponseObject, err error, name strin
 }
 
 func TestLogin_EmailRequiredForLocal(t *testing.T) {
+	t.Parallel()
 	resp, err := loginHandlers(&fakeLoginQuerier{}).Login(context.Background(), LoginRequestObject{
 		Body: &LoginRequest{Password: "whatever"},
 	})
@@ -61,6 +62,7 @@ func TestLogin_EmailRequiredForLocal(t *testing.T) {
 // TestLogin_UniformErrors: an unknown e-mail, an SSO-only account and a wrong
 // password are indistinguishable (#51).
 func TestLogin_UniformErrors(t *testing.T) {
+	t.Parallel()
 	wrongHash, err := auth.HashPasswordWithCost("right", testBcryptCost)
 	if err != nil {
 		t.Fatal(err)
@@ -85,6 +87,7 @@ func TestLogin_UniformErrors(t *testing.T) {
 // TestLogin_TimingEqualized: the unknown-e-mail path runs bcrypt instead of
 // returning early (#51).
 func TestLogin_TimingEqualized(t *testing.T) {
+	t.Parallel()
 	const minBcryptTime = 15 * time.Millisecond
 
 	start := time.Now()

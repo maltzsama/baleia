@@ -10,6 +10,7 @@ import (
 )
 
 func TestRegistryAndConnector(t *testing.T) {
+	t.Parallel()
 	b := bindtrino.New(nil, nil)
 	bindings.Register(b)
 	got, ok := bindings.For("trino")

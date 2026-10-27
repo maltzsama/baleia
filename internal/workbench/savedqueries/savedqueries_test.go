@@ -119,6 +119,7 @@ func (brokenFolders) Get(context.Context, pgtype.UUID, pgtype.UUID) (db.QueryFol
 // TestFolderLookupFailureIsNotNotFound: a database outage is an error, never
 // a missing folder.
 func TestFolderLookupFailureIsNotNotFound(t *testing.T) {
+	t.Parallel()
 	st := newStore()
 	s := NewService(st, brokenFolders{}, st)
 	_, err := s.Create(context.Background(), newID(), newID(), New{SpaceID: newID(), FolderID: newID(), Name: "x"})
@@ -144,6 +145,7 @@ func setup() fixture {
 }
 
 func TestCreate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := setup()
 	binding := newID()
@@ -167,6 +169,7 @@ func TestCreate(t *testing.T) {
 		{"bad slug", New{SpaceID: f.space, Name: "x", Slug: "Bad Slug"}, ErrInvalidSlug},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := f.s.Create(ctx, newID(), f.ws, c.in); !errors.Is(err, c.want) {
 				t.Errorf("err = %v, want %v", err, c.want)
 			}
@@ -190,6 +193,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := setup()
 	q, _ := f.s.Create(ctx, newID(), f.ws, New{SpaceID: f.space, FolderID: f.folder.ID, Name: "a", SQL: "select 1"})

@@ -29,6 +29,7 @@ func failWrites(t *testing.T, pool *pgxpool.Pool, event string) {
 // TestInviteUser_TokenFailureLeavesNoUser: when the invite token cannot be
 // stored, the user is not created either, so the invite can be retried (#376).
 func TestInviteUser_TokenFailureLeavesNoUser(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	failWrites(t, f.pool, "INSERT ON password_reset_tokens")
 
@@ -43,6 +44,7 @@ func TestInviteUser_TokenFailureLeavesNoUser(t *testing.T) {
 // TestUpdateAgent_StatusFailureKeepsTheName: a PATCH whose status write fails
 // leaves the name as it was (#376).
 func TestUpdateAgent_StatusFailureKeepsTheName(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 	failWrites(t, f.pool, "UPDATE OF status ON agents")

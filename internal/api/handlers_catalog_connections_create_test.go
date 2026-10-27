@@ -99,8 +99,10 @@ func visitCreate(t *testing.T, resp CreateCatalogConnectionResponseObject) *http
 // TestCreateConnection_AllTypesUseGuard: every provider goes through the single
 // encryption path. Without a key nothing is stored.
 func TestCreateConnection_AllTypesUseGuard(t *testing.T) {
+	t.Parallel()
 	for kind, body := range validCreateRequests() {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			q := &recordingConnQuerier{}
 			resp, err := createHandlers(t, q, nil).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body})
 			if err != nil {
@@ -120,6 +122,7 @@ func TestCreateConnection_AllTypesUseGuard(t *testing.T) {
 // id and nothing else; non-secret values go to config; the url column keeps
 // what the Trino projection reads.
 func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	wantURL := map[string]string{
 		"polaris":    "http://polaris:8181",
@@ -130,6 +133,7 @@ func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
 	}
 	for kind, body := range validCreateRequests() {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			q := &recordingConnQuerier{}
 			resp, err := createHandlers(t, q, kr).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body})
 			if err != nil {
@@ -163,6 +167,7 @@ func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
 // TestCreateConnection_LegacyShapeMovesValuesToConfig: the UI sends client_id
 // inside credentials; it is stored as config, and the projection still sees it.
 func TestCreateConnection_LegacyShapeMovesValuesToConfig(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &recordingConnQuerier{}
 	url := "http://polaris:8181/"
@@ -183,6 +188,7 @@ func TestCreateConnection_LegacyShapeMovesValuesToConfig(t *testing.T) {
 }
 
 func TestCreateConnection_Rejects(t *testing.T) {
+	t.Parallel()
 	cases := map[string]struct {
 		body  *CreateCatalogConnectionRequest
 		code  string
@@ -202,6 +208,7 @@ func TestCreateConnection_Rejects(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			q := &recordingConnQuerier{}
 			resp, err := createHandlers(t, q, testKeyring(t)).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: c.body})
 			if err != nil {
@@ -268,6 +275,7 @@ func runUpdate(t *testing.T, h *API, body UpdateCatalogConnectionRequest) *httpt
 }
 
 func TestUpdateConnection_NameOnlyTouchesNothingElse(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &updateConnQuerier{conn: storedPolaris(t, kr)}
 	name := "renamed"
@@ -283,6 +291,7 @@ func TestUpdateConnection_NameOnlyTouchesNothingElse(t *testing.T) {
 // TestUpdateConnection_NameTakenIsConflict: renaming to a name another
 // connection has is a 409 with the conflict code, not a 500.
 func TestUpdateConnection_NameTakenIsConflict(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &updateConnQuerier{conn: storedPolaris(t, kr), updateErr: &pgconn.PgError{Code: "23505"}}
 	name := "taken"
@@ -293,6 +302,7 @@ func TestUpdateConnection_NameTakenIsConflict(t *testing.T) {
 }
 
 func TestUpdateConnection_MergesConfigAndKeepsSecret(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &updateConnQuerier{conn: storedPolaris(t, kr)}
 	rec := runUpdate(t, createHandlers(t, q, kr), UpdateCatalogConnectionRequest{Config: strMap("realm", "OTHER")})
@@ -315,6 +325,7 @@ func TestUpdateConnection_MergesConfigAndKeepsSecret(t *testing.T) {
 }
 
 func TestUpdateConnection_ReplacesNamedSecret(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &updateConnQuerier{conn: storedPolaris(t, kr)}
 	if rec := runUpdate(t, createHandlers(t, q, kr), UpdateCatalogConnectionRequest{Credentials: anyMap("client_id", "new-id", "client_secret", "new-s3cr3t")}); rec.Code != 200 {
@@ -334,6 +345,7 @@ func TestUpdateConnection_ReplacesNamedSecret(t *testing.T) {
 // column keeps client_id in its blob; after a config update the projection
 // must read the new value.
 func TestUpdateConnection_ConfigWinsOverOldBlob(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	c := testConnection(t, false, ownerUUID(t, testUserID))
 	c.Config = []byte(`{"url":"http://polaris:8181"}`) // backfilled by the migration
@@ -351,6 +363,7 @@ func TestUpdateConnection_ConfigWinsOverOldBlob(t *testing.T) {
 }
 
 func TestUpdateConnection_RejectsInvalid(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &updateConnQuerier{conn: storedPolaris(t, kr)}
 	rec := runUpdate(t, createHandlers(t, q, kr), UpdateCatalogConnectionRequest{Config: strMap("bogus", "1")})
@@ -365,6 +378,7 @@ func TestUpdateConnection_RejectsInvalid(t *testing.T) {
 // TestUpdateConnection_EncryptionFailureIs500: a credentials PATCH with no key
 // answers a typed 500 and writes nothing.
 func TestUpdateConnection_EncryptionFailureIs500(t *testing.T) {
+	t.Parallel()
 	owner := ownerUUID(t, testUserID)
 	q := &updateConnQuerier{conn: testConnection(t, true, owner)}
 	h := createHandlers(t, q, nil)
@@ -378,6 +392,7 @@ func TestUpdateConnection_EncryptionFailureIs500(t *testing.T) {
 }
 
 func TestCreateConnection_CredentialsReadOnly(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &recordingConnQuerier{}
 	readOnly := true
@@ -400,6 +415,7 @@ func TestCreateConnection_CredentialsReadOnly(t *testing.T) {
 }
 
 func TestUpdateConnection_CredentialsReadOnly(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	q := &updateConnQuerier{conn: storedPolaris(t, kr)}
 	readOnly := true
@@ -413,6 +429,7 @@ func TestUpdateConnection_CredentialsReadOnly(t *testing.T) {
 }
 
 func TestListConnectionProviders(t *testing.T) {
+	t.Parallel()
 	h := createHandlers(t, nil, nil)
 	resp, err := h.ListConnectionProviders(testContext(), ListConnectionProvidersRequestObject{})
 	if err != nil {

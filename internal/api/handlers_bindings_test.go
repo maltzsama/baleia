@@ -176,6 +176,7 @@ func createBinding(t *testing.T, h *API, ctx context.Context, body CreateBinding
 // TestBindingAPI_Authz: binding needs write on the catalog's connection and
 // on the engine's (G-admin for the system-owned Trino connection).
 func TestBindingAPI_Authz(t *testing.T) {
+	t.Parallel()
 	q := newBindingQuerier(t)
 	h, ft := bindingHandlers(t, q)
 	body := CreateBindingRequest{EngineId: openapi_types.UUID(bEngine.Bytes), EngineCatalogName: "sales_eu"}
@@ -202,6 +203,7 @@ func TestBindingAPI_Authz(t *testing.T) {
 }
 
 func TestBindingAPI_Rejections(t *testing.T) {
+	t.Parallel()
 	q := newBindingQuerier(t)
 	h, _ := bindingHandlers(t, q)
 	admin := ctxAs(adminID, "admin")
@@ -244,6 +246,7 @@ func TestBindingAPI_Rejections(t *testing.T) {
 }
 
 func TestBindingAPI_UpdateDeleteSync(t *testing.T) {
+	t.Parallel()
 	q := newBindingQuerier(t)
 	h, ft := bindingHandlers(t, q)
 	admin := ctxAs(adminID, "admin")
@@ -307,6 +310,7 @@ func TestBindingAPI_UpdateDeleteSync(t *testing.T) {
 }
 
 func TestEngineBindingSupport(t *testing.T) {
+	t.Parallel()
 	q := newBindingQuerier(t)
 	h, _ := bindingHandlers(t, q)
 	resp, err := h.GetEngineBindingSupport(ctxAs(adminID, "admin"), GetEngineBindingSupportRequestObject{Id: openapi_types.UUID(bEngine.Bytes)})

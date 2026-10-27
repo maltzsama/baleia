@@ -15,6 +15,7 @@ import (
 )
 
 func TestBuildCreateCatalogDDL_RedactsSecretKeys(t *testing.T) {
+	t.Parallel()
 	spec := CatalogSpec{
 		Name:      "baleia_polaris",
 		Connector: "iceberg",
@@ -47,6 +48,7 @@ func TestBuildCreateCatalogDDL_RedactsSecretKeys(t *testing.T) {
 }
 
 func TestBuildCreateCatalogDDL_SortedKeys(t *testing.T) {
+	t.Parallel()
 	// Keys out of alphabetical order on purpose: at runtime Go's range order
 	// is randomized, so the only way to detect a regression to range-order
 	// is to make this test fail when the output is not alphabetically sorted.
@@ -83,6 +85,7 @@ func TestBuildCreateCatalogDDL_SortedKeys(t *testing.T) {
 }
 
 func TestBuildCreateCatalogDDL_EscapesSingleQuote(t *testing.T) {
+	t.Parallel()
 	// A password like "abc'def" must be escaped to "abc''def" in the DDL.
 	// Without escaping, the value would terminate the SQL string literal
 	// and either break the DDL or open an injection path.
@@ -119,6 +122,7 @@ func TestBuildCreateCatalogDDL_EscapesSingleQuote(t *testing.T) {
 }
 
 func TestValidateCatalogName(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		ok   bool
@@ -143,6 +147,7 @@ func TestValidateCatalogName(t *testing.T) {
 }
 
 func TestCreateCatalog_RejectsInvalidNameBeforeExecute(t *testing.T) {
+	t.Parallel()
 	c := &Client{baseURL: "http://invalid:1", user: "test", http: nil}
 	err := c.CreateCatalog(context.Background(), CatalogSpec{
 		Name:       "BadName",
@@ -158,7 +163,9 @@ func TestCreateCatalog_RejectsInvalidNameBeforeExecute(t *testing.T) {
 // is cancelled mid-poll, the client abandons the query on Trino with exactly
 // one DELETE to the last nextUri before returning ctx.Err().
 func TestExecute_CancelSendsDelete(t *testing.T) {
+	t.Parallel()
 	var deleteCalls int32
+	polling := make(chan struct{}, 1)
 
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +178,10 @@ func TestExecute_CancelSendsDelete(t *testing.T) {
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"nextUri":%q}`, srv.URL+"/next2"))
 		case r.Method == http.MethodGet && r.URL.Path == "/next2":
 			// Simulate a long-running query: block until the client aborts.
+			select {
+			case polling <- struct{}{}:
+			default:
+			}
 			<-r.Context().Done()
 		case r.Method == http.MethodDelete && r.URL.Path == "/next2":
 			atomic.AddInt32(&deleteCalls, 1)
@@ -183,9 +194,10 @@ func TestExecute_CancelSendsDelete(t *testing.T) {
 
 	c := New(srv.URL, "testuser")
 
+	// Cancel once the client is polling the running query, not after a guess.
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		<-polling
 		cancel()
 	}()
 
@@ -206,6 +218,7 @@ func TestExecute_CancelSendsDelete(t *testing.T) {
 // TestKillQuery_RejectsBadID pins the injection guard on kill_query: an id that
 // does not match Trino's format returns an error and never reaches HTTP.
 func TestKillQuery_RejectsBadID(t *testing.T) {
+	t.Parallel()
 	c := &Client{baseURL: "http://invalid:1", user: "test", http: &http.Client{}}
 
 	err := c.KillQuery(context.Background(), "not-an-id", "cancel")
@@ -218,6 +231,7 @@ func TestKillQuery_RejectsBadID(t *testing.T) {
 // statement executed with ExecuteOptions.User reaches Trino with that
 // X-Trino-User, not the client's configured user.
 func TestExecuteOptions_UserSentAsIdentity(t *testing.T) {
+	t.Parallel()
 	var gotUser string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/v1/statement" {
@@ -243,6 +257,7 @@ func TestExecuteOptions_UserSentAsIdentity(t *testing.T) {
 // TestDecodeUseNumber pins the precision fix: JSON decoding must keep bigint
 // values as json.Number so values above 2^53 survive the wire intact.
 func TestDecodeUseNumber(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost && r.URL.Path == "/v1/statement" {
@@ -273,6 +288,7 @@ func TestDecodeUseNumber(t *testing.T) {
 // TestStatementAsksForParametricDatetime: without the capability Trino rounds
 // timestamp(6) and time(6) values to milliseconds.
 func TestStatementAsksForParametricDatetime(t *testing.T) {
+	t.Parallel()
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Get("X-Trino-Client-Capabilities")
@@ -290,6 +306,7 @@ func TestStatementAsksForParametricDatetime(t *testing.T) {
 // TestErrorsAreTyped: statement failures carry Trino's classification and
 // HTTP failures are transport errors.
 func TestErrorsAreTyped(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Header.Get("X-Trino-User") {
 		case "down":

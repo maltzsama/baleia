@@ -72,6 +72,7 @@ func provider(t *testing.T) *Provider {
 }
 
 func TestMetadataReader_flightsql(t *testing.T) {
+	t.Parallel()
 	host, port := server(t, false)
 	p := provider(t)
 	ctx := context.Background()
@@ -121,6 +122,7 @@ func TestMetadataReader_flightsql(t *testing.T) {
 }
 
 func TestAuth(t *testing.T) {
+	t.Parallel()
 	host, port := server(t, true)
 	p := provider(t)
 	ctx := context.Background()
@@ -148,6 +150,7 @@ func TestAuth(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	p := provider(t)
 	for _, c := range []connections.Config{
 		{Values: map[string]string{"host": "h", "port": "1", "auth": "basic"}},
@@ -168,6 +171,7 @@ func TestValidate(t *testing.T) {
 // TestColumnTypes: string-like and binary-like columns are read whatever
 // their width.
 func TestColumnTypes(t *testing.T) {
+	t.Parallel()
 	mem := memory.NewGoAllocator()
 	schema := arrow.NewSchema([]arrow.Field{
 		{Name: "a", Type: arrow.BinaryTypes.String, Nullable: true},

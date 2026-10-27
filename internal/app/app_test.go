@@ -10,6 +10,7 @@ import (
 )
 
 func TestNew_RequiresService(t *testing.T) {
+	t.Parallel()
 	if _, err := New(context.Background(), &config.Config{}, Options{}); !errors.Is(err, ErrNoService) {
 		t.Fatalf("err = %v, want ErrNoService", err)
 	}
@@ -18,6 +19,7 @@ func TestNew_RequiresService(t *testing.T) {
 // TestClose_ReverseOrderOnce: the last built is released first, and a second
 // Close does nothing.
 func TestClose_ReverseOrderOnce(t *testing.T) {
+	t.Parallel()
 	var got []int
 	c := &Core{}
 	for i := range 3 {

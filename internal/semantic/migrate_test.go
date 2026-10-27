@@ -10,6 +10,7 @@ import (
 func sp(s string) *string { return &s }
 
 func TestMigrateV1Aggregation(t *testing.T) {
+	t.Parallel()
 	in := MigrateV1Input{
 		CatalogID:  "cat",
 		ModelSlug:  "orders",
@@ -52,6 +53,7 @@ func TestMigrateV1Aggregation(t *testing.T) {
 }
 
 func TestMigrateV1CustomSQLLeavesColumns(t *testing.T) {
+	t.Parallel()
 	in := MigrateV1Input{
 		CatalogID:  "cat",
 		ModelSlug:  "orders",
@@ -77,6 +79,7 @@ func TestMigrateV1CustomSQLLeavesColumns(t *testing.T) {
 }
 
 func TestMigrateV1RejectsUnknownColumnType(t *testing.T) {
+	t.Parallel()
 	in := MigrateV1Input{
 		CatalogID:  "cat",
 		ModelSlug:  "orders",

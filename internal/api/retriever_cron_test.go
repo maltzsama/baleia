@@ -26,6 +26,7 @@ func (f *updateRetrieverFake) UpdateRetriever(_ context.Context, p db.UpdateRetr
 // TestUpdateRetriever_CronValidation pins #140: update enforces the same rules as
 // create (422, 5-minute minimum), and a valid schedule recomputes next_refresh_at.
 func TestUpdateRetriever_CronValidation(t *testing.T) {
+	t.Parallel()
 	for name, expr := range map[string]string{"every minute": "* * * * *", "invalid": "not a cron"} {
 		f := &updateRetrieverFake{}
 		h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: f, tx: directTx{q: f}})
@@ -62,6 +63,7 @@ func TestUpdateRetriever_CronValidation(t *testing.T) {
 // TestTriggerRetrieverRefresh_OnlyFull pins #143: the manual trigger rejects
 // incremental like create and update do, and starts no workflow for it.
 func TestTriggerRetrieverRefresh_OnlyFull(t *testing.T) {
+	t.Parallel()
 	inc := TriggerRetrieverRefreshJSONBodyRefreshType("incremental")
 	full := TriggerRetrieverRefreshJSONBodyRefreshType("full")
 

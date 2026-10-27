@@ -67,6 +67,7 @@ func setup(t *testing.T) (*Service, *fakeStore, *fakeSessions, db.User) {
 }
 
 func TestGet(t *testing.T) {
+	t.Parallel()
 	s, st, _, u := setup(t)
 	if got, err := s.Get(context.Background(), u.ID); err != nil || got.Email != u.Email {
 		t.Fatalf("Get = %+v, %v", got, err)
@@ -85,6 +86,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestUpdateProfile_KeepsUnsetFields(t *testing.T) {
+	t.Parallel()
 	s, _, _, u := setup(t)
 	pt := "pt-BR"
 	got, err := s.UpdateProfile(context.Background(), u.ID, Profile{Locale: &pt})
@@ -101,6 +103,7 @@ func TestUpdateProfile_KeepsUnsetFields(t *testing.T) {
 }
 
 func TestChangePassword(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, ss, u := setup(t)
 
@@ -151,6 +154,7 @@ func (brokenStore) PersonalWorkspaceID(context.Context, pgtype.UUID) (pgtype.UUI
 // TestStoreFailureIsNotNotFound: a database outage is an error, never a
 // missing account or workspace.
 func TestStoreFailureIsNotNotFound(t *testing.T) {
+	t.Parallel()
 	s := New(brokenStore{&fakeStore{}}, &fakeSessions{}, Config{})
 	if _, err := s.Get(context.Background(), newID()); !errors.Is(err, errDown) || errors.Is(err, ErrNotFound) {
 		t.Errorf("Get = %v, want the store error", err)

@@ -90,6 +90,7 @@ func (f *fixture) versions(t *testing.T, id pgtype.UUID) []db.ContentVersion {
 }
 
 func TestUpdate_OneVersionPerChange(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	q := f.create(t, "Revenue", "revenue")
 	if vs := f.versions(t, q.ID); len(vs) != 1 || vs[0].Version != 1 || vs[0].ChangeKind != "create" {
@@ -114,6 +115,7 @@ func TestUpdate_OneVersionPerChange(t *testing.T) {
 }
 
 func TestCreate_RollsBackEntityAndVersion(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
 	missing := pgUUID(uuid.New())
@@ -140,6 +142,7 @@ func TestCreate_RollsBackEntityAndVersion(t *testing.T) {
 }
 
 func TestDeleteThenRestoreSameID(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
 	q := f.create(t, "Revenue", "revenue")
@@ -170,6 +173,7 @@ func TestDeleteThenRestoreSameID(t *testing.T) {
 }
 
 func TestRestoreNameConflict(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
 	q := f.create(t, "Revenue", "revenue")
@@ -191,6 +195,7 @@ func TestRestoreNameConflict(t *testing.T) {
 }
 
 func TestConcurrentUpdates_NoDuplicateVersion(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
 	q := f.create(t, "Concurrent", "concurrent")
@@ -233,6 +238,7 @@ func TestConcurrentUpdates_NoDuplicateVersion(t *testing.T) {
 func ptr[T any](v T) *T { return &v }
 
 func TestUpdate_VersionConflict(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
 	q := f.create(t, "conflict", "conflict")

@@ -31,6 +31,7 @@ func createOIDCProvider(t *testing.T, h *API) IdentityProviderDetail {
 // TestIdP_PatchKeepsSecret: a PATCH that omits client_secret keeps the stored
 // value and only changes the fields that were sent.
 func TestIdP_PatchKeepsSecret(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	detail := createOIDCProvider(t, h)
 
@@ -73,6 +74,7 @@ func TestIdP_PatchKeepsSecret(t *testing.T) {
 // TestIdP_DeleteWithUsers409: a provider with linked users cannot be deleted
 // without the explicit suspension flag.
 func TestIdP_DeleteWithUsers409(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	detail := createOIDCProvider(t, h)
 	ctx := context.Background()
@@ -103,6 +105,7 @@ func TestIdP_DeleteWithUsers409(t *testing.T) {
 // TestIdP_DeleteSuspends: with suspend_users=true the linked users are
 // suspended and detached before the provider row is removed.
 func TestIdP_DeleteSuspends(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	detail := createOIDCProvider(t, h)
 	ctx := context.Background()
@@ -143,6 +146,7 @@ func TestIdP_DeleteSuspends(t *testing.T) {
 // TestIdP_TransientTestPersistsNothing: an unsaved configuration is probed and
 // discarded.
 func TestIdP_TransientTestPersistsNothing(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	h.prober = proberFunc(fakeIDPProbe)
 
@@ -172,6 +176,7 @@ func TestIdP_TransientTestPersistsNothing(t *testing.T) {
 // TestIdP_TestStoredProvider: the stored probe loads the sealed config and
 // returns a check list without writing.
 func TestIdP_TestStoredProvider(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	h.prober = proberFunc(fakeIDPProbe)
 	detail := createOIDCProvider(t, h)
@@ -191,6 +196,7 @@ func TestIdP_TestStoredProvider(t *testing.T) {
 
 // TestIdP_MutationsNonAdmin403: the new admin operations refuse a member.
 func TestIdP_MutationsNonAdmin403(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	ctx := idpMemberCtx()
 	id := openapi_types.UUID(uuid.New())

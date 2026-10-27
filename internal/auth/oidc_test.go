@@ -24,6 +24,7 @@ func newProvider(t *testing.T, idp *oidctest.StubIDP) *auth.OIDCProvider {
 }
 
 func TestGeneratePKCE(t *testing.T) {
+	t.Parallel()
 	verifier, challenge, err := auth.GeneratePKCE()
 	if err != nil {
 		t.Fatal(err)
@@ -39,6 +40,7 @@ func TestGeneratePKCE(t *testing.T) {
 // TestOIDC_FullFlowWithPKCE: the authorization URL carries S256 PKCE and the
 // stub provider only accepts the matching verifier (#250).
 func TestOIDC_FullFlowWithPKCE(t *testing.T) {
+	t.Parallel()
 	verifier, challenge, err := auth.GeneratePKCE()
 	if err != nil {
 		t.Fatal(err)
@@ -85,6 +87,7 @@ func TestOIDC_FullFlowWithPKCE(t *testing.T) {
 
 // TestOIDC_BadVerifier: a wrong verifier is rejected by the provider (#250).
 func TestOIDC_BadVerifier(t *testing.T) {
+	t.Parallel()
 	_, challenge, err := auth.GeneratePKCE()
 	if err != nil {
 		t.Fatal(err)
@@ -108,6 +111,7 @@ func TestOIDC_BadVerifier(t *testing.T) {
 
 // TestOIDC_NonceMismatch: the ID token must carry the nonce from the attempt.
 func TestOIDC_NonceMismatch(t *testing.T) {
+	t.Parallel()
 	verifier, challenge, err := auth.GeneratePKCE()
 	if err != nil {
 		t.Fatal(err)
@@ -132,6 +136,7 @@ func TestOIDC_NonceMismatch(t *testing.T) {
 // TestOIDC_NoPKCE: neither the authorization URL nor the exchange works
 // without a challenge/verifier (#250 forbids a no-PKCE path).
 func TestOIDC_NoPKCE(t *testing.T) {
+	t.Parallel()
 	_, challenge, _ := auth.GeneratePKCE()
 	nonce, _ := auth.GenerateNonce()
 	idp, err := oidctest.New(challenge, "client")

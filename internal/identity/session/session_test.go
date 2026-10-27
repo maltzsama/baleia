@@ -89,6 +89,7 @@ func setup(t *testing.T, status string) (*Service, *fakeStore, db.User) {
 }
 
 func TestIssue_StartsAFamily(t *testing.T) {
+	t.Parallel()
 	s, f, u := setup(t, "active")
 	a, err := s.Issue(context.Background(), u)
 	if err != nil {
@@ -108,6 +109,7 @@ func TestIssue_StartsAFamily(t *testing.T) {
 }
 
 func TestRotate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, f, u := setup(t, "active")
 	first, err := s.Issue(ctx, u)
@@ -139,6 +141,7 @@ func TestRotate(t *testing.T) {
 }
 
 func TestRotate_ReuseNotContained(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, f, u := setup(t, "active")
 	first, _ := s.Issue(ctx, u)
@@ -153,6 +156,7 @@ func TestRotate_ReuseNotContained(t *testing.T) {
 }
 
 func TestRotate_Suspended(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, f, u := setup(t, "suspended")
 	first, _ := s.Issue(ctx, u)
@@ -166,6 +170,7 @@ func TestRotate_Suspended(t *testing.T) {
 }
 
 func TestRotate_UserGone(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, f, u := setup(t, "active")
 	first, _ := s.Issue(ctx, u)
@@ -176,6 +181,7 @@ func TestRotate_UserGone(t *testing.T) {
 }
 
 func TestEnd(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, f, u := setup(t, "active")
 	first, _ := s.Issue(ctx, u)
@@ -209,6 +215,7 @@ func (brokenTokens) GetRefreshTokenByHashAny(context.Context, string) (db.Refres
 // TestStoreFailureIsNotInvalid: a database outage is an error, never an
 // invalid token or a logout that did not happen.
 func TestStoreFailureIsNotInvalid(t *testing.T) {
+	t.Parallel()
 	f := newFakeStore()
 	s := New(brokenTokens{f}, f, Config{JWTSecret: "0123456789abcdef0123456789abcdef", AccessTTL: time.Minute, RefreshTTL: time.Hour})
 	if _, _, err := s.Rotate(context.Background(), "any"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalid) {
@@ -234,6 +241,7 @@ func (lostLookup) GetRefreshTokenByHashAny(context.Context, string) (db.RefreshT
 // TestRotate_ReuseLookupFailureIsAnError: when the reuse check cannot run,
 // that is a server error, not an invalid token that skips the family revoke.
 func TestRotate_ReuseLookupFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	f := newFakeStore()
 	s := New(lostLookup{f}, f, Config{JWTSecret: "0123456789abcdef0123456789abcdef", AccessTTL: time.Minute, RefreshTTL: time.Hour})
 	if _, _, err := s.Rotate(context.Background(), "any"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalid) {

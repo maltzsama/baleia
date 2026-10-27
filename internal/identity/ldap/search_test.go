@@ -69,6 +69,7 @@ func entry(dn string, attrs map[string][]string) *ldapv3.Entry {
 }
 
 func TestFilterInjection(t *testing.T) {
+	t.Parallel()
 	escaped := ldapv3.EscapeFilter(`*)(uid=*`)
 	filter, err := userFilter("(uid={{username}})", `*)(uid=*`)
 	if err != nil {
@@ -93,6 +94,7 @@ func TestFilterInjection(t *testing.T) {
 }
 
 func TestEmptyPasswordRejected(t *testing.T) {
+	t.Parallel()
 	conn := &fakeConn{}
 	dial, calls := fakeDialer(conn)
 	if _, err := findUser(context.Background(), validConfig(), "alice", "", dial); !errors.Is(err, ErrEmptyPassword) {
@@ -104,6 +106,7 @@ func TestEmptyPasswordRejected(t *testing.T) {
 }
 
 func TestMultipleMatchesRejected(t *testing.T) {
+	t.Parallel()
 	conn := &fakeConn{searchResult: &ldapv3.SearchResult{Entries: []*ldapv3.Entry{
 		entry("uid=one,ou=people,dc=example,dc=org", nil),
 		entry("uid=two,ou=people,dc=example,dc=org", nil),
@@ -118,6 +121,7 @@ func TestMultipleMatchesRejected(t *testing.T) {
 }
 
 func TestFindUser_SingleMatch(t *testing.T) {
+	t.Parallel()
 	conn := &fakeConn{searchResult: &ldapv3.SearchResult{Entries: []*ldapv3.Entry{
 		entry("uid=alice,ou=people,dc=example,dc=org", nil),
 	}}}

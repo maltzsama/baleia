@@ -40,6 +40,7 @@ func (f *metadataTemporal) ExecuteWorkflow(_ context.Context, o client.StartWork
 // (the workflow id is the catalog's); a running pass is a 409; strangers see
 // 404.
 func TestSyncCatalogMetadata(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	_, cat := reqIDs(q)
 	tc := &metadataTemporal{}
@@ -84,6 +85,7 @@ func (q *runsFake) ListMetadataSyncRuns(_ context.Context, p db.ListMetadataSync
 }
 
 func TestListCatalogMetadataSyncRuns(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	rf := &runsFake{authzFake: q}
 	h.queries = rf
@@ -111,6 +113,7 @@ func TestListCatalogMetadataSyncRuns(t *testing.T) {
 // TestUpdateCatalog_StartsSync: a changed catalog gets a metadata pass right
 // away, reusing a pass already running (#17).
 func TestUpdateCatalog_StartsSync(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	tc := &metadataTemporal{}
 	h.temporalClient = tc
@@ -138,6 +141,7 @@ func TestUpdateCatalog_StartsSync(t *testing.T) {
 // TestCreateDirectEngine_StartsMetadataSyncs: every native catalog of a new
 // engine gets a metadata pass right away.
 func TestCreateDirectEngine_StartsMetadataSyncs(t *testing.T) {
+	t.Parallel()
 	q := &engineQuerier{conn: ownedConnection(t, "clickhouse", testUserID)}
 	p := &fakeEngineProvider{kind: "clickhouse", roles: []connections.Role{connections.RoleMetadata, connections.RoleDirect}, catalogs: []string{"default", "logs"}}
 	h := engineHandlers(t, q, p)
@@ -155,6 +159,7 @@ func TestCreateDirectEngine_StartsMetadataSyncs(t *testing.T) {
 // the first, then the end of the latest finished one and a failed pass's
 // code.
 func TestCatalog_FreshnessFields(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
 	get := func() Catalog {

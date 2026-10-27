@@ -10,6 +10,7 @@ import (
 )
 
 func TestMetricsListener(t *testing.T) {
+	t.Parallel()
 	reg := metrics.New("worker")
 	handler, flush := reg.TemporalHandler()
 	handler.Counter("temporal_activity_execution_failed").Inc(1) // the SDK's own name

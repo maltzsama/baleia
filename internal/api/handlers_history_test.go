@@ -119,6 +119,7 @@ func stringPtr(value string) *string { return &value }
 func statusPtr(value ListExecutionsParamsStatus) *ListExecutionsParamsStatus { return &value }
 
 func TestHistory_Filters(t *testing.T) {
+	t.Parallel()
 	f := newHistoryFixture(t)
 	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	first := f.addExecution(t, f.member, "finished", "SELECT a FROM orders", base)
@@ -178,6 +179,7 @@ func TestHistory_Filters(t *testing.T) {
 }
 
 func TestHistory_KeysetCursor(t *testing.T) {
+	t.Parallel()
 	f := newHistoryFixture(t)
 	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	oldest := f.addExecution(t, f.member, "finished", "SELECT 1", base)
@@ -205,6 +207,7 @@ func TestHistory_KeysetCursor(t *testing.T) {
 }
 
 func TestHistory_Visibility(t *testing.T) {
+	t.Parallel()
 	f := newHistoryFixture(t)
 	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	f.addExecution(t, f.member, "finished", "SELECT 1", base)
@@ -236,6 +239,7 @@ func TestHistory_Visibility(t *testing.T) {
 }
 
 func TestHistory_SearchUsesIndex(t *testing.T) {
+	t.Parallel()
 	f := newHistoryFixture(t)
 	ctx := context.Background()
 	if _, err := f.pool.Exec(ctx, `

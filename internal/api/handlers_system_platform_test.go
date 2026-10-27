@@ -26,6 +26,7 @@ func findStatusItem(t *testing.T, res SystemStatusResource, name string) SystemS
 // TestSystemStatus_ScheduleMissing: a schedule Temporal does not know is
 // reported as `missing`, never blank.
 func TestSystemStatus_ScheduleMissing(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{schema: unreachableSchema{}})
 	h.schedules = scheduleFunc(func(_ context.Context, id string) (SystemStatusItemStatus, string) {
 		if id == schedules.MetadataSync {
@@ -50,6 +51,7 @@ func TestSystemStatus_ScheduleMissing(t *testing.T) {
 // TestSystemStatus_EngineHealth: the engines section reports the probed health
 // of each engine.
 func TestSystemStatus_EngineHealth(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	ctx := context.Background()
 
@@ -81,6 +83,7 @@ func TestSystemStatus_EngineHealth(t *testing.T) {
 // TestSystemStatus_PlatformSections: every new section probes a real database
 // without error and reports its components.
 func TestSystemStatus_PlatformSections(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	resp, err := f.h.GetSystemStatus(ctxAs(f.admin, "admin"), GetSystemStatusRequestObject{})
 	if err != nil {

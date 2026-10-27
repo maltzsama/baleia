@@ -12,6 +12,7 @@ import (
 // word lists) in sync with the registry, so a new dialect cannot ship silently
 // empty autocomplete.
 func TestAllDialectsMatchRegistry(t *testing.T) {
+	t.Parallel()
 	got := slices.Clone(allDialects)
 	slices.Sort(got)
 	if want := testRegistry.Names(); !slices.Equal(got, want) {
@@ -20,6 +21,7 @@ func TestAllDialectsMatchRegistry(t *testing.T) {
 }
 
 func TestRegistry(t *testing.T) {
+	t.Parallel()
 	if got := strings.Join(testRegistry.Names(), ","); got != "clickhouse,flightsql-generic,mariadb,mysql,oracle,postgresql,sqlite,trino,tsql" {
 		t.Errorf("names = %s", got)
 	}
@@ -47,6 +49,7 @@ func TestRegistry(t *testing.T) {
 // TestNewRegistry: every registry built lists the same dialects, so callers
 // can each be injected their own without disagreeing.
 func TestNewRegistry(t *testing.T) {
+	t.Parallel()
 	a, b := NewRegistry(), NewRegistry()
 	if !slices.Equal(a.Names(), b.Names()) || !slices.Equal(a.Names(), testRegistry.Names()) {
 		t.Fatalf("names differ: %v / %v / %v", a.Names(), b.Names(), testRegistry.Names())
@@ -61,6 +64,7 @@ func TestNewRegistry(t *testing.T) {
 // TestMustGetPanicsOnUnknown: MustGet is for the name constants; an unknown
 // name is a programming error.
 func TestMustGetPanicsOnUnknown(t *testing.T) {
+	t.Parallel()
 	defer func() {
 		if recover() == nil {
 			t.Fatal("MustGet of an unknown dialect did not panic")
@@ -73,6 +77,7 @@ func TestMustGetPanicsOnUnknown(t *testing.T) {
 // the API can carry resolves, and a miss is (nil, false) explicitly rather
 // than through a lookup of the empty name.
 func TestForEngineKind(t *testing.T) {
+	t.Parallel()
 	for kind, want := range map[string]string{
 		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
 		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
@@ -91,6 +96,7 @@ func TestForEngineKind(t *testing.T) {
 }
 
 func TestQuoteIdent(t *testing.T) {
+	t.Parallel()
 	want := map[string]string{
 		Trino: `"a""b"`, PostgreSQL: `"a""b"`, SQLite: `"a""b"`, FlightSQL: `"a""b"`,
 		MySQL: "`a\"b`", MariaDB: "`a\"b`", ClickHouse: "`a\"b`", TSQL: `[a"b]`,
@@ -132,6 +138,7 @@ func TestQuoteIdent(t *testing.T) {
 }
 
 func TestQualify(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		Trino:      `"c"."s"."t"`,
 		PostgreSQL: `"s"."t"`,
@@ -161,6 +168,7 @@ func TestQualify(t *testing.T) {
 }
 
 func TestQuoteString(t *testing.T) {
+	t.Parallel()
 	in := `it's a \ test`
 	want := map[string]string{
 		Trino: `'it''s a \ test'`, PostgreSQL: `'it''s a \ test'`, Oracle: `'it''s a \ test'`,
@@ -185,6 +193,7 @@ func split(t *testing.T, name, sql string) []string {
 }
 
 func TestSplitStatements_common(t *testing.T) {
+	t.Parallel()
 	for _, n := range allDialects {
 		got := split(t, n, "SELECT 1; SELECT 'a;b' -- c;d\n; /* x;y */ SELECT 2;;\n  -- only a comment\n")
 		if len(got) != 3 || got[0] != "SELECT 1" || got[1] != "SELECT 'a;b' -- c;d" || got[2] != "/* x;y */ SELECT 2" {
@@ -200,6 +209,7 @@ func TestSplitStatements_common(t *testing.T) {
 }
 
 func TestSplitStatements_postgresql(t *testing.T) {
+	t.Parallel()
 	got := split(t, PostgreSQL, `CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql; DO $body$ BEGIN PERFORM 1; END $body$; SELECT E'a\';b'; SELECT 1`)
 	if len(got) != 4 || !strings.HasSuffix(got[0], "LANGUAGE sql") || !strings.HasPrefix(got[1], "DO $body$") || got[2] != `SELECT E'a\';b'` {
 		t.Errorf("%q", got)
@@ -216,6 +226,7 @@ func TestSplitStatements_postgresql(t *testing.T) {
 }
 
 func TestSplitStatements_mysql(t *testing.T) {
+	t.Parallel()
 	for _, n := range []string{MySQL, MariaDB} {
 		got := split(t, n, "SELECT 'a\\';b', \"c;d\", `e;f` FROM t # hash; comment\n; SELECT 2")
 		if len(got) != 2 {
@@ -229,6 +240,7 @@ func TestSplitStatements_mysql(t *testing.T) {
 }
 
 func TestSplitStatements_tsql(t *testing.T) {
+	t.Parallel()
 	got := split(t, TSQL, "SELECT [a;b], [x]]y;] FROM t\nGO\nCREATE PROCEDURE p AS SELECT 1\n  go  \nSELECT 2; SELECT 3")
 	if len(got) != 4 || got[0] != "SELECT [a;b], [x]]y;] FROM t" || got[1] != "CREATE PROCEDURE p AS SELECT 1" {
 		t.Errorf("%q", got)
@@ -239,6 +251,7 @@ func TestSplitStatements_tsql(t *testing.T) {
 }
 
 func TestSplitStatements_oracle(t *testing.T) {
+	t.Parallel()
 	got := split(t, Oracle, "SELECT q'[a';b]' FROM dual;\nBEGIN\n  NULL;\n  INSERT INTO t VALUES (1);\nEND;\n/\nCREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;\n/\nSELECT 2 FROM dual")
 	if len(got) != 4 || got[0] != "SELECT q'[a';b]' FROM dual" || !strings.HasPrefix(got[1], "BEGIN") || !strings.HasSuffix(got[1], "END;") ||
 		!strings.HasPrefix(got[2], "CREATE OR REPLACE PROCEDURE") || got[3] != "SELECT 2 FROM dual" {
@@ -250,6 +263,7 @@ func TestSplitStatements_oracle(t *testing.T) {
 }
 
 func TestStatementsOffsets(t *testing.T) {
+	t.Parallel()
 	sql := "  SELECT 1;\n\nSELECT 'x;';"
 	spans, err := testRegistry.MustGet(Trino).Statements(sql)
 	if err != nil || len(spans) != 2 {
@@ -263,6 +277,7 @@ func TestStatementsOffsets(t *testing.T) {
 }
 
 func TestPreviewAndLimit(t *testing.T) {
+	t.Parallel()
 	want := map[string][2]string{
 		Trino:  {"SELECT * FROM t LIMIT 10", "SELECT * FROM (SELECT 1 -- note\n) AS baleia_limit LIMIT 5"},
 		TSQL:   {"SELECT TOP (10) * FROM t", "SELECT TOP (5) * FROM (SELECT 1 -- note\n) AS baleia_limit"},
@@ -290,6 +305,7 @@ func TestPreviewAndLimit(t *testing.T) {
 // asserted by message because it is the only observable difference between
 // the two malformed-decimal paths; both are ErrInvalid.
 func TestDecimal(t *testing.T) {
+	t.Parallel()
 	for _, typ := range []LogicalType{"", "uuid", "integer", "decimal", "decimals(10,2)", "numeric"} {
 		if p, s, ok, err := typ.decimal(); ok || err != nil {
 			t.Errorf("%q: (%d,%d,%v,%v), want ok=false, err=nil", typ, p, s, ok, err)
@@ -323,6 +339,7 @@ func TestDecimal(t *testing.T) {
 }
 
 func TestLiteral(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2024, 3, 5, 10, 20, 30, 123456000, time.FixedZone("x", 3600))
 	cases := []struct {
 		dialect string
@@ -385,6 +402,7 @@ func TestLiteral(t *testing.T) {
 // semantic-layer primitives. The integration test runs the same statements
 // against real servers (#14 PR 3).
 func TestGenerationGolden(t *testing.T) {
+	t.Parallel()
 	type golden struct{ approx, month, week, cast, divide string }
 	want := map[string]golden{
 		Trino: {"approx_distinct(x)", "date_trunc('month', ts)", "date_trunc('week', ts)",
@@ -446,6 +464,7 @@ func TestGenerationGolden(t *testing.T) {
 
 // TestSplitStatements_trino keeps the cases of the former sqlsplitter suite.
 func TestSplitStatements_trino(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		sql  string
 		want []string
@@ -477,6 +496,7 @@ func TestSplitStatements_trino(t *testing.T) {
 // Trino quoting cases moved from internal/trino when its package-level
 // helpers went away (#364 follow-up).
 func TestTrino_QuoteIdent(t *testing.T) {
+	t.Parallel()
 	trino := NewRegistry().MustGet(Trino)
 	for in, want := range map[string]string{
 		"orders":     `"orders"`,
@@ -501,6 +521,7 @@ func TestTrino_QuoteIdent(t *testing.T) {
 }
 
 func TestTrino_QualifiedName(t *testing.T) {
+	t.Parallel()
 	trino := NewRegistry().MustGet(Trino)
 	got, err := trino.QualifiedName("cat", `we"ird`, "t")
 	if err != nil || got != `"cat"."we""ird"."t"` {
@@ -512,6 +533,7 @@ func TestTrino_QualifiedName(t *testing.T) {
 }
 
 func TestTrino_QuoteString(t *testing.T) {
+	t.Parallel()
 	trino := NewRegistry().MustGet(Trino)
 	for in, want := range map[string]string{"7d": `'7d'`, "it's": `'it''s'`, `'; DROP`: `'''; DROP'`} {
 		if got := trino.QuoteString(in); got != want {
@@ -529,6 +551,7 @@ var testRegistry = NewRegistry()
 // the API can carry resolves, and a miss is (nil, false) explicitly rather
 // than through a lookup of the empty name.
 func TestForEngineKindDeprecated(t *testing.T) {
+	t.Parallel()
 	for kind, want := range map[string]string{
 		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
 		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,

@@ -18,6 +18,7 @@ func metric(t *testing.T, m SimpleMetricV1) SimpleMetricV1 {
 }
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	col := "total_price"
 	tests := []struct {
 		name string
@@ -41,6 +42,7 @@ func TestValidate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			err := tt.m.Validate()
 			if tt.want == "" {
 				if err != nil {
@@ -56,6 +58,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestParseRejectsUnknownFields(t *testing.T) {
+	t.Parallel()
 	raw := []byte(`{"type":"simple","aggregation":"sum","column":"x","surprise":true}`)
 	if _, err := ParseSimpleMetricV1(raw); err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("expected unknown-field error, got %v", err)
@@ -63,6 +66,7 @@ func TestParseRejectsUnknownFields(t *testing.T) {
 }
 
 func TestRenderTrino(t *testing.T) {
+	t.Parallel()
 	col, tc := "total_price", "order_date"
 	m := metric(t, SimpleMetricV1{
 		Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col,
@@ -86,6 +90,7 @@ func TestRenderTrino(t *testing.T) {
 }
 
 func TestRenderScalarAndLimit(t *testing.T) {
+	t.Parallel()
 	col := "amount"
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggAvg, Column: &col})
 	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{
@@ -104,6 +109,7 @@ func TestRenderScalarAndLimit(t *testing.T) {
 }
 
 func TestRenderCountStar(t *testing.T) {
+	t.Parallel()
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggCount})
 	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "orders"})
 	if err != nil {
@@ -115,6 +121,7 @@ func TestRenderCountStar(t *testing.T) {
 }
 
 func TestRenderFilterValuesAreLiterals(t *testing.T) {
+	t.Parallel()
 	col := "amount"
 	m := metric(t, SimpleMetricV1{
 		Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col,
@@ -130,6 +137,7 @@ func TestRenderFilterValuesAreLiterals(t *testing.T) {
 }
 
 func TestRenderQuotesIdentifiers(t *testing.T) {
+	t.Parallel()
 	col := "amount"
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col})
 	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: `we"ird`}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "sum_amount"})
@@ -142,6 +150,7 @@ func TestRenderQuotesIdentifiers(t *testing.T) {
 }
 
 func TestRenderGrainRequiresTimeColumn(t *testing.T) {
+	t.Parallel()
 	col := "amount"
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col})
 	_, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "x", Grain: dialect.GrainDay})
@@ -151,6 +160,7 @@ func TestRenderGrainRequiresTimeColumn(t *testing.T) {
 }
 
 func TestRenderCustomSQL(t *testing.T) {
+	t.Parallel()
 	m := metric(t, SimpleMetricV1{Type: DefinitionType, CustomSQL: ptr(`sum("amount") filter (where "paid")`)})
 	got, err := Render(m, TableRef{Catalog: "lake", Schema: []string{"sales"}, Table: "orders"}, dialect.NewRegistry().MustGet(dialect.Trino), RenderOptions{Alias: "paid"})
 	if err != nil {
@@ -162,6 +172,7 @@ func TestRenderCustomSQL(t *testing.T) {
 }
 
 func TestParseRoundTrip(t *testing.T) {
+	t.Parallel()
 	col := "amount"
 	in := SimpleMetricV1{
 		Type: DefinitionType, Aggregation: dialect.AggSum, Column: &col,

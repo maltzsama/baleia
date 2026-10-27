@@ -18,12 +18,14 @@ import (
 // BALEIA_TEST_MYSQL_URL (mysql://user:pass@host:port) to enable it; the user
 // needs CREATE and DROP on databases.
 func TestMetadataReader_mysql(t *testing.T) {
+	t.Parallel()
 	runMetadataReader(t, "BALEIA_TEST_MYSQL_URL", New)
 }
 
 // TestMetadataReader_mariadb is the same suite against MariaDB
 // (BALEIA_TEST_MARIADB_URL).
 func TestMetadataReader_mariadb(t *testing.T) {
+	t.Parallel()
 	runMetadataReader(t, "BALEIA_TEST_MARIADB_URL", NewMariaDB)
 }
 

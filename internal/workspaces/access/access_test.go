@@ -42,6 +42,7 @@ func (f *fakeStore) ListTeamMembers(context.Context, pgtype.UUID) ([]db.ListTeam
 // TestCheck: a member passes; an agent also needs to be bound to the
 // workspace (#59).
 func TestCheck(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{}
 	s := New(st)
@@ -64,6 +65,7 @@ func TestCheck(t *testing.T) {
 }
 
 func TestPrincipals(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{
 		users: []db.ListWorkspacePrincipalUsersRow{{Name: "Ana", Email: "ana@x.io"}, {Name: "Bruno", Email: "bruno@x.io"}},

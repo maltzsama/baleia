@@ -17,6 +17,7 @@ import (
 // TestMetadataReader_sqlserver runs against a real server. Set
 // BALEIA_TEST_SQLSERVER_URL (sqlserver://sa:pass@host:port) to enable it.
 func TestMetadataReader_sqlserver(t *testing.T) {
+	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_SQLSERVER_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_SQLSERVER_URL not set")

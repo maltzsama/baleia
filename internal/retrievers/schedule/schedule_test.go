@@ -8,6 +8,7 @@ import (
 // TestParseCron_IsStandardFiveField pins #139: the expression is
 // "minute hour day-of-month month day-of-week", not "second minute hour ...".
 func TestParse_IsStandardFiveField(t *testing.T) {
+	t.Parallel()
 	s, _, err := Parse("0 3 * * *")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -28,6 +29,7 @@ func TestParse_IsStandardFiveField(t *testing.T) {
 }
 
 func TestParse_Rejects(t *testing.T) {
+	t.Parallel()
 	for name, expr := range map[string]string{
 		"every minute":      "* * * * *",
 		"every 4 minutes":   "*/4 * * * *",
@@ -48,6 +50,7 @@ func TestParse_Rejects(t *testing.T) {
 }
 
 func TestLocation(t *testing.T) {
+	t.Parallel()
 	loc, expr := Location("CRON_TZ=America/Sao_Paulo 0 3 * * *")
 	if loc.String() != "America/Sao_Paulo" || expr != "0 3 * * *" {
 		t.Errorf("CronLocation = %s, %q", loc, expr)
@@ -58,6 +61,7 @@ func TestLocation(t *testing.T) {
 }
 
 func TestNext5(t *testing.T) {
+	t.Parallel()
 	if p := Next5("*/5 * * * *"); !p.Valid || len(p.Next) != 5 || !p.MinIntervalOK {
 		t.Errorf("every 5 minutes = %+v", p)
 	}

@@ -68,6 +68,7 @@ func finished(n int) *activities.ExecuteScriptResult {
 // dialect and runs in ONE activity on the target, with every statement in
 // order; the totals complete the execution.
 func TestV2_RunsScriptOnTarget(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	var split activities.SplitSQLParams
@@ -105,6 +106,7 @@ func TestV2_RunsScriptOnTarget(t *testing.T) {
 // TestV3_SplitsWithTheInputDialect: V3 splits with the dialect the caller
 // resolved, not one it looks up from the target's engine kind.
 func TestV3_SplitsWithTheInputDialect(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	var split activities.SplitSQLParams
@@ -128,6 +130,7 @@ func TestV3_SplitsWithTheInputDialect(t *testing.T) {
 // on engines of different kinds run through the same workflow, each split
 // with its engine's dialect and executed on its engine.
 func TestV2_TwoEnginesSameWorkflow(t *testing.T) {
+	t.Parallel()
 	pg := v2Input()
 	pg.Target.EngineID = pgtype.UUID{Bytes: [16]byte{0xE2}, Valid: true}
 	pg.Target.EngineKind = "postgresql"
@@ -156,6 +159,7 @@ func TestV2_TwoEnginesSameWorkflow(t *testing.T) {
 // TestV2_PropagatesRequestID: the inbound HTTP correlation id reaches the
 // script so a run can be joined back to the request log line.
 func TestV2_PropagatesRequestID(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 2)
@@ -171,6 +175,7 @@ func TestV2_PropagatesRequestID(t *testing.T) {
 // TestV2_StatementFailureFailsExecution: a failed statement fails the
 // execution; the run itself completes (the failure is the user's SQL).
 func TestV2_StatementFailureFailsExecution(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 2)
@@ -191,6 +196,7 @@ func TestV2_StatementFailureFailsExecution(t *testing.T) {
 // TestV2_CancelledOnEngineCompletesCancelled: a statement cancelled on the
 // engine ends the execution cancelled, neither finished nor failed.
 func TestV2_CancelledOnEngineCompletesCancelled(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 2)
@@ -209,6 +215,7 @@ func TestV2_CancelledOnEngineCompletesCancelled(t *testing.T) {
 // TestV2_ScriptNotRetried pins the duplicate-write fix: a failed script is
 // never re-executed automatically.
 func TestV2_ScriptNotRetried(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 1)
@@ -231,6 +238,7 @@ func TestV2_ScriptNotRetried(t *testing.T) {
 // the engine is asked to stop it (AbandonStatements uses the persisted
 // handle), the rest are skipped and the execution fails.
 func TestV2_HeartbeatTimeoutMarksInterrupted(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 3)
@@ -259,6 +267,7 @@ func TestV2_HeartbeatTimeoutMarksInterrupted(t *testing.T) {
 // the running statement as cancelled and records the execution's
 // cancellation, never a completion.
 func TestV2_CancelMarksCancelled(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 2)
@@ -302,6 +311,7 @@ func TestV2_CancelMarksCancelled(t *testing.T) {
 // TestV2_RejectedScriptFails: a script the editor gate rejects fails the
 // execution before any statement record exists.
 func TestV2_RejectedScriptFails(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	env.OnActivity(activities.SplitSQL, mock.Anything, mock.Anything).
@@ -317,6 +327,7 @@ func TestV2_RejectedScriptFails(t *testing.T) {
 }
 
 func TestScriptTimeout(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, 93*time.Minute, scriptTimeout(3, 30*time.Minute, 2*time.Hour), "a minute of margin per statement")
 	require.Equal(t, 2*time.Hour, scriptTimeout(10, 30*time.Minute, 2*time.Hour), "capped by the execution timeout")
 	require.Equal(t, defaultExecutionTimeout, scriptTimeout(10, 30*time.Minute, 0), "no cap given: the default cap")
@@ -327,6 +338,7 @@ func TestScriptTimeout(t *testing.T) {
 // history, so it must never carry connection secrets; the activity loads and
 // decrypts the engine's connection itself.
 func TestV2_InputHasNoSecrets(t *testing.T) {
+	t.Parallel()
 	raw, err := json.Marshal(v2Input())
 	require.NoError(t, err)
 	for _, secret := range []string{"s3cret", "client_secret", "password", "token", "credentials"} {
@@ -351,8 +363,10 @@ func TestV2_InputHasNoSecrets(t *testing.T) {
 // per outcome: finished, a failed statement, cancelled, worker interrupted).
 // A change to the workflow's commands fails here: add V3 instead (#27).
 func TestV2_Replay(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"finished", "failed", "cancelled", "interrupted"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			r := worker.NewWorkflowReplayer()
 			r.RegisterWorkflow(QueryExecutionWorkflowV2)
 			require.NoError(t, r.ReplayWorkflowHistoryFromJSONFile(nil, "testdata/v2_"+name+".json"))

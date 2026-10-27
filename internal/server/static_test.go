@@ -45,6 +45,7 @@ func serve(handler http.Handler, method, target string) *httptest.ResponseRecord
 // TestStaticRootServesTheApp guards #219: the root used to list web/build
 // (login.html, sql.html, …), and those .html links landed on the SPA's 404.
 func TestStaticRootServesTheApp(t *testing.T) {
+	t.Parallel()
 	rec := serve(staticFixture(t, true), http.MethodGet, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET / = %d, want 200", rec.Code)
@@ -55,6 +56,7 @@ func TestStaticRootServesTheApp(t *testing.T) {
 }
 
 func TestStaticHTMLRedirectsToTheRoute(t *testing.T) {
+	t.Parallel()
 	for _, target := range []string{"/login.html", "/sql.html"} {
 		rec := serve(staticFixture(t, true), http.MethodGet, target)
 		if rec.Code != http.StatusFound {
@@ -68,6 +70,7 @@ func TestStaticHTMLRedirectsToTheRoute(t *testing.T) {
 }
 
 func TestStaticSPAFallback(t *testing.T) {
+	t.Parallel()
 	rec := serve(staticFixture(t, true), http.MethodGet, "/sql")
 	if rec.Code != http.StatusOK || rec.Body.String() != "<app-shell>" {
 		t.Fatalf("GET /sql = %d %q, want the app shell", rec.Code, rec.Body.String())
@@ -75,6 +78,7 @@ func TestStaticSPAFallback(t *testing.T) {
 }
 
 func TestStaticSetupFlow(t *testing.T) {
+	t.Parallel()
 	// No users yet: the root sends the operator to the setup wizard.
 	rec := serve(staticFixture(t, false), http.MethodGet, "/")
 	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/setup" {
@@ -89,6 +93,7 @@ func TestStaticSetupFlow(t *testing.T) {
 }
 
 func TestStaticAPIAndAssets(t *testing.T) {
+	t.Parallel()
 	handler := staticFixture(t, true)
 	rec := serve(handler, http.MethodGet, "/api/v1/unknown")
 	if rec.Code != http.StatusNotFound {
@@ -108,6 +113,7 @@ func TestStaticAPIAndAssets(t *testing.T) {
 // A route that is also a build directory (/connections holds the prerendered
 // connections/new.html) used to answer with the directory listing.
 func TestStaticDirectoryRouteServesTheApp(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "app.html"), []byte("<app-shell>"), 0o644); err != nil {
 		t.Fatal(err)
@@ -130,6 +136,7 @@ func TestStaticDirectoryRouteServesTheApp(t *testing.T) {
 // TestStatic_CachesConfigured: once set up, the shell no longer asks the
 // database on every page load (#375); before that it keeps asking.
 func TestStatic_CachesConfigured(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "app.html"), []byte("<app-shell>"), 0o644); err != nil {
 		t.Fatal(err)

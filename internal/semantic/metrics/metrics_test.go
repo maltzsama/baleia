@@ -78,6 +78,7 @@ func fields() Fields {
 }
 
 func TestPrepare(t *testing.T) {
+	t.Parallel()
 	if _, err := Prepare(fields(), count); err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +99,7 @@ func TestPrepare(t *testing.T) {
 }
 
 func TestCreate_Certification(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st)
@@ -119,6 +121,7 @@ func TestCreate_Certification(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
+	t.Parallel()
 	p, _ := Prepare(fields(), count)
 	current := db.SemanticMetric{Slug: p.Slug, Label: p.Label, TableName: p.Table, CatalogID: p.CatalogID, Certified: true, Definition: p.Raw}
 
@@ -149,6 +152,7 @@ func TestMerge(t *testing.T) {
 }
 
 func TestList_Filters(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st)

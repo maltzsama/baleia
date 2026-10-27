@@ -40,6 +40,7 @@ func (f *fakeStore) ListVisibleSemanticModels(context.Context, db.ListVisibleSem
 }
 
 func TestSearch(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	space := db.ListSpacesForPrincipalRow{ID: newID(), Name: "Finance"}
 	root := db.QueryFolder{ID: newID(), SpaceID: space.ID, Name: "Reports", Slug: "reports"}

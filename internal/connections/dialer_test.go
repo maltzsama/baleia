@@ -22,6 +22,7 @@ func resolveTo(addrs ...string) func(context.Context, string, string) ([]netip.A
 }
 
 func TestDialerDeniesMetadataIP(t *testing.T) {
+	t.Parallel()
 	d, err := NewDialer(DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -56,6 +57,7 @@ func TestDialerDeniesMetadataIP(t *testing.T) {
 }
 
 func TestDialerSkipsDeniedAddressesOfAHost(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +83,7 @@ func TestDialerSkipsDeniedAddressesOfAHost(t *testing.T) {
 }
 
 func TestDialerOptions(t *testing.T) {
+	t.Parallel()
 	d, err := NewDialer(DialerOptions{
 		AllowLoopback: true,
 		DenyCIDRs:     []string{"10.1.0.0/16"},

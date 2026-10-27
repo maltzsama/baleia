@@ -106,6 +106,7 @@ func (f fixture) draft() Draft {
 }
 
 func TestCreate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := setup(t)
 	r, err := f.s.Create(ctx, f.ws, newID(), f.draft())
@@ -133,6 +134,7 @@ func TestCreate(t *testing.T) {
 		{name: "every minute", edit: func(d *Draft) { d.CronSchedule = "* * * * *" }, invalid: true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			d := f.draft()
 			c.edit(&d)
 			_, err := f.s.Create(ctx, f.ws, newID(), d)
@@ -151,6 +153,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestUpdate_ClearsADestinationError(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := setup(t)
 	r, _ := f.s.Create(ctx, f.ws, newID(), f.draft())
@@ -168,6 +171,7 @@ func TestUpdate_ClearsADestinationError(t *testing.T) {
 }
 
 func TestRefreshAndDelete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := setup(t)
 	r, _ := f.s.Create(ctx, f.ws, newID(), f.draft())
@@ -191,6 +195,7 @@ func TestRefreshAndDelete(t *testing.T) {
 // TestHistory_ScopedToTheWorkspace: a retriever of another workspace has no
 // history to show, even when its id is known.
 func TestHistory_ScopedToTheWorkspace(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := setup(t)
 	r, _ := f.s.Create(ctx, f.ws, newID(), f.draft())
@@ -205,6 +210,7 @@ func TestHistory_ScopedToTheWorkspace(t *testing.T) {
 // TestValidateDefinition_AnyWhitespaceAfterTheKeyword: multi-line SQL from
 // the editor breaks the line right after SELECT or WITH.
 func TestValidateDefinition_AnyWhitespaceAfterTheKeyword(t *testing.T) {
+	t.Parallel()
 	f := setup(t)
 	for _, def := range []string{"SELECT\n  a\nFROM t", "with\tx AS (select 1) select * from x", "select 1", "  Select 1"} {
 		if err := f.s.ValidateDefinition(def); err != nil {

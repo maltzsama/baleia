@@ -93,6 +93,7 @@ func newMetaFixture(t *testing.T) *metaFixture {
 func (f *metaFixture) as(user string) context.Context { return ctxAs(user, "member") }
 
 func TestMetadata_ForeignWorkspace404(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.stranger)
 	r1, _ := f.h.ListMetadataCatalogs(ctx, ListMetadataCatalogsRequestObject{Id: f.ws})
@@ -114,6 +115,7 @@ func TestMetadata_ForeignWorkspace404(t *testing.T) {
 // invisible: 404 on its namespaces, tables and table, and search returns
 // nothing from it.
 func TestMetadata_UngrantedCatalog404(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 	if r, _ := f.h.ListMetadataNamespaces(ctx, ListMetadataNamespacesRequestObject{Id: f.ws, CatalogId: f.other}); !is404(r) {
@@ -160,6 +162,7 @@ func is404(r any) bool {
 // TestMetadata_MultiLevelNamespace: parent=ops lists ["ops","b.c"]; the dot
 // stays inside its level, and ns=ops&ns=b.c addresses that namespace.
 func TestMetadata_MultiLevelNamespace(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 	top, err := f.h.ListMetadataNamespaces(ctx, ListMetadataNamespacesRequestObject{Id: f.ws, CatalogId: f.lake})
@@ -191,6 +194,7 @@ func TestMetadata_MultiLevelNamespace(t *testing.T) {
 // TestMetadata_Pagination: 250 tables come back in 3 pages, in name order,
 // each once; tombstoned tables are not listed.
 func TestMetadata_Pagination(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := context.Background()
 	for i := range 250 {
@@ -239,6 +243,7 @@ func TestMetadata_Pagination(t *testing.T) {
 // TestSearch_Ranking: "ord" ranks orders above customer_order_history, and
 // finds columns too.
 func TestSearch_Ranking(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	r, err := f.h.SearchMetadata(f.as(f.owner), SearchMetadataRequestObject{Id: f.ws, Params: SearchMetadataParams{Q: "ord"}})
 	if err != nil {
@@ -275,6 +280,7 @@ func TestSearch_Ranking(t *testing.T) {
 }
 
 func TestSearch_ExcludesTombstoned(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	r, err := f.h.SearchMetadata(f.as(f.owner), SearchMetadataRequestObject{Id: f.ws, Params: SearchMetadataParams{Q: "orders_old"}})
 	if err != nil {
@@ -291,6 +297,7 @@ func TestSearch_ExcludesTombstoned(t *testing.T) {
 // rendered for the binding's engine (here Trino); a tombstoned table shows
 // removed_at; a binding of another catalog is a 404.
 func TestMetadataTable_DisplayForBinding(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	r, err := f.h.GetMetadataTable(f.as(f.owner), GetMetadataTableRequestObject{Id: f.ws, TableId: f.orders})
 	if err != nil {

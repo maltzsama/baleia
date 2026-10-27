@@ -148,6 +148,7 @@ func setup() (*Service, *fakeStore, *fakeMailer, *fakeSessions) {
 }
 
 func TestInvite(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, m, _ := setup()
 	u, err := s.Invite(ctx, "ana@x.io", "member")
@@ -174,6 +175,7 @@ func TestInvite(t *testing.T) {
 }
 
 func TestChangeRole(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, _, ss := setup()
 	u, _ := st.CreateUser(ctx, db.CreateUserParams{Email: "ana@x.io", Role: "member"})
@@ -190,6 +192,7 @@ func TestChangeRole(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, _, ss := setup()
 	u, _ := st.CreateUser(ctx, db.CreateUserParams{Email: "ana@x.io"})
@@ -215,6 +218,7 @@ func TestRemove(t *testing.T) {
 }
 
 func TestSuspendReinstate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, _, _ := setup()
 	u, _ := st.CreateUser(ctx, db.CreateUserParams{Email: "ana@x.io"})
@@ -248,6 +252,7 @@ func (failingMailer) Send(context.Context, string, string, mail.Template, map[st
 // TestInvite_FailedMailNeverLogsTheToken: the invitation link is a bearer
 // credential; a failed send is logged without it.
 func TestInvite_FailedMailNeverLogsTheToken(t *testing.T) {
+	t.Parallel()
 	var logs bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
@@ -277,6 +282,7 @@ func (brokenStore) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
 // TestStoreFailureIsNotNotFound: a database outage is an error, never a
 // missing account.
 func TestStoreFailureIsNotNotFound(t *testing.T) {
+	t.Parallel()
 	st := brokenStore{newStore()}
 	s := New(st, st.tx, &fakeMailer{}, &fakeSessions{}, Config{})
 	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
@@ -291,6 +297,7 @@ func TestStoreFailureIsNotNotFound(t *testing.T) {
 // TestInvite_ConcurrentInviteIsAConflict: the loser of two invites for the
 // same e-mail gets ErrEmailTaken, not a raw database error.
 func TestInvite_ConcurrentInviteIsAConflict(t *testing.T) {
+	t.Parallel()
 	s, st, m, _ := setup()
 	st.emailRace = "ana@x.io"
 	if _, err := s.Invite(context.Background(), "ana@x.io", "member"); !errors.Is(err, ErrEmailTaken) {
@@ -304,6 +311,7 @@ func TestInvite_ConcurrentInviteIsAConflict(t *testing.T) {
 // TestChangeRole_RevokesEvenIfTheReadBackFails: once the role is changed the
 // sessions end, whatever happens after.
 func TestChangeRole_RevokesEvenIfTheReadBackFails(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s, st, _, ss := setup()
 	u, _ := st.CreateUser(ctx, db.CreateUserParams{Email: "ana@x.io", Role: "member"})

@@ -26,6 +26,7 @@ func testKeyring(t *testing.T) *crypto.Keyring {
 var testConnID = pgtype.UUID{Bytes: [16]byte{0xC0, 0xFF, 0xEE}, Valid: true}
 
 func TestEncodeCredentialsNil(t *testing.T) {
+	t.Parallel()
 	got, err := encodeCredentials(testKeyring(t), nil, testConnID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -37,6 +38,7 @@ func TestEncodeCredentialsNil(t *testing.T) {
 
 // TestEncodeCredentialsRequiresKeyring: without a keyring nothing is stored.
 func TestEncodeCredentialsRequiresKeyring(t *testing.T) {
+	t.Parallel()
 	_, err := encodeCredentials(nil, map[string]any{"password": "s3cr3t-value"}, testConnID)
 	if !errors.Is(err, errNoKeyring) {
 		t.Fatalf("want errNoKeyring, got %v", err)
@@ -47,6 +49,7 @@ func TestEncodeCredentialsRequiresKeyring(t *testing.T) {
 // the stored value is an envelope that never contains the secret in cleartext,
 // and it round-trips back to the original credentials for the same row.
 func TestEncodeCredentialsEncrypts(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	creds := map[string]any{"username": "alice", "password": "s3cr3t-value"}
 
@@ -77,6 +80,7 @@ func TestEncodeCredentialsEncrypts(t *testing.T) {
 // TestEncodeCredentialsBoundToRow: a ciphertext copied to another connection
 // must not open there.
 func TestEncodeCredentialsBoundToRow(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	enc, err := encodeCredentials(kr, map[string]any{"password": "s3cr3t-value"}, testConnID)
 	if err != nil {
@@ -89,9 +93,11 @@ func TestEncodeCredentialsBoundToRow(t *testing.T) {
 }
 
 func TestCreateCredentials(t *testing.T) {
+	t.Parallel()
 	generic := map[string]any{"client_id": "id", "client_secret": "secret"}
 
 	t.Run("generic credentials are used for every type", func(t *testing.T) {
+		t.Parallel()
 		for _, typ := range []string{"polaris", "nessie", "glue", "hive", "iceberg", "postgresql", "mysql"} {
 			got := createCredentials(&CreateCatalogConnectionRequest{Type: typ, Credentials: &generic}, nil)
 			if got == nil {
@@ -100,6 +106,7 @@ func TestCreateCredentials(t *testing.T) {
 		}
 	})
 	t.Run("typed credentials win over generic", func(t *testing.T) {
+		t.Parallel()
 		typed := &SqlCredentials{}
 		got := createCredentials(&CreateCatalogConnectionRequest{Type: "postgresql", PostgresqlCredentials: typed, Credentials: &generic}, nil)
 		if got != typed {
@@ -107,11 +114,13 @@ func TestCreateCredentials(t *testing.T) {
 		}
 	})
 	t.Run("no credentials is an untyped nil", func(t *testing.T) {
+		t.Parallel()
 		if got := createCredentials(&CreateCatalogConnectionRequest{Type: "postgresql"}, nil); got != nil {
 			t.Fatalf("got %v, want nil", got)
 		}
 	})
 	t.Run("polaris falls back to the deployment defaults", func(t *testing.T) {
+		t.Parallel()
 		defaults := map[string]string{"client_id": "env-id", "client_secret": "env-secret"}
 		got, ok := createCredentials(&CreateCatalogConnectionRequest{Type: "polaris"}, defaults).(map[string]string)
 		if !ok || got["client_id"] != "env-id" {

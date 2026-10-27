@@ -55,6 +55,7 @@ func openTestSession(t *testing.T, e queryengine.Engine, spec queryengine.Sessio
 }
 
 func TestRootConfinement(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	createDatabase(t, filepath.Join(dir, "inside.db"), "CREATE TABLE t(a)")
 	outside := t.TempDir()
@@ -84,6 +85,7 @@ func TestRootConfinement(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			cfg := connections.Config{Kind: connections.KindSQLite, Values: map[string]string{"path": tc.path}}
 			e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, tc.o, testDialect)
 			if tc.want == "" {
@@ -105,6 +107,7 @@ func TestRootConfinement(t *testing.T) {
 }
 
 func TestRefusesAttachAndTail(t *testing.T) {
+	t.Parallel()
 	o, cfg := fixture(t, true)
 	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
@@ -136,6 +139,7 @@ func TestRefusesAttachAndTail(t *testing.T) {
 }
 
 func TestReadOnlyEvenWithPragma(t *testing.T) {
+	t.Parallel()
 	o, cfg := fixture(t, true)
 	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
@@ -160,6 +164,7 @@ func TestReadOnlyEvenWithPragma(t *testing.T) {
 }
 
 func TestMixedTypesFallback(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	createDatabase(t, filepath.Join(dir, "mixed.db"),
 		"CREATE TABLE m(x INTEGER)", "INSERT INTO m VALUES (1)", "INSERT INTO m VALUES ('abc')")
@@ -185,6 +190,7 @@ func TestMixedTypesFallback(t *testing.T) {
 }
 
 func TestCancelUnsupported(t *testing.T) {
+	t.Parallel()
 	o, cfg := fixture(t, false)
 	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
@@ -199,6 +205,7 @@ func TestCancelUnsupported(t *testing.T) {
 // TestSpec checks the path the composition root uses: the spec's factory
 // builds engines with the options it was given.
 func TestSpec(t *testing.T) {
+	t.Parallel()
 	o, cfg := fixture(t, false)
 	s := Spec(o, dialect.NewRegistry().MustGet(dialect.SQLite))
 	if s.Name != Kind {

@@ -43,6 +43,7 @@ func arrowStream(t *testing.T, values []string) *bytes.Buffer {
 }
 
 func TestExportCSV_StreamsAndQuotes(t *testing.T) {
+	t.Parallel()
 	values := []string{"a,b", `he said "hi"`, "line1\nline2", "plain"}
 	stream := arrowStream(t, values)
 
@@ -69,6 +70,7 @@ func TestExportCSV_StreamsAndQuotes(t *testing.T) {
 }
 
 func TestExportTSVAndJSONL(t *testing.T) {
+	t.Parallel()
 	stream := arrowStream(t, []string{"a\tb", `q"q`})
 
 	var tsv bytes.Buffer
@@ -99,6 +101,7 @@ func TestExportTSVAndJSONL(t *testing.T) {
 }
 
 func TestResultKeyFor(t *testing.T) {
+	t.Parallel()
 	fallback := "query-results/e/1/0.arrow"
 	sets := []byte(`[{"result_index":0,"result_key":"query-results/e/1/0.arrow"},{"result_index":1,"result_key":"query-results/e/1/1.arrow"}]`)
 
@@ -120,6 +123,7 @@ func TestResultKeyFor(t *testing.T) {
 // batches and checks the count stays bounded: the converter never materializes
 // the result.
 func TestExportCSV_OneMillionRows(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("million-row export in short mode")
 	}

@@ -5,6 +5,7 @@ import (
 )
 
 func TestSavedQueryVersionsAndTrash(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 
@@ -75,6 +76,7 @@ func TestSavedQueryVersionsAndTrash(t *testing.T) {
 }
 
 func TestSemanticMetricVersions(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 

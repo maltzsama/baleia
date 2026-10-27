@@ -111,6 +111,7 @@ func newFixture(t *testing.T, status string) *fixture {
 }
 
 func TestBeginFinish(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newFixture(t, "active")
 	next := "/sql"
@@ -135,6 +136,7 @@ func TestBeginFinish(t *testing.T) {
 }
 
 func TestFinish_Rejections(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newFixture(t, "active")
 	begin := func() string {
@@ -182,6 +184,7 @@ func TestFinish_Rejections(t *testing.T) {
 }
 
 func TestFinish_Suspended(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newFixture(t, "suspended")
 	_, state, err := f.s.Begin(ctx, f.id, nil)
@@ -197,6 +200,7 @@ func TestFinish_Suspended(t *testing.T) {
 // TestProvider_FailsClosed: a configuration that is not sealed is refused,
 // never parsed as plaintext (#278).
 func TestProvider_FailsClosed(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, "active")
 	ap := f.store.providers[f.id.Bytes]
 	ap.ConfigEnc = `{"issuer_url":"http://issuer.example","client_id":"c","client_secret":"s"}`
@@ -210,6 +214,7 @@ func TestProvider_FailsClosed(t *testing.T) {
 // TestProvider_OnlyEnabledOIDC: a disabled provider, or one of another type,
 // cannot start or finish a login.
 func TestProvider_OnlyEnabledOIDC(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	for _, c := range []struct {
 		name    string
@@ -220,6 +225,7 @@ func TestProvider_OnlyEnabledOIDC(t *testing.T) {
 		{"ldap", "ldap", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t, "active")
 			ap := f.store.providers[f.id.Bytes]
 			ap.Type, ap.Enabled = c.typ, c.enabled

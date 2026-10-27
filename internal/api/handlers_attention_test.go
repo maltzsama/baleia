@@ -120,6 +120,7 @@ func hasKind(items []AttentionItem, kind AttentionKind) bool {
 // TestAttention_Scoped: the owner of a broken binding sees it; another member
 // with no access does not.
 func TestAttention_Scoped(t *testing.T) {
+	t.Parallel()
 	f := newAttentionFixture(t)
 
 	items := f.list(t, f.owner)
@@ -150,6 +151,7 @@ func TestAttention_Scoped(t *testing.T) {
 
 // TestAttention_AdminOnlyKinds: drift and export lag are admin-only.
 func TestAttention_AdminOnlyKinds(t *testing.T) {
+	t.Parallel()
 	f := newAttentionFixture(t)
 	ctx := context.Background()
 
@@ -187,6 +189,7 @@ func TestAttention_AdminOnlyKinds(t *testing.T) {
 // TestAttention_Cache: the endpoint returns the 30 s cache and recomputes
 // after it is cleared.
 func TestAttention_Cache(t *testing.T) {
+	t.Parallel()
 	f := newAttentionFixture(t)
 
 	if !hasKind(f.list(t, f.owner), BindingError) {
@@ -211,6 +214,7 @@ func TestAttention_Cache(t *testing.T) {
 
 // TestAttention_ClearsWhenFixed: an item disappears when its condition clears.
 func TestAttention_ClearsWhenFixed(t *testing.T) {
+	t.Parallel()
 	f := newAttentionFixture(t)
 	ctx := context.Background()
 

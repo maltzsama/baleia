@@ -23,6 +23,7 @@ func newWorkspaceFor(t *testing.T, f *metaFixture, name string) openapi_types.UU
 }
 
 func TestBundleExportImport(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 

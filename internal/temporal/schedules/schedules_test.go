@@ -57,6 +57,7 @@ func testSpecs() []Spec {
 // TestEnsure_CreatesWhenAbsent pins that Ensure creates every schedule on first
 // boot.
 func TestEnsure_CreatesWhenAbsent(t *testing.T) {
+	t.Parallel()
 	sc := &fakeScheduleClient{}
 	err := Ensure(context.Background(), &fakeClient{sc: sc}, "queue", testSpecs())
 	if err != nil {
@@ -73,6 +74,7 @@ func TestEnsure_CreatesWhenAbsent(t *testing.T) {
 // TestEnsure_UpatesWhenExists pins idempotency across worker boots: a create
 // collision is followed by an update, one schedule per ID.
 func TestEnsure_UpatesWhenExists(t *testing.T) {
+	t.Parallel()
 	sc := &fakeScheduleClient{createErr: temporal.ErrScheduleAlreadyRunning}
 	err := Ensure(context.Background(), &fakeClient{sc: sc}, "queue", testSpecs())
 	if err != nil {

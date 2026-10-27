@@ -14,6 +14,7 @@ func strptr(v string) *string { return &v }
 // TestSettingsKeyIsWriteOnly: the provider key is sealed at rest and opened only
 // by the adapters; the stored row never carries the plaintext.
 func TestSettingsKeyIsWriteOnly(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	keyring, err := crypto.NewKeyring("0123456789abcdef0123456789abcdef", "")
 	if err != nil {

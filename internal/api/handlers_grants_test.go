@@ -278,6 +278,7 @@ func grant(t *testing.T, h *API, q *authzFake, ctx context.Context, perm GrantCa
 
 // TestGrantCatalogAccess_Persists: grant -> list shows it -> revoke -> gone.
 func TestGrantCatalogAccess_Persists(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	owner := ctxAs(ownerID, "member")
 
@@ -320,6 +321,7 @@ func TestGrantCatalogAccess_Persists(t *testing.T) {
 // TestGrantCatalogAccess_Authz: both parties must agree and nothing is written
 // before the checks pass.
 func TestGrantCatalogAccess_Authz(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		ctx  context.Context
@@ -361,6 +363,7 @@ func TestGrantCatalogAccess_Authz(t *testing.T) {
 }
 
 func TestRevokeCatalogAccess_Authz(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		ctx  context.Context
@@ -389,6 +392,7 @@ func TestRevokeCatalogAccess_Authz(t *testing.T) {
 }
 
 func TestListWorkspaceCatalogAccess_Authz(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	_ = grant(t, h, q, ctxAs(ownerID, "member"), GrantCatalogAccessRequestPermissionRead)
 	for name, tc := range map[string]struct {
@@ -408,6 +412,7 @@ func TestListWorkspaceCatalogAccess_Authz(t *testing.T) {
 // TestGrantMemberCatalogAccess: a workspace member reaches a granted catalog
 // read-only; when the grant is revoked the catalog is a 404 again.
 func TestGrantMemberCatalogAccess(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	member := ctxAs(memberID, "member")
 	conn, cat := reqIDs(q)
@@ -472,6 +477,7 @@ func visitConnCode(t *testing.T, resp any) int {
 }
 
 func TestUpdateWorkspace_OwnerRule(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		ctx  context.Context
@@ -502,6 +508,7 @@ func TestUpdateWorkspace_OwnerRule(t *testing.T) {
 }
 
 func TestTeamsReadScoping(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	other := db.Team{ID: pgtype.UUID{Bytes: [16]byte{0x7F}, Valid: true}, Name: "other"}
 	q.g.teams[other.ID.Bytes] = other
@@ -548,6 +555,7 @@ func TestTeamsReadScoping(t *testing.T) {
 // stranger gets a 404 (not a 403), and a revoke is visible immediately even
 // though the response is cached.
 func TestListWorkspaceCatalogs_GrantsAndCache(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 
 	listAs := func(user string) (int, []workspaceCatalogEntry) {
@@ -592,6 +600,7 @@ func (q *authzFake) ListTeamMembers(_ context.Context, team pgtype.UUID) ([]db.L
 // TestListTeamMembers_UserFields pins #150: user.id is the user's id (not the
 // membership row's) and user.role / auth_provider come from the user.
 func TestListTeamMembers_UserFields(t *testing.T) {
+	t.Parallel()
 	h, _ := newGrantsHandlers(t)
 	resp, err := h.ListTeamMembers(ctxAs(ownerID, "member"), ListTeamMembersRequestObject{Id: teamID.Bytes})
 	if err != nil {
@@ -638,6 +647,7 @@ func (r rollbackTx) InTx(_ context.Context, fn func(db.Querier) error) error {
 // TestRevokeCatalogAccess_Atomic: when clearing the workspace default fails,
 // the grant is kept, not revoked with a default still on its catalog.
 func TestRevokeCatalogAccess_Atomic(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	owner := ctxAs(ownerID, "member")
 	if got := grant(t, h, q, owner, GrantCatalogAccessRequestPermissionRead); got != 201 {
@@ -662,6 +672,7 @@ func (brokenWorkspaces) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Works
 // TestGetWorkspace_StoreFailureIsAnError: a failed lookup is a server error,
 // not "workspace not found".
 func TestGetWorkspace_StoreFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	h.queries = brokenWorkspaces{q}
 	h.access = wsaccess.New(h.queries)
@@ -682,6 +693,7 @@ func (brokenAccess) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAcces
 // TestListWorkspaceTargets_AccessFailureIsAnError: a failed access check is
 // a server error, not "workspace not found".
 func TestListWorkspaceTargets_AccessFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	h.queries = brokenAccess{q}
 	h.access = wsaccess.New(h.queries)

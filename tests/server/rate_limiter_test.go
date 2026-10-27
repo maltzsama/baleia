@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/server"
@@ -17,6 +18,7 @@ func testConfig() server.RateLimiterConfig {
 }
 
 func TestRateLimiterAllow(t *testing.T) {
+	t.Parallel()
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
@@ -33,30 +35,34 @@ func TestRateLimiterAllow(t *testing.T) {
 	}
 }
 
+// TestRateLimiterRefill runs on the bubble's clock: the refill second
+// passes at once (#374).
 func TestRateLimiterRefill(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping refill test in short mode")
-	}
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		rl := server.NewRateLimiter(testConfig())
+		defer rl.Stop()
 
-	cfg := testConfig()
-	rl := server.NewRateLimiter(cfg)
-	defer rl.Stop()
+		ip := "192.168.1.2"
 
-	ip := "192.168.1.2"
+		rl.Allow(ip)
+		if rl.Allow(ip) {
+			t.Fatal("second request should be rate-limited")
+		}
 
-	rl.Allow(ip)
-	if rl.Allow(ip) {
-		t.Fatal("second request should be rate-limited")
-	}
-
-	time.Sleep(time.Second + 50*time.Millisecond)
-
-	if !rl.Allow(ip) {
-		t.Fatal("request should be allowed after refill interval")
-	}
+		time.Sleep(time.Second - time.Millisecond)
+		if rl.Allow(ip) {
+			t.Fatal("request allowed before the refill interval")
+		}
+		time.Sleep(time.Millisecond)
+		if !rl.Allow(ip) {
+			t.Fatal("request should be allowed after refill interval")
+		}
+	})
 }
 
 func TestRateLimiterPerIP(t *testing.T) {
+	t.Parallel()
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
@@ -74,8 +80,9 @@ func TestRateLimiterPerIP(t *testing.T) {
 }
 
 func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
+	t.Parallel()
 	rl := server.NewRateLimiter(testConfig())
-	defer rl.Stop()
+	t.Cleanup(rl.Stop)
 
 	middleware := server.RateLimitRefreshMiddleware(rl, nil)
 
@@ -98,6 +105,7 @@ func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req := httptest.NewRequest("POST", tt.path, nil)
 			req.RemoteAddr = tt.remoteAddr
 			rec := httptest.NewRecorder()
@@ -110,6 +118,7 @@ func TestRateLimiterMiddlewareOnlyRefresh(t *testing.T) {
 }
 
 func TestRateLimiterMiddlewareBlocksRefresh(t *testing.T) {
+	t.Parallel()
 	cfg := testConfig()
 	rl := server.NewRateLimiter(cfg)
 	defer rl.Stop()
@@ -143,6 +152,7 @@ func TestRateLimiterMiddlewareBlocksRefresh(t *testing.T) {
 }
 
 func TestRateLimiterMiddlewareBlocksResults(t *testing.T) {
+	t.Parallel()
 	cfg := testConfig()
 	rl := server.NewRateLimiter(cfg)
 	defer rl.Stop()
@@ -172,24 +182,28 @@ func TestRateLimiterMiddlewareBlocksResults(t *testing.T) {
 }
 
 func TestRateLimiterCleanup(t *testing.T) {
-	rl := server.NewRateLimiter(testConfig())
-	defer rl.Stop()
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		rl := server.NewRateLimiter(testConfig())
+		defer rl.Stop()
 
-	rl.Allow("stale-ip")
-	time.Sleep(10 * time.Millisecond)
+		rl.Allow("stale-ip")
+		time.Sleep(10 * time.Millisecond)
 
-	if rl.IPCount() != 1 {
-		t.Fatal("expected 1 entry")
-	}
+		if rl.IPCount() != 1 {
+			t.Fatal("expected 1 entry")
+		}
 
-	rl.Cleanup(1 * time.Millisecond)
+		rl.Cleanup(1 * time.Millisecond)
 
-	if rl.IPCount() != 0 {
-		t.Fatalf("expected 0 entries after cleanup, got %d", rl.IPCount())
-	}
+		if rl.IPCount() != 0 {
+			t.Fatalf("expected 0 entries after cleanup, got %d", rl.IPCount())
+		}
+	})
 }
 
 func TestRateLimiterConcurrent(t *testing.T) {
+	t.Parallel()
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
@@ -213,6 +227,7 @@ func TestRateLimiterConcurrent(t *testing.T) {
 }
 
 func TestRateLimiterReset(t *testing.T) {
+	t.Parallel()
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
@@ -225,6 +240,7 @@ func TestRateLimiterReset(t *testing.T) {
 }
 
 func TestRateLimiterMiddlewareNonRefreshUnlimited(t *testing.T) {
+	t.Parallel()
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
@@ -246,6 +262,7 @@ func TestRateLimiterMiddlewareNonRefreshUnlimited(t *testing.T) {
 }
 
 func TestRateLimiterDefaultBurst(t *testing.T) {
+	t.Parallel()
 	rl := server.NewRateLimiter(testConfig())
 	defer rl.Stop()
 
@@ -264,6 +281,7 @@ func TestRateLimiterDefaultBurst(t *testing.T) {
 }
 
 func TestRateLimiterConfigurable(t *testing.T) {
+	t.Parallel()
 	cfg := server.RateLimiterConfig{
 		RequestsPerSecond: 100,
 		Burst:             50,

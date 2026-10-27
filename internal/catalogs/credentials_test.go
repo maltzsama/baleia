@@ -21,6 +21,7 @@ func testKeyring(t *testing.T) *crypto.Keyring {
 // TestDecodeCredentials_Unreadable: any envelope that cannot be opened yields a
 // typed error and zero credentials; the stored value is never used as plaintext.
 func TestDecodeCredentials_Unreadable(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t)
 	id := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 	other := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}

@@ -46,6 +46,7 @@ func fixture(t *testing.T) (root, outside string) {
 }
 
 func TestSQLiteRootConfinement(t *testing.T) {
+	t.Parallel()
 	root, outside := fixture(t)
 	p := New(Options{Root: root})
 	for _, path := range []string{"../secret.db", outside, "link.db", filepath.Join(root, "..", "secret.db")} {
@@ -74,6 +75,7 @@ func TestSQLiteRootConfinement(t *testing.T) {
 }
 
 func TestMetadataReader_sqlite(t *testing.T) {
+	t.Parallel()
 	root, _ := fixture(t)
 	p := New(Options{Root: root})
 	ctx := context.Background()
@@ -113,6 +115,7 @@ func TestMetadataReader_sqlite(t *testing.T) {
 
 // TestReadOnlyUnlessBothAllow: writes need the connection and the server.
 func TestReadOnlyUnlessBothAllow(t *testing.T) {
+	t.Parallel()
 	root, _ := fixture(t)
 	ctx := context.Background()
 	write := func(p *Provider, rw string) error {

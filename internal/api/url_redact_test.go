@@ -3,6 +3,7 @@ package api
 import "testing"
 
 func TestRedactURLSecrets(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		in   string
@@ -16,6 +17,7 @@ func TestRedactURLSecrets(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := redactURLSecrets(tc.in); got != tc.want {
 				t.Fatalf("redactURLSecrets(%q) = %q, want %q", tc.in, got, tc.want)
 			}

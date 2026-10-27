@@ -10,6 +10,7 @@ import (
 )
 
 func TestIsSecretReference(t *testing.T) {
+	t.Parallel()
 	for _, ok := range []string{
 		"@baleia-secret[env:FOO]",
 		"@baleia-secret[file:token.txt]",
@@ -107,6 +108,7 @@ func TestConfigReferenceAndSecret(t *testing.T) {
 // builds resolves file references under the registry's base directory, not
 // the environment's.
 func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "token.txt"), []byte("from-file\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -127,6 +129,7 @@ func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
 // that stays inside it (how a Kubernetes Secret volume links name ->
 // ..data/name) resolves.
 func TestSecretResolver_FileStaysUnderTheBaseDir(t *testing.T) {
+	t.Parallel()
 	outside := filepath.Join(t.TempDir(), "outside.txt")
 	if err := os.WriteFile(outside, []byte("leaked"), 0o600); err != nil {
 		t.Fatal(err)

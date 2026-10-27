@@ -13,6 +13,7 @@ import (
 // tables and reaches data exclusively through the MCP tools. It may not import
 // the API, the main db package, an engine adapter, Temporal or object storage.
 func TestImportBoundary(t *testing.T) {
+	t.Parallel()
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)

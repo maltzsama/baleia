@@ -10,6 +10,7 @@ import (
 )
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	p := New(nil)
 
 	cfg, err := p.Validate(connections.Config{Values: map[string]string{"url": "http://lakekeeper:8181/"}})
@@ -46,6 +47,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestRESTURI(t *testing.T) {
+	t.Parallel()
 	p := New(nil)
 	if got := p.RESTURI(connections.Config{Values: map[string]string{"url": "http://lk:8181/"}}); got != "http://lk:8181/catalog" {
 		t.Errorf("RESTURI = %q", got)
@@ -57,6 +59,7 @@ func TestRESTURI(t *testing.T) {
 // with the seeded warehouse). Named without the TestMetadataReader_ prefix so
 // the sources CI job does not require it when the env var is unset.
 func TestLakekeeperIntegration(t *testing.T) {
+	t.Parallel()
 	base := os.Getenv("BALEIA_TEST_LAKEKEEPER_URL")
 	if base == "" {
 		t.Skip("BALEIA_TEST_LAKEKEEPER_URL not set")

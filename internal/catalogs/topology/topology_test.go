@@ -30,6 +30,7 @@ func (f *fakeStore) ListMetadataColumns(context.Context, pgtype.UUID) ([]db.List
 // TestColumns: an unknown table returns the store's no-rows error, which
 // callers treat as "no columns"; a known one its columns.
 func TestColumns(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{columns: 2}
 	s := New(st)

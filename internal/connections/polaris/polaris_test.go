@@ -13,6 +13,7 @@ import (
 // BALEIA_TEST_POLARIS_CREDENTIALS=admin:admin). It lists every catalog and
 // walks the first level of each.
 func TestMetadataReader_polaris(t *testing.T) {
+	t.Parallel()
 	base, creds := os.Getenv("BALEIA_TEST_POLARIS_URL"), os.Getenv("BALEIA_TEST_POLARIS_CREDENTIALS")
 	if base == "" || creds == "" {
 		t.Skip("BALEIA_TEST_POLARIS_URL / BALEIA_TEST_POLARIS_CREDENTIALS not set")

@@ -144,6 +144,7 @@ func fixture() *Checker {
 }
 
 func TestConnection(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	cases := []struct {
@@ -169,6 +170,7 @@ func TestConnection(t *testing.T) {
 }
 
 func TestCatalog(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	if cat, conn, err := c.Catalog(ctx, owner, catA, ActWrite); err != nil || cat.ID != catA || conn.ID != connA {
@@ -189,6 +191,7 @@ func TestCatalog(t *testing.T) {
 // it, may not change it (403, they can already see it), and does not reach the
 // connection itself.
 func TestCatalogGrantMember(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	if _, _, err := c.Catalog(ctx, reader, catA, ActRead); err != nil {
@@ -210,6 +213,7 @@ func TestCatalogGrantMember(t *testing.T) {
 }
 
 func TestWorkspace(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	cases := []struct {
@@ -235,6 +239,7 @@ func TestWorkspace(t *testing.T) {
 }
 
 func TestTeam(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	cases := []struct {
@@ -262,6 +267,7 @@ func TestTeam(t *testing.T) {
 // TestCatalogOfConnection: a catalog id must be reached through its own
 // connection, so a connection you own cannot be used to reach another's catalog.
 func TestCatalogOfConnection(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	if _, _, err := c.CatalogOfConnection(ctx, owner, connA, catA, ActRead); err != nil {
@@ -278,6 +284,7 @@ func TestCatalogOfConnection(t *testing.T) {
 }
 
 func TestRequireAdmin(t *testing.T) {
+	t.Parallel()
 	if err := admin.RequireAdmin(); err != nil {
 		t.Fatal(err)
 	}
@@ -287,6 +294,7 @@ func TestRequireAdmin(t *testing.T) {
 }
 
 func TestPrincipalFromContext(t *testing.T) {
+	t.Parallel()
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, "11111111-1111-1111-1111-111111111111")
 	ctx = context.WithValue(ctx, auth.ContextKeyRole, "admin")
 	p, err := PrincipalFromContext(ctx)
@@ -304,6 +312,7 @@ func TestPrincipalFromContext(t *testing.T) {
 }
 
 func TestEngine(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	cases := []struct {
@@ -320,6 +329,7 @@ func TestEngine(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, err := c.Engine(ctx, tc.p, engA, tc.act)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
@@ -334,6 +344,7 @@ func TestEngine(t *testing.T) {
 // TestDenialHook: every refusal is reported once, by resource and reason;
 // allowed calls report nothing.
 func TestDenialHook(t *testing.T) {
+	t.Parallel()
 	var got []string
 	c := fixture().WithDenials(func(resource, reason string) { got = append(got, resource+":"+reason) })
 	ctx := context.Background()
@@ -351,6 +362,7 @@ func TestDenialHook(t *testing.T) {
 // TestAgentWorkspaceBinding: an agent reaches a workspace only while it is
 // bound to it and its owner is still a member (#59).
 func TestAgentWorkspaceBinding(t *testing.T) {
+	t.Parallel()
 	agentID := uid(60)
 	c := New(store{
 		wss:        map[[16]byte]db.Workspace{wsX.Bytes: {ID: wsX}},
@@ -381,6 +393,7 @@ func TestAgentWorkspaceBinding(t *testing.T) {
 // TestAgentDeniedAdminActions: an agent never carries the owner's global role
 // and every write is refused, whatever the owner may do (#59).
 func TestAgentDeniedAdminActions(t *testing.T) {
+	t.Parallel()
 	c := fixture()
 	ctx := context.Background()
 	agent := Principal{UserID: owner.UserID, Role: "member", Kind: KindAgent, AgentID: uid(60)}
@@ -409,6 +422,7 @@ func TestAgentDeniedAdminActions(t *testing.T) {
 // workspace it is bound to; the owner's connection ownership and grants in
 // other workspaces do not widen that scope (#59).
 func TestAgentResourceScope(t *testing.T) {
+	t.Parallel()
 	agentID := uid(60)
 	catB := uid(21)
 	c := New(store{

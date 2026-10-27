@@ -80,6 +80,7 @@ func (f *fakeStore) DeleteSemanticModel(context.Context, pgtype.UUID, pgtype.UUI
 }
 
 func TestPrepareNewAndCreate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st)
@@ -115,6 +116,7 @@ func TestPrepareNewAndCreate(t *testing.T) {
 }
 
 func TestMergeFields(t *testing.T) {
+	t.Parallel()
 	current := db.SemanticModel{Slug: "orders", Label: "Orders", Certified: true}
 	no := false
 	if _, err := MergeFields(current, Change{Certified: &no}, false); !errors.Is(err, ErrCertifyForbidden) {
@@ -134,6 +136,7 @@ func TestMergeFields(t *testing.T) {
 }
 
 func TestPrepareUpdate_KeepsTheStoredDefinition(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st)
@@ -149,6 +152,7 @@ func TestPrepareUpdate_KeepsTheStoredDefinition(t *testing.T) {
 }
 
 func TestSlugTaken(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st)

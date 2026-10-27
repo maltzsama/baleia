@@ -18,6 +18,7 @@ import (
 // TestMetadataSyncWorkflow: one pass of the named catalog, retried up to 3
 // times (a pass is idempotent).
 func TestMetadataSyncWorkflow(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	var calls int32
@@ -41,6 +42,7 @@ func TestMetadataSyncWorkflow(t *testing.T) {
 // TestMetadataDispatch_BoundedConcurrency: engines are refreshed first, then
 // every syncable catalog is synced as a child, never more than 4 at once.
 func TestMetadataDispatch_BoundedConcurrency(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(MetadataSyncWorkflow)
@@ -86,6 +88,7 @@ func TestMetadataDispatch_BoundedConcurrency(t *testing.T) {
 // does not stop the known catalogs from syncing; a failed child does not
 // fail the pass.
 func TestMetadataDispatch_RefreshFailureStillSyncs(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(MetadataSyncWorkflow)
@@ -104,6 +107,7 @@ func TestMetadataDispatch_RefreshFailureStillSyncs(t *testing.T) {
 // TestMetadataSync_NoDuplicate: a catalog whose sync is already running is
 // not synced twice: the child's workflow id is the catalog's.
 func TestMetadataSync_NoDuplicate(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(MetadataSyncWorkflow)

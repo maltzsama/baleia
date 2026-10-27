@@ -13,6 +13,7 @@ import (
 )
 
 func TestSystemStatus_AdminOnly(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{settings: SettingsFromConfig(&config.Config{}), schema: unreachableSchema{}})
 
 	resp, err := h.GetSystemStatus(context.Background(), GetSystemStatusRequestObject{})
@@ -50,6 +51,7 @@ func TestSystemStatus_AdminOnly(t *testing.T) {
 }
 
 func TestSystemStatus_SectionTimeout(t *testing.T) {
+	t.Parallel()
 	previous := systemStatusSectionTimeout
 	systemStatusSectionTimeout = 20 * time.Millisecond
 	defer func() { systemStatusSectionTimeout = previous }()
@@ -67,6 +69,7 @@ func TestSystemStatus_SectionTimeout(t *testing.T) {
 }
 
 func TestSystemStatus_NoSecrets(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{settings: SettingsFromConfig(&config.Config{
 		SMTPHost:     "smtp.internal.example",
 		SMTPFrom:     "ops@internal.example",
@@ -108,6 +111,7 @@ func TestSystemStatus_NoSecrets(t *testing.T) {
 }
 
 func TestSystemStatus_SMTPNotConfigured(t *testing.T) {
+	t.Parallel()
 	section := smtpStatusSection(MailSettings{})
 	if section.Status != Unknown || section.Configured == nil || *section.Configured {
 		t.Fatalf("smtp section = %+v, want unconfigured/unknown", section)
@@ -119,6 +123,7 @@ func TestSystemStatus_SMTPNotConfigured(t *testing.T) {
 
 // TestSystemStatus_DatabaseMigrationVersion probes a real migrated database.
 func TestSystemStatus_DatabaseMigrationVersion(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	resp, err := f.h.GetSystemStatus(ctxAs(f.admin, "admin"), GetSystemStatusRequestObject{})
 	if err != nil {

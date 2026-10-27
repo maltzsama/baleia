@@ -8,12 +8,14 @@ import (
 )
 
 func TestSpec(t *testing.T) {
+	t.Parallel()
 	if s := Spec(dialect.NewRegistry().MustGet(dialect.ClickHouse)); s.Name != Kind || s.Factory == nil {
 		t.Fatalf("spec = %+v, want kind %q with a factory", s, Kind)
 	}
 }
 
 func TestExceptionCode(t *testing.T) {
+	t.Parallel()
 	cases := map[int]queryengine.ErrorCode{
 		62:  queryengine.CodeSyntax,
 		60:  queryengine.CodeNotFound,
@@ -38,6 +40,7 @@ func TestExceptionCode(t *testing.T) {
 }
 
 func TestLogComment(t *testing.T) {
+	t.Parallel()
 	if got := logComment(queryengine.Tags{}); got != "" {
 		t.Fatalf("empty tags = %q, want empty", got)
 	}

@@ -17,6 +17,7 @@ import (
 // TestMetadataReader_clickhouse runs against a real server. Set
 // BALEIA_TEST_CLICKHOUSE_URL (http://user:pass@host:port) to enable it.
 func TestMetadataReader_clickhouse(t *testing.T) {
+	t.Parallel()
 	raw := os.Getenv("BALEIA_TEST_CLICKHOUSE_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_CLICKHOUSE_URL not set")

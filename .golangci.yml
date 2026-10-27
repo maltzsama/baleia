@@ -15,8 +15,12 @@ linters:
     - forcetypeassert
     - gosec
     - noctx
+    # Independent tests run in parallel (#374): a test or subtest that must
+    # stay serial says why in a //nolint:paralleltest comment.
+    - paralleltest
     - revive
     - thelper
+    - tparallel
   settings:
     staticcheck:
       checks:
@@ -63,6 +67,22 @@ linters:
           - forcetypeassert
           - gosec
           - noctx
+      # These packages' tests share package state on purpose and stay serial:
+      # migrate steps goose's global migrator through versions; activities
+      # swap defaultActivities, the Temporal entry points' receiver; obs
+      # installs the global OpenTelemetry tracer provider (#374).
+      - path: internal/(migrate|temporal/activities|obs)/.*_test\.go
+        linters:
+          - paralleltest
+          - tparallel
+      # These suites run against a shared server (BALEIA_TEST_* URLs, the
+      # contract Postgres, or one in-process server per engine) and create
+      # fixed-name objects there or run long cancellable queries, so they stay
+      # serial (#374).
+      - path: internal/(queryengine/[a-z]+/(conformance|integration)|contract/.*)_test\.go
+        linters:
+          - paralleltest
+          - tparallel
 
 formatters:
   enable:

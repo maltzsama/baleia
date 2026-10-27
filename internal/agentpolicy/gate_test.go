@@ -118,6 +118,7 @@ func (f *fixture) check(t *testing.T, c Call) Decision {
 }
 
 func TestToolNotAllowed(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.store.agent.Policy = []byte(`{"tools":["list_catalogs"]}`)
 	dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1")))
@@ -127,6 +128,7 @@ func TestToolNotAllowed(t *testing.T) {
 }
 
 func TestCatalogRestriction(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.store.agent.Policy = []byte(`{"catalogs":["00000000-0000-0000-0000-0000000000ff"]}`)
 	dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1")))
@@ -143,6 +145,7 @@ func TestCatalogRestriction(t *testing.T) {
 }
 
 func TestWorkspaceBinding(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.store.bound = false
 	if dec := f.check(t, f.call(ToolListCatalogs, nil)); dec.Allowed || dec.Reason != ReasonScope {
@@ -156,6 +159,7 @@ func TestWorkspaceBinding(t *testing.T) {
 }
 
 func TestStatementRules(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		sql  string
 		want bool
@@ -179,6 +183,7 @@ func TestStatementRules(t *testing.T) {
 }
 
 func TestConcurrencyAndHourlyQuota(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.store.running = 2 // default max_concurrent_queries
 	if dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1"))); dec.Allowed || dec.Reason != ReasonQuota {
@@ -198,6 +203,7 @@ func TestConcurrencyAndHourlyQuota(t *testing.T) {
 }
 
 func TestBurstLimiter(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":2}`)
 	for i := 0; i < 2; i++ {
@@ -211,6 +217,7 @@ func TestBurstLimiter(t *testing.T) {
 }
 
 func TestCeilingsClampAndPolicyChangeTakesEffect(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.store.agent.Policy = []byte(`{"max_rows_returned":10000}`)
 	dec := f.check(t, f.call(ToolListCatalogs, nil))
@@ -227,6 +234,7 @@ func TestCeilingsClampAndPolicyChangeTakesEffect(t *testing.T) {
 }
 
 func TestReadOnlyEnforcement(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.gate = NewGate(f.store, fakeEngines{readOnly: queryengine.ReadOnlyNone}, DefaultCeilings(), dialect.NewRegistry())
 	f.gate.SetClock(func() time.Time { return f.now })
@@ -241,6 +249,7 @@ func TestReadOnlyEnforcement(t *testing.T) {
 }
 
 func TestDisabledAgentAndForeignOwner(t *testing.T) {
+	t.Parallel()
 	f := newFixture()
 	f.store.agent.Status = "disabled"
 	if dec := f.check(t, f.call(ToolListCatalogs, nil)); dec.Allowed || dec.Reason != ReasonPolicy {
@@ -255,6 +264,7 @@ func TestDisabledAgentAndForeignOwner(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	ceilings := DefaultCeilings()
 	if err := (Policy{Tools: []string{"nope"}}).Validate(ceilings); err == nil {
 		t.Error("unknown tool accepted")

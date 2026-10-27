@@ -80,6 +80,7 @@ func unwrap(t *testing.T, e queryengine.Engine) *fake.Engine {
 }
 
 func TestManager_UsesDialer(t *testing.T) {
+	t.Parallel()
 	m, d := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
 	e, err := m.Get(context.Background(), engineID)
 	if err != nil {
@@ -91,6 +92,7 @@ func TestManager_UsesDialer(t *testing.T) {
 }
 
 func TestManager_RebuildsOnUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)}
 	m, _ := newManager(t, s)
@@ -132,6 +134,7 @@ func TestManager_RebuildsOnUpdate(t *testing.T) {
 }
 
 func TestReadOnlyUnsupportedRejected(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	m, _ := newManager(t, &store{row: engineRow(readOnlyNoneKind, time.Unix(1, 0), false)})
 	e, err := m.Get(ctx, engineID)
@@ -149,6 +152,7 @@ func TestReadOnlyUnsupportedRejected(t *testing.T) {
 }
 
 func TestReadOnlyUnsupportedAllowedWithAssertion(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	m, _ := newManager(t, &store{row: engineRow(readOnlyNoneKind, time.Unix(1, 0), true)})
 	e, err := m.Get(ctx, engineID)
@@ -163,6 +167,7 @@ func TestReadOnlyUnsupportedAllowedWithAssertion(t *testing.T) {
 }
 
 func TestManager_Refuses(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	disabled := engineRow(fake.Kind, time.Unix(1, 0), false)
 	disabled.Engine.Enabled = false
@@ -177,6 +182,7 @@ func TestManager_Refuses(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			m, _ := newManager(t, &store{row: c.row})
 			_, err := m.Get(ctx, engineID)
 			if c.err != nil {
@@ -211,6 +217,7 @@ func (s multiStore) GetEngineWithConnection(_ context.Context, id pgtype.UUID) (
 // TestManager_SeveralInstancesAndKinds: two engines of one kind and one of
 // another run side by side through the same manager.
 func TestManager_SeveralInstancesAndKinds(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := multiStore{}
 	ids := []pgtype.UUID{}
@@ -242,6 +249,7 @@ func TestManager_SeveralInstancesAndKinds(t *testing.T) {
 }
 
 func TestManager_DefaultTrinoAndCollectStrings(t *testing.T) {
+	t.Parallel()
 	m, _ := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
 	e, err := m.DefaultTrino(context.Background())
 	if err != nil {

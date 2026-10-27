@@ -116,6 +116,7 @@ func count(t *testing.T, pool *pgxpool.Pool, q string, args ...any) int {
 // TestSync_InitialPass: 2 namespaces × 3 tables are stored with their
 // columns and a finished run; multi-level namespaces round-trip.
 func TestSync_InitialPass(t *testing.T) {
+	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
@@ -149,6 +150,7 @@ func TestSync_InitialPass(t *testing.T) {
 // TestSync_OnlyChangedTablesReload: a second pass with one changed version
 // loads that table only and rewrites only its columns.
 func TestSync_OnlyChangedTablesReload(t *testing.T) {
+	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
@@ -179,6 +181,7 @@ func TestSync_OnlyChangedTablesReload(t *testing.T) {
 // TestSync_Tombstones: a table missing from a pass is tombstoned (and its
 // namespace when empty); when it reappears the tombstone is cleared.
 func TestSync_Tombstones(t *testing.T) {
+	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
@@ -232,6 +235,7 @@ func TestSync_Tombstones(t *testing.T) {
 // TestSync_ConcurrentLocked: a second sync of the same catalog while one runs
 // gets ErrSyncInProgress.
 func TestSync_ConcurrentLocked(t *testing.T) {
+	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree(), block: make(chan struct{}), entered: make(chan struct{})}
@@ -259,6 +263,7 @@ func TestSync_ConcurrentLocked(t *testing.T) {
 // TestSync_FailedRunRecorded: a source error fails the run with a code and
 // keeps what was stored (nothing is tombstoned by a partial pass).
 func TestSync_FailedRunRecorded(t *testing.T) {
+	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
@@ -280,6 +285,7 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 }
 
 func TestSync_UnknownCatalog(t *testing.T) {
+	t.Parallel()
 	pool := testPool(t)
 	_, err := NewSyncer(pool, fakeOpener{&fakeSource{}}).Sync(context.Background(), pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, nil)
 	if !errors.Is(err, ErrCatalogNotFound) {
@@ -288,6 +294,7 @@ func TestSync_UnknownCatalog(t *testing.T) {
 }
 
 func TestTableKeyDistinguishesLevels(t *testing.T) {
+	t.Parallel()
 	if tableKey([]string{"a", "b"}, "c") == tableKey([]string{"a"}, "b\x1fc") || strings.Contains(tableKey(nil, "t"), "\x1f") {
 		t.Fatal("table keys must not collide across namespace levels")
 	}

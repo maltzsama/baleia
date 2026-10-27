@@ -36,6 +36,7 @@ func validConfig() Config {
 }
 
 func TestLDAPConfig_PlainLDAPRejected(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	cfg.URL = "ldap://ldap.example.org:389"
 	if err := cfg.Validate(); err == nil {
@@ -44,6 +45,7 @@ func TestLDAPConfig_PlainLDAPRejected(t *testing.T) {
 }
 
 func TestLDAPConfig_StartTLSAllowed(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	cfg.URL = "ldap://ldap.example.org:389"
 	cfg.StartTLS = true
@@ -53,6 +55,7 @@ func TestLDAPConfig_StartTLSAllowed(t *testing.T) {
 }
 
 func TestLDAPConfig_CAPem(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	cfg.CAPem = testCACertPEM(t)
 	if err := cfg.Validate(); err != nil {
@@ -92,6 +95,7 @@ func testCACertPEM(t *testing.T) string {
 }
 
 func TestLDAPConfig_RequiredFields(t *testing.T) {
+	t.Parallel()
 	mutations := map[string]func(*Config){
 		"bind_dn":       func(c *Config) { c.BindDN = "" },
 		"bind_password": func(c *Config) { c.BindPassword = "" },
@@ -107,6 +111,7 @@ func TestLDAPConfig_RequiredFields(t *testing.T) {
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			cfg := validConfig()
 			mutate(&cfg)
 			if err := cfg.Validate(); err == nil {
@@ -117,6 +122,7 @@ func TestLDAPConfig_RequiredFields(t *testing.T) {
 }
 
 func TestLDAPConfig_StrictDecode(t *testing.T) {
+	t.Parallel()
 	raw := []byte(`{
 		"url": "ldaps://ldap.example.org:636",
 		"bind_dn": "cn=svc,ou=services,dc=example,dc=org",
@@ -131,6 +137,7 @@ func TestLDAPConfig_StrictDecode(t *testing.T) {
 }
 
 func TestLDAPConfig_SecretsEncrypted(t *testing.T) {
+	t.Parallel()
 	kr := testKeyring(t, strings.Repeat("k", 32))
 	cfg := validConfig()
 

@@ -36,6 +36,7 @@ func (f *fakeStore) tx(_ context.Context, fn func(Store) error) error {
 }
 
 func TestCreateFirstAdmin(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{}
 	s := New(st, st.tx, bcrypt.MinCost)
@@ -63,6 +64,7 @@ func TestCreateFirstAdmin(t *testing.T) {
 
 // TestCreateFirstAdmin_Concurrent: of concurrent setups exactly one wins (#375).
 func TestCreateFirstAdmin_Concurrent(t *testing.T) {
+	t.Parallel()
 	st := &fakeStore{}
 	s := New(st, st.tx, bcrypt.MinCost)
 	var wg sync.WaitGroup

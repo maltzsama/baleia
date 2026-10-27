@@ -25,6 +25,7 @@ func (f *fakeStore) ListEnginesVisibleToUser(context.Context, pgtype.UUID) ([]db
 }
 
 func TestAvailableAndEngines(t *testing.T) {
+	t.Parallel()
 	var nilQuerier db.Querier
 	if New(nilQuerier).Available() {
 		t.Error("a service without a database is unavailable")

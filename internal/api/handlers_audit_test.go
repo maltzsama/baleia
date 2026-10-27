@@ -14,6 +14,7 @@ import (
 // TestAuditList_Scoping: a member sees only the events they performed, even
 // when asking for someone else's; an admin sees all, page by page.
 func TestAuditList_Scoping(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	rec := audit.NewPostgres(q, nil, nil)
