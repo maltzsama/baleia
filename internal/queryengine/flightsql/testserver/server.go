@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/flight"
@@ -54,8 +55,17 @@ func (s *Server) GetFlightInfoStatement(ctx context.Context, cmd flightsql.State
 	return info, nil
 }
 
+// shutdownGrace bounds how long the shutdown function waits for streams to
+// end.
+const shutdownGrace = 5 * time.Second
+
 // Start binds an in-process server on 127.0.0.1:0 and serves it, returning the
 // bound address and a shutdown function.
+//
+// The shutdown is graceful for at most shutdownGrace. A cancelled query can
+// keep running: SQLite drops an interrupt that arrives before the statement
+// steps, so the conformance SleepSQL (a billion-row CTE) may run to the end,
+// and GracefulStop would wait for it and hang the package (#374).
 func Start(db *sql.DB, multiEndpoint bool) (string, func(), error) {
 	srv, err := NewServer(db, multiEndpoint)
 	if err != nil {
@@ -67,7 +77,18 @@ func Start(db *sql.DB, multiEndpoint bool) (string, func(), error) {
 		return "", nil, err
 	}
 	go func() { _ = server.Serve() }()
-	return server.Addr().String(), server.Shutdown, nil
+	shutdown := func() {
+		done := make(chan struct{})
+		go func() {
+			server.Shutdown()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(shutdownGrace):
+		}
+	}
+	return server.Addr().String(), shutdown, nil
 }
 
 // sqlError maps a SQLite error to the Flight SQL gRPC status a capable server

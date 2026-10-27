@@ -75,9 +75,10 @@ linters:
         linters:
           - paralleltest
           - tparallel
-      # These suites run against shared external servers (BALEIA_TEST_* URLs,
-      # the contract Postgres) and create fixed-name objects there, so they
-      # stay serial (#374).
+      # These suites run against a shared server (BALEIA_TEST_* URLs, the
+      # contract Postgres, or one in-process server per engine) and create
+      # fixed-name objects there or run long cancellable queries, so they stay
+      # serial (#374).
       - path: internal/(queryengine/[a-z]+/(conformance|integration)|contract/.*)_test\.go
         linters:
           - paralleltest
