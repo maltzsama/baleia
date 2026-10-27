@@ -69,6 +69,23 @@ BALEIA_TRACING_ENABLED=true \
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 make dev
 ```
 
+## Query events (#406)
+
+The Trino query list is polled every 30 seconds (`lens-query-poller`). With
+`BALEIA_TRINO_EVENTS_TOKEN` set, Trino's HTTP event listener also pushes each
+completed query to `POST /internal/trino/query-events`, and the API records it
+at once, with figures the list leaves out (output rows). The poller keeps
+running: the listener sends no mid-flight progress, so the running-queries
+list still comes from it, and it repairs drift. A poll read before a query
+ended never sets it back to running.
+
+The endpoint is not under `/api/v1`: it takes the token as `Authorization:
+Bearer`, not a user session. Catalog DDL and the poller's own statement are
+dropped, as the poller drops them, and the event itself is never stored (its
+plans can carry literals). In the chart, `trino.queryEvents.enabled` writes
+the listener's configuration, with the token read from the secret through
+`${ENV:BALEIA_TRINO_EVENTS_TOKEN}`.
+
 ## Logs (#379)
 
 The API, the worker and `cmd/migrate` log JSON lines to stdout from

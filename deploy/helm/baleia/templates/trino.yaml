@@ -7,11 +7,22 @@ metadata:
     {{- include "baleia.labels" . | nindent 4 }}
 data:
   config.properties: |
-{{ .Files.Get "files/trino/config.properties" | indent 4 }}
+{{ .Files.Get "files/trino/config.properties" | indent 4 }}{{ if .Values.trino.queryEvents.enabled }}
+    event-listener.config-files=/etc/trino/event-listener.properties{{ end }}
   catalog-store.properties: |
 {{ .Files.Get "files/trino/catalog-store.properties" | indent 4 }}{{ if .Values.trino.registryEncryption }}
     baleia.registry-key=${ENV:BALEIA_REGISTRY_KEY}{{ if .Values.secrets.values.BALEIA_REGISTRY_KEY_PREVIOUS }}
     baleia.registry-key-previous=${ENV:BALEIA_REGISTRY_KEY_PREVIOUS}{{ end }}{{ end }}
+  {{- if .Values.trino.queryEvents.enabled }}
+  # Completed queries are pushed to the API as they end (#406); the token is
+  # read from the environment, never written in this ConfigMap.
+  event-listener.properties: |
+    event-listener.name=http
+    http-event-listener.log-created=false
+    http-event-listener.log-completed=true
+    http-event-listener.connect-ingest-uri=http://{{ include "baleia.fullname" . }}-api:{{ .Values.api.port }}/internal/trino/query-events
+    http-event-listener.connect-http-headers=Authorization:Bearer ${ENV:BALEIA_TRINO_EVENTS_TOKEN}
+  {{- end }}
   baleia-base-access-control.properties: |
 {{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}
   baleia-catalog-guard.properties: |
@@ -107,6 +118,13 @@ spec:
                   name: {{ include "baleia.secretName" . }}
                   key: BALEIA_REGISTRY_KEY_PREVIOUS
                   optional: true
+            {{- if .Values.trino.queryEvents.enabled }}
+            - name: BALEIA_TRINO_EVENTS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_TRINO_EVENTS_TOKEN
+            {{- end }}
             - name: JAVA_OPTS
               value: "-Xmx{{ .Values.trino.jvmHeap }}"
             # Trino's S3 filesystem auto-detects the region through the EC2
@@ -140,6 +158,11 @@ spec:
             - name: trino-config
               mountPath: /etc/trino/baleia-catalog-guard.properties
               subPath: baleia-catalog-guard.properties
+            {{- if .Values.trino.queryEvents.enabled }}
+            - name: trino-config
+              mountPath: /etc/trino/event-listener.properties
+              subPath: event-listener.properties
+            {{- end }}
       volumes:
         - name: plugin
           emptyDir: {}
