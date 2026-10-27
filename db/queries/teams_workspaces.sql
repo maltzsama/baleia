@@ -82,6 +82,17 @@ SELECT EXISTS (
       AND (w.owner_user_id = $2 OR tm.user_id = $2)
 ) AS has_access;
 
+-- name: SharesWorkspace :one
+-- Whether two users are both members of one workspace, by the membership
+-- rule of CheckWorkspaceAccess (#432).
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members a ON a.team_id = w.owner_team_id AND a.user_id = @caller_id::uuid
+    LEFT JOIN team_members b ON b.team_id = w.owner_team_id AND b.user_id = @user_id::uuid
+    WHERE (w.owner_user_id = @caller_id::uuid OR a.user_id IS NOT NULL)
+      AND (w.owner_user_id = @user_id::uuid OR b.user_id IS NOT NULL)
+) AS shares;
+
 -- name: DeleteTeam :exec
 DELETE FROM teams WHERE id = $1;
 

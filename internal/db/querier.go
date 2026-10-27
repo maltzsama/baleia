@@ -513,6 +513,9 @@ type Querier interface {
 	// so the API can cancel it from another process.
 	SetStatementQueryHandle(ctx context.Context, arg SetStatementQueryHandleParams) error
 	SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error
+	// Whether two users are both members of one workspace, by the membership
+	// rule of CheckWorkspaceAccess (#432).
+	SharesWorkspace(ctx context.Context, arg SharesWorkspaceParams) (bool, error)
 	// After a failure, a cancel or a crash the statements that never ran are
 	// skipped.
 	SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error

@@ -805,6 +805,30 @@ func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberPara
 	return result.RowsAffected(), nil
 }
 
+const sharesWorkspace = `-- name: SharesWorkspace :one
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members a ON a.team_id = w.owner_team_id AND a.user_id = $1::uuid
+    LEFT JOIN team_members b ON b.team_id = w.owner_team_id AND b.user_id = $2::uuid
+    WHERE (w.owner_user_id = $1::uuid OR a.user_id IS NOT NULL)
+      AND (w.owner_user_id = $2::uuid OR b.user_id IS NOT NULL)
+) AS shares
+`
+
+type SharesWorkspaceParams struct {
+	CallerID pgtype.UUID `json:"caller_id"`
+	UserID   pgtype.UUID `json:"user_id"`
+}
+
+// Whether two users are both members of one workspace, by the membership
+// rule of CheckWorkspaceAccess (#432).
+func (q *Queries) SharesWorkspace(ctx context.Context, arg SharesWorkspaceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, sharesWorkspace, arg.CallerID, arg.UserID)
+	var shares bool
+	err := row.Scan(&shares)
+	return shares, err
+}
+
 const updateTeam = `-- name: UpdateTeam :one
 UPDATE teams
 SET name = $2, description = $3, updated_at = now()

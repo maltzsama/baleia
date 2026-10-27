@@ -1049,7 +1049,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resolve audit ids to names, only entities the caller can see */
+        /**
+         * Resolve audit ids to names, only entities the caller can see
+         * @description Ids the caller cannot see are left out of the answer. A non-admin resolves only themselves and the users they share a workspace with; an administrator resolves every user. Every list is optional.
+         */
         post: operations["resolveAudit"];
         delete?: never;
         options?: never;
