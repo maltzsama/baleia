@@ -3,6 +3,7 @@ package obs
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,7 +17,7 @@ import (
 // TestSetupDisabledIsNoop: with tracing off, nothing is installed and a span
 // from the global provider does not record.
 func TestSetupDisabledIsNoop(t *testing.T) {
-	shutdown, err := Setup(context.Background(), false, "api")
+	shutdown, err := Setup(context.Background(), slog.New(slog.DiscardHandler), false, "api")
 	if err != nil {
 		t.Fatal(err)
 	}
