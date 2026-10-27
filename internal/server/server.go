@@ -42,13 +42,21 @@ type Server struct {
 	metrics *metrics.Registry
 
 	handlers *api.API
-	strict   api.ServerInterface
-	ws       *ws.Handler
-	mcp      *mcp.Server // nil unless agents are enabled
+	// background is the handlers' work that outlives a request; Run waits
+	// for it on shutdown.
+	background drainer
+	strict     api.ServerInterface
+	ws         *ws.Handler
+	mcp        *mcp.Server // nil unless agents are enabled
 	// rl and authLimiter run cleanup goroutines; Run stops them on shutdown.
 	rl               *RateLimiter
 	authLimiter      *AuthRouteLimiter
 	onRefreshLimited func()
+}
+
+// drainer waits, until ctx ends, for work left running in the background.
+type drainer interface {
+	Drain(ctx context.Context) error
 }
 
 // New builds the API on the shared graph (internal/app). ctx is the process
@@ -79,6 +87,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		return nil, err
 	}
 	s.handlers = h
+	s.background = h
 
 	authMetrics := h.AuthMetrics()
 	s.onRefreshLimited = func() { authMetrics.Attempt(metrics.AuthRefresh, metrics.OutcomeRateLimited) }
@@ -452,9 +461,11 @@ func extractToken(r *http.Request) string {
 	return ""
 }
 
-// Run serves until ctx ends, then drains in-flight requests for at most
-// HTTPShutdownTimeout, or without a deadline when it is zero (#372). A clean
-// shutdown returns nil. The rate limiters stop when Run returns.
+// Run serves until ctx ends, then drains in-flight requests, and then the
+// handlers' background work, for at most HTTPShutdownTimeout, or without a
+// deadline when it is zero (#372). A clean shutdown returns nil; background
+// work cut at the deadline is logged, not an exit failure. The rate limiters
+// stop when Run returns.
 func (s *Server) Run(ctx context.Context) error {
 	defer s.stopLimiters()
 	srv := &http.Server{
@@ -474,7 +485,13 @@ func (s *Server) Run(ctx context.Context) error {
 			sctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), s.cfg.HTTPShutdownTimeout)
 		}
 		defer cancel()
-		shutdown <- srv.Shutdown(sctx)
+		err := srv.Shutdown(sctx)
+		if s.background != nil {
+			if derr := s.background.Drain(sctx); derr != nil {
+				slog.WarnContext(sctx, "background work still running at shutdown", "err", derr)
+			}
+		}
+		shutdown <- err
 	}()
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err

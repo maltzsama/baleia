@@ -52,6 +52,13 @@ type API struct {
 // domain (#365) keeps it composed into one value.
 var _ StrictServerInterface = (*API)(nil)
 
+// Drain waits, until ctx ends, for the work the handlers left running in the
+// background: the password-reset deliveries (#422). The server calls it
+// after the HTTP server stopped taking requests.
+func (a *API) Drain(ctx context.Context) error {
+	return a.resets.Drain(ctx)
+}
+
 // MailSender is the transactional e-mail surface (#67).
 type MailSender interface {
 	Send(ctx context.Context, to, locale string, template mail.Template, data map[string]any) error

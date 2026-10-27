@@ -2,9 +2,14 @@ package api
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/audit/trail"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -47,5 +52,37 @@ func TestResolveAudit_UsersAreScopedToSharedWorkspaces(t *testing.T) {
 	}
 	if got := resolve(ctxAs(f.admin, "admin")); len(got) != 3 {
 		t.Errorf("admin resolved %d users, want 3", len(got))
+	}
+}
+
+// userLookup answers every user lookup with err.
+type userLookup struct {
+	*authzFake
+	err error
+}
+
+func (q userLookup) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+	return db.User{}, q.err
+}
+
+// TestResolveAudit_LookupFailureIsAnError: an unknown id is left out of the
+// answer, but a failed lookup is a server error, not a silent gap.
+func TestResolveAudit_LookupFailureIsAnError(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newAuthzHandlers(t)
+	admin := ctxAs(ownerID, "admin")
+	ids := []openapi_types.UUID{{0xAA}}
+	body := &AuditResolveRequest{Users: &ids}
+
+	h.trail = trail.New(userLookup{authzFake: q, err: pgx.ErrNoRows})
+	resp, err := h.ResolveAudit(admin, ResolveAuditRequestObject{Body: body})
+	ok, isOK := resp.(ResolveAudit200JSONResponse)
+	if err != nil || !isOK || len(*ok.Users) != 0 {
+		t.Fatalf("unknown user = %T, %v; want 200 without it", resp, err)
+	}
+
+	h.trail = trail.New(userLookup{authzFake: q, err: errors.New("connection reset")})
+	if _, err := h.ResolveAudit(admin, ResolveAuditRequestObject{Body: body}); err == nil {
+		t.Error("a failed lookup was answered as an unknown user")
 	}
 }
