@@ -249,7 +249,7 @@ export interface paths {
         put?: never;
         /**
          * Request password reset link
-         * @description Always returns 204 regardless of email existence. Returns 503 if email service is not configured.
+         * @description Always returns 204 regardless of email existence, right after the account lookup. The token and the e-mail are sent in the background, so a failed send does not change the answer: it is only logged (with the user id), and operators notice a broken SMTP setup from the log. Returns 503 if the email service is not configured.
          */
         post: operations["requestPasswordReset"];
         delete?: never;
@@ -9304,6 +9304,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
@@ -9376,6 +9377,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };

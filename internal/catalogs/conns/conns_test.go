@@ -17,6 +17,7 @@ type fakeStore struct {
 	conns             []db.CatalogConnection
 	engines           []db.Engine
 	createErr, delErr error
+	updateErr         error
 	listedEngines     bool
 }
 
@@ -34,7 +35,7 @@ func (f *fakeStore) CreateCatalogConnection(_ context.Context, arg db.CreateCata
 }
 
 func (f *fakeStore) UpdateCatalogConnection(_ context.Context, arg db.UpdateCatalogConnectionParams) (db.CatalogConnection, error) {
-	return db.CatalogConnection{ID: arg.ID}, nil
+	return db.CatalogConnection{ID: arg.ID}, f.updateErr
 }
 
 func (f *fakeStore) DeleteCatalogConnection(context.Context, pgtype.UUID) error { return f.delErr }
@@ -55,12 +56,17 @@ func TestList_WithoutEngine(t *testing.T) {
 	}
 }
 
-func TestCreateAndDelete_MapConflicts(t *testing.T) {
+func TestWrites_MapConflicts(t *testing.T) {
 	ctx := context.Background()
 	st := &fakeStore{createErr: &pgconn.PgError{Code: "23505"}}
 	s := New(st)
 	if _, err := s.Create(ctx, db.CreateCatalogConnectionParams{Name: "pg"}); !errors.Is(err, ErrNameTaken) {
 		t.Errorf("duplicate name = %v, want ErrNameTaken", err)
+	}
+	st.updateErr = &pgconn.PgError{Code: "23505"}
+	taken := "pg"
+	if _, err := s.Update(ctx, db.UpdateCatalogConnectionParams{ID: newID(), Name: &taken}); !errors.Is(err, ErrNameTaken) {
+		t.Errorf("rename to a taken name = %v, want ErrNameTaken", err)
 	}
 
 	st.delErr = &pgconn.PgError{Code: "23001", ConstraintName: "engines_connection_id_fkey"}

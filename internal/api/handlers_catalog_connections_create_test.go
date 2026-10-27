@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -221,8 +222,9 @@ func TestCreateConnection_Rejects(t *testing.T) {
 
 type updateConnQuerier struct {
 	db.Querier
-	conn    db.CatalogConnection
-	updates []db.UpdateCatalogConnectionParams
+	conn      db.CatalogConnection
+	updates   []db.UpdateCatalogConnectionParams
+	updateErr error
 }
 
 func (f *updateConnQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
@@ -235,7 +237,7 @@ func (f *updateConnQuerier) UpdateCatalogConnection(_ context.Context, p db.Upda
 	if p.Config != nil {
 		c.Config = p.Config
 	}
-	return c, nil
+	return c, f.updateErr
 }
 
 // storedPolaris is a polaris row as written by the registry: client_id in
@@ -275,6 +277,18 @@ func TestUpdateConnection_NameOnlyTouchesNothingElse(t *testing.T) {
 	p := q.updates[0]
 	if *p.Name != "renamed" || p.Config != nil || p.Url != nil || p.CredentialsEnc != nil {
 		t.Fatalf("params = %+v", p)
+	}
+}
+
+// TestUpdateConnection_NameTakenIsConflict: renaming to a name another
+// connection has is a 409 with the conflict code, not a 500.
+func TestUpdateConnection_NameTakenIsConflict(t *testing.T) {
+	kr := testKeyring(t)
+	q := &updateConnQuerier{conn: storedPolaris(t, kr), updateErr: &pgconn.PgError{Code: "23505"}}
+	name := "taken"
+	rec := runUpdate(t, createHandlers(t, q, kr), UpdateCatalogConnectionRequest{Name: &name})
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"code":"conflict"`) {
+		t.Fatalf("response = %d %s, want 409 conflict", rec.Code, rec.Body)
 	}
 }
 

@@ -404,6 +404,7 @@ func TestReset_RequestStoresHash(t *testing.T) {
 	if _, ok := resp.(RequestPasswordReset204Response); !ok {
 		t.Fatalf("request = %T, want 204", resp)
 	}
+	f.h.resets.Wait()
 
 	u, err := url.Parse(sentURL)
 	if err != nil {
