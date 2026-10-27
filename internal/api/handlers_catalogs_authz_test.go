@@ -558,11 +558,8 @@ func codeOf(t *testing.T, resp any, err error) int {
 // of blocking the request forever.
 func TestSyncCatalog_StuckDDLTimesOut(t *testing.T) {
 	t.Parallel()
-	old := catalogDDLTimeout
-	catalogDDLTimeout = 300 * time.Millisecond
-	defer func() { catalogDDLTimeout = old }()
-
 	h, q, _ := newAuthzHandlers(t)
+	h.ddlTimeout = 300 * time.Millisecond
 	stuck := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		if strings.HasPrefix(string(b), "CREATE CATALOG") {

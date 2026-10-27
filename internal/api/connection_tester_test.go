@@ -96,18 +96,11 @@ func runDraft(t *testing.T, h *API, user string, body *TestConnectionRequest) Te
 	return resp
 }
 
-func freshLimiter(t *testing.T) {
-	before := connectionTests
-	connectionTests = &testLimiter{windows: map[string]testWindow{}}
-	t.Cleanup(func() { connectionTests = before })
-}
-
 // TestTransient_RESTPersistsNothing: a draft test of an Iceberg REST
 // catalog runs its checks and writes nothing (draftQuerier fails on any
 // write).
 func TestTransient_RESTPersistsNothing(t *testing.T) {
 	t.Parallel()
-	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, false)
 	resp := runDraft(t, draftHandlers(t, reg), ownerID, draft(srv.URL+"/catalog"))
@@ -121,7 +114,6 @@ func TestTransient_RESTPersistsNothing(t *testing.T) {
 // raw error never reaches the response.
 func TestTransient_ErrorCodes(t *testing.T) {
 	t.Parallel()
-	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, true)
 	r := runDraft(t, draftHandlers(t, reg), ownerID, draft(srv.URL+"/catalog")).(TestConnectionDraft200JSONResponse)
@@ -159,7 +151,6 @@ func TestTransient_ErrorCodes(t *testing.T) {
 // by the dialer before any connection.
 func TestTransient_DeniedCIDR(t *testing.T) {
 	t.Parallel()
-	freshLimiter(t)
 	r := runDraft(t, draftHandlers(t, testRegistry(t)), ownerID, draft("http://169.254.169.254/catalog")).(TestConnectionDraft200JSONResponse)
 	if r.Success || *r.ErrorCode != codeDeniedNetwork {
 		t.Fatalf("result = %+v", r)
@@ -170,7 +161,6 @@ func TestTransient_DeniedCIDR(t *testing.T) {
 // another user is not affected.
 func TestTransient_RateLimited(t *testing.T) {
 	t.Parallel()
-	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, false)
 	h := draftHandlers(t, reg)
@@ -191,7 +181,6 @@ func TestTransient_RateLimited(t *testing.T) {
 // engine the caller may not use is a 404; an unknown intent a 422.
 func TestTransient_IntentsFilter(t *testing.T) {
 	t.Parallel()
-	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, false)
 	h := draftHandlers(t, reg)

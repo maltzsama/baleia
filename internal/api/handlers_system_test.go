@@ -52,11 +52,7 @@ func TestSystemStatus_AdminOnly(t *testing.T) {
 
 func TestSystemStatus_SectionTimeout(t *testing.T) {
 	t.Parallel()
-	previous := systemStatusSectionTimeout
-	systemStatusSectionTimeout = 20 * time.Millisecond
-	defer func() { systemStatusSectionTimeout = previous }()
-
-	section := runStatusSection(context.Background(), "database_unavailable", func(ctx context.Context) error {
+	section := runStatusSection(context.Background(), 20*time.Millisecond, "database_unavailable", func(ctx context.Context) error {
 		<-ctx.Done()
 		return ctx.Err()
 	})
