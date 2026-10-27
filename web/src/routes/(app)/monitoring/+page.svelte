@@ -6,6 +6,7 @@
 	import { loadCatalogs, type MetadataCatalog } from '$lib/metadata/client';
 	import { poll, type PollController } from '$lib/util/poll';
 	import { formatDuration } from '$lib/util/time';
+	import { formatBytes } from '$lib/util/size';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Checkbox from '$lib/ui/Checkbox.svelte';
@@ -274,6 +275,28 @@
 	});
 
 	onDestroy(stopPolls);
+
+	// What a query used (#407): the list's figures plus what the engine
+	// reported when the detail was opened. Unknown figures are left out.
+	function queryUsage(q: MonitoringQueryDetail): { label: string; value: string }[] {
+		const r = q.resources;
+		const rows = (n: number) => n.toLocaleString();
+		const items: [string, number | null | undefined, (n: number) => string][] = [
+			[m.monitoring_cpu_time(), q.cpu_ms, formatDuration],
+			[m.monitoring_elapsed(), q.elapsed_ms, formatDuration],
+			[m.monitoring_queued(), r?.queued_ms, formatDuration],
+			[m.monitoring_planning(), r?.planning_ms, formatDuration],
+			[m.monitoring_peak_memory(), r?.peak_memory_bytes, formatBytes],
+			[m.monitoring_data_read(), q.physical_input_bytes, formatBytes],
+			[m.monitoring_rows_processed(), r?.processed_rows, rows],
+			[m.monitoring_bytes_processed(), r?.processed_bytes, formatBytes],
+			[m.monitoring_rows_returned(), r?.output_rows ?? q.output_rows, rows],
+			[m.monitoring_bytes_returned(), r?.output_bytes, formatBytes]
+		];
+		return items
+			.filter((item): item is [string, number, (n: number) => string] => item[1] != null)
+			.map(([label, value, format]) => ({ label, value: format(value) }));
+	}
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
@@ -463,6 +486,7 @@
 								<th class="px-3 py-2">SQL</th>
 								<th class="px-3 py-2">Catalog</th>
 								<th class="px-3 py-2">Elapsed</th>
+								<th class="px-3 py-2">{m.monitoring_cpu()}</th>
 								<th class="px-3 py-2">Started</th>
 								<th class="px-3 py-2 text-right">Actions</th>
 							</tr>
@@ -497,6 +521,9 @@
 									<td class="px-3 py-1.5">{query.catalog}</td>
 									<td class="px-3 py-1.5">
 										{query.elapsed_ms != null ? formatDuration(query.elapsed_ms) : '—'}
+									</td>
+									<td class="px-3 py-1.5">
+										{query.cpu_ms != null ? formatDuration(query.cpu_ms) : '—'}
 									</td>
 									<td class="px-3 py-1.5"><RelativeTime at={query.created_at} /></td>
 									<td class="px-3 py-1.5 text-right">
@@ -726,6 +753,19 @@
 				/>
 			</dd>
 		</dl>
+		{@const usage = queryUsage(selectedQuery)}
+		{#if usage.length}
+			<h3 class="mt-4 text-[12px] font-semibold">{m.monitoring_resources()}</h3>
+			<dl
+				class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]"
+				aria-label={m.monitoring_resources()}
+			>
+				{#each usage as item (item.label)}
+					<dt class="text-slate-600 dark:text-slate-300">{item.label}</dt>
+					<dd class="font-mono">{item.value}</dd>
+				{/each}
+			</dl>
+		{/if}
 		<h3 class="mt-4 text-[12px] font-semibold">{m.common_sql()}</h3>
 		<pre
 			class="mt-1 overflow-x-auto rounded-lg border border-border bg-bg-toolbar p-3 font-mono text-[11px]">{selectedQuery.sql}</pre>

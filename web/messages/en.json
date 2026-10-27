@@ -1047,5 +1047,17 @@
 	"history_cancel_consequence_engine": "The statement running now is stopped on the engine, and the statements after it do not run.",
 	"history_cancel_consequence_results": "Statements that already finished keep their results.",
 	"history_execution_cancelled": "Execution cancelled",
-	"history_execution_already_ended": "The execution had already ended"
+	"history_execution_already_ended": "The execution had already ended",
+	"monitoring_cpu": "CPU",
+	"monitoring_resources": "Resources",
+	"monitoring_cpu_time": "CPU time",
+	"monitoring_elapsed": "Elapsed",
+	"monitoring_queued": "Queued",
+	"monitoring_planning": "Planning",
+	"monitoring_peak_memory": "Peak memory",
+	"monitoring_data_read": "Data read",
+	"monitoring_rows_processed": "Rows processed",
+	"monitoring_bytes_processed": "Bytes processed",
+	"monitoring_rows_returned": "Rows returned",
+	"monitoring_bytes_returned": "Bytes returned"
 }
