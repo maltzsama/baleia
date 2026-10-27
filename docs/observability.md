@@ -36,7 +36,23 @@ One trace covers, with the W3C `traceparent` propagated across every hop:
   tracer (`internal/obs.PGXTracer`). SQL statement text is **not** recorded
   (`otelpgx.WithDisableSQLStatementInAttributes`).
 
-Every request log line carries `trace_id` and `span_id` when tracing is on.
+### Spans inside the application (#380)
+
+Between the edges, the application opens its own spans:
+
+| Span | Where | Attributes |
+|---|---|---|
+| `engine.open_session`, `engine.execute` | every engine, through the Manager's wrapper (`internal/queryengine`) | `baleia.engine.kind`, `baleia.session.read_only`, `baleia.rows`, `baleia.result_sets`, `baleia.error.code` |
+| `binding.create`, `binding.replace`, `binding.drop` | catalog DDL (`internal/bindings`) | `baleia.binding.action`, `baleia.catalog`, `baleia.connector` |
+| `metadata.sync` | one catalog's metadata pass (`internal/metadata`) | `baleia.catalog.id`, `baleia.metadata.path`, `baleia.tables.{seen,changed,removed}` |
+| `s3.put`, `s3.get` | result writes and reads (`internal/storage`) | `baleia.bytes` |
+| `assistant.turn` | one assistant turn; the provider calls inside it are HTTP client spans (`internal/assistant`) | `baleia.assistant.data_sharing`, `baleia.assistant.tool_calls` |
+
+The direct PostgreSQL engine's pool has the `otelpgx` tracer too, so a user's
+statements show under `engine.execute`. The other direct engines
+(`database/sql`) are covered by `engine.execute` only. A failed span carries a
+short fixed status, or the engine error code; never the error text, which can
+quote a statement, a catalog's properties or an object key.
 
 ### Never traced
 
@@ -51,4 +67,24 @@ spans, not on metric labels.
 docker compose --profile tracing up -d      # Jaeger UI on http://localhost:16686
 BALEIA_TRACING_ENABLED=true \
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 make dev
+```
+
+## Logs (#379)
+
+The API, the worker and `cmd/migrate` log JSON lines to stdout from
+`BALEIA_LOG_LEVEL` up (`debug`, `info`, `warn`, `error`; default `info`). A
+line logged during a traced request, activity or turn carries its `trace_id`
+and `span_id`, so a log line leads to its trace. The Temporal SDK logs
+through the same logger.
+
+## Profiling (#380)
+
+`BALEIA_PPROF_ADDR` (unset by default) makes the API and the worker serve the
+Go runtime profiles under `/debug/pprof/` on their own listener. It has no
+authentication: bind it to loopback and reach it with `kubectl
+port-forward`, e.g.
+
+```sh
+kubectl -n baleia port-forward deploy/baleia-api 6060:6060   # with BALEIA_PPROF_ADDR=127.0.0.1:6060
+go tool pprof http://localhost:6060/debug/pprof/heap
 ```

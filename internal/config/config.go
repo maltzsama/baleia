@@ -172,6 +172,10 @@ type Config struct {
 	OracleLOBMaxBytes int
 	// WorkerHealthPort is the worker's liveness listener (WORKER_HEALTH_PORT).
 	WorkerHealthPort string
+	// PprofAddr is where the api and the worker serve the runtime profiles
+	// (BALEIA_PPROF_ADDR, e.g. 127.0.0.1:6060); empty, the default, serves
+	// none. The listener is unauthenticated (#380).
+	PprofAddr string
 	// LogLevel is the lowest level the api and worker log (BALEIA_LOG_LEVEL:
 	// debug, info, warn or error); see SlogLevel.
 	LogLevel string
@@ -210,6 +214,7 @@ func Load() *Config {
 		PolarisClientSecret:   getEnv("POLARIS_CLIENT_SECRET", ""),
 		WorkerHealthPort:      getEnv("WORKER_HEALTH_PORT", "8081"),
 		LogLevel:              getEnv("BALEIA_LOG_LEVEL", "info"),
+		PprofAddr:             getEnv("BALEIA_PPROF_ADDR", ""),
 		OracleLOBMaxBytes:     getEnvInt("BALEIA_LOB_MAX_BYTES", 0),
 		SecretFileBaseDir:     getEnv("BALEIA_SECRET_FILE_BASE_DIR", ""),
 		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),

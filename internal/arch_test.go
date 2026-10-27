@@ -479,3 +479,52 @@ func TestDialectLookupOnlyInV2(t *testing.T) {
 		}
 	})
 }
+
+// TestNoDefaultServeMux: importing net/http/pprof (internal/obs, #380) puts
+// the runtime profiles on http.DefaultServeMux, so no server may serve that
+// mux: the profiles stay on the opt-in BALEIA_PPROF_ADDR listener.
+func TestNoDefaultServeMux(t *testing.T) {
+	t.Parallel()
+	isHTTP := func(e ast.Expr, name string) bool {
+		sel, ok := e.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		pkg, ok := sel.X.(*ast.Ident)
+		return ok && pkg.Name == "http" && sel.Sel.Name == name
+	}
+	isNil := func(e ast.Expr) bool {
+		id, ok := e.(*ast.Ident)
+		return ok && id.Name == "nil"
+	}
+	goSources(t, func(rel string, f *ast.File) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.SelectorExpr:
+				if isHTTP(n, "DefaultServeMux") {
+					t.Errorf("%s uses http.DefaultServeMux", rel)
+				}
+			case *ast.CallExpr:
+				switch {
+				case isHTTP(n.Fun, "Handle"), isHTTP(n.Fun, "HandleFunc"):
+					t.Errorf("%s registers on http.DefaultServeMux; use a mux of its own", rel)
+				case (isHTTP(n.Fun, "ListenAndServe") || isHTTP(n.Fun, "Serve")) && len(n.Args) == 2 && isNil(n.Args[1]):
+					t.Errorf("%s serves http.DefaultServeMux (nil handler)", rel)
+				}
+			case *ast.CompositeLit:
+				if !isHTTP(n.Type, "Server") {
+					return true
+				}
+				for _, el := range n.Elts {
+					if kv, ok := el.(*ast.KeyValueExpr); ok {
+						if id, ok := kv.Key.(*ast.Ident); ok && id.Name == "Handler" && !isNil(kv.Value) {
+							return true
+						}
+					}
+				}
+				t.Errorf("%s builds an http.Server without a handler: it would serve http.DefaultServeMux", rel)
+			}
+			return true
+		})
+	})
+}
