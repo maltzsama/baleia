@@ -1,0 +1,99 @@
+{
+ "context": {
+  "catalog": "tpch",
+  "clientCapabilities": [
+   "SESSION_AUTHORIZATION",
+   "VARIANT",
+   "PARAMETRIC_DATETIME",
+   "PATH",
+   "NUMBER"
+  ],
+  "clientTags": [],
+  "enabledRoles": [],
+  "environment": "docker",
+  "groups": [],
+  "originalRoles": [],
+  "originalUser": "trino",
+  "principal": "trino",
+  "queryType": "SELECT",
+  "remoteClientAddress": "127.0.0.1",
+  "resourceEstimates": {},
+  "resourceGroupId": [
+   "global"
+  ],
+  "retryPolicy": "NONE",
+  "schema": "tiny",
+  "serverAddress": "10.10.61.205",
+  "serverVersion": "483",
+  "sessionProperties": {},
+  "source": "trino-cli",
+  "timezone": "UTC",
+  "user": "trino",
+  "userAgent": "trino-cli/483 os=Linux os/version=7.0.0-38-generic arch=amd64 lang/java=25.0.3+9-LTS java/vm=OpenJDK_64-Bit_Server_VM java/vendor=Eclipse_Adoptium locale=en"
+ },
+ "createTime": "2026-10-27T17:06:51.849129372Z",
+ "endTime": "2026-10-27T17:06:51.853499177Z",
+ "executionStartTime": "2026-10-27T17:06:51.853499177Z",
+ "failureInfo": {
+  "errorCode": {
+   "code": 47,
+   "fatal": true,
+   "name": "COLUMN_NOT_FOUND",
+   "type": "USER_ERROR"
+  },
+  "failureMessage": "line 1:8: Column 'no_such_column' cannot be resolved",
+  "failureType": "io.trino.spi.TrinoException",
+  "failuresJson": "{\"type\":\"io.trino.spi.TrinoException\",\"message\":\"line 1:8: Column 'no_such_column' cannot be resolved\",\"suppressed\":[],\"stack\":[\"io.trino.sql.analyzer.SemanticExceptions.semanticException(SemanticExceptions.java:58)\",\"io.trino.sql.analyzer.SemanticExceptions.semanticException(SemanticExceptions.java:52)\",\"io.trino.sql.analyzer.SemanticExceptions.missingAttributeException(SemanticExceptions.java:35)\",\"io.trino.sql.analyzer.Scope.lambda$resolveField$0(Scope.java:227)\",\"java.base/java.util.Optional.orElseThrow(Optional.java:403)\",\"io.trino.sql.analyzer.Scope.resolveField(Scope.java:227)\",\"io.trino.sql.analyzer.ExpressionAnalyzer$Visitor.visitIdentifier(ExpressionAnalyzer.java:825)\",\"io.trino.sql.analyzer.ExpressionAnalyzer$Visitor.visitIdentifier(ExpressionAnalyzer.java:730)\",\"io.trino.sql.tree.Identifier.accept(Identifier.java:91)\",\"io.trino.sql.tree.AstVisitor.process(AstVisitor.java:27)\",\"io.trino.sql.analyzer.ExpressionAnalyzer$Visitor.process(ExpressionAnalyzer.java:760)\",\"io.trino.sql.analyzer.ExpressionAnalyzer.analyze(ExpressionAnalyzer.java:559)\",\"io.trino.sql.analyzer.ExpressionAnalyzer.analyzeExpression(ExpressionAnalyzer.java:4759)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.analyzeExpression(StatementAnalyzer.java:5747)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.analyzeSelectSingleColumn(StatementAnalyzer.java:5549)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.analyzeSelect(StatementAnalyzer.java:5263)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.visitQuerySpecification(StatementAnalyzer.java:3484)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.visitQuerySpecification(StatementAnalyzer.java:545)\",\"io.trino.sql.tree.QuerySpecification.accept(QuerySpecification.java:155)\",\"io.trino.sql.tree.AstVisitor.process(AstVisitor.java:27)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.process(StatementAnalyzer.java:564)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.process(StatementAnalyzer.java:572)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.visitQuery(StatementAnalyzer.java:1592)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.visitQuery(StatementAnalyzer.java:545)\",\"io.trino.sql.tree.Query.accept(Query.java:130)\",\"io.trino.sql.tree.AstVisitor.process(AstVisitor.java:27)\",\"io.trino.sql.analyzer.StatementAnalyzer$Visitor.process(StatementAnalyzer.java:564)\",\"io.trino.sql.analyzer.StatementAnalyzer.analyze(StatementAnalyzer.java:524)\",\"io.trino.sql.analyzer.StatementAnalyzer.analyze(StatementAnalyzer.java:513)\",\"io.trino.sql.analyzer.Analyzer.analyze(Analyzer.java:98)\",\"io.trino.sql.analyzer.Analyzer.analyze(Analyzer.java:87)\",\"io.trino.execution.SqlQueryExecution.analyze(SqlQueryExecution.java:288)\",\"io.trino.execution.SqlQueryExecution.<init>(SqlQueryExecution.java:222)\",\"io.trino.execution.SqlQueryExecution$SqlQueryExecutionFactory.createQueryExecution(SqlQueryExecution.java:893)\",\"io.trino.dispatcher.LocalDispatchQueryFactory.lambda$createDispatchQuery$0(LocalDispatchQueryFactory.java:163)\",\"io.trino.$gen.Trino_483____20261027_170634_2.call(Unknown Source)\",\"com.google.common.util.concurrent.TrustedListenableFutureTask$TrustedFutureInterruptibleTask.runInterruptibly(TrustedListenableFutureTask.java:128)\",\"com.google.common.util.concurrent.InterruptibleTask.run(InterruptibleTask.java:74)\",\"com.google.common.util.concurrent.TrustedListenableFutureTask.run(TrustedListenableFutureTask.java:80)\",\"java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)\",\"java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)\",\"java.base/java.lang.Thread.run(Thread.java:1474)\"],\"errorLocation\":{\"lineNumber\":1,\"columnNumber\":8},\"errorCode\":{\"code\":47,\"name\":\"COLUMN_NOT_FOUND\",\"type\":\"USER_ERROR\",\"fatal\":true}}"
+ },
+ "ioMetadata": {
+  "inputs": []
+ },
+ "metadata": {
+  "query": "SELECT no_such_column FROM orders",
+  "queryId": "20261027_170651_00001_xnycr",
+  "queryState": "FAILED",
+  "routines": [],
+  "tables": [],
+  "transactionId": "07076f1e-f6f7-4f50-85b1-a97179d2510d",
+  "uri": "http://10.10.61.205:8080/v1/query/20261027_170651_00001_xnycr"
+ },
+ "statistics": {
+  "analysisTime": 0.00355333,
+  "catalogMetadataMetrics": {},
+  "complete": true,
+  "completedSplits": 0,
+  "cpuTime": 0.0,
+  "cpuTimeDistribution": [],
+  "cumulativeMemory": 0.0,
+  "dynamicFilterDomainStatistics": [],
+  "exchangeMetrics": {},
+  "executionTime": 0.0,
+  "failedCpuTime": 0.0,
+  "failedCumulativeMemory": 0.0,
+  "internalNetworkBytes": 0,
+  "internalNetworkRows": 0,
+  "operatorSummaries": [],
+  "optimizerRulesSummaries": [],
+  "outputBufferMetrics": [],
+  "outputBufferUtilization": [],
+  "outputBytes": 0,
+  "outputRows": 0,
+  "peakTaskTotalMemory": 0,
+  "peakTaskUserMemory": 0,
+  "peakUserMemoryBytes": 0,
+  "physicalInputBytes": 0,
+  "physicalInputRows": 0,
+  "planningTime": 0.0,
+  "processedInputBytes": 0,
+  "processedInputRows": 0,
+  "queuedTime": 0.001071945,
+  "resourceWaitingTime": 0.00329786,
+  "spilledBytes": 0,
+  "stageGcStatistics": [],
+  "taskStatistics": [],
+  "wallTime": 0.004369804,
+  "writtenBytes": 0,
+  "writtenRows": 0
+ },
+ "warnings": []
+}

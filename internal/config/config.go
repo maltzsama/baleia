@@ -172,6 +172,10 @@ type Config struct {
 	OracleLOBMaxBytes int
 	// WorkerHealthPort is the worker's liveness listener (WORKER_HEALTH_PORT).
 	WorkerHealthPort string
+	// TrinoEventsToken is the bearer token Trino's HTTP event listener sends
+	// to /internal/trino/query-events (BALEIA_TRINO_EVENTS_TOKEN, #406);
+	// empty turns the endpoint off.
+	TrinoEventsToken string
 	// PprofAddr is where the api and the worker serve the runtime profiles
 	// (BALEIA_PPROF_ADDR, e.g. 127.0.0.1:6060); empty, the default, serves
 	// none. The listener is unauthenticated (#380).
@@ -215,6 +219,7 @@ func Load() *Config {
 		WorkerHealthPort:      getEnv("WORKER_HEALTH_PORT", "8081"),
 		LogLevel:              getEnv("BALEIA_LOG_LEVEL", "info"),
 		PprofAddr:             getEnv("BALEIA_PPROF_ADDR", ""),
+		TrinoEventsToken:      getEnv("BALEIA_TRINO_EVENTS_TOKEN", ""),
 		OracleLOBMaxBytes:     getEnvInt("BALEIA_LOB_MAX_BYTES", 0),
 		SecretFileBaseDir:     getEnv("BALEIA_SECRET_FILE_BASE_DIR", ""),
 		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),
@@ -367,6 +372,9 @@ func (c *Config) Validate() error {
 	}
 	if _, err := c.SlogLevel(); err != nil {
 		return err
+	}
+	if t := c.TrinoEventsToken; t != "" && len(t) < MinJWTSecretLen {
+		return fmt.Errorf("BALEIA_TRINO_EVENTS_TOKEN must be at least %d characters", MinJWTSecretLen)
 	}
 	if err := c.ValidateEncryptionKeys(); err != nil {
 		return err

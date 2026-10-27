@@ -176,3 +176,22 @@ func TestConfig_SlogLevel(t *testing.T) {
 		t.Errorf("Validate = %v, want a BALEIA_LOG_LEVEL error", err)
 	}
 }
+
+// TestConfig_TrinoEventsToken: the query events endpoint (#406) takes a
+// token as long as the JWT secret, or none.
+func TestConfig_TrinoEventsToken(t *testing.T) {
+	t.Parallel()
+	base := Config{JWTSecret: strings.Repeat("s", MinJWTSecretLen)}
+	short, long := base, base
+	short.TrinoEventsToken = "short"
+	long.TrinoEventsToken = strings.Repeat("t", MinJWTSecretLen)
+	if err := short.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_TRINO_EVENTS_TOKEN") {
+		t.Errorf("short token = %v, want a BALEIA_TRINO_EVENTS_TOKEN error", err)
+	}
+	if err := long.Validate(); err != nil {
+		t.Errorf("long token = %v", err)
+	}
+	if err := base.Validate(); err != nil {
+		t.Errorf("no token = %v", err)
+	}
+}
