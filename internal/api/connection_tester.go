@@ -352,7 +352,9 @@ type testWindow struct {
 	n     int
 }
 
-var connectionTests = &testLimiter{windows: map[string]testWindow{}}
+func newTestLimiter() *testLimiter {
+	return &testLimiter{windows: map[string]testWindow{}}
+}
 
 // allow counts one test of user in the current minute.
 func (l *testLimiter) allow(user string, now time.Time) bool {
@@ -377,7 +379,7 @@ func (h *CatalogHandlers) TestConnectionDraft(ctx context.Context, request TestC
 	if err != nil {
 		return TestConnectionDraft401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	if !connectionTests.allow(p.UserID.String(), time.Now()) {
+	if !h.connectionTests.allow(p.UserID.String(), time.Now()) {
 		return TestConnectionDraft429JSONResponse{Code: ErrorCodeRateLimited, Message: "too many connection tests; try again in a minute"}, nil
 	}
 	if request.Body == nil {

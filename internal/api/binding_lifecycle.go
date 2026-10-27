@@ -22,7 +22,7 @@ func (h *CatalogHandlers) lifecycleOn(cluster db.TrinoCluster, eng db.Engine) bi
 		Binder:       h.binder.WithStore(h.stores.registry),
 		Engine:       bindings.EngineRef{ID: eng.ID, ClusterID: cluster.ID},
 		ConnectionID: eng.ConnectionID,
-		DDLTimeout:   catalogDDLTimeout,
+		DDLTimeout:   h.ddlTimeout,
 		OnDDL:        h.metrics.catalog.DDL,
 	}
 }

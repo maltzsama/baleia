@@ -14,7 +14,7 @@ import (
 
 // systemStatusSectionTimeout bounds each dependency probe (#260). Baleia and
 // SMTP are read from memory and do not need a timeout.
-var systemStatusSectionTimeout = 2 * time.Second
+const systemStatusSectionTimeout = 2 * time.Second
 
 // processStartedAt is the API process start time reported in the baleia
 // section. Initialisation time is close enough to process start.
@@ -67,7 +67,7 @@ func baleiaStatusSection() SystemStatusSection {
 
 func (h *OpsHandlers) databaseStatusSection(ctx context.Context) SystemStatusSection {
 	var migrationVersion int64
-	section := runStatusSection(ctx, "database_unavailable", func(ctx context.Context) error {
+	section := runStatusSection(ctx, systemStatusSectionTimeout, "database_unavailable", func(ctx context.Context) error {
 		v, err := h.schema.SchemaVersion(ctx)
 		migrationVersion = v
 		return err
@@ -79,7 +79,7 @@ func (h *OpsHandlers) databaseStatusSection(ctx context.Context) SystemStatusSec
 }
 
 func (h *core) temporalStatusSection(ctx context.Context) SystemStatusSection {
-	return runStatusSection(ctx, "temporal_unavailable", func(ctx context.Context) error {
+	return runStatusSection(ctx, systemStatusSectionTimeout, "temporal_unavailable", func(ctx context.Context) error {
 		if h.temporalClient == nil {
 			return errors.New("no temporal client")
 		}
@@ -89,7 +89,7 @@ func (h *core) temporalStatusSection(ctx context.Context) SystemStatusSection {
 }
 
 func (h *OpsHandlers) objectStorageStatusSection(ctx context.Context) SystemStatusSection {
-	return runStatusSection(ctx, "object_storage_unavailable", func(ctx context.Context) error {
+	return runStatusSection(ctx, systemStatusSectionTimeout, "object_storage_unavailable", func(ctx context.Context) error {
 		if h.s3 == nil {
 			return errors.New("no object storage client")
 		}
@@ -109,11 +109,11 @@ func smtpStatusSection(mail MailSettings) SystemStatusSection {
 	return section
 }
 
-// runStatusSection runs one probe under its own timeout. The raw error is
-// discarded; only the stable code is exposed (#260).
-func runStatusSection(ctx context.Context, errorCode string, probe func(context.Context) error) SystemStatusSection {
+// runStatusSection runs one probe under timeout. The raw error is discarded;
+// only the stable code is exposed (#260).
+func runStatusSection(ctx context.Context, timeout time.Duration, errorCode string, probe func(context.Context) error) SystemStatusSection {
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(ctx, systemStatusSectionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	err := probe(ctx)

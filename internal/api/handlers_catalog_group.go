@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/bindings/stored"
@@ -14,6 +15,12 @@ import (
 
 // CatalogHandlers serves connections, catalogs, engines, bindings and their metadata (#365).
 type CatalogHandlers struct {
+	// connectionTests rate-limits connection and engine tests per user;
+	// one per API, never a package global (parallel tests raced on one).
+	connectionTests *testLimiter
+	// ddlTimeout bounds each catalog DDL (catalogDDLTimeout; tests shorten it
+	// on their own instance).
+	ddlTimeout time.Duration
 	*core
 	// binder binds catalogs into Trino as the admin identity (docs/adr/0005,
 	// #80), built at the wiring site.
@@ -57,6 +64,8 @@ func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
 	q := c.queries
 	return &CatalogHandlers{
 		core: c, binder: binder, engineAdmin: manage.New(q, tx), catalogAdmin: admin.New(q, catalogTx), conns: conns.New(q),
-		stores: catalogStores{lifecycle: q, registry: q, reconcile: q, projector: q, runs: q, redirect: q, primary: q},
+		stores:          catalogStores{lifecycle: q, registry: q, reconcile: q, projector: q, runs: q, redirect: q, primary: q},
+		connectionTests: newTestLimiter(),
+		ddlTimeout:      catalogDDLTimeout,
 	}
 }

@@ -28,7 +28,7 @@ func (h *CatalogHandlers) TestEngine(ctx context.Context, request TestEngineRequ
 	if err != nil {
 		return nil, err
 	}
-	if !connectionTests.allow(p.UserID.String(), time.Now()) {
+	if !h.connectionTests.allow(p.UserID.String(), time.Now()) {
 		return TestEngine429JSONResponse{Code: ErrorCodeRateLimited, Message: "too many tests; wait a minute"}, nil
 	}
 	if h.engines == nil {

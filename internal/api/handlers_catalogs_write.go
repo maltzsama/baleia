@@ -29,7 +29,7 @@ import (
 
 // catalogDDLTimeout bounds every catalog DDL sent to Trino, so a stuck
 // CREATE/DROP CATALOG surfaces as a sync error instead of blocking the request.
-var catalogDDLTimeout = 30 * time.Second
+const catalogDDLTimeout = 30 * time.Second
 
 func (h *core) authz() *authz.Checker {
 	c := authz.New(h.queries)
