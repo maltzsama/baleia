@@ -271,3 +271,16 @@ func TestSubSecondTimeoutRoundsUp(t *testing.T) {
 		t.Fatalf("query_max_execution_time = %q, want 90s", got)
 	}
 }
+
+// TestMaintenanceStatementsWithoutRetention: an empty retention renders
+// optimize only, and a bad one is still refused.
+func TestMaintenanceStatementsWithoutRetention(t *testing.T) {
+	e := testEngine(t, &fakeCoordinator{})
+	got, err := e.MaintenanceStatements([]string{"c", "n", "t"}, "")
+	if err != nil || len(got) != 1 || got[0] != `ALTER TABLE "c"."n"."t" EXECUTE optimize` {
+		t.Errorf("empty retention = %q, %v; want optimize only", got, err)
+	}
+	if _, err := e.MaintenanceStatements([]string{"c", "n", "t"}, "7d') --"); err == nil {
+		t.Error("a bad retention was rendered")
+	}
+}

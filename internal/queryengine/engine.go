@@ -184,7 +184,8 @@ type Dialect = dialect.Dialect
 
 // IcebergMaintainer is implemented by engines with
 // Capabilities.IcebergMaintenance. It renders the statements of one
-// maintenance run; invalid input is an error before anything runs.
+// maintenance run (optimize only for an empty retention); invalid input is
+// an error before anything runs.
 type IcebergMaintainer interface {
 	MaintenanceStatements(table []string, retention string) ([]string, error)
 }

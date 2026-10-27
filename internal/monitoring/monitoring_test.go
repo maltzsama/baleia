@@ -96,7 +96,11 @@ func TestQueries(t *testing.T) {
 func TestPrepare(t *testing.T) {
 	ctx := context.Background()
 	capableEngine := newID()
-	st := &fakeStore{bindings: []db.CatalogBinding{{ID: newID(), EngineID: newID()}, {ID: newID(), EngineID: capableEngine}}}
+	st := &fakeStore{bindings: []db.CatalogBinding{
+		{ID: newID(), EngineID: newID(), Enabled: true},
+		{ID: newID(), EngineID: capableEngine, Enabled: true},
+		{ID: newID(), EngineID: capableEngine},
+	}}
 	s := New(st)
 	capable := func(_ context.Context, id pgtype.UUID) bool { return id == capableEngine }
 	week := " 7d "
@@ -112,11 +116,28 @@ func TestPrepare(t *testing.T) {
 		}
 	}
 	plan, err := s.Prepare(ctx, Maintenance{Operations: []string{"expire_snapshots"}, Retention: &week}, capable)
-	if err != nil || plan.Binding != st.bindings[1].ID || plan.Retention != "7d" {
+	if err != nil || plan.Binding.ID != st.bindings[1].ID || plan.Retention != "7d" {
 		t.Fatalf("Prepare = %+v, %v; want the capable binding and a trimmed retention", plan, err)
 	}
 	if _, err := s.Prepare(ctx, Maintenance{Operations: []string{"optimize"}}, func(context.Context, pgtype.UUID) bool { return false }); !errors.Is(err, ErrNoCapableBinding) {
 		t.Errorf("no capable binding = %v", err)
+	}
+
+	explicit := st.bindings[1].ID
+	if plan, err := s.Prepare(ctx, Maintenance{Operations: []string{"optimize"}, Binding: &explicit}, capable); err != nil || plan.Binding.EngineID != capableEngine {
+		t.Errorf("explicit capable binding = %+v, %v", plan.Binding, err)
+	}
+	for name, id := range map[string]pgtype.UUID{
+		"binding of another catalog": newID(),
+		"disabled binding":           st.bindings[2].ID,
+	} {
+		if _, err := s.Prepare(ctx, Maintenance{Operations: []string{"optimize"}, Binding: &id}, capable); !errors.As(err, &inv) {
+			t.Errorf("%s = %v, want an InvalidError", name, err)
+		}
+	}
+	incapable := st.bindings[0].ID
+	if _, err := s.Prepare(ctx, Maintenance{Operations: []string{"optimize"}, Binding: &incapable}, capable); !errors.Is(err, ErrNoCapableBinding) {
+		t.Errorf("explicit incapable binding = %v, want ErrNoCapableBinding", err)
 	}
 
 	run, err := s.Record(ctx, Plan{Maintenance: Maintenance{Operations: []string{"optimize"}}, Binding: plan.Binding}, "maintenance-1")

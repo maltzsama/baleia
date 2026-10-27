@@ -202,7 +202,9 @@ type Plan struct {
 	Maintenance
 	// Retention is trimmed; empty when no operation needs it.
 	Retention string
-	Binding   pgtype.UUID
+	// Binding is the enabled, capable binding of the catalog the run uses:
+	// its engine runs the statements under its engine catalog name.
+	Binding db.CatalogBinding
 }
 
 // Prepare validates m and picks its binding.
@@ -224,17 +226,24 @@ func (s *Service) Prepare(ctx context.Context, m Maintenance, capable Capable) (
 		return Plan{}, &InvalidError{Msg: "retention must match ^[1-9][0-9]{0,4}[dhm]$ for expire_snapshots and remove_orphan_files"}
 	}
 	plan := Plan{Maintenance: m, Retention: retention}
-	if m.Binding != nil {
-		plan.Binding = *m.Binding
-		return plan, nil
-	}
 	bindings, err := s.store.ListBindingsByCatalog(ctx, m.CatalogID)
 	if err != nil {
 		return Plan{}, err
 	}
+	if m.Binding != nil {
+		i := slices.IndexFunc(bindings, func(b db.CatalogBinding) bool { return b.ID == *m.Binding })
+		if i < 0 || !bindings[i].Enabled {
+			return Plan{}, &InvalidError{Msg: "binding_id is not an enabled binding of this catalog"}
+		}
+		if !capable(ctx, bindings[i].EngineID) {
+			return Plan{}, ErrNoCapableBinding
+		}
+		plan.Binding = bindings[i]
+		return plan, nil
+	}
 	for _, b := range bindings {
-		if capable(ctx, b.EngineID) {
-			plan.Binding = b.ID
+		if b.Enabled && capable(ctx, b.EngineID) {
+			plan.Binding = b
 			return plan, nil
 		}
 	}
@@ -248,7 +257,7 @@ func (s *Service) Record(ctx context.Context, p Plan, workflowID string) (db.Mai
 		retention = &p.Retention
 	}
 	return s.store.CreateMaintenanceRun(ctx, db.CreateMaintenanceRunParams{
-		CatalogID: p.CatalogID, BindingID: p.Binding, Namespace: p.Namespace, TableName: p.Table,
+		CatalogID: p.CatalogID, BindingID: p.Binding.ID, Namespace: p.Namespace, TableName: p.Table,
 		Operations: p.Operations, Retention: retention, StartedBy: p.StartedBy, WorkflowID: workflowID,
 	})
 }

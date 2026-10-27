@@ -24,7 +24,17 @@ func runMaintenance(t *testing.T, a *Activities, p LensRunMaintenanceParams) err
 	return err
 }
 
-type snapshotSink struct{ db.Querier }
+type snapshotSink struct {
+	db.Querier
+	finished *[]db.UpdateMaintenanceRunParams
+}
+
+func (s snapshotSink) UpdateMaintenanceRun(_ context.Context, arg db.UpdateMaintenanceRunParams) (db.MaintenanceRun, error) {
+	if s.finished != nil {
+		*s.finished = append(*s.finished, arg)
+	}
+	return db.MaintenanceRun{}, nil
+}
 
 func (snapshotSink) UpsertTrinoQuerySnapshot(context.Context, db.UpsertTrinoQuerySnapshotParams) (db.TrinoQuerySnapshot, error) {
 	return db.TrinoQuerySnapshot{}, nil
@@ -76,5 +86,35 @@ func TestLensRunMaintenance_RejectsBadInputBeforeTrino(t *testing.T) {
 		if err != nil && strings.Contains(err.Error(), "DROP") {
 			t.Errorf("%s: error echoes the input: %v", name, err)
 		}
+	}
+}
+
+// TestLensRunMaintenance_RunsOnPlannedEngine: an engine-aware run uses the
+// engine it was planned on; only the legacy Lens route falls back to the
+// default Trino.
+func TestLensRunMaintenance_RunsOnPlannedEngine(t *testing.T) {
+	const engineID = "00000000-0000-0000-0000-0000000000e1"
+	for name, tc := range map[string]struct{ engine, want string }{
+		"planned engine": {engineID, engineID},
+		"legacy route":   {"", "default"},
+	} {
+		rec := &fakeEngine{Engine: testTrino}
+		a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{}}
+		err := runMaintenance(t, a, LensRunMaintenanceParams{
+			ExecutionID: maintExecID, EngineID: tc.engine, Catalog: "c", Namespace: "n", Table: "t", Operations: []string{"optimize"},
+		})
+		if err != nil || len(rec.gotEngine) != 1 || rec.gotEngine[0] != tc.want {
+			t.Errorf("%s: err=%v engines=%q, want [%s]", name, err, rec.gotEngine, tc.want)
+		}
+	}
+	rec := &fakeEngine{Engine: testTrino}
+	var finished []db.UpdateMaintenanceRunParams
+	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{finished: &finished}}
+	if err := runMaintenance(t, a, LensRunMaintenanceParams{ExecutionID: maintExecID, RunID: maintExecID, EngineID: "nope", Catalog: "c", Namespace: "n", Table: "t"}); err == nil || len(rec.sqls) != 0 {
+		t.Errorf("invalid engine id: err=%v statements=%q, want an error and no statements", err, rec.sqls)
+	}
+	// The run does not stay "running" when nothing could run.
+	if len(finished) != 1 || finished[0].Status != "failed" {
+		t.Errorf("run updates = %+v, want one failed", finished)
 	}
 }
