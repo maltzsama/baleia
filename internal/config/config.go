@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -171,6 +172,9 @@ type Config struct {
 	OracleLOBMaxBytes int
 	// WorkerHealthPort is the worker's liveness listener (WORKER_HEALTH_PORT).
 	WorkerHealthPort string
+	// LogLevel is the lowest level the api and worker log (BALEIA_LOG_LEVEL:
+	// debug, info, warn or error); see SlogLevel.
+	LogLevel string
 	// HTTP* bound the API listener (#372). There is no server-wide read or
 	// write timeout: result downloads, SSE and WebSockets are long-lived.
 	HTTPReadHeaderTimeout time.Duration
@@ -205,6 +209,7 @@ func Load() *Config {
 		PolarisClientID:       getEnv("POLARIS_CLIENT_ID", ""),
 		PolarisClientSecret:   getEnv("POLARIS_CLIENT_SECRET", ""),
 		WorkerHealthPort:      getEnv("WORKER_HEALTH_PORT", "8081"),
+		LogLevel:              getEnv("BALEIA_LOG_LEVEL", "info"),
 		OracleLOBMaxBytes:     getEnvInt("BALEIA_LOB_MAX_BYTES", 0),
 		SecretFileBaseDir:     getEnv("BALEIA_SECRET_FILE_BASE_DIR", ""),
 		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),
@@ -355,6 +360,9 @@ func (c *Config) Validate() error {
 	if err := ValidateSecret(c.JWTSecret); err != nil {
 		return err
 	}
+	if _, err := c.SlogLevel(); err != nil {
+		return err
+	}
 	if err := c.ValidateEncryptionKeys(); err != nil {
 		return err
 	}
@@ -448,6 +456,19 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// SlogLevel parses LogLevel; empty, as in a Config built without Load, is
+// info.
+func (c *Config) SlogLevel() (slog.Level, error) {
+	if c.LogLevel == "" {
+		return slog.LevelInfo, nil
+	}
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(c.LogLevel)); err != nil {
+		return slog.LevelInfo, fmt.Errorf("BALEIA_LOG_LEVEL must be debug, info, warn or error (got %q)", c.LogLevel)
+	}
+	return level, nil
 }
 
 func getEnv(key, fallback string) string {

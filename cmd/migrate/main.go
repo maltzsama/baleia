@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/migrate"
+	"github.com/galileostudio/baleia/internal/obs"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
@@ -24,20 +25,22 @@ func main() {
 	flag.Parse()
 
 	cfg := config.Load()
+	level, _ := cfg.SlogLevel()
+	logger := obs.NewLogger(os.Stdout, level)
+	slog.SetDefault(logger)
+	ctx := context.Background()
 
 	db, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("failed to open database", "err", err)
+		logger.ErrorContext(ctx, "failed to open database", "err", err)
 		os.Exit(1)
 	}
 	defer db.Close()
 
 	if err := goose.SetDialect("postgres"); err != nil {
-		slog.Error("failed to set dialect", "err", err)
+		logger.ErrorContext(ctx, "failed to set dialect", "err", err)
 		os.Exit(1)
 	}
-
-	ctx := context.Background()
 
 	switch command {
 	case "up":
@@ -51,14 +54,14 @@ func main() {
 	case "version":
 		err = goose.VersionContext(ctx, db, "db/migrations")
 	case "credentials":
-		err = migrateCredentials(ctx, db, cfg)
+		err = migrateCredentials(ctx, logger, db, cfg)
 	case "oidc-providers":
-		err = migrateOIDCProviders(ctx, db, cfg)
+		err = migrateOIDCProviders(ctx, logger, db, cfg)
 	case "audit-prune":
 		var dropped []string
 		dropped, err = audit.Prune(ctx, db, before, time.Now().UTC())
 		for _, name := range dropped {
-			slog.Info("audit partition dropped", "partition", name)
+			logger.InfoContext(ctx, "audit partition dropped", "partition", name)
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
@@ -66,14 +69,14 @@ func main() {
 	}
 
 	if err != nil {
-		slog.Error("migration error", "cmd", command, "err", err)
+		logger.ErrorContext(ctx, "migration error", "cmd", command, "err", err)
 		os.Exit(1)
 	}
 }
 
 // migrateCredentials re-seals legacy connection credentials (encrypted under
 // JWT_SECRET) as v1 envelopes under BALEIA_ENCRYPTION_KEY, in one transaction.
-func migrateCredentials(ctx context.Context, db *sql.DB, cfg *config.Config) error {
+func migrateCredentials(ctx context.Context, logger *slog.Logger, db *sql.DB, cfg *config.Config) error {
 	if cfg.EncryptionKey == "" {
 		return fmt.Errorf("BALEIA_ENCRYPTION_KEY must be set")
 	}
@@ -99,16 +102,16 @@ func migrateCredentials(ctx context.Context, db *sql.DB, cfg *config.Config) err
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	slog.Info("credentials migrated", "migrated", res.Migrated, "resealed", res.Resealed, "already_v1", res.Skipped, "failed", len(res.Failed))
+	logger.InfoContext(ctx, "credentials migrated", "migrated", res.Migrated, "resealed", res.Resealed, "already_v1", res.Skipped, "failed", len(res.Failed))
 	for _, id := range res.Failed {
-		slog.Warn("credentials left untouched: could not be decrypted with JWT_SECRET, re-enter them", "connection_id", id)
+		logger.WarnContext(ctx, "credentials left untouched: could not be decrypted with JWT_SECRET, re-enter them", "connection_id", id)
 	}
 	return nil
 }
 
 // migrateOIDCProviders seals legacy plaintext auth_providers.config_enc values
 // and re-seals rows under the current key, in one transaction (#278).
-func migrateOIDCProviders(ctx context.Context, db *sql.DB, cfg *config.Config) error {
+func migrateOIDCProviders(ctx context.Context, logger *slog.Logger, db *sql.DB, cfg *config.Config) error {
 	if cfg.EncryptionKey == "" {
 		return fmt.Errorf("BALEIA_ENCRYPTION_KEY must be set")
 	}
@@ -129,9 +132,9 @@ func migrateOIDCProviders(ctx context.Context, db *sql.DB, cfg *config.Config) e
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	slog.Info("oidc providers migrated", "migrated", res.Migrated, "resealed", res.Resealed, "already_v1", res.Skipped, "failed", len(res.Failed))
+	logger.InfoContext(ctx, "oidc providers migrated", "migrated", res.Migrated, "resealed", res.Resealed, "already_v1", res.Skipped, "failed", len(res.Failed))
 	for _, id := range res.Failed {
-		slog.Warn("oidc provider left untouched: not valid plaintext or a known key envelope", "provider_id", id)
+		logger.WarnContext(ctx, "oidc provider left untouched: not valid plaintext or a known key envelope", "provider_id", id)
 	}
 	return nil
 }

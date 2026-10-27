@@ -5,9 +5,11 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -42,11 +44,15 @@ type Options struct {
 	Service string
 	// PoolSize is the database pool size when BALEIA_DB_MAX_CONNS is unset.
 	PoolSize int
+	// Logger is the process logger (obs.NewLogger); nil discards.
+	Logger *slog.Logger
 }
 
 // Core is the shared dependency graph. Close releases it.
 type Core struct {
-	Config  *config.Config
+	Config *config.Config
+	// Logger is injected into every component that logs (#379).
+	Logger  *slog.Logger
 	Metrics *metrics.Registry
 	Pool    *pgxpool.Pool
 	Queries *db.Queries
@@ -78,7 +84,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	if opts.Service == "" {
 		return nil, ErrNoService
 	}
-	c := &Core{Config: cfg}
+	c := &Core{Config: cfg, Logger: cmp.Or(opts.Logger, slog.New(slog.DiscardHandler))}
 	defer func() {
 		if err != nil {
 			c.Close()
@@ -118,7 +124,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
 	// With stored credentials and no key, refuse to start rather than serve
 	// rows that cannot be read.
-	if c.Keyring, err = bootstrap.LoadKeyring(ctx, cfg, c.Queries.CountEncryptedConnections); err != nil {
+	if c.Keyring, err = bootstrap.LoadKeyring(ctx, c.Logger, cfg, c.Queries.CountEncryptedConnections); err != nil {
 		return nil, fmt.Errorf("credential keyring: %w", err)
 	}
 	if c.RegistryKeyring, err = bootstrap.LoadRegistryKeyring(cfg); err != nil {
@@ -127,7 +133,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 
 	temporalMetrics, flushTemporal := c.Metrics.TemporalHandler()
 	c.onClose(func() { _ = flushTemporal() })
-	if c.Temporal, err = dial.Temporal(ctx, cfg.TemporalHost, temporalMetrics, 30*time.Second, obs.ClientInterceptors()); err != nil {
+	if c.Temporal, err = dial.Temporal(ctx, c.Logger, cfg.TemporalHost, temporalMetrics, 30*time.Second, obs.ClientInterceptors()); err != nil {
 		return nil, fmt.Errorf("temporal: %w", err)
 	}
 	c.onClose(c.Temporal.Close)

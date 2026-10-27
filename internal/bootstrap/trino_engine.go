@@ -52,7 +52,7 @@ func (d DefaultTrinoEngine) config() map[string]string {
 //   - a connection someone owns: leave it, TRINO_URL no longer applies.
 //
 // Run it in one transaction.
-func EnsureDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, env DefaultTrinoEngine) error {
+func EnsureDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q DefaultEngineStore, env DefaultTrinoEngine) error {
 	trinoURL := env.URL
 	if trinoURL == "" {
 		return nil
@@ -60,14 +60,14 @@ func EnsureDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, env Def
 	row, err := q.GetDefaultTrinoEngine(ctx)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return createDefaultTrinoEngine(ctx, q, env)
+		return createDefaultTrinoEngine(ctx, logger, q, env)
 	case err != nil:
 		return fmt.Errorf("default trino engine: %w", err)
 	}
 
 	conn := row.CatalogConnection
 	if conn.CreatedBy.Valid {
-		slog.Info("default trino engine is managed by a user; TRINO_URL is not applied", "engine", row.Engine.Name)
+		logger.InfoContext(ctx, "default trino engine is managed by a user; TRINO_URL is not applied", "engine", row.Engine.Name)
 		return nil
 	}
 	var cfg map[string]string
@@ -97,11 +97,11 @@ func EnsureDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, env Def
 	if _, err := q.UpdateCatalogConnection(ctx, db.UpdateCatalogConnectionParams{ID: conn.ID, Url: &url, Config: raw}); err != nil {
 		return fmt.Errorf("update default trino engine url: %w", err)
 	}
-	slog.Info("default trino engine updated from the environment", "engine", row.Engine.Name)
+	logger.InfoContext(ctx, "default trino engine updated from the environment", "engine", row.Engine.Name)
 	return nil
 }
 
-func createDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, env DefaultTrinoEngine) error {
+func createDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q DefaultEngineStore, env DefaultTrinoEngine) error {
 	trinoURL := env.URL
 	cluster, err := q.GetDefaultTrinoCluster(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -152,6 +152,6 @@ func createDefaultTrinoEngine(ctx context.Context, q DefaultEngineStore, env Def
 	if err := q.LinkTrinoClusterEngine(ctx, db.LinkTrinoClusterEngineParams{ID: cluster.ID, EngineID: eng.ID}); err != nil {
 		return fmt.Errorf("link default trino cluster: %w", err)
 	}
-	slog.Info("default trino engine created from TRINO_URL", "engine", eng.Name)
+	logger.InfoContext(ctx, "default trino engine created from TRINO_URL", "engine", eng.Name)
 	return nil
 }
