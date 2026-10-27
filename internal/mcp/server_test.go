@@ -69,6 +69,7 @@ func newTestServer(t *testing.T, gate *agentpolicy.Gate, origins []string) (*htt
 }
 
 func TestAuth_RequiresAgentToken(t *testing.T) {
+	t.Parallel()
 	ts, raw := newTestServer(t, nil, nil)
 	cases := []struct {
 		name    string
@@ -82,6 +83,7 @@ func TestAuth_RequiresAgentToken(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			req, _ := http.NewRequest(http.MethodPost, ts.URL, strings.NewReader(`{}`))
 			for k, v := range tc.headers {
 				req.Header.Set(k, v)
@@ -103,6 +105,7 @@ func TestAuth_RequiresAgentToken(t *testing.T) {
 }
 
 func TestOriginRejected(t *testing.T) {
+	t.Parallel()
 	ts, raw := newTestServer(t, nil, []string{"https://ok.example"})
 	send := func(origin string) int {
 		req, _ := http.NewRequest(http.MethodPost, ts.URL, strings.NewReader(`{}`))
@@ -148,6 +151,7 @@ func connect(t *testing.T, ts *httptest.Server, raw string) *mcpsdk.ClientSessio
 }
 
 func TestToolsList(t *testing.T) {
+	t.Parallel()
 	ts, raw := newTestServer(t, nil, nil)
 	session := connect(t, ts, raw)
 	res, err := session.ListTools(context.Background(), nil)
@@ -178,6 +182,7 @@ func (s gateStore) GetAgentByID(context.Context, pgtype.UUID) (db.Agent, error) 
 }
 
 func TestRefusalBeforeHandler(t *testing.T) {
+	t.Parallel()
 	tokens, raw := fixtures()
 	store := gateStore{agent: db.Agent{
 		ID: uid(1), OwnerID: uid(2), Kind: "external", Status: "active",
@@ -209,6 +214,7 @@ func TestRefusalBeforeHandler(t *testing.T) {
 // TestImportBoundary keeps the MCP package on the in-process API surface: it
 // must never reach the database, engines or object storage directly (#58).
 func TestImportBoundary(t *testing.T) {
+	t.Parallel()
 	out, err := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, "github.com/galileostudio/baleia/internal/mcp").Output()
 	if err != nil {
 		t.Fatalf("go list: %v", err)

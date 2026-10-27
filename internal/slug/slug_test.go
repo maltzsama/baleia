@@ -8,6 +8,7 @@ import (
 )
 
 func TestFrom(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, want string }{
 		{"Revenue by Month", "revenue_by_month"},
 		{"  --Já é 2026!  ", "j_2026"},
@@ -27,6 +28,7 @@ func TestFrom(t *testing.T) {
 }
 
 func TestValid(t *testing.T) {
+	t.Parallel()
 	for _, s := range []string{"a", "orders_2026", "a" + strings.Repeat("b", 62)} {
 		if !Valid(s) {
 			t.Errorf("Valid(%q) = false", s)
@@ -40,6 +42,7 @@ func TestValid(t *testing.T) {
 }
 
 func TestUnique(t *testing.T) {
+	t.Parallel()
 	taken := map[string]bool{"orders": true, "orders_2": true}
 	got, err := Unique(context.Background(), "Orders", func(_ context.Context, s string) (bool, error) { return taken[s], nil })
 	if err != nil || got != "orders_3" {

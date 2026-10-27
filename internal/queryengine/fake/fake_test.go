@@ -49,11 +49,13 @@ func fixtures() conformance.Fixtures {
 }
 
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	conformance.Run(t, func(*testing.T) queryengine.Engine { return fake.New(fake.Options{ID: "e1"}) }, fixtures())
 }
 
 // The suite also covers an engine that cannot enforce read-only sessions.
 func TestConformance_ReadOnlyNone(t *testing.T) {
+	t.Parallel()
 	conformance.Run(t, func(*testing.T) queryengine.Engine {
 		return fake.New(fake.Options{ID: "e2", ReadOnly: queryengine.ReadOnlyNone})
 	}, fixtures())
@@ -61,6 +63,7 @@ func TestConformance_ReadOnlyNone(t *testing.T) {
 
 // TestCapabilities_ReportTheInjectedDialect: Capabilities and Dialect agree.
 func TestCapabilities_ReportTheInjectedDialect(t *testing.T) {
+	t.Parallel()
 	pg := dialect.NewRegistry().MustGet(dialect.PostgreSQL)
 	e := fake.New(fake.Options{Dialect: pg})
 	if got := e.Capabilities().Dialect; got != pg.Name() {
@@ -75,6 +78,7 @@ func TestCapabilities_ReportTheInjectedDialect(t *testing.T) {
 // earliest a caller can hold the handle, stops the statement. Before the fix
 // the handle was registered only after OnStart, and the statement slept on.
 func TestCancel_AsSoonAsTheHandleIsReported(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e := fake.New(fake.Options{ID: "a"})
 	other := fake.New(fake.Options{ID: "b"})

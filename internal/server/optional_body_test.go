@@ -16,6 +16,7 @@ import (
 // TestOptionalJSONBody: an empty POST to an optional-body operation reaches
 // the handler as {}; a body that was sent, and other routes, are untouched.
 func TestOptionalJSONBody(t *testing.T) {
+	t.Parallel()
 	var got string
 	h := OptionalJSONBody(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -46,6 +47,7 @@ func TestOptionalJSONBody(t *testing.T) {
 // TestOptionalBodyRoutesMatchSpec keeps optionalBodyRoutes equal to the
 // operations whose requestBody api/swagger.yaml does not require.
 func TestOptionalBodyRoutesMatchSpec(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile("../../api/swagger.yaml")
 	if err != nil {
 		t.Fatal(err)

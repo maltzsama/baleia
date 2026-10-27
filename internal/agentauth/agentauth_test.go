@@ -60,6 +60,7 @@ func fixture() (fakeStore, string) {
 }
 
 func TestAuthenticate_Valid(t *testing.T) {
+	t.Parallel()
 	store, raw := fixture()
 	id, err := Authenticate(context.Background(), store, raw)
 	if err != nil {
@@ -77,6 +78,7 @@ func TestAuthenticate_Valid(t *testing.T) {
 }
 
 func TestAuthenticate_Rejections(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		mutate func(*fakeStore)
@@ -124,6 +126,7 @@ func TestAuthenticate_Rejections(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			store, raw := fixture()
 			if tc.mutate != nil {
 				tc.mutate(&store)

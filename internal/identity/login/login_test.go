@@ -80,6 +80,7 @@ func newStore() *fakeStore {
 }
 
 func TestPassword(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	st.byEmail["ana@x.io"] = db.User{ID: newID(), Email: "ana@x.io", AuthProvider: "local", PasswordHash: hash(t, "right"), Status: "active"}
@@ -96,6 +97,7 @@ func TestPassword(t *testing.T) {
 		{"SSO-only account", "sso@x.io", "right"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := s.Password(ctx, c.email, c.password); !errors.Is(err, ErrInvalidCredentials) {
 				t.Errorf("err = %v, want ErrInvalidCredentials", err)
 			}
@@ -110,6 +112,7 @@ func TestPassword(t *testing.T) {
 }
 
 func TestDirectory(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	kr, err := crypto.NewKeyring("test-secret-0123456789abcdef-0123456789", "")
 	if err != nil {
@@ -160,6 +163,7 @@ func TestDirectory(t *testing.T) {
 		{"suspended account", ap.ID, "off", "right"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := s.Directory(ctx, c.provider, c.username, c.password); !errors.Is(err, ErrInvalidCredentials) {
 				t.Errorf("err = %v, want ErrInvalidCredentials", err)
 			}
@@ -183,6 +187,7 @@ func (brokenStore) GetAuthProviderByID(context.Context, pgtype.UUID) (db.AuthPro
 // TestStoreFailureIsNotInvalidCredentials: a database outage is an error, not
 // a failed login that is audited as denied and slows the account down.
 func TestStoreFailureIsNotInvalidCredentials(t *testing.T) {
+	t.Parallel()
 	s := New(brokenStore{newStore()}, fakeDirectory{}, nil, bcrypt.MinCost)
 	if _, err := s.Password(context.Background(), "ana@x.io", "right"); !errors.Is(err, errDown) || errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("Password = %v, want the store error", err)

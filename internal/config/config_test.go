@@ -6,6 +6,7 @@ import (
 )
 
 func TestValidateRejectsInsecureJWTSecret(t *testing.T) {
+	t.Parallel()
 	for _, secret := range []string{"", DefaultJWTSecret, "short"} {
 		c := &Config{JWTSecret: secret}
 		if err := c.Validate(); err == nil {
@@ -15,6 +16,7 @@ func TestValidateRejectsInsecureJWTSecret(t *testing.T) {
 }
 
 func TestValidateAcceptsCustomJWTSecret(t *testing.T) {
+	t.Parallel()
 	c := &Config{JWTSecret: "a-long-random-value-not-the-default"}
 	if err := c.Validate(); err != nil {
 		t.Fatalf("Validate rejected a custom secret: %v", err)
@@ -22,6 +24,7 @@ func TestValidateAcceptsCustomJWTSecret(t *testing.T) {
 }
 
 func TestValidateEncryptionKeys(t *testing.T) {
+	t.Parallel()
 	const jwt = "a-long-random-value-not-the-default"
 	key := "k-0123456789abcdef0123456789abcdef"
 	cases := []struct {
@@ -46,6 +49,7 @@ func TestValidateEncryptionKeys(t *testing.T) {
 }
 
 func TestValidateRegistryKey(t *testing.T) {
+	t.Parallel()
 	const jwt = "a-long-random-value-not-the-default"
 	key := "r-0123456789abcdef0123456789abcdef"
 	cases := []struct {
@@ -70,6 +74,7 @@ func TestValidateRegistryKey(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // t.Setenv: the environment is process-wide.
 func TestConfig_TokenTTLDefaults(t *testing.T) {
 	// A Config built without Load still gets safe defaults.
 	c := &Config{}
@@ -109,6 +114,7 @@ func TestConfig_TokenTTLDefaults(t *testing.T) {
 }
 
 func TestConfig_BcryptCostMin(t *testing.T) {
+	t.Parallel()
 	const jwt = "a-long-random-value-not-the-default"
 	for _, cost := range []int{9, 32} {
 		if err := (&Config{JWTSecret: jwt, BcryptCost: cost}).Validate(); err == nil {
@@ -123,6 +129,7 @@ func TestConfig_BcryptCostMin(t *testing.T) {
 }
 
 func TestMetadataSyncEvery(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[time.Duration]time.Duration{0: DefaultMetadataSyncInterval, 30 * time.Minute: 30 * time.Minute} {
 		if got := (&Config{MetadataSyncInterval: in}).MetadataSyncEvery(); got != want {
 			t.Errorf("%s -> %s, want %s", in, got, want)
@@ -138,6 +145,7 @@ func TestMetadataSyncEvery(t *testing.T) {
 
 // TestPolarisDefaultCredentials: the polaris fallback needs both values.
 func TestPolarisDefaultCredentials(t *testing.T) {
+	t.Parallel()
 	if got := (&Config{PolarisClientID: "id"}).PolarisDefaultCredentials(); got != nil {
 		t.Fatalf("only the id: %v, want nil", got)
 	}

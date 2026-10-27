@@ -13,6 +13,7 @@ import (
 // TestOnBehalfOfOnlyForAgents: agent events carry actor_kind=agent, the agent
 // id and the owner in on_behalf_of; human events leave on_behalf_of NULL (#61).
 func TestOnBehalfOfOnlyForAgents(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	rec := NewPostgres(q, nil, nil)
@@ -68,6 +69,7 @@ func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 // TestOnBehalfOfPropagatesToPartitions: the column is on the partitioned parent
 // and therefore on the existing partitions.
 func TestOnBehalfOfPropagatesToPartitions(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	var n int
 	if err := pool.QueryRow(context.Background(),

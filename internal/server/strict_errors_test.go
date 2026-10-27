@@ -11,6 +11,7 @@ import (
 // TestStrictResponseError: a handler error is answered with a stable code,
 // never with its text (#373).
 func TestStrictResponseError(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	strictResponseError(rec, httptest.NewRequest(http.MethodGet, "/api/v1/x", nil), errors.New(`pq: relation "secret_table" does not exist`))
 	if rec.Code != http.StatusInternalServerError {
@@ -28,6 +29,7 @@ func TestStrictResponseError(t *testing.T) {
 // TestStrictRequestError: a decode error is a JSON bad_request, and a
 // message with quotes still makes valid JSON.
 func TestStrictRequestError(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	strictRequestError(rec, httptest.NewRequest(http.MethodPost, "/api/v1/x", nil), errors.New(`can't decode JSON body: invalid character '"'`))
 	var body map[string]string

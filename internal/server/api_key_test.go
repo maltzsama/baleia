@@ -71,6 +71,7 @@ func runAuth(t *testing.T, q db.Querier, method, path, operation, apiKey string)
 }
 
 func TestAPIKey_Authenticates(t *testing.T) {
+	t.Parallel()
 	q, secret, user, key := apiKeyFixture(t, nil)
 
 	rec, ctx, called := runAuth(t, q, http.MethodGet, "/api/v1/workspaces", "ListWorkspaces", secret)
@@ -98,6 +99,7 @@ func TestAPIKey_Authenticates(t *testing.T) {
 }
 
 func TestAPIKey_CannotMintKeys(t *testing.T) {
+	t.Parallel()
 	q, secret, _, _ := apiKeyFixture(t, nil)
 
 	for _, tc := range []struct{ method, path, operation string }{
@@ -114,6 +116,7 @@ func TestAPIKey_CannotMintKeys(t *testing.T) {
 }
 
 func TestAPIKey_Expired(t *testing.T) {
+	t.Parallel()
 	past := time.Now().Add(-time.Minute)
 	q, secret, _, _ := apiKeyFixture(t, &past)
 
@@ -124,6 +127,7 @@ func TestAPIKey_Expired(t *testing.T) {
 }
 
 func TestAPIKey_Invalid(t *testing.T) {
+	t.Parallel()
 	q, _, _, _ := apiKeyFixture(t, nil)
 
 	rec, _, called := runAuth(t, q, http.MethodGet, "/api/v1/workspaces", "ListWorkspaces", "bal_wrong")
@@ -135,6 +139,7 @@ func TestAPIKey_Invalid(t *testing.T) {
 // TestSuspendedCannotUseAPIKey: the middleware applies the status gate, so a
 // suspended account cannot authenticate with a surviving key (#283).
 func TestSuspendedCannotUseAPIKey(t *testing.T) {
+	t.Parallel()
 	q, secret, user, _ := apiKeyFixture(t, nil)
 	reason := "admin"
 	if _, err := q.SuspendUser(context.Background(), db.SuspendUserParams{ID: user.ID, SuspendedReason: &reason}); err != nil {

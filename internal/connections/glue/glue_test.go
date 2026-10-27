@@ -16,6 +16,7 @@ import (
 // TestNoAmbientCredentials: a connection with neither keys nor a role is
 // rejected unless the operator allowed ambient credentials (#86).
 func TestNoAmbientCredentials(t *testing.T) {
+	t.Parallel()
 	off, on := New(nil, Options{}), New(nil, Options{AllowAmbientCredentials: true})
 	base := func() connections.Config {
 		return connections.Config{Values: map[string]string{"region": "us-east-1"}}
@@ -50,6 +51,7 @@ func TestNoAmbientCredentials(t *testing.T) {
 }
 
 func TestValidateEndpoint(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		endpoint string
 		secure   bool
@@ -71,6 +73,7 @@ func TestValidateEndpoint(t *testing.T) {
 }
 
 func TestFormat(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		params map[string]string
 		want   string
@@ -93,6 +96,7 @@ func TestFormat(t *testing.T) {
 // moto server: docker run -p 5000:5000 motoserver/moto, then
 // BALEIA_TEST_MOTO_URL=http://localhost:5000 go test ./internal/connections/glue/
 func TestMetadataReader_Moto(t *testing.T) {
+	t.Parallel()
 	endpoint := os.Getenv("BALEIA_TEST_MOTO_URL")
 	if endpoint == "" {
 		t.Skip("BALEIA_TEST_MOTO_URL not set")

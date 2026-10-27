@@ -8,6 +8,7 @@ import (
 )
 
 func TestWithBasicAuth(t *testing.T) {
+	t.Parallel()
 	var user, pass, trinoUser string
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, _ = r.BasicAuth()

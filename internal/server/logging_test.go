@@ -34,6 +34,7 @@ func logEntry(t *testing.T, buf *bytes.Buffer) map[string]any {
 }
 
 func TestStructuredLoggerFieldsAndRedaction(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		logger, buf := newTestLogger()
 
@@ -93,6 +94,7 @@ func TestStructuredLoggerFieldsAndRedaction(t *testing.T) {
 }
 
 func TestStructuredLoggerRecordsFinalStatusAfterInformational(t *testing.T) {
+	t.Parallel()
 	logger, buf := newTestLogger()
 
 	router := chi.NewRouter()
@@ -113,11 +115,13 @@ func TestStructuredLoggerRecordsFinalStatusAfterInformational(t *testing.T) {
 // TestResponseRecorderAllowsUpgrades: the logger wrapper must let a WebSocket
 // upgrade hijack the connection (the execution event channel).
 func TestResponseRecorderAllowsUpgrades(t *testing.T) {
+	t.Parallel()
 	var _ http.Hijacker = &responseRecorder{}
 	var _ http.Flusher = &responseRecorder{}
 }
 
 func TestStructuredLoggerRecordsActorFromHandler(t *testing.T) {
+	t.Parallel()
 	logger, buf := newTestLogger()
 
 	router := chi.NewRouter()
@@ -143,6 +147,7 @@ func TestStructuredLoggerRecordsActorFromHandler(t *testing.T) {
 // TestStructuredLoggerCarriesTraceID: a request handled inside a span logs the
 // span's trace_id and span_id (#47).
 func TestStructuredLoggerCarriesTraceID(t *testing.T) {
+	t.Parallel()
 	exp := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
 	defer func() { _ = tp.Shutdown(context.Background()) }()

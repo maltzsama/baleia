@@ -23,6 +23,7 @@ const listPayload = `[
 ]`
 
 func TestQueryInfoDecodesTrino482(t *testing.T) {
+	t.Parallel()
 	var qs []QueryInfo
 	if err := json.Unmarshal([]byte(listPayload), &qs); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -71,6 +72,7 @@ func TestQueryInfoDecodesTrino482(t *testing.T) {
 }
 
 func TestParseUnits(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]time.Duration{
 		"0.00ns": 0, "5us": 5 * time.Microsecond, "18.00ms": 18 * time.Millisecond,
 		"1.50s": 1500 * time.Millisecond, "2.00m": 2 * time.Minute, "1.00h": time.Hour, "1d": 24 * time.Hour,
@@ -97,6 +99,7 @@ func TestParseUnits(t *testing.T) {
 // TestGetClusterStats drives the client against a fake coordinator: query
 // counts come from /v1/query, the worker count from the nodes statement.
 func TestGetClusterStats(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/query":

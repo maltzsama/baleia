@@ -55,6 +55,7 @@ func (f *fakeStore) DisableManagedBindingsOfCatalog(context.Context, pgtype.UUID
 func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error { return fn(f) }
 
 func TestUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{}
 	s := New(st, st.tx)
@@ -73,6 +74,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestRetire(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{bindings: []db.CatalogBinding{{Mode: "managed", LifecycleState: "active"}, {Mode: "native"}}}
 	s := New(st, st.tx)
@@ -93,6 +95,7 @@ func TestRetire(t *testing.T) {
 }
 
 func TestSizeAndImpact(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := newID()
 	st := &fakeStore{countErr: errors.New("timeout"), engines: []db.Engine{{Name: "other", ConnectionID: newID()}, {Name: "pg", ConnectionID: conn}}}

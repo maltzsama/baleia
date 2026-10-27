@@ -11,6 +11,7 @@ import (
 // TestOpen_SessionGuards: the timeouts reach every session as server
 // settings, in milliseconds (#377).
 func TestOpen_SessionGuards(t *testing.T) {
+	t.Parallel()
 	url := testdb.New(t).Config().ConnString()
 	ctx := context.Background()
 	pool, err := Open(ctx, url, Options{

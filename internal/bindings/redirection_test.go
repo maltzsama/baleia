@@ -35,6 +35,7 @@ func strptr(s string) *string { return &s }
 // connection also exposes Iceberg and Delta catalogs on the same engine
 // delegates those tables to them (#86).
 func TestRedirectionProperties(t *testing.T) {
+	t.Parallel()
 	conn, engine := uuid(1), uuid(2)
 	hiveCat, iceCat, deltaCat, otherConnCat := uuid(10), uuid(11), uuid(12), uuid(13)
 	store := fakeRedirectionStore{

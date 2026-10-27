@@ -44,6 +44,7 @@ func userCtx() context.Context {
 // TestRecorderFillsContext: actor, auth method, request id and client come
 // from the context.
 func TestRecorderFillsContext(t *testing.T) {
+	t.Parallel()
 	q := &recordedInserter{}
 	r := NewPostgres(q, nil, nil)
 	err := r.Record(userCtx(), Event{Action: CatalogCreate, ResourceType: "catalog", ResourceID: "c1", WorkspaceID: "22222222-2222-2222-2222-222222222222", Outcome: Allowed})
@@ -75,6 +76,7 @@ func TestRecorderFillsContext(t *testing.T) {
 // TestRedactsSecrets: declared and conventionally named secret fields are
 // stored as "***"; other changes as they are.
 func TestRedactsSecrets(t *testing.T) {
+	t.Parallel()
 	q := &recordedInserter{}
 	r := NewPostgres(q, []string{"sas"}, nil)
 	err := r.Record(userCtx(), Event{Action: ConnectionUpdate, ResourceType: "connection", Outcome: Allowed, Changes: map[string]Change{
@@ -101,6 +103,7 @@ func TestRedactsSecrets(t *testing.T) {
 // Record return an error within the write timeout and count the failure;
 // the caller goes on.
 func TestRecordFailureDoesNotFailRequest(t *testing.T) {
+	t.Parallel()
 	failures := 0
 	r := NewPostgres(&recordedInserter{block: true}, nil, func() { failures++ })
 	start := time.Now()
@@ -122,6 +125,7 @@ func TestRecordFailureDoesNotFailRequest(t *testing.T) {
 }
 
 func TestUnknownActionIsAnError(t *testing.T) {
+	t.Parallel()
 	failures := 0
 	r := NewPostgres(&recordedInserter{}, nil, func() { failures++ })
 	if err := r.Record(userCtx(), Event{Action: "catalog.explode", ResourceType: "catalog", Outcome: Allowed}); err == nil || failures != 1 {
@@ -132,6 +136,7 @@ func TestUnknownActionIsAnError(t *testing.T) {
 // TestActionsAreBounded: the vocabulary is unique and every action matches
 // the table's CHECK.
 func TestActionsAreBounded(t *testing.T) {
+	t.Parallel()
 	re := regexp.MustCompile(`^[a-z_]+\.[a-z_]+$`)
 	seen := map[Action]bool{}
 	for _, a := range Actions() {
@@ -143,6 +148,7 @@ func TestActionsAreBounded(t *testing.T) {
 }
 
 func TestMiddlewareRecordsClient(t *testing.T) {
+	t.Parallel()
 	var got RequestInfo
 	h := Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		got, _ = requestOf(r.Context())
@@ -159,6 +165,7 @@ func TestMiddlewareRecordsClient(t *testing.T) {
 
 // TestAppendOnly: the application role cannot update or delete audit rows.
 func TestAppendOnly(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	if err := NewPostgres(q, nil, nil).Record(userCtx(), Event{Action: CatalogCreate, ResourceType: "catalog", Outcome: Allowed}); err != nil {
@@ -175,6 +182,7 @@ func TestAppendOnly(t *testing.T) {
 // TestKeysetPagination: pages over equal timestamps are stable, ordered and
 // without duplicates.
 func TestKeysetPagination(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
 	at := time.Now().UTC().Truncate(time.Second)
@@ -209,6 +217,7 @@ func TestKeysetPagination(t *testing.T) {
 // TestEnsurePartitions: partitions are created ahead, idempotently; an
 // event outside them fails instead of landing in a default partition.
 func TestEnsurePartitions(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
 	q := db.New(pool)
@@ -231,6 +240,7 @@ func TestEnsurePartitions(t *testing.T) {
 // TestPrune drops only the partitions before the cut, never the current
 // month.
 func TestPrune(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
 	now := time.Now().UTC()

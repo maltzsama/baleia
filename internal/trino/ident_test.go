@@ -3,6 +3,7 @@ package trino
 import "testing"
 
 func TestValidateRetention(t *testing.T) {
+	t.Parallel()
 	for _, ok := range []string{"7d", "12h", "30m", "99999d", "1d"} {
 		if err := ValidateRetention(ok); err != nil {
 			t.Errorf("ValidateRetention(%q): %v", ok, err)

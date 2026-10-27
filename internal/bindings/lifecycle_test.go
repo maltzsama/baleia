@@ -135,6 +135,7 @@ func setup(state string) (*store, *fakeBinder, bindings.Lifecycle) {
 var proj = bindings.Projection{EngineCatalog: "sales", Version: "v2"}
 
 func TestProvision(t *testing.T) {
+	t.Parallel()
 	st, _, l := setup(bindings.StateProvisioning)
 	b, err := l.Provision(context.Background(), st.b, proj)
 	if err != nil || b.LifecycleState != bindings.StateActive || b.LastErrorCode != nil {
@@ -163,6 +164,7 @@ func TestProvision(t *testing.T) {
 }
 
 func TestRename(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	oldV := "v-old"
 	st, fb, l := setup(bindings.StateUpdating)
@@ -209,6 +211,7 @@ func TestRename(t *testing.T) {
 }
 
 func TestUpdateSyncDeprovision(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st, fb, l := setup(bindings.StateUpdating)
 	fb.fail["replace"] = errors.New("boom")
@@ -238,6 +241,7 @@ func TestUpdateSyncDeprovision(t *testing.T) {
 }
 
 func TestObserve(t *testing.T) {
+	t.Parallel()
 	st, fb, l := setup(bindings.StateActive)
 	fb.observed = []bindings.Observed{
 		{EngineCatalog: "sales", Present: true, Connector: "postgresql"},
@@ -260,6 +264,7 @@ func TestObserve(t *testing.T) {
 // leaves the binding in error, because state writes do not inherit the
 // engine's deadline.
 func TestEngineDeadlineDoesNotLoseTheError(t *testing.T) {
+	t.Parallel()
 	st, fb, l := setup(bindings.StateProvisioning)
 	fb.slow = time.Second
 	l.DDLTimeout = 20 * time.Millisecond

@@ -12,6 +12,7 @@ import (
 // REST surface answers 401 agent_token_not_allowed and never runs the handler
 // (#59).
 func TestAgentTokenRejectedOnRESTAPI(t *testing.T) {
+	t.Parallel()
 	handler := func(ctx context.Context, w http.ResponseWriter, _ *http.Request, _ any) (any, error) {
 		t.Fatal("handler must not be called with an agent token")
 		return nil, nil
@@ -33,6 +34,7 @@ func TestAgentTokenRejectedOnRESTAPI(t *testing.T) {
 }
 
 func TestAgentTokenRejectedOnChiRoutes(t *testing.T) {
+	t.Parallel()
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("handler must not be called with an agent token")
 	})
@@ -52,6 +54,7 @@ func TestAgentTokenRejectedOnChiRoutes(t *testing.T) {
 // refresh cookie; a 401 there left the session alive and the app signed the
 // user back in (#387).
 func TestLogoutNeedsNoAccessToken(t *testing.T) {
+	t.Parallel()
 	called := false
 	handler := func(ctx context.Context, w http.ResponseWriter, _ *http.Request, _ any) (any, error) {
 		called = true

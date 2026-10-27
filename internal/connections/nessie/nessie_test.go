@@ -14,6 +14,7 @@ import (
 // REST catalog enabled. Set BALEIA_TEST_NESSIE_URL (server root, e.g.
 // http://localhost:19120) to enable it.
 func TestMetadataReader_nessie(t *testing.T) {
+	t.Parallel()
 	base := os.Getenv("BALEIA_TEST_NESSIE_URL")
 	if base == "" {
 		t.Skip("BALEIA_TEST_NESSIE_URL not set")

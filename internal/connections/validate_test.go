@@ -27,6 +27,7 @@ func fieldKeys(err error) []string {
 }
 
 func TestValidateSchemaNormalizes(t *testing.T) {
+	t.Parallel()
 	cfg, err := ValidateSchema(testSchema, Config{
 		Values:  map[string]string{"url": " https://h/x ", "user": " u "},
 		Secrets: map[string]string{"password": " p "},
@@ -46,6 +47,7 @@ func TestValidateSchemaNormalizes(t *testing.T) {
 }
 
 func TestValidateSchemaRejects(t *testing.T) {
+	t.Parallel()
 	cases := map[string]struct {
 		cfg  Config
 		keys []string

@@ -20,6 +20,7 @@ func (f *fakeExecer) Exec(_ context.Context, sql string, _ ...any) (pgconn.Comma
 }
 
 func TestSetTrinoRolePasswordQuotesLiteral(t *testing.T) {
+	t.Parallel()
 	f := &fakeExecer{}
 	if err := SetTrinoRolePassword(context.Background(), f, "p'wd"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -30,6 +31,7 @@ func TestSetTrinoRolePasswordQuotesLiteral(t *testing.T) {
 }
 
 func TestSetTrinoRolePasswordNoopWhenEmpty(t *testing.T) {
+	t.Parallel()
 	f := &fakeExecer{}
 	if err := SetTrinoRolePassword(context.Background(), f, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)

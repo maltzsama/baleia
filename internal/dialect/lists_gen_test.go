@@ -109,6 +109,7 @@ WHERE c.name LIKE '%Functions%' OR c.name LIKE '%Operators%'`,
 }
 
 func TestGenerateLists(t *testing.T) {
+	t.Parallel()
 	name := os.Getenv("BALEIA_UPDATE_LISTS")
 	if name == "" {
 		t.Skip("BALEIA_UPDATE_LISTS not set")

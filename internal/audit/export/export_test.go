@@ -129,6 +129,7 @@ func newExporter(t *testing.T, src Source, cur Cursor, sink BulkSink, batch int,
 // TestOrderedAndResumable: a transport failure after batch 2 leaves the cursor
 // there; a fresh pass resumes and the union has every event, in order, no gaps.
 func TestOrderedAndResumable(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 	at := now.Add(-time.Hour)
 	src := fakeSource{events: events(4, at)}
@@ -172,6 +173,7 @@ func TestOrderedAndResumable(t *testing.T) {
 // TestIdempotentIDs: the same event maps to the same `_id`, so re-sending a
 // batch overwrites instead of duplicating.
 func TestIdempotentIDs(t *testing.T) {
+	t.Parallel()
 	e := Event{OccurredAt: time.Unix(1_700_000_000, 123), ID: 7}
 	a, b := DocumentID(e), DocumentID(e)
 	if a != b {
@@ -185,6 +187,7 @@ func TestIdempotentIDs(t *testing.T) {
 
 // TestPartialErrors: item 3 of 5 fails; the cursor advances only to item 2.
 func TestPartialErrors(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 	src := fakeSource{events: events(5, now.Add(-time.Hour))}
 	cur := &fakeCursor{}
@@ -209,6 +212,7 @@ func TestPartialErrors(t *testing.T) {
 
 // TestSafetyLag: events newer than the lag are not exported.
 func TestSafetyLag(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 	src := fakeSource{events: []Event{
 		{OccurredAt: now.Add(-time.Second), ID: 1, Action: "a.b", Outcome: "allowed", ResourceType: "x"},
@@ -229,6 +233,7 @@ func TestSafetyLag(t *testing.T) {
 
 // TestNoSecretsInDocs: the mapping copies redacted changes only.
 func TestNoSecretsInDocs(t *testing.T) {
+	t.Parallel()
 	e := Event{OccurredAt: time.Now(), ID: 1, Action: "catalog.create", Outcome: "allowed", ResourceType: "catalog",
 		Changes: json.RawMessage(`{"password":{"from":"***","to":"***"}}`)}
 	doc := Document(e)

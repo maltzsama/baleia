@@ -59,6 +59,7 @@ func (f *fakeStore) ListDeletedContent(context.Context, db.ListDeletedContentPar
 }
 
 func TestSpaceOf(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	live, deleted, gone := newID(), newID(), newID()
 	liveSpace, oldSpace := newID(), newID()

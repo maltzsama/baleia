@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewRegistry_ListsEveryKind(t *testing.T) {
+	t.Parallel()
 	r, err := NewRegistry(Options{Dialects: dialect.NewRegistry()})
 	if err != nil {
 		t.Fatal(err)
@@ -19,6 +20,7 @@ func TestNewRegistry_ListsEveryKind(t *testing.T) {
 }
 
 func TestNewRegistry_RequiresDialects(t *testing.T) {
+	t.Parallel()
 	if _, err := NewRegistry(Options{}); err == nil {
 		t.Fatal("NewRegistry without dialects returned no error")
 	}

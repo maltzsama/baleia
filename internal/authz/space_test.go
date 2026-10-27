@@ -7,6 +7,7 @@ import (
 )
 
 func TestSpaceRoleString(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		role SpaceRole
 		want string
@@ -23,6 +24,7 @@ func TestSpaceRoleString(t *testing.T) {
 }
 
 func TestEffectiveSpaceRoleMapping(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		in   string
 		want SpaceRole
@@ -40,6 +42,7 @@ func TestEffectiveSpaceRoleMapping(t *testing.T) {
 }
 
 func TestRequireSpace(t *testing.T) {
+	t.Parallel()
 	ws, sp := uid(30), uid(31)
 	p := Principal{UserID: uid(4), Role: "member"}
 	cases := []struct {
@@ -56,6 +59,7 @@ func TestRequireSpace(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			c := New(store{spaceRoles: map[[3][16]byte]string{
 				{ws.Bytes, sp.Bytes, p.UserID.Bytes}: tt.role,
 			}})

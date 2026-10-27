@@ -42,6 +42,7 @@ func fixture(t *testing.T, name string, v any) {
 }
 
 func TestVersionVectors(t *testing.T) {
+	t.Parallel()
 	var vectors []struct {
 		Name         string            `json:"name"`
 		Connector    string            `json:"connector"`
@@ -60,6 +61,7 @@ func TestVersionVectors(t *testing.T) {
 }
 
 func TestPlaceholderCases(t *testing.T) {
+	t.Parallel()
 	var cases []struct {
 		Value   string `json:"value"`
 		Matches bool   `json:"matches"`
@@ -128,6 +130,7 @@ func migratedDB(t *testing.T) (*sql.DB, string) {
 }
 
 func TestReservedNames(t *testing.T) {
+	t.Parallel()
 	var want []string
 	fixture(t, "reserved_catalog_names.json", &want)
 	got := bindtrino.New(nil, nil).ReservedNames()
@@ -168,6 +171,7 @@ var statementRe = regexp.MustCompile(`(?s)-- name: (\w+)\n(.*?);\n`)
 // issues, as the plugin's role, against Baleia's migrated schema: a renamed
 // column or a missing grant fails here before it fails in Trino.
 func TestRegistrySchema(t *testing.T) {
+	t.Parallel()
 	fixture(t, "registry_schema.sql", nil)
 	raw, _ := os.ReadFile(filepath.Join("testdata", "contract", "registry_schema.sql"))
 	stmts := statementRe.FindAllStringSubmatch(string(raw), -1)
@@ -259,6 +263,7 @@ func TestRegistrySchema(t *testing.T) {
 // 'trino'); Baleia's queries never claim it, and never write the registry's
 // sync columns after the plugin did (#38).
 func TestRegistryWriteSemantics(t *testing.T) {
+	t.Parallel()
 	files, err := filepath.Glob(filepath.Join("..", "..", "db", "queries", "*.sql"))
 	if err != nil || len(files) == 0 {
 		t.Fatal("no queries", err)

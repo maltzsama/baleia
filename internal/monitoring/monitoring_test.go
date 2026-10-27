@@ -68,6 +68,7 @@ func (f *fakeStore) UpdateMaintenanceRun(_ context.Context, arg db.UpdateMainten
 }
 
 func TestQueries(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{}
 	s := New(st)
@@ -94,6 +95,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestPrepare(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	capableEngine := newID()
 	st := &fakeStore{bindings: []db.CatalogBinding{

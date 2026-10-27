@@ -23,6 +23,7 @@ func provider(t *testing.T) *Provider {
 }
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	p := provider(t)
 	for _, c := range []connections.Config{
 		{Values: map[string]string{"url": "http://trino:8080", "username": "u"}, Secrets: map[string]string{"password": "p"}},
@@ -41,6 +42,7 @@ func TestValidate(t *testing.T) {
 
 // TestLiteralsKeepPercent: names with % or {catalog} reach Trino unchanged.
 func TestLiteralsKeepPercent(t *testing.T) {
+	t.Parallel()
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -62,6 +64,7 @@ func TestLiteralsKeepPercent(t *testing.T) {
 // BALEIA_TEST_TRINO_URL (http://host:port) to enable it; it reads the
 // built-in system catalog's metadata schema, present on every server.
 func TestMetadataReader_trino(t *testing.T) {
+	t.Parallel()
 	url := os.Getenv("BALEIA_TEST_TRINO_URL")
 	if url == "" {
 		t.Skip("BALEIA_TEST_TRINO_URL not set")

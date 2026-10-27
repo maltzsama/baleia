@@ -11,12 +11,14 @@ import (
 )
 
 func TestSpec(t *testing.T) {
+	t.Parallel()
 	if s := Spec(dialect.NewRegistry().MustGet(dialect.FlightSQL)); s.Name != Kind || s.Factory == nil {
 		t.Fatalf("spec = %+v, want kind %q with a factory", s, Kind)
 	}
 }
 
 func TestMapError(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		code codes.Code
 		want queryengine.ErrorCode
@@ -45,6 +47,7 @@ func TestMapError(t *testing.T) {
 }
 
 func TestParseSetShow(t *testing.T) {
+	t.Parallel()
 	if n, v, ok := parseSet("SET x = '1'"); !ok || n != "x" || v != "1" {
 		t.Errorf("parseSet = %q, %q, %v", n, v, ok)
 	}

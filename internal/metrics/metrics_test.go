@@ -56,6 +56,7 @@ func scrape(t *testing.T, h http.Handler, auth string) (int, string) {
 }
 
 func TestLabelAllowList(t *testing.T) {
+	t.Parallel()
 	families, err := registry(t).Prometheus().Gather()
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +83,7 @@ func TestLabelAllowList(t *testing.T) {
 // TestMetadataMetrics: the sync's freshness gauge and duration histogram are
 // exported under the names the alert rules use, without catalog labels.
 func TestMetadataMetrics(t *testing.T) {
+	t.Parallel()
 	_, body := scrape(t, registry(t).Handler(""), "")
 	for _, want := range []string{
 		"baleia_metadata_staleness_seconds_max 42",
@@ -95,6 +97,7 @@ func TestMetadataMetrics(t *testing.T) {
 }
 
 func TestScrape(t *testing.T) {
+	t.Parallel()
 	code, body := scrape(t, registry(t).Handler(""), "")
 	if code != 200 {
 		t.Fatalf("status %d", code)
@@ -110,6 +113,7 @@ func TestScrape(t *testing.T) {
 }
 
 func TestTokenAuth(t *testing.T) {
+	t.Parallel()
 	h := registry(t).Handler("s3cret")
 	for auth, want := range map[string]int{"": 401, "Bearer nope": 401, "s3cret": 401, "Bearer s3cret": 200} {
 		if code, _ := scrape(t, h, auth); code != want {

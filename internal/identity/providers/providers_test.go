@@ -87,6 +87,7 @@ func (f *fakeStore) DeleteAuthProvider(_ context.Context, id pgtype.UUID) error 
 func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error { return fn(f) }
 
 func TestCreate_SealsWithTheGeneratedID(t *testing.T) {
+	t.Parallel()
 	st := newStore()
 	s := New(st, st.tx)
 	var sealedFor pgtype.UUID
@@ -108,6 +109,7 @@ func TestCreate_SealsWithTheGeneratedID(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -138,6 +140,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestListEnabled(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -163,6 +166,7 @@ func (brokenStore) GetAuthProviderByID(context.Context, pgtype.UUID) (db.AuthPro
 // TestGet_StoreFailureIsNotNotFound: a database outage is an error, never a
 // missing provider.
 func TestGet_StoreFailureIsNotNotFound(t *testing.T) {
+	t.Parallel()
 	st := brokenStore{newStore()}
 	s := New(st, st.tx)
 	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
@@ -177,6 +181,7 @@ func TestGet_StoreFailureIsNotNotFound(t *testing.T) {
 // TestDelete_UserLinkedDuringDelete: a user linked between the count and the
 // delete is a conflict, not a server error.
 func TestDelete_UserLinkedDuringDelete(t *testing.T) {
+	t.Parallel()
 	st := newStore()
 	s := New(st, st.tx)
 	ap, _ := s.Create(context.Background(), "p", "oidc", true, func(id pgtype.UUID) (string, error) { return id.String(), nil })

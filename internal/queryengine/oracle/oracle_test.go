@@ -13,6 +13,7 @@ import (
 // TestPLSQLBlockKeptWhole: a PL/SQL block is one statement, kept whole with its
 // END; and terminated by a line with / (SQL*Plus convention).
 func TestPLSQLBlockKeptWhole(t *testing.T) {
+	t.Parallel()
 	spans, err := dialect.NewRegistry().MustGet(dialect.Oracle).Statements("BEGIN\n  NULL;\nEND;\n/\n")
 	if err != nil {
 		t.Fatal(err)
@@ -28,6 +29,7 @@ func TestPLSQLBlockKeptWhole(t *testing.T) {
 // TestCancelScopeInProcess: without the cancel_with_alter_system assertion,
 // Cancel cannot reach another process and returns ErrCancelUnsupported.
 func TestCancelScopeInProcess(t *testing.T) {
+	t.Parallel()
 	e := &Engine{cancelWithAlterSystem: false}
 	if got := e.Capabilities().CancelScope; got != queryengine.CancelInProcess {
 		t.Errorf("CancelScope = %q, want in_process", got)
@@ -41,6 +43,7 @@ func TestCancelScopeInProcess(t *testing.T) {
 // TestReadOnlyRequiresAssertion: Oracle cannot enforce a read-only session
 // (ReadOnly is none), so without the credentials assertion OpenSession fails.
 func TestReadOnlyRequiresAssertion(t *testing.T) {
+	t.Parallel()
 	e := &Engine{}
 	if got := e.Capabilities().ReadOnly; got != queryengine.ReadOnlyNone {
 		t.Fatalf("ReadOnly = %q, want none", got)
@@ -52,6 +55,7 @@ func TestReadOnlyRequiresAssertion(t *testing.T) {
 }
 
 func TestOraCode(t *testing.T) {
+	t.Parallel()
 	cases := map[int]queryengine.ErrorCode{
 		900:   queryengine.CodeSyntax,
 		933:   queryengine.CodeSyntax,
@@ -75,6 +79,7 @@ func TestOraCode(t *testing.T) {
 }
 
 func TestSessionIDs(t *testing.T) {
+	t.Parallel()
 	if _, _, err := sessionIDs(queryengine.QueryHandle{}); err == nil {
 		t.Error("a handle without sid did not fail")
 	}
@@ -85,6 +90,7 @@ func TestSessionIDs(t *testing.T) {
 }
 
 func TestTruncateUTF8(t *testing.T) {
+	t.Parallel()
 	if got := truncateUTF8("ação", 100); got != "ação" {
 		t.Errorf("no-op truncation = %q", got)
 	}

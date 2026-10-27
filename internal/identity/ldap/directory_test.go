@@ -8,6 +8,7 @@ import (
 )
 
 func TestListUsersParsesDisabledAndGroups(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	enabled := entry("uid=alice,ou=people,dc=example,dc=org", map[string][]string{
 		"entryUUID":          {"11111111-1111-1111-1111-111111111111"},
@@ -43,6 +44,7 @@ func TestListUsersParsesDisabledAndGroups(t *testing.T) {
 }
 
 func TestListUsersFailsClosedOnMissingStableID(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	bad := entry("uid=noid,ou=people,dc=example,dc=org", map[string][]string{
 		"userAccountControl": {"512"},

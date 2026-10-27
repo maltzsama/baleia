@@ -97,6 +97,7 @@ func (f *fixture) seed(t *testing.T, space, catalog pgtype.UUID) {
 }
 
 func TestExportDeterministic(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	space := f.spaceNamed(t, "Finance", "finance")
 	catalog := f.grantedCatalog(t, "lake")
@@ -131,6 +132,7 @@ func TestExportDeterministic(t *testing.T) {
 }
 
 func TestRoundTripNoChanges(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	source := f.spaceNamed(t, "Finance", "finance")
 	catalog := f.grantedCatalog(t, "lake")
@@ -180,6 +182,7 @@ func TestRoundTripNoChanges(t *testing.T) {
 }
 
 func TestUpdateCreatesImportVersion(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
 	source := f.spaceNamed(t, "Finance", "finance")
@@ -237,6 +240,7 @@ func TestUpdateCreatesImportVersion(t *testing.T) {
 }
 
 func TestOmittedItemsNotDeleted(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
 	source := f.spaceNamed(t, "Finance", "finance")
@@ -260,6 +264,7 @@ func TestOmittedItemsNotDeleted(t *testing.T) {
 }
 
 func TestUnknownKindAndForbiddenSQL(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	dest := f.spaceNamed(t, "Dest", "dest")
 	bundle := Bundle{Format: BundleFormat, FormatVersion: BundleVersion, BaleiaVersion: "dev",
@@ -290,6 +295,7 @@ func TestUnknownKindAndForbiddenSQL(t *testing.T) {
 }
 
 func TestDryRunWritesNothing(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	dest := f.spaceNamed(t, "Dest", "dest")
 	bundle := Bundle{Format: BundleFormat, FormatVersion: BundleVersion, BaleiaVersion: "dev",
@@ -318,6 +324,7 @@ func TestDryRunWritesNothing(t *testing.T) {
 }
 
 func TestDependencyOrder(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	dest := f.spaceNamed(t, "Dest", "dest")
 	bundle := Bundle{Format: BundleFormat, FormatVersion: BundleVersion, BaleiaVersion: "dev",
@@ -351,6 +358,7 @@ func TestDependencyOrder(t *testing.T) {
 // TestImport_RequiresDialect: without a dialect the import refuses up front
 // instead of panicking on the first saved query.
 func TestImport_RequiresDialect(t *testing.T) {
+	t.Parallel()
 	s := New(nil, nil)
 	if _, err := s.Import(context.Background(), ImportOptions{Mode: ImportDryRun}); !errors.Is(err, ErrNoDialect) {
 		t.Fatalf("err = %v, want ErrNoDialect", err)

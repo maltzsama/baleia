@@ -69,6 +69,7 @@ func waitIdle(t *testing.T, svc *Service, userID, id pgtype.UUID) {
 // executed through the injected caller (the in-memory MCP client in production)
 // and returned to the model; the provider sees no rows under metadata_only.
 func TestTurnToolCallsGoThroughTheCaller(t *testing.T) {
+	t.Parallel()
 	svc, userID, workspaceID := newTurnFixture(t)
 	conv, err := svc.CreateConversation(context.Background(), userID, workspaceID)
 	if err != nil {
@@ -129,6 +130,7 @@ func TestTurnToolCallsGoThroughTheCaller(t *testing.T) {
 // TestTurnBudgetStopsBeforeTheProvider: an exhausted budget persists a notice
 // and never calls the model.
 func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
+	t.Parallel()
 	svc, userID, workspaceID := newTurnFixture(t)
 	if _, err := svc.UpdateSettings(context.Background(), SettingsInput{
 		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
@@ -174,6 +176,7 @@ func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 
 // TestRunnerSlot: an empty or nil slot loads nil; a stored runner loads back.
 func TestRunnerSlot(t *testing.T) {
+	t.Parallel()
 	var none *RunnerSlot
 	if none.Load() != nil {
 		t.Fatal("a nil slot must load nil")

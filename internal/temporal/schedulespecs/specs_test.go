@@ -8,6 +8,7 @@ import (
 )
 
 func TestCore(t *testing.T) {
+	t.Parallel()
 	specs := Core(90 * time.Second)
 	if len(specs) != 9 {
 		t.Fatalf("Core returned %d specs, want 9", len(specs))
@@ -33,6 +34,7 @@ func TestCore(t *testing.T) {
 }
 
 func TestOptionalSchedules(t *testing.T) {
+	t.Parallel()
 	if got := CatalogReconcile(time.Hour); got.ID != schedules.CatalogReconcile || got.Every != time.Hour || got.Workflow == nil {
 		t.Fatalf("CatalogReconcile = %+v", got)
 	}

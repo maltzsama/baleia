@@ -18,6 +18,7 @@ func bigInt(s string) *big.Int {
 }
 
 func TestArrowType(t *testing.T) {
+	t.Parallel()
 	numeric := func(p, s int32) int32 { return 4 + (p << 16) + s }
 	cases := []struct {
 		name   string
@@ -56,6 +57,7 @@ func TestArrowType(t *testing.T) {
 }
 
 func TestNumericPrecScale(t *testing.T) {
+	t.Parallel()
 	if p, s, ok := numericPrecScale(4 + (38 << 16) + 10); !ok || p != 38 || s != 10 {
 		t.Errorf("numeric(38,10): p=%d s=%d ok=%v", p, s, ok)
 	}
@@ -65,6 +67,7 @@ func TestNumericPrecScale(t *testing.T) {
 }
 
 func TestNumericString(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		n    pgtype.Numeric
@@ -85,6 +88,7 @@ func TestNumericString(t *testing.T) {
 }
 
 func TestFormatUUID(t *testing.T) {
+	t.Parallel()
 	var b [16]byte
 	for i := range b {
 		b[i] = byte(i)
@@ -95,6 +99,7 @@ func TestFormatUUID(t *testing.T) {
 }
 
 func TestIsoInterval(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		i    pgtype.Interval
@@ -112,6 +117,7 @@ func TestIsoInterval(t *testing.T) {
 }
 
 func TestSQLState(t *testing.T) {
+	t.Parallel()
 	cases := map[string]queryengine.ErrorCode{
 		"42601": queryengine.CodeSyntax,
 		"42804": queryengine.CodeSyntax,
@@ -134,6 +140,7 @@ func TestSQLState(t *testing.T) {
 }
 
 func TestApplicationName(t *testing.T) {
+	t.Parallel()
 	if got := applicationName(queryengine.Tags{}); got != "baleia" {
 		t.Errorf("no tags: %q", got)
 	}
@@ -147,6 +154,7 @@ func TestApplicationName(t *testing.T) {
 }
 
 func TestBackendPID(t *testing.T) {
+	t.Parallel()
 	if _, err := backendPID(queryengine.QueryHandle{}); err == nil {
 		t.Error("a handle without backend_pid did not fail")
 	}

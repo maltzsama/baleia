@@ -150,6 +150,7 @@ func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error {
 }
 
 func TestName(t *testing.T) {
+	t.Parallel()
 	if n, err := Name("  bot "); err != nil || n != "bot" {
 		t.Errorf("Name = %q, %v", n, err)
 	}
@@ -161,6 +162,7 @@ func TestName(t *testing.T) {
 }
 
 func TestVisibility(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -187,6 +189,7 @@ func TestVisibility(t *testing.T) {
 }
 
 func TestWorkspacesAndUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -222,6 +225,7 @@ func TestWorkspacesAndUpdate(t *testing.T) {
 }
 
 func TestTokens(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -257,6 +261,7 @@ func TestTokens(t *testing.T) {
 // TestReach: each granted catalog once, with only enabled bindings on
 // enabled, existing engines.
 func TestReach(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)

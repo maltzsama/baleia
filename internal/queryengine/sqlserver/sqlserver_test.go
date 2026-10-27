@@ -13,6 +13,7 @@ import (
 // TestGOBatches: the dialect splits a script on GO lines, and GO never reaches
 // the server (each batch is one Execute).
 func TestGOBatches(t *testing.T) {
+	t.Parallel()
 	spans, err := dialect.NewRegistry().MustGet(dialect.TSQL).Statements("SELECT 1\nGO\nSELECT 2\nGO\n")
 	if err != nil {
 		t.Fatal(err)
@@ -30,6 +31,7 @@ func TestGOBatches(t *testing.T) {
 // TestCancelScopeInProcess: without the cancel_with_kill assertion, Cancel
 // cannot reach another process and returns ErrCancelUnsupported.
 func TestCancelScopeInProcess(t *testing.T) {
+	t.Parallel()
 	e := &Engine{cancelWithKill: false}
 	if got := e.Capabilities().CancelScope; got != queryengine.CancelInProcess {
 		t.Errorf("CancelScope = %q, want in_process", got)
@@ -43,6 +45,7 @@ func TestCancelScopeInProcess(t *testing.T) {
 // TestReadOnlyRequiresAssertion: SQL Server cannot enforce a read-only session
 // (ReadOnly is none), so without the credentials assertion OpenSession fails.
 func TestReadOnlyRequiresAssertion(t *testing.T) {
+	t.Parallel()
 	e := &Engine{}
 	if got := e.Capabilities().ReadOnly; got != queryengine.ReadOnlyNone {
 		t.Fatalf("ReadOnly = %q, want none", got)
@@ -54,6 +57,7 @@ func TestReadOnlyRequiresAssertion(t *testing.T) {
 }
 
 func TestTSQLCode(t *testing.T) {
+	t.Parallel()
 	cases := map[int32]queryengine.ErrorCode{
 		102:  queryengine.CodeSyntax,
 		156:  queryengine.CodeSyntax,
@@ -72,6 +76,7 @@ func TestTSQLCode(t *testing.T) {
 }
 
 func TestFormatUUID(t *testing.T) {
+	t.Parallel()
 	b := []byte{0x11, 0x11, 0x11, 0x11, 0x22, 0x22, 0x33, 0x33, 0x44, 0x44, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55}
 	if got := formatUUID(b); got != "11111111-2222-3333-4444-555555555555" {
 		t.Errorf("formatUUID = %q", got)
@@ -79,6 +84,7 @@ func TestFormatUUID(t *testing.T) {
 }
 
 func TestSessionID(t *testing.T) {
+	t.Parallel()
 	if _, err := sessionID(queryengine.QueryHandle{}); err == nil {
 		t.Error("a handle without spid did not fail")
 	}
@@ -89,6 +95,7 @@ func TestSessionID(t *testing.T) {
 }
 
 func TestNanosSinceMidnight(t *testing.T) {
+	t.Parallel()
 	v := time.Date(1, 1, 1, 13, 45, 30, 123456700, time.UTC)
 	want := int64(13)*3_600_000_000_000 + 45*60_000_000_000 + 30*1_000_000_000 + 123456700
 	if got := nanosSinceMidnight(v); got != want {

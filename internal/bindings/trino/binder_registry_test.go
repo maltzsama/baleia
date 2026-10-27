@@ -59,6 +59,7 @@ func stageProps(t *testing.T, b *Binder, p bindings.Projection) map[string]strin
 // written as @baleia-enc[...] and opens back to the plaintext; the version is
 // untouched.
 func TestStageSealsRegistrySecrets(t *testing.T) {
+	t.Parallel()
 	kr := registryKeyring(t)
 	b := New(nil, nil).WithRegistryKeyring(kr)
 	p := bindings.Projection{
@@ -91,6 +92,7 @@ func TestStageSealsRegistrySecrets(t *testing.T) {
 // TestStageKeepsPlaintextWithoutKeyring: Phase A stays the default; no keyring
 // means the registry keeps its current shape.
 func TestStageKeepsPlaintextWithoutKeyring(t *testing.T) {
+	t.Parallel()
 	b := New(nil, nil)
 	props := stageProps(t, b, bindings.Projection{
 		EngineCatalog: "lake",
@@ -106,6 +108,7 @@ func TestStageKeepsPlaintextWithoutKeyring(t *testing.T) {
 // TestStageLeavesReferencesAlone: an external reference is not a resolved
 // secret and must survive unchanged.
 func TestStageLeavesReferencesAlone(t *testing.T) {
+	t.Parallel()
 	b := New(nil, nil).WithRegistryKeyring(registryKeyring(t))
 	props := stageProps(t, b, bindings.Projection{
 		EngineCatalog: "lake",

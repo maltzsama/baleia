@@ -21,11 +21,17 @@ const confDB = "baleia_conformance"
 
 // TestConformanceMySQL runs the engine suite against a real MySQL server.
 // Set BALEIA_TEST_MYSQL_URL.
-func TestConformance(t *testing.T) { runConformance(t, "BALEIA_TEST_MYSQL_URL", false) }
+func TestConformance(t *testing.T) {
+	t.Parallel()
+	runConformance(t, "BALEIA_TEST_MYSQL_URL", false)
+}
 
 // TestConformanceMariaDB is the same suite against MariaDB
 // (BALEIA_TEST_MARIADB_URL).
-func TestConformanceMariaDB(t *testing.T) { runConformance(t, "BALEIA_TEST_MARIADB_URL", true) }
+func TestConformanceMariaDB(t *testing.T) {
+	t.Parallel()
+	runConformance(t, "BALEIA_TEST_MARIADB_URL", true)
+}
 
 func runConformance(t *testing.T, env string, mariadb bool) {
 	raw := os.Getenv(env)

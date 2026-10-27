@@ -14,6 +14,7 @@ import (
 // TestConformance runs the engine suite against a real coordinator with the
 // catalog guard installed (the compose Trino). Set BALEIA_TEST_TRINO_URL.
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	url := os.Getenv("BALEIA_TEST_TRINO_URL")
 	if url == "" {
 		t.Skip("BALEIA_TEST_TRINO_URL not set")

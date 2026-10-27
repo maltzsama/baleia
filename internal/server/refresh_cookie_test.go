@@ -21,6 +21,7 @@ func loginHandler(token string) api.StrictHandlerFunc {
 // TestRefreshCookie_Flags: the cookie is HttpOnly, Secure, SameSite=Lax and
 // scoped to the auth routes (#51).
 func TestRefreshCookie_Flags(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{RefreshTokenTTL: time.Hour}
 	handler := refreshCookieMiddleware(cfg)(loginHandler("tok-1"), "Login")
 
@@ -56,6 +57,7 @@ func TestRefreshCookie_Flags(t *testing.T) {
 // TestRefreshCookie_NotInJSONForBrowser: only X-Baleia-Client: api receives the
 // JSON refresh token (#51).
 func TestRefreshCookie_NotInJSONForBrowser(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{}
 	mw := refreshCookieMiddleware(cfg)
 
@@ -70,6 +72,7 @@ func TestRefreshCookie_NotInJSONForBrowser(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
 			if tc.header != "" {
@@ -93,6 +96,7 @@ func TestRefreshCookie_NotInJSONForBrowser(t *testing.T) {
 
 // TestLogout_ClearsCookie: logout emits an expired cookie (#51).
 func TestLogout_ClearsCookie(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{}
 	handler := refreshCookieMiddleware(cfg)(func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
 		return api.Logout204Response{}, nil
@@ -118,6 +122,7 @@ func TestLogout_ClearsCookie(t *testing.T) {
 }
 
 func TestRefreshCookieContext(t *testing.T) {
+	t.Parallel()
 	var got string
 	h := refreshCookieContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = auth.RefreshCookieFromContext(r.Context())

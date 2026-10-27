@@ -7,6 +7,7 @@ import (
 )
 
 func TestToTimeMicros(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		in   string
 		want int64
@@ -29,6 +30,7 @@ func TestToTimeMicros(t *testing.T) {
 }
 
 func TestCloneRowCopiesBytes(t *testing.T) {
+	t.Parallel()
 	shared := []byte("abc")
 	row := []any{int64(1), shared}
 	out := cloneRow(row)
@@ -42,6 +44,7 @@ func TestCloneRowCopiesBytes(t *testing.T) {
 }
 
 func TestMySQLCode(t *testing.T) {
+	t.Parallel()
 	cases := map[uint16]queryengine.ErrorCode{
 		1064: queryengine.CodeSyntax,
 		1146: queryengine.CodeNotFound,
@@ -60,6 +63,7 @@ func TestMySQLCode(t *testing.T) {
 }
 
 func TestConnectionID(t *testing.T) {
+	t.Parallel()
 	if _, err := connectionID(queryengine.QueryHandle{}); err == nil {
 		t.Error("a handle without connection_id did not fail")
 	}

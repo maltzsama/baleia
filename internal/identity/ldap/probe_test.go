@@ -10,6 +10,7 @@ import (
 // TestProbeNeverUserBinds: a probe searches for the test username with the
 // service account and never binds as that user, so it cannot authenticate.
 func TestProbeNeverUserBinds(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	user := entry("uid=alice,ou=people,dc=example,dc=org", map[string][]string{
 		"entryUUID": {"11111111-1111-1111-1111-111111111111"},
@@ -33,6 +34,7 @@ func TestProbeNeverUserBinds(t *testing.T) {
 
 // TestProbeSkipsSearchWithoutUsername: no test user means no search at all.
 func TestProbeSkipsSearchWithoutUsername(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	conn := &fakeConn{}
 	dial, _ := fakeDialer(conn)

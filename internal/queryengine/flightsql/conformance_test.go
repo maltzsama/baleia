@@ -18,6 +18,7 @@ import (
 // TestConformance runs the engine suite against an in-process Flight SQL server
 // (the arrow-go SQLite example plus proper gRPC error codes).
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	e := newEngineForTest(t, false)
 	conformance.Run(t, func(t *testing.T) queryengine.Engine { return e }, conformance.Fixtures{
 		TypesSQL: `SELECT c_int, c_real, c_text, c_blob FROM baleia_conformance_types`,
@@ -48,6 +49,7 @@ func TestConformance(t *testing.T) {
 // TestMultiEndpoint reads a statement whose result is split across two
 // endpoints, asserting every batch is read.
 func TestMultiEndpoint(t *testing.T) {
+	t.Parallel()
 	e := newEngineForTest(t, true)
 	tbl, err := queryengine.Collect(context.Background(), e, queryengine.SessionSpec{},
 		"SELECT c_int FROM baleia_conformance_types", 100)
@@ -63,6 +65,7 @@ func TestMultiEndpoint(t *testing.T) {
 // TestReadOnlyRequiresAssertion: the protocol has no read-only session, so a
 // read-only target needs the credentials_read_only assertion.
 func TestReadOnlyRequiresAssertion(t *testing.T) {
+	t.Parallel()
 	e := newEngineForTest(t, false)
 	guarded := queryengine.Guard(e, false)
 	if _, err := guarded.OpenSession(context.Background(), queryengine.SessionSpec{ReadOnly: true}); queryengine.CodeOf(err) != queryengine.CodeReadOnly {
@@ -73,6 +76,7 @@ func TestReadOnlyRequiresAssertion(t *testing.T) {
 // TestSessionStateIsPerSession: SET/SHOW are tracked per session and do not
 // leak into a new one.
 func TestSessionStateIsPerSession(t *testing.T) {
+	t.Parallel()
 	e := newEngineForTest(t, false)
 	s, err := e.OpenSession(context.Background(), queryengine.SessionSpec{})
 	if err != nil {

@@ -3,6 +3,7 @@ package typemap
 import "testing"
 
 func TestIcebergTypeMapping(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"boolean":                   "boolean",
 		"int":                       "integer",
@@ -41,6 +42,7 @@ func TestIcebergTypeMapping(t *testing.T) {
 }
 
 func TestDisplay(t *testing.T) {
+	t.Parallel()
 	if got, ok := Display("trino", "trino", "varchar(10)"); !ok || got != "varchar(10)" {
 		t.Errorf("same type system is the identity: %q %v", got, ok)
 	}
@@ -53,6 +55,7 @@ func TestDisplay(t *testing.T) {
 }
 
 func TestLogical(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		system, native, want string
 	}{

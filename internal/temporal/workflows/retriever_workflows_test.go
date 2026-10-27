@@ -19,6 +19,7 @@ const dueRetrieverID = "11111111-1111-1111-1111-111111111111"
 // retriever-<id>-<next_refresh_at> together with REJECT_DUPLICATE is what
 // prevents a second dispatch pass from starting the same run twice.
 func TestDispatch_StartsRefreshForDue(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 
@@ -41,6 +42,7 @@ func TestDispatch_StartsRefreshForDue(t *testing.T) {
 // TestDispatch_RecordsPassAfterAdvancing: the dispatch pass is recorded as a
 // success only once its children started and schedules advanced.
 func TestDispatch_RecordsPassAfterAdvancing(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 

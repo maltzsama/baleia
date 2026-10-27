@@ -20,6 +20,7 @@ func (f *fakeRecorder) Record(_ context.Context, e audit.Event) error {
 }
 
 func TestAuditHooks_OneEventPerCall(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		o      Outcome
@@ -34,6 +35,7 @@ func TestAuditHooks_OneEventPerCall(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rec := &fakeRecorder{}
 			NewAuditHooks(rec).OnToolCall(context.Background(), agentpolicy.Call{
 				Tool: agentpolicy.ToolRunQuery, WorkspaceID: uid(9), SQL: stringPtr("SELECT secret"),
@@ -64,6 +66,7 @@ func TestAuditHooks_OneEventPerCall(t *testing.T) {
 }
 
 func TestAuditHooks_ExecutionResource(t *testing.T) {
+	t.Parallel()
 	rec := &fakeRecorder{}
 	NewAuditHooks(rec).OnToolCall(context.Background(), agentpolicy.Call{Tool: agentpolicy.ToolGetResults, WorkspaceID: uid(9)}, Outcome{
 		Allowed: true, ExecutionID: "exec-1",

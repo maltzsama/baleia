@@ -51,6 +51,7 @@ func testModels() map[string]Model {
 }
 
 func TestModelValidate(t *testing.T) {
+	t.Parallel()
 	m := testModels()
 	if err := m["orders"].Validate(m); err != nil {
 		t.Fatalf("valid model rejected: %v", err)
@@ -89,6 +90,7 @@ func TestModelValidate(t *testing.T) {
 }
 
 func TestExploreQueryValidate(t *testing.T) {
+	t.Parallel()
 	models := testModels()
 	valid := ExploreQuery{
 		Model:      "orders",
@@ -129,6 +131,7 @@ func TestExploreQueryValidate(t *testing.T) {
 }
 
 func TestExploreShareRoundTrip(t *testing.T) {
+	t.Parallel()
 	q := ExploreQuery{
 		Model:      "orders",
 		Dimensions: []string{"created_at"},

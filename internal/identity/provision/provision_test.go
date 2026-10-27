@@ -28,6 +28,7 @@ func (f *fakeMembers) UpsertTeamMember(_ context.Context, arg db.UpsertTeamMembe
 }
 
 func TestApplyTeams(t *testing.T) {
+	t.Parallel()
 	user := pgtype.UUID{Bytes: uuid.New(), Valid: true}
 	ok, broken, failing := uuid.NewString(), "not-a-uuid", uuid.NewString()
 	f := &fakeMembers{fail: map[string]bool{failing: true}}
@@ -79,6 +80,7 @@ func newAccounts() *fakeAccounts {
 }
 
 func TestOIDCUser(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	provider := pgtype.UUID{Bytes: uuid.New(), Valid: true}
 	team := uuid.NewString()
@@ -93,6 +95,7 @@ func TestOIDCUser(t *testing.T) {
 	}
 
 	t.Run("creates an allowed verified account with its teams", func(t *testing.T) {
+		t.Parallel()
 		st := newAccounts()
 		u, err := OIDCUser(ctx, st, provider, cfg, info("s1", "ana@x.io", true, "data"))
 		if err != nil || u.AuthProvider != "oidc" || u.Role != identity.RoleMember {
@@ -114,6 +117,7 @@ func TestOIDCUser(t *testing.T) {
 		{"no allowed domains", auth.OIDCProviderConfig{AutoCreate: true}, info("s5", "ana@x.io", true)},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			st := newAccounts()
 			if _, err := OIDCUser(ctx, st, provider, c.cfg, c.info); !errors.Is(err, ErrNotProvisioned) {
 				t.Errorf("err = %v, want ErrNotProvisioned", err)
@@ -125,6 +129,7 @@ func TestOIDCUser(t *testing.T) {
 	}
 
 	t.Run("an existing subject gets the mapped role", func(t *testing.T) {
+		t.Parallel()
 		st := newAccounts()
 		existing := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Role: identity.RoleMember}
 		st.bySubject["s6"] = existing
@@ -135,6 +140,7 @@ func TestOIDCUser(t *testing.T) {
 	})
 
 	t.Run("a concurrent login's account is used", func(t *testing.T) {
+		t.Parallel()
 		st := newAccounts()
 		st.raceSubject = "s7"
 		u, err := OIDCUser(ctx, st, provider, cfg, info("s7", "ana@x.io", true))
@@ -145,6 +151,7 @@ func TestOIDCUser(t *testing.T) {
 }
 
 func TestDomainAllowed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		email string
 		want  bool

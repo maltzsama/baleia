@@ -41,6 +41,7 @@ func (f *fakeStore) UpdateCatalogConnection(_ context.Context, arg db.UpdateCata
 func (f *fakeStore) DeleteCatalogConnection(context.Context, pgtype.UUID) error { return f.delErr }
 
 func TestList_WithoutEngine(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	free, backing := db.CatalogConnection{ID: newID()}, db.CatalogConnection{ID: newID()}
 	st := &fakeStore{conns: []db.CatalogConnection{free, backing}, engines: []db.Engine{{ConnectionID: backing.ID}}}
@@ -57,6 +58,7 @@ func TestList_WithoutEngine(t *testing.T) {
 }
 
 func TestWrites_MapConflicts(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := &fakeStore{createErr: &pgconn.PgError{Code: "23505"}}
 	s := New(st)

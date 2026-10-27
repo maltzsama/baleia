@@ -17,6 +17,7 @@ import (
 // TestRouteTemplate: requests are labelled by the chi pattern they matched,
 // never by the raw path; a path that matched nothing is "unmatched".
 func TestRouteTemplate(t *testing.T) {
+	t.Parallel()
 	reg := New("api")
 	m := reg.HTTP()
 	r := chi.NewRouter()
@@ -55,6 +56,7 @@ func TestRouteTemplate(t *testing.T) {
 // scans the scrape: no label value is a UUID or an e-mail, holds whitespace
 // or SQL, or names a catalog.
 func TestNoForbiddenValues(t *testing.T) {
+	t.Parallel()
 	reg := New("api")
 	const id, email, name, sql = "9b1d5c3e-1111-4222-8333-444455556666", "ana@example.com", "secret_catalog_name", "SELECT * FROM users"
 

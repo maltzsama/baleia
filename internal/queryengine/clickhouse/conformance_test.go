@@ -18,6 +18,7 @@ import (
 // TestConformance runs the engine suite against a real ClickHouse server. Set
 // BALEIA_TEST_CLICKHOUSE_URL.
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	c := testClient(t)
 	setup(t, c)
 
@@ -66,6 +67,7 @@ func TestConformance(t *testing.T) {
 // TestArrowPassthrough asserts the exact Arrow types ClickHouse emits reach the
 // sink with no Baleia mapping layer.
 func TestArrowPassthrough(t *testing.T) {
+	t.Parallel()
 	c := testClient(t)
 	e := queryengine.Guard(&Engine{dialect: dialect.NewRegistry().MustGet(dialect.ClickHouse), id: "passthrough", c: c}, false)
 	tbl, err := queryengine.Collect(context.Background(), e, queryengine.SessionSpec{},
@@ -95,6 +97,7 @@ func TestArrowPassthrough(t *testing.T) {
 
 // TestCredentialsNotInURL asserts the request URL never carries credentials.
 func TestCredentialsNotInURL(t *testing.T) {
+	t.Parallel()
 	cfg := connections.Config{
 		Kind:    connections.KindClickHouse,
 		Values:  map[string]string{"host": "ch.example", "port": "8123", "username": "alice"},

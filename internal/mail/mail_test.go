@@ -7,6 +7,7 @@ import (
 )
 
 func TestTemplatesBothLocales(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"Name":      "Ana",
 		"ResetURL":  "https://baleia.test/reset-password?token=abc",
@@ -14,6 +15,7 @@ func TestTemplatesBothLocales(t *testing.T) {
 	}
 	for _, template := range []Template{TemplatePasswordReset, TemplateInvite} {
 		t.Run(string(template), func(t *testing.T) {
+			t.Parallel()
 			en, err := Render(LocaleEnglish, template, data)
 			if err != nil {
 				t.Fatalf("en: %v", err)
@@ -42,18 +44,21 @@ func TestTemplatesBothLocales(t *testing.T) {
 }
 
 func TestRenderRejectsUnknownTemplate(t *testing.T) {
+	t.Parallel()
 	if _, err := Render(LocaleEnglish, Template("nope"), nil); err == nil {
 		t.Fatal("an unknown template must fail")
 	}
 }
 
 func TestRenderRejectsMissingData(t *testing.T) {
+	t.Parallel()
 	if _, err := Render(LocaleEnglish, TemplatePasswordReset, map[string]any{"Name": "Ana"}); err == nil {
 		t.Fatal("a missing template value must fail")
 	}
 }
 
 func TestLocaleOrDefault(t *testing.T) {
+	t.Parallel()
 	pt := LocalePtBR
 	cases := []struct {
 		name       string
@@ -69,6 +74,7 @@ func TestLocaleOrDefault(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := LocaleOrDefault(tc.preference, tc.fallback); got != tc.want {
 				t.Fatalf("LocaleOrDefault = %q, want %q", got, tc.want)
 			}
@@ -79,6 +85,7 @@ func TestLocaleOrDefault(t *testing.T) {
 func ptr[T any](v T) *T { return &v }
 
 func TestSendSkipsWithoutSMTP(t *testing.T) {
+	t.Parallel()
 	sender := New(Config{})
 	if err := sender.Send(context.Background(), "ana@baleia.test", LocaleEnglish, TemplateInvite,
 		map[string]any{"Name": "Ana", "InviteURL": "https://baleia.test/x"}); err != nil {

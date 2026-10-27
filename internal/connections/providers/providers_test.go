@@ -38,9 +38,11 @@ var storedKinds = []connections.Kind{
 }
 
 func TestEveryProviderIsComplete(t *testing.T) {
+	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
 	for _, p := range reg.All() {
 		t.Run(string(p.Kind()), func(t *testing.T) {
+			t.Parallel()
 			if !slices.Contains(storedKinds, p.Kind()) {
 				t.Errorf("kind %q is not allowed by catalog_connections.type", p.Kind())
 			}
@@ -160,8 +162,9 @@ func fakeIcebergREST(t *testing.T) *httptest.Server {
 }
 
 func TestIcebergRESTReaders(t *testing.T) {
+	t.Parallel()
 	srv := fakeIcebergREST(t)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 	reg := registry(t, connections.DialerOptions{AllowLoopback: true})
 
 	cases := []struct {
@@ -176,6 +179,7 @@ func TestIcebergRESTReaders(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(string(c.kind), func(t *testing.T) {
+			t.Parallel()
 			ctx := context.Background()
 			p, err := reg.Get(c.kind)
 			if err != nil {
@@ -244,6 +248,7 @@ func TestIcebergRESTReaders(t *testing.T) {
 }
 
 func TestPolarisRejectsBadCredentials(t *testing.T) {
+	t.Parallel()
 	srv := fakeIcebergREST(t)
 	defer srv.Close()
 	reg := registry(t, connections.DialerOptions{AllowLoopback: true})
@@ -259,6 +264,7 @@ func TestPolarisRejectsBadCredentials(t *testing.T) {
 }
 
 func TestRESTURIs(t *testing.T) {
+	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
 	cfg := connections.Config{Values: map[string]string{"url": "http://host:1/base/"}}
 	want := map[connections.Kind]string{
@@ -279,6 +285,7 @@ func TestRESTURIs(t *testing.T) {
 }
 
 func TestEveryDriverUsesDialer(t *testing.T) {
+	t.Parallel()
 	// Default dialer: loopback is denied, so every provider must fail with
 	// ErrDeniedNetwork before reaching anything.
 	reg := registry(t, connections.DialerOptions{})
@@ -331,6 +338,7 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 }
 
 func TestFromStored(t *testing.T) {
+	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
 
 	cfg, err := FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://polaris:8181/", nil, []byte(`{"client_id":"id","client_secret":"sec","realm":"R","stray":"x"}`))
@@ -360,6 +368,7 @@ func TestFromStored(t *testing.T) {
 // that does not parse is a read failure of stored data, not a server bug —
 // one errors.Is covers it, the way an unopenable envelope already does (#349).
 func TestFromStoredParseFailureIsUnreadable(t *testing.T) {
+	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
 
 	cases := map[string]struct {
@@ -380,6 +389,7 @@ func TestFromStoredParseFailureIsUnreadable(t *testing.T) {
 }
 
 func TestConnectionsMatrixUpToDate(t *testing.T) {
+	t.Parallel()
 	// The bindable column comes from the binders (bindings.TestSupportsMatrixMatchesDocs).
 	got := Markdown(registry(t, connections.DialerOptions{}), bindtrino.New(nil, nil))
 	const path = "../../../docs/connections.md"
@@ -399,6 +409,7 @@ func TestConnectionsMatrixUpToDate(t *testing.T) {
 }
 
 func TestFromStoredReadsConfigColumn(t *testing.T) {
+	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
 
 	// A database row after the migration backfill: the JDBC URL sits in config.
@@ -421,6 +432,7 @@ func TestFromStoredReadsConfigColumn(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
+	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
 	cur := connections.Config{Kind: connections.KindPostgreSQL,
 		Values:  map[string]string{"host": "a", "port": "5432", "database": "d", "username": "u", "sslmode": "require"},
@@ -446,6 +458,7 @@ func TestMerge(t *testing.T) {
 }
 
 func TestLegacyURL(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		cfg  connections.Config
 		want string

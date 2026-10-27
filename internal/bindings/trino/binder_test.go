@@ -27,6 +27,7 @@ func cfg(kind connections.Kind, values, secrets map[string]string) connections.C
 // byte-identical to the one before the binder, so no Polaris catalog has to
 // resync; the version reproduces the value captured from Trino 482.
 func TestProject_PolarisBuildsPolarisShape(t *testing.T) {
+	t.Parallel()
 	src := cfg(connections.KindPolaris, map[string]string{"url": "http://polaris:8181", "client_id": "abc", "realm": "POLARIS"}, map[string]string{"client_secret": "def"})
 	p, err := New(nil, nil).Project(bindings.BindingSpec{EngineCatalog: "baleia_polaris", SourceRef: "baleia"}, src)
 	if err != nil {
@@ -67,6 +68,7 @@ func mapsEqual(a, b map[string]string) bool {
 
 // TestProject_Kinds fixes the projection of every bindable kind.
 func TestProject_Kinds(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		src     connections.Config
@@ -258,6 +260,7 @@ func TestProject_Kinds(t *testing.T) {
 	b := New(nil, nil)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			p, err := b.Project(c.spec, c.src)
 			if err != nil {
 				t.Fatal(err)
@@ -312,6 +315,7 @@ func TestProject_Kinds(t *testing.T) {
 }
 
 func TestExtraProps(t *testing.T) {
+	t.Parallel()
 	b := New(nil, nil)
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "pw"})
 	for _, key := range []string{"connection-url", "connection-password", "connection-user", "iceberg.rest-catalog.uri", "iceberg.rest-catalog.oauth2.credential",
@@ -334,6 +338,7 @@ func TestExtraProps(t *testing.T) {
 }
 
 func TestReservedNamesAndConnectors(t *testing.T) {
+	t.Parallel()
 	b := New(nil, nil)
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db"}, nil)
 	for _, name := range b.ReservedNames() {
@@ -410,6 +415,7 @@ func (s *store) GetTrinoCatalogRegistryState(_ context.Context, arg db.GetTrinoC
 // TestDDLHasNoSecrets: for every kind, the CREATE CATALOG text Trino logs
 // carries placeholders, never the secret; the registry has the real value.
 func TestDDLHasNoSecrets(t *testing.T) {
+	t.Parallel()
 	sources := []connections.Config{
 		cfg(connections.KindPolaris, map[string]string{"url": "http://p:8181", "client_id": "id"}, map[string]string{"client_secret": "FIXTURE-SECRET-1"}),
 		cfg(connections.KindNessie, map[string]string{"url": "http://n:19120", "warehouse": "w"}, map[string]string{"token": "FIXTURE-SECRET-2"}),
@@ -447,6 +453,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 }
 
 func TestLifecycleAndConfirm(t *testing.T) {
+	t.Parallel()
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
 	b := New(trinoclient.New(co.srv.URL, "baleia-admin"), st)
@@ -502,6 +509,7 @@ func TestLifecycleAndConfirm(t *testing.T) {
 // (TestConnectionsMatrixUpToDate renders the bindable column from this
 // binder); this pins the binder side of it.
 func TestSupports(t *testing.T) {
+	t.Parallel()
 	got := New(nil, nil).Supports()
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},

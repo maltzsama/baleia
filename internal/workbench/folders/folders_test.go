@@ -83,6 +83,7 @@ func (f *fakeStore) DeleteQueryFolder(_ context.Context, arg db.DeleteQueryFolde
 }
 
 func TestCreate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -121,6 +122,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestListGetDelete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -157,6 +159,7 @@ func (brokenStore) GetQueryFolderByID(context.Context, db.GetQueryFolderByIDPara
 // TestStoreFailureIsNotNotFound: a database outage is an error, never a
 // missing folder or parent.
 func TestStoreFailureIsNotNotFound(t *testing.T) {
+	t.Parallel()
 	s := New(brokenStore{newStore()}, nil)
 	if _, err := s.Get(context.Background(), newID(), newID()); !errors.Is(err, errDown) {
 		t.Errorf("Get = %v, want the store error", err)
@@ -206,6 +209,7 @@ func (f *fakeStore) tx(_ context.Context, fn func(Mover) error) error {
 // TestUpdate_MoveIsAtomic: when moving the subtree fails, the folder stays
 // where it was.
 func TestUpdate_MoveIsAtomic(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -221,6 +225,7 @@ func TestUpdate_MoveIsAtomic(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -263,6 +268,7 @@ func TestUpdate(t *testing.T) {
 // TestUpdate_ParentMustExistInTheSpace: a missing parent, or one in another
 // space, is refused before any write.
 func TestUpdate_ParentMustExistInTheSpace(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
@@ -280,6 +286,7 @@ func TestUpdate_ParentMustExistInTheSpace(t *testing.T) {
 // TestUpdate_SlugTakenIsAConflict: a slug taken in the same space, or by a
 // concurrent write, is a conflict, not a raw database error.
 func TestUpdate_SlugTakenIsAConflict(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)

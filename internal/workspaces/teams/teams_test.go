@@ -94,6 +94,7 @@ func (f *fakeStore) RemoveTeamMember(_ context.Context, arg db.RemoveTeamMemberP
 }
 
 func TestMembers(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	s := New(st)
@@ -135,6 +136,7 @@ func TestMembers(t *testing.T) {
 // TestLookupFailure: a failed team lookup is returned, not taken for a
 // missing team.
 func TestLookupFailure(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	st := newStore()
 	st.lookupErr = errors.New("connection reset")

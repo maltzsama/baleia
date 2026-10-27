@@ -84,6 +84,7 @@ func atoiPort(t *testing.T, p string) int {
 // TestNumberWithoutPrecisionExact: a NUMBER without precision is read as exact
 // decimal text, never as float64.
 func TestNumberWithoutPrecisionExact(t *testing.T) {
+	t.Parallel()
 	e := oracleEngine(t, requireOracle(t), Options{})
 	tbl, err := queryengine.Collect(context.Background(), e, queryengine.SessionSpec{},
 		`SELECT 12345678901234567890.123456789 AS "n" FROM dual`, 10)
@@ -99,6 +100,7 @@ func TestNumberWithoutPrecisionExact(t *testing.T) {
 // TestLobCap: a CLOB larger than the byte cap is truncated and the truncation
 // is flagged in the field metadata.
 func TestLobCap(t *testing.T) {
+	t.Parallel()
 	raw := requireOracle(t)
 	db := oracleAdmin(t, raw)
 	ctx := context.Background()

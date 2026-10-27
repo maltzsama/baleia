@@ -18,6 +18,7 @@ func csrfFixture(called *bool) func(context.Context, http.ResponseWriter, *http.
 }
 
 func TestRefreshRequiresCSRFHeader(t *testing.T) {
+	t.Parallel()
 	called := false
 	h := csrfMiddleware(csrfFixture(&called), "RefreshToken")
 
@@ -62,6 +63,7 @@ func TestRefreshRequiresCSRFHeader(t *testing.T) {
 }
 
 func TestLogoutRequiresCSRFHeader(t *testing.T) {
+	t.Parallel()
 	called := false
 	h := csrfMiddleware(csrfFixture(&called), "Logout")
 
@@ -76,6 +78,7 @@ func TestLogoutRequiresCSRFHeader(t *testing.T) {
 }
 
 func TestCSRFHeaderNotRequiredElsewhere(t *testing.T) {
+	t.Parallel()
 	called := false
 	h := csrfMiddleware(csrfFixture(&called), "Login")
 	rec := httptest.NewRecorder()

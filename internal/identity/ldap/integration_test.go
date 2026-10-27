@@ -25,6 +25,7 @@ func envOr(key, fallback string) string {
 //	BALEIA_TEST_LDAP_URL=ldap://localhost:389 \
 //	  go test -tags integration ./internal/identity/ldap/
 func TestIntegration_OpenLDAP(t *testing.T) {
+	t.Parallel()
 	url := os.Getenv("BALEIA_TEST_LDAP_URL")
 	if url == "" {
 		t.Skip("BALEIA_TEST_LDAP_URL not set; start the `ldap` compose profile")

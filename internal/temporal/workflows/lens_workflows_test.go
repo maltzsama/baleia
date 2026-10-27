@@ -22,6 +22,7 @@ import (
 // ContinueAsNewError blows the event history until Temporal terminates the
 // workflow, so one appearing in this package fails the build.
 func TestNoInfiniteLoops(t *testing.T) {
+	t.Parallel()
 	fset, files, err := parseWorkflowSources()
 	require.NoError(t, err)
 
@@ -35,6 +36,7 @@ func TestNoInfiniteLoops(t *testing.T) {
 // TestLensQueryPoll_SinglePass documents the schedule pattern: the poller does
 // exactly one activity call and returns.
 func TestLensQueryPoll_SinglePass(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 
@@ -55,6 +57,7 @@ func TestLensQueryPoll_SinglePass(t *testing.T) {
 // TestLensTableHealth_FanOut pins the fan-out: every enabled Iceberg catalog is
 // analyzed, and one failing catalog does not fail the others.
 func TestLensTableHealth_FanOut(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 
@@ -138,6 +141,7 @@ func hasContinueAsNewError(n ast.Node) bool {
 // TestLensTableHealth_RecordsPassLast: the schedule's success is recorded
 // once, after every catalog's analysis, even when one of them failed.
 func TestLensTableHealth_RecordsPassLast(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 
@@ -169,6 +173,7 @@ func TestLensTableHealth_RecordsPassLast(t *testing.T) {
 // TestLensTableHealth_NoPassWhenListingFails: a pass that failed is not
 // recorded as a success.
 func TestLensTableHealth_NoPassWhenListingFails(t *testing.T) {
+	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 

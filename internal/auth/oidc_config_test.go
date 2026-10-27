@@ -10,6 +10,7 @@ import (
 
 // TestOIDCConfigValidate pins the rules the admin API relies on (#259).
 func TestOIDCConfigValidate(t *testing.T) {
+	t.Parallel()
 	valid := OIDCProviderConfig{
 		IssuerURL:    "https://idp.example.test",
 		ClientID:     "baleia",
@@ -54,6 +55,7 @@ func TestOIDCConfigValidate(t *testing.T) {
 // TestOIDCConfigSealBindsAAD: a config sealed for one provider does not open
 // for another (#278).
 func TestOIDCConfigSealBindsAAD(t *testing.T) {
+	t.Parallel()
 	kr, err := crypto.NewKeyring("test-secret-0123456789abcdef-0123456789", "")
 	if err != nil {
 		t.Fatal(err)

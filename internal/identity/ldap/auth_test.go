@@ -10,6 +10,7 @@ import (
 )
 
 func TestNestedGroups(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	cfg.NestedGroups = true
 	cfg.RoleMapping = []identity.RoleMapping{
@@ -50,7 +51,9 @@ func TestNestedGroups(t *testing.T) {
 }
 
 func TestStableIDLinking(t *testing.T) {
+	t.Parallel()
 	t.Run("entryUUID", func(t *testing.T) {
+		t.Parallel()
 		id, err := stableID(entry("uid=alice,ou=people,dc=example,dc=org", map[string][]string{
 			"entryUUID": {"11111111-1111-1111-1111-111111111111"},
 		}))
@@ -63,6 +66,7 @@ func TestStableIDLinking(t *testing.T) {
 	})
 
 	t.Run("objectGUID", func(t *testing.T) {
+		t.Parallel()
 		raw := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 		e := ldapv3.NewEntry("cn=Alice,ou=people,dc=example,dc=org", nil)
 		e.Attributes = append(e.Attributes, &ldapv3.EntryAttribute{
@@ -79,6 +83,7 @@ func TestStableIDLinking(t *testing.T) {
 	})
 
 	t.Run("missing", func(t *testing.T) {
+		t.Parallel()
 		if _, err := stableID(entry("uid=alice,ou=people,dc=example,dc=org", nil)); err == nil {
 			t.Fatal("entry without a stable id was accepted")
 		}
@@ -86,6 +91,7 @@ func TestStableIDLinking(t *testing.T) {
 }
 
 func TestRequiredGroup(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig()
 	cfg.RequiredGroup = "cn=admins,ou=groups,dc=example,dc=org"
 
@@ -114,6 +120,7 @@ func TestRequiredGroup(t *testing.T) {
 }
 
 func TestUserBindRejectsWrongPassword(t *testing.T) {
+	t.Parallel()
 	user := entry("uid=alice,ou=people,dc=example,dc=org", map[string][]string{
 		"entryUUID": {"11111111-1111-1111-1111-111111111111"},
 	})
@@ -128,6 +135,7 @@ func TestUserBindRejectsWrongPassword(t *testing.T) {
 }
 
 func TestAuthenticateUsesDefaultRoleAndName(t *testing.T) {
+	t.Parallel()
 	user := entry("uid=alice,ou=people,dc=example,dc=org", map[string][]string{
 		"entryUUID": {"11111111-1111-1111-1111-111111111111"},
 		"mail":      {"alice@example.org"},
