@@ -71,8 +71,18 @@
 	);
 	const activeTab = $derived(editor.activeTab);
 
-	let executing = $state(false);
-	let runState = $state<RunState | null>(null);
+	// Runs are per tab (#413): a run in one tab neither blocks Run nor shows
+	// its status in another, and each tab keeps its own event stream.
+	let runs = $state<Record<string, RunState>>({});
+	let executingTabs = $state<Record<string, boolean>>({});
+	// Not state: the streams never feed the template.
+	const streams: Record<string, ExecutionStream> = {};
+	const executing = $derived(!!executingTabs[activeTab.id]);
+	// Only the run of the tab's current execution, never a stale one.
+	const runState = $derived.by(() => {
+		const run = runs[activeTab.id];
+		return run && run.executionId === activeTab.executionId ? run : null;
+	});
 	let baseTitle = '';
 	let dark = $state(browser && document.body.classList.contains('dark'));
 	let cursorLine = $state(1);
@@ -96,6 +106,8 @@
 	let conflictOpen = $state(false);
 	let closingIdx = $state<number | null>(null);
 	let closeOpen = $state(false);
+	// The tab "Save" on the close dialog closes once it is saved (#411).
+	let closeAfterSave: string | null = null;
 	let paletteOpen = $state(false);
 	let paletteMode = $state<'commands' | 'quick'>('commands');
 	let shortcutsOpen = $state(false);
@@ -288,21 +300,54 @@
 			closeOpen = true;
 			return;
 		}
-		editor.closeTab(tab.id);
+		removeTab(tab.id);
+	}
+
+	/** Whether the tab is still open, e.g. after awaiting a request. */
+	function isOpen(id: string): boolean {
+		return editor.tabs.some((tab) => tab.id === id);
+	}
+
+	/** Closes a tab and drops its run and event stream. */
+	function removeTab(id: string) {
+		if (tabs.length <= 1) return;
+		streams[id]?.close();
+		delete streams[id];
+		delete runs[id];
+		delete executingTabs[id];
+		editor.closeTab(id);
 	}
 
 	function discardAndClose() {
 		if (closingIdx === null) return;
 		flushSql();
 		const id = tabs[closingIdx]?.id;
-		if (id) editor.closeTab(id);
+		if (id) removeTab(id);
 		closingIdx = null;
 		closeOpen = false;
 	}
 
+	// Save opens on the tab being closed, which stays open until it is saved:
+	// cancelling the save keeps it and its SQL (#411).
 	function saveAndClose() {
-		discardAndClose();
-		openSave('save');
+		if (closingIdx === null) return;
+		const idx = closingIdx;
+		const tab = tabs[idx];
+		closingIdx = null;
+		closeOpen = false;
+		if (!tab) return;
+		if (tab.id !== editor.activeId) switchTab(idx);
+		openSave(tab.readOnly ? 'copy' : 'save');
+		closeAfterSave = tab.id;
+	}
+
+	// A save that ends without saving (cancelled, or a conflict dismissed)
+	// forgets the pending close. A conflict hands over from one dialog to the
+	// other, so the check waits for both to settle.
+	function settleCloseAfterSave() {
+		queueMicrotask(() => {
+			if (!saveOpen && !conflictOpen) closeAfterSave = null;
+		});
 	}
 
 	function isTextTarget(target: EventTarget | null): boolean {
@@ -537,7 +582,9 @@
 			clearTimeout(sqlSyncTimer);
 			sqlSyncTimer = undefined;
 		}
-		editor.updateSql(editor.activeId, editorView.state.doc.toString());
+		// The view holds the tab it last mirrored, which lags the store's active
+		// tab until the sync effect runs: never write one tab's SQL into another.
+		editor.updateSql(syncedTabId, editorView.state.doc.toString());
 	}
 
 	function scheduleSqlSync() {
@@ -608,6 +655,7 @@
 
 		const state = EditorState.create({ doc: editor.activeTab?.sql ?? '', extensions });
 		editorView = new EditorView({ state, parent: editorEl });
+		syncedTabId = editor.activeId;
 		editorReady = true;
 
 		return () => {
@@ -620,7 +668,7 @@
 			unregisterProvider('models');
 			unregisterProvider('queries');
 			unregisterProvider('tables');
-			stream?.close();
+			for (const stream of Object.values(streams)) stream.close();
 		};
 	});
 
@@ -678,7 +726,7 @@
 			tab.statusText = m.components_queryeditor_no_target();
 			return;
 		}
-		executing = true;
+		executingTabs[tab.id] = true;
 		tab.errorMsg = '';
 		tab.results = [];
 		tab.statusText = m.components_queryeditor_running();
@@ -699,13 +747,16 @@
 					apiErrorMessage(error, m.components_queryeditor_failed_to_start_execution())
 				);
 			}
+			// Closed while the run was starting: keep no state, open no stream.
+			if (!isOpen(tab.id)) return;
 			tab.runTarget = data.target ?? null;
 			editor.setExecution(tab.id, data.id);
-			runState = initialRunState(data.id);
-			connectWS(data.id, idx);
+			runs[tab.id] = initialRunState(data.id);
+			connectWS(data.id, tab);
 		} catch (e) {
+			if (!isOpen(tab.id)) return;
 			tab.errorMsg = errorMessage(e);
-			executing = false;
+			executingTabs[tab.id] = false;
 			tab.statusText = m.components_queryeditor_error();
 		}
 	}
@@ -759,8 +810,6 @@
 		}
 	}
 
-	let stream: ExecutionStream | null = null;
-
 	// The results load once the run ended, from its state, never from the
 	// translated status line (#387).
 	const runEnded = $derived(
@@ -796,14 +845,17 @@
 		}
 	}
 
-	function connectWS(execId: string, idx: number) {
-		stream?.close();
-		const tab = tabs[idx];
-		stream = subscribeExecution({
+	function connectWS(execId: string, tab: (typeof tabs)[number]) {
+		streams[tab.id]?.close();
+		const stream = subscribeExecution({
 			workspaceId,
 			executionId: execId,
 			onEvent: (event: ExecutionEvent) => {
-				runState = applyEvent(runState ?? initialRunState(execId), event);
+				const run = runs[tab.id];
+				runs[tab.id] = applyEvent(
+					run?.executionId === execId ? run : initialRunState(execId),
+					event
+				);
 				if (event.type === 'statement_status' && event.status === 'running') {
 					tab.statusText = `Running statement ${event.position}…`;
 					return;
@@ -812,17 +864,18 @@
 				const done = terminalStatus(event);
 				if (done) {
 					tab.statusText = executionStatusText(done);
-					executing = false;
+					executingTabs[tab.id] = false;
 					notifyBackground(done);
 					return;
 				}
 				if (event.type === 'execution_status') tab.statusText = executionStatusText(event.status);
 			},
 			onGaveUp: () => {
-				executing = false;
+				executingTabs[tab.id] = false;
 				tab.statusText = m.components_queryeditor_connection_lost();
 			}
 		});
+		streams[tab.id] = stream;
 	}
 
 	async function rerun(fromPosition: number) {
@@ -838,13 +891,14 @@
 				}
 			});
 			if (error || !data) throw new Error(apiErrorMessage(error, 'Could not re-run'));
+			if (!isOpen(tab.id)) return;
 			tab.results = [];
 			tab.errorMsg = '';
 			tab.statusText = m.components_queryeditor_running();
-			executing = true;
+			executingTabs[tab.id] = true;
 			editor.setExecution(tab.id, data.id);
-			runState = initialRunState(data.id);
-			connectWS(data.id, activeIdx);
+			runs[tab.id] = initialRunState(data.id);
+			connectWS(data.id, tab);
 		} catch (e) {
 			tab.errorMsg = errorMessage(e);
 		}
@@ -906,8 +960,13 @@
 	}
 
 	function onSaved(query: SavedQuery) {
-		editor.markSaved(editor.activeId, query);
+		const id = editor.activeId;
+		editor.markSaved(id, query);
 		savedQueries.onSaved(query);
+		if (closeAfterSave === id) {
+			closeAfterSave = null;
+			removeTab(id);
+		}
 	}
 
 	function onConflict(details: Conflict) {
@@ -1166,7 +1225,13 @@
 	{/if}
 
 	<SaveQueryDialog
-		bind:open={saveOpen}
+		bind:open={
+			() => saveOpen,
+			(open) => {
+				saveOpen = open;
+				if (!open) settleCloseAfterSave();
+			}
+		}
 		tab={activeTab}
 		{workspaceId}
 		spaces={savedQueries.spaces}
@@ -1179,7 +1244,13 @@
 
 	{#if conflict}
 		<SaveConflictDialog
-			bind:open={conflictOpen}
+			bind:open={
+				() => conflictOpen,
+				(open) => {
+					conflictOpen = open;
+					if (!open) settleCloseAfterSave();
+				}
+			}
 			tab={activeTab}
 			{workspaceId}
 			{conflict}
