@@ -2,7 +2,6 @@ package activities
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/bindings"
@@ -48,10 +47,10 @@ func ReconcileCatalogs(ctx context.Context, p ReconcileCatalogsParams) (*Reconci
 func (a *Activities) ReconcileAtBoot(ctx context.Context) {
 	res, err := a.reconcileAll(ctx, true, nil)
 	if err != nil {
-		slog.Warn("reconcile dry run at boot", "err", err)
+		a.logger.WarnContext(ctx, "reconcile dry run at boot", "err", err)
 		return
 	}
-	slog.Info("reconcile dry run at boot", "engines", res.Engines, "changes_needed", res.Mutating, "adopted", res.Adopted, "failed", res.Failed)
+	a.logger.InfoContext(ctx, "reconcile dry run at boot", "engines", res.Engines, "changes_needed", res.Mutating, "adopted", res.Adopted, "failed", res.Failed)
 }
 
 func (a *Activities) reconcileAll(ctx context.Context, dryRun bool, beat func(int)) (*ReconcileCatalogsResult, error) {
@@ -81,11 +80,11 @@ func (a *Activities) reconcileAll(ctx context.Context, dryRun bool, beat func(in
 		res.Engines++
 		rep, runErr := a.reconcileEngine(ctx, r.Engine, r.ClusterID, dryRun, onAction)
 		if _, err := stored.SaveRun(context.WithoutCancel(ctx), a.queries, r.Engine.ID, rep, runErr); err != nil {
-			slog.Warn("save reconcile run", "engine", r.Engine.Name, "err", err)
+			a.logger.WarnContext(ctx, "save reconcile run", "engine", r.Engine.Name, "err", err)
 		}
 		if runErr != nil {
 			res.Failed++
-			slog.Warn("reconcile engine", "engine", r.Engine.Name, "err", runErr)
+			a.logger.WarnContext(ctx, "reconcile engine", "engine", r.Engine.Name, "err", runErr)
 		}
 		res.Mutating += rep.Mutating()
 		res.Adopted += len(rep.Adopted)

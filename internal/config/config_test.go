@@ -1,6 +1,8 @@
 package config
 
 import (
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -152,5 +154,25 @@ func TestPolarisDefaultCredentials(t *testing.T) {
 	got := (&Config{PolarisClientID: "id", PolarisClientSecret: "s"}).PolarisDefaultCredentials()
 	if got["client_id"] != "id" || got["client_secret"] != "s" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+// TestConfig_SlogLevel: BALEIA_LOG_LEVEL takes the slog level names, in any
+// case, and anything else fails Validate (#379).
+func TestConfig_SlogLevel(t *testing.T) {
+	t.Parallel()
+	for raw, want := range map[string]slog.Level{"debug": slog.LevelDebug, "info": slog.LevelInfo, "WARN": slog.LevelWarn, "error": slog.LevelError} {
+		if got, err := (&Config{LogLevel: raw}).SlogLevel(); err != nil || got != want {
+			t.Errorf("SlogLevel(%q) = %v, %v; want %v", raw, got, err, want)
+		}
+	}
+	if _, err := (&Config{LogLevel: "verbose"}).SlogLevel(); err == nil {
+		t.Error("SlogLevel accepted verbose")
+	}
+	c := Load()
+	c.JWTSecret = strings.Repeat("s", 40)
+	c.LogLevel = "verbose"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_LOG_LEVEL") {
+		t.Errorf("Validate = %v, want a BALEIA_LOG_LEVEL error", err)
 	}
 }

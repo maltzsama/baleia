@@ -8,6 +8,7 @@ package mail
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/tls"
 	"embed"
@@ -44,6 +45,8 @@ type Config struct {
 	Password      string
 	From          string
 	DefaultLocale string
+	// Logger receives the logs; nil discards them (#379).
+	Logger *slog.Logger
 }
 
 // Message is a rendered e-mail.
@@ -54,12 +57,13 @@ type Message struct {
 
 // Sender renders templates and sends them over SMTP.
 type Sender struct {
-	cfg Config
+	logger *slog.Logger
+	cfg    Config
 }
 
 // New returns a Sender. A Sender with no Host/Port skips delivery and logs.
 func New(cfg Config) *Sender {
-	return &Sender{cfg: cfg}
+	return &Sender{cfg: cfg, logger: cmp.Or(cfg.Logger, slog.New(slog.DiscardHandler))}
 }
 
 // Supported reports whether the locale has templates.
@@ -124,7 +128,7 @@ func (s *Sender) Send(ctx context.Context, to, locale string, name Template, dat
 		return err
 	}
 	if s.cfg.Host == "" || s.cfg.Port == "" {
-		slog.Warn("SMTP not configured, skipping email", "to", to, "template", name)
+		s.logger.WarnContext(ctx, "SMTP not configured, skipping email", "template", name)
 		return nil
 	}
 

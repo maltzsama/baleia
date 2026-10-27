@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"math"
 	"strconv"
 
@@ -68,7 +67,7 @@ func (a *Activities) reconcileDirectories(ctx context.Context) (*DirectoryReconc
 			if firstErr == nil {
 				firstErr = err
 			}
-			slog.Warn("directory reconcile", "provider", ap.Name, "err", err)
+			a.logger.WarnContext(ctx, "directory reconcile", "provider", ap.Name, "err", err)
 			continue
 		}
 		res.Suspended += suspended
@@ -315,7 +314,7 @@ func (a *Activities) finishReconcileRun(ctx context.Context, run db.DirectoryRec
 		ID: run.ID, Outcome: &o, Seen: int32(seen), Suspended: int32(suspended), Reinstated: int32(reinstated),
 		Error: errText, Actions: raw,
 	}); err != nil {
-		slog.Warn("finish directory reconcile run", "run", run.ID.String(), "err", err)
+		a.logger.WarnContext(ctx, "finish directory reconcile run", "run", run.ID.String(), "err", err)
 	}
 }
 

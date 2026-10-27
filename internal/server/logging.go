@@ -11,7 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // responseRecorder captures the status code and body size for logging.
@@ -78,7 +77,8 @@ func StructuredLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			// Give handlers a place to record an actor resolved downstream (the
 			// WebSocket token flow) for the request log.
-			r = r.WithContext(auth.WithLogActorHolder(r.Context()))
+			ctx := auth.WithLogActorHolder(r.Context())
+			r = r.WithContext(ctx)
 
 			next.ServeHTTP(rec, r)
 
@@ -101,11 +101,9 @@ func StructuredLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			if actor != "" {
 				attrs = append(attrs, "actor_id", actor)
 			}
-			if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
-				attrs = append(attrs, "trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
-			}
-
-			logger.Info("http_request", attrs...)
+			// The logger's handler adds trace_id and span_id from the context
+			// (obs.NewLogger, #379).
+			logger.InfoContext(ctx, "http_request", attrs...)
 		})
 	}
 }

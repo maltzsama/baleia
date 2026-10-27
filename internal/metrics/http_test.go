@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -84,7 +85,7 @@ func TestNoForbiddenValues(t *testing.T) {
 	eng.Statement("", StatementSuccess, "", time.Second, 5, 100)
 	reg.Catalog().DDL("create", errors.New("catalog "+name+" exists"))
 	reg.Schedules().Succeeded("lens-query-poller")
-	reg.WatchBindingStates(func(context.Context) (map[string]int64, error) { return map[string]int64{"active": 1}, nil })
+	reg.WatchBindingStates(slog.New(slog.DiscardHandler), func(context.Context) (map[string]int64, error) { return map[string]int64{"active": 1}, nil })
 
 	uuid := regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 	mail := regexp.MustCompile(`[^@\s"]+@[^@\s"]+\.[a-z]+`)

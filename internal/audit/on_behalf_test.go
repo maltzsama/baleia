@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -16,7 +17,7 @@ func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
-	rec := NewPostgres(q, nil, nil)
+	rec := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	owner := uuid.New()
 	agent := uuid.New()
 

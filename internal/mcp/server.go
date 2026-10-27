@@ -5,6 +5,7 @@
 package mcp
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -50,6 +51,7 @@ func (NopHooks) OnToolCall(context.Context, agentpolicy.Call, Outcome) {}
 
 // Server is the MCP HTTP surface.
 type Server struct {
+	logger   *slog.Logger
 	handlers *api.API
 	gate     *agentpolicy.Gate
 	tokens   agentauth.Store
@@ -61,11 +63,13 @@ type Server struct {
 
 // New builds the MCP server. allowedOrigins is empty by default, which rejects
 // any request carrying an Origin header (native MCP clients do not send one).
-func New(h *api.API, gate *agentpolicy.Gate, tokens agentauth.Store, hooks Hooks, allowedOrigins []string) *Server {
+func New(logger *slog.Logger, h *api.API, gate *agentpolicy.Gate, tokens agentauth.Store, hooks Hooks, allowedOrigins []string) *Server {
+	logger = cmp.Or(logger, slog.New(slog.DiscardHandler))
 	if hooks == nil {
 		hooks = NopHooks{}
 	}
 	s := &Server{
+		logger:   logger,
 		handlers: h,
 		gate:     gate,
 		tokens:   tokens,
@@ -82,7 +86,7 @@ func New(h *api.API, gate *agentpolicy.Gate, tokens agentauth.Store, hooks Hooks
 
 	stream := mcpsdk.NewStreamableHTTPHandler(
 		func(*http.Request) *mcpsdk.Server { return s.sdk },
-		&mcpsdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: slog.Default()},
+		&mcpsdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: logger},
 	)
 	s.http = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.authorize(w, r) {
@@ -129,7 +133,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {
 	if err != nil {
 		var ae *agentauth.AuthError
 		if errors.As(err, &ae) {
-			slog.Info("agent token rejected", "prefix", ae.Prefix, "reason", ae.Reason)
+			s.logger.InfoContext(r.Context(), "agent token rejected", "prefix", ae.Prefix, "reason", ae.Reason)
 		}
 		unauthorized(w)
 		return false

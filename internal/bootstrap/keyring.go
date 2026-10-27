@@ -25,7 +25,7 @@ var ErrEncryptionKeyRequired = errors.New("BALEIA_ENCRYPTION_KEY is required: th
 // nil keyring and a warning, so first boot is not blocked; saving a credential
 // then fails with a clear error until a key is set. If credentials already
 // exist, startup is refused.
-func LoadKeyring(ctx context.Context, cfg *config.Config, count CredentialCounter) (*crypto.Keyring, error) {
+func LoadKeyring(ctx context.Context, logger *slog.Logger, cfg *config.Config, count CredentialCounter) (*crypto.Keyring, error) {
 	if cfg.EncryptionKey == "" {
 		n, err := count(ctx)
 		if err != nil {
@@ -34,7 +34,7 @@ func LoadKeyring(ctx context.Context, cfg *config.Config, count CredentialCounte
 		if n > 0 {
 			return nil, ErrEncryptionKeyRequired
 		}
-		slog.Warn("BALEIA_ENCRYPTION_KEY is not set: connection credentials cannot be saved until it is")
+		logger.WarnContext(ctx, "BALEIA_ENCRYPTION_KEY is not set: connection credentials cannot be saved until it is")
 		return nil, nil
 	}
 	return crypto.NewKeyring(cfg.EncryptionKey, cfg.EncryptionKeyPrevious)

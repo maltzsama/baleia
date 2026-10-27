@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"slices"
 	"strings"
@@ -153,7 +152,7 @@ func (t connectionTest) run(ctx context.Context) TestCatalogConnectionResult {
 	add := func(c ConnectionCheck, err error) bool {
 		if err != nil {
 			code := classifyTestError(err)
-			slog.Info("connection test check failed", "check", c.Name, "code", code, "request_id", middleware.GetReqID(ctx), "err", err)
+			t.h.logger.InfoContext(ctx, "connection test check failed", "check", c.Name, "code", code, "request_id", middleware.GetReqID(ctx), "err", err)
 			c.Ok, c.ErrorCode = false, &code
 			if res.Success {
 				res.Success = false
@@ -268,7 +267,7 @@ func (t connectionTest) bind(ctx context.Context, b testBind) error {
 		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ephemeralDropTime)
 		defer cancel()
 		if err := t.h.binder.DropEphemeral(dctx, t.h.queries, ref, name); err != nil {
-			slog.Warn("drop test catalog; the sweeper will retry", "catalog", name, "err", err)
+			t.h.logger.WarnContext(dctx, "drop test catalog; the sweeper will retry", "catalog", name, "err", err)
 		}
 	}()
 	bctx, cancel := context.WithTimeout(ctx, bindCheckTimeout)

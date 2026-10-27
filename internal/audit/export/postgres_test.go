@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ func TestPostgres_EventsAndCursor(t *testing.T) {
 	t.Parallel()
 	q := db.New(testdb.New(t))
 	ctx := context.Background()
-	rec := audit.NewPostgres(q, nil, nil)
+	rec := audit.NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	for range 2 {
 		if err := rec.Record(ctx, audit.Event{Action: audit.CatalogUpdate, ResourceType: "catalog", Outcome: audit.Allowed}); err != nil {
 			t.Fatal(err)

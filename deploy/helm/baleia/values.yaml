@@ -22,6 +22,8 @@ secrets:
 
 # Environment variables surfaced as a ConfigMap (env, not secrets).
 config:
+  # Lowest level the api and worker log, as JSON lines (debug, info, warn, error).
+  BALEIA_LOG_LEVEL: info
   PUBLIC_URL: ""
   TEMPORAL_HOST: ""       # default: temporal.<namespace>.svc:7233
   TRINO_URL: ""           # empty + trino.enabled -> in-chart service

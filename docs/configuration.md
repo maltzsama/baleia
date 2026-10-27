@@ -34,6 +34,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_SCHEDULES_ENABLED` | `true` | Ensure recurring Temporal Schedules (Lens pollers, table health, retriever) at worker boot |
 | `BALEIA_CONNECTIONS_DENY_CIDRS` | _(unset)_ | Comma-separated CIDRs that connections may never reach, added to the built-in deny list (loopback, link-local incl. cloud metadata `169.254.169.254`, `0.0.0.0/8`) — see [ADR 0011](adr/0011-direct-connections-security.md) |
 | `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, connections may only reach these comma-separated CIDRs (the deny list still wins) |
+| `BALEIA_LOG_LEVEL` | `info` | Lowest level the API, the worker and `cmd/migrate` log: `debug`, `info`, `warn` or `error`. They log JSON lines to stdout; a line logged during a traced request or activity carries its `trace_id` and `span_id` (#379) |
 | `BALEIA_METRICS_ENABLED` | `true` | Serve Prometheus metrics at the API's `/metrics` (the catalog is `internal/metrics`, #87) |
 | `BALEIA_METRICS_TOKEN` | _(unset)_ | When set, `/metrics` (API and worker) needs `Authorization: Bearer <token>`; it is never behind the user JWT. A credential: in the chart it is the optional Secret key `BALEIA_METRICS_TOKEN` (`secrets.values` or `existingSecret`), never `config` |
 | `WORKER_HEALTH_PORT` | `8081` | The worker's liveness listener (`/healthz`) |

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -62,7 +63,7 @@ func fixtures() (*fakeTokenStore, string) {
 func newTestServer(t *testing.T, gate *agentpolicy.Gate, origins []string) (*httptest.Server, string) {
 	t.Helper()
 	tokens, raw := fixtures()
-	server := New(nil, gate, tokens, nil, origins)
+	server := New(slog.New(slog.DiscardHandler), nil, gate, tokens, nil, origins)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
 	return ts, raw
@@ -189,7 +190,7 @@ func TestRefusalBeforeHandler(t *testing.T) {
 		Policy: []byte(`{"tools":[]}`),
 	}}
 	gate := agentpolicy.NewGate(store, nil, agentpolicy.DefaultCeilings(), dialect.NewRegistry())
-	server := New(nil, gate, tokens, nil, nil)
+	server := New(slog.New(slog.DiscardHandler), nil, gate, tokens, nil, nil)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
 

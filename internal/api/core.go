@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
@@ -23,6 +24,8 @@ import (
 // connections and engines, the audit trail and the resolved settings. Each
 // group embeds the same *core and owns the rest of its state.
 type core struct {
+	// logger is the process logger (#379); every group logs through it.
+	logger  *slog.Logger
 	queries db.Querier
 	pool    *pgxpool.Pool
 	// tx runs dependent writes in one transaction (poolTx outside tests).

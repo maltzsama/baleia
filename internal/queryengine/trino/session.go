@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -118,7 +117,7 @@ func (s *session) applyHeaders(h http.Header) {
 		delete(s.prepared, strings.TrimSpace(k))
 	}
 	if h.Get("X-Trino-Set-Authorization-User") != "" {
-		slog.Warn("trino asked to change the session user; ignored", "engine", s.engine.id)
+		s.engine.logger.Warn("trino asked to change the session user; ignored", "engine", s.engine.id)
 	}
 }
 

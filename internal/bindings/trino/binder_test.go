@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -29,7 +30,7 @@ func cfg(kind connections.Kind, values, secrets map[string]string) connections.C
 func TestProject_PolarisBuildsPolarisShape(t *testing.T) {
 	t.Parallel()
 	src := cfg(connections.KindPolaris, map[string]string{"url": "http://polaris:8181", "client_id": "abc", "realm": "POLARIS"}, map[string]string{"client_secret": "def"})
-	p, err := New(nil, nil).Project(bindings.BindingSpec{EngineCatalog: "baleia_polaris", SourceRef: "baleia"}, src)
+	p, err := New(slog.New(slog.DiscardHandler), nil, nil).Project(bindings.BindingSpec{EngineCatalog: "baleia_polaris", SourceRef: "baleia"}, src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +258,7 @@ func TestProject_Kinds(t *testing.T) {
 			want: map[string]string{"hive.metastore": "glue", "hive.metastore.glue.region": "eu-west-1", "fs.s3.enabled": "true"},
 		},
 	}
-	b := New(nil, nil)
+	b := New(slog.New(slog.DiscardHandler), nil, nil)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -316,7 +317,7 @@ func TestProject_Kinds(t *testing.T) {
 
 func TestExtraProps(t *testing.T) {
 	t.Parallel()
-	b := New(nil, nil)
+	b := New(slog.New(slog.DiscardHandler), nil, nil)
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "pw"})
 	for _, key := range []string{"connection-url", "connection-password", "connection-user", "iceberg.rest-catalog.uri", "iceberg.rest-catalog.oauth2.credential",
 		"iceberg.rest-catalog.security", "s3.aws-secret-key", "s3.aws-access-key", "hive.metastore.uri", "iceberg.catalog.type", "x.token", "connector.name"} {
@@ -339,7 +340,7 @@ func TestExtraProps(t *testing.T) {
 
 func TestReservedNamesAndConnectors(t *testing.T) {
 	t.Parallel()
-	b := New(nil, nil)
+	b := New(slog.New(slog.DiscardHandler), nil, nil)
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db"}, nil)
 	for _, name := range b.ReservedNames() {
 		if _, err := b.Project(bindings.BindingSpec{EngineCatalog: name}, src); !errors.Is(err, bindings.ErrReservedName) {
@@ -432,7 +433,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
-	b := New(trinoclient.New(co.srv.URL, "baleia-admin"), st)
+	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st)
 	eng := bindings.EngineRef{ClusterID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}
 	for i, src := range sources {
 		p, err := b.Project(bindings.BindingSpec{EngineCatalog: "c" + string(rune('a'+i)), SourceRef: "w"}, src)
@@ -456,7 +457,7 @@ func TestLifecycleAndConfirm(t *testing.T) {
 	t.Parallel()
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
-	b := New(trinoclient.New(co.srv.URL, "baleia-admin"), st)
+	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st)
 	eng := bindings.EngineRef{ClusterID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}
 	ctx := context.Background()
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db"}, nil)
@@ -510,7 +511,7 @@ func TestLifecycleAndConfirm(t *testing.T) {
 // binder); this pins the binder side of it.
 func TestSupports(t *testing.T) {
 	t.Parallel()
-	got := New(nil, nil).Supports()
+	got := New(slog.New(slog.DiscardHandler), nil, nil).Supports()
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
@@ -536,7 +537,7 @@ func TestSupports(t *testing.T) {
 // the plugin's catalog_version (#31).
 func TestProject_SecretReference(t *testing.T) {
 	t.Setenv("BALEIA_TEST_PASSWORD", "s3cret")
-	b := New(nil, nil)
+	b := New(slog.New(slog.DiscardHandler), nil, nil)
 	ref := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "@baleia-secret[env:BALEIA_TEST_PASSWORD]"})
 	lit := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "s3cret"})
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -391,7 +392,7 @@ func TestFromStoredParseFailureIsUnreadable(t *testing.T) {
 func TestConnectionsMatrixUpToDate(t *testing.T) {
 	t.Parallel()
 	// The bindable column comes from the binders (bindings.TestSupportsMatrixMatchesDocs).
-	got := Markdown(registry(t, connections.DialerOptions{}), bindtrino.New(nil, nil))
+	got := Markdown(registry(t, connections.DialerOptions{}), bindtrino.New(slog.New(slog.DiscardHandler), nil, nil))
 	const path = "../../../docs/connections.md"
 	if os.Getenv("BALEIA_UPDATE_DOCS") == "1" {
 		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {

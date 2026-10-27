@@ -9,7 +9,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-func Up(ctx context.Context, dsn string) error {
+func Up(ctx context.Context, logger *slog.Logger, dsn string) error {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return err
@@ -24,6 +24,6 @@ func Up(ctx context.Context, dsn string) error {
 		return err
 	}
 
-	slog.Info("migrations applied successfully")
+	logger.InfoContext(ctx, "migrations applied successfully")
 	return nil
 }

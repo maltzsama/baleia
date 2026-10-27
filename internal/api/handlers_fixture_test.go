@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
@@ -44,6 +45,7 @@ type handlerFields struct {
 // testAPI builds handlers from the fields a test sets; the rest stay zero.
 func testAPI(f handlerFields) *API {
 	c := &core{
+		logger:         discardLogger,
 		versionCache:   f.versionCache,
 		queries:        f.queries,
 		pool:           f.pool,
@@ -102,3 +104,6 @@ type engineStatusFunc func(ctx context.Context, e db.Engine) (SystemStatusItemSt
 func (f engineStatusFunc) ProbeEngine(ctx context.Context, e db.Engine) (SystemStatusItemStatus, string) {
 	return f(ctx, e)
 }
+
+// discardLogger is the logger of tests that do not read the log.
+var discardLogger = slog.New(slog.DiscardHandler)

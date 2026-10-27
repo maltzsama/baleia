@@ -208,7 +208,7 @@ func lensRouter(q db.Querier, tc client.Client, userID, role string) http.Handle
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
 		r.Use(func(next http.Handler) http.Handler { return asUser(userID, role, next) })
-		RegisterLensRoutes(r, q, &config.Config{TrinoUserIdentity: "uuid"}, tc, testEngines(), nil)
+		RegisterLensRoutes(r, discardLogger, q, &config.Config{TrinoUserIdentity: "uuid"}, tc, testEngines(), nil)
 	})
 	return r
 }
@@ -328,7 +328,7 @@ func TestLensRoutesRequireAnIdentity(t *testing.T) {
 	t.Parallel()
 	q := &explorerFake{}
 	r := chi.NewRouter()
-	RegisterLensRoutes(r, q, &config.Config{}, nil, nil, nil) // no auth middleware in front: no identity in ctx
+	RegisterLensRoutes(r, discardLogger, q, &config.Config{}, nil, nil, nil) // no auth middleware in front: no identity in ctx
 	for _, p := range []string{"/lens/queries", "/lens/analytics/queries"} {
 		if code, _ := get(t, r, p); code != 401 {
 			t.Errorf("%s without identity: %d, want 401", p, code)

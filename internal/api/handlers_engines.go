@@ -41,7 +41,7 @@ func engineToPublic(e db.Engine) Engine {
 	return out
 }
 
-func bindingToPublic(b db.CatalogBinding) CatalogBinding {
+func bindingToPublic(logger *slog.Logger, b db.CatalogBinding) CatalogBinding {
 	return CatalogBinding{
 		Id:                openapi_types.UUID(b.ID.Bytes),
 		CatalogId:         openapi_types.UUID(b.CatalogID.Bytes),
@@ -50,15 +50,15 @@ func bindingToPublic(b db.CatalogBinding) CatalogBinding {
 		Connector:         b.Connector,
 		Mode:              CatalogBindingMode(b.Mode),
 		Enabled:           b.Enabled,
-		ExtraProps:        ptrExtraProps(b.ExtraProps),
+		ExtraProps:        ptrExtraProps(logger, b.ExtraProps),
 		LifecycleState:    ptrLifecycle(b.LifecycleState),
 		LastErrorCode:     b.LastErrorCode,
 		LastErrorMessage:  b.LastErrorMessage,
 	}
 }
 
-func ptrExtraProps(raw []byte) *map[string]string {
-	m := extraPropsOf(raw)
+func ptrExtraProps(logger *slog.Logger, raw []byte) *map[string]string {
+	m := extraPropsOf(logger, raw)
 	return &m
 }
 
@@ -141,7 +141,7 @@ func (h *CatalogHandlers) CreateEngine(ctx context.Context, request CreateEngine
 	pingCtx, cancel := context.WithTimeout(ctx, enginePingTimeout)
 	defer cancel()
 	if err := provider.Ping(pingCtx, cfg); err != nil {
-		slog.Info("engine reachability check failed", "connection", conn.Name, "err", err)
+		h.logger.InfoContext(ctx, "engine reachability check failed", "connection", conn.Name, "err", err)
 		return invalid("engine_unreachable", "connection_id", connectionTestError(err)), nil
 	}
 	natives, err := catalogs.NativeNames(pingCtx, provider, cfg, conn.Name)

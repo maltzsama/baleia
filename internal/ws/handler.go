@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -69,6 +70,7 @@ type QuerierQueryStatement struct {
 }
 
 type Handler struct {
+	logger      *slog.Logger
 	queries     Querier
 	jwtSecret   string
 	tickets     *wsticket.Store
@@ -82,8 +84,9 @@ type Handler struct {
 // SetTickets wires the shared single-use ticket store (#26).
 func (h *Handler) SetTickets(store *wsticket.Store) { h.tickets = store }
 
-func New(queries Querier, jwtSecret, s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket string, s3UseSSL bool) *Handler {
+func New(logger *slog.Logger, queries Querier, jwtSecret, s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket string, s3UseSSL bool) *Handler {
 	return &Handler{
+		logger:      cmp.Or(logger, slog.New(slog.DiscardHandler)),
 		queries:     queries,
 		jwtSecret:   jwtSecret,
 		tickets:     nil,
@@ -197,7 +200,7 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("websocket upgrade", "err", err)
+		h.logger.ErrorContext(r.Context(), "websocket upgrade", "err", err)
 		return
 	}
 	defer conn.Close()
@@ -236,7 +239,7 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 		case <-done:
 			return
 		case <-ctx.Done():
-			sendExecutionStatus(conn, executionID, &seq, "failed", strPtr("timeout"))
+			sendExecutionStatus(h.logger, conn, executionID, &seq, "failed", strPtr("timeout"))
 			return
 		case <-pingTicker.C:
 			conn.SetWriteDeadline(time.Now().Add(writeTimeout))
@@ -257,7 +260,7 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 
 	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, execID, workspaceID)
 	if err != nil {
-		sendExecutionStatus(conn, executionID, seq, "failed", strPtr("not_found"))
+		sendExecutionStatus(h.logger, conn, executionID, seq, "failed", strPtr("not_found"))
 		return false
 	}
 
@@ -269,7 +272,7 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 	// The first message of every connection replaces the client state.
 	if *lastStatus == "" {
 		snapshot := executionSnapshot(execution)
-		sendEvent(conn, WSEvent{
+		sendEvent(h.logger, conn, WSEvent{
 			Type:        "snapshot",
 			ExecutionID: executionID,
 			Seq:         nextSeq(seq),
@@ -293,7 +296,7 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 		snapshot := statementSnapshot(stmt)
 		count := snapshot.ResultCount
 		truncated := snapshot.Truncated
-		sendEvent(conn, WSEvent{
+		sendEvent(h.logger, conn, WSEvent{
 			Type:         "statement_status",
 			ExecutionID:  executionID,
 			Seq:          nextSeq(seq),
@@ -311,7 +314,7 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 
 	if execution.Status != *lastStatus {
 		*lastStatus = execution.Status
-		sendExecutionStatus(conn, executionID, seq, execution.Status, execution.ErrorCode)
+		sendExecutionStatus(h.logger, conn, executionID, seq, execution.Status, execution.ErrorCode)
 		if terminal(execution.Status) {
 			return false
 		}
@@ -380,8 +383,8 @@ func statementSnapshot(s QuerierQueryStatement) StatementSnapshot {
 	return out
 }
 
-func sendExecutionStatus(conn *websocket.Conn, executionID string, seq *int64, status string, code *string) {
-	sendEvent(conn, WSEvent{
+func sendExecutionStatus(logger *slog.Logger, conn *websocket.Conn, executionID string, seq *int64, status string, code *string) {
+	sendEvent(logger, conn, WSEvent{
 		Type:        "execution_status",
 		ExecutionID: executionID,
 		Seq:         nextSeq(seq),
@@ -391,7 +394,7 @@ func sendExecutionStatus(conn *websocket.Conn, executionID string, seq *int64, s
 	})
 }
 
-func sendEvent(conn *websocket.Conn, event WSEvent) {
+func sendEvent(logger *slog.Logger, conn *websocket.Conn, event WSEvent) {
 	var lastErr error
 	for i := 0; i < maxWriteRetry; i++ {
 		conn.SetWriteDeadline(time.Now().Add(writeTimeout))
@@ -402,7 +405,7 @@ func sendEvent(conn *websocket.Conn, event WSEvent) {
 		}
 		return
 	}
-	slog.Error("websocket write failed after retries", "err", lastErr)
+	logger.Error("websocket write failed after retries", "err", lastErr)
 }
 
 func terminal(status string) bool {

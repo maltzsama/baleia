@@ -36,14 +36,19 @@ const taskQueue = "baleia-task-queue"
 
 func main() {
 	cfg := config.Load()
-	if err := run(cfg); err != nil {
-		slog.Error("worker", "err", err)
+	// An invalid level logs at info until Validate rejects it in run.
+	level, _ := cfg.SlogLevel()
+	// JSON like the api's (#379); the Temporal SDK logs through it too.
+	logger := obs.NewLogger(os.Stdout, level)
+	slog.SetDefault(logger)
+	if err := run(cfg, logger); err != nil {
+		logger.ErrorContext(context.Background(), "worker", "err", err)
 		os.Exit(1)
 	}
 }
 
 // run returns instead of exiting so every deferred Close runs.
-func run(cfg *config.Config) error {
+func run(cfg *config.Config, logger *slog.Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -53,7 +58,7 @@ func run(cfg *config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	core, err := app.New(ctx, cfg, app.Options{Service: "worker", PoolSize: 10})
+	core, err := app.New(ctx, cfg, app.Options{Service: "worker", PoolSize: 10, Logger: logger})
 	if err != nil {
 		return err
 	}
@@ -66,7 +71,7 @@ func run(cfg *config.Config) error {
 		srv := &http.Server{Addr: cfg.WorkerMetricsAddr, Handler: metricsMux(reg, cfg.MetricsToken), ReadHeaderTimeout: 5 * time.Second}
 		go func() {
 			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				slog.Error("worker metrics listener", "addr", cfg.WorkerMetricsAddr, "err", err)
+				logger.ErrorContext(ctx, "worker metrics listener", "addr", cfg.WorkerMetricsAddr, "err", err)
 			}
 		}()
 		defer srv.Close()
@@ -77,7 +82,7 @@ func run(cfg *config.Config) error {
 	// Lens reads the Trino coordinator's runtime state as the service identity.
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.Dialer.HTTPClient(60*time.Second)))
 
-	act := activities.New(pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
+	act := activities.New(logger, pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
 	act.SetMetrics(reg)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(core.Queries, core.Keyring, core.Connections, core.Engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones
@@ -92,7 +97,7 @@ func run(cfg *config.Config) error {
 		_, err := q.DisableMissingAdoptedBindings(ctx, eng.ID)
 		return err
 	})
-	reg.WatchMetadataStaleness(core.Queries.MaxMetadataStalenessSeconds)
+	reg.WatchMetadataStaleness(logger, core.Queries.MaxMetadataStalenessSeconds)
 	// Binding reconciliation (#37): managed drift only; adopted catalogs are
 	// reported, never changed.
 	act.SetEphemeralSweeper(func(ctx context.Context) (int, error) { return binder.SweepEphemeral(ctx, core.Queries) })
@@ -155,12 +160,12 @@ func run(cfg *config.Config) error {
 		if err := ensureSchedules(ctx, core.Temporal, cfg); err != nil {
 			return err
 		}
-		slog.Info("temporal schedules ensured")
+		logger.InfoContext(ctx, "temporal schedules ensured")
 	}
 
-	slog.Info("worker started", "queue", taskQueue, "schedules_enabled", cfg.SchedulesEnabled)
+	logger.InfoContext(ctx, "worker started", "queue", taskQueue, "schedules_enabled", cfg.SchedulesEnabled)
 
-	go serveHealth(cfg.WorkerHealthPort)
+	go serveHealth(ctx, logger, cfg.WorkerHealthPort)
 
 	// One dry reconcile at boot: drift shows up in the log (counts only).
 	go func() {
@@ -206,9 +211,9 @@ func ensureSchedules(ctx context.Context, c client.Client, cfg *config.Config) e
 
 // serveHealth exposes a liveness endpoint Kubernetes can probe. If the port
 // cannot be bound the worker still starts; the probe simply stays down.
-func serveHealth(port string) {
+func serveHealth(ctx context.Context, logger *slog.Logger, port string) {
 	if _, err := strconv.Atoi(port); err != nil {
-		slog.Error("invalid health port", "port", port, "err", err)
+		logger.ErrorContext(ctx, "invalid health port", "port", port, "err", err)
 		return
 	}
 
@@ -217,7 +222,7 @@ func serveHealth(port string) {
 		w.WriteHeader(http.StatusOK)
 	})
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		slog.Error("health server", "port", port, "err", err)
+		logger.ErrorContext(ctx, "health server", "port", port, "err", err)
 	}
 }
 

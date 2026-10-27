@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -21,7 +22,8 @@ import (
 
 func newTestLogger() (*slog.Logger, *bytes.Buffer) {
 	var buf bytes.Buffer
-	return slog.New(slog.NewJSONHandler(&buf, nil)), &buf
+	// The process logger: its handler adds the trace (#379).
+	return obs.NewLogger(&buf, slog.LevelInfo), &buf
 }
 
 func logEntry(t *testing.T, buf *bytes.Buffer) map[string]any {

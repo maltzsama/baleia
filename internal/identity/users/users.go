@@ -4,6 +4,7 @@
 package users
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -69,6 +70,8 @@ type Config struct {
 	PublicURL     string
 	DefaultLocale string
 	PasswordCost  int
+	// Logger receives the logs; nil discards them (#379).
+	Logger *slog.Logger
 }
 
 // InviteTTL is how long an invitation link stays valid.
@@ -90,6 +93,7 @@ const (
 
 // Service administers accounts.
 type Service struct {
+	logger   *slog.Logger
 	store    Store
 	tx       Tx
 	mailer   Mailer
@@ -99,7 +103,7 @@ type Service struct {
 
 // New builds the service.
 func New(store Store, tx Tx, mailer Mailer, sessions Sessions, cfg Config) *Service {
-	return &Service{store: store, tx: tx, mailer: mailer, sessions: sessions, cfg: cfg}
+	return &Service{store: store, tx: tx, mailer: mailer, sessions: sessions, cfg: cfg, logger: cmp.Or(cfg.Logger, slog.New(slog.DiscardHandler))}
 }
 
 // List returns every account.
@@ -159,7 +163,7 @@ func (s *Service) Invite(ctx context.Context, email, role string) (db.User, erro
 		"InviteURL": inviteURL,
 	}); err != nil {
 		// The link carries the invitation token: never log it.
-		slog.Warn("failed to send invite email", "err", err, "user_id", user.ID.String())
+		s.logger.WarnContext(ctx, "failed to send invite email", "err", err, "user_id", user.ID.String())
 	}
 	return user, nil
 }

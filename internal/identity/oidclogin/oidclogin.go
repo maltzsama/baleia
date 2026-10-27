@@ -4,10 +4,12 @@
 package oidclogin
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -60,6 +62,8 @@ type Config struct {
 	PublicURL string
 	// CacheTTL is how long a discovered provider is reused.
 	CacheTTL time.Duration
+	// Logger receives the logs; nil discards them (#379).
+	Logger *slog.Logger
 }
 
 // Service starts and finishes OIDC logins.
@@ -81,6 +85,7 @@ type cacheEntry struct {
 
 // New builds the service; keyring opens the sealed provider configurations.
 func New(store Store, accounts provision.Accounts, keyring *crypto.Keyring, discover Discover, cfg Config) *Service {
+	cfg.Logger = cmp.Or(cfg.Logger, slog.New(slog.DiscardHandler))
 	return &Service{store: store, accounts: accounts, keyring: keyring, discover: discover, cfg: cfg}
 }
 
@@ -189,7 +194,7 @@ func (s *Service) Finish(ctx context.Context, providerID pgtype.UUID, state, coo
 		return db.User{}, nil, ErrExchange
 	}
 
-	user, err := provision.OIDCUser(ctx, s.accounts, providerID, cfg, info)
+	user, err := provision.OIDCUser(ctx, s.cfg.Logger, s.accounts, providerID, cfg, info)
 	if err != nil {
 		return db.User{}, nil, err
 	}

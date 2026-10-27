@@ -4,6 +4,7 @@
 package executions
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,6 +70,8 @@ type Dialects interface {
 type Config struct {
 	StatementTimeout time.Duration
 	ExecutionTimeout time.Duration
+	// Logger receives the logs; nil discards them (#379).
+	Logger *slog.Logger
 }
 
 // ErrNotFound: no execution (or statement) has this id in the workspace.
@@ -79,6 +82,7 @@ const TaskQueue = "baleia-task-queue"
 
 // Service runs and reads executions.
 type Service struct {
+	logger    *slog.Logger
 	store     Store
 	workflows Workflows
 	engines   Engines
@@ -90,7 +94,7 @@ type Service struct {
 // stops the workflow; dialects may be nil, in which case every script is
 // split as Trino.
 func New(store Store, workflows Workflows, engines Engines, dialects Dialects, cfg Config) *Service {
-	return &Service{store: store, workflows: workflows, engines: engines, dialects: dialects, cfg: cfg}
+	return &Service{store: store, workflows: workflows, engines: engines, dialects: dialects, cfg: cfg, logger: cmp.Or(cfg.Logger, slog.New(slog.DiscardHandler))}
 }
 
 // Run is one execution to start on a resolved target.
@@ -180,7 +184,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 		failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		if _, ferr := s.store.UpdateQueryExecution(failCtx, db.UpdateQueryExecutionParams{ID: execution.ID, Status: "failed"}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
-			slog.Error("failed to mark execution failed after workflow start error",
+			s.logger.ErrorContext(ctx, "failed to mark execution failed after workflow start error",
 				"execution_id", executionID, "start_err", err, "mark_err", ferr)
 		}
 		return db.QueryExecution{}, err
@@ -214,7 +218,7 @@ func (s *Service) Cancel(ctx context.Context, ws, id pgtype.UUID) (execution db.
 		cancelErr := s.workflows.CancelWorkflow(ctx, WorkflowID(id), "")
 		var notFound *serviceerror.NotFound
 		if cancelErr != nil && !errors.As(cancelErr, &notFound) {
-			slog.Warn("failed to cancel temporal workflow", "execution_id", id.String(), "err", cancelErr)
+			s.logger.WarnContext(ctx, "failed to cancel temporal workflow", "execution_id", id.String(), "err", cancelErr)
 		}
 		// The worker running it may be gone: stop the statements on the
 		// engine through their persisted handles too.
@@ -250,7 +254,7 @@ func (s *Service) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
 		eng, err = s.engines.DefaultTrino(ctx)
 	}
 	if err != nil {
-		slog.Warn("cancel on engine: no engine", "execution_id", e.ID.String(), "err", err)
+		s.logger.WarnContext(ctx, "cancel on engine: no engine", "execution_id", e.ID.String(), "err", err)
 		return
 	}
 	for _, r := range rows {
@@ -259,7 +263,7 @@ func (s *Service) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
 			continue
 		}
 		if err := eng.Cancel(ctx, handle); err != nil {
-			slog.Warn("cancel on engine failed", "execution_id", e.ID.String(), "position", r.Position, "err", err)
+			s.logger.WarnContext(ctx, "cancel on engine failed", "execution_id", e.ID.String(), "position", r.Position, "err", err)
 		}
 	}
 }

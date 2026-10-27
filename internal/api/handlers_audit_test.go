@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestAuditList_Scoping(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
-	rec := audit.NewPostgres(q, nil, nil)
+	rec := audit.NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	const alice, bob = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 	as := func(user string) context.Context {
 		return context.WithValue(context.Background(), auth.ContextKeyUserID, user)

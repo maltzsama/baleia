@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
@@ -62,12 +61,12 @@ func notManaged() UnprocessableEntityJSONResponse {
 
 // observe records what the engine reports after a procedure; it never fails
 // the request (the reconciler, #37, observes again).
-func observe(ctx context.Context, l bindings.Lifecycle) {
+func (h *core) observe(ctx context.Context, l bindings.Lifecycle) {
 	// Bounded: it outlives a disconnected client, never a stuck engine.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), observeTimeout)
 	defer cancel()
 	if _, err := l.Observe(ctx); err != nil {
-		slog.Warn("observe engine catalogs", "engine", l.Engine.ID, "err", err)
+		h.logger.WarnContext(ctx, "observe engine catalogs", "engine", l.Engine.ID, "err", err)
 	}
 }
 
@@ -111,7 +110,7 @@ func (h *core) catalogResponse(ctx context.Context, cat db.Catalog, b db.Catalog
 func (h *core) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Catalog) {
 	st, err := h.topology.SyncState(ctx, id)
 	if err != nil {
-		slog.Warn("catalog metadata freshness", "err", err)
+		h.logger.WarnContext(ctx, "catalog metadata freshness", "err", err)
 		return
 	}
 	status := CatalogMetadataSyncStatusNever
@@ -131,7 +130,7 @@ func (h *core) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Catalog
 
 // bindingResponse is a binding with its derived status and lifecycle.
 func (h *core) bindingResponse(ctx context.Context, b db.CatalogBinding, version string) CatalogBinding {
-	out := bindingToPublic(b)
+	out := bindingToPublic(h.logger, b)
 	if acts := h.catalogBindingActions(ctx, dbCatalogBindingRef{catalogID: b.CatalogID}); acts != nil {
 		out.AllowedActions = &acts
 	}
