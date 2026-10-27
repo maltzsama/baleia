@@ -303,6 +303,11 @@
 		removeTab(tab.id);
 	}
 
+	/** Whether the tab is still open, e.g. after awaiting a request. */
+	function isOpen(id: string): boolean {
+		return editor.tabs.some((tab) => tab.id === id);
+	}
+
 	/** Closes a tab and drops its run and event stream. */
 	function removeTab(id: string) {
 		if (tabs.length <= 1) return;
@@ -742,11 +747,14 @@
 					apiErrorMessage(error, m.components_queryeditor_failed_to_start_execution())
 				);
 			}
+			// Closed while the run was starting: keep no state, open no stream.
+			if (!isOpen(tab.id)) return;
 			tab.runTarget = data.target ?? null;
 			editor.setExecution(tab.id, data.id);
 			runs[tab.id] = initialRunState(data.id);
 			connectWS(data.id, tab);
 		} catch (e) {
+			if (!isOpen(tab.id)) return;
 			tab.errorMsg = errorMessage(e);
 			executingTabs[tab.id] = false;
 			tab.statusText = m.components_queryeditor_error();
@@ -883,6 +891,7 @@
 				}
 			});
 			if (error || !data) throw new Error(apiErrorMessage(error, 'Could not re-run'));
+			if (!isOpen(tab.id)) return;
 			tab.results = [];
 			tab.errorMsg = '';
 			tab.statusText = m.components_queryeditor_running();

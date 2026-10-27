@@ -347,4 +347,49 @@ describe('QueryEditor', () => {
 		await waitFor(() => expect(screen.getByTestId('results-area')).toBeTruthy());
 		expect((screen.getByTestId('run-current') as HTMLButtonElement).disabled).toBe(true);
 	});
+
+	// CodeRabbit on #440: a tab closed while its run starts gets no stream.
+	it('opens no stream for a tab closed while its run starts', async () => {
+		mockWorkbench();
+		let release = () => {};
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const seen = { started: false, tickets: 0 };
+		server.use(
+			http.post('/dialects/{name}/split', ({ response }) =>
+				response(200).json([{ start: 0, end: 8 }])
+			),
+			http.post('/workspaces/{id}/executions', async ({ response }) => {
+				seen.started = true;
+				await gate;
+				return response(202).json({
+					id: EXECUTION,
+					workspace_id: WS,
+					status: 'running',
+					sql: 'SELECT 1',
+					started_at: '2026-01-01T00:00:00Z'
+				});
+			}),
+			http.post('/ws-tickets', ({ response }) => {
+				seen.tickets++;
+				return response(201).json({ ticket: 'ticket-1', expires_at: '2030-01-01T00:00:00Z' });
+			})
+		);
+		const tab = editor.addTab();
+		editor.updateSql(tab.id, 'SELECT 1');
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		await fireEvent.click(screen.getByTestId('run-current'));
+		await waitFor(() => expect(seen.started).toBe(true));
+		const idx = editor.tabs.findIndex((item) => item.id === tab.id);
+		await fireEvent.click(screen.getAllByLabelText('Close tab')[idx]);
+		const closeDialog = await dialogTitled('Close this tab?');
+		await fireEvent.click(within(closeDialog).getByRole('button', { name: 'Discard' }));
+		expect(editor.tabs.some((item) => item.id === tab.id)).toBe(false);
+
+		release();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(seen.tickets).toBe(0);
+		expect(screen.queryByTestId('results-area')).toBeNull();
+	});
 });
