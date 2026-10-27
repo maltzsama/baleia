@@ -51,6 +51,7 @@ func validLDAPConfig() *LDAPConfig {
 // TestIdP_SecretsNeverReturned: list/create/get work and no response carries a
 // secret; the stored value is an encrypted envelope.
 func TestIdP_SecretsNeverReturned(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	ctx := idpAdminCtx()
 
@@ -143,6 +144,7 @@ func TestIdP_SecretsNeverReturned(t *testing.T) {
 
 // TestIdP_NonAdmin403: every admin operation refuses a member.
 func TestIdP_NonAdmin403(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	ctx := idpMemberCtx()
 
@@ -172,6 +174,7 @@ func TestIdP_NonAdmin403(t *testing.T) {
 // TestIdP_CreateValidates: the type-specific validator rejects incomplete or
 // insecure configurations before any row is written.
 func TestIdP_CreateValidates(t *testing.T) {
+	t.Parallel()
 	h := idpTestHandlers(t)
 	ctx := idpAdminCtx()
 

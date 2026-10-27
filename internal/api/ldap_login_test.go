@@ -75,6 +75,7 @@ func providerID(ap db.AuthProvider) *openapi_types.UUID {
 }
 
 func TestLogin_LDAPProvider(t *testing.T) {
+	t.Parallel()
 	f, ap := ldapLoginFixture(t)
 	resp, err := f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{
 		ProviderId: providerID(ap),
@@ -107,6 +108,7 @@ func TestLogin_LDAPProvider(t *testing.T) {
 // TestLogin_LDAPIgnoresEmail: with provider_id the email is not looked up and
 // an unrelated address cannot authenticate.
 func TestLogin_LDAPIgnoresEmail(t *testing.T) {
+	t.Parallel()
 	f, ap := ldapLoginFixture(t)
 	resp, err := f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{
 		ProviderId: providerID(ap),
@@ -127,6 +129,7 @@ func TestLogin_LDAPIgnoresEmail(t *testing.T) {
 }
 
 func TestLogin_LDAPUniformError(t *testing.T) {
+	t.Parallel()
 	f, ap := ldapLoginFixture(t)
 
 	oidcProvider, err := f.h.queries.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
@@ -148,6 +151,7 @@ func TestLogin_LDAPUniformError(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			resp, err := f.h.Login(context.Background(), LoginRequestObject{Body: tc.body})
 			if err != nil {
 				t.Fatal(err)
@@ -169,6 +173,7 @@ func TestLogin_LDAPUniformError(t *testing.T) {
 // TestLogin_LDAPRejectsNonLDAPAccount: a local account that happens to carry
 // the provider/external id pair is not a valid directory link.
 func TestLogin_LDAPRejectsNonLDAPAccount(t *testing.T) {
+	t.Parallel()
 	f, ap := ldapLoginFixture(t)
 	f.h.logins = newLogins(f.h.core, directoryFunc(func(context.Context, identityldap.Config, string, string) (*identityldap.User, error) {
 		return &identityldap.User{ExternalID: "local-linked", Role: identity.RoleAdmin}, nil
@@ -198,6 +203,7 @@ func TestLogin_LDAPRejectsNonLDAPAccount(t *testing.T) {
 // TestLogin_LDAPNotProvisioned: a directory user without a linked account is
 // denied; LDAP never auto-creates by e-mail.
 func TestLogin_LDAPNotProvisioned(t *testing.T) {
+	t.Parallel()
 	f, ap := ldapLoginFixture(t)
 	f.h.logins = newLogins(f.h.core, directoryFunc(func(context.Context, identityldap.Config, string, string) (*identityldap.User, error) {
 		return &identityldap.User{ExternalID: "unlinked-1", Email: "new@corp.test", Name: "New", Role: identity.RoleMember}, nil

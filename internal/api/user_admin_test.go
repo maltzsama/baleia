@@ -20,6 +20,7 @@ func userID(t *testing.T, raw string) openapi_types.UUID {
 
 // TestSuspend_NonAdmin403: suspension is a global-admin operation.
 func TestSuspend_NonAdmin403(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	id := userID(t, f.owner)
 	got, err := f.h.SuspendUser(ctxAs(f.owner, "member"), SuspendUserRequestObject{Id: id})
@@ -39,6 +40,7 @@ func TestSuspend_NonAdmin403(t *testing.T) {
 // TestSuspend_RevokesTokens: suspension ends every session and deletes the
 // user's API keys.
 func TestSuspend_RevokesTokens(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	ctx := context.Background()
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
@@ -82,6 +84,7 @@ func TestSuspend_RevokesTokens(t *testing.T) {
 
 // TestSuspend_Audited: the change is one allowed user.suspend event.
 func TestSuspend_Audited(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	if _, err := f.h.SuspendUser(ctxAs(f.admin, "admin"), SuspendUserRequestObject{Id: userID(t, f.owner)}); err != nil {
 		t.Fatal(err)
@@ -94,6 +97,7 @@ func TestSuspend_Audited(t *testing.T) {
 
 // TestReinstate_Reactivates: an admin can lift a suspension.
 func TestReinstate_Reactivates(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	ctx := ctxAs(f.admin, "admin")
 	id := userID(t, f.owner)
@@ -119,6 +123,7 @@ func TestReinstate_Reactivates(t *testing.T) {
 // TestSuspendedCannotLogin: a suspended local account cannot authenticate even
 // with the right password.
 func TestSuspendedCannotLogin(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	if _, err := f.h.SuspendUser(ctxAs(f.admin, "admin"), SuspendUserRequestObject{Id: userID(t, f.owner)}); err != nil {
 		t.Fatal(err)
@@ -141,6 +146,7 @@ func TestSuspendedCannotLogin(t *testing.T) {
 // TestSuspendedCannotRefresh: a token that survived (or was minted after) the
 // suspension is refused by the status gate.
 func TestSuspendedCannotRefresh(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	ctx := context.Background()
 	if _, err := f.h.SuspendUser(ctxAs(f.admin, "admin"), SuspendUserRequestObject{Id: userID(t, f.owner)}); err != nil {
@@ -172,6 +178,7 @@ func TestSuspendedCannotRefresh(t *testing.T) {
 
 // TestSuspendedCannotOIDC: the callback lands on /login?error=account_suspended.
 func TestSuspendedCannotOIDC(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
 	if result := f.finish(t, state, cookie); result.Location != "/sql" {
@@ -198,6 +205,7 @@ func TestSuspendedCannotOIDC(t *testing.T) {
 // TestSuspendedCannotLDAP: a suspended directory account gets the uniform
 // invalid_credentials answer, never a hint about the suspension.
 func TestSuspendedCannotLDAP(t *testing.T) {
+	t.Parallel()
 	f, ap := ldapLoginFixture(t)
 	reason := "admin"
 	var userID pgtype.UUID

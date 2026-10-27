@@ -85,6 +85,7 @@ func (f *agentsFixture) createAgent(t *testing.T, ctx context.Context, name stri
 }
 
 func TestAgentsFeatureFlagOff(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, false)
 	got, err := f.h.ListAgents(f.owner, ListAgentsRequestObject{})
 	if err != nil {
@@ -98,6 +99,7 @@ func TestAgentsFeatureFlagOff(t *testing.T) {
 // TestAgentTokenShownOnce: the secret appears in the create response and never
 // in the list (#59).
 func TestAgentTokenShownOnce(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 
@@ -136,6 +138,7 @@ func TestAgentTokenShownOnce(t *testing.T) {
 }
 
 func TestAgentTokenMaxTTL(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 
@@ -155,6 +158,7 @@ func TestAgentTokenMaxTTL(t *testing.T) {
 // TestAgentScope: the owner sees its agent, another member gets 404 (no
 // existence oracle) and an admin may only disable it (#59).
 func TestAgentScope(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 	id := openapi_types.UUID(agent.Id)
@@ -205,6 +209,7 @@ func TestAgentScope(t *testing.T) {
 // TestUpdateAgent_InvalidWorkspaceLeavesNoWrite: a refused workspace change
 // must not persist the name/status sent in the same PATCH (#59 review).
 func TestUpdateAgent_InvalidWorkspaceLeavesNoWrite(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 	id := openapi_types.UUID(agent.Id)
@@ -242,6 +247,7 @@ func TestUpdateAgent_InvalidWorkspaceLeavesNoWrite(t *testing.T) {
 // TestUpdateAgent_UnknownStatusIs422: a status outside the enum is refused
 // before any write, not passed to the table's CHECK as a 500.
 func TestUpdateAgent_UnknownStatusIs422(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 	status := UpdateAgentRequestStatus("paused")
@@ -260,6 +266,7 @@ func TestUpdateAgent_UnknownStatusIs422(t *testing.T) {
 // TestRequireWorkspaceAccess_AgentBinding: the execution path applies the
 // agent's workspace binding, not only its owner's membership (#59 review).
 func TestRequireWorkspaceAccess_AgentBinding(t *testing.T) {
+	t.Parallel()
 	fake := &fakeRunQueryQuerier{}
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
 	ctx = context.WithValue(ctx, auth.ContextKeyRole, "member")
@@ -280,6 +287,7 @@ func TestRequireWorkspaceAccess_AgentBinding(t *testing.T) {
 // even when the workspace grants write, records agent_id and carries the agent
 // identity into the workflow (#59).
 func TestRunQuery_AgentIsReadOnly(t *testing.T) {
+	t.Parallel()
 	fake := &fakeRunQueryQuerier{
 		exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
 		targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)},
@@ -323,6 +331,7 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 }
 
 func TestAgentPolicy_DefaultsAndCeilings(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 
@@ -346,6 +355,7 @@ func TestAgentPolicy_DefaultsAndCeilings(t *testing.T) {
 }
 
 func TestAgentPolicy_PutAndClamp(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 
@@ -375,6 +385,7 @@ func TestAgentPolicy_PutAndClamp(t *testing.T) {
 }
 
 func TestAgentPolicy_Validation(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 	version := AgentPolicyVersion(1)
@@ -406,6 +417,7 @@ func TestAgentPolicy_Validation(t *testing.T) {
 }
 
 func TestAgentPolicy_Scope(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	agent := f.createAgent(t, f.owner, "etl-agent")
 	id := openapi_types.UUID(agent.Id)

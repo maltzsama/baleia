@@ -13,6 +13,7 @@ import (
 // TestListAuthProviders_OnlyEnabled: the public login list contains enabled
 // OIDC and LDAP providers and no configuration.
 func TestListAuthProviders_OnlyEnabled(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	h := testAPI(handlerFields{queries: q, tx: directTx{q: q}})

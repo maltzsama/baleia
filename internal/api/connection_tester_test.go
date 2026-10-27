@@ -106,6 +106,7 @@ func freshLimiter(t *testing.T) {
 // catalog runs its checks and writes nothing (draftQuerier fails on any
 // write).
 func TestTransient_RESTPersistsNothing(t *testing.T) {
+	t.Parallel()
 	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, false)
@@ -119,6 +120,7 @@ func TestTransient_RESTPersistsNothing(t *testing.T) {
 // TestTransient_ErrorCodes: upstream failures map to bounded codes, and the
 // raw error never reaches the response.
 func TestTransient_ErrorCodes(t *testing.T) {
+	t.Parallel()
 	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, true)
@@ -156,6 +158,7 @@ func TestTransient_ErrorCodes(t *testing.T) {
 // TestTransient_DeniedCIDR: a host on the cloud metadata address is refused
 // by the dialer before any connection.
 func TestTransient_DeniedCIDR(t *testing.T) {
+	t.Parallel()
 	freshLimiter(t)
 	r := runDraft(t, draftHandlers(t, testRegistry(t)), ownerID, draft("http://169.254.169.254/catalog")).(TestConnectionDraft200JSONResponse)
 	if r.Success || *r.ErrorCode != codeDeniedNetwork {
@@ -166,6 +169,7 @@ func TestTransient_DeniedCIDR(t *testing.T) {
 // TestTransient_RateLimited: the 11th test of a user in a minute is a 429;
 // another user is not affected.
 func TestTransient_RateLimited(t *testing.T) {
+	t.Parallel()
 	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, false)
@@ -186,6 +190,7 @@ func TestTransient_RateLimited(t *testing.T) {
 // TestTransient_IntentsFilter: only the requested checks run; a bind on an
 // engine the caller may not use is a 404; an unknown intent a 422.
 func TestTransient_IntentsFilter(t *testing.T) {
+	t.Parallel()
 	freshLimiter(t)
 	reg, _ := loopbackRegistry(t)
 	srv := fakeREST(t, false)
@@ -207,6 +212,7 @@ func TestTransient_IntentsFilter(t *testing.T) {
 // TestTransient_DirectEngineNotRegistered: a kind without an engine adapter
 // yet skips the direct check; nothing is registered.
 func TestTransient_DirectEngineNotRegistered(t *testing.T) {
+	t.Parallel()
 	reg, d := loopbackRegistry(t)
 	p, _ := reg.Get(connections.KindPostgreSQL)
 	c, err := connectionTest{h: testAPI(handlerFields{kinds: testKinds(t, d)}).CatalogHandlers, provider: p}.directEngine(context.Background())
@@ -240,6 +246,7 @@ func (q *ephemeralFake) DeleteEphemeralRegistryRow(_ context.Context, p db.Delet
 // during a bind check, the test catalog is still dropped and its registry
 // row hard-deleted (cleanup never uses the request context).
 func TestTransient_SQLCleanupOnClientCancel(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	ef := &ephemeralFake{authzFake: q}
 	h.queries = ef
@@ -278,6 +285,7 @@ func TestTransient_SQLCleanupOnClientCancel(t *testing.T) {
 // TestSweeper_DropsExpired: only expired ephemeral rows are listed, dropped
 // and hard-deleted; permanent rows and live test rows stay.
 func TestSweeper_DropsExpired(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
 	var cluster pgtype.UUID

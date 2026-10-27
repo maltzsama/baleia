@@ -33,6 +33,7 @@ func (q snapshotFake) GetTrinoQuerySnapshotByEngine(context.Context, db.GetTrino
 // TestMonitoringQuery_LookupErrors: an unknown query is a 404, and a failed
 // lookup is a server error, not "query not found".
 func TestMonitoringQuery_LookupErrors(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	admin := ctxAs(ownerID, "admin")
 	engine := [16]byte{0xE1}
@@ -71,6 +72,7 @@ func (brokenCatalogLookup) GetCatalogByID(context.Context, pgtype.UUID) (db.Cata
 // maintenance answer a failed catalog lookup with a server error, not
 // "catalog not found".
 func TestCatalogForMonitoring_LookupFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	h.queries = brokenCatalogLookup{q}
 	h.access = wsaccess.New(h.queries)
@@ -99,6 +101,7 @@ func (q catalogBindings) ListBindingsByCatalog(_ context.Context, catalogID pgty
 // TestCreateMaintenanceRun_RejectsForeignBinding: an explicit binding_id that
 // is not a binding of the catalog is a 422, and no run is recorded.
 func TestCreateMaintenanceRun_RejectsForeignBinding(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	h.monitor = monitoring.New(catalogBindings{q})
 	admin := ctxAs(ownerID, "admin")

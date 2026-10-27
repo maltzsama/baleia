@@ -32,6 +32,7 @@ func targetRow(binding, catalog byte, kind, permission string, enabled bool) db.
 func tuuid(b byte) *openapi_types.UUID { u := openapi_types.UUID(id(b).Bytes); return &u }
 
 func TestResolveTarget(t *testing.T) {
+	t.Parallel()
 	one := targetRow(1, 1, "trino", "write", true)
 	twoEngines := []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true), targetRow(2, 1, "postgresql", "write", true)}
 	schema := "sales"
@@ -62,6 +63,7 @@ func TestResolveTarget(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := testAPI(handlerFields{queries: &fakeRunQueryQuerier{targets: c.rows}})
 			got, err := h.ResolveTarget(context.Background(), c.ws, c.req)
 			if c.code != "" {
@@ -103,6 +105,7 @@ func runQueryWith(t *testing.T, fake *fakeRunQueryQuerier, target *TargetRequest
 }
 
 func TestRunQuery_StoresTarget(t *testing.T) {
+	t.Parallel()
 	fake := &fakeRunQueryQuerier{
 		exec:    db.QueryExecution{ID: id(0xBB), Status: "running"},
 		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "read", true)},
@@ -138,6 +141,7 @@ func TestRunQuery_StoresTarget(t *testing.T) {
 }
 
 func TestRunQuery_TargetErrors(t *testing.T) {
+	t.Parallel()
 	cases := map[string]struct {
 		rows   []db.ListWorkspaceTargetsRow
 		target *TargetRequest
@@ -151,6 +155,7 @@ func TestRunQuery_TargetErrors(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			fake := &fakeRunQueryQuerier{targets: c.rows}
 			rec := runQuery(t, fake, c.target)
 			if rec.Code != c.status || !strings.Contains(rec.Body.String(), `"code":"`+c.code+`"`) {
@@ -164,6 +169,7 @@ func TestRunQuery_TargetErrors(t *testing.T) {
 }
 
 func TestExecutionTarget(t *testing.T) {
+	t.Parallel()
 	e := db.QueryExecution{
 		EngineID:       id(0xE1),
 		TargetSnapshot: []byte(`{"engine_kind":"trino","engine_name":"default","catalog_name":"lake","engine_catalog":"lake","schema":null,"read_only":false}`),
@@ -178,6 +184,7 @@ func TestExecutionTarget(t *testing.T) {
 }
 
 func TestListWorkspaceTargets(t *testing.T) {
+	t.Parallel()
 	fake := &fakeRunQueryQuerier{
 		workspace: db.Workspace{DefaultBindingID: id(0xB2)},
 		targets: []db.ListWorkspaceTargetsRow{

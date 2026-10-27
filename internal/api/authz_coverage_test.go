@@ -639,6 +639,7 @@ func strictOperations() []string {
 }
 
 func TestAuthzCoverage(t *testing.T) {
+	t.Parallel()
 	funcs, dup := loadFuncs(t, ".")
 	pkgs := map[string]struct {
 		f map[string]*funcBody
@@ -683,6 +684,7 @@ func TestAuthzCoverage(t *testing.T) {
 // operation, a stale entry, a guard that left the handler body, and a stub that
 // grew logic.
 func TestAuthzCoverage_Detects(t *testing.T) {
+	t.Parallel()
 	body := func(recv bool, calls ...string) *funcBody {
 		fb := &funcBody{calls: map[string]bool{}, usesReceiver: recv, file: "x.go"}
 		for _, c := range calls {
@@ -738,6 +740,7 @@ func TestAuthzCoverage_Detects(t *testing.T) {
 // recorded with the field, so an entry naming modelDefs.List is not met by
 // some other List.
 func TestBodyOf_QualifiesServiceCalls(t *testing.T) {
+	t.Parallel()
 	f, err := parser.ParseFile(token.NewFileSet(), "x.go", `package x
 func (h *H) F() { h.other.List(); h.modelDefs.Get() }`, 0)
 	if err != nil {

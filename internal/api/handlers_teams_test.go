@@ -16,6 +16,7 @@ import (
 // TestUpdateTeamMemberRole: an admin can change a member role in place, and a
 // non-admin is refused.
 func TestUpdateTeamMemberRole(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
@@ -94,6 +95,7 @@ func TestUpdateTeamMemberRole(t *testing.T) {
 // member twice a 409; removing someone who is not a member is a 404, not a
 // silent success.
 func TestTeamMembers_ErrorMapping(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
@@ -156,6 +158,7 @@ func (brokenTeams) GetTeamByID(context.Context, pgtype.UUID) (db.Team, error) {
 // TestTeamLookup_StoreFailureIsAnError: a failed lookup is a server error,
 // not "team not found".
 func TestTeamLookup_StoreFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: brokenTeams{}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 	asAdmin := ctxAs(testUserID, "admin")
 	id := openapi_types.UUID{0x7E}

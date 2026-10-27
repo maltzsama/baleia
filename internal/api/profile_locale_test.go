@@ -31,7 +31,9 @@ func (f *fakeLocaleQuerier) UpdateUser(_ context.Context, arg db.UpdateUserParam
 // one with a translatable field code, and leaves the preference untouched when
 // the field is omitted (#67).
 func TestPatchMeLocale(t *testing.T) {
+	t.Parallel()
 	t.Run("stores a supported locale", func(t *testing.T) {
+		t.Parallel()
 		fake := &fakeLocaleQuerier{user: db.User{ID: mustUUID(t, localeTestUserID)}}
 		h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
 		locale := LocalePtBR
@@ -55,6 +57,7 @@ func TestPatchMeLocale(t *testing.T) {
 	})
 
 	t.Run("keeps the current locale when omitted", func(t *testing.T) {
+		t.Parallel()
 		current := "en"
 		fake := &fakeLocaleQuerier{user: db.User{ID: mustUUID(t, localeTestUserID), Locale: &current}}
 		h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
@@ -70,6 +73,7 @@ func TestPatchMeLocale(t *testing.T) {
 	})
 
 	t.Run("rejects an unsupported locale", func(t *testing.T) {
+		t.Parallel()
 		fake := &fakeLocaleQuerier{user: db.User{ID: mustUUID(t, localeTestUserID)}}
 		h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
 		unsupported := Locale("fr")

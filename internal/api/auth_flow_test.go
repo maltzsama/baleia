@@ -83,6 +83,7 @@ func refreshToken(t *testing.T, h *API, token string) string {
 // TestGetMe_IncludesStatus: the profile endpoint honours the required
 // active/suspended contract (#266 follow-up).
 func TestGetMe_IncludesStatus(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	ctx := context.Background()
@@ -121,6 +122,7 @@ func TestGetMe_IncludesStatus(t *testing.T) {
 }
 
 func TestRefresh_ConcurrentSingleWinner(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 
@@ -158,6 +160,7 @@ func TestRefresh_ConcurrentSingleWinner(t *testing.T) {
 }
 
 func TestRefresh_FamilyPreserved(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	rotated := refreshToken(t, f.h, token)
@@ -177,6 +180,7 @@ func TestRefresh_FamilyPreserved(t *testing.T) {
 }
 
 func TestRefresh_ReuseRevokesFamily(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	rotated := refreshToken(t, f.h, token)
@@ -205,6 +209,7 @@ func TestRefresh_ReuseRevokesFamily(t *testing.T) {
 // TestRefresh_CookieFallback: a browser refreshes with only the HttpOnly
 // cookie, no body token (#51).
 func TestRefresh_CookieFallback(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 
@@ -222,6 +227,7 @@ func TestRefresh_CookieFallback(t *testing.T) {
 // TestLogout_CookieRevokesFamily: logout revokes the family behind the cookie
 // token, so neither it nor the rotated token works afterwards (#51).
 func TestLogout_CookieRevokesFamily(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	rotated := refreshToken(t, f.h, token)
@@ -242,6 +248,7 @@ func TestLogout_CookieRevokesFamily(t *testing.T) {
 // TestCreateFirstAdmin_RejectsShortPassword: the API enforces the documented
 // 8-character minimum even though oapi-codegen does not validate bodies.
 func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	h := testAPI(handlerFields{queries: db.New(pool), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
@@ -256,6 +263,7 @@ func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
 }
 
 func TestUpdatePassword_RejectsShortPassword(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	resp, err := f.h.UpdatePassword(ctxAs(f.owner, "member"), UpdatePasswordRequestObject{
 		Body: &UpdatePasswordRequest{CurrentPassword: "correct horse", NewPassword: "short"},
@@ -271,6 +279,7 @@ func TestUpdatePassword_RejectsShortPassword(t *testing.T) {
 // TestReset_ShortPasswordDoesNotConsumeToken: the length check runs before the
 // single-use token is consumed.
 func TestReset_ShortPasswordDoesNotConsumeToken(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	const raw = "short-password-reset"
 	createResetToken(t, f, f.owner, raw, time.Now().Add(time.Hour))
@@ -308,6 +317,7 @@ func createResetToken(t *testing.T, f *auditFixture, userID string, raw string, 
 }
 
 func TestReset_HashedSingleUse(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	const raw = "raw-reset-token"
 	createResetToken(t, f, f.owner, raw, time.Now().Add(time.Hour))
@@ -345,6 +355,7 @@ func TestReset_HashedSingleUse(t *testing.T) {
 }
 
 func TestReset_Expired(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	const raw = "expired-reset-token"
 	createResetToken(t, f, f.owner, raw, time.Now().Add(-time.Minute))
@@ -361,6 +372,7 @@ func TestReset_Expired(t *testing.T) {
 }
 
 func TestReset_RevokesRefresh(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	const raw = "reset-revokes-refresh"
@@ -381,6 +393,7 @@ func TestReset_RevokesRefresh(t *testing.T) {
 }
 
 func TestReset_RequestStoresHash(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	f.h.settings.Mail.SMTPHost, f.h.settings.Mail.SMTPPort = "smtp.example.test", "25"
 	var sentURL string
@@ -434,6 +447,7 @@ func TestReset_RequestStoresHash(t *testing.T) {
 }
 
 func TestPasswordChange_RevokesRefresh(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 
@@ -452,6 +466,7 @@ func TestPasswordChange_RevokesRefresh(t *testing.T) {
 }
 
 func TestRoleChange_RevokesRefresh(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	ownerID := openapi_types.UUID(mustUUID(t, f.owner).Bytes)
@@ -480,6 +495,7 @@ func (failingRevoke) RevokeRefreshFamily(context.Context, pgtype.UUID) error {
 // TestLogout_RevokeFailureIsAnError: a failed revoke is not reported as a
 // successful logout, and the audit trail records the failure (#370).
 func TestLogout_RevokeFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	f.mem.take()
@@ -500,6 +516,7 @@ func TestLogout_RevokeFailureIsAnError(t *testing.T) {
 // TestRefresh_ReuseRevokeFailureIsAnError: a replayed token whose family
 // cannot be revoked is a server error, not a quiet 401 (#370).
 func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	f := newAuthFixture(t)
 	token := loginRefresh(t, f.h, "owner@x.io", "correct horse")
 	refreshToken(t, f.h, token)
@@ -521,6 +538,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 // TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin: concurrent setups with
 // different e-mails create exactly one admin; the others get 409 (#375).
 func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	h := testAPI(handlerFields{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	const n = 8

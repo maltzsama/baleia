@@ -103,6 +103,7 @@ func newExplorerHandlers(t *testing.T) (*API, *explorerFake, *fakeTrino, string)
 // TestListTables_NamespaceIsQuoted: a hostile namespace reaches Trino as one
 // quoted identifier, never as SQL.
 func TestListTables_NamespaceIsQuoted(t *testing.T) {
+	t.Parallel()
 	h, _, ft, conn := newExplorerHandlers(t)
 	router := explorerRouter(h, ownerID, "member")
 	code, _ := get(t, router, "/connections/"+conn+"/catalogs/wh/namespaces/we%22ird/tables")
@@ -116,6 +117,7 @@ func TestListTables_NamespaceIsQuoted(t *testing.T) {
 }
 
 func TestExplorer_QuotesEveryStatement(t *testing.T) {
+	t.Parallel()
 	h, _, ft, conn := newExplorerHandlers(t)
 	router := explorerRouter(h, ownerID, "member")
 	get(t, router, "/connections/"+conn+"/catalogs/wh/namespaces")
@@ -128,6 +130,7 @@ func TestExplorer_QuotesEveryStatement(t *testing.T) {
 }
 
 func TestExplorer_ForeignUser404_NoTrinoCall(t *testing.T) {
+	t.Parallel()
 	h, _, ft, conn := newExplorerHandlers(t)
 	router := explorerRouter(h, strangerID, "member")
 	for _, p := range []string{
@@ -147,6 +150,7 @@ func TestExplorer_ForeignUser404_NoTrinoCall(t *testing.T) {
 // TestExplorer_CatalogMustBelongToConnection: a connection you own cannot be
 // used to browse another connection's catalog.
 func TestExplorer_CatalogMustBelongToConnection(t *testing.T) {
+	t.Parallel()
 	h, q, ft, _ := newExplorerHandlers(t)
 	// A second connection, also owned by the caller, that has no catalogs.
 	owner, _ := uuidFromString(ownerID)
@@ -179,6 +183,7 @@ func (q *twoConns) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID)
 // TestExplorer_TrinoErrorsAreNotReturned: the cause is logged; the client gets
 // a code, a generic message and the request id, as valid JSON.
 func TestExplorer_TrinoErrorsAreNotReturned(t *testing.T) {
+	t.Parallel()
 	h, _, _, conn := newExplorerHandlers(t)
 	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"id":"q","error":{"message":"line 1:1: Catalog \"secret-name\" /etc/trino " broke","errorName":"X"}}`)
@@ -215,6 +220,7 @@ func snapshot(id, user string) db.TrinoQuerySnapshot {
 // TestLensQueries_MemberSeesOnlyOwn: a member sees their own Trino identity's
 // queries; the admin sees everyone's.
 func TestLensQueries_MemberSeesOnlyOwn(t *testing.T) {
+	t.Parallel()
 	member := "u_" + ownerID
 	q := &explorerFake{snaps: []db.TrinoQuerySnapshot{snapshot("q-mine", member), snapshot("q-theirs", "u_"+strangerID)}}
 
@@ -275,6 +281,7 @@ func post(t *testing.T, h http.Handler, path, body string) (int, string) {
 }
 
 func TestTriggerMaintenance(t *testing.T) {
+	t.Parallel()
 	h, q, _, conn := newExplorerHandlers(t)
 	_ = h
 	tc := &recordingTemporal{}
@@ -318,6 +325,7 @@ func TestTriggerMaintenance(t *testing.T) {
 }
 
 func TestLensRoutesRequireAnIdentity(t *testing.T) {
+	t.Parallel()
 	q := &explorerFake{}
 	r := chi.NewRouter()
 	RegisterLensRoutes(r, q, &config.Config{}, nil, nil, nil) // no auth middleware in front: no identity in ctx
@@ -331,6 +339,7 @@ func TestLensRoutesRequireAnIdentity(t *testing.T) {
 // TestExplorer_PathParametersArePercentDecoded pins #134: %24 and %3B survive
 // as RawPath and must be decoded before they reach Trino; a bad escape is 400.
 func TestExplorer_PathParametersArePercentDecoded(t *testing.T) {
+	t.Parallel()
 	h, _, ft, conn := newExplorerHandlers(t)
 	router := explorerRouter(h, ownerID, "member")
 	if code, _ := get(t, router, "/connections/"+conn+"/catalogs/wh/namespaces/ns/tables/events%24snapshots/columns"); code != 200 {

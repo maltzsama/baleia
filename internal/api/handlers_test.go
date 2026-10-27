@@ -41,6 +41,7 @@ func testDeps(t *testing.T) Deps {
 // TestNewAPI_RequiresDependencies: a missing dependency is an error at
 // construction, naming what is missing, not a nil found at request time.
 func TestNewAPI_RequiresDependencies(t *testing.T) {
+	t.Parallel()
 	_, err := NewAPI(Deps{})
 	if err == nil {
 		t.Fatal("NewAPI with missing dependencies returned no error")
@@ -56,6 +57,7 @@ func TestNewAPI_RequiresDependencies(t *testing.T) {
 // own: a no-op audit recorder, the caches, the content and assistant services
 // and a ticket store.
 func TestNewAPI_Defaults(t *testing.T) {
+	t.Parallel()
 	h, err := NewAPI(testDeps(t))
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +79,7 @@ func TestNewAPI_Defaults(t *testing.T) {
 // TestNewAPI_Observability: the audit recorder, the metrics and the
 // ticket store given in Deps are the ones the handlers use.
 func TestNewAPI_Observability(t *testing.T) {
+	t.Parallel()
 	deps := testDeps(t)
 	rec := &memAudit{}
 	tickets := wsticket.New()
@@ -116,6 +119,7 @@ func assertGroupsWired(t *testing.T, h *API) {
 }
 
 func TestNewAPI_GroupsShareCore(t *testing.T) {
+	t.Parallel()
 	h, err := NewAPI(testDeps(t))
 	if err != nil {
 		t.Fatal(err)
@@ -127,6 +131,7 @@ func TestNewAPI_GroupsShareCore(t *testing.T) {
 // TestNewAuthHandlers_RealSeams: outside tests the auth seams reach the real
 // directory and the network.
 func TestNewAuthHandlers_RealSeams(t *testing.T) {
+	t.Parallel()
 	a := newAuthHandlers(&core{})
 	if a.logins == nil || a.sessions == nil || a.resets == nil || a.setup == nil {
 		t.Error("the identity services must be built")
@@ -139,6 +144,7 @@ func TestNewAuthHandlers_RealSeams(t *testing.T) {
 // TestNewOpsHandlers_RealSeams: the status probes reach Temporal and the
 // engine manager; without a Temporal client there is no schedule probe.
 func TestNewOpsHandlers_RealSeams(t *testing.T) {
+	t.Parallel()
 	o := newOpsHandlers(&core{}, nil)
 	if o.schedules != nil {
 		t.Errorf("schedules = %T, want nil without a Temporal client", o.schedules)

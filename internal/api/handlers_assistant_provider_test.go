@@ -16,6 +16,7 @@ import (
 // address (loopback here) is refused by the connections dialer and the
 // server is never reached (#378).
 func TestLLMProvider_GoesThroughTheDialer(t *testing.T) {
+	t.Parallel()
 	reached := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { reached = true }))
 	defer srv.Close()

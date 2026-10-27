@@ -47,6 +47,7 @@ func testConnection(t *testing.T, stored bool, owner pgtype.UUID) db.CatalogConn
 // TestGetCatalogConnectionNeverReturnsSecrets pins the fix: the serialized
 // response carries only has_credentials, never a credentials field or the secret.
 func TestGetCatalogConnectionNeverReturnsSecrets(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, ownerUUID(t, testUserID))}})
 
 	resp, err := h.GetCatalogConnection(testContext(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
@@ -74,6 +75,7 @@ func TestGetCatalogConnectionNeverReturnsSecrets(t *testing.T) {
 }
 
 func TestGetCatalogConnectionReportsNoCredentials(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, false, ownerUUID(t, testUserID))}})
 
 	resp, err := h.GetCatalogConnection(testContext(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
@@ -90,6 +92,7 @@ func TestGetCatalogConnectionReportsNoCredentials(t *testing.T) {
 }
 
 func TestGetCatalogConnectionHidesOtherUsersConnections(t *testing.T) {
+	t.Parallel()
 	other := ownerUUID(t, "99999999-9999-9999-9999-999999999999")
 	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, other)}})
 
@@ -105,6 +108,7 @@ func TestGetCatalogConnectionHidesOtherUsersConnections(t *testing.T) {
 // TestGetCatalogConnectionHidesUnownedConnections covers a NULL created_by: an
 // unowned connection must not be readable by any caller.
 func TestGetCatalogConnectionHidesUnownedConnections(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, pgtype.UUID{})}})
 
 	resp, err := h.GetCatalogConnection(testContext(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
@@ -117,6 +121,7 @@ func TestGetCatalogConnectionHidesUnownedConnections(t *testing.T) {
 }
 
 func TestTestCatalogConnectionHidesOtherUsersConnections(t *testing.T) {
+	t.Parallel()
 	other := ownerUUID(t, "99999999-9999-9999-9999-999999999999")
 	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, other)}})
 
@@ -130,6 +135,7 @@ func TestTestCatalogConnectionHidesOtherUsersConnections(t *testing.T) {
 }
 
 func TestTestCatalogConnectionHidesUnownedConnections(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, pgtype.UUID{})}})
 
 	resp, err := h.TestCatalogConnection(testContext(), TestCatalogConnectionRequestObject{Id: PathId{0x01}})

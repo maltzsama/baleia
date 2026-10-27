@@ -72,6 +72,7 @@ func createSpace(t *testing.T, f *metaFixture, ctx context.Context, body CreateS
 }
 
 func TestSpaces_CreateListGetUpdateDelete(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 
@@ -123,6 +124,7 @@ func TestSpaces_CreateListGetUpdateDelete(t *testing.T) {
 }
 
 func TestSpaces_DefaultUndeletable(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.owner)
 	r, err := f.h.DeleteSpace(ctx, DeleteSpaceRequestObject{Id: f.ws, SpaceId: defaultSpaceID(t, f, f.ws)})
@@ -135,6 +137,7 @@ func TestSpaces_DefaultUndeletable(t *testing.T) {
 }
 
 func TestSpaces_RestrictedInvisibleAndViewer(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ws := sharedWorkspace(t, f)
 	owner, member := f.as(f.owner), f.as(f.stranger)
@@ -182,6 +185,7 @@ func TestSpaces_RestrictedInvisibleAndViewer(t *testing.T) {
 }
 
 func TestSpaces_AccessListAndForceDelete(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ws := sharedWorkspace(t, f)
 	owner := f.as(f.owner)
@@ -255,6 +259,7 @@ func TestSpaces_AccessListAndForceDelete(t *testing.T) {
 }
 
 func TestSpaces_ForeignWorkspace404(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := f.as(f.stranger)
 	r, err := f.h.ListSpaces(ctx, ListSpacesRequestObject{Id: f.ws})
@@ -289,6 +294,7 @@ func (brokenPrincipals) GetTeamByID(context.Context, pgtype.UUID) (db.Team, erro
 // TestSetSpaceMember_LookupFailureIsAnError: a failed principal lookup is a
 // server error, not "user not found".
 func TestSetSpaceMember_LookupFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	f := newMetaFixture(t)
 	ws := sharedWorkspace(t, f)
 	owner := f.as(f.owner)

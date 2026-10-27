@@ -97,6 +97,7 @@ func one(t *testing.T, name string, got []recorded, action audit.Action, outcome
 // TestAuditMatrix: each operation, on success and on one failure path,
 // yields exactly one event with the expected action and outcome.
 func TestAuditMatrix(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	h, mem := f.h, f.mem
 	owner, stranger, admin := ctxAs(f.owner, "member"), ctxAs(f.stranger, "member"), ctxAs(f.admin, "admin")
@@ -199,6 +200,7 @@ func TestAuditMatrix(t *testing.T) {
 // TestAuditDenialsOnce: a refused request is one denied event, recorded by
 // the checker hook under the handler's action (not zero, not two).
 func TestAuditDenialsOnce(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	resp, _ := f.h.CreateCatalogConnection(ctxAs(f.owner, "member"), CreateCatalogConnectionRequestObject{Body: validCreateRequests()["polaris"]})
 	id := resp.(CreateCatalogConnection201JSONResponse).Id
@@ -218,6 +220,7 @@ func TestAuditDenialsOnce(t *testing.T) {
 // TestAuditNoSecrets: updating credentials records the secret keys as
 // "***"; no recorded event holds a secret value.
 func TestAuditNoSecrets(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	owner := ctxAs(f.owner, "member")
 	resp, _ := f.h.CreateCatalogConnection(owner, CreateCatalogConnectionRequestObject{Body: validCreateRequests()["polaris"]})
@@ -239,6 +242,7 @@ func TestAuditNoSecrets(t *testing.T) {
 // TestAuditLoginFailureHashesEmail: a failed login is recorded with the
 // e-mail's fingerprint, never the e-mail itself.
 func TestAuditLoginFailureHashesEmail(t *testing.T) {
+	t.Parallel()
 	f := newAuditFixture(t)
 	_, _ = f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: emailPtr("owner@x.io"), Password: "wrong"}})
 	_, _ = f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{Email: emailPtr("nobody@x.io"), Password: "wrong"}})

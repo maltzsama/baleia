@@ -10,6 +10,7 @@ import (
 // TestSettingsFromConfig: defaults are resolved once, so a zero config value
 // reaches the handlers as the packaged default, and set values pass through.
 func TestSettingsFromConfig(t *testing.T) {
+	t.Parallel()
 	zero := SettingsFromConfig(&config.Config{})
 	if zero.Auth.AccessTTL != config.DefaultAccessTokenTTL || zero.Auth.RefreshTTL != config.DefaultRefreshTokenTTL ||
 		zero.Auth.ResetTTL != config.DefaultResetTokenTTL || zero.Auth.PasswordCost != config.DefaultBcryptCost {
@@ -38,6 +39,7 @@ func TestSettingsFromConfig(t *testing.T) {
 // TestSettings_ZeroValue: handlers built without configuration fall back to
 // the defaults the nil config used to give.
 func TestSettings_ZeroValue(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{})
 	if h.metadataSyncEvery() != config.DefaultMetadataSyncInterval {
 		t.Errorf("metadata sync = %v, want the default", h.metadataSyncEvery())

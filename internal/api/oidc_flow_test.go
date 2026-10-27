@@ -22,6 +22,7 @@ import (
 )
 
 func TestSafeRelativePath(t *testing.T) {
+	t.Parallel()
 	cases := map[string]bool{
 		"/sql":              true,
 		"/sql?tab=1":        true,
@@ -58,6 +59,7 @@ func oidcAttemptFixture(t *testing.T) (*db.Queries, db.AuthProvider) {
 // TestOIDC_AttemptSingleUse: consuming a state deletes the row, so a replayed
 // callback finds nothing (#250).
 func TestOIDC_AttemptSingleUse(t *testing.T) {
+	t.Parallel()
 	q, provider := oidcAttemptFixture(t)
 	ctx := context.Background()
 	const state = "state-1"
@@ -85,6 +87,7 @@ func TestOIDC_AttemptSingleUse(t *testing.T) {
 // TestOIDC_RedirectConstraint: the database refuses unsafe redirects even if a
 // future writer forgets to validate them (#252).
 func TestOIDC_RedirectConstraint(t *testing.T) {
+	t.Parallel()
 	q, provider := oidcAttemptFixture(t)
 	ctx := context.Background()
 	expires := pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true}
@@ -261,6 +264,7 @@ func (f *oidcFlowFixture) failure(t *testing.T, result *OIDCResult) string {
 // TestOIDC_NoTokensInRedirect: the callback hands the session off in the
 // HttpOnly cookie and redirects to the stored relative path (#252).
 func TestOIDC_NoTokensInRedirect(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
 	result := f.finish(t, state, cookie)
@@ -278,6 +282,7 @@ func TestOIDC_NoTokensInRedirect(t *testing.T) {
 }
 
 func TestOIDC_StateMismatch(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	_, cookie := f.start(t)
 	if code := f.failure(t, f.finish(t, "different-state", cookie)); code != oidcErrorSSOFailed {
@@ -286,6 +291,7 @@ func TestOIDC_StateMismatch(t *testing.T) {
 }
 
 func TestOIDC_StateReplay(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
 	if result := f.finish(t, state, cookie); result.Location != "/sql" {
@@ -297,6 +303,7 @@ func TestOIDC_StateReplay(t *testing.T) {
 }
 
 func TestOIDC_Expired(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
 	if _, err := f.pool.Exec(context.Background(), "UPDATE oidc_login_attempts SET expires_at = now() - interval '1 minute' WHERE state = $1", state); err != nil {
@@ -308,6 +315,7 @@ func TestOIDC_Expired(t *testing.T) {
 }
 
 func TestOIDC_NonceMismatch(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
 	f.idp.Nonce = "wrong-nonce"
@@ -318,6 +326,7 @@ func TestOIDC_NonceMismatch(t *testing.T) {
 
 // TestOIDC_RedirectRelativeOnly: only a stored same-origin path is honoured.
 func TestOIDC_RedirectRelativeOnly(t *testing.T) {
+	t.Parallel()
 	str := func(s string) *string { return &s }
 	cases := []struct {
 		in   *string
@@ -338,6 +347,7 @@ func TestOIDC_RedirectRelativeOnly(t *testing.T) {
 
 // TestOIDC_FailureRedirects: every failure lands on /login?error=<code>.
 func TestOIDC_FailureRedirects(t *testing.T) {
+	t.Parallel()
 	for _, code := range []string{oidcErrorNotProvisioned, oidcErrorAccountSuspended, oidcErrorIDPUnavailable, oidcErrorSSOFailed} {
 		if got := oidcFailureLocation(code); got != "/login?error="+code {
 			t.Errorf("%s: location %q", code, got)
@@ -395,6 +405,7 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 // TestOIDC_ConfigEncrypted: the provider config is sealed with the keyring and
 // bound to the provider id (#278).
 func TestOIDC_ConfigEncrypted(t *testing.T) {
+	t.Parallel()
 	q := db.New(testdb.New(t))
 	provider := oidcProvider(t, q, "http://issuer.example")
 	stored, err := q.GetAuthProviderByID(context.Background(), provider.ID)
@@ -412,6 +423,7 @@ func TestOIDC_ConfigEncrypted(t *testing.T) {
 // TestOIDC_ConfigDecryptFailsClosed: a plaintext config is refused, never
 // parsed as JSON (#278).
 func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
+	t.Parallel()
 	q := db.New(testdb.New(t))
 	plaintext := `{"issuer_url":"http://issuer.example","client_id":"client","client_secret":"secret"}`
 	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
@@ -429,6 +441,7 @@ func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 // TestOIDC_ProviderCache: discovery is cached and a config change invalidates
 // it (#280).
 func TestOIDC_ProviderCache(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	idp, err := oidctest.New("", "client")
@@ -466,6 +479,7 @@ func TestOIDC_ProviderCache(t *testing.T) {
 
 // TestOIDC_StrictParity: the redirect/callback are the strict handlers (#280).
 func TestOIDC_StrictParity(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	result := &OIDCResult{}
 	ctx := WithOIDCResult(context.Background(), result)
@@ -487,6 +501,7 @@ func TestOIDC_StrictParity(t *testing.T) {
 // TestOIDC_UnknownUserInviteOnly: unknown subjects are denied by default
 // (#251).
 func TestOIDC_UnknownUserInviteOnly(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlowWithConfig(t, func(issuer string) auth.OIDCProviderConfig {
 		cfg := oidcConfig(issuer)
 		cfg.AutoCreate = false
@@ -501,6 +516,7 @@ func TestOIDC_UnknownUserInviteOnly(t *testing.T) {
 // TestOIDC_AutoCreateDomainAllowList: auto-create needs a verified e-mail in an
 // allowed domain (#251).
 func TestOIDC_AutoCreateDomainAllowList(t *testing.T) {
+	t.Parallel()
 	// Allowed + verified creates the account.
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
@@ -528,6 +544,7 @@ func TestOIDC_AutoCreateDomainAllowList(t *testing.T) {
 // TestOIDC_NoEmailLinking: an existing local account with the same e-mail is
 // never linked to the OIDC subject (#251).
 func TestOIDC_NoEmailLinking(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlow(t)
 	password := "not-used"
 	local, err := f.q.CreateUser(context.Background(), db.CreateUserParams{
@@ -551,6 +568,7 @@ func TestOIDC_NoEmailLinking(t *testing.T) {
 
 // TestOIDC_RoleMappingEachLogin: roles follow the IdP on every login (#251).
 func TestOIDC_RoleMappingEachLogin(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlowWithConfig(t, func(issuer string) auth.OIDCProviderConfig {
 		cfg := oidcConfig(issuer)
 		cfg.RoleMapping = []identity.RoleMapping{{Group: "baleia-admins", Role: identity.RoleAdmin}}
@@ -591,6 +609,7 @@ func TestOIDC_RoleMappingEachLogin(t *testing.T) {
 // TestOIDC_ConfigurableClaims: claim names come from the provider config
 // (#279).
 func TestOIDC_ConfigurableClaims(t *testing.T) {
+	t.Parallel()
 	f := newOIDCFlowWithConfig(t, func(issuer string) auth.OIDCProviderConfig {
 		cfg := oidcConfig(issuer)
 		cfg.Claims = auth.OIDCClaimsConfig{Subject: "user_id", Email: "mail", Name: "display_name", Groups: "memberOf"}
@@ -621,6 +640,7 @@ func TestOIDC_ConfigurableClaims(t *testing.T) {
 
 // TestOIDC_TeamMapping: mapped teams are upserted on login (#279).
 func TestOIDC_TeamMapping(t *testing.T) {
+	t.Parallel()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	idp, err := oidctest.New("", "client")
@@ -667,6 +687,7 @@ func TestOIDC_TeamMapping(t *testing.T) {
 
 // TestOIDC_AttemptExpired: an attempt older than its TTL is refused (#250).
 func TestOIDC_AttemptExpired(t *testing.T) {
+	t.Parallel()
 	q, provider := oidcAttemptFixture(t)
 	ctx := context.Background()
 	if err := q.CreateOIDCLoginAttempt(ctx, db.CreateOIDCLoginAttemptParams{

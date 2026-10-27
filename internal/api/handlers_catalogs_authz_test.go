@@ -221,6 +221,7 @@ func uuidString(u pgtype.UUID) string {
 func reqIDs(q *authzFake) (conn [16]byte, cat [16]byte) { return q.conn.ID.Bytes, q.cat.ID.Bytes }
 
 func TestListCatalogs_Authz(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	conn, _ := reqIDs(q)
 	for name, tc := range map[string]struct {
@@ -240,6 +241,7 @@ func TestListCatalogs_Authz(t *testing.T) {
 }
 
 func TestGetCatalog_Authz(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
 	get := func(ctx context.Context, c, k [16]byte) int {
@@ -265,6 +267,7 @@ func TestGetCatalog_Authz(t *testing.T) {
 }
 
 func TestUpdateCatalog_Authz(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
 	body := &CreateCatalogRequest{Warehouse: "wh2"}
@@ -295,6 +298,7 @@ func TestUpdateCatalog_Authz(t *testing.T) {
 // then is the old name disabled and dropped, so it never goes missing. The
 // same-name order of #129 (DROP, upsert, CREATE) is TestSyncCatalog_Authz.
 func TestUpdateCatalog_RenamePersistsAndRecreatesInOrder(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
 	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{TrinoCatalogName: "wh_renamed"}})
@@ -329,6 +333,7 @@ func TestUpdateCatalog_RenamePersistsAndRecreatesInOrder(t *testing.T) {
 }
 
 func TestSyncCatalog_Authz(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	_, cat := reqIDs(q)
 
@@ -366,6 +371,7 @@ func TestSyncCatalog_Authz(t *testing.T) {
 // TestSyncCatalog_FailedRecreateIsASyncError: a DDL failure is recorded and
 // answered 409, never reported as synced.
 func TestSyncCatalog_FailedRecreateIsASyncError(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -391,6 +397,7 @@ func TestSyncCatalog_FailedRecreateIsASyncError(t *testing.T) {
 }
 
 func TestDeleteCatalog_ForeignUser404_NoTrinoCall(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
 	resp, err := h.DeleteCatalog(ctxAs(strangerID, "member"), DeleteCatalogRequestObject{ConnectionId: conn, CatalogId: cat})
@@ -406,6 +413,7 @@ func TestDeleteCatalog_ForeignUser404_NoTrinoCall(t *testing.T) {
 }
 
 func TestCreateCatalog_ForeignUser404_NothingWritten(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, _ := reqIDs(q)
 	resp, err := h.CreateCatalog(ctxAs(strangerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: &CreateCatalogRequest{Name: "x", TrinoCatalogName: "x", Warehouse: "x"}})
@@ -421,6 +429,7 @@ func TestCreateCatalog_ForeignUser404_NothingWritten(t *testing.T) {
 }
 
 func TestReconcileTrino_AdminOnly(t *testing.T) {
+	t.Parallel()
 	h, _, _ := newAuthzHandlers(t)
 	resp, err := h.ReconcileTrino(ctxAs(ownerID, "member"), ReconcileTrinoRequestObject{})
 	if err != nil {
@@ -432,6 +441,7 @@ func TestReconcileTrino_AdminOnly(t *testing.T) {
 }
 
 func TestConnectionHandlers_Authz(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	id := q.conn.ID.Bytes
 	stranger, admin, owner := ctxAs(strangerID, "member"), ctxAs(adminID, "admin"), ctxAs(ownerID, "member")
@@ -547,6 +557,7 @@ func codeOf(t *testing.T, resp any, err error) int {
 // answers is cut off by the DDL deadline and reported as a sync error instead
 // of blocking the request forever.
 func TestSyncCatalog_StuckDDLTimesOut(t *testing.T) {
+	t.Parallel()
 	old := catalogDDLTimeout
 	catalogDDLTimeout = 300 * time.Millisecond
 	defer func() { catalogDDLTimeout = old }()
@@ -586,6 +597,7 @@ func strp(s string) *string { return &s }
 // TestBindingErrorsAre422: projection errors the request or the connection
 // caused are client errors, including credentials that cannot be opened.
 func TestBindingErrorsAre422(t *testing.T) {
+	t.Parallel()
 	cases := map[error]string{
 		fmt.Errorf("x: %w", catalogs.ErrCredentialsUnreadable):                                  "credentials_unreadable",
 		fmt.Errorf("x: %w", bindings.ErrReservedName):                                           "reserved_name",
@@ -604,6 +616,7 @@ func TestBindingErrorsAre422(t *testing.T) {
 // TestUpdateCatalog_DeletedIsNotRecreated: a deleted catalog's binding is
 // disabled; an update is a 409 and nothing reaches Trino (#38).
 func TestUpdateCatalog_DeletedIsNotRecreated(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	b, _ := q.current(pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true})
 	b.LifecycleState = "disabled"
@@ -621,6 +634,7 @@ func TestUpdateCatalog_DeletedIsNotRecreated(t *testing.T) {
 // TestNativeCatalogsAreNotManaged: catalogs that belong to their engine
 // answer 422 on every managed-catalog operation.
 func TestNativeCatalogsAreNotManaged(t *testing.T) {
+	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	q.cat.Origin = "native"
 	conn, cat := reqIDs(q)
@@ -648,6 +662,7 @@ func (brokenCatalogList) ListCatalogsByConnection(context.Context, pgtype.UUID) 
 // TestListCatalogs_StoreFailureIsAnError: a failed read is a server error,
 // not an empty list the client would take for "no catalogs".
 func TestListCatalogs_StoreFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	h.queries = brokenCatalogList{q}
 	h.access = wsaccess.New(h.queries)

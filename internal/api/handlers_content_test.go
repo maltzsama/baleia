@@ -6,6 +6,7 @@ import (
 )
 
 func TestSpaceActions_FromEffectiveRole(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name      string
 		role      string
@@ -20,6 +21,7 @@ func TestSpaceActions_FromEffectiveRole(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := spaceActions(tc.role, tc.isDefault); !slices.Equal(got, tc.want) {
 				t.Fatalf("spaceActions(%q, %v) = %v, want %v", tc.role, tc.isDefault, got, tc.want)
 			}

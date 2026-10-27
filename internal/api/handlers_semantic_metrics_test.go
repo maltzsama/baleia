@@ -83,6 +83,7 @@ func createMetric(t *testing.T, f *metaFixture, ctx context.Context, body Semant
 }
 
 func TestSemanticMetrics_CreateValidateListDelete(t *testing.T) {
+	t.Parallel()
 	f, engine := metricFixture(t)
 	ctx := f.as(f.owner)
 
@@ -131,6 +132,7 @@ func TestSemanticMetrics_CreateValidateListDelete(t *testing.T) {
 }
 
 func TestSemanticMetrics_InvalidDefinition422(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 
@@ -155,6 +157,7 @@ func TestSemanticMetrics_InvalidDefinition422(t *testing.T) {
 }
 
 func TestSemanticMetrics_EngineRejection422(t *testing.T) {
+	t.Parallel()
 	f, engine := metricFixture(t)
 	ctx := f.as(f.owner)
 	engine.failWith = queryengine.NewError(queryengine.CodeNotFound, "trino", "42S02", "missing column")
@@ -174,6 +177,7 @@ func TestSemanticMetrics_EngineRejection422(t *testing.T) {
 }
 
 func TestSemanticMetrics_CustomSQLRequiresReadOnly422(t *testing.T) {
+	t.Parallel()
 	f, engine := metricFixture(t)
 	ctx := f.as(f.owner)
 	engine.readOnly = queryengine.ReadOnlyNone
@@ -193,6 +197,7 @@ func TestSemanticMetrics_CustomSQLRequiresReadOnly422(t *testing.T) {
 }
 
 func TestSemanticMetrics_SlugConflict409(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	body := SemanticMetricCreate{
@@ -208,6 +213,7 @@ func TestSemanticMetrics_SlugConflict409(t *testing.T) {
 }
 
 func TestSemanticMetrics_UngrantedCatalog404(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	r := createMetric(t, f, ctx, SemanticMetricCreate{
@@ -220,6 +226,7 @@ func TestSemanticMetrics_UngrantedCatalog404(t *testing.T) {
 }
 
 func TestSemanticMetrics_SQL(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	def := simpleDefinition("sum", "net_revenue")
@@ -268,6 +275,7 @@ func TestSemanticMetrics_SQL(t *testing.T) {
 }
 
 func TestMetadataTable_Doc(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: "Orders table.", Tags: tags("certified")})

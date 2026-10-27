@@ -32,6 +32,7 @@ func (f *fakeUserDeleter) RevokeUserRefreshTokens(context.Context, pgtype.UUID) 
 // TestRemoveUserConflict: a user the database still references is refused
 // with 409, not 500; the owner of a workspace gets user_owns_workspace.
 func TestRemoveUserConflict(t *testing.T) {
+	t.Parallel()
 	ctx := context.WithValue(context.Background(), auth.ContextKeyRole, "admin")
 	cases := []struct {
 		name     string
@@ -71,6 +72,7 @@ func TestRemoveUserConflict(t *testing.T) {
 // TestDisable_RevokesRefresh: removing (disabling) a user ends their refresh
 // tokens (#51).
 func TestDisable_RevokesRefresh(t *testing.T) {
+	t.Parallel()
 	fake := &fakeUserDeleter{}
 	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
 	ctx := context.WithValue(context.Background(), auth.ContextKeyRole, "admin")

@@ -74,6 +74,7 @@ func retrieverRequest() CreateRetrieverRequestObject {
 }
 
 func TestCreateRetriever_RequiresDestination(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		set  func(*CreateRetrieverRequest)
@@ -99,6 +100,7 @@ func TestCreateRetriever_RequiresDestination(t *testing.T) {
 }
 
 func TestCreateRetriever_RejectsMultiStatementAndDDL(t *testing.T) {
+	t.Parallel()
 	for name, def := range map[string]string{
 		"multi":       "SELECT 1; SELECT 2",
 		"catalog_ddl": "CREATE CATALOG x USING tpch",
@@ -118,6 +120,7 @@ func TestCreateRetriever_RejectsMultiStatementAndDDL(t *testing.T) {
 }
 
 func TestCreateRetriever_IncrementalNotSupported(t *testing.T) {
+	t.Parallel()
 	req := retrieverRequest()
 	inc := CreateRetrieverRequestRefreshType("incremental")
 	req.Body.RefreshType = &inc
@@ -136,6 +139,7 @@ func TestCreateRetriever_IncrementalNotSupported(t *testing.T) {
 }
 
 func TestCreateRetriever_StoresDestinationFields(t *testing.T) {
+	t.Parallel()
 	fake := &fakeRetrieverQuerier{}
 	resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: fake, tx: directTx{q: fake}})).CreateRetriever(testContext(), retrieverRequest())
 	if err != nil {
@@ -172,6 +176,7 @@ func (f *fakeRetrieverDeleter) DeleteRetriever(_ context.Context, arg db.DeleteR
 // TestDeleteRetriever: the row is deleted in the caller's workspace; one that
 // is not there is 404.
 func TestDeleteRetriever(t *testing.T) {
+	t.Parallel()
 	req := DeleteRetrieverRequestObject{Id: PathId{0xAA}, RetrieverId: [16]byte{0xBB}}
 
 	q := &fakeRetrieverDeleter{rows: 1}

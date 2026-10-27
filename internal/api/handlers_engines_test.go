@@ -148,6 +148,7 @@ func createEngine(t *testing.T, h *API, name string) *httptest.ResponseRecorder 
 }
 
 func TestCreateDirectEngine_DiscoversNativeCatalogs(t *testing.T) {
+	t.Parallel()
 	q := &engineQuerier{conn: ownedConnection(t, "clickhouse", testUserID)}
 	p := &fakeEngineProvider{kind: "clickhouse", roles: []connections.Role{connections.RoleMetadata, connections.RoleDirect}, catalogs: []string{"default", "logs"}}
 	rec := createEngine(t, engineHandlers(t, q, p), "ch")
@@ -166,12 +167,14 @@ func TestCreateDirectEngine_DiscoversNativeCatalogs(t *testing.T) {
 }
 
 func TestCreateDirectEngine_NativeCatalogPerKind(t *testing.T) {
+	t.Parallel()
 	cases := map[connections.Kind]string{
 		connections.KindPostgreSQL: "sales",        // the configured database
 		connections.KindMySQL:      "warehouse-db", // one catalog named after the connection
 	}
 	for kind, want := range cases {
 		t.Run(string(kind), func(t *testing.T) {
+			t.Parallel()
 			q := &engineQuerier{conn: ownedConnection(t, string(kind), testUserID)}
 			p := &fakeEngineProvider{kind: kind, roles: []connections.Role{connections.RoleDirect}, catalogs: []string{"ignored"}}
 			if rec := createEngine(t, engineHandlers(t, q, p), "e"); rec.Code != 201 {
@@ -185,6 +188,7 @@ func TestCreateDirectEngine_NativeCatalogPerKind(t *testing.T) {
 }
 
 func TestCreateEngine_Rejects(t *testing.T) {
+	t.Parallel()
 	direct := []connections.Role{connections.RoleDirect}
 	cases := map[string]struct {
 		conn db.CatalogConnection
@@ -201,6 +205,7 @@ func TestCreateEngine_Rejects(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			q := &engineQuerier{conn: c.conn}
 			rec := createEngine(t, engineHandlers(t, q, c.p), c.name)
 			if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.want) {
@@ -232,11 +237,13 @@ func deleteEngine(t *testing.T, h *API) *httptest.ResponseRecorder {
 }
 
 func TestDeleteEngineWithBindings409(t *testing.T) {
+	t.Parallel()
 	for name, blockers := range map[string]db.CountEngineBlockersRow{
 		"managed bindings":   {ManagedBindings: 1},
 		"running executions": {RunningExecutions: 2},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			q := engineFixture(t, testUserID)
 			q.blockers = blockers
 			rec := deleteEngine(t, engineHandlers(t, q))
@@ -251,6 +258,7 @@ func TestDeleteEngineWithBindings409(t *testing.T) {
 }
 
 func TestDeleteEngine_RemovesNativeCatalogs(t *testing.T) {
+	t.Parallel()
 	q := engineFixture(t, testUserID)
 	if rec := deleteEngine(t, engineHandlers(t, q)); rec.Code != 204 {
 		t.Fatalf("response = %d %s", rec.Code, rec.Body)
@@ -261,9 +269,11 @@ func TestDeleteEngine_RemovesNativeCatalogs(t *testing.T) {
 }
 
 func TestEngineAccess(t *testing.T) {
+	t.Parallel()
 	stranger := "00000000-0000-0000-0000-00000000beef"
 
 	t.Run("a stranger gets 404", func(t *testing.T) {
+		t.Parallel()
 		q := engineFixture(t, stranger)
 		resp, err := engineHandlers(t, q).GetEngine(testContext(), GetEngineRequestObject{Id: [16]byte{0xE1}})
 		if err != nil {
@@ -275,6 +285,7 @@ func TestEngineAccess(t *testing.T) {
 	})
 
 	t.Run("a grantee reads but may not write", func(t *testing.T) {
+		t.Parallel()
 		q := engineFixture(t, stranger)
 		q.granted = true
 		h := engineHandlers(t, q)
@@ -295,6 +306,7 @@ func TestEngineAccess(t *testing.T) {
 }
 
 func TestNativeCatalogsReaderError(t *testing.T) {
+	t.Parallel()
 	p := &fakeEngineProvider{kind: "clickhouse", roles: []connections.Role{connections.RoleDirect}}
 	bad := &errReaderProvider{fakeEngineProvider: p}
 	_, err := catalogs.NativeNames(context.Background(), bad, connections.Config{}, "")
@@ -325,6 +337,7 @@ func (q *deleteConnQuerier) DeleteCatalogConnection(context.Context, pgtype.UUID
 // TestDeleteConnectionBackingEngine409: engines reference their connection
 // ON DELETE RESTRICT, which Postgres reports as 23001.
 func TestDeleteConnectionBackingEngine409(t *testing.T) {
+	t.Parallel()
 	q := &deleteConnQuerier{
 		conn: ownedConnection(t, "postgresql", testUserID),
 		err:  &pgconn.PgError{Code: "23001", ConstraintName: "engines_connection_id_fkey"},

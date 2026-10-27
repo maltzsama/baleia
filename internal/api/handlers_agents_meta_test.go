@@ -22,6 +22,7 @@ func (f fakeEngineSource) DefaultTrino(context.Context) (queryengine.Engine, err
 }
 
 func TestAgentsMeta(t *testing.T) {
+	t.Parallel()
 	f := newAgentsFixture(t, true)
 	got, err := f.h.GetAgentsMeta(f.owner, GetAgentsMetaRequestObject{})
 	if err != nil {
@@ -51,6 +52,7 @@ func TestAgentsMeta(t *testing.T) {
 }
 
 func TestAgentEligibilityPolicyExclusion(t *testing.T) {
+	t.Parallel()
 	catalogID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 	engineID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
 	h := testAPI(handlerFields{})
@@ -77,6 +79,7 @@ func TestAgentEligibilityPolicyExclusion(t *testing.T) {
 }
 
 func TestAgentEligibilityReadOnlyNotEnforced(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{engines: fakeEngineSource{readOnly: queryengine.ReadOnlyNone}})
 	catalogID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 	engineID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}

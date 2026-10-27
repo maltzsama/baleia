@@ -64,6 +64,7 @@ func execRequest() (PathId, openapi_types.UUID) {
 // belongs to another workspace yields pgx.ErrNoRows from the scoped query, so
 // the handler answers 404 instead of returning the foreign execution.
 func TestGetExecutionRejectsForeignWorkspace(t *testing.T) {
+	t.Parallel()
 	fake := &fakeQuerier{hasWorkspaceAccess: true, execErr: pgx.ErrNoRows}
 	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
 	wsID, execID := execRequest()
@@ -84,6 +85,7 @@ func TestGetExecutionRejectsForeignWorkspace(t *testing.T) {
 }
 
 func TestGetExecutionRequiresWorkspaceAccess(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: false}})
 	wsID, execID := execRequest()
 
@@ -97,6 +99,7 @@ func TestGetExecutionRequiresWorkspaceAccess(t *testing.T) {
 }
 
 func TestGetExecutionReturnsOwnExecution(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: true}})
 	wsID, execID := execRequest()
 
@@ -110,6 +113,7 @@ func TestGetExecutionReturnsOwnExecution(t *testing.T) {
 }
 
 func TestCancelExecutionCancelsRunning(t *testing.T) {
+	t.Parallel()
 	fake := &fakeQuerier{hasWorkspaceAccess: true, cancelResult: db.QueryExecution{Status: "cancelled"}}
 	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}, temporalClient: &fakeTemporalClient{}})
 	wsID, execID := execRequest()
@@ -131,6 +135,7 @@ func TestCancelExecutionCancelsRunning(t *testing.T) {
 // conditional cancel matches nothing (the query already finished), the handler
 // returns the real terminal status instead of reporting cancelled.
 func TestCancelExecutionDoesNotOverrideCompletion(t *testing.T) {
+	t.Parallel()
 	fake := &fakeQuerier{
 		hasWorkspaceAccess: true,
 		cancelErr:          pgx.ErrNoRows,
@@ -153,6 +158,7 @@ func TestCancelExecutionDoesNotOverrideCompletion(t *testing.T) {
 }
 
 func TestListStatementsReturns404ForForeignExecution(t *testing.T) {
+	t.Parallel()
 	h := testAPI(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: true, execErr: pgx.ErrNoRows}})
 	wsID, execID := execRequest()
 
@@ -223,6 +229,7 @@ func (f *fakeTemporalClient) CancelWorkflow(ctx context.Context, workflowID, run
 // TestRunQuery_WorkflowStartFailureFailsRow pins the orphan-row fix: when the
 // workflow cannot start, the running execution row is failed instead of stuck.
 func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
+	t.Parallel()
 	fake := &fakeRunQueryQuerier{
 		exec:    db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
 		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)},
@@ -272,6 +279,7 @@ func (c *cancelRecorder) Cancel(_ context.Context, h queryengine.QueryHandle) er
 // cancelled through its persisted handle, so a dead worker cannot leave it
 // running.
 func TestCancelExecutionCancelsOnTheEngine(t *testing.T) {
+	t.Parallel()
 	q := &handlesQuerier{
 		fakeQuerier: &fakeQuerier{hasWorkspaceAccess: true, cancelResult: db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "cancelled"}},
 		rows:        []db.ListRunningStatementHandlesRow{{Position: 1, QueryHandle: []byte(`{"engine_id":"e","query_id":"20260101_000000_00001_abcde"}`)}},

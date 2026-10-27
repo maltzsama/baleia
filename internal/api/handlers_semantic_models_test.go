@@ -14,6 +14,7 @@ import (
 // a rename leaves the stored slug stale; the explore compiler must still find
 // the model by the row's slug (#121).
 func TestSemanticModels_CompileResolvesModelByRowSlug(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 
@@ -104,6 +105,7 @@ func listModels(t *testing.T, f *metaFixture, ctx context.Context) []SemanticMod
 // v1 metrics of one table become one model whose metrics keep their slugs; a
 // dry run writes nothing and a second run changes nothing (#91, #121).
 func TestSemanticModels_MigrateV1(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	for _, body := range []SemanticMetricCreate{
@@ -186,6 +188,7 @@ func TestSemanticModels_MigrateV1(t *testing.T) {
 
 // A table without an id column needs an explicit primary key.
 func TestSemanticModels_MigrateV1NeedsPrimaryKey(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	if _, err := f.pool.Exec(context.Background(), `UPDATE metadata_columns SET name = 'order_id' WHERE table_id = $1 AND name = 'id'`, f.orders); err != nil {
@@ -210,6 +213,7 @@ func TestSemanticModels_MigrateV1NeedsPrimaryKey(t *testing.T) {
 // A space that holds only models is not empty: deleting it without force must
 // not cascade over them, and the content search finds models (#113, #121).
 func TestSemanticModels_SpaceCountsAndSearch(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	created, err := f.h.CreateSemanticModel(ctx, CreateSemanticModelRequestObject{Id: f.ws, Body: &SemanticModelCreate{
@@ -245,6 +249,7 @@ func TestSemanticModels_SpaceCountsAndSearch(t *testing.T) {
 // A valid query the compiler cannot express answers not_supported, not
 // invalid_definition and never a 500.
 func TestSemanticModels_CompileUnsupportedCode(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	create := func(slug string, def map[string]any) {
@@ -291,6 +296,7 @@ func TestSemanticModels_CompileUnsupportedCode(t *testing.T) {
 // A v1 metric on a catalog the workspace no longer has a grant for must not
 // leak the table's columns or become a model.
 func TestSemanticModels_MigrateV1NeedsCatalogGrant(t *testing.T) {
+	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
 	space, err := f.h.queries.GetDefaultSpace(context.Background(), pgtype.UUID{Bytes: f.ws, Valid: true})

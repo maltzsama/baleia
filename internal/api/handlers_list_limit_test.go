@@ -5,7 +5,9 @@ import "testing"
 // A limit caps the filtered list and an out-of-range value is rejected (the
 // workbench palette relies on both: #332, #333).
 func TestListLimits(t *testing.T) {
+	t.Parallel()
 	t.Run("semantic metrics", func(t *testing.T) {
+		t.Parallel()
 		f, _ := metricFixture(t)
 		ctx := f.as(f.owner)
 
@@ -42,6 +44,7 @@ func TestListLimits(t *testing.T) {
 	})
 
 	t.Run("saved queries", func(t *testing.T) {
+		t.Parallel()
 		f := newMetaFixture(t)
 		ctx := f.as(f.owner)
 
