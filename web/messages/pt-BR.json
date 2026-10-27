@@ -1039,5 +1039,13 @@
 	"common_just_now": "agora mesmo",
 	"components_queryeditor_failed": "Falhou",
 	"components_queryeditor_cancelled": "Cancelado",
-	"components_queryeditor_running_statement": "Executando a instrução {position}…"
+	"components_queryeditor_running_statement": "Executando a instrução {position}…",
+	"history_actions": "Ações",
+	"history_cancel_execution": "Cancelar execução",
+	"history_cancel_execution_named": "Cancelar execução: {sql}",
+	"history_cancel_this_execution": "Cancelar esta execução?",
+	"history_cancel_consequence_engine": "A instrução em execução é interrompida no engine, e as instruções seguintes não rodam.",
+	"history_cancel_consequence_results": "As instruções que já terminaram mantêm seus resultados.",
+	"history_execution_cancelled": "Execução cancelada",
+	"history_execution_already_ended": "A execução já tinha terminado"
 }
