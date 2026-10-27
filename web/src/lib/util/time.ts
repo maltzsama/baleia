@@ -1,5 +1,8 @@
 // Human formatting shared by the product screens (#105).
 
+import { m } from '$lib/paraglide/messages';
+import { getLocale, type Locale } from '$lib/paraglide/runtime';
+
 export function formatDuration(ms: number): string {
 	if (!Number.isFinite(ms) || ms < 0) return '—';
 	if (ms < 1000) return `${Math.round(ms)} ms`;
@@ -13,11 +16,16 @@ export function formatDuration(ms: number): string {
 	return `${hours} h${mins ? ` ${mins} min` : ''}`;
 }
 
-export function formatRelativeTime(at: string | Date | number, now = Date.now()): string {
+/** Relative time in the active locale (#412), e.g. "5 minutes ago". */
+export function formatRelativeTime(
+	at: string | Date | number,
+	now = Date.now(),
+	locale: Locale = getLocale()
+): string {
 	const then = at instanceof Date ? at.getTime() : new Date(at).getTime();
 	if (Number.isNaN(then)) return '—';
 	const diff = Math.round((now - then) / 1000);
-	if (Math.abs(diff) < 45) return 'just now';
+	if (Math.abs(diff) < 45) return m.common_just_now({}, { locale });
 	const units: [Intl.RelativeTimeFormatUnit, number][] = [
 		['year', 365 * 24 * 3600],
 		['month', 30 * 24 * 3600],
@@ -26,13 +34,13 @@ export function formatRelativeTime(at: string | Date | number, now = Date.now())
 		['minute', 60],
 		['second', 1]
 	];
-	const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+	const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
 	for (const [unit, seconds] of units) {
 		if (Math.abs(diff) >= seconds) {
 			return formatter.format(-Math.round(diff / seconds), unit);
 		}
 	}
-	return 'just now';
+	return m.common_just_now({}, { locale });
 }
 
 export function formatAbsoluteTime(at: string | Date): string {

@@ -101,6 +101,12 @@ function mockWorkbench() {
 	);
 }
 
+// The whole script runs from ⇧⌘/Ctrl+Shift+Enter in the editor (#417).
+async function runWholeScript() {
+	const content = document.querySelector('.cm-content') as HTMLElement;
+	await fireEvent.keyDown(content, { key: 'Enter', code: 'Enter', ctrlKey: true, shiftKey: true });
+}
+
 describe('QueryEditor', () => {
 	beforeEach(() => {
 		clearEnginesCache();
@@ -157,7 +163,7 @@ describe('QueryEditor', () => {
 		render(QueryEditor);
 		await screen.findByText('trino · trino');
 
-		await fireEvent.click(screen.getByTestId('run-all'));
+		await runWholeScript();
 
 		await waitFor(() => expect(captured.body).toBeDefined());
 		expect(captured.body?.target).toEqual({ binding_id: BINDING, schema: 'sales' });
@@ -219,7 +225,7 @@ describe('QueryEditor', () => {
 		await waitFor(() => expect(sent).toEqual(['SELECT 1;']));
 	});
 
-	it('runs the whole script with Run all', async () => {
+	it('runs the whole script with the shortcut, and has no Run all button', async () => {
 		mockWorkbench();
 		const sent: string[] = [];
 		captureRuns(sent);
@@ -227,8 +233,9 @@ describe('QueryEditor', () => {
 		render(QueryEditor);
 		await screen.findByText('trino · trino');
 
-		await fireEvent.click(screen.getByTestId('run-all'));
+		await runWholeScript();
 		await waitFor(() => expect(sent).toEqual(['SELECT 1;\nSELECT 2']));
+		expect(screen.queryByTestId('run-all')).toBeNull();
 	});
 
 	it('keeps the target on the tab', async () => {
