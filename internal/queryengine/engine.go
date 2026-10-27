@@ -2,6 +2,7 @@ package queryengine
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -189,6 +190,27 @@ type Dialect = dialect.Dialect
 type IcebergMaintainer interface {
 	MaintenanceStatements(table []string, retention string) ([]string, error)
 }
+
+// QueryResourcesReader reads what one query used, by its engine-side id
+// (#407). Engines with monitoring implement it; an id the engine no longer
+// knows is ErrQueryUnknown.
+type QueryResourcesReader interface {
+	QueryResources(ctx context.Context, queryID string) (QueryResources, error)
+}
+
+// QueryResources is a query's resource usage; a nil field is unknown.
+type QueryResources struct {
+	PeakMemoryBytes *int64
+	ProcessedRows   *int64
+	ProcessedBytes  *int64
+	OutputRows      *int64
+	OutputBytes     *int64
+	QueuedMs        *int64
+	PlanningMs      *int64
+}
+
+// ErrQueryUnknown: the engine does not know the query (any more).
+var ErrQueryUnknown = errors.New("queryengine: query not known to the engine")
 
 // As finds an extension or concrete type behind the Manager's wrappers.
 func As[T any](e Engine) (T, bool) {

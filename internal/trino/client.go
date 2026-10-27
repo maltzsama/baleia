@@ -629,8 +629,19 @@ func (c *Client) ListQueries(ctx context.Context) ([]QueryInfo, error) {
 	return queries, nil
 }
 
+// ErrQueryGone: the coordinator no longer knows the query (it forgets
+// finished queries after query.min-expire-age).
+var ErrQueryGone = errors.New("trino: query not known to the coordinator")
+
+// maxQueryInfoBytes bounds the /v1/query/{id} document, which carries the
+// whole plan and per-stage statistics.
+const maxQueryInfoBytes = 32 << 20
+
+// GetQuery reads one query's info and statistics from /v1/query/{id} (#407).
+// An unknown query is ErrQueryGone.
 func (c *Client) GetQuery(ctx context.Context, queryID string) (*QueryInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/v1/query/"+queryID, nil)
+	// The id comes from a request path: escaped, it stays one path segment.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/query/"+url.PathEscape(queryID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -641,9 +652,15 @@ func (c *Client) GetQuery(ctx context.Context, queryID string) (*QueryInfo, erro
 		return nil, fmt.Errorf("trino get query: %w", err)
 	}
 	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
+		return nil, ErrQueryGone
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("trino get query: status %d", resp.StatusCode)
+	}
 
 	var qi QueryInfo
-	if err := json.NewDecoder(resp.Body).Decode(&qi); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxQueryInfoBytes)).Decode(&qi); err != nil {
 		return nil, fmt.Errorf("trino decode query: %w", err)
 	}
 	return &qi, nil

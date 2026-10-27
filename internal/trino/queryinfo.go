@@ -29,7 +29,15 @@ type QueryInfo struct {
 		ElapsedTime           string `json:"elapsedTime"`
 		TotalCPUTime          string `json:"totalCpuTime"`
 		PhysicalInputDataSize string `json:"physicalInputDataSize"`
-		FullyBlocked          bool   `json:"fullyBlocked"`
+		// The rest comes only with /v1/query/{id} (GetQuery, #407).
+		QueuedTime                string `json:"queuedTime"`
+		PlanningTime              string `json:"planningTime"`
+		PeakUserMemoryReservation string `json:"peakUserMemoryReservation"`
+		ProcessedInputPositions   *int64 `json:"processedInputPositions"`
+		ProcessedInputDataSize    string `json:"processedInputDataSize"`
+		OutputPositions           *int64 `json:"outputPositions"`
+		OutputDataSize            string `json:"outputDataSize"`
+		FullyBlocked              bool   `json:"fullyBlocked"`
 	} `json:"queryStats"`
 	ErrorType *string `json:"errorType"`
 	ErrorCode *struct {
@@ -75,6 +83,49 @@ func (q QueryInfo) PhysicalInputBytes() *int64 {
 		return nil
 	}
 	return &b
+}
+
+// Resources is what the query used, from the statistics GetQuery returns;
+// a field is nil when Trino left it out.
+func (q QueryInfo) Resources() Resources {
+	s := q.QueryStats
+	return Resources{
+		PeakMemoryBytes: dataSize(s.PeakUserMemoryReservation),
+		ProcessedRows:   s.ProcessedInputPositions,
+		ProcessedBytes:  dataSize(s.ProcessedInputDataSize),
+		OutputRows:      s.OutputPositions,
+		OutputBytes:     dataSize(s.OutputDataSize),
+		QueuedMs:        durationMs64(s.QueuedTime),
+		PlanningMs:      durationMs64(s.PlanningTime),
+	}
+}
+
+// Resources is a query's resource usage; nil fields are unknown.
+type Resources struct {
+	PeakMemoryBytes *int64
+	ProcessedRows   *int64
+	ProcessedBytes  *int64
+	OutputRows      *int64
+	OutputBytes     *int64
+	QueuedMs        *int64
+	PlanningMs      *int64
+}
+
+func dataSize(s string) *int64 {
+	b, ok := ParseDataSize(s)
+	if !ok {
+		return nil
+	}
+	return &b
+}
+
+func durationMs64(s string) *int64 {
+	ms := durationMs(s)
+	if ms == nil {
+		return nil
+	}
+	v := int64(*ms)
+	return &v
 }
 
 // FailureMessage is the failure text when Trino returned it, else the error

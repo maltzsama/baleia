@@ -3,8 +3,11 @@ package trino
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -119,5 +122,55 @@ func TestGetClusterStats(t *testing.T) {
 	// q3 is RUNNING and fully blocked, q4 is QUEUED, the others are done.
 	if cs.RunningQueries != 1 || cs.QueuedQueries != 1 || cs.BlockedQueries != 1 || cs.ActiveWorkers != 3 {
 		t.Fatalf("stats = %+v", cs)
+	}
+}
+
+// TestGetQuery_Resources: GetQuery reads the per-query statistics, keeps an
+// odd id in one path segment, and answers an unknown query with
+// ErrQueryGone (#407).
+func TestGetQuery_Resources(t *testing.T) {
+	t.Parallel()
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		if strings.HasSuffix(r.URL.Path, "/gone") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = io.WriteString(w, `{"queryId":"q1","state":"FINISHED","queryStats":{
+			"peakUserMemoryReservation":"1.50MB","processedInputPositions":1200,
+			"processedInputDataSize":"2kB","outputPositions":10,"outputDataSize":"469B",
+			"queuedTime":"12.00ms","planningTime":"1.50s"}}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := New(srv.URL, "admin")
+
+	qi, err := c.GetQuery(context.Background(), "q1/../x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/v1/query/q1%2F..%2Fx" {
+		t.Errorf("path = %s, want the id escaped into one segment", gotPath)
+	}
+	r := qi.Resources()
+	for name, tc := range map[string]struct {
+		got  *int64
+		want int64
+	}{
+		"peak memory":     {r.PeakMemoryBytes, 1572864},
+		"processed rows":  {r.ProcessedRows, 1200},
+		"processed bytes": {r.ProcessedBytes, 2048},
+		"output rows":     {r.OutputRows, 10},
+		"output bytes":    {r.OutputBytes, 469},
+		"queued":          {r.QueuedMs, 12},
+		"planning":        {r.PlanningMs, 1500},
+	} {
+		if tc.got == nil || *tc.got != tc.want {
+			t.Errorf("%s = %v, want %d", name, tc.got, tc.want)
+		}
+	}
+
+	if _, err := c.GetQuery(context.Background(), "gone"); !errors.Is(err, ErrQueryGone) {
+		t.Errorf("unknown query = %v, want ErrQueryGone", err)
 	}
 }
