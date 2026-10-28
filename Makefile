@@ -192,6 +192,7 @@ k8s-up:
 	$(MAKE) k8s-plugin-bundle
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
 		-f deploy/dev/values-dev.yaml \
+		--set-string config.BALEIA_PLUGIN_VERSION=$(K8S_PLUGIN_VERSION) \
 		--set trino.plugin.image=$(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) \
 		--set trino.plugin.version=$(K8S_PLUGIN_VERSION) \
 		--wait --timeout 10m
