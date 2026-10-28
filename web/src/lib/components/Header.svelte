@@ -2,15 +2,25 @@
 	import { m } from '$lib/paraglide/messages';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { sectionTitle } from '$lib/nav/sections';
+	import { locate, sectionTitle, visiblePages } from '$lib/nav/sections';
+	import AttentionBell from '$lib/components/AttentionBell.svelte';
 	import { client } from '$lib/api/client';
 	import { canGlobal } from '$lib/authz/can';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import type { Workspace } from '$lib/stores/workspace.svelte';
 
-	// The section the page belongs to (#465), from the shared nav map.
-	const title = $derived(sectionTitle(page.url.pathname));
+	// The section the page belongs to (#465), from the shared nav map. An area
+	// with several pages shows them as tabs next to its name (#464).
+	const located = $derived(locate(page.url.pathname));
+	const tabs = $derived(
+		located && located.area.key !== 'settings'
+			? visiblePages(located.area, authStore.user?.features)
+			: []
+	);
+	const title = $derived(
+		tabs.length > 1 && located ? located.area.label() : sectionTitle(page.url.pathname)
+	);
 	let {
 		onToggleDark,
 		dark
@@ -112,6 +122,23 @@
 	class="h-12 bg-bg-panel flex items-center px-4 border-b border-border gap-3 shrink-0 relative z-40"
 >
 	<span class="min-w-0 max-w-[40%] shrink truncate text-sm font-semibold" {title}>{title}</span>
+
+	{#if tabs.length > 1 && located}
+		<nav aria-label={located.area.label()} class="flex h-full items-stretch gap-1">
+			{#each tabs as tab (tab.href)}
+				<a
+					href={resolve(tab.href as '/')}
+					aria-current={located.page?.href === tab.href ? 'page' : undefined}
+					class="flex items-center border-b-2 px-2 text-[12px] font-semibold no-underline transition-colors duration-150
+						{located.page?.href === tab.href
+						? 'border-primary text-primary'
+						: 'border-transparent text-text-muted hover:text-text-main'}"
+				>
+					{tab.label()}
+				</a>
+			{/each}
+		</nav>
+	{/if}
 
 	<div class="relative">
 		{#if workspaceStore.current}
@@ -227,6 +254,8 @@
 	</div>
 
 	<div class="flex-1"></div>
+
+	<AttentionBell />
 
 	<div class="flex items-center gap-1.5 text-[11px] text-text-muted">
 		<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"

@@ -72,13 +72,18 @@
 		open = false;
 	}
 
+	let bellEl: HTMLButtonElement | undefined = $state();
+
 	function onkeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') close();
+		if (event.key !== 'Escape' || !open) return;
+		close();
+		bellEl?.focus();
 	}
 </script>
 
 <div class="relative">
 	<button
+		bind:this={bellEl}
 		type="button"
 		onclick={toggle}
 		{onkeydown}
@@ -86,7 +91,7 @@
 		aria-expanded={open}
 		aria-haspopup="dialog"
 		title={m.components_attentionbell_attention()}
-		class="relative w-9 h-9 flex items-center justify-center rounded-[10px] border-none bg-transparent cursor-pointer text-slate-400 transition-all duration-150 hover:bg-slate-800 hover:text-white"
+		class="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-muted transition-colors duration-150 hover:bg-bg-toolbar hover:text-text-main"
 	>
 		<svg viewBox="0 0 24 24" class="w-4 h-4"
 			><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path
@@ -108,7 +113,7 @@
 			aria-label={m.components_attentionbell_attention()}
 			tabindex="-1"
 			{onkeydown}
-			class="absolute left-full top-0 z-50 ml-2 flex max-h-[70vh] w-80 flex-col overflow-y-auto rounded-lg border border-border bg-bg-panel p-3 shadow-xl"
+			class="absolute right-0 top-full z-50 mt-2 flex max-h-[70vh] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-y-auto rounded-lg border border-border bg-bg-panel p-3 shadow-xl"
 		>
 			<div class="mb-2 flex items-center justify-between">
 				<h2 class="text-[13px] font-semibold">{m.components_attentionbell_needs_attention()}</h2>
