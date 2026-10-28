@@ -216,11 +216,12 @@ func (s *Server) routes() {
 		})
 	}
 
-	// Trino's HTTP event listener posts completed queries here (#406),
-	// authenticated by BALEIA_TRINO_EVENTS_TOKEN, not by a user JWT.
+	// A nil *Ingester would be a non-nil http.Handler: pass nil explicitly.
+	var events http.Handler
 	if s.queryEvents != nil {
-		s.mux.Post("/internal/trino/query-events", s.queryEvents.ServeHTTP)
+		events = s.queryEvents
 	}
+	mountQueryEvents(s.mux, events)
 
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", s.ws.StreamExecution)
 
@@ -554,4 +555,18 @@ func defaultTrinoID(engines interface {
 		}
 		return id, nil
 	}
+}
+
+// mountQueryEvents mounts the route Trino's HTTP event listener posts
+// completed queries to (#406), authenticated by BALEIA_TRINO_EVENTS_TOKEN, not
+// by a user JWT. With ingestion off (nil) the path still answers 404, not the
+// SPA fallback's 200, which a listener would take for a delivery.
+func mountQueryEvents(mux chi.Router, events http.Handler) {
+	if events == nil {
+		mux.HandleFunc("/internal/trino/query-events", func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		})
+		return
+	}
+	mux.Post("/internal/trino/query-events", events.ServeHTTP)
 }

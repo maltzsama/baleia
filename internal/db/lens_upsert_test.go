@@ -29,8 +29,9 @@ func TestUpsertTableHealthSnapshotUpdatesOnConflict(t *testing.T) {
 
 // TestUpsertTrinoQuerySnapshot_TwoWriters: the poller and the query events
 // write the same row (#406). A poll read before the query ended does not set
-// a terminal state back to running, and a figure the poller does not know
-// (output rows) keeps the event's.
+// a terminal state back to running nor its final figures back to the
+// running ones, and a figure the poller does not know (output rows) keeps
+// the event's.
 func TestUpsertTrinoQuerySnapshot_TwoWriters(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
@@ -45,28 +46,31 @@ func TestUpsertTrinoQuerySnapshot_TwoWriters(t *testing.T) {
 	q := New(pool)
 	rows := int64(10)
 	cpu := int32(840)
-	snap := func(state string, outputRows *int64) UpsertTrinoQuerySnapshotParams {
+	snap := func(state string, cpu int32, outputRows *int64) UpsertTrinoQuerySnapshotParams {
 		return UpsertTrinoQuerySnapshotParams{
 			TrinoQueryID: "q1", EngineID: engine, Origin: "trino_direct", User: "ada", State: state,
 			Sql: "SELECT 1", CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}, CpuMs: &cpu, OutputRows: outputRows,
 		}
 	}
 
-	if _, err := q.UpsertTrinoQuerySnapshot(ctx, snap("finished", &rows)); err != nil {
+	if _, err := q.UpsertTrinoQuerySnapshot(ctx, snap("finished", cpu, &rows)); err != nil {
 		t.Fatal(err)
 	}
-	got, err := q.UpsertTrinoQuerySnapshot(ctx, snap("running", nil))
+	got, err := q.UpsertTrinoQuerySnapshot(ctx, snap("running", 120, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.State != "finished" {
 		t.Errorf("state = %q after a late poll, want finished", got.State)
 	}
+	if got.CpuMs == nil || *got.CpuMs != cpu {
+		t.Errorf("cpu_ms = %v after a late poll, want the final %d", got.CpuMs, cpu)
+	}
 	if got.OutputRows == nil || *got.OutputRows != rows {
 		t.Errorf("output_rows = %v after a poll without them, want the event's %d", got.OutputRows, rows)
 	}
 
-	failed, err := q.UpsertTrinoQuerySnapshot(ctx, snap("failed", nil))
+	failed, err := q.UpsertTrinoQuerySnapshot(ctx, snap("failed", cpu, nil))
 	if err != nil || failed.State != "failed" {
 		t.Errorf("a terminal state = %q, %v; want it to replace another terminal one", failed.State, err)
 	}

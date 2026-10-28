@@ -22,6 +22,12 @@ data:
     http-event-listener.log-completed=true
     http-event-listener.connect-ingest-uri=http://{{ include "baleia.fullname" . }}-api:{{ .Values.api.port }}/internal/trino/query-events
     http-event-listener.connect-http-headers=Authorization:Bearer ${ENV:BALEIA_TRINO_EVENTS_TOKEN}
+    # A server error is retried (the default is not to); an event that still
+    # fails is left to the poller.
+    http-event-listener.connect-retry-count=3
+    http-event-listener.connect-retry-delay=1s
+    http-event-listener.connect-backoff-base=2
+    http-event-listener.connect-max-delay=10s
   {{- end }}
   baleia-base-access-control.properties: |
 {{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}

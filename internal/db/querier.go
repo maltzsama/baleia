@@ -614,8 +614,9 @@ type Querier interface {
 	UpsertTrinoCatalogRegistry(ctx context.Context, arg UpsertTrinoCatalogRegistryParams) error
 	// Monitoring snapshots (#117): every row is tagged with its engine or logical
 	// catalog, so two engines never mix.
-	// Two writers (the poller and the query events, #406): a terminal state is
-	// never set back to running by a poll read before the query ended, and a
+	// Two writers (the poller and the query events, #406). A poll read before the
+	// query ended is stale once a terminal state is stored: it changes neither the
+	// state nor the final figures, and only fills one still missing. Otherwise a
 	// figure one writer does not know (the poller has no output rows) keeps the
 	// other's.
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)

@@ -342,6 +342,8 @@ var routeAccess = map[string]access{
 	// Trino's HTTP event listener posts completed queries with the
 	// BALEIA_TRINO_EVENTS_TOKEN bearer token, compared in constant time (#406).
 	"POST /internal/trino/query-events": {kind: kindChecked, pkg: "../monitoring/queryevents", calls: []string{"ConstantTimeCompare"}},
+	// With ingestion off the path only answers 404 (http.NotFound).
+	"ANY /internal/trino/query-events": {kind: kindPublic},
 
 	// The WebSocket authenticates with a single-use ticket issued by
 	// POST /ws-tickets; the JWT never appears in the URL (#26).
