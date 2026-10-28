@@ -46,6 +46,13 @@
 	let previewError = $state('');
 	let validation = $state<'idle' | 'valid' | 'invalid'>('idle');
 	let error = $state<RetrieverRequestError | null>(null);
+	// The destination and SQL a validation ran on (#462): the result, and
+	// the error it raised, only stand while both are unchanged.
+	let validatedKey = $state('');
+	const validationKey = $derived(JSON.stringify([bindingId, definition]));
+	const shownValidation = $derived(validatedKey === validationKey ? validation : 'idle');
+	let errorFromValidation = $state(false);
+	const shownError = $derived(errorFromValidation && validatedKey !== validationKey ? null : error);
 	let loading = $state(true);
 	let saving = $state(false);
 	let testing = $state(false);
@@ -107,12 +114,15 @@
 		if (!workspaceId || !bindingId) return;
 		testing = true;
 		error = null;
+		errorFromValidation = false;
+		validatedKey = validationKey;
 		try {
 			await validateRetriever(workspaceId, bindingId, definition);
 			validation = 'valid';
 		} catch (e) {
 			validation = 'invalid';
 			error = e instanceof RetrieverRequestError ? e : null;
+			errorFromValidation = true;
 		} finally {
 			testing = false;
 		}
@@ -122,6 +132,7 @@
 		if (!workspaceId || !bindingId || !name.trim() || !namespace || !table) return;
 		saving = true;
 		error = null;
+		errorFromValidation = false;
 		try {
 			const body = {
 				name: name.trim(),
@@ -187,9 +198,9 @@
 				<Button size="sm" loading={testing} disabled={testing} onclick={validate}>
 					Validate on the destination
 				</Button>
-				{#if validation === 'valid'}
+				{#if shownValidation === 'valid'}
 					<span class="text-[11px] font-semibold text-success">Valid on the destination</span>
-				{:else if validation === 'invalid'}
+				{:else if shownValidation === 'invalid'}
 					<span class="text-[11px] font-semibold text-danger">Validation failed</span>
 				{/if}
 			</div>
@@ -227,8 +238,8 @@
 			{/if}
 		</div>
 
-		{#if error}
-			<ErrorPanel {error} />
+		{#if shownError}
+			<ErrorPanel error={shownError} />
 		{/if}
 		<div class="flex justify-end gap-2">
 			<Button variant="primary" loading={saving} disabled={saving} onclick={save}>

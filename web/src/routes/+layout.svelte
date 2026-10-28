@@ -1,5 +1,11 @@
 <script lang="ts">
 	import '../app.css';
+	// UI font (IBM Plex Sans, --font-ui), self-hosted via Fontsource: the
+	// weights the UI uses (normal, medium, semibold, bold). Never a CDN.
+	import '@fontsource/ibm-plex-sans/400.css';
+	import '@fontsource/ibm-plex-sans/500.css';
+	import '@fontsource/ibm-plex-sans/600.css';
+	import '@fontsource/ibm-plex-sans/700.css';
 	// Query-editor code font (Sometype Mono), self-hosted via Fontsource.
 	// Only the query editor uses it; everything else stays on --font-mono.
 	import '@fontsource/sometype-mono/400.css';

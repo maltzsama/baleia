@@ -37,6 +37,11 @@
 	const folders = $derived(savedQueries.foldersIn(spaceId));
 	let metrics = $state<SemanticMetric[]>([]);
 	let models = $state<SemanticModel[]>([]);
+	// Metrics and models load on their own (#460): a failure is shown with a
+	// retry and never reads as an empty space; whatever did load stays.
+	let metricsError = $state('');
+	let modelsError = $state('');
+	let semanticLoaded = $state(false);
 	const loading = $derived(savedQueries.loading);
 	const error = $derived(savedQueries.error);
 
@@ -108,8 +113,25 @@
 		await workspaceStore.load();
 		if (!workspaceId) return;
 		await savedQueries.reload(workspaceId);
-		metrics = await listMetrics(workspaceId);
-		models = await listModels(workspaceId, spaceId);
+		await loadSemantic();
+	}
+
+	async function loadSemantic() {
+		metricsError = '';
+		modelsError = '';
+		const [metricRows, modelRows] = await Promise.allSettled([
+			listMetrics(workspaceId),
+			listModels(workspaceId, spaceId)
+		]);
+		if (metricRows.status === 'fulfilled') metrics = metricRows.value;
+		else metricsError = errorText(metricRows.reason);
+		if (modelRows.status === 'fulfilled') models = modelRows.value;
+		else modelsError = errorText(modelRows.reason);
+		semanticLoaded = true;
+	}
+
+	function errorText(e: unknown): string {
+		return e instanceof Error ? e.message : String(e);
 	}
 
 	function openQuery(query: SavedQuery) {
@@ -422,7 +444,22 @@
 			</nav>
 
 			<section class="min-w-0">
-				{#if queries.length === 0 && spaceMetrics.length === 0 && spaceModels.length === 0}
+				{#if metricsError || modelsError}
+					<div class="mb-3">
+						<ErrorState
+							title={metricsError && modelsError
+								? m.content_spaces_could_not_load_metrics_and_models()
+								: metricsError
+									? m.content_spaces_could_not_load_metrics()
+									: m.content_spaces_could_not_load_models()}
+							message={metricsError || modelsError}
+							onretry={loadSemantic}
+						/>
+					</div>
+				{/if}
+				{#if !semanticLoaded && queries.length === 0}
+					<Skeleton class="h-24 w-full" />
+				{:else if queries.length === 0 && spaceMetrics.length === 0 && spaceModels.length === 0 && !metricsError && !modelsError}
 					<EmptyState
 						title="Nothing here"
 						description={canEdit

@@ -70,11 +70,7 @@ export function filterSections(
 	sections: SettingsSection[],
 	user: AuthUser | null | undefined
 ): SettingsSection[] {
-	return sections.filter(
-		(section) =>
-			(!section.action || canGlobal(user, section.action)) &&
-			(!section.feature || user?.features?.[section.feature])
-	);
+	return sections.filter((section) => canAccessSection(section, user));
 }
 
 export function visibleSections(user: AuthUser | null | undefined): SettingsSection[] {
@@ -97,9 +93,22 @@ export function sectionForPath(
 		.sort((a, b) => b.href.length - a.href.length)[0];
 }
 
+/** False when the section's feature flag is off for this user. */
+export function sectionEnabled(
+	section: SettingsSection | undefined,
+	user: AuthUser | null | undefined
+): boolean {
+	return !section?.feature || !!user?.features?.[section.feature];
+}
+
+/**
+ * Whether a user may open a section: its feature is on and its action is
+ * granted. The nav and the direct URL use this one predicate (#459); the
+ * server stays the authority.
+ */
 export function canAccessSection(
 	section: SettingsSection | undefined,
 	user: AuthUser | null | undefined
 ): boolean {
-	return !section?.action || canGlobal(user, section.action);
+	return sectionEnabled(section, user) && (!section?.action || canGlobal(user, section.action));
 }

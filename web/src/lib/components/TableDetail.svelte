@@ -22,10 +22,20 @@
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 
-	let detail = $state<MetadataTableDetail | null>(null);
 	let loading = $state(false);
 	let error = $state('');
 	let bindingId = $state('');
+	// What was last loaded, and for which table and binding (#456). The view
+	// only shows a detail of the selected table, and actions only run on the
+	// detail of the selected binding, so a pending switch never acts on the
+	// previous object.
+	let loaded = $state<{ detail: MetadataTableDetail; tableId: string; bindingId: string } | null>(
+		null
+	);
+	const detail = $derived(
+		loaded && table && loaded.tableId === table.tableId ? loaded.detail : null
+	);
+	const detailCurrent = $derived(!!detail && loaded?.bindingId === bindingId);
 	let colSearch = $state('');
 	let expandedCol = $state<string | null>(null);
 	let lastTableId = '';
@@ -52,7 +62,7 @@
 		// Retry is driven by a tick so re-running the same read re-issues it.
 		void retryTick;
 		if (!ref) {
-			detail = null;
+			loaded = null;
 			error = '';
 			loading = false;
 			return;
@@ -65,8 +75,8 @@
 		loading = true;
 		error = '';
 		loadTable(workspaceId, ref.tableId, binding || undefined)
-			.then((loaded) => {
-				if (!cancelled) detail = loaded;
+			.then((result) => {
+				if (!cancelled) loaded = { detail: result, tableId: ref.tableId, bindingId: binding };
 			})
 			.catch((e) => {
 				if (!cancelled) error = e instanceof Error ? e.message : String(e);
@@ -89,7 +99,7 @@
 	const hasBindings = $derived((table?.bindings.length ?? 0) > 1);
 
 	function insertName() {
-		if (!detail?.qualified_name) return;
+		if (!detailCurrent || !detail?.qualified_name) return;
 		editor.insert(detail.qualified_name);
 		toasts.success(m.components_tabledetail_inserted_into_the_editor());
 	}
@@ -102,7 +112,7 @@
 	let previewRows = $state<unknown[][]>([]);
 
 	async function runPreview() {
-		if (!detail?.preview_sql || !table) return;
+		if (!detailCurrent || !detail?.preview_sql || !table) return;
 		previewOpen = true;
 		previewLoading = true;
 		previewError = '';
@@ -242,11 +252,17 @@
 					</label>
 				{/if}
 
-				<Button variant="secondary" size="sm" disabled={!detail.preview_sql} onclick={runPreview}
-					>Preview</Button
+				<Button
+					variant="secondary"
+					size="sm"
+					disabled={!detailCurrent || !detail.preview_sql}
+					onclick={runPreview}>Preview</Button
 				>
-				<Button variant="secondary" size="sm" disabled={!detail.qualified_name} onclick={insertName}
-					>Insert name</Button
+				<Button
+					variant="secondary"
+					size="sm"
+					disabled={!detailCurrent || !detail.qualified_name}
+					onclick={insertName}>Insert name</Button
 				>
 				{#if detail.qualified_name}
 					<span class="inline-flex items-center gap-1 text-[11px] text-text-muted">

@@ -18,6 +18,20 @@ describe('StatusBadge', () => {
 		render(StatusBadge, { props: { kind: 'binding', status: 'mystery' } });
 		expect(screen.getByText('mystery')).toBeTruthy();
 	});
+
+	// #454: a catalog that never synced is not shown as a success.
+	it.each([
+		['never', 'Never synced', 'bg-bg-toolbar'],
+		['running', 'Syncing', 'bg-blue-50'],
+		['finished', 'Synced', 'bg-green-50'],
+		['failed', 'Sync failed', 'bg-red-50'],
+		['unexpected', 'unexpected', 'bg-bg-toolbar']
+	])('maps metadata sync %s', (status, label, tone) => {
+		render(StatusBadge, { props: { kind: 'metadataSync', status } });
+		expect(screen.getByText(label).closest('span[class*="rounded-full"]')?.className).toContain(
+			tone
+		);
+	});
 });
 
 describe('MarkdownView', () => {

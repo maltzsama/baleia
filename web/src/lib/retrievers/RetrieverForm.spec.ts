@@ -59,4 +59,45 @@ describe('RetrieverForm', () => {
 
 		await waitFor(() => expect(screen.getByText(/The minimum interval is 5 minutes/)).toBeTruthy());
 	});
+	// #462: a validation result only stands for the SQL and destination it ran on.
+	it('drops the validation result when the definition changes', async () => {
+		let valid = true;
+		server.use(
+			http.post('/workspaces/{id}/retrievers/validate', ({ response }) =>
+				valid
+					? response(200).json({ ok: true })
+					: response(422).json({ code: 'validation_error', message: 'bad SQL', errors: [] })
+			)
+		);
+		render(RetrieverForm, { props: { ondone: vi.fn() } });
+		await waitFor(() => expect(screen.getByText(/trino · lake/)).toBeTruthy());
+		const sql = screen.getByLabelText('Definition (one SELECT) *');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Validate on the destination' }));
+		expect(await screen.findByText('Valid on the destination')).toBeTruthy();
+		await fireEvent.input(sql, { target: { value: 'SELECT 2' } });
+		expect(screen.queryByText('Valid on the destination')).toBeNull();
+
+		valid = false;
+		await fireEvent.click(screen.getByRole('button', { name: 'Validate on the destination' }));
+		expect(await screen.findByText('Validation failed')).toBeTruthy();
+		await fireEvent.input(sql, { target: { value: 'SELECT 3' } });
+		expect(screen.queryByText('Validation failed')).toBeNull();
+		expect(screen.queryByText('bad SQL')).toBeNull();
+	});
+
+	it('keeps the result when only the schedule changes', async () => {
+		server.use(
+			http.post('/workspaces/{id}/retrievers/validate', ({ response }) =>
+				response(200).json({ ok: true })
+			)
+		);
+		render(RetrieverForm, { props: { ondone: vi.fn() } });
+		await waitFor(() => expect(screen.getByText(/trino · lake/)).toBeTruthy());
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Validate on the destination' }));
+		expect(await screen.findByText('Valid on the destination')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Every day at 03:00' }));
+		expect(screen.getByText('Valid on the destination')).toBeTruthy();
+	});
 });

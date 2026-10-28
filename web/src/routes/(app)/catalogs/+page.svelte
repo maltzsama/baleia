@@ -2,6 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
+	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Input from '$lib/ui/Input.svelte';
@@ -157,15 +158,7 @@
 									<span class="text-slate-600 dark:text-slate-300">Never</span>
 								{/if}
 								{#if catalog.metadata_sync_status}
-									<Badge
-										tone={catalog.metadata_sync_status === 'failed'
-											? 'danger'
-											: catalog.metadata_sync_status === 'running'
-												? 'info'
-												: 'success'}
-									>
-										{catalog.metadata_sync_status}
-									</Badge>
+									<StatusBadge kind="metadataSync" status={catalog.metadata_sync_status} />
 								{/if}
 							</td>
 							<td class="px-3 py-2">
