@@ -75,27 +75,65 @@
 		scrollLeft = scrollEl.scrollLeft;
 	}
 
+	// Keyboard (#471): focus stays on the grid, which points at the active
+	// cell with aria-activedescendant, so it keeps working while rows and
+	// columns virtualize. Focusing a non-empty grid starts on its first cell.
+	const gridId = $props.id();
+	const cellId = (row: number, col: number) => `${gridId}-r${row}-c${col}`;
+
 	function select(row: number, col: number) {
 		selected = { row, col };
 	}
 
-	function handleKey(event: KeyboardEvent, row: number, col: number) {
+	function onGridFocus() {
+		if (!selected && store.rowCount > 0 && store.columns.length > 0) select(0, 0);
+	}
+
+	/** Scrolls the viewport just enough to show a cell. */
+	function reveal(row: number, col: number) {
+		if (!scrollEl) return;
+		const top = HEADER_HEIGHT + row * ROW_HEIGHT;
+		if (top - HEADER_HEIGHT < scrollEl.scrollTop) scrollEl.scrollTop = top - HEADER_HEIGHT;
+		else if (top + ROW_HEIGHT > scrollEl.scrollTop + viewportHeight) {
+			scrollEl.scrollTop = top + ROW_HEIGHT - viewportHeight;
+		}
+		const layout = columnLayouts[col];
+		if (!layout) return;
+		if (layout.start < scrollEl.scrollLeft) scrollEl.scrollLeft = layout.start;
+		else if (layout.start + layout.width > scrollEl.scrollLeft + viewportWidth) {
+			scrollEl.scrollLeft = layout.start + layout.width - viewportWidth;
+		}
+		onScroll();
+	}
+
+	function onGridKey(event: KeyboardEvent) {
+		if (!selected) return;
+		const { row, col } = selected;
+		const page = Math.max(1, Math.floor((viewportHeight - HEADER_HEIGHT) / ROW_HEIGHT));
 		const keys: Record<string, [number, number]> = {
 			ArrowDown: [1, 0],
 			ArrowUp: [-1, 0],
 			ArrowRight: [0, 1],
-			ArrowLeft: [0, -1]
+			ArrowLeft: [0, -1],
+			PageDown: [page, 0],
+			PageUp: [-page, 0]
 		};
 		const delta = keys[event.key];
 		if (delta) {
 			event.preventDefault();
-			selected = {
+			const next = {
 				row: Math.min(Math.max(0, row + delta[0]), Math.max(0, store.rowCount - 1)),
 				col: Math.min(Math.max(0, col + delta[1]), store.columns.length - 1)
 			};
+			selected = next;
+			reveal(next.row, next.col);
 			return;
 		}
-		if (event.key === 'Enter') {
+		if (event.key === 'Home' || event.key === 'End') {
+			event.preventDefault();
+			selected = { row, col: event.key === 'Home' ? 0 : store.columns.length - 1 };
+			reveal(row, selected.col);
+		} else if (event.key === 'Enter') {
 			event.preventDefault();
 			void expandAt(row, col);
 		} else if (event.key === 'c' && (event.ctrlKey || event.metaKey)) {
@@ -247,16 +285,23 @@
 		role="grid"
 		tabindex="0"
 		aria-label={m.components_resultgrid_result_rows()}
+		aria-rowcount={store.rowCount + 1}
+		aria-colcount={store.columns.length}
+		aria-activedescendant={selected ? cellId(selected.row, selected.col) : undefined}
 		onscroll={onScroll}
+		onfocus={onGridFocus}
+		onkeydown={onGridKey}
 	>
 		<div style="position: relative; width: {totalWidth}px; height: {totalHeight}px;">
 			<div
 				style="position: sticky; top: 0; z-index: 10; height: {HEADER_HEIGHT}px; width: {totalWidth}px; background: var(--color-bg-toolbar); border-bottom: 1px solid var(--color-border);"
 				role="row"
+				aria-rowindex={1}
 			>
 				{#each visibleColumns as layout (layout.column.name)}
 					<div
 						role="columnheader"
+						aria-colindex={layout.index + 1}
 						title={`${layout.column.nativeType || layout.column.type}`}
 						style="position: absolute; left: {layout.start}px; width: {layout.width}px; height: {HEADER_HEIGHT}px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-right: 1px solid var(--color-border); box-sizing: border-box;"
 					>
@@ -281,14 +326,19 @@
 			{#each visibleRows as row (row)}
 				<div
 					role="row"
+					aria-rowindex={row + 2}
 					style="position: absolute; top: {HEADER_HEIGHT +
 						row * ROW_HEIGHT}px; left: 0; width: {totalWidth}px; height: {ROW_HEIGHT}px;"
 				>
 					{#each visibleColumns as layout (layout.column.name)}
 						{@const display = formatCell(store.cell(row, layout.index), layout.column)}
+						<!-- The grid owns the keyboard (aria-activedescendant); a click picks the cell. -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
 							role="gridcell"
-							tabindex={selected?.row === row && selected?.col === layout.index ? 0 : -1}
+							tabindex="-1"
+							id={cellId(row, layout.index)}
+							aria-colindex={layout.index + 1}
 							aria-selected={selected?.row === row && selected?.col === layout.index}
 							style="position: absolute; left: {layout.start}px; width: {layout.width}px; height: {ROW_HEIGHT}px; display: flex; align-items: center; padding: 0 10px; box-sizing: border-box; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); cursor: default;"
 							class="font-data text-xs {display.null
@@ -297,8 +347,10 @@
 								? 'bg-blue-50 dark:bg-[#152236]'
 								: 'hover:bg-bg-toolbar'}"
 							title={display.text}
-							onclick={() => select(row, layout.index)}
-							onkeydown={(event) => handleKey(event, row, layout.index)}
+							onclick={() => {
+								select(row, layout.index);
+								scrollEl?.focus();
+							}}
 						>
 							<span
 								class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {display.align ===
