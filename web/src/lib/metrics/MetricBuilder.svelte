@@ -74,6 +74,9 @@
 	let validating = $state(false);
 	let validateOk = $state('');
 	let validateError = $state('');
+	// The definition a validation ran on (#462): its result is only shown
+	// while the table, binding and definition are still the same.
+	let validatedKey = $state('');
 	let saving = $state(false);
 	let saveError = $state('');
 
@@ -103,6 +106,8 @@
 		time_grains: timeColumn ? grains : [],
 		custom_sql: useCustom && customSql.trim() ? customSql.trim() : null
 	});
+	const validationKey = $derived(JSON.stringify([table?.id ?? '', bindingId, definition]));
+	const validationCurrent = $derived(validatedKey === validationKey);
 
 	let renderTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -218,6 +223,7 @@
 		validating = true;
 		validateOk = '';
 		validateError = '';
+		validatedKey = validationKey;
 		try {
 			await validateMetric(workspaceId, {
 				catalog_id: table.catalog_id,
@@ -515,8 +521,8 @@
 					class="mt-2 overflow-x-auto rounded bg-bg-toolbar p-2 font-mono text-[11px]">{preview ||
 						'—'}</pre>
 			{/if}
-			{#if validateOk}<Badge tone="success">{validateOk}</Badge>{/if}
-			{#if validateError}
+			{#if validateOk && validationCurrent}<Badge tone="success">{validateOk}</Badge>{/if}
+			{#if validateError && validationCurrent}
 				<div class="mt-2">
 					<ErrorPanel error={{ code: 'engine_error', message: validateError }} />
 				</div>
