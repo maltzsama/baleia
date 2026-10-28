@@ -1059,5 +1059,11 @@
 	"monitoring_rows_processed": "Linhas processadas",
 	"monitoring_bytes_processed": "Bytes processados",
 	"monitoring_rows_returned": "Linhas retornadas",
-	"monitoring_bytes_returned": "Bytes retornados"
+	"monitoring_bytes_returned": "Bytes retornados",
+	"monitoring_kill": "Encerrar",
+	"monitoring_kill_query": "Encerrar query",
+	"monitoring_kill_this_query": "Encerrar esta query?",
+	"monitoring_kill_consequence_stop": "“{query}” é interrompida em {engine}, e {user} recebe um erro em vez dos resultados.",
+	"monitoring_kill_consequence_undo": "Não dá para desfazer: a query precisa ser executada de novo.",
+	"monitoring_query_killed": "Query encerrada."
 }

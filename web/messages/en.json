@@ -1059,5 +1059,11 @@
 	"monitoring_rows_processed": "Rows processed",
 	"monitoring_bytes_processed": "Bytes processed",
 	"monitoring_rows_returned": "Rows returned",
-	"monitoring_bytes_returned": "Bytes returned"
+	"monitoring_bytes_returned": "Bytes returned",
+	"monitoring_kill": "Kill",
+	"monitoring_kill_query": "Kill query",
+	"monitoring_kill_this_query": "Kill this query?",
+	"monitoring_kill_consequence_stop": "“{query}” is stopped on {engine}, and {user} gets an error instead of its results.",
+	"monitoring_kill_consequence_undo": "This cannot be undone: the query has to be run again.",
+	"monitoring_query_killed": "Query killed."
 }

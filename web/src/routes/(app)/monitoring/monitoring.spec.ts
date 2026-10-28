@@ -220,4 +220,44 @@ describe('monitoring page', () => {
 			expect(screen.getAllByText('sales.orders').length).toBeGreaterThan(1);
 		});
 	});
+
+	// #458: Kill asks first, names the query and only the confirm kills it.
+	it('kills a query only after confirmation', async () => {
+		const query = {
+			trino_query_id: 'q9',
+			state: 'running',
+			user: 'ada',
+			sql_first_line: 'SELECT * FROM orders',
+			catalog: 'lake',
+			created_at: '2026-10-01T12:00:00Z'
+		};
+		let kills = 0;
+		server.use(
+			http.get('/engines/{id}/monitoring/queries', ({ response }) =>
+				response(200).json({ items: [query] })
+			),
+			http.post('/engines/{id}/monitoring/queries/{query_id}', ({ response }) => {
+				kills++;
+				return response(202).empty();
+			})
+		);
+		render(MonitoringPage);
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Kill' }));
+		const dialog = await screen.findByRole('dialog');
+		expect(within(dialog).getByText('Kill this query?')).toBeTruthy();
+		expect(
+			within(dialog).getByText(
+				'“SELECT * FROM orders” is stopped on trino, and ada gets an error instead of its results.'
+			)
+		).toBeTruthy();
+		await fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+		expect(kills).toBe(0);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Kill' }));
+		const again = await screen.findByRole('dialog');
+		await fireEvent.click(within(again).getByRole('button', { name: 'Kill query' }));
+		await waitFor(() => expect(kills).toBe(1));
+	});
 });
