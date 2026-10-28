@@ -96,7 +96,7 @@
 			}
 			settings = data;
 			apiKey = '';
-			toasts.success('Assistant settings saved.');
+			toasts.success(m.settings_assistant_assistant_settings_saved());
 		} finally {
 			saving = false;
 		}
@@ -128,57 +128,85 @@
 			</div>
 		{:else if error}
 			<div class="mt-6">
-				<ErrorState title="Could not load settings" message={error} onretry={load} />
+				<ErrorState
+					title={m.settings_assistant_could_not_load_settings()}
+					message={error}
+					onretry={load}
+				/>
 			</div>
 		{:else}
 			<div class="mt-6 flex flex-col gap-4">
 				<section class="rounded-lg border border-border bg-bg-panel p-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
-							<h2 class="text-[13px] font-semibold">Provider</h2>
+							<h2 class="text-[13px] font-semibold">{m.settings_assistant_provider()}</h2>
 							<p class="text-[12px] text-text-muted">
-								The API process needs egress to the provider URL. Leave the key empty to keep the
-								stored one.
+								{m.settings_assistant_the_api_process_needs_egress_to()}
 							</p>
 						</div>
-						{#if settings?.api_key_set}<Badge tone="success">key set</Badge>{/if}
+						{#if settings?.api_key_set}<Badge tone="success">{m.settings_assistant_key_set()}</Badge
+							>{/if}
 					</div>
 					<div class="mt-3 grid gap-3 sm:grid-cols-2">
-						<Checkbox bind:checked={enabled} label="Enable the assistant" />
+						<Checkbox bind:checked={enabled} label={m.settings_assistant_enable_the_assistant()} />
 						<Select
-							label="Provider"
+							label={m.settings_assistant_provider()}
 							bind:value={provider}
-							placeholder="Choose a provider"
+							placeholder={m.settings_assistant_choose_a_provider()}
 							options={providerOptions}
 						/>
 						<Input
-							label="Base URL"
+							label={m.settings_assistant_base_url()}
 							bind:value={baseUrl}
 							placeholder={provider === 'anthropic' ? 'https://api.anthropic.com' : 'https://…/v1'}
 						/>
-						<Input label="Model" bind:value={model} placeholder="claude-… or gpt-…" />
 						<Input
-							label="API key"
+							label={m.settings_assistant_model()}
+							bind:value={model}
+							placeholder={m.settings_assistant_claude_or_gpt()}
+						/>
+						<Input
+							label={m.settings_assistant_api_key()}
 							type="password"
 							bind:value={apiKey}
 							placeholder={settings?.api_key_set
 								? m.settings_assistant_set_leave_empty_to_keep()
 								: m.settings_assistant_not_set()}
 						/>
-						<Select label="Data sharing" bind:value={dataSharing} options={sharingOptions} />
+						<Select
+							label={m.settings_assistant_data_sharing()}
+							bind:value={dataSharing}
+							options={sharingOptions}
+						/>
 					</div>
 				</section>
 
 				<section class="rounded-lg border border-border bg-bg-panel p-4">
-					<h2 class="text-[13px] font-semibold">Limits</h2>
+					<h2 class="text-[13px] font-semibold">{m.settings_assistant_limits()}</h2>
 					<p class="text-[12px] text-text-muted">
-						Bounds every turn; the daily budget is per user and counts input + output tokens.
+						{m.settings_assistant_bounds_every_turn_the_daily_budget()}
 					</p>
 					<div class="mt-3 grid gap-3 sm:grid-cols-2">
-						<Input label="Max turn seconds" type="number" bind:value={maxTurnSeconds} />
-						<Input label="Max tool calls per turn" type="number" bind:value={maxToolCalls} />
-						<Input label="Max output tokens per turn" type="number" bind:value={maxOutputTokens} />
-						<Input label="Daily token budget per user" type="number" bind:value={dailyBudget} />
+						<Input
+							label={m.settings_assistant_max_turn_seconds()}
+							type="number"
+							bind:value={maxTurnSeconds}
+						/>
+						<Input
+							label={m.settings_assistant_max_tool_calls_per_turn()}
+							type="number"
+							bind:value={maxToolCalls}
+						/>
+						<Input
+							label={m.settings_assistant_max_output_tokens_per_turn()}
+							type="number"
+							bind:value={maxOutputTokens}
+						/>
+						<Input
+							label={m.settings_assistant_daily_token_budget_per_user()}
+							type="number"
+							bind:value={dailyBudget}
+						/>
 					</div>
 				</section>
 
@@ -190,13 +218,15 @@
 					</p>
 				{/if}
 				<div class="flex flex-wrap items-center gap-2">
-					<Button variant="primary" loading={saving} onclick={save}>Save settings</Button>
-					<Button loading={testing} onclick={test}>Test connection</Button>
+					<Button variant="primary" loading={saving} onclick={save}
+						>{m.settings_assistant_save_settings()}</Button
+					>
+					<Button loading={testing} onclick={test}>{m.settings_assistant_test_connection()}</Button>
 					{#if testResult}
 						<span class="text-[12px] {testResult.ok ? 'text-success' : 'text-danger'}">
 							{testResult.ok
-								? `Connected in ${testResult.latency_ms ?? 0} ms`
-								: (testResult.error ?? 'Connection failed')}
+								? m.settings_assistant_connected_in_ms({ value: testResult.latency_ms ?? 0 })
+								: (testResult.error ?? m.settings_assistant_connection_failed())}
 						</span>
 					{/if}
 				</div>

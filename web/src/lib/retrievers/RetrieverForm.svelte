@@ -167,54 +167,77 @@
 		</p>
 	{:else if destinations.length === 0}
 		<div class="rounded-lg border border-border bg-bg-panel p-4 text-[13px]">
-			<p class="font-semibold">No writable destination</p>
+			<p class="font-semibold">{m.retrievers_retrieverform_no_writable_destination()}</p>
 			<p class="mt-1 text-slate-600 dark:text-slate-300">
-				A retriever needs an Iceberg catalog bound to a federated engine that this workspace may
-				write to. Ask an owner to grant <span class="font-mono">write</span> on a catalog.
+				{m.retrievers_retrieverform_a_retriever_needs_an_iceberg_catalog()}
+				<code class="font-mono">write</code>
+				{m.retrievers_retrieverform_on_a_catalog()}
 			</p>
 		</div>
 	{:else}
 		<div class="grid gap-3 rounded-lg border border-border bg-bg-panel p-4 sm:grid-cols-2">
-			<Input label="Name *" bind:value={name} placeholder="daily-orders" />
+			<Input
+				label={m.retrievers_retrieverform_name()}
+				bind:value={name}
+				placeholder="daily-orders"
+			/>
 			<Select
-				label="Destination *"
+				label={m.retrievers_retrieverform_destination()}
 				bind:value={bindingId}
 				options={destinations.map((destination) => ({
 					value: destination.binding_id,
 					label: `${destination.engine.name} · ${destination.catalog.name} (${destination.engine_catalog_name})`
 				}))}
 			/>
-			<Input label="Namespace *" bind:value={namespace} placeholder="sales" class="font-mono" />
-			<Input label="Table *" bind:value={table} placeholder="daily_orders" class="font-mono" />
+			<Input
+				label={m.retrievers_retrieverform_namespace()}
+				bind:value={namespace}
+				placeholder="sales"
+				class="font-mono"
+			/>
+			<Input
+				label={m.retrievers_retrieverform_table()}
+				bind:value={table}
+				placeholder="daily_orders"
+				class="font-mono"
+			/>
 		</div>
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4">
 			<Textarea
-				label="Definition (one SELECT) *"
+				label={m.retrievers_retrieverform_definition_one_select()}
 				bind:value={definition}
 				class="min-h-[160px] font-mono"
 			/>
 			<div class="mt-2 flex flex-wrap items-center gap-2">
 				<Button size="sm" loading={testing} disabled={testing} onclick={validate}>
-					Validate on the destination
+					{m.retrievers_retrieverform_validate_on_the_destination()}
 				</Button>
 				{#if shownValidation === 'valid'}
-					<span class="text-[11px] font-semibold text-success">Valid on the destination</span>
+					<span class="text-[11px] font-semibold text-success"
+						>{m.retrievers_retrieverform_valid_on_the_destination()}</span
+					>
 				{:else if shownValidation === 'invalid'}
-					<span class="text-[11px] font-semibold text-danger">Validation failed</span>
+					<span class="text-[11px] font-semibold text-danger"
+						>{m.retrievers_retrieverform_validation_failed()}</span
+					>
 				{/if}
 			</div>
 		</div>
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4">
-			<p class="text-[13px] font-semibold">Schedule</p>
+			<p class="text-[13px] font-semibold">{m.retrievers_retrieverform_schedule()}</p>
 			<div class="mt-2 flex flex-wrap gap-1.5">
 				{#each presets as preset (preset.expression)}
 					<Button size="sm" onclick={() => (cron = preset.expression)}>{preset.label}</Button>
 				{/each}
 			</div>
 			<div class="mt-3">
-				<Input label="Cron expression" bind:value={cron} class="font-mono" />
+				<Input
+					label={m.retrievers_retrieverform_cron_expression()}
+					bind:value={cron}
+					class="font-mono"
+				/>
 			</div>
 			{#if previewError}
 				<p class="mt-2 text-[11px] text-danger" role="alert">{previewError}</p>
@@ -226,7 +249,7 @@
 				{:else}
 					{#if !preview.min_interval_ok}
 						<p class="mt-2 text-[11px] text-danger" role="alert">
-							The minimum interval is 5 minutes.
+							{m.retrievers_retrieverform_the_minimum_interval_is_5_minutes()}
 						</p>
 					{/if}
 					<ul class="mt-2 grid gap-0.5 text-[11px] text-slate-600 dark:text-slate-300">

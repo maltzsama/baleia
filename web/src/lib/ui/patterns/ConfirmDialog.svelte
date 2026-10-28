@@ -57,7 +57,7 @@
 			</ul>
 		{/if}
 		{#if typeToConfirm}
-			<Input label={`Type "${resourceName}" to confirm`} bind:value={typed} />
+			<Input label={m.confirmdialog_type_to_confirm({ resourceName })} bind:value={typed} />
 		{/if}
 		{#if error}
 			<p class="text-danger">{error}</p>

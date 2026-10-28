@@ -130,7 +130,9 @@
 							>{m.content_historydrawer_v()}{version.version} · {version.change_kind}</span
 						>
 						<span class="block text-[10px] text-slate-600 dark:text-slate-300">
-							{version.author?.name ?? 'Unknown'} · <RelativeTime at={version.created_at} />
+							{version.author?.name ?? m.content_historydrawer_unknown()} · <RelativeTime
+								at={version.created_at}
+							/>
 						</span>
 						{#if version.restored_from != null}
 							<span class="block text-[10px] text-slate-600 dark:text-slate-300">
@@ -140,7 +142,9 @@
 					</button>
 				</li>
 			{:else}
-				<li class="text-slate-600 dark:text-slate-300">No versions yet.</li>
+				<li class="text-slate-600 dark:text-slate-300">
+					{m.content_historydrawer_no_versions_yet()}
+				</li>
 			{/each}
 		</ul>
 		<div class="min-w-0">
@@ -171,7 +175,9 @@
 					<DiffView {before} {after} language="json" />
 				{/if}
 			{:else}
-				<p class="text-[11px] text-slate-600 dark:text-slate-300">Choose a version.</p>
+				<p class="text-[11px] text-slate-600 dark:text-slate-300">
+					{m.content_historydrawer_choose_a_version()}
+				</p>
 			{/if}
 		</div>
 	</div>

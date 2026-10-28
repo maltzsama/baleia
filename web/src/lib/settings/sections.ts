@@ -1,5 +1,6 @@
 // Settings navigation metadata (#262). Each settings slice appends its own
 // entry; access comes from /auth/me's global_actions, never from the role.
+import { m } from '$lib/paraglide/messages';
 import { canGlobal, type GlobalAction } from '$lib/authz/can';
 import type { AuthUser, Features } from '$lib/stores/auth.svelte';
 
@@ -16,53 +17,89 @@ export type SettingsSection = {
 export const settingsSections: SettingsSection[] = [
 	{
 		href: '/settings/system',
-		label: 'System status',
-		description: 'Health of every platform component.',
+		get label() {
+			return m.settings_sections_system_status();
+		},
+		get description() {
+			return m.settings_sections_health_of_every_platform_component();
+		},
 		action: 'view_system'
 	},
 	{
 		href: '/settings/identity',
-		label: 'Identity providers',
-		description: 'OIDC and LDAP sign-in, group mapping and provider health.',
+		get label() {
+			return m.settings_sections_identity_providers();
+		},
+		get description() {
+			return m.settings_sections_oidc_and_ldap_sign_in_group();
+		},
 		action: 'manage_identity'
 	},
 	{
 		href: '/settings/users',
-		label: 'Users',
-		description: 'Invite people, change roles and suspend or reinstate accounts.',
+		get label() {
+			return m.settings_sections_users();
+		},
+		get description() {
+			return m.settings_sections_invite_people_change_roles_and_suspend();
+		},
 		action: 'manage_users'
 	},
 	{
 		href: '/settings/teams',
-		label: 'Teams',
-		description: 'Team membership and roles for sharing workspaces.'
+		get label() {
+			return m.settings_sections_teams();
+		},
+		get description() {
+			return m.settings_sections_team_membership_and_roles_for_sharing();
+		}
 	},
 	{
 		href: '/settings/agents',
-		label: 'Agents',
-		description: 'Read-only MCP agents, their tokens and policy ceilings.',
+		get label() {
+			return m.settings_sections_agents();
+		},
+		get description() {
+			return m.settings_sections_read_only_mcp_agents_their_tokens();
+		},
 		feature: 'agents'
 	},
 	{
 		href: '/settings/assistant',
-		label: 'Assistant',
-		description: 'Provider, data sharing and turn limits for the embedded assistant.',
+		get label() {
+			return m.settings_sections_assistant();
+		},
+		get description() {
+			return m.settings_sections_provider_data_sharing_and_turn_limits();
+		},
 		feature: 'assistant'
 	},
 	{
 		href: '/settings/audit',
-		label: 'Audit trail',
-		description: 'Who changed what, when, and which requests were denied.'
+		get label() {
+			return m.settings_sections_audit_trail();
+		},
+		get description() {
+			return m.settings_sections_who_changed_what_when_and_which();
+		}
 	},
 	{
 		href: '/settings/profile',
-		label: 'Profile',
-		description: 'Your name, e-mail and password.'
+		get label() {
+			return m.settings_sections_profile();
+		},
+		get description() {
+			return m.settings_sections_your_name_e_mail_and_password();
+		}
 	},
 	{
 		href: '/settings/api-keys',
-		label: 'API keys',
-		description: 'Keys for scripts and agents, shown once at creation.'
+		get label() {
+			return m.settings_sections_api_keys();
+		},
+		get description() {
+			return m.settings_sections_keys_for_scripts_and_agents_shown();
+		}
 	}
 ];
 

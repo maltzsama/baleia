@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -352,9 +353,11 @@
 		<ErrorPanel error={{ code: 'service_unavailable', message: loadError }} />
 	{:else if step === 1}
 		<header>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">New connection</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">
+				{m.connections_connectionwizard_new_connection()}
+			</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				Choose what you are connecting. Baleia reads the rest from the provider.
+				{m.connections_connectionwizard_choose_what_you_are_connecting_baleia()}
 			</p>
 		</header>
 
@@ -406,13 +409,17 @@
 			<div>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{provider.label}</h1>
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
-					Step 2 of 4 — connection settings
+					{m.connections_connectionwizard_step_2_of_4_connection_settings()}
 				</p>
 			</div>
 		</header>
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4">
-			<Input label="Connection name *" bind:value={name} placeholder="e.g. analytics-prod" />
+			<Input
+				label={m.connections_connectionwizard_connection_name()}
+				bind:value={name}
+				placeholder="e.g. analytics-prod"
+			/>
 			<div class="mt-3">
 				<ProviderForm
 					{provider}
@@ -422,41 +429,44 @@
 				/>
 			</div>
 			<div class="mt-3 rounded-md border border-border bg-bg-toolbar px-3 py-2.5">
-				<Checkbox label="These credentials cannot modify data" bind:checked={credentialsReadOnly} />
+				<Checkbox
+					label={m.connections_connectionwizard_these_credentials_cannot_modify_data()}
+					bind:checked={credentialsReadOnly}
+				/>
 				<p class="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
-					Assert this when the account is read-only at the source. It unlocks read grants and agents
-					on engines that cannot enforce read-only sessions.
+					{m.connections_connectionwizard_assert_this_when_the_account_is()}
 				</p>
 			</div>
 		</div>
 
 		{#if missing.length > 0}
 			<p class="text-[11px] text-slate-600 dark:text-slate-300">
-				Fill the required fields to continue.
+				{m.connections_connectionwizard_fill_the_required_fields_to_continue()}
 			</p>
 		{/if}
 
 		<div class="flex justify-between">
-			<Button onclick={() => (step = 1)}>Back</Button>
+			<Button onclick={() => (step = 1)}>{m.connections_connectionwizard_back()}</Button>
 			<Button variant="primary" disabled={!name.trim() || missing.length > 0} onclick={toUsage}>
-				Continue
+				{m.connections_connectionwizard_continue()}
 			</Button>
 		</div>
 	{:else if step === 3 && provider}
 		<header>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">How will you use it?</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">
+				{m.connections_connectionwizard_how_will_you_use_it()}
+			</h1>
 			<p class="text-[13px] text-slate-600 dark:text-slate-300">
-				Step 3 of 4 — Baleia can read metadata, run SQL directly, or expose the source through a
-				federated engine.
+				{m.connections_connectionwizard_step_3_of_4_baleia_can()}
 			</p>
 		</header>
 
 		<div class="flex flex-col gap-3">
 			{#if readsMetadata(provider)}
 				<div class="flex items-start gap-2 rounded-lg border border-border bg-bg-panel p-3">
-					<Badge tone="success">Always on</Badge>
+					<Badge tone="success">{m.connections_connectionwizard_always_on()}</Badge>
 					<p class="text-[12px] text-slate-600 dark:text-slate-300">
-						Baleia lists the catalogs, schemas and tables this connection exposes.
+						{m.connections_connectionwizard_baleia_lists_the_catalogs_schemas_and()}
 					</p>
 				</div>
 			{/if}
@@ -465,9 +475,11 @@
 				<label class="flex items-start gap-2 rounded-lg border border-border bg-bg-panel p-3">
 					<input type="checkbox" class="mt-0.5 h-4 w-4 accent-primary" bind:checked={direct} />
 					<span>
-						<span class="block text-[13px] font-semibold">Query it directly</span>
+						<span class="block text-[13px] font-semibold"
+							>{m.connections_connectionwizard_query_it_directly()}</span
+						>
 						<span class="block text-[11px] text-slate-600 dark:text-slate-300">
-							Register it as a query engine and run SQL on it without Trino.
+							{m.connections_connectionwizard_register_it_as_a_query_engine()}
 						</span>
 					</span>
 				</label>
@@ -475,9 +487,11 @@
 
 			{#if compatibleEngines.length > 0}
 				<div class="rounded-lg border border-border bg-bg-panel p-3">
-					<p class="text-[13px] font-semibold">Expose through a federated engine</p>
+					<p class="text-[13px] font-semibold">
+						{m.connections_connectionwizard_expose_through_a_federated_engine()}
+					</p>
 					<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
-						Bind this source into an engine so its catalogs can be queried next to the others.
+						{m.connections_connectionwizard_bind_this_source_into_an_engine()}
 					</p>
 					{#each compatibleEngines as engine (engine.id)}
 						<label class="flex items-center gap-2 py-1">
@@ -494,13 +508,15 @@
 				</div>
 			{:else}
 				<p class="text-[11px] text-slate-600 dark:text-slate-300">
-					No federated engine can bind this source right now.
+					{m.connections_connectionwizard_no_federated_engine_can_bind_this()}
 				</p>
 			{/if}
 
 			{#if bindEngineIds.length > 0}
 				<div class="rounded-lg border border-border bg-bg-panel p-3">
-					<p class="text-[13px] font-semibold">Catalogs to create</p>
+					<p class="text-[13px] font-semibold">
+						{m.connections_connectionwizard_catalogs_to_create()}
+					</p>
 					<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
 						{isDatabase
 							? m.connections_connectionwizard_each_database_becomes_one_catalog()
@@ -520,18 +536,20 @@
 							</div>
 							{#if catalogNames.length > 1}
 								<Button variant="ghost" size="sm" onclick={() => removeCatalog(index)}
-									>Remove</Button
+									>{m.connections_connectionwizard_remove()}</Button
 								>
 							{/if}
 						</div>
 					{/each}
 					{#if !isDatabase}
-						<Button size="sm" onclick={addCatalog}>Add catalog</Button>
+						<Button size="sm" onclick={addCatalog}
+							>{m.connections_connectionwizard_add_catalog()}</Button
+						>
 					{/if}
 					{#if connectors.length > 1}
 						<div class="mt-2">
 							<Select
-								label="Connector"
+								label={m.connections_connectionwizard_connector()}
 								bind:value={connector}
 								options={connectors.map((item) => ({ value: item, label: item }))}
 							/>
@@ -542,14 +560,18 @@
 		</div>
 
 		<div class="flex justify-between">
-			<Button onclick={() => (step = 2)}>Back</Button>
-			<Button variant="primary" onclick={() => (step = 4)}>Continue</Button>
+			<Button onclick={() => (step = 2)}>{m.connections_connectionwizard_back()}</Button>
+			<Button variant="primary" onclick={() => (step = 4)}
+				>{m.connections_connectionwizard_continue()}</Button
+			>
 		</div>
 	{:else if step === 4 && provider}
 		<header>
-			<h1 class="text-xl font-semibold tracking-[-0.3px]">Test and create</h1>
+			<h1 class="text-xl font-semibold tracking-[-0.3px]">
+				{m.connections_connectionwizard_test_and_create()}
+			</h1>
 			<p class="text-[13px] text-slate-600 dark:text-slate-300">
-				Step 4 of 4 — the connection is saved only after the checks pass.
+				{m.connections_connectionwizard_step_4_of_4_the_connection()}
 			</p>
 		</header>
 
@@ -561,12 +583,12 @@
 						: m.connections_connectionwizard_test_connection()}
 				</Button>
 				{#if tested}
-					<Badge tone="success">Tested</Badge>
+					<Badge tone="success">{m.connections_connectionwizard_tested()}</Badge>
 				{:else if testResult && !testResult.success}
-					<Badge tone="danger">Failed</Badge>
+					<Badge tone="danger">{m.connections_connectionwizard_failed()}</Badge>
 				{:else}
 					<span class="text-[11px] text-slate-600 dark:text-slate-300"
-						>Editing a field invalidates the test.</span
+						>{m.connections_connectionwizard_editing_a_field_invalidates_the_test()}</span
 					>
 				{/if}
 			</div>
@@ -591,7 +613,7 @@
 							<span class="flex-1">
 								{check.name}
 								{#if check.skipped}<span class="text-slate-600 dark:text-slate-300">
-										(skipped)</span
+										{m.connections_connectionwizard_skipped()}</span
 									>{/if}
 								{#if check.detail}
 									<span class="block text-[10px] text-slate-600 dark:text-slate-300"
@@ -616,19 +638,26 @@
 				<p class="text-[12px] text-danger">{createError}</p>
 				{#if created}
 					<p class="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
-						The connection {created.connection.name} was created. Finish the remaining steps from the
-						connections page.
+						{m.connections_connectionwizard_the_connection_was_created_finish_the({
+							name: created.connection.name
+						})}
 					</p>
-					<Button class="mt-2" size="sm" onclick={finish}>Open connections</Button>
+					<Button class="mt-2" size="sm" onclick={finish}
+						>{m.connections_connectionwizard_open_connections()}</Button
+					>
 				{/if}
 			</div>
 		{/if}
 
 		<div class="flex justify-between">
-			<Button onclick={() => (step = 3)} disabled={creating}>Back</Button>
+			<Button onclick={() => (step = 3)} disabled={creating}
+				>{m.connections_connectionwizard_back()}</Button
+			>
 			<div class="flex items-center gap-2">
 				{#if !tested && !created}
-					<span class="text-[11px] text-slate-600 dark:text-slate-300">Run the test first.</span>
+					<span class="text-[11px] text-slate-600 dark:text-slate-300"
+						>{m.connections_connectionwizard_run_the_test_first()}</span
+					>
 				{/if}
 				<Button
 					variant="primary"
@@ -636,17 +665,19 @@
 					disabled={!tested || creating || created !== null}
 					onclick={create}
 				>
-					Create
+					{m.connections_connectionwizard_create()}
 				</Button>
 			</div>
 		</div>
 	{:else if step === 5}
 		<header>
 			<div class="flex items-center gap-2">
-				<Badge tone="success">Created</Badge>
+				<Badge tone="success">{m.connections_connectionwizard_created()}</Badge>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{created?.connection.name}</h1>
 			</div>
-			<p class="text-[13px] text-slate-600 dark:text-slate-300">The connection is ready.</p>
+			<p class="text-[13px] text-slate-600 dark:text-slate-300">
+				{m.connections_connectionwizard_the_connection_is_ready()}
+			</p>
 		</header>
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4 text-[13px]">
@@ -656,39 +687,52 @@
 			</p>
 			{#if created?.engine}
 				<p class="mt-2">
-					Engine <span class="font-semibold">{created.engine.name}</span> registered with its native catalogs.
+					{m.connections_connectionwizard_engine()}
+					<span class="font-semibold">{created.engine.name}</span>
+					{m.connections_connectionwizard_registered_with_its_native_catalogs()}
 				</p>
 			{/if}
 			{#if created?.catalogs.length}
 				<p class="mt-2">
-					Catalogs: <span class="font-mono">{created.catalogs.map((c) => c.name).join(', ')}</span>
+					{m.connections_connectionwizard_catalogs()}
+					<span class="font-mono">{created.catalogs.map((c) => c.name).join(', ')}</span>
 				</p>
 			{/if}
 		</div>
 
 		{#if created?.catalogs.length && grantable.length > 0}
 			<section class="rounded-lg border border-border bg-bg-panel p-4">
-				<h2 class="text-[13px] font-semibold">Grant access</h2>
+				<h2 class="text-[13px] font-semibold">{m.connections_connectionwizard_grant_access()}</h2>
 				<p class="mb-3 text-[11px] text-slate-600 dark:text-slate-300">
-					Give a workspace permission to query these catalogs.
+					{m.connections_connectionwizard_give_a_workspace_permission_to_query()}
 				</p>
 				<div class="grid gap-2 sm:grid-cols-3">
 					<Select
-						label="Catalog"
+						label={m.connections_connectionwizard_catalog()}
 						bind:value={grantCatalog}
 						options={created.catalogs.map((c) => ({ value: c.id ?? '', label: c.name ?? '' }))}
 					/>
 					<Select
-						label="Workspace"
+						label={m.connections_connectionwizard_workspace()}
 						bind:value={grantWorkspace}
 						options={grantable.map((w) => ({ value: w.id, label: w.name }))}
 					/>
 					<Select
-						label="Permission"
+						label={m.connections_connectionwizard_permission()}
 						bind:value={grantPermission}
 						options={[
-							{ value: 'read', label: 'Read' },
-							{ value: 'write', label: 'Write' }
+							{
+								value: 'read',
+								get label() {
+									return m.connections_connectionwizard_read();
+								}
+							},
+							{
+								value: 'write',
+								get label() {
+									return m.connections_connectionwizard_write();
+								}
+							}
 						]}
 					/>
 				</div>
@@ -699,11 +743,15 @@
 						disabled={granting}
 						onclick={() => grant(grantPermission)}
 					>
-						Grant
+						{m.connections_connectionwizard_grant()}
 					</Button>
 					{#if grants.length > 0}
 						<span class="text-[11px] text-slate-600 dark:text-slate-300"
-							>{grants.length} grant(s) added</span
+							>{plural(
+								grants.length,
+								m.connections_connectionwizard_grants_added_one,
+								m.connections_connectionwizard_grants_added_other
+							)}</span
 						>
 					{/if}
 				</div>
@@ -712,7 +760,7 @@
 						<ErrorPanel error={grantError} />
 						{#if grantError.code === 'read_only_unenforceable'}
 							<Button class="mt-2" size="sm" onclick={() => grant('write')} disabled={granting}>
-								Grant write instead
+								{m.connections_connectionwizard_grant_write_instead()}
 							</Button>
 						{/if}
 					</div>
@@ -728,7 +776,7 @@
 		{/if}
 
 		<div class="flex justify-end">
-			<Button variant="primary" onclick={finish}>Done</Button>
+			<Button variant="primary" onclick={finish}>{m.connections_connectionwizard_done()}</Button>
 		</div>
 	{/if}
 </div>

@@ -131,7 +131,7 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load engines" message={error} onretry={load} />
+		<ErrorState title={m.engines_could_not_load_engines()} message={error} onretry={load} />
 	{:else if engines.length === 0}
 		<EmptyState
 			title={m.engines_no_engines_yet()}
@@ -151,16 +151,26 @@
 			class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
 		>
 			<Select
-				label="Class"
+				label={m.engines_class()}
 				bind:value={classFilter}
 				options={[
 					{ value: '', label: m.monitoring_any() },
-					{ value: 'federated', label: 'Federated' },
-					{ value: 'direct', label: 'Direct' }
+					{
+						value: 'federated',
+						get label() {
+							return m.engines_federated();
+						}
+					},
+					{
+						value: 'direct',
+						get label() {
+							return m.engines_direct();
+						}
+					}
 				]}
 			/>
 			<Select
-				label="Kind"
+				label={m.engines_kind()}
 				bind:value={kindFilter}
 				options={[
 					{ value: '', label: m.monitoring_any() },
@@ -168,22 +178,42 @@
 				]}
 			/>
 			<Select
-				label="Health"
+				label={m.engines_health()}
 				bind:value={healthFilter}
 				options={[
 					{ value: '', label: m.monitoring_any() },
 					{ value: 'ok', label: m.statusbadge_healthy() },
-					{ value: 'unreachable', label: 'Unreachable' },
-					{ value: 'unknown', label: 'Unknown' }
+					{
+						value: 'unreachable',
+						get label() {
+							return m.engines_unreachable();
+						}
+					},
+					{
+						value: 'unknown',
+						get label() {
+							return m.engines_unknown();
+						}
+					}
 				]}
 			/>
 			<Select
-				label="State"
+				label={m.engines_state()}
 				bind:value={enabledFilter}
 				options={[
 					{ value: '', label: m.monitoring_any() },
-					{ value: 'enabled', label: 'Enabled' },
-					{ value: 'disabled', label: 'Disabled' }
+					{
+						value: 'enabled',
+						get label() {
+							return m.engines_enabled();
+						}
+					},
+					{
+						value: 'disabled',
+						get label() {
+							return m.engines_disabled();
+						}
+					}
 				]}
 			/>
 		</div>
@@ -204,13 +234,13 @@
 						class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 					>
 						<tr>
-							<th class="px-3 py-2">Engine</th>
-							<th class="px-3 py-2">Version</th>
-							<th class="px-3 py-2">Health</th>
-							<th class="px-3 py-2">Connection</th>
-							<th class="px-3 py-2 text-right">Catalogs</th>
-							<th class="px-3 py-2">Read-only</th>
-							<th class="px-3 py-2">State</th>
+							<th class="px-3 py-2">{m.engines_engine()}</th>
+							<th class="px-3 py-2">{m.engines_version()}</th>
+							<th class="px-3 py-2">{m.engines_health()}</th>
+							<th class="px-3 py-2">{m.engines_connection()}</th>
+							<th class="px-3 py-2 text-right">{m.engines_catalogs()}</th>
+							<th class="px-3 py-2">{m.engines_read_only()}</th>
+							<th class="px-3 py-2">{m.engines_state()}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -232,7 +262,8 @@
 										<StatusBadge kind="engine" status={engineHealth(engine)} />
 										{#if engine.health?.checked_at}
 											<span class="text-[10px] text-slate-600 dark:text-slate-300">
-												checked <RelativeTime at={engine.health.checked_at} />
+												{m.engines_checked()}
+												<RelativeTime at={engine.health.checked_at} />
 											</span>
 										{/if}
 									</div>
@@ -250,7 +281,7 @@
 								</td>
 								<td class="px-3 py-2">
 									<Badge tone={engine.enabled ? 'success' : 'neutral'}>
-										{engine.enabled ? 'Enabled' : 'Disabled'}
+										{engine.enabled ? m.engines_enabled() : m.engines_disabled()}
 									</Badge>
 								</td>
 							</tr>

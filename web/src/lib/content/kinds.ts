@@ -12,10 +12,34 @@ export type ContentKindEntry = {
 };
 
 export const contentKinds: Record<ContentKind, ContentKindEntry> = {
-	folder: { label: 'Folder', tone: 'neutral', href: (id) => `/content?folder=${id}` },
-	saved_query: { label: 'Query', tone: 'neutral', href: (id) => `/sql/q/${id}` },
-	semantic_metric: { label: 'Metric', tone: 'info', href: (id) => `/metrics/${id}` },
-	semantic_model: { label: 'Model', tone: 'info', href: (id) => `/models/${id}` }
+	folder: {
+		get label() {
+			return m.content_kinds_folder();
+		},
+		tone: 'neutral',
+		href: (id) => `/content?folder=${id}`
+	},
+	saved_query: {
+		get label() {
+			return m.content_kinds_query();
+		},
+		tone: 'neutral',
+		href: (id) => `/sql/q/${id}`
+	},
+	semantic_metric: {
+		get label() {
+			return m.content_kinds_metric();
+		},
+		tone: 'info',
+		href: (id) => `/metrics/${id}`
+	},
+	semantic_model: {
+		get label() {
+			return m.content_kinds_model();
+		},
+		tone: 'info',
+		href: (id) => `/models/${id}`
+	}
 };
 
 export function kindEntry(kind: string): ContentKindEntry {

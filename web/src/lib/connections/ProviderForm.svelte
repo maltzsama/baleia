@@ -40,7 +40,9 @@
 	}
 
 	const secretHint = $derived(
-		editing && hasStoredSecrets ? 'Leave blank to keep the stored value.' : undefined
+		editing && hasStoredSecrets
+			? m.connections_providerform_leave_blank_to_keep_the_stored()
+			: undefined
 	);
 </script>
 
@@ -74,7 +76,7 @@
 					type={references[field.key] ? 'text' : 'password'}
 					value={secrets[field.key] ?? ''}
 					placeholder={references[field.key]
-						? '@baleia-secret[env:NAME]'
+						? m.connections_providerform_baleia_secret_env_name()
 						: field.required
 							? m.connections_providerform_required()
 							: m.common_optional()}
@@ -87,7 +89,7 @@
 				{#if allowReferences}
 					<div class="mt-1 flex items-center justify-between gap-2">
 						<Checkbox
-							label="Use an env/file reference"
+							label={m.connections_providerform_use_an_env_file_reference()}
 							checked={references[field.key] ?? false}
 							{disabled}
 							onchange={(e) => (references[field.key] = (e.target as HTMLInputElement).checked)}

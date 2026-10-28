@@ -49,7 +49,7 @@
 		busyId = retriever.id;
 		try {
 			await refreshRetriever(workspaceId, retriever.id);
-			toasts.success(`Refreshing ${retriever.name}`);
+			toasts.success(m.retrievers_refreshing({ name: retriever.name }));
 			await load();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : String(e));
@@ -108,23 +108,23 @@
 	{#if !enabled}
 		<EmptyState
 			title={m.retrievers_retrievers_are_disabled()}
-			description="An administrator can enable the retrievers feature flag for this instance."
+			description={m.retrievers_an_administrator_can_enable_the_retrievers()}
 		/>
 	{:else if loading}
-		<div class="flex flex-col gap-2" aria-label="Loading retrievers">
+		<div class="flex flex-col gap-2" aria-label={m.retrievers_loading_retrievers()}>
 			{#each [0, 1, 2] as item (item)}
 				<Skeleton class="h-12 w-full" />
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load retrievers" message={error} onretry={load} />
+		<ErrorState title={m.retrievers_could_not_load_retrievers()} message={error} onretry={load} />
 	{:else if retrievers.length === 0}
 		<EmptyState
-			title="No retrievers"
-			description="A retriever needs a destination: an Iceberg catalog bound to a federated engine that this workspace may write to."
+			title={m.retrievers_no_retrievers()}
+			description={m.retrievers_a_retriever_needs_a_destination_an()}
 		>
 			<Button variant="primary" onclick={() => goto(resolve('/retrievers/new'))}>
-				New retriever
+				{m.retrievers_new_retriever()}
 			</Button>
 		</EmptyState>
 	{:else}
@@ -134,12 +134,12 @@
 					class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th class="px-3 py-2">Name</th>
-						<th class="px-3 py-2">Destination</th>
-						<th class="px-3 py-2">Schedule</th>
-						<th class="px-3 py-2">Status</th>
-						<th class="px-3 py-2">Last refresh</th>
-						<th class="px-3 py-2 text-right">Actions</th>
+						<th class="px-3 py-2">{m.retrievers_name()}</th>
+						<th class="px-3 py-2">{m.retrievers_destination()}</th>
+						<th class="px-3 py-2">{m.retrievers_schedule()}</th>
+						<th class="px-3 py-2">{m.retrievers_status()}</th>
+						<th class="px-3 py-2">{m.retrievers_last_refresh()}</th>
+						<th class="px-3 py-2 text-right">{m.retrievers_actions()}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -172,7 +172,8 @@
 								<span class="font-mono text-[11px]">{retriever.cron_schedule}</span>
 								{#if retriever.next_refresh_at}
 									<span class="block text-[10px] text-slate-600 dark:text-slate-300">
-										next <RelativeTime at={retriever.next_refresh_at} />
+										{m.retrievers_next()}
+										<RelativeTime at={retriever.next_refresh_at} />
 									</span>
 								{/if}
 							</td>
@@ -209,7 +210,7 @@
 										disabled={busyId === retriever.id}
 										onclick={() => refresh(retriever)}
 									>
-										Refresh now
+										{m.retrievers_refresh_now()}
 									</Button>
 									<Button
 										size="sm"
@@ -219,7 +220,7 @@
 										{retriever.status === 'paused' ? m.retrievers_resume() : m.retrievers_pause()}
 									</Button>
 									<Button size="sm" onclick={() => goto(resolve(`/retrievers/${retriever.id}`))}>
-										Edit
+										{m.retrievers_edit()}
 									</Button>
 									<Button
 										size="sm"
@@ -229,7 +230,7 @@
 											deleteOpen = true;
 										}}
 									>
-										Delete
+										{m.retrievers_delete()}
 									</Button>
 								</div>
 							</td>
@@ -247,10 +248,10 @@
 		title={m.retrievers_remove_retriever()}
 		resourceName={deleting.name}
 		consequences={[
-			'The destination table is not dropped.',
+			m.retrievers_the_destination_table_is_not_dropped(),
 			m.retrievers_refresh_history_is_removed()
 		]}
-		confirmLabel="Remove retriever"
+		confirmLabel={m.retrievers_remove_retriever()}
 		onconfirm={remove}
 	/>
 {/if}

@@ -315,7 +315,7 @@
 						<div
 							role="separator"
 							aria-orientation="vertical"
-							aria-label={`Resize ${layout.column.name}`}
+							aria-label={m.components_resultgrid_resize({ name: layout.column.name })}
 							class="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary"
 							onpointerdown={(event) => startResize(event, layout.column.name)}
 						></div>

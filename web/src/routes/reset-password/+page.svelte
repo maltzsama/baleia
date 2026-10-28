@@ -34,7 +34,7 @@
 	async function submit() {
 		if (busy) return;
 		if (newPassword.length < MIN_LENGTH) {
-			error = `Password must be at least ${MIN_LENGTH} characters.`;
+			error = m.reset_password_password_must_be_at_least_characters({ MIN_LENGTH });
 			return;
 		}
 		if (newPassword !== confirmPassword) {
@@ -55,9 +55,9 @@
 			if ([400, 401, 404, 410].includes(response.status)) {
 				invalidLink = true;
 			} else if (response.status === 422) {
-				error = `Password must be at least ${MIN_LENGTH} characters.`;
+				error = m.reset_password_password_must_be_at_least_characters({ MIN_LENGTH });
 			} else {
-				error = `Could not change the password (HTTP ${response.status}). Try again.`;
+				error = m.reset_password_could_not_change_the_password_http({ status: response.status });
 			}
 		} catch {
 			error = m.setup_connection_error_is_the_server_running();
@@ -86,7 +86,7 @@
 						{#if !token}
 							{m.reset_password_this_reset_link_is_incomplete_request_a_ne()}
 						{:else}
-							This reset link is invalid or has expired.
+							{m.reset_password_this_reset_link_is_invalid_or()}
 						{/if}
 					</div>
 					<a
@@ -98,9 +98,11 @@
 				</div>
 			{:else}
 				<div class="flex flex-col animate-[fadeIn_.2s_ease]">
-					<div class="text-xl font-bold tracking-[-.4px] mb-1">Set new password</div>
+					<div class="text-xl font-bold tracking-[-.4px] mb-1">
+						{m.reset_password_set_new_password()}
+					</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
-						Choose a strong password for your account.
+						{m.reset_password_choose_a_strong_password_for_your()}
 					</div>
 					{#if error}
 						<div
@@ -113,7 +115,7 @@
 					<div class="mb-3.5">
 						<PasswordInput
 							id="new-pw"
-							label="New password"
+							label={m.reset_password_new_password()}
 							autocomplete="new-password"
 							bind:value={newPassword}
 							placeholder="••••••••"
@@ -135,16 +137,20 @@
 							></div>
 						</div>
 						<div class="text-[10px] mt-1">
-							{#if strengthScore === 1}<span class="text-red-500">Weak</span>
-							{:else if strengthScore === 2}<span class="text-amber-500">Fair</span>
-							{:else if strengthScore >= 3}<span class="text-green-600">Strong</span>
+							{#if strengthScore === 1}<span class="text-red-500">{m.reset_password_weak()}</span>
+							{:else if strengthScore === 2}<span class="text-amber-500"
+									>{m.reset_password_fair()}</span
+								>
+							{:else if strengthScore >= 3}<span class="text-green-600"
+									>{m.reset_password_strong()}</span
+								>
 							{/if}
 						</div>
 					</div>
 					<div class="mb-3.5">
 						<PasswordInput
 							id="confirm-pw"
-							label="Confirm password"
+							label={m.reset_password_confirm_password()}
 							autocomplete="new-password"
 							bind:value={confirmPassword}
 							placeholder="••••••••"

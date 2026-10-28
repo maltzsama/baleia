@@ -48,9 +48,24 @@
 		status
 			? [
 					{ label: m.settings_system_schedules(), resource: status.schedules },
-					{ label: 'Engines', resource: status.engines },
-					{ label: 'Bindings', resource: status.bindings },
-					{ label: 'Metadata', resource: status.metadata },
+					{
+						get label() {
+							return m.settings_system_engines();
+						},
+						resource: status.engines
+					},
+					{
+						get label() {
+							return m.settings_system_bindings();
+						},
+						resource: status.bindings
+					},
+					{
+						get label() {
+							return m.settings_system_metadata();
+						},
+						resource: status.metadata
+					},
 					{ label: m.settings_system_reconcile(), resource: status.reconcile },
 					{ label: m.settings_system_audit_export(), resource: status.audit_export },
 					{ label: m.settings_system_plugin(), resource: status.plugin }
@@ -108,11 +123,17 @@
 			</div>
 		{:else if error}
 			<div class="mt-6">
-				<ErrorState title="Could not load the system status" message={error} onretry={load} />
+				<ErrorState
+					title={m.settings_system_could_not_load_the_system_status_2()}
+					message={error}
+					onretry={load}
+				/>
 			</div>
 		{:else if status}
 			<section class="mt-6">
-				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Core</h2>
+				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+					{m.settings_system_core()}
+				</h2>
 				<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 					{#each core as card (card.label)}
 						<article class="rounded-lg border border-border bg-bg-panel p-3">
@@ -125,22 +146,35 @@
 							{/if}
 							<dl class="mt-2 space-y-0.5 text-[11px] text-text-muted">
 								{#if card.section.latency_ms !== undefined}
-									<div>Latency: {card.section.latency_ms} ms</div>
+									<div>{m.settings_system_latency_ms({ latency_ms: card.section.latency_ms })}</div>
 								{/if}
 								{#if card.section.version}
-									<div>Version: {card.section.version}</div>
+									<div>{m.settings_system_version({ version: card.section.version })}</div>
 								{/if}
 								{#if card.section.commit}
-									<div>Commit: {card.section.commit}</div>
+									<div>{m.settings_system_commit({ commit: card.section.commit })}</div>
 								{/if}
 								{#if card.section.started_at}
-									<div>Started: <RelativeTime at={card.section.started_at} /></div>
+									<div>
+										{m.settings_system_started()}
+										<RelativeTime at={card.section.started_at} />
+									</div>
 								{/if}
 								{#if card.section.migration_version !== undefined}
-									<div>Migration: {card.section.migration_version}</div>
+									<div>
+										{m.settings_system_migration({
+											migration_version: card.section.migration_version
+										})}
+									</div>
 								{/if}
 								{#if card.section.configured !== undefined}
-									<div>Configured: {card.section.configured ? 'yes' : 'no'}</div>
+									<div>
+										{m.settings_system_configured({
+											value: card.section.configured
+												? m.settings_system_yes()
+												: m.settings_system_no()
+										})}
+									</div>
 								{/if}
 							</dl>
 						</article>
@@ -150,7 +184,7 @@
 
 			<section class="mt-6">
 				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-					Platform
+					{m.settings_system_platform()}
 				</h2>
 				<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 					{#each resources as card (card.label)}
@@ -180,7 +214,9 @@
 									{/each}
 								</ul>
 							{:else}
-								<p class="mt-2 text-[11px] text-text-muted">No items reported.</p>
+								<p class="mt-2 text-[11px] text-text-muted">
+									{m.settings_system_no_items_reported()}
+								</p>
 							{/if}
 						</article>
 					{/each}

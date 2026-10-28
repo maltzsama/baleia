@@ -22,7 +22,7 @@ describe('nav sections', () => {
 		['/engines', 'Connections · Engines', 'Conexões · Engines'],
 		['/monitoring', 'Monitoring', 'Monitoramento'],
 		['/settings', 'Settings', 'Configurações'],
-		['/settings/users', 'Settings · Users', 'Configurações · Users']
+		['/settings/users', 'Settings · Users', 'Configurações · Usuários']
 	])('%s is "%s" (en) and "%s" (pt-BR)', (path, en, pt) => {
 		setAppLocale('en');
 		expect(sectionTitle(path)).toBe(en);

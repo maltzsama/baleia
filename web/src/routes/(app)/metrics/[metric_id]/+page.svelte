@@ -126,25 +126,31 @@
 	{#if loading && !metric}
 		<Skeleton class="h-32 w-full" />
 	{:else if error && !metric}
-		<ErrorState title="Could not load the metric" message={error} onretry={load} />
+		<ErrorState
+			title={m.metrics_detail_could_not_load_the_metric()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if metric}
 		<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 			<div>
 				<div class="flex flex-wrap items-center gap-2">
 					<h1 class="text-xl font-semibold tracking-[-0.3px]">{metric.label}</h1>
 					{#if metric.certified}
-						<Badge tone="success">Certified</Badge>
+						<Badge tone="success">{m.metrics_detail_certified()}</Badge>
 					{/if}
 					{#if !portable}
-						<Badge tone="warning">Non-portable</Badge>
+						<Badge tone="warning">{m.metrics_detail_non_portable()}</Badge>
 					{/if}
 				</div>
 				<p
 					class="mt-1 flex items-center gap-1 font-mono text-[11px] text-slate-600 dark:text-slate-300"
 				>
-					{metric.slug}<CopyButton value={metric.slug} label="slug" />
-					· {savedQueries.spaces.find((space) => space.id === metric?.space_id)?.name ?? '—'}
-					· updated <RelativeTime at={metric.updated_at} />
+					{metric.slug}<CopyButton value={metric.slug} label={m.common_slug()} />
+					{m.metrics_detail_updated({
+						value: savedQueries.spaces.find((space) => space.id === metric?.space_id)?.name ?? '—'
+					})}
+					<RelativeTime at={metric.updated_at} />
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
@@ -155,18 +161,20 @@
 				{/if}
 				{#if canEdit}
 					<Button onclick={() => (window.location.href = `/metrics/${metric?.id}/edit`)}
-						>Edit</Button
+						>{m.metrics_detail_edit()}</Button
 					>
-					<Button variant="danger" onclick={() => (deleteOpen = true)}>Delete</Button>
+					<Button variant="danger" onclick={() => (deleteOpen = true)}
+						>{m.metrics_detail_delete()}</Button
+					>
 				{/if}
-				<Button onclick={() => (historyOpen = true)}>History</Button>
+				<Button onclick={() => (historyOpen = true)}>{m.metrics_detail_history()}</Button>
 			</div>
 		</div>
 
 		<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
 			<div class="flex flex-col gap-3">
 				<div class="rounded-lg border border-border bg-bg-panel p-4">
-					<h2 class="text-[13px] font-semibold">Definition</h2>
+					<h2 class="text-[13px] font-semibold">{m.metrics_detail_definition()}</h2>
 					<p class="mt-1 text-[12px]">
 						{describeDefinition(definition, {
 							catalog: metric.catalog_id,
@@ -178,12 +186,12 @@
 						<p class="mt-2 text-[12px] text-slate-600 dark:text-slate-300">{metric.description}</p>
 					{/if}
 					<dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
-						<dt class="text-slate-600 dark:text-slate-300">Table</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.metrics_detail_table()}</dt>
 						<dd class="font-mono">{metric.namespace.join('.')}.{metric.table}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Owner</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.metrics_detail_owner()}</dt>
 						<dd class="font-mono">{metric.owner_user_id ?? '—'}</dd>
 						{#if metric.certified_by}
-							<dt class="text-slate-600 dark:text-slate-300">Certified by</dt>
+							<dt class="text-slate-600 dark:text-slate-300">{m.metrics_detail_certified_by()}</dt>
 							<dd class="font-mono">{metric.certified_by}</dd>
 						{/if}
 					</dl>
@@ -194,7 +202,7 @@
 				<div class="flex flex-wrap items-end gap-2">
 					<div class="min-w-40 flex-1">
 						<Select
-							label="Binding"
+							label={m.metrics_detail_binding()}
 							bind:value={bindingId}
 							options={bindings.map((binding) => ({ value: binding.id, label: binding.label }))}
 							onchange={loadSQL}
@@ -203,7 +211,7 @@
 					{#if (definition.time_grains ?? []).length > 0}
 						<div class="w-32">
 							<Select
-								label="Grain"
+								label={m.metrics_detail_grain()}
 								bind:value={grain}
 								options={[
 									{ value: '', label: m.metrics_no_grouping() },
@@ -225,7 +233,7 @@
 						class="mt-2 overflow-x-auto rounded bg-bg-toolbar p-2 font-mono text-[11px]">{sql}</pre>
 					<div class="mt-2 flex justify-end gap-2">
 						<CopyButton value={sql} label="SQL" />
-						<Button size="sm" onclick={openInEditor}>Open in editor</Button>
+						<Button size="sm" onclick={openInEditor}>{m.metrics_detail_open_in_editor()}</Button>
 					</div>
 				{/if}
 			</div>
@@ -245,9 +253,9 @@
 	bind:open={deleteOpen}
 	title={m.metrics_delete_metric()}
 	resourceName={metric?.label ?? ''}
-	confirmLabel="Delete metric"
+	confirmLabel={m.metrics_detail_delete_metric()}
 	consequences={[
-		'Queries and links that reference this metric stop resolving.',
+		m.metrics_detail_queries_and_links_that_reference_this(),
 		m.metrics_the_metric_can_be_restored_from_trash()
 	]}
 	onconfirm={remove}
@@ -257,8 +265,8 @@
 	bind:open={certifyOpen}
 	title={m.metrics_remove_certification()}
 	resourceName={metric?.label ?? ''}
-	confirmLabel="Remove certification"
+	confirmLabel={m.metrics_detail_remove_certification()}
 	danger={false}
-	consequences={['The certified badge disappears; the metric remains available.']}
+	consequences={[m.metrics_detail_the_certified_badge_disappears_the_metric()]}
 	onconfirm={() => setCertified(false)}
 />

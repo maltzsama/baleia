@@ -373,15 +373,23 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load monitoring" message={error} onretry={loadEngines} />
+		<ErrorState
+			title={m.monitoring_could_not_load_monitoring()}
+			message={error}
+			onretry={loadEngines}
+		/>
 	{:else if engines.length === 0}
 		<EmptyState
-			title="No engine with monitoring support"
-			description="Monitoring is available for federated engines such as Trino."
+			title={m.monitoring_no_engine_with_monitoring_support()}
+			description={m.monitoring_monitoring_is_available_for_federated_engines()}
 		/>
 	{:else}
-		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Monitoring tabs">
-			{#each [['cluster', m.monitoring_cluster()], ['queries', 'Queries'], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
+		<div
+			class="mb-4 flex gap-1 border-b border-border"
+			role="tablist"
+			aria-label={m.monitoring_monitoring_tabs()}
+		>
+			{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -400,7 +408,7 @@
 			<div class="mb-3 flex items-center gap-2">
 				<div class="w-40">
 					<Select
-						label="Window"
+						label={m.monitoring_window()}
 						bind:value={clusterWindow}
 						options={[
 							{ value: '1h', label: m.monitoring_last_hour() },
@@ -412,7 +420,8 @@
 				</div>
 				{#if cluster?.latest}
 					<span class="text-[11px] text-slate-600 dark:text-slate-300">
-						updated <RelativeTime at={cluster.latest.captured_at} live />
+						{m.monitoring_updated()}
+						<RelativeTime at={cluster.latest.captured_at} live />
 					</span>
 				{/if}
 			</div>
@@ -420,18 +429,18 @@
 				<Skeleton class="h-32 w-full" />
 			{:else if clusterError}
 				<ErrorState
-					title="Could not load the cluster"
+					title={m.monitoring_could_not_load_the_cluster()}
 					message={clusterError}
 					onretry={loadCluster}
 				/>
 			{:else if !cluster?.latest}
 				<EmptyState
-					title="No cluster snapshot"
-					description="The poller has not captured this engine yet."
+					title={m.monitoring_no_cluster_snapshot()}
+					description={m.monitoring_the_poller_has_not_captured_this()}
 				/>
 			{:else}
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-					{#each [['Workers', cluster.latest.active_workers], ['Running', cluster.latest.running_queries], ['Queued', cluster.latest.queued_queries], ['Blocked', cluster.latest.blocked_queries]] as [label, value] (label)}
+					{#each [[m.monitoring_workers(), cluster.latest.active_workers], [m.monitoring_running(), cluster.latest.running_queries], [m.monitoring_queued(), cluster.latest.queued_queries], [m.monitoring_blocked(), cluster.latest.blocked_queries]] as [label, value] (label)}
 						<div class="rounded-lg border border-border bg-bg-panel p-3">
 							<div class="text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300">
 								{label}
@@ -441,7 +450,7 @@
 					{/each}
 					<div class="rounded-lg border border-border bg-bg-panel p-3">
 						<div class="text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300">
-							Memory used
+							{m.monitoring_memory_used()}
 						</div>
 						<div class="mt-1 text-xl font-semibold">
 							{cluster.latest.total_memory_bytes && cluster.latest.free_memory_bytes
@@ -461,39 +470,68 @@
 				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
 			>
 				<Select
-					label="Scope"
+					label={m.monitoring_scope()}
 					bind:value={scope}
 					options={[
-						{ value: 'mine', label: 'Mine' },
+						{
+							value: 'mine',
+							get label() {
+								return m.monitoring_mine();
+							}
+						},
 						...(isAdmin ? [{ value: 'all', label: m.monitoring_everyone() }] : [])
 					]}
 					onchange={() => loadQueries()}
 				/>
 				<Select
-					label="State"
+					label={m.monitoring_state()}
 					bind:value={queryState}
 					options={[
 						{ value: '', label: m.monitoring_any() },
-						{ value: 'running', label: 'Running' },
-						{ value: 'finished', label: 'Finished' },
-						{ value: 'failed', label: 'Failed' },
-						{ value: 'cancelled', label: 'Cancelled' }
+						{
+							value: 'running',
+							get label() {
+								return m.monitoring_running();
+							}
+						},
+						{
+							value: 'finished',
+							get label() {
+								return m.monitoring_finished();
+							}
+						},
+						{
+							value: 'failed',
+							get label() {
+								return m.monitoring_failed();
+							}
+						},
+						{
+							value: 'cancelled',
+							get label() {
+								return m.monitoring_cancelled();
+							}
+						}
 					]}
 					onchange={() => loadQueries()}
 				/>
-				<Input label="SQL contains" bind:value={queryText} placeholder="orders" />
+				<Input label={m.monitoring_sql_contains()} bind:value={queryText} placeholder="orders" />
 				<div class="flex items-end">
-					<Button onclick={() => loadQueries()}>Search</Button>
+					<Button onclick={() => loadQueries()}>{m.monitoring_search()}</Button>
 				</div>
 			</div>
 			{#if queriesLoading && queryPage.items.length === 0}
 				<Skeleton class="h-32 w-full" />
 			{:else if queriesError}
-				<ErrorState title="Could not load queries" message={queriesError} onretry={loadQueries} />
+				<ErrorState
+					title={m.monitoring_could_not_load_queries()}
+					message={queriesError}
+					onretry={loadQueries}
+				/>
 			{:else if queryPage.items.length === 0}
 				<EmptyState
-					title="No queries"
-					description="No query matches this engine, state and text."
+					title={m.monitoring_no_queries()}
+					description={m.monitoring_no_query_matches_this_engine_state()}
 				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -502,14 +540,14 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">State</th>
-								<th class="px-3 py-2">User</th>
+								<th class="px-3 py-2">{m.monitoring_state()}</th>
+								<th class="px-3 py-2">{m.monitoring_user()}</th>
 								<th class="px-3 py-2">SQL</th>
-								<th class="px-3 py-2">Catalog</th>
-								<th class="px-3 py-2">Elapsed</th>
+								<th class="px-3 py-2">{m.monitoring_catalog()}</th>
+								<th class="px-3 py-2">{m.monitoring_elapsed()}</th>
 								<th class="px-3 py-2">{m.monitoring_cpu()}</th>
-								<th class="px-3 py-2">Started</th>
-								<th class="px-3 py-2 text-right">Actions</th>
+								<th class="px-3 py-2">{m.monitoring_started()}</th>
+								<th class="px-3 py-2 text-right">{m.monitoring_actions()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -574,13 +612,13 @@
 				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
 			>
 				<Select
-					label="Catalog"
+					label={m.monitoring_catalog()}
 					bind:value={catalogId}
 					options={catalogs.map((catalog) => ({ value: catalog.id, label: catalog.name }))}
 					onchange={() => loadHealth()}
 				/>
 				<Select
-					label="Needs"
+					label={m.monitoring_needs()}
 					bind:value={needs}
 					options={[
 						{ value: '', label: m.monitoring_any() },
@@ -590,28 +628,28 @@
 					]}
 					onchange={() => loadHealth()}
 				/>
-				<Input label="Max health score" bind:value={maxScore} placeholder="80" />
+				<Input label={m.monitoring_max_health_score()} bind:value={maxScore} placeholder="80" />
 				<div class="flex items-end">
-					<Button onclick={() => loadHealth()}>Refresh</Button>
+					<Button onclick={() => loadHealth()}>{m.monitoring_refresh()}</Button>
 				</div>
 			</div>
 			{#if catalogs.length === 0}
 				<EmptyState
-					title="No catalogs"
-					description="No Iceberg catalog is granted to this workspace."
+					title={m.monitoring_no_catalogs()}
+					description={m.monitoring_no_iceberg_catalog_is_granted_to()}
 				/>
 			{:else if healthLoading && health.length === 0}
 				<Skeleton class="h-32 w-full" />
 			{:else if healthError}
 				<ErrorState
-					title="Could not load table health"
+					title={m.monitoring_could_not_load_table_health()}
 					message={healthError}
 					onretry={loadHealth}
 				/>
 			{:else if health.length === 0}
 				<EmptyState
-					title="No table health rows"
-					description="The health poller has not seen a table in this catalog yet."
+					title={m.monitoring_no_table_health_rows()}
+					description={m.monitoring_the_health_poller_has_not_seen()}
 				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -620,15 +658,15 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Table</th>
-								<th class="px-3 py-2">Health</th>
-								<th class="px-3 py-2">Snapshots</th>
-								<th class="px-3 py-2">Files</th>
-								<th class="px-3 py-2">Size</th>
-								<th class="px-3 py-2">Oldest</th>
-								<th class="px-3 py-2">Needs</th>
-								<th class="px-3 py-2">Last maintenance</th>
-								<th class="px-3 py-2 text-right">Actions</th>
+								<th class="px-3 py-2">{m.monitoring_table()}</th>
+								<th class="px-3 py-2">{m.monitoring_health()}</th>
+								<th class="px-3 py-2">{m.monitoring_snapshots()}</th>
+								<th class="px-3 py-2">{m.monitoring_files()}</th>
+								<th class="px-3 py-2">{m.monitoring_size()}</th>
+								<th class="px-3 py-2">{m.monitoring_oldest()}</th>
+								<th class="px-3 py-2">{m.monitoring_needs()}</th>
+								<th class="px-3 py-2">{m.monitoring_last_maintenance()}</th>
+								<th class="px-3 py-2 text-right">{m.monitoring_actions()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -654,12 +692,12 @@
 									<td class="px-3 py-1.5">{row.file_count ?? '—'}</td>
 									<td class="px-3 py-1.5">
 										{row.total_size_bytes != null
-											? `${Math.round(row.total_size_bytes / 1024 / 1024)} MiB`
+											? m.monitoring_mib({ value: Math.round(row.total_size_bytes / 1024 / 1024) })
 											: '—'}
 									</td>
 									<td class="px-3 py-1.5">
 										{row.oldest_snapshot_age_hours != null
-											? `${row.oldest_snapshot_age_hours}h`
+											? m.monitoring_hours({ hours: row.oldest_snapshot_age_hours })
 											: '—'}
 									</td>
 									<td class="px-3 py-1.5">
@@ -677,7 +715,9 @@
 										{/if}
 									</td>
 									<td class="px-3 py-1.5 text-right">
-										<Button size="sm" onclick={() => openMaintenance(row)}>Run maintenance…</Button>
+										<Button size="sm" onclick={() => openMaintenance(row)}
+											>{m.monitoring_run_maintenance_2()}</Button
+										>
 									</td>
 								</tr>
 							{/each}
@@ -686,19 +726,19 @@
 				</div>
 			{/if}
 			{#if catalogs.length > 0 && !healthError && !(healthLoading && health.length === 0)}
-				<h2 class="mt-5 text-[13px] font-semibold">Maintenance runs</h2>
+				<h2 class="mt-5 text-[13px] font-semibold">{m.monitoring_maintenance_runs()}</h2>
 				<div class="mt-2 overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
 						<thead
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Status</th>
-								<th class="px-3 py-2">Table</th>
-								<th class="px-3 py-2">Operations</th>
-								<th class="px-3 py-2">Started</th>
-								<th class="px-3 py-2">Finished</th>
-								<th class="px-3 py-2">Error</th>
+								<th class="px-3 py-2">{m.monitoring_status()}</th>
+								<th class="px-3 py-2">{m.monitoring_table()}</th>
+								<th class="px-3 py-2">{m.monitoring_operations()}</th>
+								<th class="px-3 py-2">{m.monitoring_started()}</th>
+								<th class="px-3 py-2">{m.monitoring_finished()}</th>
+								<th class="px-3 py-2">{m.monitoring_error()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -728,7 +768,7 @@
 							{:else}
 								<tr>
 									<td class="px-3 py-3 text-slate-600 dark:text-slate-300" colspan="6">
-										No maintenance runs yet.
+										{m.monitoring_no_maintenance_runs_yet()}
 									</td>
 								</tr>
 							{/each}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { canGlobal } from '$lib/authz/can';
 	import { eachLimited } from '$lib/util/limit';
@@ -181,7 +182,9 @@
 		try {
 			const result = await testStored(connection.id);
 			if (result.success) {
-				toasts.success(`${connection.name}: reachable (${result.latency_ms} ms)`);
+				toasts.success(
+					m.connections_reachable({ name: connection.name, latency: result.latency_ms })
+				);
 			} else {
 				toasts.error(
 					`${connection.name}: ${result.error_message ?? m.connections_the_test_failed()}`
@@ -201,7 +204,7 @@
 			if (!name) throw new Error('The connection name cannot be used as an engine name.');
 			const engine = await createEngine({ name, connection_id: connection.id });
 			engines = [...engines, engine];
-			toasts.success(`Engine ${engine.name} registered`);
+			toasts.success(m.connections_engine_registered({ name: engine.name }));
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : String(e));
 		} finally {
@@ -230,7 +233,7 @@
 				connector: addConnector,
 				description: ''
 			});
-			toasts.success(`Catalog ${addName} created`);
+			toasts.success(m.connections_catalog_created({ addName }));
 			addOpen = false;
 			adding = null;
 			await load();
@@ -250,17 +253,22 @@
 		const items: string[] = [];
 		const ownEngines = enginesOf(connection.id);
 		if (ownEngines.length > 0) {
-			items.push(`Its engine ${ownEngines.map((e) => e.name).join(', ')} must be deleted first.`);
+			items.push(
+				m.connections_its_engine_must_be_deleted_first({
+					value: ownEngines.map((e) => e.name).join(', ')
+				})
+			);
 		}
 		const catalogsHere = catalogs[connection.id] ?? [];
 		if (catalogsHere.length > 0) {
 			items.push(
-				`${catalogsHere.length} catalog(s) and their bindings will be removed: ${catalogsHere
-					.map((item) => item.catalog.name)
-					.join(', ')}.`
+				m.connections_catalog_s_and_their_bindings_will({
+					length: catalogsHere.length,
+					value: catalogsHere.map((item) => item.catalog.name).join(', ')
+				})
 			);
 		}
-		items.push('Saved queries and metrics that target these catalogs will stop resolving.');
+		items.push(m.connections_saved_queries_and_metrics_that_target());
 		return items;
 	}
 
@@ -296,7 +304,7 @@
 			<Input bind:value={search} placeholder={m.connections_search_connections()} />
 		</div>
 		<span class="ml-auto font-mono text-xs text-slate-600 dark:text-slate-300"
-			>{filtered.length} {m.common_connection()}{filtered.length === 1 ? '' : 's'}</span
+			>{plural(filtered.length, m.connections_count_one, m.connections_count_other)}</span
 		>
 	</div>
 
@@ -310,7 +318,7 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load connections" message={error} onretry={load} />
+		<ErrorState title={m.connections_could_not_load_connections()} message={error} onretry={load} />
 	{:else if connections.length === 0}
 		<!-- Nothing yet (#476): the first step, when the user may take it. -->
 		<EmptyState
@@ -359,16 +367,16 @@
 
 					<div class="flex flex-wrap gap-1">
 						{#if connection.credentials_read_only}
-							<Badge tone="success">Read-only credentials</Badge>
+							<Badge tone="success">{m.connections_read_only_credentials()}</Badge>
 						{/if}
 						{#if connection.has_credentials}
-							<Badge tone="neutral">Credentials stored</Badge>
+							<Badge tone="neutral">{m.connections_credentials_stored()}</Badge>
 						{/if}
 					</div>
 
 					{#if ownEngines.length > 0}
 						<div class="text-[11px]">
-							<span class="text-slate-600 dark:text-slate-300">Engine</span>
+							<span class="text-slate-600 dark:text-slate-300">{m.connections_engine()}</span>
 							{#each ownEngines as engine (engine.id)}
 								<span class="ml-1 inline-flex items-center gap-1 font-medium">
 									<KindIcon kind={engine.kind} family="engine" size={13} />
@@ -396,7 +404,7 @@
 										<StatusBadge
 											kind="sync"
 											status={syncStatus(item.catalog.metadata_sync_status)}
-											title="Metadata freshness"
+											title={m.connections_metadata_freshness()}
 										/>
 									{/if}
 									{#if item.catalog.metadata_synced_at}
@@ -408,7 +416,11 @@
 										<span class="text-danger">· {m.connections_bindings_unavailable()}</span>
 									{:else if item.bindings.length > 0}
 										<span class="text-slate-600 dark:text-slate-300">
-											· {item.bindings.length} binding{item.bindings.length === 1 ? '' : 's'}
+											· {plural(
+												item.bindings.length,
+												m.connections_binding_count_one,
+												m.connections_binding_count_other
+											)}
 										</span>
 									{/if}
 								</li>
@@ -422,14 +434,14 @@
 							onclick={() => {
 								editing = connection;
 								editOpen = true;
-							}}>Edit</Button
+							}}>{m.connections_edit()}</Button
 						>
 						<Button
 							size="sm"
 							loading={testingId === connection.id}
 							onclick={() => test(connection)}
 						>
-							Test
+							{m.connections_test()}
 						</Button>
 						{#if provider && canQueryDirectly(provider) && ownEngines.length === 0}
 							<Button
@@ -437,11 +449,13 @@
 								loading={registeringId === connection.id}
 								onclick={() => registerEngine(connection)}
 							>
-								Register engine
+								{m.connections_register_engine()}
 							</Button>
 						{/if}
 						{#if compatibleEngines(connection.type).length > 0}
-							<Button size="sm" onclick={() => openAdd(connection)}>Add catalog</Button>
+							<Button size="sm" onclick={() => openAdd(connection)}
+								>{m.connections_add_catalog()}</Button
+							>
 						{/if}
 						<Button
 							size="sm"
@@ -450,7 +464,7 @@
 								activityOpen = true;
 							}}
 						>
-							Activity
+							{m.connections_activity()}
 						</Button>
 						<span
 							title={ownEngines.length > 0 ? m.connections_delete_the_engine_first() : ''}
@@ -465,7 +479,7 @@
 									deleteOpen = true;
 								}}
 							>
-								Delete
+								{m.connections_delete()}
 							</Button>
 						</span>
 					</div>
@@ -493,7 +507,7 @@
 		title={m.connections_remove_connection()}
 		resourceName={deleting.name}
 		consequences={consequences(deleting)}
-		confirmLabel="Remove connection"
+		confirmLabel={m.connections_remove_connection()}
 		typeToConfirm
 		onconfirm={remove}
 	/>
@@ -503,7 +517,7 @@
 	{@const connectors = connectorsFor(adding)}
 	<Modal
 		bind:open={addOpen}
-		title={`Add catalog to ${adding.name}`}
+		title={m.connections_add_catalog_to({ name: adding.name })}
 		onclose={() => {
 			adding = null;
 		}}
@@ -545,7 +559,7 @@
 	<Drawer
 		size="lg"
 		bind:open={activityOpen}
-		title={`Activity — ${activity.name}`}
+		title={m.connections_activity_2({ name: activity.name })}
 		onclose={() => {
 			activity = null;
 		}}

@@ -1,6 +1,7 @@
 // "Insert from model" palette provider (#121). It registers through the same
 // registry as the other providers (#112): a model's dimension or metric is
 // compiled to SQL by the API and inserted at the cursor.
+import { m } from '$lib/paraglide/messages';
 import type { PaletteProvider } from '$lib/palette/registry';
 import { compileExplore, definitionOf, listModels, type ExploreQuery } from './explore';
 
@@ -11,7 +12,7 @@ export function modelPaletteProvider(options: {
 }): PaletteProvider {
 	return {
 		id: 'models',
-		label: 'Models',
+		label: m.semantic_palette_models(),
 		search: async (query) => {
 			const workspaceId = options.workspaceId();
 			if (!workspaceId) return [];
@@ -37,8 +38,8 @@ export function modelPaletteProvider(options: {
 					items.push({
 						id: `model-${model.id}-${field.name}`,
 						label: field.label,
-						detail: `${model.label} · ${field.kind === 'metrics' ? 'metric' : 'dimension'}`,
-						group: 'Models',
+						detail: `${model.label} · ${field.kind === 'metrics' ? m.semantic_palette_metric() : m.semantic_palette_dimension()}`,
+						group: m.semantic_palette_models(),
 						run: async () => {
 							const explore: ExploreQuery = { model: model.slug, [field.kind]: [field.name] };
 							const out = await compileExplore(workspaceId, explore, options.bindingId() || null);

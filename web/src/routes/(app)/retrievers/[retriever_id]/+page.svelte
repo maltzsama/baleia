@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -76,7 +77,11 @@
 	{#if loading}
 		<Skeleton class="h-48 w-full" />
 	{:else if error}
-		<ErrorState title="Could not load the retriever" message={error} onretry={load} />
+		<ErrorState
+			title={m.retrievers_detail_could_not_load_the_retriever()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if retriever}
 		<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 			<div>
@@ -89,7 +94,9 @@
 			</div>
 			<div class="flex items-center gap-2">
 				<StatusBadge kind="retriever" status={retriever.status} />
-				<Button loading={refreshing} disabled={refreshing} onclick={refresh}>Refresh now</Button>
+				<Button loading={refreshing} disabled={refreshing} onclick={refresh}
+					>{m.retrievers_detail_refresh_now()}</Button
+				>
 			</div>
 		</div>
 
@@ -99,7 +106,7 @@
 			>
 				<span class="font-mono">{retriever.error_code}</span>
 				{#if retriever.status === 'error'}
-					— choose a new destination or fix the schedule, then save.
+					{m.retrievers_detail_choose_a_new_destination_or_fix()}
 				{/if}
 			</div>
 		{/if}
@@ -114,17 +121,17 @@
 			/>
 
 			<section class="min-w-0">
-				<h2 class="text-[13px] font-semibold">Refresh history</h2>
+				<h2 class="text-[13px] font-semibold">{m.retrievers_detail_refresh_history()}</h2>
 				<div class="mt-2 overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
 						<thead
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-2 py-2">Status</th>
-								<th class="px-2 py-2">Started</th>
-								<th class="px-2 py-2">Duration</th>
-								<th class="px-2 py-2">Rows</th>
+								<th class="px-2 py-2">{m.retrievers_detail_status()}</th>
+								<th class="px-2 py-2">{m.retrievers_detail_started()}</th>
+								<th class="px-2 py-2">{m.retrievers_detail_duration()}</th>
+								<th class="px-2 py-2">{m.retrievers_detail_rows()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -153,7 +160,7 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-3 text-slate-600 dark:text-slate-300" colspan="4">
-										No refreshes yet.
+										{m.retrievers_detail_no_refreshes_yet()}
 									</td>
 								</tr>
 							{/each}

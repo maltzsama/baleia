@@ -92,7 +92,7 @@
 	}
 </script>
 
-<Modal bind:open title={`Edit ${connection.name}`}>
+<Modal bind:open title={m.connections_editconnectiondialog_edit({ name: connection.name })}>
 	<div class="flex flex-col gap-3">
 		<Input label={m.connections_editconnectiondialog_connection_name()} bind:value={name} />
 		{#if provider}
@@ -105,7 +105,11 @@
 				allowReferences={canBind}
 			/>
 		{:else}
-			<p class="text-[12px] text-danger">No provider is registered for {connection.type}.</p>
+			<p class="text-[12px] text-danger">
+				{m.connections_editconnectiondialog_no_provider_is_registered_for({
+					type: connection.type
+				})}
+			</p>
 		{/if}
 		<div class="rounded-md border border-border bg-bg-toolbar px-3 py-2.5">
 			<Checkbox
@@ -122,8 +126,11 @@
 		{#if testResult}
 			<p class="text-[11px] {testResult.success ? 'text-success' : 'text-danger'}">
 				{testResult.success
-					? `Stored settings are reachable (${testResult.latency_ms} ms).`
-					: (testResult.error_message ?? 'The stored settings failed the test.')}
+					? m.connections_editconnectiondialog_stored_settings_are_reachable_ms({
+							latency_ms: testResult.latency_ms
+						})
+					: (testResult.error_message ??
+						m.connections_editconnectiondialog_the_stored_settings_failed_the_test())}
 			</p>
 		{/if}
 	</div>

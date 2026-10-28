@@ -69,7 +69,10 @@
 			const tags = normalizeTags(row.tags);
 			const invalid = tags.find((tag) => !tagValid(tag));
 			if (invalid) {
-				failures = [...failures, { column: row.name, message: `invalid tag ${invalid}` }];
+				failures = [
+					...failures,
+					{ column: row.name, message: m.semantic_documentcolumns_invalid_tag({ invalid }) }
+				];
 				continue;
 			}
 			try {

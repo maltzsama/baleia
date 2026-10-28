@@ -69,12 +69,14 @@
 				params: { path: { id: editing.id } },
 				body: body as Update
 			});
-			if (err) throw new Error(apiErrorMessage(err, 'Could not save the provider.'));
+			if (err)
+				throw new Error(apiErrorMessage(err, m.settings_identity_could_not_save_the_provider()));
 		} else {
 			const { error: err } = await client.POST('/admin/identity-providers', {
 				body: body as Create
 			});
-			if (err) throw new Error(apiErrorMessage(err, 'Could not create the provider.'));
+			if (err)
+				throw new Error(apiErrorMessage(err, m.settings_identity_could_not_create_the_provider()));
 		}
 		await load();
 	}
@@ -129,7 +131,8 @@
 		const { error: err } = await client.DELETE('/admin/identity-providers/{id}', {
 			params: { path: { id: deleting.id }, query: { suspend_users: true } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not delete the provider.'));
+		if (err)
+			throw new Error(apiErrorMessage(err, m.settings_identity_could_not_delete_the_provider()));
 		deleteOpen = false;
 		await load();
 	}
@@ -157,13 +160,17 @@
 			</div>
 		{:else if error}
 			<div class="mt-6">
-				<ErrorState title="Could not load identity providers" message={error} onretry={load} />
+				<ErrorState
+					title={m.settings_identity_could_not_load_identity_providers_2()}
+					message={error}
+					onretry={load}
+				/>
 			</div>
 		{:else if providers.length === 0}
 			<div class="mt-6">
 				<EmptyState
-					title="No identity providers"
-					description="Users sign in locally until an OIDC or LDAP provider is added."
+					title={m.settings_identity_no_identity_providers()}
+					description={m.settings_identity_users_sign_in_locally_until_an()}
 				/>
 			</div>
 		{:else}
@@ -178,7 +185,9 @@
 										{provider.type.toUpperCase()}
 									</Badge>
 									<Badge tone={provider.enabled ? 'success' : 'neutral'}>
-										{provider.enabled ? 'Enabled' : 'Disabled'}
+										{provider.enabled
+											? m.settings_identity_enabled()
+											: m.settings_identity_disabled()}
 									</Badge>
 								</div>
 								<p class="mt-1 text-[12px] text-text-muted">
@@ -187,20 +196,22 @@
 										? m.settings_identity_linked_user()
 										: m.settings_identity_linked_users()}
 									{#if provider.has_client_secret || provider.has_bind_password}
-										· secret stored
+										{m.settings_identity_secret_stored()}
 									{/if}
 								</p>
 							</div>
 							<div class="flex flex-wrap gap-2">
 								<Button size="sm" loading={testing === provider.id} onclick={() => test(provider)}
-									>Test</Button
+									>{m.settings_identity_test()}</Button
 								>
-								<Button size="sm" onclick={() => openEdit(provider)}>Edit</Button>
+								<Button size="sm" onclick={() => openEdit(provider)}
+									>{m.settings_identity_edit()}</Button
+								>
 								<Button size="sm" onclick={() => toggle(provider)}>
-									{provider.enabled ? 'Disable' : 'Enable'}
+									{provider.enabled ? m.settings_identity_disable() : m.settings_identity_enable()}
 								</Button>
 								<Button size="sm" variant="danger" onclick={() => askDelete(provider)}
-									>Delete</Button
+									>{m.settings_identity_delete()}</Button
 								>
 							</div>
 						</div>
@@ -240,10 +251,10 @@
 	title={m.settings_identity_delete_identity_provider()}
 	resourceName={deleting?.name ?? ''}
 	consequences={[
-		'Users linked to this provider are suspended and detached; they are never deleted.',
+		m.settings_identity_users_linked_to_this_provider_are(),
 		m.settings_identity_their_refresh_tokens_and_api_keys_are_revo(),
 		m.settings_identity_the_provider_configuration_and_stored_secr()
 	]}
-	confirmLabel="Delete provider"
+	confirmLabel={m.settings_identity_delete_provider()}
 	onconfirm={confirmDelete}
 />

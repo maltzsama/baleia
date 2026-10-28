@@ -746,7 +746,7 @@
 								label={m.models_metric_sql()}
 								bind:value={metric.sql}
 								class="font-mono"
-								placeholder="SUM(amount) - SUM(refund)"
+								placeholder={m.semantic_modeleditor_sum_amount_sum_refund()}
 							/>
 							<p class="mt-1 text-[10px] text-text-muted">{m.models_metric_sql_hint()}</p>
 						</div>

@@ -224,20 +224,31 @@
 	{#if loading && !ws}
 		<Skeleton class="h-24 w-full" />
 	{:else if error && !ws}
-		<ErrorState title="Could not load the workspace" message={error} onretry={load} />
+		<ErrorState
+			title={m.settings_workspaces_detail_could_not_load_the_workspace()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if ws}
 		<div class="mb-4">
 			<h1 class="text-xl font-semibold tracking-[-0.3px]">{ws.name}</h1>
 			<p class="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
-				{ws.type === 'personal'
-					? m.settings_workspaces_personal_workspace()
-					: m.settings_workspaces_shared_workspace()} · created
+				{m.settings_workspaces_detail_created({
+					value:
+						ws.type === 'personal'
+							? m.settings_workspaces_personal_workspace()
+							: m.settings_workspaces_shared_workspace()
+				})}
 				<RelativeTime at={ws.created_at} />
 			</p>
 		</div>
 
-		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Workspace tabs">
-			{#each [['general', 'General'], ['target', m.settings_workspaces_default_target()], ['catalogs', 'Catalogs'], ['members', 'Members'], ['activity', 'Activity']] as [value, label] (value)}
+		<div
+			class="mb-4 flex gap-1 border-b border-border"
+			role="tablist"
+			aria-label={m.settings_workspaces_detail_workspace_tabs()}
+		>
+			{#each [['general', m.settings_workspaces_detail_general()], ['target', m.settings_workspaces_default_target()], ['catalogs', m.settings_workspaces_detail_catalogs()], ['members', m.settings_workspaces_detail_members()], ['activity', m.settings_workspaces_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -255,21 +266,35 @@
 		{#if tab === 'general'}
 			<div class="max-w-xl rounded-lg border border-border bg-bg-panel p-4">
 				<div class="flex flex-col gap-3 text-[12px]">
-					<Input label="Name" bind:value={name} disabled={!canEdit} />
-					<Input label="Description" bind:value={description} disabled={!canEdit} />
+					<Input
+						label={m.settings_workspaces_detail_name()}
+						bind:value={name}
+						disabled={!canEdit}
+					/>
+					<Input
+						label={m.settings_workspaces_detail_description()}
+						bind:value={description}
+						disabled={!canEdit}
+					/>
 					<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
-						<dt class="text-slate-600 dark:text-slate-300">Type</dt>
+						<dt class="text-slate-600 dark:text-slate-300">
+							{m.settings_workspaces_detail_type()}
+						</dt>
 						<dd>{ws.type}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Owner</dt>
+						<dt class="text-slate-600 dark:text-slate-300">
+							{m.settings_workspaces_detail_owner()}
+						</dt>
 						<dd class="font-mono">{ws.owner_team_id ?? ws.owner_user_id ?? '—'}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Updated</dt>
+						<dt class="text-slate-600 dark:text-slate-300">
+							{m.settings_workspaces_detail_updated()}
+						</dt>
 						<dd>{ws.updated_at ? new Date(ws.updated_at).toLocaleString() : '—'}</dd>
 					</dl>
 					{#if editError}<p class="text-danger" role="alert">{editError}</p>{/if}
 					{#if canEdit}
 						<div class="flex justify-end">
 							<Button variant="primary" loading={saving} disabled={saving} onclick={saveGeneral}>
-								Save
+								{m.settings_workspaces_detail_save()}
 							</Button>
 						</div>
 					{/if}
@@ -277,30 +302,33 @@
 			</div>
 			{#if canDelete && ws.type === 'shared'}
 				<div class="mt-4 max-w-xl rounded-lg border border-danger/40 bg-bg-panel p-4">
-					<h2 class="text-[13px] font-semibold text-danger">Danger zone</h2>
+					<h2 class="text-[13px] font-semibold text-danger">
+						{m.settings_workspaces_detail_danger_zone()}
+					</h2>
 					<p class="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
-						Deleting removes the workspace's spaces, content and grants. Personal workspaces cannot
-						be deleted.
+						{m.settings_workspaces_detail_deleting_removes_the_workspace_s_spaces()}
 					</p>
 					<div class="mt-2">
-						<Button variant="danger" onclick={() => (deleteOpen = true)}>Delete workspace</Button>
+						<Button variant="danger" onclick={() => (deleteOpen = true)}
+							>{m.settings_workspaces_detail_delete_workspace()}</Button
+						>
 					</div>
 				</div>
 			{/if}
 		{:else if tab === 'target'}
 			<div class="max-w-xl rounded-lg border border-border bg-bg-panel p-4 text-[12px]">
 				<p class="text-[11px] text-slate-600 dark:text-slate-300">
-					Current default:
+					{m.settings_workspaces_detail_current_default()}
 					{#if currentTarget}
 						<span class="font-mono">{currentTarget.catalog_name} · {currentTarget.engine_name}</span
 						>
 					{:else}
-						none
+						{m.settings_workspaces_detail_none()}
 					{/if}
 				</p>
 				<div class="mt-3 flex flex-col gap-3">
 					<Select
-						label="Default target"
+						label={m.settings_workspaces_detail_default_target()}
 						bind:value={targetBindingId}
 						options={[
 							{ value: '', label: m.settings_workspaces_no_default_the_only_target_applies() },
@@ -310,7 +338,11 @@
 							}))
 						]}
 					/>
-					<Input label="Default schema" bind:value={targetSchema} class="font-mono" />
+					<Input
+						label={m.settings_workspaces_detail_default_schema()}
+						bind:value={targetSchema}
+						class="font-mono"
+					/>
 					{#if targetError}<p class="text-danger" role="alert">{targetError}</p>{/if}
 					<div class="flex justify-end gap-2">
 						<Button
@@ -321,7 +353,7 @@
 							}}
 							disabled={targetSaving}
 						>
-							Clear
+							{m.settings_workspaces_detail_clear()}
 						</Button>
 						<Button
 							variant="primary"
@@ -329,7 +361,7 @@
 							disabled={targetSaving}
 							onclick={saveTarget}
 						>
-							Save
+							{m.settings_workspaces_detail_save()}
 						</Button>
 					</div>
 				</div>
@@ -337,15 +369,16 @@
 		{:else if tab === 'catalogs'}
 			<div class="mb-3 flex items-center justify-between">
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
-					Catalogs granted to this workspace. Revoking clears the default target when it used the
-					catalog.
+					{m.settings_workspaces_detail_catalogs_granted_to_this_workspace_revoking()}
 				</p>
-				<Button variant="primary" onclick={openGrant}>Grant access</Button>
+				<Button variant="primary" onclick={openGrant}
+					>{m.settings_workspaces_detail_grant_access()}</Button
+				>
 			</div>
 			{#if grants.length === 0}
 				<EmptyState
-					title="No catalog grants"
-					description="Grant a catalog so the workspace can run queries."
+					title={m.settings_workspaces_detail_no_catalog_grants()}
+					description={m.settings_workspaces_detail_grant_a_catalog_so_the_workspace()}
 				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -354,10 +387,10 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Catalog</th>
-								<th class="px-3 py-2">Permission</th>
-								<th class="px-3 py-2">Granted</th>
-								<th class="px-3 py-2 text-right">Actions</th>
+								<th class="px-3 py-2">{m.settings_workspaces_detail_catalog()}</th>
+								<th class="px-3 py-2">{m.settings_workspaces_detail_permission()}</th>
+								<th class="px-3 py-2">{m.settings_workspaces_detail_granted()}</th>
+								<th class="px-3 py-2 text-right">{m.settings_workspaces_detail_actions()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -372,7 +405,7 @@
 											class="text-danger hover:underline"
 											onclick={() => openRevoke(grant)}
 										>
-											Revoke
+											{m.settings_workspaces_detail_revoke()}
 										</button>
 									</td>
 								</tr>
@@ -383,11 +416,11 @@
 			{/if}
 		{:else if tab === 'members'}
 			{#if ws.type === 'personal'}
-				<p class="text-[12px]">This is a personal workspace; its owner is the only member.</p>
+				<p class="text-[12px]">{m.settings_workspaces_detail_this_is_a_personal_workspace_its()}</p>
 			{:else if members.length === 0}
 				<EmptyState
-					title="No members"
-					description="Team membership is managed in Settings → Teams."
+					title={m.settings_workspaces_detail_no_members()}
+					description={m.settings_workspaces_detail_team_membership_is_managed_in_settings()}
 				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -395,7 +428,11 @@
 						<thead
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
-							<tr><th class="px-3 py-2">Member</th><th class="px-3 py-2">Team role</th></tr>
+							<tr
+								><th class="px-3 py-2">{m.settings_workspaces_detail_member()}</th><th
+									class="px-3 py-2">{m.settings_workspaces_detail_team_role()}</th
+								></tr
+							>
 						</thead>
 						<tbody>
 							{#each members as member (member.user.id)}
@@ -413,7 +450,11 @@
 				</div>
 			{/if}
 		{:else if tab === 'activity'}
-			<ActivityPanel resourceType="workspace" resourceId={workspaceId} title="Workspace activity" />
+			<ActivityPanel
+				resourceType="workspace"
+				resourceId={workspaceId}
+				title={m.settings_workspaces_detail_workspace_activity()}
+			/>
 		{/if}
 	{/if}
 </div>
@@ -454,14 +495,18 @@
 	bind:open={revokeOpen}
 	title={m.common_revoke_catalog_access()}
 	resourceName={revokeCatalog?.catalog_name ?? ''}
-	confirmLabel="Revoke"
+	confirmLabel={m.settings_workspaces_detail_revoke()}
 	consequences={[
-		`${revokeImpact?.saved_queries ?? 0} saved quer(ies) target this catalog and fall back to the workspace default.`,
-		`${revokeImpact?.metrics ?? 0} metric(s) use it.`,
+		m.settings_workspaces_detail_saved_quer_ies_target_this_catalog({
+			value: revokeImpact?.saved_queries ?? 0
+		}),
+		m.settings_workspaces_detail_metric_s_use_it({ value: revokeImpact?.metrics ?? 0 }),
 		revokeImpact?.default_target_affected
-			? 'The workspace default target uses this catalog and will be cleared.'
-			: 'The workspace default target is not affected.',
-		`${revokeImpact?.running_executions ?? 0} execution(s) are running and continue to completion.`
+			? m.settings_workspaces_detail_the_workspace_default_target_uses_this()
+			: m.settings_workspaces_detail_the_workspace_default_target_is_not(),
+		m.settings_workspaces_detail_execution_s_are_running_and_continue({
+			value: revokeImpact?.running_executions ?? 0
+		})
 	]}
 	onconfirm={confirmRevoke}
 />
@@ -470,12 +515,18 @@
 	bind:open={deleteOpen}
 	title={m.settings_workspaces_delete_workspace()}
 	resourceName={ws?.name ?? ''}
-	confirmLabel="Delete workspace"
+	confirmLabel={m.settings_workspaces_detail_delete_workspace()}
 	typeToConfirm
 	consequences={[
-		`${impact?.spaces ?? 0} space(s), ${impact?.saved_queries ?? 0} saved quer(ies) and ${impact?.metrics ?? 0} metric(s) are deleted.`,
-		`${impact?.running_executions ?? 0} execution(s) must finish first.`,
-		'Grants and defaults are removed with the workspace.'
+		m.settings_workspaces_detail_space_s_saved_quer_ies_and({
+			value: impact?.spaces ?? 0,
+			value2: impact?.saved_queries ?? 0,
+			value3: impact?.metrics ?? 0
+		}),
+		m.settings_workspaces_detail_execution_s_must_finish_first({
+			value: impact?.running_executions ?? 0
+		}),
+		m.settings_workspaces_detail_grants_and_defaults_are_removed_with()
 	]}
 	onconfirm={confirmDelete}
 />

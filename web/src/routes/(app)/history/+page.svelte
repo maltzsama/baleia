@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -271,7 +272,7 @@
 				</div>
 			{:else if error}
 				<ErrorState
-					title="Could not load the history"
+					title={m.history_could_not_load_the_history()}
 					message={error}
 					onretry={() => {
 						const seq = ++requestSeq;
@@ -281,8 +282,8 @@
 				/>
 			{:else if items.length === 0}
 				<EmptyState
-					title="No executions"
-					description="No execution matches these filters. Run a query or clear the filters."
+					title={m.history_no_executions()}
+					description={m.history_no_execution_matches_these_filters_run()}
 				/>
 			{:else}
 				<div class="overflow-x-auto">
@@ -291,12 +292,12 @@
 							<tr
 								class="border-b border-border bg-bg-toolbar text-[10px] uppercase tracking-wide text-text-muted"
 							>
-								<th class="px-3 py-2 font-semibold">Status</th>
-								<th class="px-3 py-2 font-semibold">Started</th>
-								<th class="px-3 py-2 font-semibold">Duration</th>
-								<th class="px-3 py-2 text-right font-semibold">Rows</th>
-								<th class="px-3 py-2 font-semibold">User</th>
-								<th class="px-3 py-2 font-semibold">Engine</th>
+								<th class="px-3 py-2 font-semibold">{m.history_status()}</th>
+								<th class="px-3 py-2 font-semibold">{m.history_started_2()}</th>
+								<th class="px-3 py-2 font-semibold">{m.history_duration()}</th>
+								<th class="px-3 py-2 text-right font-semibold">{m.history_rows()}</th>
+								<th class="px-3 py-2 font-semibold">{m.history_user()}</th>
+								<th class="px-3 py-2 font-semibold">{m.history_engine()}</th>
 								<th class="px-3 py-2 font-semibold">SQL</th>
 								<th class="px-3 py-2 font-semibold"
 									><span class="sr-only">{m.history_actions()}</span></th
@@ -410,7 +411,13 @@
 					<Duration ms={selected.duration_ms} />
 				{/if}
 				{#if selected.rows_returned != null}
-					<span>{selected.rows_returned.toLocaleString()} {m.common_rows()}</span>
+					<span
+						>{plural(
+							selected.rows_returned,
+							m.history_row_count_one,
+							m.history_row_count_other
+						)}</span
+					>
 				{/if}
 			</div>
 
@@ -459,9 +466,9 @@
 						<Skeleton class="h-4 w-2/3" />
 					</div>
 				{:else if statementsError}
-					<ErrorState title="Could not load statements" message={statementsError} />
+					<ErrorState title={m.history_could_not_load_statements()} message={statementsError} />
 				{:else if statements.length === 0}
-					<p class="text-[12px] text-text-muted">No statements recorded.</p>
+					<p class="text-[12px] text-text-muted">{m.history_no_statements_recorded()}</p>
 				{:else}
 					<div class="flex flex-col gap-2">
 						{#each statements as statement (statement.id)}
@@ -473,10 +480,16 @@
 										<Duration ms={statement.duration_ms} />
 									{/if}
 									{#if statement.rows_returned != null}
-										<span>{statement.rows_returned.toLocaleString()} rows</span>
+										<span
+											>{plural(
+												statement.rows_returned,
+												m.history_row_count_one,
+												m.history_row_count_other
+											)}</span
+										>
 									{/if}
 									{#if statement.truncated}
-										<Badge tone="warning">truncated</Badge>
+										<Badge tone="warning">{m.history_truncated()}</Badge>
 									{/if}
 									{#if (statement.result_sets?.length ?? 0) > 0}
 										<button
@@ -484,7 +497,7 @@
 											class="ml-auto rounded px-1.5 py-0.5 text-primary hover:bg-bg-toolbar"
 											onclick={() => showResults(statement.position)}
 										>
-											Results
+											{m.history_results()}
 										</button>
 									{/if}
 								</div>

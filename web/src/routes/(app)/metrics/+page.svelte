@@ -77,7 +77,12 @@
 			label={m.common_space()}
 			bind:value={spaceId}
 			options={[
-				{ value: '', label: 'All' },
+				{
+					value: '',
+					get label() {
+						return m.metrics_all();
+					}
+				},
 				...spaces.map((space) => ({ value: space.id, label: space.name }))
 			]}
 		/>
@@ -102,11 +107,11 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load metrics" message={error} onretry={load} />
+		<ErrorState title={m.metrics_could_not_load_metrics()} message={error} onretry={load} />
 	{:else if metrics.length === 0}
 		<EmptyState
-			title="No metrics"
-			description="Create a metric from a table to reuse it in queries."
+			title={m.metrics_no_metrics()}
+			description={m.metrics_create_a_metric_from_a_table()}
 		/>
 	{:else}
 		<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -115,11 +120,11 @@
 					class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th class="px-3 py-2">Metric</th>
-						<th class="px-3 py-2">Definition</th>
-						<th class="px-3 py-2">Space</th>
-						<th class="px-3 py-2">Owner</th>
-						<th class="px-3 py-2">Updated</th>
+						<th class="px-3 py-2">{m.metrics_metric()}</th>
+						<th class="px-3 py-2">{m.metrics_definition()}</th>
+						<th class="px-3 py-2">{m.metrics_space()}</th>
+						<th class="px-3 py-2">{m.metrics_owner()}</th>
+						<th class="px-3 py-2">{m.metrics_updated()}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -133,7 +138,7 @@
 								>
 									{metric.label}
 								</button>
-								{#if metric.certified}<Badge tone="success">Certified</Badge>{/if}
+								{#if metric.certified}<Badge tone="success">{m.metrics_certified()}</Badge>{/if}
 								<div class="font-mono text-[10px] text-slate-600 dark:text-slate-300">
 									{metric.slug}
 								</div>

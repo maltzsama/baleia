@@ -174,10 +174,15 @@
 		if (!impact) return [];
 		return [
 			impact.engine
-				? `Deletes the engine ${impact.engine.name} and its catalogs.`
-				: 'No engine backs this connection.',
-			`${impact.catalogs} catalog(s) and ${impact.bindings} binding(s) depend on it.`,
-			`${impact.running_executions} execution(s) are running now.`
+				? m.connections_detail_deletes_the_engine_and_its_catalogs({ name: impact.engine.name })
+				: m.connections_detail_no_engine_backs_this_connection(),
+			m.connections_detail_catalog_s_and_binding_s_depend({
+				catalogs: impact.catalogs,
+				bindings: impact.bindings
+			}),
+			m.connections_detail_execution_s_are_running_now({
+				running_executions: impact.running_executions
+			})
 		];
 	}
 
@@ -188,43 +193,55 @@
 	{#if loading && !conn}
 		<Skeleton class="h-24 w-full" />
 	{:else if error && !conn}
-		<ErrorState title="Could not load the connection" message={error} onretry={load} />
+		<ErrorState
+			title={m.connections_detail_could_not_load_the_connection()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if conn}
 		<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 			<div>
 				<div class="flex items-center gap-2">
 					<h1 class="text-xl font-semibold tracking-[-0.3px]">{conn.name}</h1>
 					<Badge tone="neutral">{conn.type}</Badge>
-					{#if readOnly}<Badge tone="warning">Read-only credentials</Badge>{/if}
+					{#if readOnly}<Badge tone="warning">{m.connections_detail_read_only_credentials()}</Badge
+						>{/if}
 				</div>
 				<p class="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
-					created <RelativeTime at={conn.created_at} />
+					{m.connections_detail_created()}
+					<RelativeTime at={conn.created_at} />
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button loading={testing} disabled={testing} onclick={runTest}>Test</Button>
+				<Button loading={testing} disabled={testing} onclick={runTest}
+					>{m.connections_detail_test()}</Button
+				>
 				{#if !engine && (conn.allowed_actions ?? []).includes('register_engine')}
-					<Button onclick={openRegister}>Register as engine</Button>
+					<Button onclick={openRegister}>{m.connections_detail_register_as_engine()}</Button>
 				{/if}
-				<Button variant="danger" onclick={() => (deleteOpen = true)}>Delete</Button>
+				<Button variant="danger" onclick={() => (deleteOpen = true)}
+					>{m.connections_detail_delete()}</Button
+				>
 			</div>
 		</div>
 
 		<div class="grid gap-4 lg:grid-cols-2">
 			<div class="rounded-lg border border-border bg-bg-panel p-4">
-				<h2 class="text-[13px] font-semibold">Configuration</h2>
+				<h2 class="text-[13px] font-semibold">{m.connections_detail_configuration()}</h2>
 				<dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
 					{#each Object.entries(conn.config) as [key, value] (key)}
 						<dt class="font-mono text-slate-600 dark:text-slate-300">{key}</dt>
 						<dd class="break-all font-mono">{value}</dd>
 					{:else}
-						<dt class="text-slate-600 dark:text-slate-300">Config</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.connections_detail_config()}</dt>
 						<dd>—</dd>
 					{/each}
-					<dt class="text-slate-600 dark:text-slate-300">Credentials</dt>
-					<dd>{conn.has_credentials ? m.connections_stored() : 'None'}</dd>
-					<dt class="text-slate-600 dark:text-slate-300">Default read-only</dt>
-					<dd>{conn.default_readonly ? 'Yes' : 'No'}</dd>
+					<dt class="text-slate-600 dark:text-slate-300">{m.connections_detail_credentials()}</dt>
+					<dd>{conn.has_credentials ? m.connections_stored() : m.connections_detail_none()}</dd>
+					<dt class="text-slate-600 dark:text-slate-300">
+						{m.connections_detail_default_read_only()}
+					</dt>
+					<dd>{conn.default_readonly ? m.connections_detail_yes() : m.connections_detail_no()}</dd>
 				</dl>
 				<p class="mt-3 text-[11px] text-slate-600 dark:text-slate-300">
 					{readOnly
@@ -234,24 +251,26 @@
 			</div>
 
 			<div class="rounded-lg border border-border bg-bg-panel p-4">
-				<h2 class="text-[13px] font-semibold">Used as</h2>
+				<h2 class="text-[13px] font-semibold">{m.connections_detail_used_as()}</h2>
 				<div class="mt-2 text-[11px]">
-					<p class="font-semibold">Direct engine</p>
+					<p class="font-semibold">{m.connections_detail_direct_engine()}</p>
 					{#if engine}
 						<EngineBadge {engine} />
 					{:else}
-						<p class="text-slate-600 dark:text-slate-300">Not registered as an engine.</p>
+						<p class="text-slate-600 dark:text-slate-300">
+							{m.connections_detail_not_registered_as_an_engine()}
+						</p>
 					{/if}
 				</div>
 				<div class="mt-4 flex items-center justify-between">
-					<p class="text-[11px] font-semibold">Catalog source</p>
+					<p class="text-[11px] font-semibold">{m.connections_detail_catalog_source()}</p>
 					{#if support && support.connectors.length > 0}
-						<Button size="sm" onclick={openCatalog}>Add catalog</Button>
+						<Button size="sm" onclick={openCatalog}>{m.connections_detail_add_catalog()}</Button>
 					{/if}
 				</div>
 				{#if catalogs.length === 0}
 					<p class="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
-						No catalogs from this connection.
+						{m.connections_detail_no_catalogs_from_this_connection()}
 					</p>
 				{:else}
 					<ul class="mt-1 flex flex-col gap-1 text-[11px]">
@@ -276,7 +295,7 @@
 			<ActivityPanel
 				resourceType="connection"
 				resourceId={connectionId}
-				title="Connection activity"
+				title={m.connections_detail_connection_activity()}
 			/>
 		</div>
 	{/if}
@@ -290,7 +309,7 @@
 			<p class="font-semibold">
 				{testResult.success ? m.connections_all_checks_passed() : m.connections_checks_failed()}
 				<span class="ml-1 font-normal text-slate-600 dark:text-slate-300"
-					>{testResult.latency_ms} ms</span
+					>{m.common_milliseconds({ value: testResult.latency_ms })}</span
 				>
 			</p>
 			{#if testResult.error_message}<p class="text-danger">{testResult.error_message}</p>{/if}
@@ -298,7 +317,11 @@
 				{#each testResult.checks ?? [] as check (check.name)}
 					<li class="flex items-start gap-2">
 						<Badge tone={check.skipped ? 'neutral' : check.ok ? 'success' : 'danger'}>
-							{check.skipped ? m.statusbadge_skipped() : check.ok ? 'OK' : 'Failed'}
+							{check.skipped
+								? m.statusbadge_skipped()
+								: check.ok
+									? 'OK'
+									: m.connections_detail_failed()}
 						</Badge>
 						<span class="font-mono">{check.name}</span>
 						<span class="text-slate-600 dark:text-slate-300"
@@ -376,7 +399,7 @@
 	bind:open={deleteOpen}
 	title={m.connections_delete_connection()}
 	resourceName={conn?.name ?? ''}
-	confirmLabel="Delete connection"
+	confirmLabel={m.connections_detail_delete_connection()}
 	typeToConfirm
 	consequences={consequences()}
 	onconfirm={confirmDelete}

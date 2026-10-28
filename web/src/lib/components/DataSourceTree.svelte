@@ -397,23 +397,27 @@
 		</div>
 	{:else if loadError}
 		<ErrorState
-			title="Could not load catalogs"
+			title={m.components_datasourcetree_could_not_load_catalogs()}
 			message={loadError}
 			onretry={() => loadRoots(workspaceId)}
 		/>
 	{:else if searchActive}
 		{#if searchLoading}
-			<div class="space-y-2 px-2 py-3" aria-label="Searching">
+			<div class="space-y-2 px-2 py-3" aria-label={m.components_datasourcetree_searching()}>
 				<Skeleton class="h-4 w-3/4" />
 				<Skeleton class="h-4 w-2/3" />
 			</div>
 		{:else if searchError}
-			<ErrorState title="Search failed" message={searchError} onretry={() => retryTick++} />
+			<ErrorState
+				title={m.components_datasourcetree_search_failed()}
+				message={searchError}
+				onretry={() => retryTick++}
+			/>
 		{:else}
 			<div id={resultsId} role="listbox" aria-label={m.components_datasourcetree_search_results()}>
 				{#if tableResults.length > 0}
 					<p class="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-						Tables
+						{m.components_datasourcetree_tables()}
 					</p>
 					{#each tableResults as result (result.table_id + result.table)}
 						{@render searchRow(result, flatResults.indexOf(result))}
@@ -421,7 +425,7 @@
 				{/if}
 				{#if columnResults.length > 0}
 					<p class="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-						Columns
+						{m.components_datasourcetree_columns()}
 					</p>
 					{#each columnResults as result (result.table_id + result.column)}
 						{@render searchRow(result, flatResults.indexOf(result))}
@@ -429,32 +433,36 @@
 				{/if}
 				{#if tableResults.length === 0 && columnResults.length === 0}
 					<EmptyState
-						title="No matches"
-						description="No table or column matches that search in the catalogs you can see."
+						title={m.components_datasourcetree_no_matches()}
+						description={m.components_datasourcetree_no_table_or_column_matches_that()}
 					/>
 				{/if}
 			</div>
 		{/if}
 	{:else if catalogs.length === 0}
 		<EmptyState
-			title="No catalogs"
-			description="This workspace has no granted catalogs. Ask an owner to bind one."
+			title={m.components_datasourcetree_no_catalogs()}
+			description={m.components_datasourcetree_this_workspace_has_no_granted_catalogs()}
 		/>
 	{:else}
-		<div class="flex gap-1 px-1.5 py-2" role="group" aria-label="Group catalogs">
+		<div
+			class="flex gap-1 px-1.5 py-2"
+			role="group"
+			aria-label={m.components_datasourcetree_group_catalogs()}
+		>
 			<button
 				class="flex-1 rounded border px-2 py-1 text-[11px] font-medium {view === 'catalog'
 					? 'border-primary bg-bg-panel text-primary'
 					: 'border-border bg-transparent text-text-muted hover:text-text-main'}"
 				aria-pressed={view === 'catalog'}
-				onclick={() => (view = 'catalog')}>By catalog</button
+				onclick={() => (view = 'catalog')}>{m.components_datasourcetree_by_catalog()}</button
 			>
 			<button
 				class="flex-1 rounded border px-2 py-1 text-[11px] font-medium {view === 'engine'
 					? 'border-primary bg-bg-panel text-primary'
 					: 'border-border bg-transparent text-text-muted hover:text-text-main'}"
 				aria-pressed={view === 'engine'}
-				onclick={() => (view = 'engine')}>By engine</button
+				onclick={() => (view = 'engine')}>{m.components_datasourcetree_by_engine()}</button
 			>
 		</div>
 
@@ -539,7 +547,7 @@
 			<p class="py-1 pl-2 text-[11px] text-text-muted">{m.common_loading_2()}</p>
 		{:else if node.status === 'error'}
 			<ErrorState
-				title="Could not load this level"
+				title={m.components_datasourcetree_could_not_load_this_level()}
 				message={node.error}
 				onretry={() => {
 					expanded.add(nodeKey(refKey, path));
@@ -610,7 +618,7 @@
 
 			{#if node.tablesError}
 				<ErrorState
-					title="Could not load tables"
+					title={m.components_datasourcetree_could_not_load_tables()}
 					message={node.tablesError}
 					onretry={() => retryTables(refKey, catalog, path)}
 				/>
@@ -625,9 +633,13 @@
 			{/if}
 
 			{#if node.tablesLoading && node.tables.length === 0}
-				<p class="py-1 pl-2 text-[11px] text-text-muted">Loading tables…</p>
+				<p class="py-1 pl-2 text-[11px] text-text-muted">
+					{m.components_datasourcetree_loading_tables()}
+				</p>
 			{:else if node.children.length === 0 && node.tables.length === 0 && !node.nextCursor}
-				<p class="py-1 pl-2 text-[11px] text-text-muted">No tables or namespaces.</p>
+				<p class="py-1 pl-2 text-[11px] text-text-muted">
+					{m.components_datasourcetree_no_tables_or_namespaces()}
+				</p>
 			{/if}
 		{/if}
 	</div>

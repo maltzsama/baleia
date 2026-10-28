@@ -149,13 +149,13 @@
 		<Skeleton class="h-32 w-full" />
 	{:else if searched && results.length === 0}
 		<EmptyState
-			title="No documentation matches"
-			description="Try different words or remove a filter."
+			title={m.data_docs_no_documentation_matches()}
+			description={m.data_docs_try_different_words_or_remove_a()}
 		/>
 	{:else if !searched}
 		<EmptyState
-			title="Search the documentation"
-			description="Type at least two characters and press Search."
+			title={m.data_docs_search_the_documentation()}
+			description={m.data_docs_type_at_least_two_characters_and()}
 		/>
 	{:else}
 		<div class="flex flex-col gap-2">
@@ -170,7 +170,7 @@
 							{result.namespace.join('.')}.{result.table}{#if result.column}
 								· {result.column}{/if}
 						</button>
-						{#if result.certified}<Badge tone="success">Certified</Badge>{/if}
+						{#if result.certified}<Badge tone="success">{m.data_docs_certified()}</Badge>{/if}
 						<span class="font-mono text-[10px] text-slate-600 dark:text-slate-300"
 							>{result.catalog_id}</span
 						>

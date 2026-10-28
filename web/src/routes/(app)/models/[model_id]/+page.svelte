@@ -89,9 +89,12 @@
 					{#if !canEdit}<Badge tone="neutral">{m.models_read_only()}</Badge>{/if}
 				</div>
 				<p class="mt-1 flex items-center gap-1 font-mono text-[11px] text-text-muted">
-					{model.slug}<CopyButton value={model.slug} label="slug" />
-					· {savedQueries.spaces.find((space) => space.id === model?.space_id)?.name ?? '—'}
-					· v{model.version} · <RelativeTime at={model.updated_at} />
+					{model.slug}<CopyButton value={model.slug} label={m.common_slug()} />
+					{m.models_detail_v({
+						value: savedQueries.spaces.find((space) => space.id === model?.space_id)?.name ?? '—',
+						version: model.version
+					})}
+					<RelativeTime at={model.updated_at} />
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">

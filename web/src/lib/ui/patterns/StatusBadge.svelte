@@ -20,70 +20,306 @@
 
 	const mappings: Record<Kind, Record<string, Look>> = {
 		binding: {
-			active: { tone: 'success', label: 'Active' },
-			provisioning: { tone: 'info', label: m.statusbadge_provisioning(), spinning: true },
-			updating: { tone: 'info', label: m.statusbadge_updating(), spinning: true },
-			deprovisioning: { tone: 'warning', label: m.statusbadge_deprovisioning(), spinning: true },
-			error: { tone: 'danger', label: 'Error' },
-			pending: { tone: 'neutral', label: 'Pending' },
-			disabled: { tone: 'neutral', label: 'Disabled' }
+			active: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_active();
+				}
+			},
+			provisioning: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_provisioning();
+				},
+				spinning: true
+			},
+			updating: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_updating();
+				},
+				spinning: true
+			},
+			deprovisioning: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_deprovisioning();
+				},
+				spinning: true
+			},
+			error: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_error();
+				}
+			},
+			pending: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_pending();
+				}
+			},
+			disabled: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_disabled();
+				}
+			}
 		},
 		execution: {
-			pending: { tone: 'neutral', label: 'Pending', spinning: true },
-			running: { tone: 'info', label: 'Running', spinning: true },
-			finished: { tone: 'success', label: 'Finished' },
-			failed: { tone: 'danger', label: 'Failed' },
-			cancelled: { tone: 'warning', label: 'Cancelled' }
+			pending: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_pending();
+				},
+				spinning: true
+			},
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_running();
+				},
+				spinning: true
+			},
+			finished: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_finished();
+				}
+			},
+			failed: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_failed();
+				}
+			},
+			cancelled: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_cancelled();
+				}
+			}
 		},
 		statement: {
-			pending: { tone: 'neutral', label: 'Pending', spinning: true },
-			running: { tone: 'info', label: 'Running', spinning: true },
-			finished: { tone: 'success', label: 'Finished' },
-			failed: { tone: 'danger', label: 'Failed' },
-			cancelled: { tone: 'warning', label: 'Cancelled' },
-			skipped: { tone: 'neutral', label: m.statusbadge_skipped() }
+			pending: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_pending();
+				},
+				spinning: true
+			},
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_running();
+				},
+				spinning: true
+			},
+			finished: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_finished();
+				}
+			},
+			failed: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_failed();
+				}
+			},
+			cancelled: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_cancelled();
+				}
+			},
+			skipped: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_skipped();
+				}
+			}
 		},
 		sync: {
-			ok: { tone: 'success', label: 'Synced' },
-			running: { tone: 'info', label: m.statusbadge_syncing(), spinning: true },
-			failed: { tone: 'danger', label: 'Failed' },
-			stale: { tone: 'warning', label: 'Stale' }
+			ok: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_synced();
+				}
+			},
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_syncing();
+				},
+				spinning: true
+			},
+			failed: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_failed();
+				}
+			},
+			stale: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_stale();
+				}
+			}
 		},
 		// A catalog's metadata sync (#454): "never" has not run, it is not a success.
 		metadataSync: {
-			never: { tone: 'neutral', label: m.statusbadge_never_synced() },
-			running: { tone: 'info', label: m.statusbadge_syncing(), spinning: true },
-			finished: { tone: 'success', label: m.statusbadge_synced() },
-			failed: { tone: 'danger', label: m.statusbadge_sync_failed() }
+			never: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_never_synced();
+				}
+			},
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_syncing();
+				},
+				spinning: true
+			},
+			finished: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_synced();
+				}
+			},
+			failed: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_sync_failed();
+				}
+			}
 		},
 		reconcile: {
-			ok: { tone: 'success', label: m.statusbadge_in_sync() },
-			drift: { tone: 'warning', label: m.statusbadge_drift() },
-			failed: { tone: 'danger', label: 'Failed' },
-			running: { tone: 'info', label: m.statusbadge_reconciling(), spinning: true }
+			ok: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_in_sync();
+				}
+			},
+			drift: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_drift();
+				}
+			},
+			failed: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_failed();
+				}
+			},
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_reconciling();
+				},
+				spinning: true
+			}
 		},
 		retriever: {
-			active: { tone: 'success', label: 'Active' },
-			paused: { tone: 'neutral', label: 'Paused' },
-			error: { tone: 'danger', label: 'Error' }
+			active: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_active();
+				}
+			},
+			paused: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_paused();
+				}
+			},
+			error: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_error();
+				}
+			}
 		},
 		maintenance: {
-			running: { tone: 'info', label: 'Running', spinning: true },
-			finished: { tone: 'success', label: 'Finished' },
-			failed: { tone: 'danger', label: 'Failed' },
-			scheduled: { tone: 'neutral', label: 'Scheduled' }
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_running();
+				},
+				spinning: true
+			},
+			finished: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_finished();
+				}
+			},
+			failed: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_failed();
+				}
+			},
+			scheduled: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_scheduled();
+				}
+			}
 		},
 		agent: {
-			active: { tone: 'success', label: 'Active' },
-			expired: { tone: 'warning', label: m.statusbadge_expired() },
-			revoked: { tone: 'danger', label: m.statusbadge_revoked() },
-			pending: { tone: 'neutral', label: 'Pending' }
+			active: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_active();
+				}
+			},
+			expired: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_expired();
+				}
+			},
+			revoked: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_revoked();
+				}
+			},
+			pending: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_pending();
+				}
+			}
 		},
 		engine: {
-			ok: { tone: 'success', label: m.statusbadge_healthy() },
-			unreachable: { tone: 'danger', label: 'Unreachable' },
-			unknown: { tone: 'neutral', label: 'Unknown' },
-			disabled: { tone: 'neutral', label: 'Disabled' }
+			ok: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_healthy();
+				}
+			},
+			unreachable: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_unreachable();
+				}
+			},
+			unknown: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_unknown();
+				}
+			},
+			disabled: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_disabled();
+				}
+			}
 		}
 	};
 

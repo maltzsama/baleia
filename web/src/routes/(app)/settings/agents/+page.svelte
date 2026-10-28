@@ -95,7 +95,7 @@
 				return;
 			}
 			createOpen = false;
-			toasts.success('Agent created. Create its first token next.');
+			toasts.success(m.settings_agents_agent_created_create_its_first_token());
 			await load();
 		} finally {
 			createBusy = false;
@@ -108,7 +108,12 @@
 		{ key: 'name', label: m.common_name(), sortable: true },
 		{ key: 'status', label: m.history_status() },
 		{ key: 'workspaces', label: m.settings_agents_workspaces() },
-		{ key: 'tokens', label: 'Tokens' },
+		{
+			key: 'tokens',
+			get label() {
+				return m.settings_agents_tokens();
+			}
+		},
 		{ key: 'last_used', label: m.settings_agents_last_used() },
 		{ key: 'created', label: m.settings_agents_created() }
 	];
@@ -144,15 +149,19 @@
 			</div>
 		{:else if error}
 			<div class="mt-6">
-				<ErrorState title="Could not load agents" message={error} onretry={load} />
+				<ErrorState
+					title={m.settings_agents_could_not_load_agents_2()}
+					message={error}
+					onretry={load}
+				/>
 			</div>
 		{:else if agents.length === 0}
 			<div class="mt-6">
 				<EmptyState
-					title="No agents"
-					description="Create an agent to give a script or an MCP client read-only access to your workspaces."
+					title={m.settings_agents_no_agents()}
+					description={m.settings_agents_create_an_agent_to_give_a()}
 				>
-					<Button variant="primary" onclick={openCreate}>New agent</Button>
+					<Button variant="primary" onclick={openCreate}>{m.settings_agents_new_agent()}</Button>
 				</EmptyState>
 			</div>
 		{:else}

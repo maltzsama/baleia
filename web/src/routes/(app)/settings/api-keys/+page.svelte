@@ -85,8 +85,8 @@
 		const { error: err } = await client.DELETE('/api-keys/{id}', {
 			params: { path: { id: revokeTarget.id } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not revoke the key.'));
-		toasts.success('API key revoked.');
+		if (err) throw new Error(apiErrorMessage(err, m.settings_api_keys_could_not_revoke_the_key()));
+		toasts.success(m.settings_api_keys_api_key_revoked());
 		await load();
 	}
 </script>
@@ -113,13 +113,17 @@
 			</div>
 		{:else if error}
 			<div class="mt-6">
-				<ErrorState title="Could not load API keys" message={error} onretry={load} />
+				<ErrorState
+					title={m.settings_api_keys_could_not_load_api_keys_2()}
+					message={error}
+					onretry={load}
+				/>
 			</div>
 		{:else if keys.length === 0}
 			<div class="mt-6">
 				<EmptyState
-					title="No API keys"
-					description="Create a key to call the API from a script or an agent."
+					title={m.settings_api_keys_no_api_keys()}
+					description={m.settings_api_keys_create_a_key_to_call_the()}
 				/>
 			</div>
 		{:else}
@@ -132,13 +136,16 @@
 							<div class="font-medium">{key.name}</div>
 							<div class="text-[11px] text-text-muted">
 								<code>{key.key_prefix}…</code>
-								· created <RelativeTime at={key.created_at} />
+								{m.settings_api_keys_created()}
+								<RelativeTime at={key.created_at} />
 								{#if key.expires_at}
-									· expires <RelativeTime at={key.expires_at} />
+									{m.settings_api_keys_expires()} <RelativeTime at={key.expires_at} />
 								{/if}
 							</div>
 						</div>
-						<Button size="sm" variant="danger" onclick={() => askRevoke(key)}>Revoke</Button>
+						<Button size="sm" variant="danger" onclick={() => askRevoke(key)}
+							>{m.settings_api_keys_revoke()}</Button
+						>
 					</div>
 				{/each}
 			</div>
@@ -178,9 +185,9 @@
 	title={m.settings_api_keys_revoke_api_key()}
 	resourceName={revokeTarget?.name ?? ''}
 	consequences={[
-		'Any script or agent using this key stops working immediately.',
+		m.settings_api_keys_any_script_or_agent_using_this(),
 		m.settings_api_keys_the_key_cannot_be_recovered_create_a_new_o()
 	]}
-	confirmLabel="Revoke key"
+	confirmLabel={m.settings_api_keys_revoke_key()}
 	onconfirm={confirmRevoke}
 />

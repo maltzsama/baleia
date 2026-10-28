@@ -30,18 +30,38 @@
 
 	type Tab = 'overview' | 'tokens' | 'policy' | 'activity';
 	const tabs: { id: Tab; label: string }[] = [
-		{ id: 'overview', label: 'Overview' },
-		{ id: 'tokens', label: 'Tokens' },
-		{ id: 'policy', label: 'Policy' },
-		{ id: 'activity', label: 'Activity' }
+		{
+			id: 'overview',
+			get label() {
+				return m.settings_agents_detail_overview();
+			}
+		},
+		{
+			id: 'tokens',
+			get label() {
+				return m.settings_agents_detail_tokens();
+			}
+		},
+		{
+			id: 'policy',
+			get label() {
+				return m.settings_agents_detail_policy();
+			}
+		},
+		{
+			id: 'activity',
+			get label() {
+				return m.settings_agents_detail_activity();
+			}
+		}
 	];
 	const limitFields = [
-		['max_rows_returned', 'Rows per result'],
-		['max_result_bytes', 'Result bytes'],
-		['max_query_runtime_seconds', 'Query runtime (s)'],
-		['max_concurrent_queries', 'Concurrent queries'],
-		['max_queries_per_hour', 'Queries per hour'],
-		['max_tool_calls_per_minute', 'Tool calls per minute']
+		['max_rows_returned', m.settings_agents_detail_limit_rows_returned],
+		['max_result_bytes', m.settings_agents_detail_limit_result_bytes],
+		['max_query_runtime_seconds', m.settings_agents_detail_limit_query_runtime_seconds],
+		['max_concurrent_queries', m.settings_agents_detail_limit_concurrent_queries],
+		['max_queries_per_hour', m.settings_agents_detail_limit_queries_per_hour],
+		['max_tool_calls_per_minute', m.settings_agents_detail_limit_tool_calls_per_minute]
 	] as const;
 
 	const agentId = $derived(page.params.agent_id ?? '');
@@ -213,7 +233,7 @@
 			policyResponse = data;
 			initPolicy();
 			policySaved = true;
-			toasts.success('Policy saved.');
+			toasts.success(m.settings_agents_detail_policy_saved());
 		} finally {
 			policyBusy = false;
 		}
@@ -248,8 +268,9 @@
 		const { error: err } = await client.DELETE('/agents/{agent_id}/tokens/{token_id}', {
 			params: { path: { agent_id: agentId, token_id: revokeTarget.id } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not revoke the token.'));
-		toasts.success('Token revoked.');
+		if (err)
+			throw new Error(apiErrorMessage(err, m.settings_agents_detail_could_not_revoke_the_token()));
+		toasts.success(m.settings_agents_detail_token_revoked());
 		await load();
 	}
 
@@ -264,7 +285,11 @@
 			return;
 		}
 		statusOpen = false;
-		toasts.success(status === 'disabled' ? 'Agent disabled.' : 'Agent enabled.');
+		toasts.success(
+			status === 'disabled'
+				? m.settings_agents_detail_agent_disabled()
+				: m.settings_agents_detail_agent_enabled()
+		);
 		await load();
 	}
 
@@ -277,7 +302,7 @@
 			deleteError = apiErrorMessage(err, m.settings_agents_could_not_delete_the_agent());
 			return;
 		}
-		toasts.success('Agent deleted.');
+		toasts.success(m.settings_agents_detail_agent_deleted());
 		await goto(resolve('/settings/agents'));
 	}
 
@@ -302,7 +327,11 @@
 				<Skeleton height="8rem" />
 			</div>
 		{:else if error}
-			<ErrorState title="Could not load the agent" message={error} onretry={load} />
+			<ErrorState
+				title={m.settings_agents_detail_could_not_load_the_agent()}
+				message={error}
+				onretry={load}
+			/>
 		{:else if agent}
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
@@ -314,7 +343,8 @@
 						<p class="mt-1 text-[13px] text-text-muted">{agent.description}</p>
 					{/if}
 					<p class="mt-1 text-[11px] text-text-muted">
-						Created <RelativeTime at={agent.created_at} /> ·
+						{m.settings_agents_detail_created()}
+						<RelativeTime at={agent.created_at} /> ·
 						{agent.allowed_actions?.includes('manage_tokens')
 							? m.settings_agents_you_own_this_agent()
 							: m.settings_agents_admin_view()}
@@ -323,16 +353,21 @@
 				<div class="flex gap-2">
 					{#if agent.allowed_actions?.includes('update')}
 						<Button size="sm" onclick={() => (statusOpen = true)}>
-							{isDisabled ? 'Enable' : 'Disable'}
+							{isDisabled ? m.settings_agents_detail_enable() : m.settings_agents_detail_disable()}
 						</Button>
 					{/if}
 					{#if agent.allowed_actions?.includes('delete')}
-						<Button size="sm" variant="danger" onclick={() => (deleteOpen = true)}>Delete</Button>
+						<Button size="sm" variant="danger" onclick={() => (deleteOpen = true)}
+							>{m.settings_agents_detail_delete()}</Button
+						>
 					{/if}
 				</div>
 			</div>
 
-			<nav class="mt-5 flex gap-1 border-b border-border" aria-label="Agent sections">
+			<nav
+				class="mt-5 flex gap-1 border-b border-border"
+				aria-label={m.settings_agents_detail_agent_sections()}
+			>
 				{#each tabs as item (item.id)}
 					<button
 						type="button"
@@ -350,17 +385,17 @@
 			{#if tab === 'overview'}
 				<section class="mt-5 flex flex-col gap-4">
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
-						<h2 class="text-[13px] font-semibold">Workspaces</h2>
+						<h2 class="text-[13px] font-semibold">{m.settings_agents_detail_workspaces()}</h2>
 						<p class="mt-1 text-[13px] text-text-muted">
 							{agent.workspaces.map((ws) => ws.name).join(', ') ||
 								m.settings_agents_no_workspace_bound()}
 						</p>
 					</div>
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
-						<h2 class="text-[13px] font-semibold">Where it can run</h2>
+						<h2 class="text-[13px] font-semibold">{m.settings_agents_detail_where_it_can_run()}</h2>
 						{#if eligibility.length === 0}
 							<p class="mt-1 text-[13px] text-text-muted">
-								No catalog is granted to the bound workspaces yet.
+								{m.settings_agents_detail_no_catalog_is_granted_to_the()}
 							</p>
 						{:else}
 							<div class="mt-3 flex flex-col gap-3">
@@ -373,20 +408,23 @@
 													<span>{engine.engine_name}</span>
 													<span class="text-text-muted">({engine.kind})</span>
 													{#if engine.status === 'ok'}
-														<Badge tone="success">ok</Badge>
+														<Badge tone="success">{m.settings_agents_detail_ok()}</Badge>
 													{:else if engine.status === 'read_only_not_enforced'}
 														<Badge tone="warning">read-only not enforced</Badge>
 														<span class="text-text-muted">
-															Agents cannot query it until an administrator asserts read-only
-															credentials.
+															{m.settings_agents_detail_agents_cannot_query_it_until_an()}
 														</span>
 													{:else}
-														<Badge tone="neutral">excluded by policy</Badge>
+														<Badge tone="neutral"
+															>{m.settings_agents_detail_excluded_by_policy()}</Badge
+														>
 													{/if}
 												</li>
 											{/each}
 											{#if entry.engines.length === 0}
-												<li class="text-[12px] text-text-muted">No engine hosts this catalog.</li>
+												<li class="text-[12px] text-text-muted">
+													{m.settings_agents_detail_no_engine_hosts_this_catalog()}
+												</li>
 											{/if}
 										</ul>
 									</div>
@@ -399,12 +437,11 @@
 				<section class="mt-5">
 					<div class="flex items-center justify-between gap-3">
 						<p class="text-[13px] text-text-muted">
-							Tokens are shown once. Baleia stores only a hash; revoking one takes effect
-							immediately.
+							{m.settings_agents_detail_tokens_are_shown_once_baleia_stores()}
 						</p>
 						{#if agent.allowed_actions?.includes('manage_tokens')}
 							<Button variant="primary" size="sm" onclick={() => (tokenOpen = true)}>
-								Create token
+								{m.settings_agents_detail_create_token()}
 							</Button>
 						{/if}
 					</div>
@@ -412,7 +449,7 @@
 						<p
 							class="mt-4 rounded-lg border border-border bg-bg-panel p-4 text-[13px] text-text-muted"
 						>
-							No tokens yet.
+							{m.settings_agents_detail_no_tokens_yet()}
 						</p>
 					{:else}
 						<ul class="mt-4 flex flex-col gap-2">
@@ -424,10 +461,13 @@
 										<span class="font-medium">{token.name}</span>
 										<span class="ml-2 font-mono text-[11px] text-text-muted">{token.prefix}</span>
 										<div class="text-[11px] text-text-muted">
-											Created <RelativeTime at={token.created_at} /> · expires
+											{m.settings_agents_detail_created()}
+											<RelativeTime at={token.created_at} />
+											{m.settings_agents_detail_expires()}
 											<RelativeTime at={token.expires_at} />
 											{#if token.last_used_at}
-												· last used <RelativeTime at={token.last_used_at} />
+												{m.settings_agents_detail_last_used()}
+												<RelativeTime at={token.last_used_at} />
 											{/if}
 										</div>
 									</div>
@@ -440,10 +480,10 @@
 												revokeOpen = true;
 											}}
 										>
-											Revoke
+											{m.settings_agents_detail_revoke()}
 										</Button>
 									{:else if token.revoked_at}
-										<Badge tone="neutral">revoked</Badge>
+										<Badge tone="neutral">{m.settings_agents_detail_revoked()}</Badge>
 									{/if}
 								</li>
 							{/each}
@@ -460,9 +500,9 @@
 						</p>
 					{/if}
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
-						<h2 class="text-[13px] font-semibold">Tools</h2>
+						<h2 class="text-[13px] font-semibold">{m.settings_agents_detail_tools()}</h2>
 						<p class="mt-1 text-[12px] text-text-muted">
-							Agents are always read-only. “Can change state” tools are the only exception.
+							{m.settings_agents_detail_agents_are_always_read_only_can()}
 						</p>
 						<div class="mt-3 grid gap-2 sm:grid-cols-2">
 							{#each meta?.tools ?? [] as tool (tool.name)}
@@ -474,7 +514,7 @@
 											toggleTool(tool.name, (event.currentTarget as HTMLInputElement).checked)}
 									/>
 									{#if !tool.read_only}
-										<Badge tone="warning">can change state</Badge>
+										<Badge tone="warning">{m.settings_agents_detail_can_change_state()}</Badge>
 									{/if}
 								</div>
 							{/each}
@@ -482,11 +522,11 @@
 					</div>
 
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
-						<h2 class="text-[13px] font-semibold">Catalogs</h2>
+						<h2 class="text-[13px] font-semibold">{m.settings_agents_detail_catalogs()}</h2>
 						<div class="mt-2 flex flex-col gap-2">
 							<Checkbox
 								checked={policy.allCatalogs}
-								label="All catalogs granted to the bound workspaces"
+								label={m.settings_agents_detail_all_catalogs_granted_to_the_bound()}
 								onchange={(event) => {
 									policy.allCatalogs = (event.currentTarget as HTMLInputElement).checked;
 								}}
@@ -513,11 +553,11 @@
 					</div>
 
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
-						<h2 class="text-[13px] font-semibold">Engines</h2>
+						<h2 class="text-[13px] font-semibold">{m.settings_agents_detail_engines()}</h2>
 						<div class="mt-2 flex flex-col gap-2">
 							<Checkbox
 								checked={policy.allEngines}
-								label="Any engine hosting those catalogs"
+								label={m.settings_agents_detail_any_engine_hosting_those_catalogs()}
 								onchange={(event) => {
 									policy.allEngines = (event.currentTarget as HTMLInputElement).checked;
 								}}
@@ -542,14 +582,17 @@
 					</div>
 
 					<div class="rounded-lg border border-border bg-bg-panel p-4">
-						<h2 class="text-[13px] font-semibold">Limits</h2>
+						<h2 class="text-[13px] font-semibold">{m.settings_agents_detail_limits()}</h2>
 						<p class="mt-1 text-[12px] text-text-muted">
-							Empty keeps the default. The server maximum is enforced even if a value is larger.
+							{m.settings_agents_detail_empty_keeps_the_default_the_server()}
 						</p>
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
 							{#each limitFields as [field, label] (field)}
 								<Input
-									label={`${label} (max ${ceiling(field) ?? '—'})`}
+									label={m.settings_agents_detail_max({
+										label: label(),
+										value: ceiling(field) ?? '—'
+									})}
 									type="number"
 									placeholder={displayLimit(field)?.toString() ??
 										m.connections_providerform_default()}
@@ -570,16 +613,18 @@
 							disabled={!canManagePolicy}
 							onclick={savePolicy}
 						>
-							Save policy
+							{m.settings_agents_detail_save_policy()}
 						</Button>
-						{#if policySaved}<span class="text-[12px] text-text-muted">Saved.</span>{/if}
+						{#if policySaved}<span class="text-[12px] text-text-muted"
+								>{m.settings_agents_detail_saved()}</span
+							>{/if}
 					</div>
 				</section>
 			{:else if tab === 'activity'}
 				<section class="mt-5">
 					{#if activity.length === 0}
 						<p class="rounded-lg border border-border bg-bg-panel p-4 text-[13px] text-text-muted">
-							No activity yet.
+							{m.settings_agents_detail_no_activity_yet()}
 						</p>
 					{:else}
 						<ul class="flex flex-col gap-2">
@@ -620,7 +665,7 @@
 			label={m.settings_agents_expires_in_days()}
 			type="number"
 			bind:value={tokenDays}
-			placeholder={`Default ${meta?.token_default_ttl_days ?? 30}`}
+			placeholder={m.settings_agents_detail_default({ value: meta?.token_default_ttl_days ?? 30 })}
 		/>
 	</div>
 	{#snippet footer()}
@@ -671,10 +716,10 @@
 	title={m.settings_agents_revoke_token()}
 	resourceName={revokeTarget?.name ?? ''}
 	consequences={[
-		'Clients using this token stop working immediately.',
+		m.settings_agents_detail_clients_using_this_token_stop_working(),
 		m.settings_agents_the_token_cannot_be_restored_create_a_new()
 	]}
-	confirmLabel="Revoke token"
+	confirmLabel={m.settings_agents_detail_revoke_token()}
 	onconfirm={confirmRevoke}
 />
 
@@ -698,7 +743,7 @@
 		<div class="flex justify-end gap-2">
 			<Button onclick={() => (statusOpen = false)}>{m.common_cancel()}</Button>
 			<Button variant="primary" onclick={() => setStatus(isDisabled ? 'active' : 'disabled')}>
-				{isDisabled ? 'Enable' : 'Disable'}
+				{isDisabled ? m.settings_agents_detail_enable() : m.settings_agents_detail_disable()}
 			</Button>
 		</div>
 	{/snippet}

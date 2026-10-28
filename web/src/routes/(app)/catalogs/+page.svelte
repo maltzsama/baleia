@@ -81,7 +81,12 @@
 			options={[
 				{ value: '', label: m.monitoring_any() },
 				{ value: 'source', label: m.catalogs_source() },
-				{ value: 'native', label: 'Native' }
+				{
+					value: 'native',
+					get label() {
+						return m.catalogs_native();
+					}
+				}
 			]}
 		/>
 		<Select
@@ -110,7 +115,7 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load catalogs" message={error} onretry={load} />
+		<ErrorState title={m.catalogs_could_not_load_catalogs()} message={error} onretry={load} />
 	{:else if catalogs.length === 0 && filtering}
 		<div role="status">
 			<EmptyState
@@ -139,13 +144,13 @@
 					class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th class="px-3 py-2">Catalog</th>
-						<th class="px-3 py-2">Origin</th>
-						<th class="px-3 py-2">Provider</th>
-						<th class="px-3 py-2">Connection</th>
-						<th class="px-3 py-2">Engines</th>
-						<th class="px-3 py-2">Metadata</th>
-						<th class="px-3 py-2">Attention</th>
+						<th class="px-3 py-2">{m.catalogs_catalog()}</th>
+						<th class="px-3 py-2">{m.catalogs_origin()}</th>
+						<th class="px-3 py-2">{m.catalogs_provider()}</th>
+						<th class="px-3 py-2">{m.catalogs_connection()}</th>
+						<th class="px-3 py-2">{m.catalogs_engines()}</th>
+						<th class="px-3 py-2">{m.catalogs_metadata()}</th>
+						<th class="px-3 py-2">{m.catalogs_attention()}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -176,7 +181,7 @@
 														? 'danger'
 														: 'neutral'}
 											>
-												{binding.sync_status ?? 'pending'}
+												{binding.sync_status ?? m.catalogs_pending()}
 											</Badge>
 										</span>
 									{:else}
@@ -188,7 +193,7 @@
 								{#if catalog.metadata_synced_at}
 									<RelativeTime at={catalog.metadata_synced_at} />
 								{:else}
-									<span class="text-slate-600 dark:text-slate-300">Never</span>
+									<span class="text-slate-600 dark:text-slate-300">{m.catalogs_never()}</span>
 								{/if}
 								{#if catalog.metadata_sync_status}
 									<StatusBadge kind="metadataSync" status={catalog.metadata_sync_status} />
@@ -196,7 +201,7 @@
 							</td>
 							<td class="px-3 py-2">
 								{#if catalog.needs_attention}
-									<Badge tone="warning">Needs attention</Badge>
+									<Badge tone="warning">{m.catalogs_needs_attention()}</Badge>
 								{:else}
 									<span class="text-slate-600 dark:text-slate-300">—</span>
 								{/if}

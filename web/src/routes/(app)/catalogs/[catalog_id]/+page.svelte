@@ -195,7 +195,7 @@
 			return;
 		}
 		if (!engineNameRe.test(addName)) {
-			addError = 'Name must match ^[a-z][a-z0-9_]{0,62}$.';
+			addError = m.catalogs_detail_name_must_match({ pattern: '^[a-z][a-z0-9_]{0,62}$' });
 			return;
 		}
 		if (reservedNames.includes(addName)) {
@@ -250,7 +250,7 @@
 	async function submitEdit() {
 		if (!editBinding) return;
 		if (!engineNameRe.test(bindingName)) {
-			bindingError = 'Name must match ^[a-z][a-z0-9_]{0,62}$.';
+			bindingError = m.catalogs_detail_name_must_match({ pattern: '^[a-z][a-z0-9_]{0,62}$' });
 			return;
 		}
 		bindingSaving = true;
@@ -393,9 +393,14 @@
 	function consequences(): string[] {
 		if (!impact) return [];
 		return [
-			`${impact.bindings} binding(s) will be deprovisioned.`,
-			`${impact.grants} workspace grant(s) and ${impact.saved_queries_targeting} saved quer(ies) target it.`,
-			`${impact.running_executions} execution(s) are running now.`
+			m.catalogs_detail_binding_s_will_be_deprovisioned({ bindings: impact.bindings }),
+			m.catalogs_detail_workspace_grant_s_and_saved_quer({
+				grants: impact.grants,
+				saved_queries_targeting: impact.saved_queries_targeting
+			}),
+			m.catalogs_detail_execution_s_are_running_now({
+				running_executions: impact.running_executions
+			})
 		];
 	}
 
@@ -420,7 +425,11 @@
 			{/each}
 		</div>
 	{:else if error && !catalog}
-		<ErrorState title="Could not load the catalog" message={error} onretry={load} />
+		<ErrorState
+			title={m.catalogs_detail_could_not_load_the_catalog()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if catalog}
 		<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 			<div>
@@ -429,18 +438,24 @@
 					{catalog.origin} · {catalog.provider_kind ?? '—'} · {catalog.connection?.name ??
 						m.catalogs_connection_hidden()}
 					{#if catalog.needs_attention}
-						· <Badge tone="warning">Needs attention</Badge>
+						· <Badge tone="warning">{m.catalogs_detail_needs_attention()}</Badge>
 					{/if}
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button onclick={openEditCatalog}>Edit</Button>
-				<Button variant="danger" onclick={() => (deleteOpen = true)}>Delete</Button>
+				<Button onclick={openEditCatalog}>{m.catalogs_detail_edit()}</Button>
+				<Button variant="danger" onclick={() => (deleteOpen = true)}
+					>{m.catalogs_detail_delete()}</Button
+				>
 			</div>
 		</div>
 
-		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Catalog tabs">
-			{#each [['overview', 'Overview'], ['bindings', 'Bindings'], ['metadata', 'Metadata'], ['access', m.catalogs_access()], ['activity', 'Activity']] as [value, label] (value)}
+		<div
+			class="mb-4 flex gap-1 border-b border-border"
+			role="tablist"
+			aria-label={m.catalogs_detail_catalog_tabs()}
+		>
+			{#each [['overview', m.catalogs_detail_overview()], ['bindings', m.catalogs_detail_bindings()], ['metadata', m.catalogs_detail_metadata()], ['access', m.catalogs_access()], ['activity', m.catalogs_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -458,21 +473,21 @@
 		{#if tab === 'overview'}
 			<div class="grid gap-4 lg:grid-cols-2">
 				<div class="rounded-lg border border-border bg-bg-panel p-4">
-					<h2 class="text-[13px] font-semibold">Catalog</h2>
+					<h2 class="text-[13px] font-semibold">{m.catalogs_detail_catalog()}</h2>
 					<dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
-						<dt class="text-slate-600 dark:text-slate-300">Description</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.catalogs_detail_description()}</dt>
 						<dd>{catalog.description ?? '—'}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Origin</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.catalogs_detail_origin()}</dt>
 						<dd>{catalog.origin}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Source ref</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.catalogs_detail_source_ref()}</dt>
 						<dd class="font-mono">{catalog.source_ref ?? '—'}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Namespaces</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.catalogs_detail_namespaces()}</dt>
 						<dd>{catalog.namespace_count ?? 0}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Tables</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.catalogs_detail_tables()}</dt>
 						<dd>{catalog.table_count ?? 0}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Enabled</dt>
-						<dd>{catalog.enabled ? 'Yes' : 'No'}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Created</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.catalogs_detail_enabled()}</dt>
+						<dd>{catalog.enabled ? m.catalogs_detail_yes() : m.catalogs_detail_no()}</dd>
+						<dt class="text-slate-600 dark:text-slate-300">{m.catalogs_detail_created()}</dt>
 						<dd>{catalog.created_at ? new Date(catalog.created_at).toLocaleString() : '—'}</dd>
 					</dl>
 					<div class="mt-3">
@@ -481,17 +496,17 @@
 							class="text-[12px] text-primary hover:underline"
 							onclick={() => (window.location.href = `/data?catalog=${catalogId}`)}
 						>
-							Open in explorer →
+							{m.catalogs_detail_open_in_explorer()}
 						</button>
 					</div>
 				</div>
 				<div class="rounded-lg border border-border bg-bg-panel p-4">
-					<h2 class="text-[13px] font-semibold">Metadata freshness</h2>
+					<h2 class="text-[13px] font-semibold">{m.catalogs_detail_metadata_freshness()}</h2>
 					<p class="mt-2 text-[11px]">
 						{#if catalog.metadata_synced_at}
-							Last pass <RelativeTime at={catalog.metadata_synced_at} />
+							{m.catalogs_detail_last_pass()} <RelativeTime at={catalog.metadata_synced_at} />
 						{:else}
-							No metadata pass yet.
+							{m.catalogs_detail_no_metadata_pass_yet()}
 						{/if}
 					</p>
 					{#if catalog.metadata_sync_status}
@@ -501,24 +516,26 @@
 						<p class="mt-2 font-mono text-[11px] text-danger">{catalog.metadata_sync_error_code}</p>
 					{/if}
 					<div class="mt-3">
-						<Button loading={syncing} disabled={syncing} onclick={syncNow}>Sync now</Button>
+						<Button loading={syncing} disabled={syncing} onclick={syncNow}
+							>{m.catalogs_detail_sync_now()}</Button
+						>
 					</div>
 				</div>
 			</div>
 		{:else if tab === 'bindings'}
 			<div class="mb-3 flex items-center justify-between">
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
-					Adopted and native bindings are read-only: Baleia never changes or drops them.
+					{m.catalogs_detail_adopted_and_native_bindings_are_read()}
 				</p>
-				<Button variant="primary" onclick={openAdd}>Add binding</Button>
+				<Button variant="primary" onclick={openAdd}>{m.catalogs_detail_add_binding()}</Button>
 			</div>
 			{#if error}
 				<p class="mb-2 text-[11px] text-danger" role="alert">{error}</p>
 			{/if}
 			{#if bindings.length === 0}
 				<EmptyState
-					title="No bindings"
-					description="Bind this catalog into a federated engine to query it."
+					title={m.catalogs_detail_no_bindings()}
+					description={m.catalogs_detail_bind_this_catalog_into_a_federated()}
 				/>
 			{:else}
 				<div class="flex flex-col gap-3">
@@ -534,7 +551,7 @@
 										<span class="flex items-center gap-1 font-mono text-[12px]">
 											{binding.engine_catalog_name}<CopyButton
 												value={binding.engine_catalog_name}
-												label="catalog name"
+												label={m.catalogs_detail_catalog_name()}
 											/>
 										</span>
 										<span
@@ -567,20 +584,24 @@
 										{/if}
 										{#if binding.connector}
 											<span class="text-[10px] text-slate-600 dark:text-slate-300"
-												>connector {binding.connector}</span
+												>{m.catalogs_detail_connector_named({ connector: binding.connector })}</span
 											>
 										{/if}
 									</div>
 								</div>
 								{#if binding.mode === 'managed'}
 									<div class="flex flex-wrap gap-1.5">
-										<Button size="sm" onclick={() => retry(binding)}>Re-apply</Button>
-										<Button size="sm" onclick={() => openEdit(binding)}>Edit</Button>
+										<Button size="sm" onclick={() => retry(binding)}
+											>{m.catalogs_detail_re_apply()}</Button
+										>
+										<Button size="sm" onclick={() => openEdit(binding)}
+											>{m.catalogs_detail_edit()}</Button
+										>
 										<Button size="sm" onclick={() => toggleBinding(binding)}>
-											{binding.enabled ? 'Disable' : 'Enable'}
+											{binding.enabled ? m.catalogs_detail_disable() : m.catalogs_detail_enable()}
 										</Button>
 										<Button size="sm" variant="danger" onclick={() => removeBinding(binding)}
-											>Delete</Button
+											>{m.catalogs_detail_delete()}</Button
 										>
 									</div>
 								{/if}
@@ -604,7 +625,7 @@
 								class="mt-2 text-[11px] text-primary hover:underline"
 								onclick={() => openProjection(binding)}
 							>
-								Show projection
+								{m.catalogs_detail_show_projection()}
 							</button>
 						</div>
 					{/each}
@@ -613,18 +634,19 @@
 		{:else if tab === 'metadata'}
 			<div class="mb-3 flex items-center justify-between">
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
-					Every pass reads namespaces, tables and columns from the catalog's source or one of its
-					engines.
+					{m.catalogs_detail_every_pass_reads_namespaces_tables_and()}
 				</p>
-				<Button loading={syncing} disabled={syncing} onclick={syncNow}>Sync now</Button>
+				<Button loading={syncing} disabled={syncing} onclick={syncNow}
+					>{m.catalogs_detail_sync_now()}</Button
+				>
 			</div>
 			{#if syncError}
 				<p class="mb-2 text-[11px] text-danger" role="alert">{syncError}</p>
 			{/if}
 			{#if runs.length === 0}
 				<EmptyState
-					title="No metadata run"
-					description="Start a sync to build the catalog snapshot."
+					title={m.catalogs_detail_no_metadata_run()}
+					description={m.catalogs_detail_start_a_sync_to_build_the()}
 				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -633,12 +655,12 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Status</th>
-								<th class="px-3 py-2">Started</th>
-								<th class="px-3 py-2">Finished</th>
-								<th class="px-3 py-2">Seen / changed / removed</th>
-								<th class="px-3 py-2">Source</th>
-								<th class="px-3 py-2">Error</th>
+								<th class="px-3 py-2">{m.catalogs_detail_status()}</th>
+								<th class="px-3 py-2">{m.catalogs_detail_started()}</th>
+								<th class="px-3 py-2">{m.catalogs_detail_finished()}</th>
+								<th class="px-3 py-2">{m.catalogs_detail_seen_changed_removed()}</th>
+								<th class="px-3 py-2">{m.catalogs_detail_source()}</th>
+								<th class="px-3 py-2">{m.catalogs_detail_error()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -671,12 +693,17 @@
 		{:else if tab === 'access'}
 			<div class="mb-3 flex items-center justify-between">
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
-					Workspaces granted this catalog. Owners and administrators always manage it.
+					{m.catalogs_detail_workspaces_granted_this_catalog_owners_and()}
 				</p>
-				<Button variant="primary" onclick={() => (grantOpen = true)}>Grant access</Button>
+				<Button variant="primary" onclick={() => (grantOpen = true)}
+					>{m.catalogs_detail_grant_access()}</Button
+				>
 			</div>
 			{#if grants.length === 0}
-				<EmptyState title="No grants" description="No workspace has access to this catalog yet." />
+				<EmptyState
+					title={m.catalogs_detail_no_grants()}
+					description={m.catalogs_detail_no_workspace_has_access_to_this()}
+				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
@@ -684,10 +711,10 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Workspace</th>
-								<th class="px-3 py-2">Permission</th>
-								<th class="px-3 py-2">Granted</th>
-								<th class="px-3 py-2 text-right">Actions</th>
+								<th class="px-3 py-2">{m.catalogs_detail_workspace()}</th>
+								<th class="px-3 py-2">{m.catalogs_detail_permission()}</th>
+								<th class="px-3 py-2">{m.catalogs_detail_granted()}</th>
+								<th class="px-3 py-2 text-right">{m.catalogs_detail_actions()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -705,7 +732,7 @@
 												revokeOpen = true;
 											}}
 										>
-											Revoke
+											{m.catalogs_detail_revoke()}
 										</button>
 									</td>
 								</tr>
@@ -715,7 +742,11 @@
 				</div>
 			{/if}
 		{:else if tab === 'activity'}
-			<ActivityPanel resourceType="catalog" resourceId={catalogId} title="Catalog activity" />
+			<ActivityPanel
+				resourceType="catalog"
+				resourceId={catalogId}
+				title={m.catalogs_detail_catalog_activity()}
+			/>
 		{/if}
 	{/if}
 </div>
@@ -826,8 +857,18 @@
 			label={m.common_permission()}
 			bind:value={grantPermission}
 			options={[
-				{ value: 'read', label: 'Read' },
-				{ value: 'write', label: 'Write' }
+				{
+					value: 'read',
+					get label() {
+						return m.catalogs_detail_read();
+					}
+				},
+				{
+					value: 'write',
+					get label() {
+						return m.catalogs_detail_write();
+					}
+				}
 			]}
 		/>
 		{#if grantError}<p class="text-danger" role="alert">{grantError}</p>{/if}
@@ -847,12 +888,17 @@
 		<Skeleton class="h-24 w-full" />
 	{:else if projection}
 		<p class="text-[11px] text-slate-600 dark:text-slate-300">
-			Connector <span class="font-mono">{projection.connector}</span>
-			{#if projection.version}· version <span class="font-mono">{projection.version}</span>{/if}
+			{m.catalogs_detail_connector()} <span class="font-mono">{projection.connector}</span>
+			{#if projection.version}{m.catalogs_detail_version()}
+				<span class="font-mono">{projection.version}</span>{/if}
 		</p>
 		<table class="mt-3 w-full text-left text-[11px]">
 			<thead class="text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300">
-				<tr><th class="py-1">Property</th><th class="py-1">Value</th></tr>
+				<tr
+					><th class="py-1">{m.catalogs_detail_property()}</th><th class="py-1"
+						>{m.catalogs_detail_value()}</th
+					></tr
+				>
 			</thead>
 			<tbody>
 				{#each Object.entries(projection.properties) as [key, value] (key)}
@@ -870,8 +916,8 @@
 	bind:open={revokeOpen}
 	title={m.common_revoke_catalog_access()}
 	resourceName={revokeWorkspace?.name ?? ''}
-	confirmLabel="Revoke"
-	consequences={['Members of this workspace lose access to the catalog.']}
+	confirmLabel={m.catalogs_detail_revoke()}
+	consequences={[m.catalogs_detail_members_of_this_workspace_lose_access()]}
 	onconfirm={async () => {
 		if (revokeWorkspace) await revoke(revokeWorkspace.id);
 	}}
@@ -881,7 +927,7 @@
 	bind:open={deleteOpen}
 	title={m.catalogs_delete_catalog()}
 	resourceName={catalog?.name ?? ''}
-	confirmLabel="Delete catalog"
+	confirmLabel={m.catalogs_detail_delete_catalog()}
 	typeToConfirm
 	consequences={consequences()}
 	onconfirm={confirmDelete}

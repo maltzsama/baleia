@@ -1,6 +1,7 @@
 // Error catalog (#105 / FD7): every API, engine, lifecycle and auth code maps
 // to a plain-language title, explanation and remediation. The UI never shows a
 // raw engine message as the headline.
+import { m } from '$lib/paraglide/messages';
 
 export type ErrorEntry = {
 	title: string;
@@ -18,336 +19,711 @@ export type DescribedError = ErrorEntry & {
 export const errorCatalog: Record<string, ErrorEntry> = {
 	// API
 	unauthorized: {
-		title: 'Not signed in',
-		explanation: 'Your session is missing or has expired.',
-		remediation: 'Sign in again and retry.'
+		get title() {
+			return m.errors_catalog_not_signed_in();
+		},
+		get explanation() {
+			return m.errors_catalog_your_session_is_missing_or_has();
+		},
+		get remediation() {
+			return m.errors_catalog_sign_in_again_and_retry();
+		}
 	},
 	forbidden: {
-		title: 'Not allowed',
-		explanation: 'You do not have permission to perform this action.',
-		remediation: 'Ask a workspace owner or administrator for access.'
+		get title() {
+			return m.errors_catalog_not_allowed();
+		},
+		get explanation() {
+			return m.errors_catalog_you_do_not_have_permission_to();
+		},
+		get remediation() {
+			return m.errors_catalog_ask_a_workspace_owner_or_administrator();
+		}
 	},
 	not_found: {
-		title: 'Not found',
-		explanation: 'The resource no longer exists or you cannot see it.',
-		remediation: 'Refresh the page and check the resource was not deleted.'
+		get title() {
+			return m.errors_catalog_not_found();
+		},
+		get explanation() {
+			return m.errors_catalog_the_resource_no_longer_exists_or();
+		},
+		get remediation() {
+			return m.errors_catalog_refresh_the_page_and_check_the();
+		}
 	},
 	conflict: {
-		title: 'Conflict',
-		explanation: 'The resource changed while you were editing it.',
-		remediation: 'Reload the latest version and apply your change again.'
+		get title() {
+			return m.errors_catalog_conflict();
+		},
+		get explanation() {
+			return m.errors_catalog_the_resource_changed_while_you_were();
+		},
+		get remediation() {
+			return m.errors_catalog_reload_the_latest_version_and_apply();
+		}
 	},
 	validation_error: {
-		title: 'Invalid input',
-		explanation: 'One or more fields are invalid.',
-		remediation: 'Fix the highlighted fields and retry.'
+		get title() {
+			return m.errors_catalog_invalid_input();
+		},
+		get explanation() {
+			return m.errors_catalog_one_or_more_fields_are_invalid();
+		},
+		get remediation() {
+			return m.errors_catalog_fix_the_highlighted_fields_and_retry();
+		}
 	},
 	invalid_definition: {
-		title: 'The query cannot be compiled',
-		explanation:
-			'The model or the explore query uses a field, join or feature the compiler cannot resolve for this engine.',
-		remediation: 'Check the highlighted fields, the model joins and the engine, then retry.'
+		get title() {
+			return m.errors_catalog_the_query_cannot_be_compiled();
+		},
+		get explanation() {
+			return m.errors_catalog_the_model_or_the_explore_query();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_highlighted_fields_the_model();
+		}
 	},
 	rate_limited: {
-		title: 'Too many requests',
-		explanation: 'You have made too many requests in a short period.',
-		remediation: 'Wait for the retry window before trying again.'
+		get title() {
+			return m.errors_catalog_too_many_requests();
+		},
+		get explanation() {
+			return m.errors_catalog_you_have_made_too_many_requests();
+		},
+		get remediation() {
+			return m.errors_catalog_wait_for_the_retry_window_before();
+		}
 	},
 	service_unavailable: {
-		title: 'Service unavailable',
-		explanation: 'A dependency is not reachable right now.',
-		remediation: 'Retry in a moment; if it persists, check the system status page.'
+		get title() {
+			return m.errors_catalog_service_unavailable();
+		},
+		get explanation() {
+			return m.errors_catalog_a_dependency_is_not_reachable_right();
+		},
+		get remediation() {
+			return m.errors_catalog_retry_in_a_moment_if_it();
+		}
 	},
 	provider_unsupported: {
-		title: 'Provider not supported',
-		explanation: 'This connection kind is not supported by the server.',
-		remediation: 'Choose a different provider.'
+		get title() {
+			return m.errors_catalog_provider_not_supported();
+		},
+		get explanation() {
+			return m.errors_catalog_this_connection_kind_is_not_supported();
+		},
+		get remediation() {
+			return m.errors_catalog_choose_a_different_provider();
+		}
 	},
 	connection_denied_network: {
-		title: 'Connection blocked',
-		explanation: 'The server refused to dial that host.',
-		remediation: 'Check the host allow-list and the connection URL.'
+		get title() {
+			return m.errors_catalog_connection_blocked();
+		},
+		get explanation() {
+			return m.errors_catalog_the_server_refused_to_dial_that();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_host_allow_list_and();
+		}
 	},
 	target_required: {
-		title: 'Choose a target',
-		explanation: 'This workspace has more than one place to run queries.',
-		remediation: 'Pick an engine, catalog and schema before running.'
+		get title() {
+			return m.errors_catalog_choose_a_target();
+		},
+		get explanation() {
+			return m.errors_catalog_this_workspace_has_more_than_one();
+		},
+		get remediation() {
+			return m.errors_catalog_pick_an_engine_catalog_and_schema();
+		}
 	},
 	engine_required: {
-		title: 'Choose an engine',
-		explanation: 'The selected catalog is not available on an enabled engine.',
-		remediation: 'Pick another target or enable an engine for this catalog.'
+		get title() {
+			return m.errors_catalog_choose_an_engine();
+		},
+		get explanation() {
+			return m.errors_catalog_the_selected_catalog_is_not_available();
+		},
+		get remediation() {
+			return m.errors_catalog_pick_another_target_or_enable_an();
+		}
 	},
 	target_unavailable: {
-		title: 'Target unavailable',
-		explanation: 'The selected engine, catalog or binding is no longer available.',
-		remediation: 'Pick another target or ask an administrator to restore the binding.'
+		get title() {
+			return m.errors_catalog_target_unavailable();
+		},
+		get explanation() {
+			return m.errors_catalog_the_selected_engine_catalog_or_binding();
+		},
+		get remediation() {
+			return m.errors_catalog_pick_another_target_or_ask_an();
+		}
 	},
 	read_only_unenforceable: {
-		title: 'Read-only cannot be enforced',
-		explanation: 'The engine cannot enforce read-only sessions for this connection.',
-		remediation: 'Grant write instead, or assert read-only credentials on the connection.'
+		get title() {
+			return m.errors_catalog_read_only_cannot_be_enforced();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_cannot_enforce_read_only();
+		},
+		get remediation() {
+			return m.errors_catalog_grant_write_instead_or_assert_read();
+		}
 	},
 	name_conflict: {
-		title: 'Name already in use',
-		explanation: 'Another item in this workspace already has that name.',
-		remediation: 'Choose a different name.'
+		get title() {
+			return m.errors_catalog_name_already_in_use();
+		},
+		get explanation() {
+			return m.errors_catalog_another_item_in_this_workspace_already();
+		},
+		get remediation() {
+			return m.errors_catalog_choose_a_different_name();
+		}
 	},
 	slug_conflict_other_space: {
-		title: 'Slug used in another space',
-		explanation: 'Slugs are unique per workspace; this one belongs to another space.',
-		remediation: 'Rename the slug in the bundle.'
+		get title() {
+			return m.errors_catalog_slug_used_in_another_space();
+		},
+		get explanation() {
+			return m.errors_catalog_slugs_are_unique_per_workspace_this();
+		},
+		get remediation() {
+			return m.errors_catalog_rename_the_slug_in_the_bundle();
+		}
 	},
 	property_not_overridable: {
-		title: 'Property cannot be overridden',
-		explanation: 'Baleia sets this property itself.',
-		remediation: 'Remove the property or change it in the connection settings.'
+		get title() {
+			return m.errors_catalog_property_cannot_be_overridden();
+		},
+		get explanation() {
+			return m.errors_catalog_baleia_sets_this_property_itself();
+		},
+		get remediation() {
+			return m.errors_catalog_remove_the_property_or_change_it();
+		}
 	},
 	invalid_time_range: {
-		title: 'Invalid time range',
-		explanation: 'The selected window is missing or larger than 93 days.',
-		remediation: 'Choose a range of at most 93 days.'
+		get title() {
+			return m.errors_catalog_invalid_time_range();
+		},
+		get explanation() {
+			return m.errors_catalog_the_selected_window_is_missing_or();
+		},
+		get remediation() {
+			return m.errors_catalog_choose_a_range_of_at_most();
+		}
 	},
 	not_supported: {
-		title: 'Not supported',
-		explanation: 'This operation is not available for the selected resource.',
-		remediation: 'Choose a supported option.'
+		get title() {
+			return m.errors_catalog_not_supported();
+		},
+		get explanation() {
+			return m.errors_catalog_this_operation_is_not_available_for();
+		},
+		get remediation() {
+			return m.errors_catalog_choose_a_supported_option();
+		}
 	},
 	version_conflict: {
-		title: 'Changed elsewhere',
-		explanation: 'Someone else saved a newer version while you were editing.',
-		remediation: 'Compare the versions, then overwrite or save a copy.'
+		get title() {
+			return m.errors_catalog_changed_elsewhere();
+		},
+		get explanation() {
+			return m.errors_catalog_someone_else_saved_a_newer_version();
+		},
+		get remediation() {
+			return m.errors_catalog_compare_the_versions_then_overwrite_or();
+		}
 	},
 
 	// Connection test
 	unreachable: {
-		title: 'Host unreachable',
-		explanation: 'Baleia could not reach the configured host.',
-		remediation: 'Check the host, port and network access.'
+		get title() {
+			return m.errors_catalog_host_unreachable();
+		},
+		get explanation() {
+			return m.errors_catalog_baleia_could_not_reach_the_configured();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_host_port_and_network();
+		}
 	},
 	tls: {
-		title: 'TLS error',
-		explanation: 'The TLS handshake failed.',
-		remediation: 'Check the certificate and the TLS settings.'
+		get title() {
+			return m.errors_catalog_tls_error();
+		},
+		get explanation() {
+			return m.errors_catalog_the_tls_handshake_failed();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_certificate_and_the_tls();
+		}
 	},
 	auth_failed: {
-		title: 'Authentication failed',
-		explanation: 'The provider rejected the supplied credentials.',
-		remediation: 'Check the username, password or client credentials.'
+		get title() {
+			return m.errors_catalog_authentication_failed();
+		},
+		get explanation() {
+			return m.errors_catalog_the_provider_rejected_the_supplied_credentials();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_username_password_or_client();
+		}
 	},
 	timeout: {
-		title: 'Timed out',
-		explanation: 'The connection test did not finish in time.',
-		remediation: 'Check the network and retry.'
+		get title() {
+			return m.errors_catalog_timed_out();
+		},
+		get explanation() {
+			return m.errors_catalog_the_connection_test_did_not_finish();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_network_and_retry();
+		}
 	},
 	engine_unavailable: {
-		title: 'Engine unavailable',
-		explanation: 'The engine did not answer the test.',
-		remediation: 'Check engine health and retry.'
+		get title() {
+			return m.errors_catalog_engine_unavailable();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_did_not_answer_the();
+		},
+		get remediation() {
+			return m.errors_catalog_check_engine_health_and_retry();
+		}
 	},
 	internal: {
-		title: 'Internal error',
-		explanation: 'Baleia hit an unexpected error.',
-		remediation: 'Retry; if it persists, check the API logs with the request id.'
+		get title() {
+			return m.errors_catalog_internal_error();
+		},
+		get explanation() {
+			return m.errors_catalog_baleia_hit_an_unexpected_error();
+		},
+		get remediation() {
+			return m.errors_catalog_retry_if_it_persists_check_the();
+		}
 	},
 
 	// Lifecycle
 	plugin_not_confirmed: {
-		title: 'Catalog plugin not confirmed',
-		explanation: 'The Trino catalog plugin has not reported back yet.',
-		remediation: 'Wait for the next reconciliation or check the plugin version.'
+		get title() {
+			return m.errors_catalog_catalog_plugin_not_confirmed();
+		},
+		get explanation() {
+			return m.errors_catalog_the_trino_catalog_plugin_has_not();
+		},
+		get remediation() {
+			return m.errors_catalog_wait_for_the_next_reconciliation_or();
+		}
 	},
 	secret_mismatch: {
-		title: 'Secret mismatch',
-		explanation: 'The stored secret does not match the configured value.',
-		remediation: 'Update the credentials on the connection.'
+		get title() {
+			return m.errors_catalog_secret_mismatch();
+		},
+		get explanation() {
+			return m.errors_catalog_the_stored_secret_does_not_match();
+		},
+		get remediation() {
+			return m.errors_catalog_update_the_credentials_on_the_connection();
+		}
 	},
 	credentials_unreadable: {
-		title: 'Credentials unreadable',
-		explanation: 'Baleia cannot decrypt the stored credentials.',
-		remediation: 'Re-enter the credentials; the encryption key may have changed.'
+		get title() {
+			return m.errors_catalog_credentials_unreadable();
+		},
+		get explanation() {
+			return m.errors_catalog_baleia_cannot_decrypt_the_stored_credentials();
+		},
+		get remediation() {
+			return m.errors_catalog_re_enter_the_credentials_the_encryption();
+		}
 	},
 	version_mismatch: {
-		title: 'Version mismatch',
-		explanation: 'The installed component version does not match the expected one.',
-		remediation: 'Upgrade the component or update the configured version.'
+		get title() {
+			return m.errors_catalog_version_mismatch();
+		},
+		get explanation() {
+			return m.errors_catalog_the_installed_component_version_does_not();
+		},
+		get remediation() {
+			return m.errors_catalog_upgrade_the_component_or_update_the();
+		}
 	},
 
 	// Auth
 	invalid_credentials: {
-		title: 'Invalid credentials',
-		explanation: 'The e-mail and password do not match an account.',
-		remediation: 'Check the values and try again.'
+		get title() {
+			return m.errors_catalog_invalid_credentials();
+		},
+		get explanation() {
+			return m.errors_catalog_the_e_mail_and_password_do();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_values_and_try_again();
+		}
 	},
 	not_provisioned: {
-		title: 'Account not provisioned',
-		explanation: 'Your identity provider authenticated you, but Baleia has no account for you.',
-		remediation: 'Ask an administrator to invite you.'
+		get title() {
+			return m.errors_catalog_account_not_provisioned();
+		},
+		get explanation() {
+			return m.errors_catalog_your_identity_provider_authenticated_you_but();
+		},
+		get remediation() {
+			return m.errors_catalog_ask_an_administrator_to_invite_you();
+		}
 	},
 	account_suspended: {
-		title: 'Account suspended',
-		explanation: 'An administrator suspended this account.',
-		remediation: 'Contact an administrator to reinstate it.'
+		get title() {
+			return m.errors_catalog_account_suspended();
+		},
+		get explanation() {
+			return m.errors_catalog_an_administrator_suspended_this_account();
+		},
+		get remediation() {
+			return m.errors_catalog_contact_an_administrator_to_reinstate_it();
+		}
 	},
 	idp_unavailable: {
-		title: 'Identity provider unavailable',
-		explanation: 'The identity provider did not answer.',
-		remediation: 'Retry; if it persists, contact your administrator.'
+		get title() {
+			return m.errors_catalog_identity_provider_unavailable();
+		},
+		get explanation() {
+			return m.errors_catalog_the_identity_provider_did_not_answer();
+		},
+		get remediation() {
+			return m.errors_catalog_retry_if_it_persists_contact_your();
+		}
 	},
 	sso_failed: {
-		title: 'Single sign-on failed',
-		explanation: 'The identity provider could not complete the sign-in.',
-		remediation: 'Try again; if it persists, contact your administrator.'
+		get title() {
+			return m.errors_catalog_single_sign_on_failed();
+		},
+		get explanation() {
+			return m.errors_catalog_the_identity_provider_could_not_complete();
+		},
+		get remediation() {
+			return m.errors_catalog_try_again_if_it_persists_contact();
+		}
 	},
 	network_error: {
-		title: 'Connection error',
-		explanation: 'Baleia could not reach the server.',
-		remediation: 'Check that the server is running and retry.'
+		get title() {
+			return m.errors_catalog_connection_error();
+		},
+		get explanation() {
+			return m.errors_catalog_baleia_could_not_reach_the_server();
+		},
+		get remediation() {
+			return m.errors_catalog_check_that_the_server_is_running();
+		}
 	},
 	agent_token_not_allowed: {
-		title: 'Agent token not allowed',
-		explanation: 'This token cannot be used for this operation.',
-		remediation: 'Use a human session or an allowed agent scope.'
+		get title() {
+			return m.errors_catalog_agent_token_not_allowed();
+		},
+		get explanation() {
+			return m.errors_catalog_this_token_cannot_be_used_for();
+		},
+		get remediation() {
+			return m.errors_catalog_use_a_human_session_or_an();
+		}
 	},
 
 	// Agent gate reasons
 	policy: {
-		title: 'Blocked by policy',
-		explanation: 'The agent capability policy denies this action.',
-		remediation: 'Ask the agent owner to widen the policy.'
+		get title() {
+			return m.errors_catalog_blocked_by_policy();
+		},
+		get explanation() {
+			return m.errors_catalog_the_agent_capability_policy_denies_this();
+		},
+		get remediation() {
+			return m.errors_catalog_ask_the_agent_owner_to_widen();
+		}
 	},
 	scope: {
-		title: 'Outside the agent scope',
-		explanation: 'The action is outside what this agent token may do.',
-		remediation: 'Use a narrower target or a different token.'
+		get title() {
+			return m.errors_catalog_outside_the_agent_scope();
+		},
+		get explanation() {
+			return m.errors_catalog_the_action_is_outside_what_this();
+		},
+		get remediation() {
+			return m.errors_catalog_use_a_narrower_target_or_a();
+		}
 	},
 	rate: {
-		title: 'Agent rate limited',
-		explanation: 'The agent exceeded its request budget.',
-		remediation: 'Wait for the window to reset.'
+		get title() {
+			return m.errors_catalog_agent_rate_limited();
+		},
+		get explanation() {
+			return m.errors_catalog_the_agent_exceeded_its_request_budget();
+		},
+		get remediation() {
+			return m.errors_catalog_wait_for_the_window_to_reset();
+		}
 	},
 	quota: {
-		title: 'Agent quota reached',
-		explanation: 'The agent reached its usage quota.',
-		remediation: 'Raise the quota or wait for the next period.'
+		get title() {
+			return m.errors_catalog_agent_quota_reached();
+		},
+		get explanation() {
+			return m.errors_catalog_the_agent_reached_its_usage_quota();
+		},
+		get remediation() {
+			return m.errors_catalog_raise_the_quota_or_wait_for();
+		}
 	},
 	budget: {
-		title: 'Agent budget reached',
-		explanation: 'The agent reached its configured budget.',
-		remediation: 'Raise the budget in the agent settings.'
+		get title() {
+			return m.errors_catalog_agent_budget_reached();
+		},
+		get explanation() {
+			return m.errors_catalog_the_agent_reached_its_configured_budget();
+		},
+		get remediation() {
+			return m.errors_catalog_raise_the_budget_in_the_agent();
+		}
 	},
 	statement: {
-		title: 'Statement rejected',
-		explanation: 'The statement is not allowed for this agent.',
-		remediation: 'Use a read-only statement.'
+		get title() {
+			return m.errors_catalog_statement_rejected();
+		},
+		get explanation() {
+			return m.errors_catalog_the_statement_is_not_allowed_for();
+		},
+		get remediation() {
+			return m.errors_catalog_use_a_read_only_statement();
+		}
 	},
 
 	// Attention center (#268). The catalog key is `attention.<kind>`.
 	'attention.binding_error': {
-		title: 'Catalog binding error',
-		explanation: 'A catalog binding needs attention.',
-		remediation: 'Open the catalog bindings tab and retry the binding.'
+		get title() {
+			return m.errors_catalog_catalog_binding_error();
+		},
+		get explanation() {
+			return m.errors_catalog_a_catalog_binding_needs_attention();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_catalog_bindings_tab_and();
+		}
 	},
 	'attention.metadata_sync_failed': {
-		title: 'Metadata sync failed',
-		explanation: 'The last metadata sync for this catalog failed.',
-		remediation: 'Open the catalog and retry the sync.'
+		get title() {
+			return m.errors_catalog_metadata_sync_failed();
+		},
+		get explanation() {
+			return m.errors_catalog_the_last_metadata_sync_for_this();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_catalog_and_retry_the();
+		}
 	},
 	'attention.metadata_stale': {
-		title: 'Metadata is stale',
-		explanation: 'This catalog has not synced within its expected interval.',
-		remediation: 'Open the catalog and run a metadata sync.'
+		get title() {
+			return m.errors_catalog_metadata_is_stale();
+		},
+		get explanation() {
+			return m.errors_catalog_this_catalog_has_not_synced_within();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_catalog_and_run_a();
+		}
 	},
 	'attention.engine_unreachable': {
-		title: 'Engine unreachable',
-		explanation: 'Baleia cannot reach this engine.',
-		remediation: 'Check the engine health and credentials.'
+		get title() {
+			return m.errors_catalog_engine_unreachable();
+		},
+		get explanation() {
+			return m.errors_catalog_baleia_cannot_reach_this_engine();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_engine_health_and_credentials();
+		}
 	},
 	'attention.retriever_error': {
-		title: 'Retriever failed',
-		explanation: 'This retriever stopped with an error.',
-		remediation: 'Open the retriever and review the last run.'
+		get title() {
+			return m.errors_catalog_retriever_failed();
+		},
+		get explanation() {
+			return m.errors_catalog_this_retriever_stopped_with_an_error();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_retriever_and_review_the();
+		}
 	},
 	'attention.reconcile_drift': {
-		title: 'Catalog drift detected',
-		explanation: 'The last reconcile found changes that need to be applied.',
-		remediation: 'Open the engine reconcile tab and apply the changes.'
+		get title() {
+			return m.errors_catalog_catalog_drift_detected();
+		},
+		get explanation() {
+			return m.errors_catalog_the_last_reconcile_found_changes_that();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_engine_reconcile_tab_and();
+		}
 	},
 	'attention.schedule_missing': {
-		title: 'Scheduled job missing',
-		explanation: 'A recurring Temporal schedule is missing or paused.',
-		remediation: 'Open the system status page and restore the schedule.'
+		get title() {
+			return m.errors_catalog_scheduled_job_missing();
+		},
+		get explanation() {
+			return m.errors_catalog_a_recurring_temporal_schedule_is_missing();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_system_status_page_and();
+		}
 	},
 	'attention.audit_export_lagging': {
-		title: 'Audit export is lagging',
-		explanation: 'Audit events are not reaching the export sink in time.',
-		remediation: 'Open the system status page and check the export lag.'
+		get title() {
+			return m.errors_catalog_audit_export_is_lagging();
+		},
+		get explanation() {
+			return m.errors_catalog_audit_events_are_not_reaching_the();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_system_status_page_and_2();
+		}
 	},
 	'attention.agent_token_expiring': {
-		title: 'Agent token expiring',
-		explanation: 'An agent token expires within seven days.',
-		remediation: 'Open the agent and rotate its token.'
+		get title() {
+			return m.errors_catalog_agent_token_expiring();
+		},
+		get explanation() {
+			return m.errors_catalog_an_agent_token_expires_within_seven();
+		},
+		get remediation() {
+			return m.errors_catalog_open_the_agent_and_rotate_its();
+		}
 	},
 
 	// A statement the engine ran (#393). The catalog key is `statement.<code>`,
 	// the engine code the worker stores; the engine's own message is the
 	// detail that names the object or the position.
 	'statement.syntax': {
-		title: 'SQL error',
-		explanation: 'The engine could not parse or type-check the statement.',
-		remediation: 'Fix the statement at the line and column the engine reports.'
+		get title() {
+			return m.errors_catalog_sql_error();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_could_not_parse_or();
+		},
+		get remediation() {
+			return m.errors_catalog_fix_the_statement_at_the_line();
+		}
 	},
 	'statement.not_found': {
-		title: 'Name not found',
-		explanation:
-			'A catalog, schema, table, column or function in the statement does not exist on the engine, or you cannot see it.',
-		remediation: 'Check the spelling and the qualified name the engine reports.'
+		get title() {
+			return m.errors_catalog_name_not_found();
+		},
+		get explanation() {
+			return m.errors_catalog_a_catalog_schema_table_column_or();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_spelling_and_the_qualified();
+		}
 	},
 	'statement.permission_denied': {
-		title: 'Access denied by the engine',
-		explanation: 'The engine refused the statement for your identity.',
-		remediation: 'Ask an administrator for access to the object the engine names.'
+		get title() {
+			return m.errors_catalog_access_denied_by_the_engine();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_refused_the_statement_for();
+		},
+		get remediation() {
+			return m.errors_catalog_ask_an_administrator_for_access_to();
+		}
 	},
 	'statement.read_only_unsupported': {
-		title: 'Writes are not allowed here',
-		explanation: 'This target runs read-only and the statement modifies data.',
-		remediation: 'Run a read-only statement, or use a target with write access.'
+		get title() {
+			return m.errors_catalog_writes_are_not_allowed_here();
+		},
+		get explanation() {
+			return m.errors_catalog_this_target_runs_read_only_and();
+		},
+		get remediation() {
+			return m.errors_catalog_run_a_read_only_statement_or();
+		}
 	},
 	'statement.timeout': {
-		title: 'Statement timed out',
-		explanation: 'The engine stopped the statement at its time limit.',
-		remediation: 'Narrow the query (filters, LIMIT) or ask for a higher limit.'
+		get title() {
+			return m.errors_catalog_statement_timed_out();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_stopped_the_statement_at();
+		},
+		get remediation() {
+			return m.errors_catalog_narrow_the_query_filters_limit_or();
+		}
 	},
 	'statement.cancelled': {
-		title: 'Statement cancelled',
-		explanation: 'The statement was cancelled before it finished.',
-		remediation: 'Run it again if you still need the result.'
+		get title() {
+			return m.errors_catalog_statement_cancelled();
+		},
+		get explanation() {
+			return m.errors_catalog_the_statement_was_cancelled_before_it();
+		},
+		get remediation() {
+			return m.errors_catalog_run_it_again_if_you_still();
+		}
 	},
 	'statement.resource_exhausted': {
-		title: 'Engine out of resources',
-		explanation: 'The engine ran out of memory or queue capacity for this statement.',
-		remediation: 'Retry later or narrow the query.'
+		get title() {
+			return m.errors_catalog_engine_out_of_resources();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_ran_out_of_memory();
+		},
+		get remediation() {
+			return m.errors_catalog_retry_later_or_narrow_the_query();
+		}
 	},
 	'statement.engine_unavailable': {
-		title: 'Engine unavailable',
-		explanation: 'The engine could not be reached or is starting up.',
-		remediation: 'Retry in a moment; if it persists, check the engine health.'
+		get title() {
+			return m.errors_catalog_engine_unavailable();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_could_not_be_reached();
+		},
+		get remediation() {
+			return m.errors_catalog_retry_in_a_moment_if_it_2();
+		}
 	},
 	'statement.conflict': {
-		title: 'Write conflict',
-		explanation: 'The statement conflicted with a concurrent change and was not applied.',
-		remediation: 'Run it again; it is never retried automatically.'
+		get title() {
+			return m.errors_catalog_write_conflict();
+		},
+		get explanation() {
+			return m.errors_catalog_the_statement_conflicted_with_a_concurrent();
+		},
+		get remediation() {
+			return m.errors_catalog_run_it_again_it_is_never();
+		}
 	},
 	'statement.interrupted': {
-		title: 'Run interrupted',
-		explanation:
-			'The Baleia worker stopped while the statement was running; it may or may not have completed on the engine.',
-		remediation: 'Check the data, then re-run from this statement or the next one.'
+		get title() {
+			return m.errors_catalog_run_interrupted();
+		},
+		get explanation() {
+			return m.errors_catalog_the_baleia_worker_stopped_while_the();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_data_then_re_run();
+		}
 	},
 	'statement.internal': {
-		title: 'Statement failed',
-		explanation: 'The engine reported an error Baleia does not classify.',
-		remediation: 'Read the engine message below.'
+		get title() {
+			return m.errors_catalog_statement_failed();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_reported_an_error_baleia();
+		},
+		get remediation() {
+			return m.errors_catalog_read_the_engine_message_below();
+		}
 	}
 };
 
@@ -372,9 +748,9 @@ export function describeError(error: unknown, scope?: 'statement'): DescribedErr
 
 	const entry = (scope && errorCatalog[`${scope}.${code}`]) ||
 		errorCatalog[code] || {
-			title: 'Unexpected error',
-			explanation: 'Baleia could not classify this error.',
-			remediation: 'Retry; if it persists, contact an administrator.'
+			title: m.errors_catalog_unexpected_error(),
+			explanation: m.errors_catalog_baleia_could_not_classify_this_error(),
+			remediation: m.errors_catalog_retry_if_it_persists_contact_an()
 		};
 
 	return { code, ...entry, requestId, native };
