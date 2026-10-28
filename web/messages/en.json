@@ -1079,5 +1079,13 @@
 	"content_spaces_could_not_load_models": "Could not load the models",
 	"content_spaces_could_not_load_metrics_and_models": "Could not load the metrics and models",
 	"models_could_not_load_catalogs": "Could not load the catalogs",
-	"models_could_not_load_models_to_join": "Could not load the models to join"
+	"models_could_not_load_models_to_join": "Could not load the models to join",
+	"monitoring_loading_query_detail": "Loading the query detail",
+	"monitoring_could_not_load_the_query": "Could not load the query",
+	"monitoring_retention_applies_to": "Used by snapshot expiry and orphan file removal; optimize ignores it.",
+	"monitoring_running_queries": "Running queries",
+	"monitoring_show_as_table": "Show as a table",
+	"monitoring_hide_table": "Hide the table",
+	"monitoring_running_count": "{count} running",
+	"monitoring_chart_summary": "From {from} to {to}: peak of {peak} running queries, {latest} now."
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import QueriesChart from '$lib/monitoring/QueriesChart.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -199,13 +200,27 @@
 		void loadActive();
 	}
 
+	// The drawer opens at once on the clicked query (#480): a skeleton while
+	// its detail loads, an error with a retry if it fails, and a response
+	// for a query that is no longer the selected one is dropped.
+	let queryOpening = $state<MonitoringQuery | null>(null);
+	let queryLoading = $state(false);
+	let queryError = $state('');
+
 	async function openQuery(query: MonitoringQuery) {
 		if (!engineId) return;
+		queryOpening = query;
+		selectedQuery = null;
+		queryError = '';
+		queryLoading = true;
+		queryDrawer = true;
 		try {
-			selectedQuery = await getQuery(engineId, query.trino_query_id);
-			queryDrawer = true;
-		} catch {
-			selectedQuery = null;
+			const detail = await getQuery(engineId, query.trino_query_id);
+			if (queryOpening === query) selectedQuery = detail;
+		} catch (e) {
+			if (queryOpening === query) queryError = e instanceof Error ? e.message : String(e);
+		} finally {
+			if (queryOpening === query) queryLoading = false;
 		}
 	}
 
@@ -261,7 +276,8 @@
 				namespace: target.namespace,
 				table: target.table_name,
 				operations: selected,
-				retention: selected.some((op) => op !== 'optimize') ? retention : undefined
+				retention:
+					operations.expire_snapshots || operations.remove_orphan_files ? retention : undefined
 			});
 			// A newer dialog may be open by now: only close the one that asked.
 			if (maintainTarget === target) maintainOpen = false;
@@ -437,29 +453,7 @@
 					</div>
 				</div>
 				{#if cluster.series.length > 1}
-					{@const max = Math.max(1, ...cluster.series.map((point) => point.running_queries))}
-					<div class="mt-4 rounded-lg border border-border bg-bg-panel p-3">
-						<p class="text-[11px] font-semibold">Running queries</p>
-						<svg
-							viewBox="0 0 300 60"
-							class="mt-2 h-20 w-full"
-							role="img"
-							aria-label="Running queries over time"
-						>
-							<polyline
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								class="text-primary"
-								points={cluster.series
-									.map(
-										(point, index) =>
-											`${(index / (cluster!.series.length - 1)) * 300},${60 - (point.running_queries / max) * 55}`
-									)
-									.join(' ')}
-							/>
-						</svg>
-					</div>
+					<QueriesChart series={cluster.series} />
 				{/if}
 			{/if}
 		{:else if tab === 'queries'}
@@ -747,7 +741,19 @@
 </div>
 
 <Drawer bind:open={queryDrawer} title={m.monitoring_query_detail()}>
-	{#if selectedQuery}
+	{#if queryLoading}
+		<div class="flex flex-col gap-2" role="status" aria-label={m.monitoring_loading_query_detail()}>
+			<Skeleton class="h-4 w-2/3" />
+			<Skeleton class="h-4 w-1/2" />
+			<Skeleton class="h-24 w-full" />
+		</div>
+	{:else if queryError}
+		<ErrorState
+			title={m.monitoring_could_not_load_the_query()}
+			message={queryError}
+			onretry={() => queryOpening && openQuery(queryOpening)}
+		/>
+	{:else if selectedQuery}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
 			<dt class="text-slate-600 dark:text-slate-300">{m.monitoring_state()}</dt>
 			<dd>{selectedQuery.state}</dd>
@@ -823,7 +829,20 @@
 				label={m.monitoring_remove_orphan_files_files_no_snapshot_refe()}
 				bind:checked={operations.remove_orphan_files}
 			/>
-			<Input label={m.monitoring_retention_e_g_7d_30d()} bind:value={retention} class="font-mono" />
+			<!-- Retention only applies to expiry and orphan cleanup (#481); the value
+			     is kept while the field is hidden. -->
+			{#if operations.expire_snapshots || operations.remove_orphan_files}
+				<div class="flex flex-col gap-1">
+					<Input
+						label={m.monitoring_retention_e_g_7d_30d()}
+						bind:value={retention}
+						class="font-mono"
+					/>
+					<p class="text-[11px] text-slate-600 dark:text-slate-300">
+						{m.monitoring_retention_applies_to()}
+					</p>
+				</div>
+			{/if}
 			{#if maintainError}
 				<p class="text-danger" role="alert">{maintainError}</p>
 			{/if}

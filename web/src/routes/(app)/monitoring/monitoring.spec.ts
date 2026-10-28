@@ -455,4 +455,141 @@ describe('monitoring page', () => {
 		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
 		await waitFor(() => expect(posted).toEqual([B]));
 	});
+	// #480: the drawer opens at once, shows a failure with a retry, and a
+	// slow first response never replaces the query clicked after it.
+	describe('query detail drawer', () => {
+		const listed = (id: string, sql: string) => ({
+			trino_query_id: id,
+			state: 'finished',
+			user: 'ada',
+			sql_first_line: sql,
+			catalog: 'lake',
+			created_at: '2026-10-01T12:00:00Z'
+		});
+
+		function useQueries(detail: (id: string) => Promise<Response | null>) {
+			server.use(
+				http.get('/engines/{id}/monitoring/queries', ({ response }) =>
+					response(200).json({
+						items: [listed('q1', 'SELECT 1'), listed('q2', 'SELECT 2')]
+					})
+				),
+				http.get('/engines/{id}/monitoring/queries/{query_id}', async ({ params, response }) => {
+					const result = await detail(params.query_id);
+					if (result) return result;
+					return response(200).json({
+						...listed(params.query_id, ''),
+						sql: `SELECT detail_${params.query_id}`
+					});
+				})
+			);
+		}
+
+		it('shows a loading state, then an error with a retry', async () => {
+			let release: () => void = () => {};
+			const gate = new Promise<void>((resolve) => (release = resolve));
+			let failing = true;
+			useQueries(async () => {
+				await gate;
+				return failing
+					? new Response(JSON.stringify({ code: 'not_found', message: 'gone' }), {
+							status: 404,
+							headers: { 'content-type': 'application/json' }
+						})
+					: null;
+			});
+			render(MonitoringPage);
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+			await fireEvent.click(await screen.findByText('SELECT 1'));
+
+			expect(await screen.findByRole('status', { name: 'Loading the query detail' })).toBeTruthy();
+			release();
+			expect(await screen.findByText('Could not load the query')).toBeTruthy();
+
+			failing = false;
+			await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+			expect(await screen.findByText('SELECT detail_q1')).toBeTruthy();
+		});
+
+		it('keeps the last clicked query when an earlier answer is late', async () => {
+			let releaseFirst: () => void = () => {};
+			const first = new Promise<void>((resolve) => (releaseFirst = resolve));
+			useQueries(async (id) => {
+				if (id === 'q1') await first;
+				return null;
+			});
+			render(MonitoringPage);
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+			await fireEvent.click(await screen.findByText('SELECT 1'));
+			await fireEvent.click(screen.getByText('SELECT 2'));
+			expect(await screen.findByText('SELECT detail_q2')).toBeTruthy();
+
+			releaseFirst();
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(screen.getByText('SELECT detail_q2')).toBeTruthy();
+			expect(screen.queryByText('SELECT detail_q1')).toBeNull();
+		});
+	});
+
+	// #481: Retention shows only for operations that use it, and is sent only then.
+	it('asks for retention only with expiry or orphan cleanup', async () => {
+		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
+		const bodies: { operations: string[]; retention?: string }[] = [];
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog({ id: CATALOG })])
+			),
+			http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
+				response(200).json([
+					{
+						catalog_id: CATALOG,
+						catalog_name: 'lake',
+						namespace: 'sales',
+						table_name: 'orders',
+						health_score: 40,
+						needs_compaction: true,
+						needs_snapshot_expiry: false,
+						needs_orphan_cleanup: false
+					}
+				])
+			),
+			http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) => response(200).json([])),
+			http.post('/catalogs/{catalog_id}/maintenance', async ({ request, response }) => {
+				const body = (await request.json()) as { operations: string[]; retention?: string };
+				bodies.push(body);
+				return response(202).json({
+					id: `run-${bodies.length}`,
+					catalog_id: CATALOG,
+					namespace: 'sales',
+					table_name: 'orders',
+					operations: body.operations,
+					status: 'finished',
+					started_at: '2026-10-01T12:00:00Z',
+					finished_at: '2026-10-01T12:01:00Z',
+					workflow_id: 'wf'
+				});
+			})
+		);
+		render(MonitoringPage);
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Run maintenance…' }));
+		let dialog = await screen.findByRole('dialog');
+		expect(within(dialog).queryByLabelText('Retention (e.g. 7d, 30d)')).toBeNull();
+		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(bodies[0].retention).toBeUndefined();
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Run maintenance…' }));
+		dialog = await screen.findByRole('dialog');
+		await fireEvent.click(within(dialog).getByLabelText(/Expire snapshots/));
+		const retention = within(dialog).getByLabelText('Retention (e.g. 7d, 30d)');
+		await fireEvent.input(retention, { target: { value: '30d' } });
+		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
+		await waitFor(() => expect(bodies).toHaveLength(2));
+		expect(bodies[1]).toMatchObject({
+			operations: ['optimize', 'expire_snapshots'],
+			retention: '30d'
+		});
+	});
 });
