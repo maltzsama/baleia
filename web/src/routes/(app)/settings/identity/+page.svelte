@@ -136,7 +136,8 @@
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
-	<div class="max-w-4xl">
+	<!-- Lists and tables use the full width (#468). -->
+	<div class="w-full">
 		<div class="flex items-start justify-between gap-4">
 			<div>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">

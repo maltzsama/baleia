@@ -54,6 +54,17 @@ describe('Drawer', () => {
 	});
 });
 
+// #468: content-heavy drawers (SQL, JSON, diffs) take a wide size.
+describe('Drawer sizes', () => {
+	it.each([
+		[undefined, 'max-w-[420px]'],
+		['lg', 'max-w-[min(960px,60vw)]']
+	] as const)('renders size %s at %s', (size, width) => {
+		render(Drawer, { props: { open: true, title: 'Sized', size, children: body } });
+		expect(screen.getByRole('dialog', { name: 'Sized' }).className).toContain(width);
+	});
+});
+
 describe('Modal sizes', () => {
 	it.each([
 		['md', 'max-w-[480px]'],
