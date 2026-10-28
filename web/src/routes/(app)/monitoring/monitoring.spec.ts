@@ -391,4 +391,68 @@ describe('monitoring page', () => {
 		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
 		await waitFor(() => expect(posted).toEqual([B]));
 	});
+
+	it('ignores a late health response from the previous catalog', async () => {
+		const A = '00000000-0000-0000-0000-0000000000a1';
+		const B = '00000000-0000-0000-0000-0000000000b1';
+		const row = (catalog: string, name: string) => ({
+			catalog_id: catalog,
+			catalog_name: name,
+			namespace: 'sales',
+			table_name: 'orders',
+			health_score: 40,
+			needs_compaction: true,
+			needs_snapshot_expiry: false,
+			needs_orphan_cleanup: false
+		});
+		let releaseA: () => void = () => {};
+		const gateA = new Promise<void>((resolve) => (releaseA = resolve));
+		const posted: string[] = [];
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([
+					makeMetadataCatalog({ id: A, name: 'lake' }),
+					makeMetadataCatalog({ id: B, name: 'warehouse' })
+				])
+			),
+			http.get('/catalogs/{catalog_id}/table-health', async ({ params, response }) => {
+				if (params.catalog_id === A) {
+					await gateA;
+					return response(200).json([row(A, 'lake')]);
+				}
+				return response(200).json([row(B, 'warehouse')]);
+			}),
+			http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) => response(200).json([])),
+			http.post('/catalogs/{catalog_id}/maintenance', async ({ params, request, response }) => {
+				posted.push(params.catalog_id);
+				const body = (await request.json()) as { namespace: string; table: string };
+				return response(202).json({
+					id: 'run-1',
+					catalog_id: params.catalog_id,
+					namespace: body.namespace,
+					table_name: body.table,
+					operations: ['optimize'],
+					status: 'finished',
+					started_at: '2026-10-01T12:00:00Z',
+					finished_at: '2026-10-01T12:01:00Z',
+					workflow_id: 'wf-1'
+				});
+			})
+		);
+		render(MonitoringPage);
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+		await screen.findByRole('option', { name: 'warehouse' });
+		await fireEvent.change(screen.getByLabelText('Catalog'), { target: { value: B } });
+		expect(await screen.findByText('sales.orders')).toBeTruthy();
+
+		// The page shows nothing once A's rows are dropped, so give the late
+		// response a bounded moment to land before checking the target.
+		releaseA();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		await fireEvent.click(screen.getByRole('button', { name: 'Run maintenance…' }));
+		const dialog = await screen.findByRole('dialog');
+		expect(within(dialog).getByText('warehouse.sales.orders')).toBeTruthy();
+		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
+		await waitFor(() => expect(posted).toEqual([B]));
+	});
 });

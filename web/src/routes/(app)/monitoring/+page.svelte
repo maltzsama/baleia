@@ -263,7 +263,8 @@
 				operations: selected,
 				retention: selected.some((op) => op !== 'optimize') ? retention : undefined
 			});
-			maintainOpen = false;
+			// A newer dialog may be open by now: only close the one that asked.
+			if (maintainTarget === target) maintainOpen = false;
 			if (catalogId === targetCatalog) runs = [run, ...runs];
 			const controller = poll(
 				async () => {
@@ -276,7 +277,7 @@
 			await controller.done;
 			await loadHealth();
 		} catch (e) {
-			maintainError = e instanceof Error ? e.message : String(e);
+			if (maintainTarget === target) maintainError = e instanceof Error ? e.message : String(e);
 		} finally {
 			maintaining = false;
 		}
