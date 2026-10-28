@@ -1065,5 +1065,9 @@
 	"monitoring_kill_this_query": "Kill this query?",
 	"monitoring_kill_consequence_stop": "“{query}” is stopped on {engine}, and {user} gets an error instead of its results.",
 	"monitoring_kill_consequence_undo": "This cannot be undone: the query has to be run again.",
-	"monitoring_query_killed": "Cancellation requested; the query stops shortly."
+	"monitoring_query_killed": "Cancellation requested; the query stops shortly.",
+	"data_opening_the_linked_table": "Opening the linked table",
+	"data_table_not_found": "Table not found",
+	"data_table_not_found_description": "{table} is not in this catalog, or the catalog is not granted to this workspace.",
+	"data_could_not_open_the_linked_table": "Could not open the linked table"
 }
