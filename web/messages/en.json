@@ -1069,5 +1069,8 @@
 	"data_opening_the_linked_table": "Opening the linked table",
 	"data_table_not_found": "Table not found",
 	"data_table_not_found_description": "{table} is not in this catalog, or the catalog is not granted to this workspace.",
-	"data_could_not_open_the_linked_table": "Could not open the linked table"
+	"data_could_not_open_the_linked_table": "Could not open the linked table",
+	"statusbadge_never_synced": "Never synced",
+	"statusbadge_synced": "Synced",
+	"statusbadge_sync_failed": "Sync failed"
 }

@@ -1069,5 +1069,8 @@
 	"data_opening_the_linked_table": "Abrindo a tabela do link",
 	"data_table_not_found": "Tabela não encontrada",
 	"data_table_not_found_description": "{table} não está neste catálogo, ou o catálogo não está liberado para este workspace.",
-	"data_could_not_open_the_linked_table": "Não foi possível abrir a tabela do link"
+	"data_could_not_open_the_linked_table": "Não foi possível abrir a tabela do link",
+	"statusbadge_never_synced": "Nunca sincronizado",
+	"statusbadge_synced": "Sincronizado",
+	"statusbadge_sync_failed": "Falha na sincronização"
 }

@@ -8,6 +8,7 @@
 		| 'execution'
 		| 'statement'
 		| 'sync'
+		| 'metadataSync'
 		| 'reconcile'
 		| 'retriever'
 		| 'maintenance'
@@ -47,6 +48,13 @@
 			running: { tone: 'info', label: m.statusbadge_syncing(), spinning: true },
 			failed: { tone: 'danger', label: 'Failed' },
 			stale: { tone: 'warning', label: 'Stale' }
+		},
+		// A catalog's metadata sync (#454): "never" has not run, it is not a success.
+		metadataSync: {
+			never: { tone: 'neutral', label: m.statusbadge_never_synced() },
+			running: { tone: 'info', label: m.statusbadge_syncing(), spinning: true },
+			finished: { tone: 'success', label: m.statusbadge_synced() },
+			failed: { tone: 'danger', label: m.statusbadge_sync_failed() }
 		},
 		reconcile: {
 			ok: { tone: 'success', label: m.statusbadge_in_sync() },

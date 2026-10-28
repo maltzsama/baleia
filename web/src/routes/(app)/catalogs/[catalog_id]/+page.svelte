@@ -495,15 +495,7 @@
 						{/if}
 					</p>
 					{#if catalog.metadata_sync_status}
-						<Badge
-							tone={catalog.metadata_sync_status === 'failed'
-								? 'danger'
-								: catalog.metadata_sync_status === 'running'
-									? 'info'
-									: 'success'}
-						>
-							{catalog.metadata_sync_status}
-						</Badge>
+						<StatusBadge kind="metadataSync" status={catalog.metadata_sync_status} />
 					{/if}
 					{#if catalog.metadata_sync_error_code}
 						<p class="mt-2 font-mono text-[11px] text-danger">{catalog.metadata_sync_error_code}</p>
