@@ -17,7 +17,7 @@
 		width?: number;
 	} = $props();
 	let search = $state('');
-	let tree = $state<{ handleSearchKey: (event: KeyboardEvent) => void } | null>(null);
+	let tree = $state<DataSourceTree | null>(null);
 
 	// Datasources/Queries are tabs (#466): arrows move between them and the
 	// selected one is announced; the focus follows the selection.
@@ -124,6 +124,7 @@
 						placeholder="Search tables and columns..."
 						bind:value={search}
 						onkeydown={(event) => tree?.handleSearchKey(event)}
+						{...tree?.comboboxAttrs()}
 						aria-label="Search tables and columns"
 						class="border-none bg-transparent outline-none text-xs text-text-main w-full placeholder:text-text-muted"
 					/>

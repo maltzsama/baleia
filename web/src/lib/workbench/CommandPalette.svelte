@@ -17,6 +17,18 @@
 	let loading = $state(false);
 	let input: HTMLInputElement | undefined = $state();
 
+	// A combobox (#472): the input keeps the focus and names the option that
+	// Enter runs through aria-activedescendant.
+	const uid = $props.id();
+	const listId = `${uid}-list`;
+	const optionId = (index: number) => `${uid}-option-${index}`;
+	const activeId = $derived(items[active] && !loading ? optionId(active) : undefined);
+
+	function moveTo(index: number) {
+		active = index;
+		document.getElementById(optionId(index))?.scrollIntoView?.({ block: 'nearest' });
+	}
+
 	$effect(() => {
 		if (!open) return;
 		query = '';
@@ -61,10 +73,10 @@
 	function onkeydown(event: KeyboardEvent) {
 		if (event.key === 'ArrowDown') {
 			event.preventDefault();
-			active = Math.min(active + 1, items.length - 1);
+			moveTo(Math.min(active + 1, items.length - 1));
 		} else if (event.key === 'ArrowUp') {
 			event.preventDefault();
-			active = Math.max(active - 1, 0);
+			moveTo(Math.max(active - 1, 0));
 		} else if (event.key === 'Enter') {
 			event.preventDefault();
 			void run(items[active]);
@@ -90,8 +102,18 @@
 			aria-label={mode === 'quick'
 				? m.workbench_commandpalette_quick_open()
 				: m.workbench_commandpalette_command_palette()}
+			role="combobox"
+			aria-expanded={items.length > 0 && !loading}
+			aria-controls={listId}
+			aria-autocomplete="list"
+			aria-activedescendant={activeId}
 		/>
-		<div class="max-h-[50vh] overflow-y-auto" role="listbox" aria-label={m.common_results()}>
+		<div
+			id={listId}
+			class="max-h-[50vh] overflow-y-auto"
+			role="listbox"
+			aria-label={m.common_results()}
+		>
 			{#if loading}
 				<p class="px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300">
 					{m.common_searching()}
@@ -103,6 +125,8 @@
 					<button
 						type="button"
 						role="option"
+						id={optionId(index)}
+						tabindex="-1"
 						aria-selected={active === index}
 						class="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[12px] {active ===
 						index

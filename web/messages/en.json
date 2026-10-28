@@ -1118,5 +1118,6 @@
 	"ui_panelresizer_resize_fields": "Resize the field panel",
 	"ui_panelresizer_resize_settings_nav": "Resize the settings menu",
 	"sql_q_opening_the_saved_query": "Opening the saved query…",
-	"sql_q_back_to_the_workbench": "Back to the workbench"
+	"sql_q_back_to_the_workbench": "Back to the workbench",
+	"components_datasourcetree_search_results": "Search results"
 }

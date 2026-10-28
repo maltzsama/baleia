@@ -1118,5 +1118,6 @@
 	"ui_panelresizer_resize_fields": "Redimensionar o painel de campos",
 	"ui_panelresizer_resize_settings_nav": "Redimensionar o menu de configurações",
 	"sql_q_opening_the_saved_query": "Abrindo a query salva…",
-	"sql_q_back_to_the_workbench": "Voltar para o workbench"
+	"sql_q_back_to_the_workbench": "Voltar para o workbench",
+	"components_datasourcetree_search_results": "Resultados da busca"
 }

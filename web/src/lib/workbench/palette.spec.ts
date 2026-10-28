@@ -22,7 +22,7 @@ describe('command palette', () => {
 		render(CommandPalette, { props: { open: true } });
 
 		expect(await screen.findByText('Alpha')).toBeTruthy();
-		await fireEvent.keyDown(screen.getByRole('textbox', { name: 'Command palette' }), {
+		await fireEvent.keyDown(screen.getByRole('combobox', { name: 'Command palette' }), {
 			key: 'Enter'
 		});
 		await waitFor(() => expect(run).toHaveBeenCalledOnce());
@@ -41,5 +41,33 @@ describe('command palette', () => {
 		expect(await screen.findByText('Revenue')).toBeTruthy();
 		expect(screen.queryByText('Orders')).toBeNull();
 		expect(tables).not.toHaveBeenCalled();
+	});
+	// #472: the input is a combobox that names the option Enter will run.
+	it('announces the active option and runs that one on Enter', async () => {
+		const alpha = vi.fn();
+		const beta = vi.fn();
+		registerProvider({
+			id: 'test',
+			label: 'Test',
+			search: () => [
+				{ id: 'alpha', label: 'Alpha', group: 'Test', run: alpha },
+				{ id: 'beta', label: 'Beta', group: 'Test', run: beta }
+			]
+		});
+		render(CommandPalette, { props: { open: true } });
+		await screen.findByText('Beta');
+		const input = screen.getByRole('combobox', { name: 'Command palette' });
+		const list = screen.getByRole('listbox');
+		expect(input.getAttribute('aria-controls')).toBe(list.id);
+		expect(input.getAttribute('aria-expanded')).toBe('true');
+
+		const activeText = () =>
+			document.getElementById(input.getAttribute('aria-activedescendant')!)?.textContent;
+		expect(activeText()).toContain('Alpha');
+		await fireEvent.keyDown(input, { key: 'ArrowDown' });
+		expect(activeText()).toContain('Beta');
+		await fireEvent.keyDown(input, { key: 'Enter' });
+		await waitFor(() => expect(beta).toHaveBeenCalledOnce());
+		expect(alpha).not.toHaveBeenCalled();
 	});
 });
