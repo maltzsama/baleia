@@ -9,6 +9,8 @@
 	import { formatBytes } from '$lib/util/size';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
+	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
+	import { toasts } from '$lib/ui/toast.svelte';
 	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import Drawer from '$lib/ui/Drawer.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -193,14 +195,22 @@
 		}
 	}
 
-	async function kill(query: MonitoringQuery) {
-		if (!engineId) return;
-		try {
-			await killQuery(engineId, query.trino_query_id);
-			await loadQueries();
-		} catch (e) {
-			queriesError = e instanceof Error ? e.message : String(e);
-		}
+	// Killing a query asks first and names it (FD4).
+	let killing = $state<MonitoringQuery | null>(null);
+	let killOpen = $state(false);
+
+	function askKill(query: MonitoringQuery) {
+		killing = query;
+		killOpen = true;
+	}
+
+	async function kill() {
+		const target = killing;
+		if (!engineId || !target) return;
+		// ConfirmDialog shows a thrown error and stays open.
+		await killQuery(engineId, target.trino_query_id);
+		toasts.success(m.monitoring_query_killed());
+		await loadQueries();
 	}
 
 	function openMaintenance(row: TableHealth) {
@@ -532,10 +542,10 @@
 												variant="danger"
 												onclick={(event) => {
 													event.stopPropagation();
-													void kill(query);
+													askKill(query);
 												}}
 											>
-												Kill
+												{m.monitoring_kill()}
 											</Button>
 										{:else}
 											<span class="text-slate-600 dark:text-slate-300">—</span>
@@ -815,3 +825,22 @@
 		</div>
 	{/snippet}
 </Modal>
+
+{#if killing}
+	<ConfirmDialog
+		bind:open={killOpen}
+		title={m.monitoring_kill_this_query()}
+		resourceName={killing.sql_first_line || killing.trino_query_id}
+		consequences={[
+			m.monitoring_kill_consequence_stop({
+				query: killing.sql_first_line || killing.trino_query_id,
+				engine: engines.find((engine) => engine.id === engineId)?.name ?? engineId,
+				user: killing.user
+			}),
+			m.monitoring_kill_consequence_undo()
+		]}
+		confirmLabel={m.monitoring_kill_query()}
+		danger
+		onconfirm={kill}
+	/>
+{/if}
