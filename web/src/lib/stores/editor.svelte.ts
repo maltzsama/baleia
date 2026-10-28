@@ -44,7 +44,7 @@ export type EditorTab = {
 };
 
 function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
-	const sql = overrides.sql ?? 'SELECT 1;';
+	const sql = overrides.sql ?? '';
 	return {
 		id,
 		name: 'Untitled',
@@ -100,6 +100,9 @@ function createEditorStore() {
 	// "Re-run" from history (#36) opens a tab and asks the editor to run it.
 	let runSeq = 0;
 	let pendingRun = $state<EditorRun | null>(null);
+	// Bumped whenever the tabs are replaced wholesale (drafts, reset), so the
+	// editor re-mirrors the active tab even when its id did not change.
+	let generation = $state(0);
 
 	const activeTab = $derived(tabs.find((tab) => tab.id === activeId) ?? tabs[0]);
 	const dirty = $derived(tabs.some((tab) => tab.dirty));
@@ -228,6 +231,7 @@ function createEditorStore() {
 		tabs.splice(0, tabs.length, ...drafts.map(fromPersisted));
 		activeId = tabs[0].id;
 		counter = Math.max(counter, ...tabs.map((tab) => Number(tab.id) || 0));
+		generation++;
 	}
 
 	/** Persists the current tabs for a user and workspace. Never throws. */
@@ -239,6 +243,7 @@ function createEditorStore() {
 		tabs.splice(0, tabs.length, emptyTab('1'));
 		activeId = '1';
 		counter = 1;
+		generation++;
 	}
 
 	return {
@@ -259,6 +264,9 @@ function createEditorStore() {
 		},
 		get dirty() {
 			return dirty;
+		},
+		get generation() {
+			return generation;
 		},
 		activate,
 		addTab,

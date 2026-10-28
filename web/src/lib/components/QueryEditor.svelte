@@ -525,12 +525,16 @@
 	}
 
 	// Mirrors the store's active tab into CodeMirror when another component
-	// (a saved query, the route) changes the selection.
+	// (a saved query, the route) changes the selection, or when the drafts
+	// replace the tabs under the same id.
 	let syncedTabId = $state('');
+	let syncedGeneration = 0;
 	$effect(() => {
 		const id = editor.activeId;
-		if (!editorView || id === syncedTabId) return;
+		const generation = editor.generation;
+		if (!editorView || (id === syncedTabId && generation === syncedGeneration)) return;
 		syncedTabId = id;
+		syncedGeneration = generation;
 		const sql = editor.activeTab?.sql ?? '';
 		if (editorView.state.doc.toString() !== sql) {
 			editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: sql } });
@@ -656,6 +660,7 @@
 		const state = EditorState.create({ doc: editor.activeTab?.sql ?? '', extensions });
 		editorView = new EditorView({ state, parent: editorEl });
 		syncedTabId = editor.activeId;
+		syncedGeneration = editor.generation;
 		editorReady = true;
 
 		return () => {
