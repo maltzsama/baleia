@@ -6,16 +6,16 @@ package workflows
 import (
 	"time"
 
-	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-// QueryExecutionInput is the V2 workflow input (#13). It carries control
-// only: the activity loads the engine's connection and decrypts it, so no
-// secret ever enters workflow history (TestV2_InputHasNoSecrets).
+// QueryExecutionInput is the query execution workflow's input (#13). It
+// carries control only: the activity loads the engine's connection and
+// decrypts it, so no secret ever enters workflow history
+// (TestV3_InputHasNoSecrets).
 type QueryExecutionInput struct {
 	ExecutionID      string
 	WorkspaceID      string
@@ -31,39 +31,29 @@ type QueryExecutionInput struct {
 	// RerunFromPosition instead of splitting SQL again (#111).
 	RerunExecutionID  string
 	RerunFromPosition int32
-	// Dialect splits and gates the script (V3); the caller resolves it from
-	// the target's engine kind. V2 ignores it and resolves it itself.
+	// Dialect splits and gates the script; the caller resolves it from the
+	// target's engine kind.
 	Dialect string
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
 const defaultExecutionTimeout = 2 * time.Hour
 
-// QueryExecutionWorkflowV2 runs every statement of a query on the target's
+// QueryExecutionWorkflowV3 runs every statement of a query on the target's
 // engine, in ONE activity holding ONE engine session (#27), so session state
 // (USE, SET, temporary tables, transactions) persists across statements on
-// every engine. The workflow never names an engine: the target does.
+// every engine. The workflow never names an engine: the target does. The
+// script's dialect is resolved by the caller (the API's injected dialect
+// registry) and arrives in the input.
 //
 // Do not change this workflow's commands in place once runs may be open:
-// add V3 and drain V2 (see #27).
-func QueryExecutionWorkflowV2(ctx workflow.Context, in QueryExecutionInput) error {
-	dialectName := dialect.Trino
-	if d, ok := dialect.ForEngineKind(in.Target.EngineKind); ok { //nolint:staticcheck // V2 keeps its lookup so open runs replay
-		dialectName = d.Name()
-	}
-	return runQueryExecution(ctx, in, dialectName)
-}
-
-// QueryExecutionWorkflowV3 is V2 with the script's dialect resolved by the
-// caller (the API's injected dialect registry) instead of inside the workflow;
-// its commands are V2's.
+// add V4 and drain V3 (V2 went that way, #414).
 func QueryExecutionWorkflowV3(ctx workflow.Context, in QueryExecutionInput) error {
 	return runQueryExecution(ctx, in, in.Dialect)
 }
 
-// runQueryExecution is the body every QueryExecutionWorkflow version shares:
-// a version only decides where the script's dialect comes from. Its commands
-// must not change while runs of any version that uses it may be open.
+// runQueryExecution is the body of QueryExecutionWorkflowV3. Its commands must
+// not change while V3 runs may be open.
 func runQueryExecution(ctx workflow.Context, in QueryExecutionInput, dialectName string) error {
 	// Bookkeeping activities are idempotent DB updates and may be retried.
 	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{

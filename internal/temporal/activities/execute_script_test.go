@@ -482,7 +482,7 @@ func TestExecuteScript_ForbiddenStatement(t *testing.T) {
 	}
 }
 
-// scriptWorkflow runs ExecuteScript the way QueryExecutionWorkflowV2 does,
+// scriptWorkflow runs ExecuteScript the way QueryExecutionWorkflowV3 does,
 // so a test can cancel it through the workflow. The short heartbeat timeout
 // makes the SDK send heartbeats (which deliver the cancel) without delay.
 func scriptWorkflow(ctx workflow.Context, p ExecuteScriptParams) error {

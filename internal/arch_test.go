@@ -452,34 +452,6 @@ func TestNoInitInEngines(t *testing.T) {
 	})
 }
 
-// TestDialectLookupOnlyInV2: dialects are injected; the deprecated
-// package-level dialect.ForEngineKind is called only inside
-// QueryExecutionWorkflowV2, so its open runs replay, and goes away with it.
-func TestDialectLookupOnlyInV2(t *testing.T) {
-	t.Parallel()
-	const allowedFile, allowedFunc = "internal/temporal/workflows/workflows.go", "QueryExecutionWorkflowV2"
-	goSources(t, func(rel string, f *ast.File) {
-		if strings.HasPrefix(rel, "internal/dialect/") {
-			return
-		}
-		for _, decl := range f.Decls {
-			if fn, ok := decl.(*ast.FuncDecl); ok && rel == allowedFile && fn.Recv == nil && fn.Name.Name == allowedFunc {
-				continue
-			}
-			ast.Inspect(decl, func(n ast.Node) bool {
-				sel, ok := n.(*ast.SelectorExpr)
-				if !ok || sel.Sel.Name != "ForEngineKind" {
-					return true
-				}
-				if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "dialect" {
-					t.Errorf("%s calls dialect.ForEngineKind outside %s; use the injected dialect.Registry", rel, allowedFunc)
-				}
-				return true
-			})
-		}
-	})
-}
-
 // TestNoDefaultServeMux: importing net/http/pprof (internal/obs, #380) puts
 // the runtime profiles on http.DefaultServeMux, so no server may serve that
 // mux: the profiles stay on the opt-in BALEIA_PPROF_ADDR listener.
