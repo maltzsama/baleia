@@ -200,7 +200,6 @@
 	"components_savedquerieslist_delete_space": "Delete space",
 	"settings_teams_delete_team": "Delete team",
 	"settings_workspaces_delete_workspace": "Delete workspace",
-	"content_trash_deleted_queries_and_metrics_can_be_restore": "Deleted queries and metrics can be restored with their history.",
 	"common_description": "Description",
 	"components_header_description_optional": "Description (optional)",
 	"content_spaces_destination_space": "Destination space",
@@ -1144,5 +1143,12 @@
 	"connections_loading_catalogs": "Loading catalogs",
 	"connections_could_not_load_catalogs": "Could not load the catalogs.",
 	"connections_bindings_unavailable": "bindings unavailable",
-	"settings_teams_loading_members": "Loading members"
+	"settings_teams_loading_members": "Loading members",
+	"content_kind_queries": "Queries",
+	"content_kind_metrics": "Metrics",
+	"content_kind_models": "Models",
+	"content_trash_deleted_kinds_can_be_restored": "Deleted {kinds} can be restored with their history.",
+	"content_trash_all_kinds": "All",
+	"content_trash_trash_is_empty": "Trash is empty",
+	"content_trash_deleted_kinds_appear_here": "Deleted {kinds} appear here and can be restored."
 }

@@ -927,20 +927,26 @@
 		{/if}
 	</section>
 
-	{#if saveError}
-		<ErrorPanel error={{ code: saveError.code ?? 'validation_error' }} />
-		<p class="font-mono text-[11px] text-danger" role="alert">{saveError.message}</p>
-	{/if}
-
-	<div class="flex justify-end gap-2">
-		<Button onclick={() => goto(resolve('/models'))} disabled={saving}>{m.common_cancel()}</Button>
-		<Button
-			variant="primary"
-			onclick={save}
-			loading={saving}
-			disabled={saving || !label.trim() || !slug.trim() || !catalogId || primaryKey.length === 0}
-		>
-			{m.common_save()}
-		</Button>
+	<!-- Save and Cancel stay at the bottom of the viewport on a long model
+	     (#479), with the save error next to them. -->
+	<div
+		class="sticky bottom-0 z-10 -mx-1 flex flex-col gap-2 border-t border-border bg-bg-panel/95 px-1 py-3 backdrop-blur"
+	>
+		{#if saveError}
+			<ErrorPanel error={{ code: saveError.code ?? 'validation_error' }} />
+			<p class="font-mono text-[11px] text-danger" role="alert">{saveError.message}</p>
+		{/if}
+		<div class="flex justify-end gap-2">
+			<Button onclick={() => goto(resolve('/models'))} disabled={saving}>{m.common_cancel()}</Button
+			>
+			<Button
+				variant="primary"
+				onclick={save}
+				loading={saving}
+				disabled={saving || !label.trim() || !slug.trim() || !catalogId || primaryKey.length === 0}
+			>
+				{m.common_save()}
+			</Button>
+		</div>
 	</div>
 </div>

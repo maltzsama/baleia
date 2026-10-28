@@ -200,7 +200,6 @@
 	"components_savedquerieslist_delete_space": "Excluir espaço",
 	"settings_teams_delete_team": "Excluir equipe",
 	"settings_workspaces_delete_workspace": "Excluir workspace",
-	"content_trash_deleted_queries_and_metrics_can_be_restore": "Consultas e métricas excluídas podem ser restauradas com seu histórico.",
 	"common_description": "Descrição",
 	"components_header_description_optional": "Descrição (opcional)",
 	"content_spaces_destination_space": "Espaço de destino",
@@ -1144,5 +1143,12 @@
 	"connections_loading_catalogs": "Carregando catálogos",
 	"connections_could_not_load_catalogs": "Não foi possível carregar os catálogos.",
 	"connections_bindings_unavailable": "bindings indisponíveis",
-	"settings_teams_loading_members": "Carregando membros"
+	"settings_teams_loading_members": "Carregando membros",
+	"content_kind_queries": "Queries",
+	"content_kind_metrics": "Métricas",
+	"content_kind_models": "Modelos",
+	"content_trash_deleted_kinds_can_be_restored": "Itens excluídos ({kinds}) podem ser restaurados com o histórico.",
+	"content_trash_all_kinds": "Todos",
+	"content_trash_trash_is_empty": "A lixeira está vazia",
+	"content_trash_deleted_kinds_appear_here": "Itens excluídos ({kinds}) aparecem aqui e podem ser restaurados."
 }
