@@ -1140,5 +1140,9 @@
 	"engines_no_engine_matches": "No engine matches",
 	"content_type_at_least_two_characters": "Type at least two characters to search.",
 	"content_no_content_matches": "No content matches “{query}”.",
-	"content_search_failed": "Search failed"
+	"content_search_failed": "Search failed",
+	"connections_loading_catalogs": "Loading catalogs",
+	"connections_could_not_load_catalogs": "Could not load the catalogs.",
+	"connections_bindings_unavailable": "bindings unavailable",
+	"settings_teams_loading_members": "Loading members"
 }

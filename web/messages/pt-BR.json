@@ -1140,5 +1140,9 @@
 	"engines_no_engine_matches": "Nenhuma engine corresponde",
 	"content_type_at_least_two_characters": "Digite pelo menos dois caracteres para buscar.",
 	"content_no_content_matches": "Nenhum conteúdo corresponde a “{query}”.",
-	"content_search_failed": "A busca falhou"
+	"content_search_failed": "A busca falhou",
+	"connections_loading_catalogs": "Carregando catálogos",
+	"connections_could_not_load_catalogs": "Não foi possível carregar os catálogos.",
+	"connections_bindings_unavailable": "bindings indisponíveis",
+	"settings_teams_loading_members": "Carregando membros"
 }

@@ -2,6 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { canGlobal } from '$lib/authz/can';
+	import { eachLimited } from '$lib/util/limit';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -43,13 +44,20 @@
 		normalizeEngineName
 	} from '$lib/connections/providers';
 
-	type CatalogInfo = { catalog: Catalog; bindings: CatalogBinding[] };
+	// Cards whose catalogs load at once; the rest wait their turn.
+	const CATALOG_LOOKUPS = 4;
+
+	/** A catalog and its bindings; null bindings means they failed to load. */
+	type CatalogInfo = { catalog: Catalog; bindings: CatalogBinding[] | null };
+	/** Each card fills in on its own (#477): loading, loaded or failed. */
+	type CardState = { status: 'loading' | 'ready' | 'error'; error: string };
 
 	let connections = $state<CatalogConnection[]>([]);
 	let providers = $state<ConnectionProvider[]>([]);
 	let engines = $state<Engine[]>([]);
 	let support = $state<Record<string, Record<string, BindingSupport>>>({});
 	let catalogs = $state<Record<string, CatalogInfo[]>>({});
+	let cards = $state<Record<string, CardState>>({});
 	let loading = $state(true);
 	let error = $state('');
 	let search = $state('');
@@ -132,26 +140,39 @@
 				})
 			);
 			support = Object.fromEntries(supports);
-			await Promise.all(connectionList.map(loadCatalogs));
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			loading = false;
 		}
+		// The list is on screen; each card's catalogs and bindings follow, a
+		// few at a time, without holding the others back.
+		if (!error) {
+			cards = Object.fromEntries(
+				connections.map((connection) => [connection.id, { status: 'loading', error: '' }])
+			);
+			void eachLimited(connections, CATALOG_LOOKUPS, loadCatalogs);
+		}
 	}
 
 	async function loadCatalogs(connection: CatalogConnection) {
+		cards = { ...cards, [connection.id]: { status: 'loading', error: '' } };
 		try {
 			const list = await listConnectionCatalogs(connection.id);
 			const withBindings = await Promise.all(
 				list.map(async (catalog) => ({
 					catalog,
-					bindings: catalog.id ? await listCatalogBindings(catalog.id).catch(() => []) : []
+					// A failed bindings lookup is not "no bindings".
+					bindings: catalog.id ? await listCatalogBindings(catalog.id).catch(() => null) : []
 				}))
 			);
 			catalogs = { ...catalogs, [connection.id]: withBindings };
-		} catch {
-			catalogs = { ...catalogs, [connection.id]: [] };
+			cards = { ...cards, [connection.id]: { status: 'ready', error: '' } };
+		} catch (e) {
+			cards = {
+				...cards,
+				[connection.id]: { status: 'error', error: e instanceof Error ? e.message : String(e) }
+			};
 		}
 	}
 
@@ -357,7 +378,16 @@
 						</div>
 					{/if}
 
-					{#if catalogsHere.length > 0}
+					{#if cards[connection.id]?.status === 'loading'}
+						<div role="status" aria-label={m.connections_loading_catalogs()}>
+							<Skeleton class="h-4 w-2/3" />
+						</div>
+					{:else if cards[connection.id]?.status === 'error'}
+						<p class="flex flex-wrap items-center gap-2 text-[11px] text-danger" role="alert">
+							{m.connections_could_not_load_catalogs()}
+							<Button size="sm" onclick={() => loadCatalogs(connection)}>{m.common_retry()}</Button>
+						</p>
+					{:else if catalogsHere.length > 0}
 						<ul class="flex flex-col gap-1 text-[11px]">
 							{#each catalogsHere as item (item.catalog.id)}
 								<li class="flex items-center gap-1.5">
@@ -374,7 +404,9 @@
 											<RelativeTime at={item.catalog.metadata_synced_at} />
 										</span>
 									{/if}
-									{#if item.bindings.length > 0}
+									{#if item.bindings === null}
+										<span class="text-danger">· {m.connections_bindings_unavailable()}</span>
+									{:else if item.bindings.length > 0}
 										<span class="text-slate-600 dark:text-slate-300">
 											· {item.bindings.length} binding{item.bindings.length === 1 ? '' : 's'}
 										</span>
