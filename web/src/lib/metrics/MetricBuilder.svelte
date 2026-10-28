@@ -31,6 +31,20 @@
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const spaces = $derived(savedQueries.spaces);
+	// A new metric goes to a space the user can edit (#461); an existing one
+	// shows the space it lives in (moving it is done from the content views,
+	// so the picker is read-only while editing).
+	const editableSpaces = $derived(
+		spaces.filter((space) => space.allowed_actions?.includes('edit_content'))
+	);
+	const spaceOptions = $derived(
+		(metric
+			? spaces.filter(
+					(space) => space.id === spaceId || space.allowed_actions?.includes('edit_content')
+				)
+			: editableSpaces
+		).map((space) => ({ value: space.id, label: space.name }))
+	);
 
 	let label = $state('');
 	let slug = $state('');
@@ -115,7 +129,7 @@
 			slug = metric.slug;
 			slugEdited = true;
 			description = metric.description ?? '';
-			spaceId = metric.space_id ?? savedQueries.spaces[0]?.id ?? '';
+			spaceId = metric.space_id ?? '';
 			const d = metric.definition as unknown as MetricDefinition;
 			aggregation = d.aggregation ?? 'count';
 			column = d.column ?? '';
@@ -139,7 +153,8 @@
 			);
 			if (match) await selectTable(match.table_id);
 		} else {
-			spaceId = savedQueries.spaces[0]?.id ?? '';
+			// Empty lets the API use its default space.
+			spaceId = editableSpaces[0]?.id ?? '';
 		}
 	}
 
@@ -309,9 +324,8 @@
 		<Select
 			label={m.common_space()}
 			bind:value={spaceId}
-			options={spaces
-				.filter((space) => space.allowed_actions?.includes('edit_content'))
-				.map((space) => ({ value: space.id, label: space.name }))}
+			options={spaceOptions}
+			disabled={!!metric}
 		/>
 
 		<h2 class="mt-2 text-[13px] font-semibold">{m.metrics_metricbuilder_table()}</h2>
