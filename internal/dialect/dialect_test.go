@@ -544,27 +544,3 @@ func TestTrino_QuoteString(t *testing.T) {
 
 // testRegistry is the registry the package's own tests read dialects from.
 var testRegistry = NewRegistry()
-
-// TestForEngineKindDeprecated: the package-level lookup QueryExecutionWorkflowV2
-// still uses gives the same answers as the registry; it goes with V2.
-// TestForEngineKind covers the kind → dialect translation: every engine kind
-// the API can carry resolves, and a miss is (nil, false) explicitly rather
-// than through a lookup of the empty name.
-func TestForEngineKindDeprecated(t *testing.T) {
-	t.Parallel()
-	for kind, want := range map[string]string{
-		"trino": Trino, "postgresql": PostgreSQL, "mysql": MySQL, "mariadb": MariaDB,
-		"sqlserver": TSQL, "oracle": Oracle, "sqlite": SQLite, "clickhouse": ClickHouse,
-		"flightsql": FlightSQL, "fake": FlightSQL, // the test fake shares the ANSI subset
-	} {
-		d, ok := ForEngineKind(kind) //nolint:staticcheck // the deprecated lookup is under test
-		if !ok || d == nil || d.Name() != want {
-			t.Errorf("ForEngineKind(%q) = (%v, %v), want %q", kind, d, ok, want)
-		}
-	}
-	for _, kind := range []string{"", "nope", "postgres", "sql-server"} {
-		if d, ok := ForEngineKind(kind); ok || d != nil { //nolint:staticcheck // the deprecated lookup is under test
-			t.Errorf("ForEngineKind(%q) = (%v, %v), want (nil, false)", kind, d, ok)
-		}
-	}
-}

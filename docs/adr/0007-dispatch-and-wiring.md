@@ -20,9 +20,8 @@ to substitute a fake in tests or add a second engine without editing those call 
 - SQL dialects are built once by `dialect.NewRegistry()` in `internal/app` and injected into the
   engines (through their specs), the Trino provider, the api handlers, the agent policy gate, the
   worker activities and the content import. The api resolves a query's dialect and passes it to
-  `QueryExecutionWorkflowV3`. The only package-level lookup left is the deprecated
-  `dialect.ForEngineKind`, kept for `QueryExecutionWorkflowV2` so its open runs replay;
-  `TestDialectLookupOnlyInV2` keeps it there until V2 is removed.
+  `QueryExecutionWorkflowV3`. There is no package-level dialect lookup: the deprecated
+  `dialect.ForEngineKind` went away with `QueryExecutionWorkflowV2` once its runs drained (#414).
 - `cmd/e2e-seed/main.go` (build tag `e2e`, never in the release image) is a third, test-only
   composition root: it registers the Playwright smoke's Trino catalog the way a binding does (#121).
 - Kind registries (the engine kind registry, the provider registry, the binder registry) are

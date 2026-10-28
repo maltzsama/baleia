@@ -248,12 +248,3 @@ func (r *Registry) Names() []string {
 	slices.Sort(out)
 	return out
 }
-
-// defaultRegistry backs ForEngineKind, the one package-level lookup left.
-var defaultRegistry = NewRegistry()
-
-// ForEngineKind returns the dialect of a query-engine kind.
-//
-// Deprecated: only QueryExecutionWorkflowV2 calls it, so its open runs replay;
-// everything else uses an injected Registry. It goes away with V2.
-func ForEngineKind(kind string) (Dialect, bool) { return defaultRegistry.ForEngineKind(kind) }

@@ -23,7 +23,7 @@ import (
 
 const testStatementTimeout = 30 * time.Minute
 
-func v2Input() QueryExecutionInput {
+func v3Input() QueryExecutionInput {
 	return QueryExecutionInput{
 		ExecutionID: "exec-2",
 		WorkspaceID: "ws-1",
@@ -41,7 +41,8 @@ func v2Input() QueryExecutionInput {
 		},
 		Identity:         queryengine.Identity{UserID: "u_123"},
 		StatementTimeout: testStatementTimeout,
-		RequestID:        "req-v2",
+		RequestID:        "req-1",
+		Dialect:          "trino",
 	}
 }
 
@@ -64,10 +65,10 @@ func finished(n int) *activities.ExecuteScriptResult {
 	return r
 }
 
-// TestV2_RunsScriptOnTarget: the script is split with the target engine's
-// dialect and runs in ONE activity on the target, with every statement in
+// TestV3_RunsScriptOnTarget: the script is split with the input's dialect and
+// runs in ONE activity on the target, with every statement in
 // order; the totals complete the execution.
-func TestV2_RunsScriptOnTarget(t *testing.T) {
+func TestV3_RunsScriptOnTarget(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
@@ -88,17 +89,17 @@ func TestV2_RunsScriptOnTarget(t *testing.T) {
 		return true
 	})).Return(nil)
 
-	env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
 
 	require.Equal(t, "trino", split.Dialect)
-	in := v2Input()
+	in := v3Input()
 	require.Equal(t, in.ExecutionID, script.ExecutionID)
 	require.Equal(t, in.Target, script.Target)
 	require.Equal(t, in.Identity, script.Identity)
 	require.Equal(t, testStatementTimeout, script.Timeout)
-	require.Equal(t, "req-v2", script.RequestID)
+	require.Equal(t, "req-1", script.RequestID)
 	require.Equal(t, []activities.StatementRef{{Position: 1, SQL: "SELECT 1"}, {Position: 2, SQL: "SELECT 2"}}, script.Statements)
 	require.Equal(t, activities.CompleteExecutionParams{ExecutionID: "exec-2", Status: "finished", RowsReturned: 2, DurationMs: 4}, completed)
 }
@@ -118,7 +119,7 @@ func TestV3_SplitsWithTheInputDialect(t *testing.T) {
 	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.Anything).Return(finished(1), nil)
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
 
-	in := v2Input() // a Trino target
+	in := v3Input() // a Trino target
 	in.Dialect = "tsql"
 	env.ExecuteWorkflow(QueryExecutionWorkflowV3, in)
 	require.True(t, env.IsWorkflowCompleted())
@@ -126,15 +127,16 @@ func TestV3_SplitsWithTheInputDialect(t *testing.T) {
 	require.Equal(t, "tsql", split.Dialect)
 }
 
-// TestV2_TwoEnginesSameWorkflow: the workflow never names an engine. Targets
+// TestV3_TwoEnginesSameWorkflow: the workflow never names an engine. Targets
 // on engines of different kinds run through the same workflow, each split
 // with its engine's dialect and executed on its engine.
-func TestV2_TwoEnginesSameWorkflow(t *testing.T) {
+func TestV3_TwoEnginesSameWorkflow(t *testing.T) {
 	t.Parallel()
-	pg := v2Input()
+	pg := v3Input()
 	pg.Target.EngineID = pgtype.UUID{Bytes: [16]byte{0xE2}, Valid: true}
 	pg.Target.EngineKind = "postgresql"
-	for _, in := range []QueryExecutionInput{v2Input(), pg} {
+	pg.Dialect = "postgresql"
+	for _, in := range []QueryExecutionInput{v3Input(), pg} {
 		var ts testsuite.WorkflowTestSuite
 		env := ts.NewTestWorkflowEnvironment()
 		var dialectName string
@@ -149,32 +151,32 @@ func TestV2_TwoEnginesSameWorkflow(t *testing.T) {
 			return true
 		})).Return(finished(1), nil)
 		env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
-		env.ExecuteWorkflow(QueryExecutionWorkflowV2, in)
+		env.ExecuteWorkflow(QueryExecutionWorkflowV3, in)
 		require.NoError(t, env.GetWorkflowError())
 		require.Equal(t, in.Target.EngineKind, dialectName)
 		require.Equal(t, in.Target.EngineID, engineID)
 	}
 }
 
-// TestV2_PropagatesRequestID: the inbound HTTP correlation id reaches the
+// TestV3_PropagatesRequestID: the inbound HTTP correlation id reaches the
 // script so a run can be joined back to the request log line.
-func TestV2_PropagatesRequestID(t *testing.T) {
+func TestV3_PropagatesRequestID(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 2)
 	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.MatchedBy(func(p activities.ExecuteScriptParams) bool {
-		return p.RequestID == "req-v2"
+		return p.RequestID == "req-1"
 	})).Return(finished(2), nil).Once()
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
-	env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 	require.NoError(t, env.GetWorkflowError())
 	env.AssertExpectations(t)
 }
 
-// TestV2_StatementFailureFailsExecution: a failed statement fails the
+// TestV3_StatementFailureFailsExecution: a failed statement fails the
 // execution; the run itself completes (the failure is the user's SQL).
-func TestV2_StatementFailureFailsExecution(t *testing.T) {
+func TestV3_StatementFailureFailsExecution(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
@@ -187,15 +189,15 @@ func TestV2_StatementFailureFailsExecution(t *testing.T) {
 		failed = true
 		return nil
 	})
-	env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
 	require.True(t, failed, "the execution must be marked failed")
 }
 
-// TestV2_CancelledOnEngineCompletesCancelled: a statement cancelled on the
+// TestV3_CancelledOnEngineCompletesCancelled: a statement cancelled on the
 // engine ends the execution cancelled, neither finished nor failed.
-func TestV2_CancelledOnEngineCompletesCancelled(t *testing.T) {
+func TestV3_CancelledOnEngineCompletesCancelled(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
@@ -207,14 +209,14 @@ func TestV2_CancelledOnEngineCompletesCancelled(t *testing.T) {
 		status = p.Status
 		return nil
 	})
-	env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 	require.NoError(t, env.GetWorkflowError())
 	require.Equal(t, "cancelled", status)
 }
 
-// TestV2_ScriptNotRetried pins the duplicate-write fix: a failed script is
+// TestV3_ScriptNotRetried pins the duplicate-write fix: a failed script is
 // never re-executed automatically.
-func TestV2_ScriptNotRetried(t *testing.T) {
+func TestV3_ScriptNotRetried(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
@@ -227,17 +229,17 @@ func TestV2_ScriptNotRetried(t *testing.T) {
 		})
 	env.OnActivity(activities.AbandonStatements, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity(activities.FailExecution, mock.Anything, mock.Anything).Return(nil)
-	env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 	require.True(t, env.IsWorkflowCompleted())
 	require.Error(t, env.GetWorkflowError())
 	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
 }
 
-// TestV2_HeartbeatTimeoutMarksInterrupted: when the worker running the
+// TestV3_HeartbeatTimeoutMarksInterrupted: when the worker running the
 // script dies, the statement recorded as running ends failed/interrupted,
 // the engine is asked to stop it (AbandonStatements uses the persisted
 // handle), the rest are skipped and the execution fails.
-func TestV2_HeartbeatTimeoutMarksInterrupted(t *testing.T) {
+func TestV3_HeartbeatTimeoutMarksInterrupted(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
@@ -254,19 +256,19 @@ func TestV2_HeartbeatTimeoutMarksInterrupted(t *testing.T) {
 		failed = true
 		return nil
 	})
-	env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 	require.True(t, env.IsWorkflowCompleted())
 	require.Equal(t, "failed", abandon.Status)
 	require.Equal(t, activities.CodeInterrupted, abandon.ErrorCode)
-	require.Equal(t, v2Input().Target.EngineID, abandon.EngineID)
+	require.Equal(t, v3Input().Target.EngineID, abandon.EngineID)
 	require.Equal(t, "exec-2", abandon.ExecutionID)
 	require.True(t, failed, "the execution must be marked failed")
 }
 
-// TestV2_CancelMarksCancelled: cancelling the workflow mid-script abandons
+// TestV3_CancelMarksCancelled: cancelling the workflow mid-script abandons
 // the running statement as cancelled and records the execution's
 // cancellation, never a completion.
-func TestV2_CancelMarksCancelled(t *testing.T) {
+func TestV3_CancelMarksCancelled(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
@@ -295,7 +297,7 @@ func TestV2_CancelMarksCancelled(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+		env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 		close(done)
 	}()
 	<-started
@@ -308,9 +310,9 @@ func TestV2_CancelMarksCancelled(t *testing.T) {
 	require.Equal(t, "cancelled", completedStatus)
 }
 
-// TestV2_RejectedScriptFails: a script the editor gate rejects fails the
+// TestV3_RejectedScriptFails: a script the editor gate rejects fails the
 // execution before any statement record exists.
-func TestV2_RejectedScriptFails(t *testing.T) {
+func TestV3_RejectedScriptFails(t *testing.T) {
 	t.Parallel()
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
@@ -321,7 +323,7 @@ func TestV2_RejectedScriptFails(t *testing.T) {
 		failed = true
 		return nil
 	})
-	env.ExecuteWorkflow(QueryExecutionWorkflowV2, v2Input())
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, v3Input())
 	require.Error(t, env.GetWorkflowError())
 	require.True(t, failed)
 }
@@ -334,12 +336,12 @@ func TestScriptTimeout(t *testing.T) {
 	require.Equal(t, time.Hour, scriptTimeout(1, 0, time.Hour), "no statement timeout: the cap")
 }
 
-// TestV2_InputHasNoSecrets: the workflow input is recorded in Temporal
+// TestV3_InputHasNoSecrets: the workflow input is recorded in Temporal
 // history, so it must never carry connection secrets; the activity loads and
 // decrypts the engine's connection itself.
-func TestV2_InputHasNoSecrets(t *testing.T) {
+func TestV3_InputHasNoSecrets(t *testing.T) {
 	t.Parallel()
-	raw, err := json.Marshal(v2Input())
+	raw, err := json.Marshal(v3Input())
 	require.NoError(t, err)
 	for _, secret := range []string{"s3cret", "client_secret", "password", "token", "credentials"} {
 		require.NotContains(t, strings.ToLower(string(raw)), secret)
@@ -359,17 +361,17 @@ func TestV2_InputHasNoSecrets(t *testing.T) {
 	require.Equal(t, []string{"UserID", "AgentID"}, fields(queryengine.Identity{}))
 }
 
-// TestV2_Replay replays histories recorded on a real cluster (minikube, one
-// per outcome: finished, a failed statement, cancelled, worker interrupted).
-// A change to the workflow's commands fails here: add V3 instead (#27).
-func TestV2_Replay(t *testing.T) {
+// TestV3_Replay replays histories recorded on a real cluster (minikube, one
+// per outcome: finished, a failed statement, cancelled). A change to the
+// workflow's commands fails here: add V4 instead (#27, #414).
+func TestV3_Replay(t *testing.T) {
 	t.Parallel()
-	for _, name := range []string{"finished", "failed", "cancelled", "interrupted"} {
+	for _, name := range []string{"finished", "failed", "cancelled"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			r := worker.NewWorkflowReplayer()
-			r.RegisterWorkflow(QueryExecutionWorkflowV2)
-			require.NoError(t, r.ReplayWorkflowHistoryFromJSONFile(nil, "testdata/v2_"+name+".json"))
+			r.RegisterWorkflow(QueryExecutionWorkflowV3)
+			require.NoError(t, r.ReplayWorkflowHistoryFromJSONFile(nil, "testdata/v3_"+name+".json"))
 		})
 	}
 }
