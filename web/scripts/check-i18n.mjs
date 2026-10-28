@@ -3,16 +3,25 @@
 //
 // 1. en.json and pt-BR.json must have exactly the same keys, and every value
 //    must be a non-empty string.
-// 2. Every guarded .svelte file must not render hard-coded user-facing text.
+// 2. No guarded file renders hard-coded user-facing text (#469):
+//    - .svelte markup: text in every branch ({:else}, {:then}, snippets...),
+//      text attributes and their expressions ({'Create'}, {`${n} items`},
+//      {ok ? 'Yes' : 'No'});
+//    - script code, in .svelte and .ts: strings assigned to error/message/
+//      label-like variables, passed to toasts, or set as label-like object
+//      properties (label tables such as settings/sections.ts).
 //
-// The guarded directory list grows as pages are extracted; until then only the
-// key-parity check runs. Run from web/ (npm run check).
+// Run from web/ (npm run check).
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'svelte/compiler';
+import ts from 'typescript';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
+// Imported by a test, the module URL may not be a file URL; web/ is the cwd then.
+const root = import.meta.url.startsWith('file:')
+	? fileURLToPath(new URL('..', import.meta.url))
+	: process.cwd();
 const messagesDir = join(root, 'messages');
 const locales = ['en', 'pt-BR'];
 
@@ -81,42 +90,216 @@ function walkFiles(path, out = []) {
 	return out;
 }
 
-const TEXT_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'alt', 'label']);
+// Attributes and props that carry copy.
+const TEXT_ATTRIBUTE =
+	/^(title|placeholder|alt|label|aria-label|aria-description|aria-roledescription|aria-valuetext|description|message|heading|hint|confirmLabel|cancelLabel|emptyText|emptyTitle)$/;
+// Variables and object properties that hold copy.
+const TEXT_NAME =
+	/^(label|title|description|placeholder|message|heading|hint|explanation|remediation|confirmLabel|cancelLabel|[a-z]\w*(Error|Message|Label|Title|Hint|Notice))$|^(error|notice)$/;
 
 function hasLetters(value) {
 	// Unicode letters only: "×", "→" and "·" are decorative, not copy.
 	return /\p{L}/u.test(value);
 }
 
-function attributeText(attribute) {
-	if (attribute.type !== 'Attribute' || !TEXT_ATTRIBUTES.has(attribute.name)) return undefined;
-	const parts = attribute.value ?? [];
-	if (parts.length !== 1 || parts[0]?.type !== 'Text') return undefined;
-	return parts[0].data;
+// Code, not copy: identifiers, keys, routes, MIME types, CSS-ish tokens.
+function looksLikeCode(value) {
+	const text = value.trim();
+	return (
+		/^[a-z0-9_.:/#?=&@%+-]*$/.test(text) ||
+		// Class lists: lowercase tokens only, at least one utility-shaped.
+		(/^[a-z0-9_.:/#%()[\]!-]+(\s+[a-z0-9_.:/#%()[\]!-]+)*$/.test(text) && /[-:[]/.test(text)) ||
+		/^[A-Z0-9_]+$/.test(text) ||
+		// Filters and assignments without spaces: (uid={{username}}), key=value.
+		(/^\S+$/.test(text) && text.includes('=')) ||
+		/^(https?:|mailto:|\/)/.test(text)
+	);
 }
 
-function walk(node, file, report, skip = false) {
-	if (!node || typeof node !== 'object') return;
+function isCopy(value) {
+	const text = value.trim();
+	return hasLetters(text) && !ALLOWED.has(text) && !looksLikeCode(text);
+}
 
-	const tag = node.name ?? '';
-	const nextSkip = skip || SKIP_TAGS.has(tag) || SKIP_COMPONENTS.test(tag);
+// Literal markup text is read by people even as one lowercase word ("to",
+// "rows"); only class lists, routes and filters are code there.
+function isMarkupCopy(value) {
+	const text = value.trim();
+	return hasLetters(text) && !ALLOWED.has(text) && (!looksLikeCode(text) || /^[a-z]+$/.test(text));
+}
 
-	if (!nextSkip && node.type === 'Text' && typeof node.data === 'string') {
-		const text = node.data.trim();
-		if (hasLetters(text) && !ALLOWED.has(text)) report(file, text);
+// The strings an expression can render: literals reached through
+// conditionals, fallbacks, concatenation and template literals, but not
+// through calls, member access or comparisons.
+function displayed(node, out = []) {
+	if (!node) return out;
+	switch (node.type) {
+		case 'Literal':
+			if (typeof node.value === 'string') out.push(node.value);
+			break;
+		case 'StringLiteral':
+			out.push(node.value);
+			break;
+		case 'TemplateLiteral': {
+			// "{}" stands for each expression: `${n} items` reads "{} items", copy.
+			const text = node.quasis.map((quasi) => quasi.value.cooked ?? '').join('{}');
+			if (text.trim()) out.push(text);
+			break;
+		}
+		case 'ConditionalExpression':
+			displayed(node.consequent, out);
+			displayed(node.alternate, out);
+			break;
+		case 'LogicalExpression':
+			displayed(node.left, out);
+			displayed(node.right, out);
+			break;
+		case 'BinaryExpression':
+			if (node.operator === '+') {
+				displayed(node.left, out);
+				displayed(node.right, out);
+			}
+			break;
+		case 'TSAsExpression':
+		case 'TSSatisfiesExpression':
+		case 'TSNonNullExpression':
+			displayed(node.expression, out);
+			break;
 	}
+	return out;
+}
+
+function attributeStrings(attribute) {
+	const value = attribute.value;
+	if (value === true || value == null) return [];
+	const parts = Array.isArray(value) ? value : [value];
+	return parts.flatMap((part) =>
+		part.type === 'Text'
+			? // A placeholder often shows an example value: "orders", "cn".
+				[part.data].filter(attribute.name === 'placeholder' ? isCopy : isMarkupCopy)
+			: part.type === 'ExpressionTag'
+				? displayed(part.expression).filter(isCopy)
+				: []
+	);
+}
+
+function walkMarkup(node, report, skip = false) {
+	if (!node || typeof node !== 'object') return;
+	if (Array.isArray(node)) {
+		for (const child of node) walkMarkup(child, report, skip);
+		return;
+	}
+	const name = node.name ?? '';
+	const nextSkip =
+		skip ||
+		((node.type === 'RegularElement' || node.type === 'Component') &&
+			(SKIP_TAGS.has(name) || SKIP_COMPONENTS.test(name)));
 
 	if (!nextSkip) {
+		if (node.type === 'Text') {
+			const text = node.data.trim();
+			if (isMarkupCopy(text)) report(text);
+		} else if (node.type === 'ExpressionTag') {
+			for (const text of displayed(node.expression)) if (isCopy(text)) report(text);
+		}
 		for (const attribute of node.attributes ?? []) {
-			const text = attributeText(attribute);
-			if (text && hasLetters(text) && !ALLOWED.has(text)) report(file, text);
+			if (attribute.type !== 'Attribute' || !TEXT_ATTRIBUTE.test(attribute.name)) continue;
+			for (const text of attributeStrings(attribute)) report(text.trim());
 		}
 	}
 
-	for (const key of ['children', 'nodes']) {
-		for (const child of node[key] ?? []) walk(child, file, report, nextSkip);
+	for (const [key, value] of Object.entries(node)) {
+		// Expressions are checked above, only where they render.
+		if (key === 'attributes' || key === 'expression' || key === 'metadata') continue;
+		if (value && typeof value === 'object') walkMarkup(value, report, nextSkip);
 	}
-	if (node.fragment) walk(node.fragment, file, report, nextSkip);
+}
+
+// Script code, through the TypeScript AST (works for .ts and <script>).
+function walkScript(source, fileName, report) {
+	const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true);
+	const strings = (node) => {
+		if (!node) return [];
+		if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return [node.text];
+		if (ts.isTemplateExpression(node))
+			return [[node.head.text, ...node.templateSpans.map((span) => span.literal.text)].join('{}')];
+		if (ts.isConditionalExpression(node))
+			return [...strings(node.whenTrue), ...strings(node.whenFalse)];
+		if (ts.isBinaryExpression(node)) {
+			const op = node.operatorToken.kind;
+			if (
+				op === ts.SyntaxKind.PlusToken ||
+				op === ts.SyntaxKind.BarBarToken ||
+				op === ts.SyntaxKind.QuestionQuestionToken
+			)
+				return [...strings(node.left), ...strings(node.right)];
+		}
+		if (
+			ts.isParenthesizedExpression(node) ||
+			ts.isAsExpression(node) ||
+			ts.isSatisfiesExpression?.(node)
+		)
+			return strings(node.expression);
+		if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return strings(node.body);
+		return [];
+	};
+	const check = (node) => {
+		for (const text of strings(node)) if (isCopy(text)) report(text);
+	};
+	const nameOf = (node) =>
+		node && (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isPrivateIdentifier(node))
+			? node.text
+			: ts.isPropertyAccessExpression(node)
+				? node.name.text
+				: '';
+	const visit = (node) => {
+		if (ts.isPropertyAssignment(node) && TEXT_NAME.test(nameOf(node.name))) check(node.initializer);
+		else if (ts.isVariableDeclaration(node) && TEXT_NAME.test(nameOf(node.name))) {
+			// $state('...') / $derived(...) wrap the initial value.
+			const init = node.initializer;
+			check(init && ts.isCallExpression(init) ? init.arguments[0] : init);
+		} else if (
+			ts.isBinaryExpression(node) &&
+			node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+			TEXT_NAME.test(nameOf(node.left))
+		)
+			check(node.right);
+		else if (
+			ts.isCallExpression(node) &&
+			ts.isPropertyAccessExpression(node.expression) &&
+			nameOf(node.expression.expression) === 'toasts'
+		)
+			node.arguments.forEach(check);
+		ts.forEachChild(node, visit);
+	};
+	visit(file);
+}
+
+const SCRIPT_SKIP = [
+	/\.(spec|test)\.ts$/,
+	/^src\/lib\/paraglide\//,
+	/^src\/lib\/api\/schema\.d\.ts$/,
+	/^src\/test\//,
+	/\.d\.ts$/
+];
+
+/** Hard-coded copy in one file (path relative to web/), in source order. */
+export function findHardCodedText(path, source) {
+	const found = [];
+	const report = (text) => {
+		if (!found.includes(text)) found.push(text);
+	};
+	if (path.endsWith('.svelte')) {
+		const ast = parse(source, { filename: path, modern: true });
+		walkMarkup(ast.fragment, report);
+		for (const script of [ast.instance, ast.module]) {
+			if (!script) continue;
+			walkScript(source.slice(script.content.start, script.content.end), `${path}.ts`, report);
+		}
+	} else if (path.endsWith('.ts') && !SCRIPT_SKIP.some((pattern) => pattern.test(path))) {
+		walkScript(source, path, report);
+	}
+	return found;
 }
 
 function checkHardCodedStrings() {
@@ -128,21 +311,17 @@ function checkHardCodedStrings() {
 			fail(`guarded path does not exist: ${entry}`);
 			return [];
 		}
-	})
-		.filter((file) => file.endsWith('.svelte'))
-		.filter((file) => !SKIP_FILES.some((pattern) => pattern.test(relative(root, file))));
+	}).filter((file) => !SKIP_FILES.some((pattern) => pattern.test(relative(root, file))));
 
 	for (const file of files) {
-		const source = readFileSync(file, 'utf8');
-		const ast = parse(source, { filename: file });
-		const seen = new Set();
-		walk(ast.html ?? ast.fragment ?? ast, file, (path, text) => {
-			if (seen.has(text)) return;
-			seen.add(text);
-			fail(`${relative(root, path)}: hard-coded text "${text}" (use m.*)`);
-		});
+		const path = relative(root, file);
+		for (const text of findHardCodedText(path, readFileSync(file, 'utf8')))
+			fail(`${path}: hard-coded text "${text}" (use m.*)`);
 	}
 }
 
-checkParity();
-checkHardCodedStrings();
+// Tests import findHardCodedText; only a direct run checks the tree.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	checkParity();
+	checkHardCodedStrings();
+}

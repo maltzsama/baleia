@@ -79,6 +79,18 @@ Workspace/catalog/namespace/table/tab selection is URL-backed through
   '$lib/paraglide/messages'`. `npm run check` enforces key parity between
   `messages/en.json` and `messages/pt-BR.json`; the generated
   `src/lib/paraglide/` is never edited or committed.
+- `scripts/check-i18n.mjs` (part of `npm run check`) fails on hard-coded copy
+  in markup (every branch, text attributes, literals in expressions) and in
+  script code (strings assigned to error/message/label-like names, toasts,
+  label tables in `.ts`). SQL in `<code>`/`CodeBlock`, class lists, routes and
+  identifiers are not copy.
+- Labels in module-level tables are getters (`get label() { return m.x(); }`)
+  so a language switch re-renders them. Counts use `plural(n, m.x_one,
+  m.x_other)` from `$lib/i18n/plural`.
+- pt-BR glossary: engine → motor, binding → vínculo, connector → conector,
+  catalog → catálogo, grant → concessão, sync → sincronização, read-only →
+  somente leitura, space → espaço; workspace, query, retriever, token,
+  snapshot and namespace stay in English.
 
 ### UI layers
 
