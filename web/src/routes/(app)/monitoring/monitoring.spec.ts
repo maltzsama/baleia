@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { http, server } from '../../../test/server';
-import { makeMe, makeWorkspace } from '../../../test/factories';
+import { makeMe, makeMetadataCatalog, makeWorkspace } from '../../../test/factories';
+import { renderPage } from '../../../test/render';
+import { clearMetadataCache } from '$lib/metadata/client';
 import { authStore } from '$lib/stores/auth.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import MonitoringPage from './+page.svelte';
@@ -11,6 +13,7 @@ const WORKSPACE = '00000000-0000-0000-0000-000000000001';
 
 describe('monitoring page', () => {
 	beforeEach(() => {
+		clearMetadataCache();
 		authStore.set(makeMe());
 		workspaceStore.select(makeWorkspace({ id: WORKSPACE }));
 		server.use(
@@ -105,5 +108,116 @@ describe('monitoring page', () => {
 		// Unknown figures are not shown as zero.
 		expect(within(usage).queryByText('Planning')).toBeNull();
 		expect(within(usage).queryByText('Bytes processed')).toBeNull();
+	});
+	// #453: the runs the API returns are the ones the table lists.
+	describe('maintenance runs', () => {
+		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
+		const run = (id: string, status: string, table: string) => ({
+			id,
+			catalog_id: CATALOG,
+			namespace: 'sales',
+			table_name: table,
+			operations: ['optimize'],
+			status,
+			started_at: '2026-10-01T12:00:00Z',
+			finished_at: status === 'running' ? null : '2026-10-01T12:05:00Z',
+			error_code: status === 'failed' ? 'engine_error' : null,
+			workflow_id: `wf-${id}`
+		});
+
+		const healthRow = {
+			catalog_id: CATALOG,
+			catalog_name: 'lake',
+			namespace: 'sales',
+			table_name: 'orders',
+			health_score: 80,
+			needs_compaction: true,
+			needs_snapshot_expiry: false,
+			needs_orphan_cleanup: false
+		};
+
+		function mockTables(
+			runs: ReturnType<typeof run>[],
+			options: { health?: (typeof healthRow)[]; runsFail?: boolean } = {}
+		) {
+			server.use(
+				http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+					response(200).json([makeMetadataCatalog({ id: CATALOG })])
+				),
+				http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
+					response(200).json(options.health ?? [healthRow])
+				),
+				http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) =>
+					options.runsFail
+						? response(404).json({ code: 'not_found', message: 'catalog not found' })
+						: response(200).json(runs)
+				)
+			);
+		}
+
+		async function openTables() {
+			renderPage(MonitoringPage, { me: makeMe(), url: '/monitoring' });
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+		}
+
+		it('lists running, finished and failed runs', async () => {
+			mockTables([
+				run('r1', 'running', 'orders'),
+				run('r2', 'finished', 'customers'),
+				run('r3', 'failed', 'events')
+			]);
+			await openTables();
+
+			expect(await screen.findByText('sales.customers')).toBeTruthy();
+			expect(screen.getByText('sales.events')).toBeTruthy();
+			expect(screen.getByText('engine_error')).toBeTruthy();
+			expect(screen.queryByText('No maintenance runs yet.')).toBeNull();
+		});
+
+		it('lists the runs when no table has health rows', async () => {
+			mockTables([run('r2', 'finished', 'customers')], { health: [] });
+			await openTables();
+
+			expect(await screen.findByText('sales.customers')).toBeTruthy();
+			expect(screen.getByText('No table health rows')).toBeTruthy();
+		});
+
+		it('shows the empty state for an empty list', async () => {
+			mockTables([]);
+			await openTables();
+
+			expect(await screen.findByText('No maintenance runs yet.')).toBeTruthy();
+		});
+
+		it('shows the error, not the empty state, when the runs request fails', async () => {
+			mockTables([], { runsFail: true });
+			await openTables();
+
+			expect(await screen.findByText('Could not load table health')).toBeTruthy();
+			expect(screen.queryByText('No maintenance runs yet.')).toBeNull();
+		});
+
+		it('lists a run started from the modal without a reload', async () => {
+			let listed: ReturnType<typeof run>[] = [];
+			mockTables([]);
+			server.use(
+				http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) =>
+					response(200).json(listed)
+				),
+				http.post('/catalogs/{catalog_id}/maintenance', ({ response }) => {
+					listed = [run('r9', 'finished', 'orders')];
+					return response(202).json(run('r9', 'running', 'orders'));
+				})
+			);
+			await openTables();
+			expect(await screen.findByText('No maintenance runs yet.')).toBeTruthy();
+
+			await fireEvent.click(await screen.findByRole('button', { name: 'Run maintenance…' }));
+			const dialog = await screen.findByRole('dialog');
+			await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
+
+			await waitFor(() => expect(screen.queryByText('No maintenance runs yet.')).toBeNull());
+			expect(screen.getAllByText('sales.orders').length).toBeGreaterThan(1);
+		});
 	});
 });
