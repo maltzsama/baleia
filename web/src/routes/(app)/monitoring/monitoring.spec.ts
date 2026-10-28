@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { beforeEach, describe, expect, it } from 'vitest';
 import { http, server } from '../../../test/server';
 import { makeMe, makeMetadataCatalog, makeWorkspace } from '../../../test/factories';
+import { renderPage } from '../../../test/render';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { authStore } from '$lib/stores/auth.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -124,29 +125,39 @@ describe('monitoring page', () => {
 			workflow_id: `wf-${id}`
 		});
 
-		function mockTables(runs: ReturnType<typeof run>[]) {
+		const healthRow = {
+			catalog_id: CATALOG,
+			catalog_name: 'lake',
+			namespace: 'sales',
+			table_name: 'orders',
+			health_score: 80,
+			needs_compaction: true,
+			needs_snapshot_expiry: false,
+			needs_orphan_cleanup: false
+		};
+
+		function mockTables(
+			runs: ReturnType<typeof run>[],
+			options: { health?: (typeof healthRow)[]; runsFail?: boolean } = {}
+		) {
 			server.use(
 				http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
 					response(200).json([makeMetadataCatalog({ id: CATALOG })])
 				),
 				http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
-					response(200).json([
-						{
-							catalog_id: CATALOG,
-							catalog_name: 'lake',
-							namespace: 'sales',
-							table_name: 'orders',
-							health_score: 80,
-							needs_compaction: false,
-							needs_snapshot_expiry: false,
-							needs_orphan_cleanup: false
-						}
-					])
+					response(200).json(options.health ?? [healthRow])
 				),
 				http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) =>
-					response(200).json(runs)
+					options.runsFail
+						? response(404).json({ code: 'not_found', message: 'catalog not found' })
+						: response(200).json(runs)
 				)
 			);
+		}
+
+		async function openTables() {
+			renderPage(MonitoringPage, { me: makeMe(), url: '/monitoring' });
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
 		}
 
 		it('lists running, finished and failed runs', async () => {
@@ -155,8 +166,7 @@ describe('monitoring page', () => {
 				run('r2', 'finished', 'customers'),
 				run('r3', 'failed', 'events')
 			]);
-			render(MonitoringPage);
-			await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+			await openTables();
 
 			expect(await screen.findByText('sales.customers')).toBeTruthy();
 			expect(screen.getByText('sales.events')).toBeTruthy();
@@ -164,12 +174,50 @@ describe('monitoring page', () => {
 			expect(screen.queryByText('No maintenance runs yet.')).toBeNull();
 		});
 
+		it('lists the runs when no table has health rows', async () => {
+			mockTables([run('r2', 'finished', 'customers')], { health: [] });
+			await openTables();
+
+			expect(await screen.findByText('sales.customers')).toBeTruthy();
+			expect(screen.getByText('No table health rows')).toBeTruthy();
+		});
+
 		it('shows the empty state for an empty list', async () => {
 			mockTables([]);
-			render(MonitoringPage);
-			await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+			await openTables();
 
 			expect(await screen.findByText('No maintenance runs yet.')).toBeTruthy();
+		});
+
+		it('shows the error, not the empty state, when the runs request fails', async () => {
+			mockTables([], { runsFail: true });
+			await openTables();
+
+			expect(await screen.findByText('Could not load table health')).toBeTruthy();
+			expect(screen.queryByText('No maintenance runs yet.')).toBeNull();
+		});
+
+		it('lists a run started from the modal without a reload', async () => {
+			let listed: ReturnType<typeof run>[] = [];
+			mockTables([]);
+			server.use(
+				http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) =>
+					response(200).json(listed)
+				),
+				http.post('/catalogs/{catalog_id}/maintenance', ({ response }) => {
+					listed = [run('r9', 'finished', 'orders')];
+					return response(202).json(run('r9', 'running', 'orders'));
+				})
+			);
+			await openTables();
+			expect(await screen.findByText('No maintenance runs yet.')).toBeTruthy();
+
+			await fireEvent.click(await screen.findByRole('button', { name: 'Run maintenance…' }));
+			const dialog = await screen.findByRole('dialog');
+			await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
+
+			await waitFor(() => expect(screen.queryByText('No maintenance runs yet.')).toBeNull());
+			expect(screen.getAllByText('sales.orders').length).toBeGreaterThan(1);
 		});
 	});
 });

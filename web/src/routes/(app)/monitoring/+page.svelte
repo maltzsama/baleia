@@ -662,7 +662,8 @@
 						</tbody>
 					</table>
 				</div>
-
+			{/if}
+			{#if catalogs.length > 0 && !healthError && !(healthLoading && health.length === 0)}
 				<h2 class="mt-5 text-[13px] font-semibold">Maintenance runs</h2>
 				<div class="mt-2 overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
