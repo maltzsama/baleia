@@ -60,6 +60,19 @@ describe('audit page', () => {
 		expect(screen.getByText('"new"')).toBeTruthy();
 	});
 
+	// #485: each event opens from a named control, not a focusable row.
+	it('opens an event from a named button in its row', async () => {
+		render(AuditPage);
+		await screen.findByText('Ada Lovelace');
+
+		const open = screen.getByRole('button', { name: /^Open event .* by Ada Lovelace$/ });
+		expect(open.closest('td')).toBeTruthy();
+		expect(open.closest('tr')?.getAttribute('tabindex')).toBeNull();
+		await fireEvent.click(open);
+		expect(await screen.findByText('Changes')).toBeTruthy();
+		expect(screen.getAllByRole('columnheader')[0].getAttribute('scope')).toBe('col');
+	});
+
 	it('sends the selected window as from and to filters', async () => {
 		let from: string | null = null;
 		server.use(

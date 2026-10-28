@@ -322,26 +322,41 @@
 					class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th class="px-3 py-2">Time</th>
-						<th class="px-3 py-2">Actor</th>
-						<th class="px-3 py-2">Action</th>
-						<th class="px-3 py-2">Resource</th>
-						<th class="px-3 py-2">Workspace</th>
-						<th class="px-3 py-2">Outcome</th>
-						<th class="px-3 py-2">Reason</th>
+						<th scope="col" class="px-3 py-2">Time</th>
+						<th scope="col" class="px-3 py-2">Actor</th>
+						<th scope="col" class="px-3 py-2">Action</th>
+						<th scope="col" class="px-3 py-2">Resource</th>
+						<th scope="col" class="px-3 py-2">Workspace</th>
+						<th scope="col" class="px-3 py-2">Outcome</th>
+						<th scope="col" class="px-3 py-2">Reason</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each events as event (event.id)}
+						<!-- The action cell holds the keyboard control (#485); a click anywhere
+						     on the row is a mouse shortcut to the same drawer. -->
 						<tr
 							class="cursor-pointer border-b border-border/60 last:border-b-0 hover:bg-bg-toolbar"
 							onclick={() => openEvent(event)}
-							onkeydown={(e) => e.key === 'Enter' && openEvent(event)}
-							tabindex="0"
 						>
 							<td class="whitespace-nowrap px-3 py-1.5"><RelativeTime at={event.occurred_at} /></td>
 							<td class="px-3 py-1.5">{actorLabel(event)}</td>
-							<td class="px-3 py-1.5 font-mono">{event.action}</td>
+							<td class="px-3 py-1.5 font-mono">
+								<button
+									type="button"
+									class="text-left font-mono text-primary hover:underline"
+									aria-label={m.settings_audit_open_event({
+										action: event.action,
+										actor: actorLabel(event)
+									})}
+									onclick={(e) => {
+										e.stopPropagation();
+										openEvent(event);
+									}}
+								>
+									{event.action}
+								</button>
+							</td>
 							<td class="px-3 py-1.5">{resourceLabel(event)}</td>
 							<td class="px-3 py-1.5">{workspaceLabel(event)}</td>
 							<td class="px-3 py-1.5">
