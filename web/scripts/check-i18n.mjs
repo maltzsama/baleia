@@ -208,6 +208,13 @@ function walkCode(code, report, { rendered = false, each = false } = {}) {
 		if (!ts.isBlock(fn.body)) return strings(fn.body, out);
 		const visit = (node) => {
 			if (ts.isReturnStatement(node)) strings(node.expression, out);
+			// A list built step by step: items.push('...').
+			else if (
+				ts.isCallExpression(node) &&
+				ts.isPropertyAccessExpression(node.expression) &&
+				node.expression.name.text === 'push'
+			)
+				node.arguments.forEach((arg) => strings(arg, out));
 			else if (!ts.isFunctionLike(node)) ts.forEachChild(node, visit);
 		};
 		ts.forEachChild(fn.body, visit);

@@ -2309,5 +2309,8 @@
 	"settings_agents_detail_limit_query_runtime_seconds": "Query runtime (s)",
 	"settings_agents_detail_limit_concurrent_queries": "Concurrent queries",
 	"settings_agents_detail_limit_queries_per_hour": "Queries per hour",
-	"settings_agents_detail_limit_tool_calls_per_minute": "Tool calls per minute"
+	"settings_agents_detail_limit_tool_calls_per_minute": "Tool calls per minute",
+	"connections_its_engine_must_be_deleted_first": "Its engine {value} must be deleted first.",
+	"connections_catalog_s_and_their_bindings_will": "{length} catalog(s) and their bindings will be removed: {value}.",
+	"connections_saved_queries_and_metrics_that_target": "Saved queries and metrics that target these catalogs will stop resolving."
 }

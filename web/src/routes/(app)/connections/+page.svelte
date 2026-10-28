@@ -253,17 +253,22 @@
 		const items: string[] = [];
 		const ownEngines = enginesOf(connection.id);
 		if (ownEngines.length > 0) {
-			items.push(`Its engine ${ownEngines.map((e) => e.name).join(', ')} must be deleted first.`);
+			items.push(
+				m.connections_its_engine_must_be_deleted_first({
+					value: ownEngines.map((e) => e.name).join(', ')
+				})
+			);
 		}
 		const catalogsHere = catalogs[connection.id] ?? [];
 		if (catalogsHere.length > 0) {
 			items.push(
-				`${catalogsHere.length} catalog(s) and their bindings will be removed: ${catalogsHere
-					.map((item) => item.catalog.name)
-					.join(', ')}.`
+				m.connections_catalog_s_and_their_bindings_will({
+					length: catalogsHere.length,
+					value: catalogsHere.map((item) => item.catalog.name).join(', ')
+				})
 			);
 		}
-		items.push('Saved queries and metrics that target these catalogs will stop resolving.');
+		items.push(m.connections_saved_queries_and_metrics_that_target());
 		return items;
 	}
 

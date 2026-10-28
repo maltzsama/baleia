@@ -2309,5 +2309,8 @@
 	"settings_agents_detail_limit_query_runtime_seconds": "Duração da consulta (s)",
 	"settings_agents_detail_limit_concurrent_queries": "Consultas simultâneas",
 	"settings_agents_detail_limit_queries_per_hour": "Consultas por hora",
-	"settings_agents_detail_limit_tool_calls_per_minute": "Chamadas de ferramenta por minuto"
+	"settings_agents_detail_limit_tool_calls_per_minute": "Chamadas de ferramenta por minuto",
+	"connections_its_engine_must_be_deleted_first": "O motor {value} dela precisa ser excluído antes.",
+	"connections_catalog_s_and_their_bindings_will": "Catálogos removidos com seus vínculos ({length}): {value}.",
+	"connections_saved_queries_and_metrics_that_target": "Queries salvas e métricas que apontam para estes catálogos deixam de funcionar."
 }
