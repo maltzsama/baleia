@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import QueriesChart from '$lib/monitoring/QueriesChart.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -452,29 +453,7 @@
 					</div>
 				</div>
 				{#if cluster.series.length > 1}
-					{@const max = Math.max(1, ...cluster.series.map((point) => point.running_queries))}
-					<div class="mt-4 rounded-lg border border-border bg-bg-panel p-3">
-						<p class="text-[11px] font-semibold">Running queries</p>
-						<svg
-							viewBox="0 0 300 60"
-							class="mt-2 h-20 w-full"
-							role="img"
-							aria-label="Running queries over time"
-						>
-							<polyline
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								class="text-primary"
-								points={cluster.series
-									.map(
-										(point, index) =>
-											`${(index / (cluster!.series.length - 1)) * 300},${60 - (point.running_queries / max) * 55}`
-									)
-									.join(' ')}
-							/>
-						</svg>
-					</div>
+					<QueriesChart series={cluster.series} />
 				{/if}
 			{/if}
 		{:else if tab === 'queries'}

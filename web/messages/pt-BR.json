@@ -1072,5 +1072,10 @@
 	"data_could_not_open_the_linked_table": "Não foi possível abrir a tabela do link",
 	"monitoring_loading_query_detail": "Carregando o detalhe da query",
 	"monitoring_could_not_load_the_query": "Não foi possível carregar a query",
-	"monitoring_retention_applies_to": "Usada pela expiração de snapshots e pela remoção de arquivos órfãos; o optimize a ignora."
+	"monitoring_retention_applies_to": "Usada pela expiração de snapshots e pela remoção de arquivos órfãos; o optimize a ignora.",
+	"monitoring_running_queries": "Queries em execução",
+	"monitoring_show_as_table": "Ver como tabela",
+	"monitoring_hide_table": "Esconder a tabela",
+	"monitoring_running_count": "{count} em execução",
+	"monitoring_chart_summary": "De {from} a {to}: pico de {peak} queries em execução, {latest} agora."
 }
