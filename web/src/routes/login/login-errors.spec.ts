@@ -89,4 +89,27 @@ describe('login errors by code', () => {
 			await screen.findByRole('button', { name: 'Checking credentials…' }, { timeout: 2500 })
 		).toBeTruthy();
 	});
+	// #484: the theme switch is a named switch; errors are announced.
+	it('names the theme switch and toggles its state', async () => {
+		baseHandlers();
+		render(LoginPage);
+		const toggle = screen.getByRole('switch', { name: 'Dark theme' });
+		expect(toggle.tagName).toBe('BUTTON');
+		const before = toggle.getAttribute('aria-checked');
+		await fireEvent.click(toggle);
+		expect(toggle.getAttribute('aria-checked')).not.toBe(before);
+		await fireEvent.click(toggle);
+	});
+
+	it('announces a sign-in error as an alert', async () => {
+		baseHandlers();
+		server.use(
+			http.post('/auth/login', ({ response }) =>
+				response(401).json({ code: 'invalid_credentials', message: 'bad' })
+			)
+		);
+		render(LoginPage);
+		await submit('ada@example.com', 'wrong-password');
+		expect(await screen.findByRole('alert')).toBeTruthy();
+	});
 });

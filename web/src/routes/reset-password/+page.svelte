@@ -104,6 +104,7 @@
 					</div>
 					{#if error}
 						<div
+							role="alert"
 							class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5"
 						>
 							{error}

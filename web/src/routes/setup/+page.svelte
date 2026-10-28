@@ -32,6 +32,8 @@
 	}
 
 	async function createAdmin() {
+		// One submission at a time: Enter while a request runs does nothing.
+		if (busy) return;
 		error = '';
 		if (!firstName || !email || !password || password !== confirmPass) {
 			error = m.setup_fill_in_the_required_fields_and_make_sure();
@@ -142,91 +144,102 @@
 						{m.setup_this_will_be_the_first_administrator_of_yo()}
 					</div>
 				</div>
-				{#if error}
-					<div
-						class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5"
-					>
-						{error}
-					</div>
-				{/if}
-				<div class="grid grid-cols-2 gap-3 mb-3.5">
-					<div class="flex flex-col gap-[5px]">
-						<label class="text-[11px] font-semibold" for="setup-first">{m.setup_first_name()}</label
+				<!-- A form, so Enter in any field submits once (#484). -->
+				<form
+					onsubmit={(event) => {
+						event.preventDefault();
+						void createAdmin();
+					}}
+				>
+					{#if error}
+						<div
+							role="alert"
+							class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5"
 						>
+							{error}
+						</div>
+					{/if}
+					<div class="grid grid-cols-2 gap-3 mb-3.5">
+						<div class="flex flex-col gap-[5px]">
+							<label class="text-[11px] font-semibold" for="setup-first"
+								>{m.setup_first_name()}</label
+							>
+							<input
+								id="setup-first"
+								class={inputBase}
+								type="text"
+								bind:value={firstName}
+								placeholder={m.setup_john()}
+							/>
+						</div>
+						<div class="flex flex-col gap-[5px]">
+							<label class="text-[11px] font-semibold" for="setup-last">{m.setup_last_name()}</label
+							>
+							<input
+								id="setup-last"
+								class={inputBase}
+								type="text"
+								bind:value={lastName}
+								placeholder={m.setup_doe()}
+							/>
+						</div>
+					</div>
+					<div class="flex flex-col gap-[5px] mb-3.5">
+						<label class="text-[11px] font-semibold" for="setup-email">{m.common_email()}</label>
 						<input
-							id="setup-first"
-							class={inputBase}
-							type="text"
-							bind:value={firstName}
-							placeholder={m.setup_john()}
+							id="setup-email"
+							class="{inputBase} font-mono text-xs"
+							type="email"
+							bind:value={email}
+							placeholder={m.setup_admin_company_com()}
 						/>
 					</div>
-					<div class="flex flex-col gap-[5px]">
-						<label class="text-[11px] font-semibold" for="setup-last">{m.setup_last_name()}</label>
-						<input
-							id="setup-last"
-							class={inputBase}
-							type="text"
-							bind:value={lastName}
-							placeholder={m.setup_doe()}
+					<div class="mb-3.5">
+						<PasswordInput
+							id="setup-password"
+							label={m.common_password()}
+							autocomplete="new-password"
+							bind:value={password}
+							placeholder="••••••••"
+							oninput={(e) => checkStrength((e.target as HTMLInputElement).value)}
+						/>
+						<div class="flex gap-1 mt-1.5">
+							{#each [1, 2, 3] as bar (bar)}
+								<div
+									class="flex-1 h-[3px] rounded-sm transition-colors duration-300 {strengthScore >=
+									bar
+										? bar === 3
+											? 'bg-green-500'
+											: bar === 2
+												? 'bg-amber-500'
+												: 'bg-red-500'
+										: 'bg-border'}"
+								></div>
+							{/each}
+						</div>
+					</div>
+					<div class="mb-3.5">
+						<PasswordInput
+							id="setup-confirm"
+							label={m.setup_confirm_password()}
+							autocomplete="new-password"
+							bind:value={confirmPass}
+							placeholder="••••••••"
 						/>
 					</div>
-				</div>
-				<div class="flex flex-col gap-[5px] mb-3.5">
-					<label class="text-[11px] font-semibold" for="setup-email">{m.common_email()}</label>
-					<input
-						id="setup-email"
-						class="{inputBase} font-mono text-xs"
-						type="email"
-						bind:value={email}
-						placeholder={m.setup_admin_company_com()}
-					/>
-				</div>
-				<div class="mb-3.5">
-					<PasswordInput
-						id="setup-password"
-						label={m.common_password()}
-						autocomplete="new-password"
-						bind:value={password}
-						placeholder="••••••••"
-						oninput={(e) => checkStrength((e.target as HTMLInputElement).value)}
-					/>
-					<div class="flex gap-1 mt-1.5">
-						{#each [1, 2, 3] as bar (bar)}
-							<div
-								class="flex-1 h-[3px] rounded-sm transition-colors duration-300 {strengthScore >=
-								bar
-									? bar === 3
-										? 'bg-green-500'
-										: bar === 2
-											? 'bg-amber-500'
-											: 'bg-red-500'
-									: 'bg-border'}"
-							></div>
-						{/each}
-					</div>
-				</div>
-				<div class="mb-3.5">
-					<PasswordInput
-						id="setup-confirm"
-						label={m.setup_confirm_password()}
-						autocomplete="new-password"
-						bind:value={confirmPass}
-						placeholder="••••••••"
-					/>
-				</div>
-				<div class="flex items-center justify-end mt-6">
-					<button
-						onclick={createAdmin}
-						disabled={busy}
-						class="h-10 px-5 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
-					>
-						{busy ? m.setup_creating() : m.setup_continue()}
-						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
-							><polyline points="9 18 15 12 9 6" /></svg
+					<div class="flex items-center justify-end mt-6">
+						<button
+							type="submit"
+							disabled={busy}
+							class="h-10 px-5 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
 						>
-					</button>
-				</div>
+							{busy ? m.setup_creating() : m.setup_continue()}
+							<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
+								><polyline points="9 18 15 12 9 6" /></svg
+							>
+						</button>
+					</div>
+				</form>
 			</div>
 		{:else if step === 2}
 			<div class="w-full max-w-[920px] animate-[fadeIn_.2s_ease]">
