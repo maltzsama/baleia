@@ -275,7 +275,8 @@
 				namespace: target.namespace,
 				table: target.table_name,
 				operations: selected,
-				retention: selected.some((op) => op !== 'optimize') ? retention : undefined
+				retention:
+					operations.expire_snapshots || operations.remove_orphan_files ? retention : undefined
 			});
 			// A newer dialog may be open by now: only close the one that asked.
 			if (maintainTarget === target) maintainOpen = false;
@@ -849,7 +850,20 @@
 				label={m.monitoring_remove_orphan_files_files_no_snapshot_refe()}
 				bind:checked={operations.remove_orphan_files}
 			/>
-			<Input label={m.monitoring_retention_e_g_7d_30d()} bind:value={retention} class="font-mono" />
+			<!-- Retention only applies to expiry and orphan cleanup (#481); the value
+			     is kept while the field is hidden. -->
+			{#if operations.expire_snapshots || operations.remove_orphan_files}
+				<div class="flex flex-col gap-1">
+					<Input
+						label={m.monitoring_retention_e_g_7d_30d()}
+						bind:value={retention}
+						class="font-mono"
+					/>
+					<p class="text-[11px] text-slate-600 dark:text-slate-300">
+						{m.monitoring_retention_applies_to()}
+					</p>
+				</div>
+			{/if}
 			{#if maintainError}
 				<p class="text-danger" role="alert">{maintainError}</p>
 			{/if}

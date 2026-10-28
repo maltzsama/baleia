@@ -1081,5 +1081,6 @@
 	"models_could_not_load_catalogs": "Não foi possível carregar os catálogos",
 	"models_could_not_load_models_to_join": "Não foi possível carregar os modelos para join",
 	"monitoring_loading_query_detail": "Carregando o detalhe da query",
-	"monitoring_could_not_load_the_query": "Não foi possível carregar a query"
+	"monitoring_could_not_load_the_query": "Não foi possível carregar a query",
+	"monitoring_retention_applies_to": "Usada pela expiração de snapshots e pela remoção de arquivos órfãos; o optimize a ignora."
 }
