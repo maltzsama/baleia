@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
+import { authStore } from '$lib/stores/auth.svelte';
 import { http, server } from '../../../test/server';
-import { makeEngine } from '../../../test/factories';
+import { makeEngine, makeMe } from '../../../test/factories';
 import EnginesPage from './+page.svelte';
 import type { EngineCapabilities } from '$lib/engines/client';
 
@@ -102,5 +103,34 @@ describe('engines list', () => {
 		render(EnginesPage);
 
 		expect(await screen.findByText('Register engine')).toBeTruthy();
+	});
+	// #476: filters that match nothing can be cleared; no engine at all
+	// points to the next step.
+	it('clears filters that match nothing', async () => {
+		server.use(
+			http.get('/engines', ({ response }) =>
+				response(200).json([makeEngine({ name: 'main_cluster', capabilities: caps() })])
+			),
+			http.get('/catalog-connections', ({ response }) => response(200).json([]))
+		);
+		render(EnginesPage);
+		await screen.findByText('main_cluster');
+
+		await fireEvent.change(screen.getByLabelText('Class'), { target: { value: 'direct' } });
+		expect(await screen.findByText('No engine matches')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+		expect(await screen.findByText('main_cluster')).toBeTruthy();
+	});
+
+	it('offers a new connection when there is no engine and nothing to register from', async () => {
+		authStore.set(makeMe());
+		server.use(
+			http.get('/engines', ({ response }) => response(200).json([])),
+			http.get('/catalog-connections', ({ response }) => response(200).json([]))
+		);
+		render(EnginesPage);
+
+		expect(await screen.findByText('No engines yet')).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'New connection' })).toBeTruthy();
 	});
 });

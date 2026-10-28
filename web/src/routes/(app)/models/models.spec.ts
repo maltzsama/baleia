@@ -366,4 +366,15 @@ describe('v1 migration dialog', () => {
 
 		expect(await screen.findByText('Could not load the models to join')).toBeTruthy();
 	});
+
+	// #479: Save and Cancel stay reachable at the bottom of a long model.
+	it('keeps the save actions in a sticky bar', async () => {
+		baseHandlers([]);
+		render(ModelEditor, {});
+		const save = await screen.findByRole('button', { name: 'Save' });
+		const bar = save.closest('.sticky');
+		expect(bar).toBeTruthy();
+		expect(bar?.className).toContain('bottom-0');
+		expect(bar?.querySelector('button')?.textContent?.trim()).toBe('Cancel');
+	});
 });

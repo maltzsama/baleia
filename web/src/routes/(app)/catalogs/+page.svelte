@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import Button from '$lib/ui/Button.svelte';
+	import { authStore } from '$lib/stores/auth.svelte';
+	import { canGlobal } from '$lib/authz/can';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
@@ -40,6 +43,17 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	// The list is filtered server-side; these say whether it was.
+	const filtering = $derived(!!(q.trim() || origin || engineId || attention));
+
+	function clearFilters() {
+		q = '';
+		origin = '';
+		engineId = '';
+		attention = false;
+		void load();
 	}
 
 	function open(catalog: CatalogSummary) {
@@ -97,8 +111,27 @@
 		</div>
 	{:else if error}
 		<ErrorState title="Could not load catalogs" message={error} onretry={load} />
+	{:else if catalogs.length === 0 && filtering}
+		<div role="status">
+			<EmptyState
+				title={m.catalogs_no_catalog_matches_these_filters()}
+				description={m.common_change_or_clear_the_filters()}
+			>
+				<Button onclick={clearFilters}>{m.common_clear_filters()}</Button>
+			</EmptyState>
+		</div>
 	{:else if catalogs.length === 0}
-		<EmptyState title="No catalogs" description="No logical catalog matches these filters." />
+		<!-- No catalog at all (#476): catalogs come from connections. -->
+		<EmptyState
+			title={m.catalogs_no_catalogs_yet()}
+			description={m.catalogs_catalogs_come_from_connections()}
+		>
+			{#if canGlobal(authStore.user, 'create_connection')}
+				<Button variant="primary" onclick={() => (window.location.href = '/connections')}>
+					{m.catalogs_go_to_connections()}
+				</Button>
+			{/if}
+		</EmptyState>
 	{:else}
 		<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
 			<table class="w-full text-left text-[11px]">

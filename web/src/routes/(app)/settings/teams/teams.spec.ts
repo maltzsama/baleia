@@ -69,7 +69,7 @@ describe('teams settings', () => {
 
 		expect(await screen.findByText('Engineering')).toBeTruthy();
 		expect(screen.queryByText('Analytics')).toBeNull();
-		expect(screen.getByText('Alice')).toBeTruthy();
+		expect(await screen.findByText('Alice')).toBeTruthy();
 		expect(screen.queryByRole('button', { name: 'New team' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Add member' })).toBeNull();
 	});
@@ -95,7 +95,7 @@ describe('teams settings', () => {
 		renderPage(TeamsPage, { me: makeMe(), url: '/settings/teams' });
 		await screen.findByText('Engineering');
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Make owner' }));
+		await fireEvent.click(await screen.findByRole('button', { name: 'Make owner' }));
 		await fireEvent.click(await screen.findByRole('button', { name: 'Change role' }));
 
 		await waitFor(() => expect(body).toEqual({ role: 'owner' }));
@@ -113,9 +113,40 @@ describe('teams settings', () => {
 		renderPage(TeamsPage, { me: makeMe(), url: '/settings/teams' });
 		await screen.findByText('Engineering');
 
-		await fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+		await fireEvent.click((await screen.findAllByRole('button', { name: 'Remove' }))[0]);
 		await fireEvent.click(await screen.findByRole('button', { name: 'Remove member' }));
 
 		await waitFor(() => expect(removed).toBe(true));
+	});
+	// #477: the teams show before their members, and one team failing to load
+	// its members does not hide the others; it can retry.
+	it('shows the teams first and retries one failed member list', async () => {
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		let failOther = true;
+		baseHandlers();
+		server.use(
+			http.get('/teams/{id}/members', async ({ params, response }) => {
+				await gate;
+				if (params.id === other.id && failOther) {
+					return response(404).json({ code: 'not_found', message: 'gone' });
+				}
+				const user = params.id === team.id ? alice : bob;
+				return response(200).json([{ user, role: 'member', joined_at: '2026-01-01T00:00:00Z' }]);
+			})
+		);
+		renderPage(TeamsPage, { me: makeMe() });
+
+		expect(await screen.findByText('Engineering')).toBeTruthy();
+		expect(screen.getByText('Analytics')).toBeTruthy();
+		expect(screen.getAllByRole('status', { name: 'Loading members' })).toHaveLength(2);
+
+		release();
+		expect(await screen.findByText('Alice')).toBeTruthy();
+		expect(await screen.findByText('Could not load team members.')).toBeTruthy();
+
+		failOther = false;
+		await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('Bob')).toBeTruthy();
 	});
 });

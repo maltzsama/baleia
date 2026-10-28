@@ -10,6 +10,7 @@ export type Selection = {
 	catalog: string;
 	ns: string[];
 	table: string;
+	column: string;
 	tab: string;
 };
 
@@ -18,6 +19,7 @@ function createSelectionStore() {
 	const catalog = $derived(page.url.searchParams.get('catalog') ?? '');
 	const ns = $derived(page.url.searchParams.getAll('ns'));
 	const table = $derived(page.url.searchParams.get('table') ?? '');
+	const column = $derived(page.url.searchParams.get('column') ?? '');
 	const tab = $derived(page.url.searchParams.get('tab') ?? '');
 
 	function set(patch: SelectionPatch) {
@@ -42,6 +44,9 @@ function createSelectionStore() {
 		},
 		get table() {
 			return table;
+		},
+		get column() {
+			return column;
 		},
 		get tab() {
 			return tab;

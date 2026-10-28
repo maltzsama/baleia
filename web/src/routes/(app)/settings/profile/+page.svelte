@@ -86,6 +86,7 @@
 
 		{#if error}
 			<div
+				role="alert"
 				class="py-2.5 px-3.5 rounded-md text-[13px] mb-4 bg-red-50 text-red-600 border border-red-200"
 			>
 				{error}
@@ -93,6 +94,7 @@
 		{/if}
 		{#if successMsg}
 			<div
+				role="status"
 				class="py-2.5 px-3.5 rounded-md text-[13px] mb-4 bg-green-50 text-green-600 border border-green-200"
 			>
 				{successMsg}

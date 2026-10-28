@@ -135,4 +135,39 @@ describe('data page deep link', () => {
 		expect(url.searchParams.get('catalog')).toBe(WAREHOUSE);
 		expect(url.searchParams.get('table')).toBe('orders');
 	});
+	// #474: a link that names a column opens the table on that column.
+	it('expands and focuses the linked column', async () => {
+		useBackend();
+		setTestUrl(`/data?catalog=${WAREHOUSE}&ns=sales&table=orders&column=order_note`);
+		render(DataPage);
+
+		const row = await screen.findByText('order_note');
+		await waitFor(() =>
+			expect(row.closest('[data-column]')?.textContent).toContain('No description yet.')
+		);
+		await waitFor(() =>
+			expect(document.activeElement?.closest('[data-column]')).toBe(row.closest('[data-column]'))
+		);
+	});
+
+	it('drops the column when another table is picked', async () => {
+		useBackend();
+		setTestUrl(`/data?catalog=${WAREHOUSE}&ns=sales&table=orders&column=order_note`);
+		render(DataPage);
+		await screen.findByText('order_note');
+		goto.mockReset();
+
+		await fireEvent.click(await screen.findByRole('button', { name: /lake/i }));
+		// lake (listed first) now shows its own sales namespace above warehouse's.
+		await waitFor(() => expect(screen.getAllByRole('button', { name: /^sales$/ })).toHaveLength(2));
+		await fireEvent.click(screen.getAllByRole('button', { name: /^sales$/ })[0]);
+		await waitFor(() =>
+			expect(screen.getAllByRole('button', { name: /^orders$/ })).toHaveLength(2)
+		);
+		await fireEvent.click(screen.getAllByRole('button', { name: /^orders$/ })[0]);
+		await waitFor(() => expect(goto).toHaveBeenCalled());
+		const url = new URL(String(goto.mock.calls.at(-1)?.[0]), 'http://localhost');
+		expect(url.searchParams.get('catalog')).toBe(LAKE);
+		expect(url.searchParams.get('column')).toBeNull();
+	});
 });

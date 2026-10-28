@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { authStore } from '$lib/stores/auth.svelte';
+	import { canGlobal } from '$lib/authz/can';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -49,6 +51,13 @@
 		})
 	);
 	const canRegister = $derived(connections.length > 0);
+
+	function clearFilters() {
+		classFilter = '';
+		kindFilter = '';
+		healthFilter = '';
+		enabledFilter = '';
+	}
 
 	function engineHealth(engine: Engine): string {
 		if (!engine.enabled) return 'disabled';
@@ -125,9 +134,18 @@
 		<ErrorState title="Could not load engines" message={error} onretry={load} />
 	{:else if engines.length === 0}
 		<EmptyState
-			title="No engines yet"
-			description="A Trino engine is usually registered by the deployment; direct engines are registered from a database connection."
-		/>
+			title={m.engines_no_engines_yet()}
+			description={m.engines_a_trino_engine_is_usually_registered_by_the_deployment()}
+		>
+			<!-- The next step (#476): register one, or first add a database connection. -->
+			{#if canRegister}
+				<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
+			{:else if canGlobal(authStore.user, 'create_connection')}
+				<Button variant="primary" onclick={() => (window.location.href = '/connections/new')}>
+					{m.connections_new_connection()}
+				</Button>
+			{/if}
+		</EmptyState>
 	{:else}
 		<div
 			class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
@@ -171,10 +189,14 @@
 		</div>
 
 		{#if filtered.length === 0}
-			<EmptyState
-				title="No engine matches"
-				description="Change the filters to see other engines."
-			/>
+			<div role="status">
+				<EmptyState
+					title={m.engines_no_engine_matches()}
+					description={m.common_change_or_clear_the_filters()}
+				>
+					<Button onclick={clearFilters}>{m.common_clear_filters()}</Button>
+				</EmptyState>
+			</div>
 		{:else}
 			<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
 				<table class="w-full text-left text-[11px]">

@@ -24,4 +24,14 @@ describe('applySelection', () => {
 		expect(next).toBe('/data?ws=ws-1&catalog=lake&ns=sales&table=orders');
 		expect(new URL(next, 'http://localhost').searchParams.getAll('ns')).toEqual(['sales']);
 	});
+
+	// #474: a column target rides along, encoded, and clears like the rest.
+	it('sets and clears the column target', () => {
+		const url = new URL('http://localhost/data?catalog=lake&table=orders');
+		const next = applySelection(url, { column: 'order note/é' });
+		expect(new URL(next, 'http://localhost').searchParams.get('column')).toBe('order note/é');
+		expect(applySelection(new URL(next, 'http://localhost'), { column: '' })).toBe(
+			'/data?catalog=lake&table=orders'
+		);
+	});
 });

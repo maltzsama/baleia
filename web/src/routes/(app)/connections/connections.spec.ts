@@ -9,6 +9,8 @@ import {
 	makeProvider
 } from '../../../test/factories';
 import { http, server } from '../../../test/server';
+import { authStore } from '$lib/stores/auth.svelte';
+import { makeMe } from '../../../test/factories';
 import ConnectionsPage from './+page.svelte';
 
 const CONNECTION = '00000000-0000-0000-0000-0000000000e1';
@@ -65,7 +67,8 @@ describe('connections page', () => {
 
 		expect(await screen.findByText('Warehouse')).toBeTruthy();
 		expect(screen.getByText(/Test Database/)).toBeTruthy();
-		expect(screen.getByText('lake')).toBeTruthy();
+		// Catalogs and bindings fill each card after the list (#477).
+		expect(await screen.findByText('lake')).toBeTruthy();
 		expect(screen.getByText(/1 binding/)).toBeTruthy();
 	});
 
@@ -89,5 +92,73 @@ describe('connections page', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Register engine' }));
 
 		expect(await screen.findByText('warehouse-engine')).toBeTruthy();
+	});
+	// #476: no connections at all is onboarding; a search with no match is not.
+	it('offers to create the first connection when there is none', async () => {
+		authStore.set(makeMe());
+		server.use(http.get('/catalog-connections', ({ response }) => response(200).json([])));
+		render(ConnectionsPage);
+
+		expect(await screen.findByText('No connections yet')).toBeTruthy();
+		// The page header has one too; the empty state adds the onboarding one.
+		expect(screen.getAllByRole('button', { name: 'New connection' })).toHaveLength(2);
+	});
+
+	it('says the search matched nothing and lets it be cleared', async () => {
+		render(ConnectionsPage);
+		await screen.findByText('Warehouse');
+		await fireEvent.input(screen.getByPlaceholderText('Search connections…'), {
+			target: { value: 'nothing' }
+		});
+
+		expect(await screen.findByText('No connection matches “nothing”')).toBeTruthy();
+		expect(screen.queryByText('No connections yet')).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+		expect(await screen.findByText('Warehouse')).toBeTruthy();
+	});
+
+	// #477: the list shows before every lookup ends; one card failing does not
+	// hide the others or pretend to have no bindings.
+	it('fills each card on its own, with limited concurrency', async () => {
+		const ids = ['a', 'b', 'c', 'd', 'e', 'f'].map(
+			(x) => `00000000-0000-0000-0000-0000000000${x}0`
+		);
+		let inFlight = 0;
+		let peak = 0;
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		server.use(
+			http.get('/catalog-connections', ({ response }) =>
+				response(200).json(ids.map((id, i) => makeConnection({ id, name: `Conn ${i}` })))
+			),
+			http.get('/connections/{connection_id}/catalogs', async ({ params, response }) => {
+				inFlight++;
+				peak = Math.max(peak, inFlight);
+				await gate;
+				inFlight--;
+				if (params.connection_id === ids[1]) {
+					return response(404).json({ code: 'not_found', message: 'gone' });
+				}
+				return response(200).json([
+					makeCatalog({ id: `${params.connection_id}-cat`, name: `cat-${params.connection_id}` })
+				]);
+			}),
+			http.get('/catalogs/{id}/bindings', ({ params, response }) =>
+				params.id === `${ids[2]}-cat`
+					? response(404).json({ code: 'not_found', message: 'gone' })
+					: response(200).json([])
+			)
+		);
+		render(ConnectionsPage);
+
+		// Every card is on screen while the catalogs are still loading.
+		expect(await screen.findByText('Conn 5')).toBeTruthy();
+		expect(screen.getAllByRole('status', { name: 'Loading catalogs' }).length).toBe(6);
+		release();
+
+		expect(await screen.findByText('Could not load the catalogs.')).toBeTruthy();
+		expect(await screen.findByText(`cat-${ids[0]}`)).toBeTruthy();
+		expect(screen.getByText('· bindings unavailable')).toBeTruthy();
+		expect(peak).toBeLessThanOrEqual(4);
 	});
 });

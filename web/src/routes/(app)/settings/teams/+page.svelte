@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { eachLimited } from '$lib/util/limit';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -27,6 +28,11 @@
 
 	let teams = $state<Team[]>([]);
 	let members = $state<Record<string, TeamMember[]>>({});
+	// Each team's members load on their own (#477), a few teams at a time.
+	const MEMBER_LOOKUPS = 4;
+	let memberState = $state<
+		Record<string, { status: 'loading' | 'ready' | 'error'; error: string }>
+	>({});
 	let loading = $state(true);
 	let error = $state('');
 	let users = $state<User[]>([]);
@@ -66,22 +72,34 @@
 				return;
 			}
 			teams = data;
-			const next: Record<string, TeamMember[]> = {};
-			for (const team of teams) {
-				const { data: list, error: listErr } = await client.GET('/teams/{id}/members', {
-					params: { path: { id: team.id } }
-				});
-				if (listErr || !list) {
-					error = apiErrorMessage(listErr, m.settings_teams_could_not_load_team_members());
-					return;
-				}
-				next[team.id] = list;
-			}
-			members = next;
 		} catch {
 			error = m.settings_teams_could_not_load_teams();
 		} finally {
 			loading = false;
+		}
+		if (error) return;
+		// The teams are on screen; their members follow without blocking them.
+		memberState = Object.fromEntries(
+			teams.map((team) => [team.id, { status: 'loading', error: '' }])
+		);
+		void eachLimited(teams, MEMBER_LOOKUPS, loadMembers);
+	}
+
+	async function loadMembers(team: Team) {
+		memberState = { ...memberState, [team.id]: { status: 'loading', error: '' } };
+		try {
+			const { data: list, error: listErr } = await client.GET('/teams/{id}/members', {
+				params: { path: { id: team.id } }
+			});
+			if (listErr || !list) {
+				throw new Error(apiErrorMessage(listErr, m.settings_teams_could_not_load_team_members()));
+			}
+			members = { ...members, [team.id]: list };
+			memberState = { ...memberState, [team.id]: { status: 'ready', error: '' } };
+		} catch (e) {
+			const message =
+				e instanceof Error ? e.message : m.settings_teams_could_not_load_team_members();
+			memberState = { ...memberState, [team.id]: { status: 'error', error: message } };
 		}
 	}
 
@@ -239,10 +257,12 @@
 								{#if team.description}
 									<p class="text-[12px] text-text-muted">{team.description}</p>
 								{/if}
-								<p class="mt-1 text-[11px] text-text-muted">
-									{(members[team.id] ?? []).length}
-									{(members[team.id] ?? []).length === 1 ? 'member' : 'members'}
-								</p>
+								{#if memberState[team.id]?.status === 'ready'}
+									<p class="mt-1 text-[11px] text-text-muted">
+										{(members[team.id] ?? []).length}
+										{(members[team.id] ?? []).length === 1 ? 'member' : 'members'}
+									</p>
+								{/if}
 							</div>
 							{#if isAdmin}
 								<div class="flex gap-2">
@@ -252,34 +272,52 @@
 							{/if}
 						</div>
 
-						<ul class="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-							{#each members[team.id] ?? [] as member (member.user.id)}
-								<li class="flex flex-wrap items-center justify-between gap-2 text-[13px]">
-									<div>
-										<span class="font-medium">{member.user.name}</span>
-										<span class="ml-2 text-[11px] text-text-muted">{member.user.email}</span>
-									</div>
-									<div class="flex items-center gap-2">
-										<Badge tone={member.role === 'owner' ? 'info' : 'neutral'}>
-											{member.role}
-										</Badge>
-										{#if isAdmin}
-											<Button size="sm" onclick={() => askRole(team, member)}>
-												{member.role === 'owner'
-													? m.settings_teams_make_member()
-													: m.settings_teams_make_owner()}
-											</Button>
-											<Button size="sm" variant="ghost" onclick={() => askRemove(team, member)}
-												>Remove</Button
-											>
-										{/if}
-									</div>
-								</li>
-							{/each}
-							{#if (members[team.id] ?? []).length === 0}
-								<li class="text-[12px] text-text-muted">No members.</li>
-							{/if}
-						</ul>
+						{#if memberState[team.id]?.status === 'loading'}
+							<div
+								class="mt-3 border-t border-border pt-3"
+								role="status"
+								aria-label={m.settings_teams_loading_members()}
+							>
+								<Skeleton height="1rem" width="60%" />
+							</div>
+						{:else if memberState[team.id]?.status === 'error'}
+							<div class="mt-3 border-t border-border pt-3">
+								<ErrorState
+									title={m.settings_teams_could_not_load_team_members()}
+									message={memberState[team.id].error}
+									onretry={() => loadMembers(team)}
+								/>
+							</div>
+						{:else}
+							<ul class="mt-3 flex flex-col gap-2 border-t border-border pt-3">
+								{#each members[team.id] ?? [] as member (member.user.id)}
+									<li class="flex flex-wrap items-center justify-between gap-2 text-[13px]">
+										<div>
+											<span class="font-medium">{member.user.name}</span>
+											<span class="ml-2 text-[11px] text-text-muted">{member.user.email}</span>
+										</div>
+										<div class="flex items-center gap-2">
+											<Badge tone={member.role === 'owner' ? 'info' : 'neutral'}>
+												{member.role}
+											</Badge>
+											{#if isAdmin}
+												<Button size="sm" onclick={() => askRole(team, member)}>
+													{member.role === 'owner'
+														? m.settings_teams_make_member()
+														: m.settings_teams_make_owner()}
+												</Button>
+												<Button size="sm" variant="ghost" onclick={() => askRemove(team, member)}
+													>Remove</Button
+												>
+											{/if}
+										</div>
+									</li>
+								{/each}
+								{#if (members[team.id] ?? []).length === 0}
+									<li class="text-[12px] text-text-muted">No members.</li>
+								{/if}
+							</ul>
+						{/if}
 					</article>
 				{/each}
 			</div>

@@ -127,7 +127,7 @@
 		<h2 class="text-sm font-semibold">Markdown</h2>
 		<div class="grid gap-4 lg:grid-cols-2">
 			<MarkdownView source={markdown} />
-			<MarkdownEditor bind:value={markdown} />
+			<MarkdownEditor label="Description" bind:value={markdown} />
 		</div>
 	</section>
 

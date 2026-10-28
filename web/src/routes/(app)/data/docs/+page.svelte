@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -49,13 +51,19 @@
 		}
 	}
 
+	// Opens the table in the Data explorer; a column result also names the
+	// column, which the explorer expands and focuses (#474).
 	function open(result: SemanticDocSearchResult) {
-		const params = [
-			`catalog=${encodeURIComponent(result.catalog_id)}`,
-			...result.namespace.map((part) => `ns=${encodeURIComponent(part)}`),
-			`table=${encodeURIComponent(result.table)}`
+		const pairs: [string, string][] = [
+			['catalog', result.catalog_id],
+			...result.namespace.map((part): [string, string] => ['ns', part]),
+			['table', result.table],
+			...(result.column ? [['column', result.column] as [string, string]] : [])
 		];
-		window.location.href = `/data?${params.join('&')}`;
+		const query = pairs.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&');
+		// The query string is dynamic, so resolve() cannot type the whole URL.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(`${resolve('/data')}?${query}`);
 	}
 
 	function excerptParts(description: string): { text: string; match: boolean }[] {

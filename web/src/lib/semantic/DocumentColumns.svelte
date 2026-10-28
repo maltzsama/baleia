@@ -105,20 +105,28 @@
 					class="sticky top-0 bg-bg-panel text-[10px] uppercase text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th class="w-32 px-1 py-1">{m.common_column()}</th>
-						<th class="px-1 py-1">{m.common_description()}</th>
-						<th class="w-40 px-1 py-1">{m.semantic_documentcolumns_tags()}</th>
+						<th scope="col" class="w-32 px-1 py-1">{m.common_column()}</th>
+						<th scope="col" class="px-1 py-1">{m.common_description()}</th>
+						<th scope="col" class="w-40 px-1 py-1">{m.semantic_documentcolumns_tags()}</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each rows as row (row.name)}
 						<tr class="border-t border-border/60 align-top">
-							<td class="px-1 py-1 font-mono">{row.name}</td>
+							<th scope="row" class="px-1 py-1 font-mono font-normal">{row.name}</th>
 							<td class="px-1 py-1">
-								<Textarea bind:value={row.description} rows={2} />
+								<Textarea
+									bind:value={row.description}
+									rows={2}
+									ariaLabel={m.semantic_documentcolumns_description_of({ column: row.name })}
+								/>
 							</td>
 							<td class="px-1 py-1">
-								<Input bind:value={row.tags} placeholder={m.semantic_documentcolumns_tag_tag()} />
+								<Input
+									bind:value={row.tags}
+									placeholder={m.semantic_documentcolumns_tag_tag()}
+									ariaLabel={m.semantic_documentcolumns_tags_of({ column: row.name })}
+								/>
 							</td>
 						</tr>
 					{/each}

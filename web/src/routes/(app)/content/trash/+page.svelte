@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { restorableKinds, restorableKindsText } from '$lib/content/kinds';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import HistoryDrawer from '$lib/content/HistoryDrawer.svelte';
@@ -67,7 +68,7 @@
 		<div>
 			<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.content_trash_trash()}</h1>
 			<p class="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
-				{m.content_trash_deleted_queries_and_metrics_can_be_restore()}
+				{m.content_trash_deleted_kinds_can_be_restored({ kinds: restorableKindsText() })}
 			</p>
 		</div>
 		<div class="w-44">
@@ -75,10 +76,8 @@
 				label={m.common_kind()}
 				bind:value={kind}
 				options={[
-					{ value: '', label: 'All' },
-					{ value: 'saved_query', label: 'Queries' },
-					{ value: 'semantic_metric', label: 'Metrics' },
-					{ value: 'semantic_model', label: 'Models' }
+					{ value: '', label: m.content_trash_all_kinds() },
+					...restorableKinds.map((entry) => ({ value: entry.kind, label: entry.plural() }))
 				]}
 				onchange={() => load()}
 			/>
@@ -95,8 +94,8 @@
 		<ErrorState title="Could not load the trash" message={error} onretry={load} />
 	{:else if items.length === 0}
 		<EmptyState
-			title="Trash is empty"
-			description="Deleted queries and metrics appear here and can be restored."
+			title={m.content_trash_trash_is_empty()}
+			description={m.content_trash_deleted_kinds_appear_here({ kinds: restorableKindsText() })}
 		/>
 	{:else}
 		<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">

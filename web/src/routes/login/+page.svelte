@@ -258,20 +258,21 @@
 			<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
 				><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg
 			>
-			<div
+			<!-- A native switch button (#484): named, Enter and Space both toggle. -->
+			<button
+				type="button"
 				role="switch"
 				aria-checked={dark}
-				tabindex="0"
+				aria-label={m.login_dark_theme()}
 				onclick={toggleDark}
-				onkeydown={(e) => e.key === 'Enter' && toggleDark()}
-				class="w-8 h-[18px] rounded-full cursor-pointer relative transition-colors duration-200
+				class="w-8 h-[18px] rounded-full cursor-pointer relative border-none p-0 transition-colors duration-200
 					{dark ? 'bg-primary' : 'bg-border'}"
 			>
 				<span
 					class="absolute w-[14px] h-[14px] bg-white rounded-full top-[2px] left-[2px] shadow-sm transition-transform duration-200
 					{dark ? 'translate-x-[14px]' : 'translate-x-0'}"
 				></span>
-			</div>
+			</button>
 		</div>
 
 		<div class="w-full max-w-[360px]">
@@ -283,6 +284,7 @@
 					</div>
 					{#if notice}
 						<div
+							role="status"
 							class="bg-green-50 border border-green-200 rounded-md py-[9px] px-3 text-xs text-green-700 mb-3.5"
 						>
 							{notice}
@@ -290,6 +292,7 @@
 					{/if}
 					{#if error}
 						<div
+							role="alert"
 							class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5"
 						>
 							{error}
@@ -393,6 +396,7 @@
 					</div>
 					{#if error}
 						<div
+							role="alert"
 							class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5"
 						>
 							{error}
@@ -425,7 +429,7 @@
 			{/if}
 
 			{#if screen === 'sent'}
-				<div class="flex flex-col animate-[fadeIn_.2s_ease]">
+				<div class="flex flex-col animate-[fadeIn_.2s_ease]" role="status">
 					<div class="text-xl font-bold tracking-[-.4px] mb-1">{m.login_check_your_email()}</div>
 					<div class="text-[13px] text-text-muted mb-6 leading-[1.55]">
 						{m.login_if_an_account_exists_for_this_address_we_s()}
