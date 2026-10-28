@@ -1,11 +1,19 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { editor } from '$lib/stores/editor.svelte';
+import { loadDrafts } from '$lib/workbench/drafts';
 import { clearEnginesCache } from '$lib/engines/client';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
 import { makeSavedQuery, makeSpace, makeWorkspace } from '../../test/factories';
 import QueryEditor from './QueryEditor.svelte';
+
+vi.mock('$lib/workbench/drafts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/workbench/drafts')>()),
+	loadDrafts: vi.fn(async () => []),
+	saveDrafts: vi.fn(async () => {}),
+	clearDrafts: vi.fn(async () => {})
+}));
 
 const WS = '00000000-0000-0000-0000-000000000001';
 const BINDING = '00000000-0000-0000-0000-0000000000b1';
@@ -133,6 +141,30 @@ describe('QueryEditor', () => {
 		expect(screen.getByText('Ln 1, Col 1')).toBeTruthy();
 	});
 
+	it('starts empty and shows the restored draft under the same tab id (#112)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const content = document.querySelector('.cm-content') as HTMLElement;
+		expect(content.textContent).toBe('');
+
+		vi.mocked(loadDrafts).mockResolvedValueOnce([
+			{
+				id: '1',
+				name: 'Draft',
+				sql: 'SELECT 42',
+				savedRef: null,
+				bindingId: BINDING,
+				schema: 'sales',
+				readOnly: false,
+				savedSql: '',
+				savedBindingId: '',
+				savedSchema: ''
+			}
+		]);
+		await editor.hydrate('u1', WS);
+		await waitFor(() => expect(content.textContent).toBe('SELECT 42'));
+	});
+
 	it('runs with the selected target and schema', async () => {
 		mockWorkbench();
 		type RunBody = { target?: unknown };
@@ -160,6 +192,7 @@ describe('QueryEditor', () => {
 				});
 			})
 		);
+		editor.updateSql(editor.activeId, 'SELECT 1;');
 		render(QueryEditor);
 		await screen.findByText('trino · trino');
 
