@@ -70,7 +70,6 @@
 	let needs = $state('');
 	let maxScore = $state('');
 	let runs = $state<MaintenanceRun[]>([]);
-	let rounds = $state<MaintenanceRun[]>([]);
 	let maintainTarget = $state<TableHealth | null>(null);
 	let maintainOpen = $state(false);
 	let operations = $state<Record<string, boolean>>({
@@ -680,7 +679,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each rounds as run (run.id)}
+							{#each runs as run (run.id)}
 								<tr class="border-b border-border/60 last:border-b-0">
 									<td class="px-3 py-1.5">
 										<StatusBadge kind="maintenance" status={run.status} />
