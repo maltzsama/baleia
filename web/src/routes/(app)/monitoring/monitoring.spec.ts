@@ -371,44 +371,6 @@ describe('monitoring page', () => {
 					started_at: '2026-10-01T12:00:00Z',
 					finished_at: '2026-10-01T12:01:00Z',
 					workflow_id: 'wf-1'
-	});
-
-	// #481: Retention shows only for operations that use it, and is sent only then.
-	it('asks for retention only with expiry or orphan cleanup', async () => {
-		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
-		const bodies: { operations: string[]; retention?: string }[] = [];
-		server.use(
-			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-				response(200).json([makeMetadataCatalog({ id: CATALOG })])
-			),
-			http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
-				response(200).json([
-					{
-						catalog_id: CATALOG,
-						catalog_name: 'lake',
-						namespace: 'sales',
-						table_name: 'orders',
-						health_score: 40,
-						needs_compaction: true,
-						needs_snapshot_expiry: false,
-						needs_orphan_cleanup: false
-					}
-				])
-			),
-			http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) => response(200).json([])),
-			http.post('/catalogs/{catalog_id}/maintenance', async ({ request, response }) => {
-				const body = (await request.json()) as { operations: string[]; retention?: string };
-				bodies.push(body);
-				return response(202).json({
-					id: `run-${bodies.length}`,
-					catalog_id: CATALOG,
-					namespace: 'sales',
-					table_name: 'orders',
-					operations: body.operations,
-					status: 'finished',
-					started_at: '2026-10-01T12:00:00Z',
-					finished_at: '2026-10-01T12:01:00Z',
-					workflow_id: 'wf'
 				});
 			})
 		);
@@ -493,8 +455,6 @@ describe('monitoring page', () => {
 		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
 		await waitFor(() => expect(posted).toEqual([B]));
 	});
-	});
-
 	// #480: the drawer opens at once, shows a failure with a retry, and a
 	// slow first response never replaces the query clicked after it.
 	describe('query detail drawer', () => {
@@ -568,8 +528,50 @@ describe('monitoring page', () => {
 			await new Promise((resolve) => setTimeout(resolve, 20));
 			expect(screen.getByText('SELECT detail_q2')).toBeTruthy();
 			expect(screen.queryByText('SELECT detail_q1')).toBeNull();
+		});
 	});
 
+	// #481: Retention shows only for operations that use it, and is sent only then.
+	it('asks for retention only with expiry or orphan cleanup', async () => {
+		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
+		const bodies: { operations: string[]; retention?: string }[] = [];
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog({ id: CATALOG })])
+			),
+			http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
+				response(200).json([
+					{
+						catalog_id: CATALOG,
+						catalog_name: 'lake',
+						namespace: 'sales',
+						table_name: 'orders',
+						health_score: 40,
+						needs_compaction: true,
+						needs_snapshot_expiry: false,
+						needs_orphan_cleanup: false
+					}
+				])
+			),
+			http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) => response(200).json([])),
+			http.post('/catalogs/{catalog_id}/maintenance', async ({ request, response }) => {
+				const body = (await request.json()) as { operations: string[]; retention?: string };
+				bodies.push(body);
+				return response(202).json({
+					id: `run-${bodies.length}`,
+					catalog_id: CATALOG,
+					namespace: 'sales',
+					table_name: 'orders',
+					operations: body.operations,
+					status: 'finished',
+					started_at: '2026-10-01T12:00:00Z',
+					finished_at: '2026-10-01T12:01:00Z',
+					workflow_id: 'wf'
+				});
+			})
+		);
+		render(MonitoringPage);
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
 
 		await fireEvent.click(await screen.findByRole('button', { name: 'Run maintenance…' }));
 		let dialog = await screen.findByRole('dialog');
