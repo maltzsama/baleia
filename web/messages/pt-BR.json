@@ -1072,5 +1072,7 @@
 	"data_could_not_open_the_linked_table": "Não foi possível abrir a tabela do link",
 	"statusbadge_never_synced": "Nunca sincronizado",
 	"statusbadge_synced": "Sincronizado",
-	"statusbadge_sync_failed": "Falha na sincronização"
+	"statusbadge_sync_failed": "Falha na sincronização",
+	"settings_feature_disabled": "Este recurso está desativado",
+	"settings_feature_disabled_description": "Um administrador pode ativá-lo na configuração do servidor."
 }

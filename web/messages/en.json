@@ -1072,5 +1072,7 @@
 	"data_could_not_open_the_linked_table": "Could not open the linked table",
 	"statusbadge_never_synced": "Never synced",
 	"statusbadge_synced": "Synced",
-	"statusbadge_sync_failed": "Sync failed"
+	"statusbadge_sync_failed": "Sync failed",
+	"settings_feature_disabled": "This feature is turned off",
+	"settings_feature_disabled_description": "An administrator can turn it on in the server configuration."
 }
