@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import { apiErrorMessage, client } from '$lib/api/client';
 import { streamEvents, type SseFrame } from './sse';
@@ -135,7 +136,8 @@ class AssistantStore {
 			signal: controller.signal,
 			onEvent: (frame) => this.onFrame(frame)
 		}).catch(() => {
-			if (!controller.signal.aborted) this.error = 'The assistant stream disconnected.';
+			if (!controller.signal.aborted)
+				this.error = m.assistant_storesvelte_the_assistant_stream_disconnected();
 		});
 	}
 

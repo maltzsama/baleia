@@ -27,12 +27,32 @@
 	} = $props();
 
 	const roleOptions = [
-		{ value: 'member', label: 'Member' },
-		{ value: 'admin', label: 'Admin' }
+		{
+			value: 'member',
+			get label() {
+				return m.identity_identityproviderform_member();
+			}
+		},
+		{
+			value: 'admin',
+			get label() {
+				return m.identity_identityproviderform_admin();
+			}
+		}
 	];
 	const teamRoleOptions = [
-		{ value: 'member', label: 'Member' },
-		{ value: 'owner', label: 'Owner' }
+		{
+			value: 'member',
+			get label() {
+				return m.identity_identityproviderform_member();
+			}
+		},
+		{
+			value: 'owner',
+			get label() {
+				return m.identity_identityproviderform_owner();
+			}
+		}
 	];
 
 	let name = $state('');
@@ -276,7 +296,7 @@
 					]}
 				/>
 			{:else}
-				<Input label="Type" value={type.toUpperCase()} disabled />
+				<Input label={m.identity_identityproviderform_type()} value={type.toUpperCase()} disabled />
 			{/if}
 		</div>
 
@@ -311,11 +331,18 @@
 		{:else}
 			<div class="grid grid-cols-2 gap-3">
 				<Input label="URL" bind:value={url} placeholder="ldaps://ldap.example.com:636" />
-				<Input label="Base DN" bind:value={baseDn} placeholder="dc=example,dc=com" />
+				<Input
+					label={m.identity_identityproviderform_base_dn()}
+					bind:value={baseDn}
+					placeholder={m.identity_identityproviderform_dc_example_dc_com()}
+				/>
 			</div>
-			<Checkbox label="StartTLS (required for ldap://)" bind:checked={startTls} />
+			<Checkbox
+				label={m.identity_identityproviderform_starttls_required_for_ldap()}
+				bind:checked={startTls}
+			/>
 			<div class="grid grid-cols-2 gap-3">
-				<Input label="Bind DN" bind:value={bindDn} />
+				<Input label={m.identity_identityproviderform_bind_dn()} bind:value={bindDn} />
 				<Input
 					label={provider
 						? m.identity_identityproviderform_bind_password_leave_blank_to_keep()
@@ -324,18 +351,48 @@
 					bind:value={bindPassword}
 				/>
 			</div>
-			<Input label="User filter" bind:value={userFilter} placeholder={'(uid={{username}})'} />
+			<Input
+				label={m.identity_identityproviderform_user_filter()}
+				bind:value={userFilter}
+				placeholder={'(uid={{username}})'}
+			/>
 			<div class="grid grid-cols-3 gap-3">
-				<Input label="Group attribute" bind:value={groupAttribute} placeholder="memberOf" />
-				<Input label="E-mail attribute" bind:value={emailAttribute} placeholder="mail" />
-				<Input label="Name attribute" bind:value={nameAttribute} placeholder="cn" />
+				<Input
+					label={m.identity_identityproviderform_group_attribute()}
+					bind:value={groupAttribute}
+					placeholder={m.identity_identityproviderform_memberof()}
+				/>
+				<Input
+					label={m.identity_identityproviderform_e_mail_attribute()}
+					bind:value={emailAttribute}
+					placeholder="mail"
+				/>
+				<Input
+					label={m.identity_identityproviderform_name_attribute()}
+					bind:value={nameAttribute}
+					placeholder="cn"
+				/>
 			</div>
 			<div class="grid grid-cols-2 gap-3">
-				<Input label="Required group" bind:value={requiredGroup} />
-				<Input label="Timeout (seconds)" type="number" bind:value={timeoutSeconds} />
+				<Input
+					label={m.identity_identityproviderform_required_group()}
+					bind:value={requiredGroup}
+				/>
+				<Input
+					label={m.identity_identityproviderform_timeout_seconds()}
+					type="number"
+					bind:value={timeoutSeconds}
+				/>
 			</div>
-			<Checkbox label="Nested groups (AD)" bind:checked={nestedGroups} />
-			<Select label="Default role" bind:value={ldapDefaultRole} options={roleOptions} />
+			<Checkbox
+				label={m.identity_identityproviderform_nested_groups_ad()}
+				bind:checked={nestedGroups}
+			/>
+			<Select
+				label={m.identity_identityproviderform_default_role()}
+				bind:value={ldapDefaultRole}
+				options={roleOptions}
+			/>
 		{/if}
 
 		<div class="rounded-md border border-border p-3">

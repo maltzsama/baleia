@@ -22,8 +22,18 @@
 	type User = components['schemas']['UserPublic'];
 
 	const teamRoleOptions = [
-		{ value: 'member', label: 'Member' },
-		{ value: 'owner', label: 'Owner' }
+		{
+			value: 'member',
+			get label() {
+				return m.settings_teams_member();
+			}
+		},
+		{
+			value: 'owner',
+			get label() {
+				return m.settings_teams_owner();
+			}
+		}
 	];
 
 	let teams = $state<Team[]>([]);
@@ -125,7 +135,7 @@
 			createOpen = false;
 			createName = '';
 			createDescription = '';
-			toasts.success('Team created.');
+			toasts.success(m.settings_teams_team_created());
 			await load();
 		} finally {
 			createBusy = false;
@@ -155,7 +165,7 @@
 				return;
 			}
 			addOpen = false;
-			toasts.success('Member added.');
+			toasts.success(m.settings_teams_member_added());
 			await load();
 		} finally {
 			addBusy = false;
@@ -173,7 +183,7 @@
 			params: { path: { id: removeTarget.team.id, user_id: removeTarget.member.user.id } }
 		});
 		if (err) throw new Error(apiErrorMessage(err, 'Could not remove the member.'));
-		toasts.success('Member removed.');
+		toasts.success(m.settings_teams_member_removed());
 		await load();
 	}
 
@@ -190,7 +200,7 @@
 			body: { role: roleValue }
 		});
 		if (err) throw new Error(apiErrorMessage(err, 'Could not change the role.'));
-		toasts.success('Team role updated.');
+		toasts.success(m.settings_teams_team_role_updated());
 		await load();
 	}
 
@@ -205,7 +215,7 @@
 			params: { path: { id: deleteTarget.id } }
 		});
 		if (err) throw new Error(apiErrorMessage(err, 'Could not delete the team.'));
-		toasts.success('Team deleted.');
+		toasts.success(m.settings_teams_team_deleted());
 		await load();
 	}
 </script>
@@ -236,12 +246,16 @@
 			</div>
 		{:else if error}
 			<div class="mt-6">
-				<ErrorState title="Could not load teams" message={error} onretry={load} />
+				<ErrorState
+					title={m.settings_teams_could_not_load_teams_2()}
+					message={error}
+					onretry={load}
+				/>
 			</div>
 		{:else if teams.length === 0}
 			<div class="mt-6">
 				<EmptyState
-					title="No teams"
+					title={m.settings_teams_no_teams()}
 					description={isAdmin
 						? m.settings_teams_create_a_team_to_share_workspaces_and_cont()
 						: m.settings_teams_you_do_not_belong_to_a_team_yet()}
@@ -266,8 +280,12 @@
 							</div>
 							{#if isAdmin}
 								<div class="flex gap-2">
-									<Button size="sm" onclick={() => openAdd(team)}>Add member</Button>
-									<Button size="sm" variant="danger" onclick={() => askDelete(team)}>Delete</Button>
+									<Button size="sm" onclick={() => openAdd(team)}
+										>{m.settings_teams_add_member()}</Button
+									>
+									<Button size="sm" variant="danger" onclick={() => askDelete(team)}
+										>{m.settings_teams_delete()}</Button
+									>
 								</div>
 							{/if}
 						</div>
@@ -307,14 +325,14 @@
 														: m.settings_teams_make_owner()}
 												</Button>
 												<Button size="sm" variant="ghost" onclick={() => askRemove(team, member)}
-													>Remove</Button
+													>{m.settings_teams_remove()}</Button
 												>
 											{/if}
 										</div>
 									</li>
 								{/each}
 								{#if (members[team.id] ?? []).length === 0}
-									<li class="text-[12px] text-text-muted">No members.</li>
+									<li class="text-[12px] text-text-muted">{m.settings_teams_no_members()}</li>
 								{/if}
 							</ul>
 						{/if}
@@ -386,7 +404,7 @@
 		'They immediately lose access to workspaces owned by this team.',
 		m.settings_teams_their_account_and_other_team_memberships_a()
 	]}
-	confirmLabel="Remove member"
+	confirmLabel={m.settings_teams_remove_member()}
 	onconfirm={confirmRemove}
 />
 
@@ -398,7 +416,7 @@
 		'Owners can manage the team and its workspaces; members cannot.',
 		m.settings_teams_the_change_applies_immediately()
 	]}
-	confirmLabel="Change role"
+	confirmLabel={m.settings_teams_change_role()}
 	onconfirm={confirmRole}
 />
 
@@ -410,6 +428,6 @@
 		'Members lose access to the workspaces this team owns.',
 		m.settings_teams_the_team_is_removed_its_workspaces_and_con()
 	]}
-	confirmLabel="Delete team"
+	confirmLabel={m.settings_teams_delete_team()}
 	onconfirm={confirmDelete}
 />

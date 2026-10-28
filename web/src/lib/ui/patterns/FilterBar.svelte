@@ -96,7 +96,7 @@
 					label={field.label}
 					value={selectValue(field.key)}
 					options={field.options}
-					placeholder="Any"
+					placeholder={m.filterbar_any()}
 					onchange={(event) =>
 						emit({ ...value, [field.key]: (event.currentTarget as HTMLSelectElement).value })}
 				/>
@@ -131,7 +131,7 @@
 			<div class="flex items-end gap-1">
 				<div class="w-36">
 					<Input
-						label={`${field.label} from`}
+						label={m.filterbar_from({ label: field.label })}
 						type="date"
 						value={textValue(`${field.key}_from`)}
 						oninput={(event) =>
@@ -146,7 +146,7 @@
 				</div>
 				<div class="w-36">
 					<Input
-						label="to"
+						label={m.filterbar_to()}
 						type="date"
 						value={textValue(`${field.key}_to`)}
 						oninput={(event) =>

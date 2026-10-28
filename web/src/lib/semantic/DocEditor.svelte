@@ -72,7 +72,10 @@
 		}
 		const invalid = parsed.find((tag) => !tagValid(tag));
 		if (invalid) {
-			error = `Tag "${invalid}" must match ^[a-z0-9][a-z0-9_-]{0,39}$.`;
+			error = m.semantic_doceditor_tag_must_match({
+				tag: invalid,
+				pattern: '^[a-z0-9][a-z0-9_-]{0,39}$'
+			});
 			return;
 		}
 		saving = true;
@@ -102,7 +105,12 @@
 	}
 </script>
 
-<Modal bind:open title={column ? `Document column ${column}` : 'About this table'}>
+<Modal
+	bind:open
+	title={column
+		? m.semantic_doceditor_document_column({ column })
+		: m.semantic_doceditor_about_this_table()}
+>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<MarkdownEditor label={m.common_description()} bind:value={description} />
 		<Input
@@ -126,7 +134,7 @@
 			<Checkbox label={m.common_certified()} bind:checked={certified} />
 		{:else if doc?.certified}
 			<p class="text-[11px] text-amber-700 dark:text-amber-300">
-				This doc is certified. Changing the description removes the certification.
+				{m.semantic_doceditor_this_doc_is_certified_changing_the()}
 			</p>
 		{/if}
 		{#if conflict}

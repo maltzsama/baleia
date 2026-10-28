@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { components } from '$lib/api/schema';
@@ -87,7 +88,13 @@
 		type="button"
 		onclick={toggle}
 		{onkeydown}
-		aria-label={count > 0 ? `Attention: ${count} items` : 'Attention'}
+		aria-label={count > 0
+			? plural(
+					count,
+					m.components_attentionbell_attention_items_one,
+					m.components_attentionbell_attention_items_other
+				)
+			: m.components_attentionbell_attention()}
 		aria-expanded={open}
 		aria-haspopup="dialog"
 		title={m.components_attentionbell_attention()}

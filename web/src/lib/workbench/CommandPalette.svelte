@@ -119,7 +119,9 @@
 					{m.common_searching()}
 				</p>
 			{:else if items.length === 0}
-				<p class="px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300">No matches.</p>
+				<p class="px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300">
+					{m.workbench_commandpalette_no_matches()}
+				</p>
 			{:else}
 				{#each items as item, index (item.id)}
 					<button

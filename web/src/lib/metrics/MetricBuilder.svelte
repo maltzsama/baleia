@@ -382,7 +382,7 @@
 			</p>
 		{:else}
 			<Select
-				label="Aggregation"
+				label={m.metrics_metricbuilder_aggregation()}
 				bind:value={aggregation}
 				options={[
 					{ value: 'sum', label: m.metrics_metricbuilder_sum() },
@@ -394,7 +394,7 @@
 				]}
 			/>
 			<Select
-				label="Column"
+				label={m.metrics_metricbuilder_column()}
 				bind:value={column}
 				options={[
 					...(aggregation === 'count'
@@ -501,7 +501,7 @@
 						table: table.name
 					})}
 				{:else}
-					Choose a table.
+					{m.metrics_metricbuilder_choose_a_table()}
 				{/if}
 			</p>
 		</div>

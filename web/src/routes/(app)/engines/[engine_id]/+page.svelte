@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
@@ -238,7 +239,11 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load the engine" message={error} onretry={load} />
+		<ErrorState
+			title={m.engines_detail_could_not_load_the_engine()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if engine}
 		<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 			<div>
@@ -246,26 +251,36 @@
 					<EngineBadge {engine} />
 					<StatusBadge kind="engine" status={healthStatus(engine)} />
 					{#if !engine.enabled}
-						<Badge tone="neutral">Disabled</Badge>
+						<Badge tone="neutral">{m.engines_detail_disabled()}</Badge>
 					{/if}
 				</div>
 				<p class="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
-					{engine.connection?.name ?? engine.connection_id} · {engine.catalog_count ?? 0} catalog(s)
+					{engine.connection?.name ?? engine.connection_id} · {plural(
+						engine.catalog_count ?? 0,
+						m.engines_detail_catalog_count_one,
+						m.engines_detail_catalog_count_other
+					)}
 					{#if engine.health?.checked_at}
-						· checked <RelativeTime at={engine.health.checked_at} />
+						{m.engines_detail_checked()} <RelativeTime at={engine.health.checked_at} />
 					{/if}
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button loading={testing} disabled={testing} onclick={runTest}>Test</Button>
+				<Button loading={testing} disabled={testing} onclick={runTest}
+					>{m.engines_detail_test()}</Button
+				>
 				<Button onclick={() => ask(engine?.enabled ? 'disable' : 'enable')}>
-					{engine.enabled ? 'Disable' : 'Enable'}
+					{engine.enabled ? m.engines_detail_disable() : m.engines_detail_enable()}
 				</Button>
-				<Button variant="danger" onclick={() => ask('delete')}>Delete</Button>
+				<Button variant="danger" onclick={() => ask('delete')}>{m.engines_detail_delete()}</Button>
 			</div>
 		</div>
 
-		<div class="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label="Engine tabs">
+		<div
+			class="mb-4 flex gap-1 border-b border-border"
+			role="tablist"
+			aria-label={m.engines_detail_engine_tabs()}
+		>
 			{#each [['overview', 'Overview'], ['catalogs', 'Catalogs'], ...(federated ? [['observed', m.engines_observed()], ['reconcile', m.settings_system_reconcile()]] : []), ['activity', 'Activity']] as [value, label] (value)}
 				<button
 					type="button"
@@ -284,28 +299,28 @@
 		{#if tab === 'overview'}
 			<div class="grid gap-4 lg:grid-cols-2">
 				<div class="rounded-lg border border-border bg-bg-panel p-4">
-					<h2 class="text-[13px] font-semibold">Details</h2>
+					<h2 class="text-[13px] font-semibold">{m.engines_detail_details()}</h2>
 					<dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
-						<dt class="text-slate-600 dark:text-slate-300">Kind</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.engines_detail_kind()}</dt>
 						<dd class="font-mono">{engine.kind}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Class</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.engines_detail_class()}</dt>
 						<dd>{engine.class}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Version</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.engines_detail_version()}</dt>
 						<dd class="font-mono">{engine.version ?? '—'}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Connection</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.engines_detail_connection()}</dt>
 						<dd>{engine.connection?.name ?? engine.connection_id}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Identity mode</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.engines_detail_identity_mode()}</dt>
 						<dd>{engine.identity_mode}</dd>
-						<dt class="text-slate-600 dark:text-slate-300">Created</dt>
+						<dt class="text-slate-600 dark:text-slate-300">{m.engines_detail_created()}</dt>
 						<dd><RelativeTime at={engine.created_at} /></dd>
 						{#if engine.health?.error_code}
-							<dt class="text-slate-600 dark:text-slate-300">Last error</dt>
+							<dt class="text-slate-600 dark:text-slate-300">{m.engines_detail_last_error()}</dt>
 							<dd class="font-mono text-danger">{engine.health.error_code}</dd>
 						{/if}
 					</dl>
 				</div>
 				<div class="rounded-lg border border-border bg-bg-panel p-4">
-					<h2 class="text-[13px] font-semibold">Guarantees</h2>
+					<h2 class="text-[13px] font-semibold">{m.engines_detail_guarantees()}</h2>
 					<ul class="mt-2 flex flex-col gap-2">
 						{#each guarantees as guarantee (guarantee.title)}
 							<li
@@ -337,23 +352,38 @@
 				</p>
 				{#if engine.class === 'direct'}
 					<Button loading={discovering} disabled={discovering} onclick={discover}
-						>Discover catalogs</Button
+						>{m.engines_detail_discover_catalogs()}</Button
 					>
 				{/if}
 			</div>
 			{#if discoverResult}
 				<div class="mb-3 rounded-lg border border-border bg-bg-panel p-3 text-[11px]">
-					<p class="font-semibold">Discovery finished</p>
-					<p class="mt-1">Added: {discoverResult.added.join(', ') || 'none'}</p>
-					<p>Disabled: {discoverResult.disabled.join(', ') || 'none'}</p>
-					<p>Unchanged: {discoverResult.unchanged.join(', ') || 'none'}</p>
+					<p class="font-semibold">{m.engines_detail_discovery_finished()}</p>
+					<p class="mt-1">
+						{m.engines_detail_added({
+							value: discoverResult.added.join(', ') || m.engines_detail_none()
+						})}
+					</p>
+					<p>
+						{m.engines_detail_disabled_2({
+							value: discoverResult.disabled.join(', ') || m.engines_detail_none()
+						})}
+					</p>
+					<p>
+						{m.engines_detail_unchanged({
+							value: discoverResult.unchanged.join(', ') || m.engines_detail_none()
+						})}
+					</p>
 				</div>
 			{/if}
 			{#if discoverError}
 				<p class="mb-3 text-[11px] text-danger" role="alert">{discoverError}</p>
 			{/if}
 			{#if bindings.length === 0}
-				<EmptyState title="No catalogs" description="This engine has no binding yet." />
+				<EmptyState
+					title={m.engines_detail_no_catalogs()}
+					description={m.engines_detail_this_engine_has_no_binding_yet()}
+				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
@@ -361,11 +391,11 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Catalog</th>
-								<th class="px-3 py-2">Mode</th>
-								<th class="px-3 py-2">Status</th>
-								<th class="px-3 py-2">Enabled</th>
-								<th class="px-3 py-2 text-right">Data</th>
+								<th class="px-3 py-2">{m.engines_detail_catalog()}</th>
+								<th class="px-3 py-2">{m.engines_detail_mode()}</th>
+								<th class="px-3 py-2">{m.engines_detail_status()}</th>
+								<th class="px-3 py-2">{m.engines_detail_enabled()}</th>
+								<th class="px-3 py-2 text-right">{m.engines_detail_data()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -379,7 +409,9 @@
 											status={binding.lifecycle_state ?? (binding.enabled ? 'active' : 'disabled')}
 										/>
 									</td>
-									<td class="px-3 py-1.5">{binding.enabled ? 'Yes' : 'No'}</td>
+									<td class="px-3 py-1.5"
+										>{binding.enabled ? m.engines_detail_yes() : m.engines_detail_no()}</td
+									>
 									<td class="px-3 py-1.5 text-right">
 										<button
 											type="button"
@@ -387,7 +419,7 @@
 											onclick={() =>
 												(window.location.href = `/data?catalog=${encodeURIComponent(binding.catalog_id)}`)}
 										>
-											Open data
+											{m.engines_detail_open_data()}
 										</button>
 									</td>
 								</tr>
@@ -399,8 +431,8 @@
 		{:else if tab === 'observed'}
 			{#if observations.length === 0}
 				<EmptyState
-					title="No observation yet"
-					description="The observation pass fills this tab when the engine reports its catalogs."
+					title={m.engines_detail_no_observation_yet()}
+					description={m.engines_detail_the_observation_pass_fills_this_tab()}
 				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -409,12 +441,12 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Catalog</th>
-								<th class="px-3 py-2">Connector</th>
-								<th class="px-3 py-2">Mode</th>
-								<th class="px-3 py-2">Present</th>
-								<th class="px-3 py-2">First seen</th>
-								<th class="px-3 py-2">Last observed</th>
+								<th class="px-3 py-2">{m.engines_detail_catalog()}</th>
+								<th class="px-3 py-2">{m.engines_detail_connector()}</th>
+								<th class="px-3 py-2">{m.engines_detail_mode()}</th>
+								<th class="px-3 py-2">{m.engines_detail_present()}</th>
+								<th class="px-3 py-2">{m.engines_detail_first_seen()}</th>
+								<th class="px-3 py-2">{m.engines_detail_last_observed()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -434,9 +466,9 @@
 									>
 									<td class="px-3 py-1.5">
 										{#if observation.present}
-											<Badge tone="success">Present</Badge>
+											<Badge tone="success">{m.engines_detail_present()}</Badge>
 										{:else}
-											<Badge tone="warning">Missing</Badge>
+											<Badge tone="warning">{m.engines_detail_missing()}</Badge>
 										{/if}
 									</td>
 									<td class="px-3 py-1.5"><RelativeTime at={observation.first_seen_at} /></td>
@@ -450,7 +482,7 @@
 		{:else if tab === 'reconcile'}
 			<div class="mb-3 flex flex-wrap gap-2">
 				<Button loading={driftLoading} disabled={driftLoading} onclick={checkDrift}
-					>Check drift</Button
+					>{m.engines_detail_check_drift()}</Button
 				>
 				<span
 					title={mutating.length === 0
@@ -462,7 +494,7 @@
 						disabled={mutating.length === 0}
 						onclick={() => (applyOpen = true)}
 					>
-						Apply {mutating.length > 0 ? `(${mutating.length})` : ''}
+						{m.engines_detail_apply({ value: mutating.length > 0 ? `(${mutating.length})` : '' })}
 					</Button>
 				</span>
 			</div>
@@ -475,7 +507,7 @@
 						{report.dry_run ? m.engines_dry_run() : m.engines_applied()} · {counts(report) ||
 							m.engines_no_actions()}
 						{#if report.max_actions != null}
-							· cap {report.max_actions}
+							{m.engines_detail_cap({ max_actions: report.max_actions })}
 						{/if}
 					</p>
 					{#if report.error}
@@ -484,10 +516,10 @@
 					<table class="mt-2 w-full text-left text-[11px]">
 						<thead class="text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300">
 							<tr>
-								<th class="py-1">Catalog</th>
-								<th class="py-1">Action</th>
-								<th class="py-1">Reason</th>
-								<th class="py-1">Result</th>
+								<th class="py-1">{m.engines_detail_catalog()}</th>
+								<th class="py-1">{m.engines_detail_action()}</th>
+								<th class="py-1">{m.engines_detail_reason()}</th>
+								<th class="py-1">{m.engines_detail_result()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -505,17 +537,19 @@
 					</table>
 					{#if report.adopted.length > 0}
 						<p class="mt-2 text-[11px] text-slate-600 dark:text-slate-300">
-							Adopted (never changed by Baleia): <span class="font-mono"
-								>{report.adopted.join(', ')}</span
-							>
+							{m.engines_detail_adopted_never_changed_by_baleia()}
+							<span class="font-mono">{report.adopted.join(', ')}</span>
 						</p>
 					{/if}
 				</div>
 			{/if}
 
-			<h2 class="mb-2 text-[13px] font-semibold">Run history</h2>
+			<h2 class="mb-2 text-[13px] font-semibold">{m.engines_detail_run_history()}</h2>
 			{#if runs.length === 0}
-				<EmptyState title="No reconcile run" description="Check drift to record the first run." />
+				<EmptyState
+					title={m.engines_detail_no_reconcile_run()}
+					description={m.engines_detail_check_drift_to_record_the_first()}
+				/>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
@@ -523,10 +557,10 @@
 							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 						>
 							<tr>
-								<th class="px-3 py-2">Started</th>
-								<th class="px-3 py-2">Mode</th>
-								<th class="px-3 py-2">Actions</th>
-								<th class="px-3 py-2">Error</th>
+								<th class="px-3 py-2">{m.engines_detail_started()}</th>
+								<th class="px-3 py-2">{m.engines_detail_mode()}</th>
+								<th class="px-3 py-2">{m.engines_detail_actions()}</th>
+								<th class="px-3 py-2">{m.engines_detail_error()}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -557,7 +591,11 @@
 				</div>
 			{/if}
 		{:else if tab === 'activity'}
-			<ActivityPanel resourceType="engine" resourceId={engineId} title="Engine activity" />
+			<ActivityPanel
+				resourceType="engine"
+				resourceId={engineId}
+				title={m.engines_detail_engine_activity()}
+			/>
 		{/if}
 	{/if}
 </div>
@@ -570,7 +608,7 @@
 			<p class="font-semibold">
 				{testResult.success ? m.connections_all_checks_passed() : m.connections_checks_failed()}
 				<span class="ml-1 font-normal text-slate-600 dark:text-slate-300"
-					>{testResult.latency_ms} ms</span
+					>{m.common_milliseconds({ value: testResult.latency_ms })}</span
 				>
 			</p>
 			{#if testResult.error_message}
@@ -580,7 +618,11 @@
 				{#each testResult.checks ?? [] as check (check.name)}
 					<li class="flex items-start gap-2">
 						<Badge tone={check.skipped ? 'neutral' : check.ok ? 'success' : 'danger'}>
-							{check.skipped ? m.statusbadge_skipped() : check.ok ? 'OK' : 'Failed'}
+							{check.skipped
+								? m.statusbadge_skipped()
+								: check.ok
+									? 'OK'
+									: m.engines_detail_failed()}
 						</Badge>
 						<span class="font-mono">{check.name}</span>
 						<span class="text-slate-600 dark:text-slate-300"
@@ -604,8 +646,8 @@
 	confirmLabel={pending === 'delete'
 		? m.engines_delete_engine()
 		: pending === 'disable'
-			? 'Disable'
-			: 'Enable'}
+			? m.engines_detail_disable()
+			: m.engines_detail_enable()}
 	typeToConfirm={pending === 'delete'}
 	danger={pending !== 'enable'}
 	consequences={consequences()}
@@ -616,7 +658,7 @@
 	bind:open={applyOpen}
 	title={m.engines_apply_reconcile()}
 	resourceName={engine?.name ?? ''}
-	confirmLabel="Apply changes"
+	confirmLabel={m.engines_detail_apply_changes()}
 	consequences={[
 		...mutating.map((a) => `${a.kind} ${a.catalog} (${a.reason})`),
 		`At most ${report?.max_actions ?? m.engines_the_configured_cap()} changes run; the rest are reported.`,

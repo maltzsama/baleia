@@ -149,11 +149,11 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load content" message={error} onretry={load} />
+		<ErrorState title={m.content_could_not_load_content()} message={error} onretry={load} />
 	{:else if spaces.length === 0}
 		<EmptyState
-			title="No spaces"
-			description="Create a space to organize saved queries and metrics."
+			title={m.content_no_spaces()}
+			description={m.content_create_a_space_to_organize_saved()}
 		/>
 	{:else}
 		<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
@@ -167,7 +167,7 @@
 						>
 							{space.name}
 						</button>
-						{#if space.is_default}<Badge tone="neutral">Default</Badge>{/if}
+						{#if space.is_default}<Badge tone="neutral">{m.content_default()}</Badge>{/if}
 					</div>
 					<p class="line-clamp-2 text-[11px] text-slate-600 dark:text-slate-300">
 						{space.description ?? m.content_no_description()}
@@ -181,11 +181,13 @@
 						{#if space.my_role}<Badge tone="success">{space.my_role}</Badge>{/if}
 					</div>
 					<div class="text-[10px] text-slate-600 dark:text-slate-300">
-						{space.counts?.saved_queries ?? 0} queries · {space.counts?.semantic_metrics ?? 0} metrics
-						·
-						{space.counts?.semantic_models ?? 0} models ·
-						{space.counts?.folders ?? 0} folders
-						{#if space.updated_at}· updated <RelativeTime at={space.updated_at} />{/if}
+						{m.content_queries_metrics_models_folders({
+							value: space.counts?.saved_queries ?? 0,
+							value2: space.counts?.semantic_metrics ?? 0,
+							value3: space.counts?.semantic_models ?? 0,
+							value4: space.counts?.folders ?? 0
+						})}
+						{#if space.updated_at}{m.content_updated()} <RelativeTime at={space.updated_at} />{/if}
 					</div>
 				</article>
 			{/each}

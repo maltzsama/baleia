@@ -21,8 +21,8 @@
 <button
 	type="button"
 	class="inline-flex items-center gap-1 rounded px-1 text-text-muted transition-colors hover:text-text-main"
-	aria-label={`Copy ${label}`}
-	title={`Copy ${label}`}
+	aria-label={m.copybutton_copy({ label })}
+	title={m.copybutton_copy({ label })}
 	onclick={copy}
 >
 	{#if copied}

@@ -95,7 +95,7 @@
 		<div class="flex justify-end gap-2">
 			<Button onclick={() => (open = false)} disabled={busy}>{m.common_cancel()}</Button>
 			<Button variant="primary" onclick={save} disabled={!name.trim() || busy} loading={busy}>
-				{editing ? 'Save' : 'Create'}
+				{editing ? m.components_spacedialog_save() : m.components_spacedialog_create()}
 			</Button>
 		</div>
 	{/snippet}

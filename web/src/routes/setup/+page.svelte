@@ -245,11 +245,13 @@
 			<div class="w-full max-w-[920px] animate-[fadeIn_.2s_ease]">
 				<div class="mb-6 text-center">
 					<div class="text-[11px] font-bold uppercase tracking-[.7px] text-primary mb-1.5">
-						Step 2 of 3 — Optional
+						{m.setup_step_2_of_3_optional()}
 					</div>
-					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">Connect a datasource</div>
+					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">
+						{m.setup_connect_a_datasource()}
+					</div>
 					<div class="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.6]">
-						Add your first connection. You can skip this and connect later.
+						{m.setup_add_your_first_connection_you_can()}
 					</div>
 				</div>
 				<div class="rounded-xl border border-border bg-bg-panel p-5">
@@ -260,7 +262,7 @@
 						onclick={() => (step = 3)}
 						class="bg-transparent border-none text-slate-600 dark:text-slate-300 text-xs font-semibold cursor-pointer p-0 transition-colors duration-150 hover:text-text-main"
 					>
-						Skip for now
+						{m.setup_skip_for_now()}
 					</button>
 				</div>
 			</div>
@@ -274,9 +276,9 @@
 							><polyline points="20 6 9 17 4 12" /></svg
 						>
 					</div>
-					<div class="text-[22px] font-bold tracking-[-.4px]">Baleia is ready</div>
+					<div class="text-[22px] font-bold tracking-[-.4px]">{m.setup_baleia_is_ready()}</div>
 					<div class="text-[13px] text-slate-600 dark:text-slate-300 max-w-[340px] leading-[1.6]">
-						Your instance is configured. Head to the editor and run your first query.
+						{m.setup_your_instance_is_configured_head_to()}
 					</div>
 					<button
 						onclick={() => (window.location.href = '/sql')}
@@ -285,7 +287,7 @@
 						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
 							><path d="M4 17l6-6-6-6M12 19h8" /></svg
 						>
-						Open editor
+						{m.setup_open_editor()}
 					</button>
 				</div>
 			</div>

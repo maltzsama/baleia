@@ -84,7 +84,7 @@
 						{#if empty}
 							{@render empty()}
 						{:else}
-							No rows.
+							{m.table_no_rows()}
 						{/if}
 					</td>
 				</tr>

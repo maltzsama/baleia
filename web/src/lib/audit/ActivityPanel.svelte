@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import Badge from '$lib/ui/Badge.svelte';
@@ -39,7 +40,7 @@
 </script>
 
 {#if loading}
-	<div class="flex flex-col gap-2" aria-label={`Loading ${title}`}>
+	<div class="flex flex-col gap-2" aria-label={m.audit_activitypanel_loading({ title })}>
 		<Skeleton class="h-5 w-2/3" />
 		<Skeleton class="h-5 w-3/4" />
 	</div>
@@ -48,7 +49,9 @@
 		<div class="flex items-center justify-between">
 			<h2 class="text-[13px] font-semibold">{title}</h2>
 			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the query string is built from the resource -->
-			<a class="text-[11px] font-semibold text-primary hover:underline" href={viewAll}>View all</a>
+			<a class="text-[11px] font-semibold text-primary hover:underline" href={viewAll}
+				>{m.audit_activitypanel_view_all()}</a
+			>
 		</div>
 		<ul class="mt-2 flex flex-col gap-1.5 text-[11px]">
 			{#each events as event (event.id)}
@@ -64,7 +67,7 @@
 					</Badge>
 					<span class="font-mono">{event.action}</span>
 					<span class="text-slate-600 dark:text-slate-300">
-						by {event.actor_id ?? event.actor_kind}
+						{m.audit_activitypanel_by({ actor: event.actor_id ?? event.actor_kind })}
 					</span>
 					<span class="ml-auto text-slate-600 dark:text-slate-300">
 						<RelativeTime at={event.occurred_at} />

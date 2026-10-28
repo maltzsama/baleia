@@ -39,7 +39,7 @@
 	function checkKey(row: Row) {
 		if (!row.key) return;
 		if (rows.filter((item) => item.key === row.key).length > 1) {
-			error = `Duplicate key "${row.key}"`;
+			error = m.keyvalueeditor_duplicate_key({ key: row.key });
 			return;
 		}
 		error = validateKey?.(row.key) ?? '';
@@ -90,7 +90,7 @@
 				<button
 					type="button"
 					class="rounded px-1.5 text-text-muted hover:text-danger"
-					aria-label={`Remove ${row.key || 'row'}`}
+					aria-label={m.keyvalueeditor_remove({ value: row.key || m.keyvalueeditor_row() })}
 					onclick={() => remove(row.id)}
 				>
 					×

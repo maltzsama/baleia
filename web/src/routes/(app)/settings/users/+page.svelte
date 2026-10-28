@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -17,8 +18,18 @@
 	type User = components['schemas']['UserPublic'];
 
 	const roleOptions = [
-		{ value: 'member', label: 'Member' },
-		{ value: 'admin', label: 'Admin' }
+		{
+			value: 'member',
+			get label() {
+				return m.settings_users_member();
+			}
+		},
+		{
+			value: 'admin',
+			get label() {
+				return m.settings_users_admin();
+			}
+		}
 	];
 
 	let users = $state<User[]>([]);
@@ -99,7 +110,7 @@
 			}
 			inviteOpen = false;
 			inviteEmail = '';
-			toasts.success('Invitation sent.');
+			toasts.success(m.settings_users_invitation_sent());
 			await load();
 		} catch (err) {
 			inviteError =
@@ -122,7 +133,7 @@
 			body: { role: roleValue }
 		});
 		if (err) throw new Error(apiErrorMessage(err, 'Could not change the role.'));
-		toasts.success('Role updated. The user signs in again to use it.');
+		toasts.success(m.settings_users_role_updated_the_user_signs_in());
 		await load();
 	}
 
@@ -138,7 +149,7 @@
 			body: { reason: 'admin' }
 		});
 		if (err) throw new Error(apiErrorMessage(err, 'Could not suspend the user.'));
-		toasts.success('User suspended. Sessions and API keys were revoked.');
+		toasts.success(m.settings_users_user_suspended_sessions_and_api_keys());
 		await load();
 	}
 
@@ -151,7 +162,7 @@
 				toasts.error(apiErrorMessage(err, m.settings_users_could_not_reinstate_the_user()));
 				return;
 			}
-			toasts.success('User reinstated.');
+			toasts.success(m.settings_users_user_reinstated());
 			await load();
 		} catch (err) {
 			toasts.error(
@@ -194,7 +205,11 @@
 			</div>
 		{:else if error}
 			<div class="mt-6">
-				<ErrorState title="Could not load users" message={error} onretry={load} />
+				<ErrorState
+					title={m.settings_users_could_not_load_users_2()}
+					message={error}
+					onretry={load}
+				/>
 			</div>
 		{:else if filtered.length === 0}
 			<div class="mt-6">
@@ -210,11 +225,11 @@
 				<table class="w-full text-left text-[13px]">
 					<thead>
 						<tr class="border-b border-border text-[11px] uppercase text-text-muted">
-							<th class="px-3 py-2 font-semibold">User</th>
-							<th class="px-3 py-2 font-semibold">Role</th>
-							<th class="px-3 py-2 font-semibold">Status</th>
-							<th class="px-3 py-2 font-semibold">Provider</th>
-							<th class="px-3 py-2 text-right font-semibold">Actions</th>
+							<th class="px-3 py-2 font-semibold">{m.settings_users_user()}</th>
+							<th class="px-3 py-2 font-semibold">{m.settings_users_role()}</th>
+							<th class="px-3 py-2 font-semibold">{m.settings_users_status()}</th>
+							<th class="px-3 py-2 font-semibold">{m.settings_users_provider()}</th>
+							<th class="px-3 py-2 text-right font-semibold">{m.settings_users_actions()}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -244,10 +259,12 @@
 												: m.settings_users_make_admin()}
 										</Button>
 										{#if user.status === 'suspended'}
-											<Button size="sm" onclick={() => reinstate(user)}>Reinstate</Button>
+											<Button size="sm" onclick={() => reinstate(user)}
+												>{m.settings_users_reinstate()}</Button
+											>
 										{:else}
 											<Button size="sm" variant="danger" onclick={() => askSuspend(user)}
-												>Suspend</Button
+												>{m.settings_users_suspend()}</Button
 											>
 										{/if}
 									</div>
@@ -259,11 +276,17 @@
 			</div>
 
 			<div class="mt-3 flex items-center justify-between text-[12px] text-text-muted">
-				<span>{filtered.length} users</span>
+				<span
+					>{plural(filtered.length, m.settings_users_count_one, m.settings_users_count_other)}</span
+				>
 				<div class="flex items-center gap-2">
-					<Button size="sm" disabled={page <= 1} onclick={() => (page -= 1)}>Previous</Button>
-					<span>Page {page} of {totalPages}</span>
-					<Button size="sm" disabled={page >= totalPages} onclick={() => (page += 1)}>Next</Button>
+					<Button size="sm" disabled={page <= 1} onclick={() => (page -= 1)}
+						>{m.settings_users_previous()}</Button
+					>
+					<span>{m.settings_users_page_of({ page, totalPages })}</span>
+					<Button size="sm" disabled={page >= totalPages} onclick={() => (page += 1)}
+						>{m.settings_users_next()}</Button
+					>
 				</div>
 			</div>
 		{/if}
@@ -303,7 +326,7 @@
 		'The change takes effect on the next sign-in; existing sessions are revoked.',
 		m.settings_users_administrators_can_manage_users_identity_p()
 	]}
-	confirmLabel="Change role"
+	confirmLabel={m.settings_users_change_role()}
 	danger={roleValue === 'admin'}
 	onconfirm={confirmRole}
 />
@@ -317,6 +340,6 @@
 		m.settings_users_all_api_keys_are_revoked_immediately(),
 		m.settings_users_the_account_is_kept_and_can_be_reinstated()
 	]}
-	confirmLabel="Suspend user"
+	confirmLabel={m.settings_users_suspend_user()}
 	onconfirm={confirmSuspend}
 />

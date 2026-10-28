@@ -49,10 +49,10 @@
 			</p>
 		{:else}
 			<Select
-				label="Destination space"
+				label={m.components_movetospacedialog_destination_space()}
 				bind:value={target}
 				{options}
-				placeholder="Choose a space"
+				placeholder={m.components_movetospacedialog_choose_a_space()}
 			/>
 		{/if}
 		{#if error}

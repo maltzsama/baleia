@@ -148,8 +148,8 @@
 			/>
 		{:else}
 			<EmptyState
-				title="Select a table"
-				description="Browse the metadata-driven catalogs on the left to inspect a table and its columns."
+				title={m.data_select_a_table()}
+				description={m.data_browse_the_metadata_driven_catalogs_on()}
 			/>
 		{/if}
 	</section>

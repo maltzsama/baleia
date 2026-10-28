@@ -309,11 +309,15 @@
 			{/each}
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load the audit trail" message={error} onretry={load} />
+		<ErrorState
+			title={m.settings_audit_could_not_load_the_audit_trail()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if events.length === 0}
 		<EmptyState
-			title="No events"
-			description="No audit event matches these filters in the selected window."
+			title={m.settings_audit_no_events()}
+			description={m.settings_audit_no_audit_event_matches_these_filters()}
 		/>
 	{:else}
 		<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -322,13 +326,13 @@
 					class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th scope="col" class="px-3 py-2">Time</th>
-						<th scope="col" class="px-3 py-2">Actor</th>
-						<th scope="col" class="px-3 py-2">Action</th>
-						<th scope="col" class="px-3 py-2">Resource</th>
-						<th scope="col" class="px-3 py-2">Workspace</th>
-						<th scope="col" class="px-3 py-2">Outcome</th>
-						<th scope="col" class="px-3 py-2">Reason</th>
+						<th scope="col" class="px-3 py-2">{m.settings_audit_time()}</th>
+						<th scope="col" class="px-3 py-2">{m.settings_audit_actor()}</th>
+						<th scope="col" class="px-3 py-2">{m.settings_audit_action()}</th>
+						<th scope="col" class="px-3 py-2">{m.settings_audit_resource()}</th>
+						<th scope="col" class="px-3 py-2">{m.settings_audit_workspace()}</th>
+						<th scope="col" class="px-3 py-2">{m.settings_audit_outcome()}</th>
+						<th scope="col" class="px-3 py-2">{m.settings_audit_reason()}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -370,7 +374,7 @@
 		</div>
 		{#if nextCursor}
 			<div class="mt-3 flex justify-center">
-				<Button loading={loadingMore} onclick={loadMore}>Load more</Button>
+				<Button loading={loadingMore} onclick={loadMore}>{m.settings_audit_load_more()}</Button>
 			</div>
 		{/if}
 	{/if}

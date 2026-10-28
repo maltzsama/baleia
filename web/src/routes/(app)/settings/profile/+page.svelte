@@ -118,7 +118,7 @@
 			</div>
 			<div class="flex justify-end mt-2">
 				<Button variant="primary" onclick={saveProfile} disabled={saving} loading={saving}>
-					{saving ? m.settings_profile_saving() : 'Save'}
+					{saving ? m.settings_profile_saving() : m.settings_profile_save()}
 				</Button>
 			</div>
 		</section>

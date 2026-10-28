@@ -25,9 +25,24 @@
 	let principalsError = $state('');
 
 	const roleOptions = [
-		{ value: 'viewer', label: 'Viewer' },
-		{ value: 'editor', label: 'Editor' },
-		{ value: 'manager', label: 'Manager' }
+		{
+			value: 'viewer',
+			get label() {
+				return m.components_spaceaccessdialog_viewer();
+			}
+		},
+		{
+			value: 'editor',
+			get label() {
+				return m.components_spaceaccessdialog_editor();
+			}
+		},
+		{
+			value: 'manager',
+			get label() {
+				return m.components_spaceaccessdialog_manager();
+			}
+		}
 	];
 
 	$effect(() => {
@@ -104,7 +119,12 @@
 	}
 </script>
 
-<Modal bind:open title={`Access — ${space?.name ?? 'space'}`}>
+<Modal
+	bind:open
+	title={m.components_spaceaccessdialog_access({
+		value: space?.name ?? m.components_spaceaccessdialog_space()
+	})}
+>
 	<div class="flex flex-col gap-4">
 		{#if loading}
 			<p class="text-xs text-text-muted">{m.common_loading()}</p>
@@ -112,7 +132,7 @@
 			<p class="text-[11px] text-danger" role="alert">{error}</p>
 		{:else if members.length === 0}
 			<p class="text-xs text-text-muted">
-				Only workspace owners and global admins can see this space. Add a user or team below.
+				{m.components_spaceaccessdialog_only_workspace_owners_and_global_admins()}
 			</p>
 		{:else}
 			<ul class="flex flex-col gap-2">
@@ -123,7 +143,7 @@
 							<span class="text-text-muted"> {member.principal_id}</span>
 						</span>
 						<Select
-							label="Role"
+							label={m.components_spaceaccessdialog_role()}
 							value={member.role}
 							options={roleOptions}
 							class="w-28"
@@ -131,7 +151,7 @@
 								void changeRole(member, (e.target as HTMLSelectElement).value as SpaceRole)}
 						/>
 						<Button variant="ghost" size="sm" onclick={() => void removeMember(member)}>
-							Remove
+							{m.components_spaceaccessdialog_remove()}
 						</Button>
 					</li>
 				{/each}
@@ -148,7 +168,9 @@
 				]}
 			/>
 			<Select
-				label={principalType === 'team' ? 'Team' : 'Person'}
+				label={principalType === 'team'
+					? m.components_spaceaccessdialog_team()
+					: m.components_spaceaccessdialog_person()}
 				bind:value={principalId}
 				options={principals.map((principal) => ({
 					value: principal.id,

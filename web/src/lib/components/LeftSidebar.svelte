@@ -121,11 +121,11 @@
 					>
 					<input
 						type="text"
-						placeholder="Search tables and columns..."
+						placeholder={m.components_leftsidebar_search_tables_and_columns()}
 						bind:value={search}
 						onkeydown={(event) => tree?.handleSearchKey(event)}
 						{...tree?.comboboxAttrs()}
-						aria-label="Search tables and columns"
+						aria-label={m.components_leftsidebar_search_tables_and_columns_2()}
 						class="border-none bg-transparent outline-none text-xs text-text-main w-full placeholder:text-text-muted"
 					/>
 				</div>

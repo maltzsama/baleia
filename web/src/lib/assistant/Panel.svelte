@@ -101,7 +101,7 @@
 		<div class="p-3">
 			<EmptyState
 				title={m.assistant_panel_assistant_is_off()}
-				description="An administrator can enable the assistant and configure a provider in Settings → Assistant."
+				description={m.assistant_panel_an_administrator_can_enable_the_assistant()}
 			/>
 		</div>
 	{:else if assistantStore.loading}
@@ -112,7 +112,7 @@
 	{:else if assistantStore.error}
 		<div class="p-3">
 			<ErrorState
-				title="Assistant unavailable"
+				title={m.assistant_panel_assistant_unavailable()}
 				message={assistantStore.error}
 				onretry={() => assistantStore.load(workspaceId)}
 			/>
@@ -121,11 +121,11 @@
 		<div class="flex-1 overflow-y-auto p-2.5">
 			{#if !assistantStore.active || assistantStore.messages.length === 0}
 				<EmptyState
-					title="Ask a data question"
-					description="The assistant explores metadata and runs read-only queries through the same governed tools external agents use."
+					title={m.assistant_panel_ask_a_data_question()}
+					description={m.assistant_panel_the_assistant_explores_metadata_and_runs()}
 				>
 					<Button size="sm" variant="primary" onclick={() => assistantStore.create()}>
-						New conversation
+						{m.assistant_panel_new_conversation()}
 					</Button>
 				</EmptyState>
 			{/if}
@@ -149,9 +149,8 @@
 				{:else if message.role === 'tool_call'}
 					<details class="mb-1 rounded-md border border-border bg-bg-panel px-2 py-1 text-[11px]">
 						<summary class="cursor-pointer text-text-muted">
-							Tool call · <span class="font-mono"
-								>{String(field(message.content, 'tool') ?? 'tool')}</span
-							>
+							{m.assistant_panel_tool_call()}
+							<span class="font-mono">{String(field(message.content, 'tool') ?? 'tool')}</span>
 						</summary>
 						<pre class="mt-1 overflow-auto text-[10px]">{pretty(
 								field(message.content, 'arguments')
@@ -160,7 +159,7 @@
 				{:else if message.role === 'tool_result'}
 					<details class="mb-2 rounded-md border border-border bg-bg-panel px-2 py-1 text-[11px]">
 						<summary class="cursor-pointer text-text-muted">
-							Result ·
+							{m.assistant_panel_result()}
 							<Badge tone={field(message.content, 'outcome') === 'ok' ? 'success' : 'warning'}>
 								{String(field(message.content, 'outcome') ?? 'ok')}
 							</Badge>
@@ -184,14 +183,16 @@
 				bind:value={input}
 				onkeydown={onKeydown}
 				rows="2"
-				placeholder="Ask about your data…"
-				aria-label="Message the assistant"
+				placeholder={m.assistant_panel_ask_about_your_data()}
+				aria-label={m.assistant_panel_message_the_assistant()}
 				autofocus
 				class="w-full resize-none rounded-md border border-border bg-bg-toolbar px-2 py-1.5 text-[12px] text-text-main outline-none focus:border-primary"
 			></textarea>
 			<div class="mt-1.5 flex justify-end gap-1.5">
 				{#if assistantStore.state === 'running'}
-					<Button size="sm" onclick={() => assistantStore.cancel()}>Stop</Button>
+					<Button size="sm" onclick={() => assistantStore.cancel()}
+						>{m.assistant_panel_stop()}</Button
+					>
 				{/if}
 				<Button
 					size="sm"
@@ -199,7 +200,7 @@
 					disabled={!input.trim() || assistantStore.state === 'running'}
 					onclick={send}
 				>
-					Send
+					{m.assistant_panel_send()}
 				</Button>
 			</div>
 		</div>

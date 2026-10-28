@@ -67,7 +67,11 @@
 		<div class="flex flex-col flex-1 overflow-hidden">
 			<div class="flex items-center gap-2 border-b border-border bg-bg-toolbar px-2.5 py-[7px]">
 				{#if assistantStore.enabled}
-					<div class="flex flex-1 gap-1" role="tablist" aria-label="Right sidebar">
+					<div
+						class="flex flex-1 gap-1"
+						role="tablist"
+						aria-label={m.components_rightsidebar_right_sidebar()}
+					>
 						<button
 							type="button"
 							role="tab"
@@ -78,7 +82,7 @@
 								: 'text-text-muted hover:text-text-main'}"
 							onclick={() => (tab = 'inspector')}
 						>
-							Inspector
+							{m.components_rightsidebar_inspector()}
 						</button>
 						<button
 							type="button"
@@ -90,18 +94,18 @@
 								: 'text-text-muted hover:text-text-main'}"
 							onclick={() => (tab = 'assistant')}
 						>
-							Assistant
+							{m.components_rightsidebar_assistant()}
 						</button>
 					</div>
 				{:else}
 					<span class="flex-1 text-[10px] font-bold uppercase tracking-wide text-text-muted"
-						>Inspector</span
+						>{m.components_rightsidebar_inspector()}</span
 					>
 				{/if}
 				<button
 					onclick={() => (collapsed = true)}
-					title="Collapse"
-					aria-label="Collapse the inspector"
+					title={m.components_rightsidebar_collapse()}
+					aria-label={m.components_rightsidebar_collapse_the_inspector()}
 					class="w-5 h-5 rounded flex items-center justify-center text-text-muted bg-none border-none cursor-pointer hover:bg-border hover:text-text-main"
 				>
 					<svg viewBox="0 0 24 24" class="w-3 h-3"><path d="M9 18l6-6-6-6" /></svg>

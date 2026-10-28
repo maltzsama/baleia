@@ -336,12 +336,16 @@
 	{#if loading && !space}
 		<Skeleton class="h-24 w-full" />
 	{:else if error && !space}
-		<ErrorState title="Could not load the space" message={error} onretry={load} />
+		<ErrorState
+			title={m.content_spaces_detail_could_not_load_the_space()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if space}
 		<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 			<div>
 				<p class="text-[11px] text-slate-600 dark:text-slate-300">
-					Content › <span class="font-semibold">{space.name}</span>
+					{m.content_spaces_detail_content()} <span class="font-semibold">{space.name}</span>
 					{#if currentFolder && folders.find((f) => f.id === currentFolder)}› {folders.find(
 							(f) => f.id === currentFolder
 						)?.name}{/if}
@@ -355,19 +359,26 @@
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if canManage}
-					<Button onclick={() => (accessOpen = true)}>Access</Button>
-					<Button onclick={() => (editOpen = true)}>Edit</Button>
+					<Button onclick={() => (accessOpen = true)}>{m.content_spaces_detail_access()}</Button>
+					<Button onclick={() => (editOpen = true)}>{m.content_spaces_detail_edit()}</Button>
 				{/if}
 				{#if canEdit}
-					<Button variant="primary" onclick={() => (folderOpen = true)}>New folder</Button>
+					<Button variant="primary" onclick={() => (folderOpen = true)}
+						>{m.content_spaces_detail_new_folder()}</Button
+					>
 				{/if}
-				<Button loading={exportBusy} disabled={exportBusy} onclick={doExport}>Export</Button>
+				<Button loading={exportBusy} disabled={exportBusy} onclick={doExport}
+					>{m.content_spaces_detail_export()}</Button
+				>
 				{#if canEdit}
-					<Button onclick={openImport}>Import…</Button>
+					<Button onclick={openImport}>{m.content_spaces_detail_import()}</Button>
 				{/if}
-				<Button onclick={() => (window.location.href = '/content/trash')}>Trash</Button>
+				<Button onclick={() => (window.location.href = '/content/trash')}
+					>{m.content_spaces_detail_trash()}</Button
+				>
 				{#if canManage && !space.is_default}
-					<Button variant="danger" onclick={() => ask('space', space.id, space.name)}>Delete</Button
+					<Button variant="danger" onclick={() => ask('space', space.id, space.name)}
+						>{m.content_spaces_detail_delete()}</Button
 					>
 				{/if}
 			</div>
@@ -381,7 +392,10 @@
 		{/if}
 
 		<div class="grid gap-4 lg:grid-cols-[220px_1fr]">
-			<nav class="rounded-lg border border-border bg-bg-panel p-2 text-[11px]" aria-label="Folders">
+			<nav
+				class="rounded-lg border border-border bg-bg-panel p-2 text-[11px]"
+				aria-label={m.content_spaces_detail_folders()}
+			>
 				<button
 					type="button"
 					class="mb-1 block w-full rounded px-1.5 py-1 text-left {!currentFolder
@@ -389,7 +403,7 @@
 						: 'hover:bg-bg-toolbar'}"
 					onclick={() => selectFolder(null)}
 				>
-					Space root
+					{m.content_spaces_detail_space_root()}
 				</button>
 				{#each tree as node (node.folder.id)}
 					<div
@@ -409,7 +423,7 @@
 							<button
 								type="button"
 								class="text-slate-500 hover:text-text-main"
-								title="Rename folder"
+								title={m.content_spaces_detail_rename_folder()}
 								onclick={() => {
 									renameFolder = node.folder;
 									renameFolderName = node.folder.name;
@@ -421,7 +435,7 @@
 							<button
 								type="button"
 								class="text-slate-500 hover:text-text-main"
-								title="Move folder"
+								title={m.content_spaces_detail_move_folder()}
 								onclick={() => {
 									moveFolder = node.folder;
 									moveFolderTarget = '';
@@ -433,7 +447,7 @@
 							<button
 								type="button"
 								class="text-danger"
-								title="Delete folder"
+								title={m.content_spaces_detail_delete_folder()}
 								onclick={() => ask('folder', node.folder.id, node.folder.name)}
 							>
 								×
@@ -461,7 +475,7 @@
 					<Skeleton class="h-24 w-full" />
 				{:else if queries.length === 0 && spaceMetrics.length === 0 && spaceModels.length === 0 && !metricsError && !modelsError}
 					<EmptyState
-						title="Nothing here"
+						title={m.content_spaces_detail_nothing_here()}
 						description={canEdit
 							? m.content_spaces_create_a_query_in_the_workbench_or_a_metri()
 							: m.content_spaces_this_folder_is_empty()}
@@ -473,11 +487,11 @@
 								class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 							>
 								<tr>
-									<th class="px-3 py-2">Kind</th>
-									<th class="px-3 py-2">Name</th>
-									<th class="px-3 py-2">Slug</th>
-									<th class="px-3 py-2">Updated</th>
-									<th class="px-3 py-2 text-right">Actions</th>
+									<th class="px-3 py-2">{m.content_spaces_detail_kind()}</th>
+									<th class="px-3 py-2">{m.content_spaces_detail_name()}</th>
+									<th class="px-3 py-2">{m.content_spaces_detail_slug()}</th>
+									<th class="px-3 py-2">{m.content_spaces_detail_updated()}</th>
+									<th class="px-3 py-2 text-right">{m.content_spaces_detail_actions()}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -490,20 +504,24 @@
 											<a class="font-medium hover:underline" href={resolve(`/models/${model.id}`)}>
 												{model.label}
 											</a>
-											{#if model.certified}<Badge tone="success">Certified</Badge>{/if}
+											{#if model.certified}<Badge tone="success"
+													>{m.content_spaces_detail_certified()}</Badge
+												>{/if}
 										</td>
 										<td class="px-3 py-1.5 font-mono">{model.slug}</td>
 										<td class="px-3 py-1.5"><RelativeTime at={model.updated_at} /></td>
 										<td class="px-3 py-1.5 text-right">
 											<a class="text-primary hover:underline" href={resolve(`/models/${model.id}`)}
-												>Open</a
+												>{m.content_spaces_detail_open()}</a
 											>
 										</td>
 									</tr>
 								{/each}
 								{#each spaceMetrics as metric (metric.id)}
 									<tr class="border-b border-border/60 last:border-b-0">
-										<td class="px-3 py-1.5"><Badge tone="info">Metric</Badge></td>
+										<td class="px-3 py-1.5"
+											><Badge tone="info">{m.content_spaces_detail_metric()}</Badge></td
+										>
 										<td class="px-3 py-1.5">
 											<button
 												type="button"
@@ -512,7 +530,9 @@
 											>
 												{metric.label}
 											</button>
-											{#if metric.certified}<Badge tone="success">Certified</Badge>{/if}
+											{#if metric.certified}<Badge tone="success"
+													>{m.content_spaces_detail_certified()}</Badge
+												>{/if}
 										</td>
 										<td class="px-3 py-1.5 font-mono">{metric.slug}</td>
 										<td class="px-3 py-1.5"><RelativeTime at={metric.updated_at} /></td>
@@ -522,14 +542,16 @@
 												class="text-primary hover:underline"
 												onclick={() => openMetric(metric)}
 											>
-												Open
+												{m.content_spaces_detail_open()}
 											</button>
 										</td>
 									</tr>
 								{/each}
 								{#each queries as query (query.id)}
 									<tr class="border-b border-border/60 last:border-b-0">
-										<td class="px-3 py-1.5"><Badge tone="neutral">Query</Badge></td>
+										<td class="px-3 py-1.5"
+											><Badge tone="neutral">{m.content_spaces_detail_query()}</Badge></td
+										>
 										<td class="px-3 py-1.5">
 											<button
 												type="button"
@@ -549,7 +571,7 @@
 												class="text-primary hover:underline"
 												onclick={() => openHistory('saved_query', query.id)}
 											>
-												History
+												{m.content_spaces_detail_history()}
 											</button>
 											{#if canEdit}
 												<button
@@ -560,7 +582,7 @@
 														renameQueryName = query.name;
 													}}
 												>
-													Rename
+													{m.content_spaces_detail_rename()}
 												</button>
 												<button
 													type="button"
@@ -570,14 +592,14 @@
 														movingQueryOpen = true;
 													}}
 												>
-													Move
+													{m.content_spaces_detail_move()}
 												</button>
 												<button
 													type="button"
 													class="ml-2 text-danger hover:underline"
 													onclick={() => ask('query', query.id, query.name)}
 												>
-													Delete
+													{m.content_spaces_detail_delete()}
 												</button>
 											{/if}
 										</td>
@@ -817,7 +839,7 @@
 			? m.content_spaces_delete_folder()
 			: m.content_spaces_delete_query()}
 	resourceName={pending?.name ?? ''}
-	confirmLabel="Delete"
+	confirmLabel={m.content_spaces_detail_delete()}
 	consequences={[
 		pending?.kind === 'space'
 			? m.content_spaces_the_space_content_and_its_access_list_are()

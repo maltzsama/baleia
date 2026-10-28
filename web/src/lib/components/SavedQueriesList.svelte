@@ -104,7 +104,9 @@
 		{:else if loadError || actionError}
 			<p class="px-2 py-4 text-xs text-red-500" role="alert">{loadError || actionError}</p>
 		{:else if spaces.length === 0}
-			<p class="px-2 py-6 text-center text-xs text-text-muted">No spaces yet.</p>
+			<p class="px-2 py-6 text-center text-xs text-text-muted">
+				{m.components_savedquerieslist_no_spaces_yet()}
+			</p>
 		{:else}
 			{#each spaces as space (space.id)}
 				{@const spaceQueries = savedQueries.queriesIn(space.id)}
@@ -125,12 +127,12 @@
 								<path d="M6 9l6 6 6-6" />
 							</svg>
 							<span class="truncate text-xs font-semibold">{space.name}</span>
-							{#if space.is_default}<Badge>Default</Badge>{/if}
+							{#if space.is_default}<Badge>{m.components_savedquerieslist_default()}</Badge>{/if}
 							{#if space.visibility === 'restricted'}
 								<svg
 									viewBox="0 0 24 24"
 									class="h-3 w-3 shrink-0 text-text-muted"
-									aria-label="Restricted"
+									aria-label={m.components_savedquerieslist_restricted()}
 								>
 									<rect x="4" y="11" width="16" height="10" rx="2" /><path
 										d="M8 11V7a4 4 0 0 1 8 0v4"
@@ -139,7 +141,11 @@
 							{/if}
 							<span class="ml-auto text-[10px] text-text-muted">{spaceQueries.length}</span>
 							{#if !editable}
-								<svg viewBox="0 0 24 24" class="h-3 w-3 text-text-muted" aria-label="Read-only">
+								<svg
+									viewBox="0 0 24 24"
+									class="h-3 w-3 text-text-muted"
+									aria-label={m.components_savedquerieslist_read_only()}
+								>
 									<rect x="4" y="11" width="16" height="10" rx="2" /><path
 										d="M8 11V7a4 4 0 0 1 8 0v4"
 									/>
@@ -153,7 +159,7 @@
 									e.stopPropagation();
 									menuOpen = menuOpen === space.id ? null : space.id;
 								}}
-								aria-label={`Manage ${space.name}`}
+								aria-label={m.components_savedquerieslist_manage({ name: space.name })}
 							>
 								<svg viewBox="0 0 24 24" class="h-3 w-3"
 									><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle
@@ -171,7 +177,7 @@
 										class="flex w-full items-center gap-2 border-none bg-none px-3 py-[7px] text-left text-xs font-medium text-text-main hover:bg-slate-50 dark:hover:bg-[#1c2128]"
 										onclick={() => startSpaceRename(space)}
 									>
-										Rename
+										{m.components_savedquerieslist_rename()}
 									</button>
 									<button
 										class="flex w-full items-center gap-2 border-none bg-none px-3 py-[7px] text-left text-xs font-medium text-text-main hover:bg-slate-50 dark:hover:bg-[#1c2128]"
@@ -181,7 +187,7 @@
 											menuOpen = null;
 										}}
 									>
-										Access
+										{m.components_savedquerieslist_access()}
 									</button>
 									{#if !space.is_default}
 										<button
@@ -192,7 +198,7 @@
 												menuOpen = null;
 											}}
 										>
-											Delete
+											{m.components_savedquerieslist_delete()}
 										</button>
 									{/if}
 								</div>
@@ -202,7 +208,9 @@
 
 					{#if !collapsed[space.id]}
 						{#if spaceQueries.length === 0}
-							<p class="px-5 py-2 text-[11px] text-text-muted">No saved queries.</p>
+							<p class="px-5 py-2 text-[11px] text-text-muted">
+								{m.components_savedquerieslist_no_saved_queries()}
+							</p>
 						{:else}
 							{#each spaceQueries as q (q.id)}
 								{@const canEdit = savedQueries.canEdit(space.id)}
@@ -222,7 +230,7 @@
 													class="h-6 w-full rounded border border-primary bg-bg-toolbar px-1.5 text-xs outline-none"
 													type="text"
 													bind:value={renameValue}
-													aria-label={`Rename ${q.name}`}
+													aria-label={m.components_savedquerieslist_rename_2({ name: q.name })}
 													onkeydown={(e) => e.key === 'Enter' && void renameQuery(q)}
 													onblur={() => (renameId = null)}
 													use:focusOnMount
@@ -242,7 +250,7 @@
 											<svg
 												viewBox="0 0 24 24"
 												class="h-3 w-3 text-text-muted"
-												aria-label="Read-only"
+												aria-label={m.components_savedquerieslist_read_only()}
 											>
 												<rect x="4" y="11" width="16" height="10" rx="2" /><path
 													d="M8 11V7a4 4 0 0 1 8 0v4"
@@ -257,7 +265,7 @@
 												e.stopPropagation();
 												menuOpen = menuOpen === q.id ? null : q.id;
 											}}
-											aria-label={`Actions for ${q.name}`}
+											aria-label={m.components_savedquerieslist_actions_for({ name: q.name })}
 										>
 											<svg viewBox="0 0 24 24" class="h-3 w-3"
 												><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle
@@ -275,7 +283,7 @@
 													class="flex w-full items-center gap-2 border-none bg-none px-3 py-[7px] text-left text-xs font-medium text-text-main hover:bg-slate-50 dark:hover:bg-[#1c2128]"
 													onclick={() => startRename(q)}
 												>
-													Rename
+													{m.components_savedquerieslist_rename()}
 												</button>
 												{#if spaces.length > 1}
 													<button
@@ -286,7 +294,7 @@
 															menuOpen = null;
 														}}
 													>
-														Move to space...
+														{m.components_savedquerieslist_move_to_space()}
 													</button>
 												{/if}
 												<button
@@ -297,7 +305,7 @@
 														menuOpen = null;
 													}}
 												>
-													Delete
+													{m.components_savedquerieslist_delete()}
 												</button>
 											</div>
 										{/if}
@@ -323,7 +331,7 @@
 		'The query and its edit history are removed.',
 		m.components_savedquerieslist_executions_already_run_keep_their_history()
 	]}
-	confirmLabel="Delete query"
+	confirmLabel={m.components_savedquerieslist_delete_query()}
 	onconfirm={deleteQuery}
 />
 <ConfirmDialog
@@ -335,6 +343,6 @@
 		m.components_savedquerieslist_every_folder_and_saved_query_in_it_is_dele(),
 		m.components_savedquerieslist_this_cannot_be_undone()
 	]}
-	confirmLabel="Delete space"
+	confirmLabel={m.components_savedquerieslist_delete_space()}
 	onconfirm={deleteSpace}
 />

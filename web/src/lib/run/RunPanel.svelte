@@ -79,8 +79,7 @@
 			{/if}
 		{:else if statements.length > 1}
 			<span class="text-slate-600 dark:text-slate-300">
-				{statements.length}
-				{m.run_runpanel_statement()}s
+				{m.run_runpanel_statements({ count: statements.length })}
 			</span>
 		{/if}
 		<span class="flex-1"></span>
@@ -124,16 +123,18 @@
 			class="border-b border-red-200 bg-red-50 px-3.5 py-2 text-[11px] text-red-800 dark:border-[#4d1111] dark:bg-[#1f0f0f] dark:text-red-300"
 		>
 			<p>
-				Statement {failed.position} failed. Statements {skipped[0].position}–{skipped[
-					skipped.length - 1
-				].position} were not run.
+				{m.run_runpanel_statement_failed_statements_were_not_run({
+					position: failed.position,
+					position2: skipped[0].position,
+					position3: skipped[skipped.length - 1].position
+				})}
 			</p>
 			<div class="mt-1 flex gap-2">
 				<Button size="sm" onclick={() => onrerun(failed.position)}>
-					Re-run from statement {failed.position}
+					{m.run_runpanel_re_run_from_statement_2({ position: failed.position })}
 				</Button>
 				<Button size="sm" onclick={() => onrerun(skipped[0].position)}>
-					Re-run from statement {skipped[0].position}
+					{m.run_runpanel_re_run_from_statement_2({ position: skipped[0].position })}
 				</Button>
 			</div>
 		</div>
@@ -141,8 +142,9 @@
 		<div
 			class="border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] text-amber-900 dark:border-[#4d3600] dark:bg-[#241a06] dark:text-amber-300"
 		>
-			This workspace has read access to {state.target?.catalog_name ??
-				m.run_runpanel_this_catalog()}; statements that modify data are rejected.
+			{m.run_runpanel_this_workspace_has_read_access_to({
+				value: state.target?.catalog_name ?? m.run_runpanel_this_catalog()
+			})}
 		</div>
 	{/if}
 

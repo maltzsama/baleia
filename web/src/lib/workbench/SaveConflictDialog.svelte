@@ -73,7 +73,7 @@
 			{#if conflict.updatedBy?.name}
 				<span class="font-semibold text-text-main">{conflict.updatedBy.name}</span>
 			{:else}
-				Someone
+				{m.workbench_saveconflictdialog_someone()}
 			{/if}
 			{m.workbench_saveconflictdialog_saved_version()}
 			{conflict.currentVersion}

@@ -147,18 +147,21 @@
 			<Skeleton class="h-4 w-2/3" />
 		</div>
 	{:else if loading}
-		<div class="space-y-2 p-4" aria-label="Loading statements">
+		<div class="space-y-2 p-4" aria-label={m.components_resultspanel_loading_statements()}>
 			<Skeleton class="h-4 w-1/3" />
 			<Skeleton class="h-4 w-2/3" />
 		</div>
 	{:else if loadError}
 		<ErrorState
-			title="Could not load the results"
+			title={m.components_resultspanel_could_not_load_the_results()}
 			message={loadError}
 			onretry={() => retryTick++}
 		/>
 	{:else if statements.length === 0}
-		<EmptyState title="No statements" description="This execution did not record any statements." />
+		<EmptyState
+			title={m.components_resultspanel_no_statements()}
+			description={m.components_resultspanel_this_execution_did_not_record_any()}
+		/>
 	{:else}
 		<!-- One tab per statement only for a script; the run panel above already
 		     shows each statement's status (#393). -->
@@ -186,7 +189,7 @@
 							activeResultIndex = 0;
 						}}
 					>
-						Statement {statement.position}
+						{m.components_resultspanel_statement({ position: statement.position })}
 					</button>
 				{/each}
 			</div>
@@ -203,7 +206,7 @@
 							: 'text-text-muted hover:text-text-main'}"
 						onclick={() => (activeResultIndex = set.result_index)}
 					>
-						Result {set.result_index + 1}
+						{m.components_resultspanel_result({ value: set.result_index + 1 })}
 					</button>
 				{/each}
 			</div>
@@ -214,22 +217,30 @@
 				class="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700 dark:border-[#4d3600] dark:bg-[#241a06] dark:text-amber-300"
 				role="status"
 			>
-				Showing the first {activeSet.rows.toLocaleString()} rows; the limit is configured by the administrator.
+				{m.components_resultspanel_showing_the_first_rows_the_limit({
+					value: activeSet.rows.toLocaleString()
+				})}
 			</div>
 		{/if}
 
 		{#if resultSets.length === 0}
-			<EmptyState title="No rows" description="This statement returned no result set." />
+			<EmptyState
+				title={m.components_resultspanel_no_rows()}
+				description={m.components_resultspanel_this_statement_returned_no_result_set()}
+			/>
 		{:else if store.error}
 			<ErrorState
-				title="Could not load the result"
+				title={m.components_resultspanel_could_not_load_the_result()}
 				message={store.error}
 				onretry={() => resultRetry++}
 			/>
 		{:else if store.done && store.rowCount === 0 && store.columns.length === 0}
-			<EmptyState title="No rows" description="The statement returned an empty result." />
+			<EmptyState
+				title={m.components_resultspanel_no_rows()}
+				description={m.components_resultspanel_the_statement_returned_an_empty_result()}
+			/>
 		{:else if store.columns.length === 0}
-			<div class="space-y-2 p-4" aria-label="Loading results">
+			<div class="space-y-2 p-4" aria-label={m.components_resultspanel_loading_results()}>
 				<Skeleton class="h-4 w-1/3" />
 				<Skeleton class="h-4 w-2/3" />
 			</div>
@@ -239,13 +250,13 @@
 					<span class="mx-1 h-4 w-px bg-border" aria-hidden="true"></span>
 					<select
 						bind:value={exportFormat}
-						aria-label="Export format"
+						aria-label={m.components_resultspanel_export_format()}
 						class="rounded border border-border bg-bg-panel px-1.5 py-0.5 text-[11px]"
 					>
 						<option value="csv">CSV</option>
 						<option value="tsv">TSV</option>
-						<option value="jsonl">JSON Lines</option>
-						<option value="arrow">Arrow</option>
+						<option value="jsonl">{m.components_resultspanel_json_lines()}</option>
+						<option value="arrow">{m.components_resultspanel_arrow()}</option>
 					</select>
 					<button
 						type="button"

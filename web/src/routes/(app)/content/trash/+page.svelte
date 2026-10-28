@@ -91,7 +91,7 @@
 	{#if loading}
 		<Skeleton class="h-32 w-full" />
 	{:else if error}
-		<ErrorState title="Could not load the trash" message={error} onretry={load} />
+		<ErrorState title={m.content_trash_could_not_load_the_trash()} message={error} onretry={load} />
 	{:else if items.length === 0}
 		<EmptyState
 			title={m.content_trash_trash_is_empty()}
@@ -104,11 +104,11 @@
 					class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
 				>
 					<tr>
-						<th class="px-3 py-2">Kind</th>
-						<th class="px-3 py-2">Name</th>
-						<th class="px-3 py-2">Space</th>
-						<th class="px-3 py-2">Deleted</th>
-						<th class="px-3 py-2 text-right">Actions</th>
+						<th class="px-3 py-2">{m.content_trash_kind()}</th>
+						<th class="px-3 py-2">{m.content_trash_name()}</th>
+						<th class="px-3 py-2">{m.content_trash_space()}</th>
+						<th class="px-3 py-2">{m.content_trash_deleted()}</th>
+						<th class="px-3 py-2 text-right">{m.content_trash_actions()}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -117,10 +117,10 @@
 							<td class="px-3 py-1.5">
 								<Badge tone="neutral"
 									>{item.entity_type === 'saved_query'
-										? 'Query'
+										? m.content_trash_query()
 										: item.entity_type === 'semantic_model'
-											? 'Model'
-											: 'Metric'}</Badge
+											? m.content_trash_model()
+											: m.content_trash_metric()}</Badge
 								>
 							</td>
 							<td class="px-3 py-1.5">{item.name ?? item.slug}</td>
@@ -132,7 +132,7 @@
 									class="text-primary hover:underline"
 									onclick={() => openHistory(item)}
 								>
-									History
+									{m.content_trash_history()}
 								</button>
 								<Button
 									size="sm"
@@ -141,7 +141,7 @@
 									disabled={busy === item.entity_id}
 									onclick={() => restore(item)}
 								>
-									Restore
+									{m.content_trash_restore()}
 								</Button>
 							</td>
 						</tr>

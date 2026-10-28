@@ -99,7 +99,7 @@
 		clearInterval(retryTimer);
 		retryIn = seconds;
 		const title = describeError('rate_limited').title;
-		error = `${title}. Try again in ${retryIn} s.`;
+		error = m.login_try_again_in_s({ title, retryIn });
 		retryTimer = setInterval(() => {
 			retryIn -= 1;
 			if (retryIn <= 0) {
@@ -107,7 +107,7 @@
 				retryIn = 0;
 				error = '';
 			} else {
-				error = `${title}. Try again in ${retryIn} s.`;
+				error = m.login_try_again_in_s({ title, retryIn });
 			}
 		}, 1000);
 	}

@@ -224,23 +224,27 @@
 	{#if !table}
 		<EmptyState
 			title={m.components_tabledetail_select_a_table()}
-			description="Browse the catalogs to inspect a table, its columns and its documentation."
+			description={m.components_tabledetail_browse_the_catalogs_to_inspect_a()}
 		/>
 	{:else if loading && !detail}
-		<div class="space-y-3 p-4" aria-label="Loading table">
+		<div class="space-y-3 p-4" aria-label={m.components_tabledetail_loading_table()}>
 			<Loader class="h-5 w-1/2" />
 			<Loader class="h-4 w-2/3" />
 			<Loader class="h-4 w-3/4" />
 		</div>
 	{:else if error}
-		<ErrorState title="Could not load the table" message={error} onretry={() => retryTick++} />
+		<ErrorState
+			title={m.components_tabledetail_could_not_load_the_table()}
+			message={error}
+			onretry={() => retryTick++}
+		/>
 	{:else if detail}
 		<div class="shrink-0 border-b border-border px-4 py-3">
 			<div class="flex flex-wrap items-center gap-2">
 				<span class="font-mono text-[15px] font-bold">{detail.name}</span>
 				<Badge tone="neutral">{detail.kind.replace('_', ' ')}</Badge>
 				{#if detail.removed_at}
-					<Badge tone="warning">removed from the source</Badge>
+					<Badge tone="warning">{m.components_tabledetail_removed_from_the_source()}</Badge>
 				{/if}
 			</div>
 			<div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
@@ -248,9 +252,10 @@
 				<span aria-hidden="true">·</span>
 				<span>
 					{#if detail.freshness.metadata_synced_at}
-						synced <RelativeTime at={detail.freshness.metadata_synced_at} />
+						{m.components_tabledetail_synced()}
+						<RelativeTime at={detail.freshness.metadata_synced_at} />
 					{:else}
-						never synced
+						{m.components_tabledetail_never_synced()}
 					{/if}
 				</span>
 			</div>
@@ -258,9 +263,9 @@
 			<div class="mt-3 flex flex-wrap items-center gap-2">
 				{#if hasBindings}
 					<label class="flex items-center gap-1.5 text-[11px] text-text-muted">
-						<span>Engine</span>
+						<span>{m.components_tabledetail_engine()}</span>
 						<select
-							aria-label="Engine binding"
+							aria-label={m.components_tabledetail_engine_binding()}
 							class="rounded border border-border bg-bg-panel px-1.5 py-1 text-[11px]"
 							value={bindingId}
 							onchange={(e) => (bindingId = (e.currentTarget as HTMLSelectElement).value)}
@@ -278,18 +283,21 @@
 					variant="secondary"
 					size="sm"
 					disabled={!detailCurrent || !detail.preview_sql}
-					onclick={runPreview}>Preview</Button
+					onclick={runPreview}>{m.components_tabledetail_preview_2()}</Button
 				>
 				<Button
 					variant="secondary"
 					size="sm"
 					disabled={!detailCurrent || !detail.qualified_name}
-					onclick={insertName}>Insert name</Button
+					onclick={insertName}>{m.components_tabledetail_insert_name()}</Button
 				>
 				{#if detail.qualified_name}
 					<span class="inline-flex items-center gap-1 text-[11px] text-text-muted">
 						<code class="font-mono">{detail.qualified_name}</code>
-						<CopyButton value={detail.qualified_name} label="qualified name" />
+						<CopyButton
+							value={detail.qualified_name}
+							label={m.components_tabledetail_qualified_name()}
+						/>
 					</span>
 				{/if}
 			</div>
@@ -299,8 +307,12 @@
 			<div class="border-b border-border px-4 py-3">
 				<div class="mb-2 flex items-center justify-between gap-2">
 					<div class="flex items-center gap-1.5">
-						<p class="text-[10px] font-bold uppercase tracking-wide text-text-muted">About</p>
-						{#if detail.doc?.certified}<Badge tone="success">Certified</Badge>{/if}
+						<p class="text-[10px] font-bold uppercase tracking-wide text-text-muted">
+							{m.components_tabledetail_about()}
+						</p>
+						{#if detail.doc?.certified}<Badge tone="success"
+								>{m.components_tabledetail_certified()}</Badge
+							>{/if}
 					</div>
 					<Button
 						size="sm"
@@ -310,13 +322,13 @@
 							docEditorOpen = true;
 						}}
 					>
-						Edit
+						{m.components_tabledetail_edit()}
 					</Button>
 				</div>
 				{#if detail.doc?.description}
 					<MarkdownView source={detail.doc.description} />
 				{:else}
-					<p class="text-[11px] text-text-muted">No description yet.</p>
+					<p class="text-[11px] text-text-muted">{m.components_tabledetail_no_description_yet()}</p>
 				{/if}
 				{#if detail.doc?.tags?.length}
 					<div class="mt-2 flex flex-wrap gap-1">
@@ -330,7 +342,7 @@
 			{#if Object.keys(detail.properties).length > 0}
 				<div class="border-b border-border px-4 py-3">
 					<p class="mb-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-						Properties
+						{m.components_tabledetail_properties()}
 					</p>
 					<dl class="grid grid-cols-[minmax(90px,auto)_1fr] gap-x-3 gap-y-1 text-[12px]">
 						{#each Object.entries(detail.properties) as [key, value] (key)}
@@ -344,20 +356,26 @@
 			<div class="px-3 py-2">
 				<div class="mb-2 flex items-center gap-2 px-1">
 					<p class="text-[10px] font-bold uppercase tracking-wide text-text-muted">
-						Columns <span class="font-normal">({detail.columns.length})</span>
+						{m.components_tabledetail_columns()}
+						<span class="font-normal">({detail.columns.length})</span>
 					</p>
 					<input
 						type="text"
-						placeholder="Filter columns..."
-						aria-label="Filter columns"
+						placeholder={m.components_tabledetail_filter_columns()}
+						aria-label={m.components_tabledetail_filter_columns_2()}
 						bind:value={colSearch}
 						class="ml-auto w-40 rounded border border-border bg-bg-panel px-2 py-1 text-[11px] outline-none focus:border-primary"
 					/>
-					<Button size="sm" onclick={() => (columnsOpen = true)}>Document columns</Button>
+					<Button size="sm" onclick={() => (columnsOpen = true)}
+						>{m.components_tabledetail_document_columns()}</Button
+					>
 				</div>
 
 				{#if filteredColumns.length === 0}
-					<EmptyState title="No columns" description="This table has no columns in the snapshot." />
+					<EmptyState
+						title={m.components_tabledetail_no_columns()}
+						description={m.components_tabledetail_this_table_has_no_columns_in()}
+					/>
 				{:else}
 					{#each filteredColumns as column (column.ordinal)}
 						<div
@@ -376,7 +394,7 @@
 										>{column.name}</span
 									>
 									{#if column.nullable === false}
-										<Badge tone="neutral">not null</Badge>
+										<Badge tone="neutral">{m.components_tabledetail_not_null()}</Badge>
 									{/if}
 									<span
 										class="type-chip inline-flex shrink-0 items-center rounded border border-transparent px-1.5 py-px font-mono text-[10px] font-semibold {typeClass(
@@ -395,10 +413,14 @@
 									{#if column.doc?.description}
 										<MarkdownView source={column.doc.description} />
 									{:else}
-										<p class="text-[11px] text-text-muted">No description yet.</p>
+										<p class="text-[11px] text-text-muted">
+											{m.components_tabledetail_no_description_yet()}
+										</p>
 									{/if}
 									<div class="mt-1 flex items-center gap-2">
-										{#if column.doc?.certified}<Badge tone="success">Certified</Badge>{/if}
+										{#if column.doc?.certified}<Badge tone="success"
+												>{m.components_tabledetail_certified()}</Badge
+											>{/if}
 										<Button
 											size="sm"
 											onclick={() => {
@@ -407,7 +429,7 @@
 												docEditorOpen = true;
 											}}
 										>
-											Edit doc
+											{m.components_tabledetail_edit_doc()}
 										</Button>
 									</div>
 								</div>
@@ -452,9 +474,16 @@
 			<Loader class="h-4 w-1/2" />
 		</div>
 	{:else if previewError}
-		<ErrorState title="Preview failed" message={previewError} onretry={runPreview} />
+		<ErrorState
+			title={m.components_tabledetail_preview_failed()}
+			message={previewError}
+			onretry={runPreview}
+		/>
 	{:else if previewColumns.length === 0}
-		<EmptyState title="No rows" description="The preview returned no rows." />
+		<EmptyState
+			title={m.components_tabledetail_no_rows()}
+			description={m.components_tabledetail_the_preview_returned_no_rows()}
+		/>
 	{:else}
 		<table class="w-full border-separate border-spacing-0 text-left text-xs">
 			<thead>

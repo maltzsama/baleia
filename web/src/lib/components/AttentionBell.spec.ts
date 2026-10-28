@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { components } from '$lib/api/schema';
+import { setAppLocale } from '$lib/i18n/locale.svelte';
 import { http, server } from '../../test/server';
 import AttentionBell from './AttentionBell.svelte';
 
@@ -28,11 +29,13 @@ describe('attention bell', () => {
 		localStorage.clear();
 	});
 
+	afterEach(() => setAppLocale('en'));
+
 	it('counts errors first and links every item to its fix', async () => {
 		server.use(http.get('/attention', ({ response }) => response(200).json(items)));
 		render(AttentionBell);
 
-		const bell = await screen.findByRole('button', { name: 'Attention: 1 items' });
+		const bell = await screen.findByRole('button', { name: 'Attention: 1 item' });
 		await fireEvent.click(bell);
 
 		expect(await screen.findByText(/Catalog binding error/)).toBeTruthy();
@@ -51,9 +54,20 @@ describe('attention bell', () => {
 			})
 		);
 		render(AttentionBell);
-		await screen.findByRole('button', { name: 'Attention: 1 items' });
+		await screen.findByRole('button', { name: 'Attention: 1 item' });
 
 		window.dispatchEvent(new Event('focus'));
 		await waitFor(() => expect(calls).toBeGreaterThanOrEqual(2));
+	});
+
+	// #469: the count is pluralized by the active locale.
+	it('pluralizes the count in en and pt-BR', async () => {
+		const errors = [items[0], { ...items[0], resource: { ...items[0].resource, id: 'b2' } }];
+		server.use(http.get('/attention', ({ response }) => response(200).json(errors)));
+		render(AttentionBell);
+		expect(await screen.findByRole('button', { name: 'Attention: 2 items' })).toBeTruthy();
+
+		setAppLocale('pt-BR');
+		expect(await screen.findByRole('button', { name: 'Atenção: 2 itens' })).toBeTruthy();
 	});
 });
