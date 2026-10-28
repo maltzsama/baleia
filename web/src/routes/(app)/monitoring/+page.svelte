@@ -746,7 +746,7 @@
 	{/if}
 </div>
 
-<Drawer bind:open={queryDrawer} title={m.monitoring_query_detail()}>
+<Drawer size="lg" bind:open={queryDrawer} title={m.monitoring_query_detail()}>
 	{#if selectedQuery}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
 			<dt class="text-slate-600 dark:text-slate-300">{m.monitoring_state()}</dt>

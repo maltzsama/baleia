@@ -80,7 +80,8 @@
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
-	<div class="max-w-5xl">
+	<!-- Lists and tables use the full width (#468). -->
+	<div class="w-full">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_system_system_status()}</h1>
@@ -112,7 +113,7 @@
 		{:else if status}
 			<section class="mt-6">
 				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Core</h2>
-				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 					{#each core as card (card.label)}
 						<article class="rounded-lg border border-border bg-bg-panel p-3">
 							<div class="flex items-center justify-between gap-2">

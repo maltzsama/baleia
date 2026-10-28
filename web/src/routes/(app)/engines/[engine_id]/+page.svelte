@@ -625,7 +625,7 @@
 	onconfirm={applyDrift}
 />
 
-<Drawer bind:open={runDrawer} title={m.engines_reconcile_run()}>
+<Drawer size="lg" bind:open={runDrawer} title={m.engines_reconcile_run()}>
 	{#if selectedRun}
 		<p class="text-[11px] text-slate-600 dark:text-slate-300">
 			{selectedRun.dry_run ? m.engines_dry_run() : m.common_apply()}

@@ -198,7 +198,8 @@
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
-	<div class="mx-auto max-w-6xl">
+	<!-- Lists and tables use the full width (#468). -->
+	<div class="w-full">
 		<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
 			<div>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.history_query_history()}</h1>
@@ -396,7 +397,7 @@
 	</div>
 </div>
 
-<Drawer bind:open={drawerOpen} title={m.history_execution_details()}>
+<Drawer size="lg" bind:open={drawerOpen} title={m.history_execution_details()}>
 	{#if selected}
 		<div class="flex flex-col gap-4 p-5">
 			<div class="flex flex-wrap items-center gap-2 text-xs text-text-muted">

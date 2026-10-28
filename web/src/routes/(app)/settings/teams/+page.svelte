@@ -193,7 +193,8 @@
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
-	<div class="max-w-4xl">
+	<!-- Lists and tables use the full width (#468). -->
+	<div class="w-full">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{m.settings_teams_teams()}</h1>

@@ -850,7 +850,7 @@
 	{/snippet}
 </Modal>
 
-<Drawer bind:open={projectionOpen} title={m.catalogs_binding_projection()}>
+<Drawer size="lg" bind:open={projectionOpen} title={m.catalogs_binding_projection()}>
 	{#if projectionLoading}
 		<Skeleton class="h-24 w-full" />
 	{:else if projection}

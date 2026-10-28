@@ -5,12 +5,15 @@
 	let {
 		open = $bindable(false),
 		title,
+		size = 'md',
 		onclose,
 		children,
 		footer
 	}: {
 		open?: boolean;
 		title: string;
+		/** md for short details; lg for SQL, plans, JSON and diffs (#468). */
+		size?: 'md' | 'lg';
 		onclose?: () => void;
 		children: Snippet;
 		footer?: Snippet;
@@ -52,7 +55,9 @@
 	onclose={handleClose}
 	onclick={(event) => event.target === dialogEl && close()}
 	aria-label={title}
-	class="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-[420px] border-0 border-l border-border bg-bg-panel p-0 text-text-main shadow-[0_0_48px_rgba(0,0,0,.18)] backdrop:bg-black/30 backdrop:backdrop-blur-[2px]"
+	class="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full {size === 'lg'
+		? 'max-w-[min(960px,60vw)]'
+		: 'max-w-[420px]'} border-0 border-l border-border bg-bg-panel p-0 text-text-main shadow-[0_0_48px_rgba(0,0,0,.18)] backdrop:bg-black/30 backdrop:backdrop-blur-[2px]"
 >
 	{#if open}
 		<div bind:this={panelEl} tabindex="-1" class="flex h-full flex-col outline-none">

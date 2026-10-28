@@ -109,7 +109,7 @@
 	}
 </script>
 
-<Drawer bind:open title={m.content_historydrawer_history()}>
+<Drawer size="lg" bind:open title={m.content_historydrawer_history()}>
 	{#if loading}
 		<Skeleton class="h-40 w-full" />
 	{:else if error}
