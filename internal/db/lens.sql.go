@@ -919,12 +919,28 @@ const upsertTrinoQuerySnapshot = `-- name: UpsertTrinoQuerySnapshot :one
 INSERT INTO trino_query_snapshots (trino_query_id, engine_id, execution_id, origin, "user", state, sql, catalog, "schema", created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (trino_query_id) DO UPDATE
-SET state = EXCLUDED.state,
-    elapsed_ms = EXCLUDED.elapsed_ms,
-    cpu_ms = EXCLUDED.cpu_ms,
-    physical_input_bytes = EXCLUDED.physical_input_bytes,
-    output_rows = EXCLUDED.output_rows,
-    error_message = EXCLUDED.error_message,
+SET state = CASE
+        WHEN trino_query_snapshots.state IN ('finished', 'failed') AND EXCLUDED.state = 'running'
+        THEN trino_query_snapshots.state
+        ELSE EXCLUDED.state
+    END,
+    elapsed_ms = CASE
+        WHEN trino_query_snapshots.state IN ('finished', 'failed') AND EXCLUDED.state = 'running'
+        THEN COALESCE(trino_query_snapshots.elapsed_ms, EXCLUDED.elapsed_ms)
+        ELSE COALESCE(EXCLUDED.elapsed_ms, trino_query_snapshots.elapsed_ms)
+    END,
+    cpu_ms = CASE
+        WHEN trino_query_snapshots.state IN ('finished', 'failed') AND EXCLUDED.state = 'running'
+        THEN COALESCE(trino_query_snapshots.cpu_ms, EXCLUDED.cpu_ms)
+        ELSE COALESCE(EXCLUDED.cpu_ms, trino_query_snapshots.cpu_ms)
+    END,
+    physical_input_bytes = CASE
+        WHEN trino_query_snapshots.state IN ('finished', 'failed') AND EXCLUDED.state = 'running'
+        THEN COALESCE(trino_query_snapshots.physical_input_bytes, EXCLUDED.physical_input_bytes)
+        ELSE COALESCE(EXCLUDED.physical_input_bytes, trino_query_snapshots.physical_input_bytes)
+    END,
+    output_rows = COALESCE(EXCLUDED.output_rows, trino_query_snapshots.output_rows),
+    error_message = COALESCE(EXCLUDED.error_message, trino_query_snapshots.error_message),
     last_seen_at = now()
 RETURNING id, trino_query_id, execution_id, origin, "user", state, sql, catalog, schema, created_at, elapsed_ms, cpu_ms, physical_input_bytes, output_rows, error_message, raw_trino_payload, first_seen_at, last_seen_at, engine_id
 `
@@ -950,6 +966,11 @@ type UpsertTrinoQuerySnapshotParams struct {
 
 // Monitoring snapshots (#117): every row is tagged with its engine or logical
 // catalog, so two engines never mix.
+// Two writers (the poller and the query events, #406). A poll read before the
+// query ended is stale once a terminal state is stored: it changes neither the
+// state nor the final figures, and only fills one still missing. Otherwise a
+// figure one writer does not know (the poller has no output rows) keeps the
+// other's.
 func (q *Queries) UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error) {
 	row := q.db.QueryRow(ctx, upsertTrinoQuerySnapshot,
 		arg.TrinoQueryID,

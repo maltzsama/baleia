@@ -13,7 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
@@ -52,16 +51,9 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 	}
 
 	for _, q := range queries {
-		// I4 (CR-017): discard catalog-management DDL from observability.
-		// These statements are infrastructure, not user queries, and (until
-		// the placeholder plumbing of I2 is in place) they leak credentials
-		// in clear. Even after I2 the discard stays: it is defense in depth
-		// and the DDL carries no user-observability value.
-		if policy.IsCatalogDDL(q.Query) {
-			continue
-		}
-		// The cluster poller's own node-count statement is not user activity.
-		if q.Query == monitor.ClusterNodesSQL {
+		// Catalog DDL and the cluster poller's own statement are not user
+		// activity (monitor.Observable, I4/CR-017).
+		if !monitor.Observable(q.Query) {
 			continue
 		}
 
@@ -89,7 +81,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 			createdAt = time.Now()
 		}
 
-		state := mapTrinoState(q.State)
+		state := monitor.SnapshotState(q.State)
 		origin := "trino_direct"
 
 		_, err := a.queries.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
@@ -386,19 +378,6 @@ func engineUUID(id string) pgtype.UUID {
 	var out pgtype.UUID
 	_ = out.Scan(id)
 	return out
-}
-
-func mapTrinoState(s string) string {
-	switch s {
-	case "RUNNING", "QUEUED", "PLANNING", "STARTING":
-		return "running"
-	case "FINISHED":
-		return "finished"
-	case "FAILED":
-		return "failed"
-	default:
-		return "running"
-	}
 }
 
 func strPtr(s string) *string {

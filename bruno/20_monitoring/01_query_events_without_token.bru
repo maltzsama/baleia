@@ -1,0 +1,39 @@
+meta {
+  name: Query Events (no token)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "metadata": { "queryId": "20261027_000000_00000_bruno", "query": "SELECT 1", "queryState": "FINISHED" },
+    "context": { "user": "bruno" },
+    "statistics": { "cpuTime": 0.1, "wallTime": 0.2, "physicalInputBytes": 0, "outputRows": 1 },
+    "createTime": "2026-10-27T00:00:00Z"
+  }
+}
+
+script:pre-request {
+  // The endpoint is not under /api/v1: base_url's host, its own path.
+  const root = bru.getEnvVar("base_url").replace(/\/api\/v1\/?$/, "");
+  req.setUrl(root + "/internal/trino/query-events");
+}
+
+tests {
+  test("an unauthenticated event is never recorded", function () {
+    // 401 with BALEIA_TRINO_EVENTS_TOKEN set, 404 with the feature off.
+    expect([401, 404]).to.include(res.getStatus());
+  });
+}
+
+docs {
+  POST /internal/trino/query-events receives Trino's HTTP event listener
+  (#406). It is not under /api/v1 and takes no user JWT: only the
+  BALEIA_TRINO_EVENTS_TOKEN bearer token the listener is configured with.
+}

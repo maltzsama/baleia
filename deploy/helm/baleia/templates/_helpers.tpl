@@ -87,6 +87,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 - name: BALEIA_METRICS_TOKEN
   valueFrom:
     secretKeyRef: { name: {{ $name }}, key: BALEIA_METRICS_TOKEN, optional: true }
+- name: BALEIA_TRINO_EVENTS_TOKEN
+  valueFrom:
+    secretKeyRef: { name: {{ $name }}, key: BALEIA_TRINO_EVENTS_TOKEN, optional: true }
 {{- end }}
 
 {{- define "baleia.podSecurityContext" -}}

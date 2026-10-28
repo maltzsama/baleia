@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mcp"
 	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/monitoring/queryevents"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/ws"
@@ -46,9 +48,12 @@ type Server struct {
 	// background is the handlers' work that outlives a request; Run waits
 	// for it on shutdown.
 	background drainer
-	strict     api.ServerInterface
-	ws         *ws.Handler
-	mcp        *mcp.Server // nil unless agents are enabled
+	// queryEvents records Trino's query events (#406); nil when
+	// BALEIA_TRINO_EVENTS_TOKEN is unset.
+	queryEvents *queryevents.Ingester
+	strict      api.ServerInterface
+	ws          *ws.Handler
+	mcp         *mcp.Server // nil unless agents are enabled
 	// rl and authLimiter run cleanup goroutines; Run stops them on shutdown.
 	rl               *RateLimiter
 	authLimiter      *AuthRouteLimiter
@@ -89,6 +94,9 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	}
 	s.handlers = h
 	s.background = h
+	if cfg.TrinoEventsToken != "" {
+		s.queryEvents = queryevents.New(s.logger, core.Queries, defaultTrinoID(core.Engines), cfg.TrinoEventsToken)
+	}
 
 	authMetrics := h.AuthMetrics()
 	s.onRefreshLimited = func() { authMetrics.Attempt(metrics.AuthRefresh, metrics.OutcomeRateLimited) }
@@ -207,6 +215,13 @@ func (s *Server) routes() {
 			metricsHandler.ServeHTTP(w, r)
 		})
 	}
+
+	// A nil *Ingester would be a non-nil http.Handler: pass nil explicitly.
+	var events http.Handler
+	if s.queryEvents != nil {
+		events = s.queryEvents
+	}
+	mountQueryEvents(s.mux, events)
 
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", s.ws.StreamExecution)
 
@@ -522,4 +537,36 @@ func derefString(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+// defaultTrinoID is the default Trino engine's id: the engine whose
+// coordinator posts the query events, as the poller watches it.
+func defaultTrinoID(engines interface {
+	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
+}) queryevents.Engine {
+	return func(ctx context.Context) (pgtype.UUID, error) {
+		eng, err := engines.DefaultTrino(ctx)
+		if err != nil {
+			return pgtype.UUID{}, err
+		}
+		var id pgtype.UUID
+		if err := id.Scan(eng.ID()); err != nil {
+			return pgtype.UUID{}, fmt.Errorf("default trino engine id: %w", err)
+		}
+		return id, nil
+	}
+}
+
+// mountQueryEvents mounts the route Trino's HTTP event listener posts
+// completed queries to (#406), authenticated by BALEIA_TRINO_EVENTS_TOKEN, not
+// by a user JWT. With ingestion off (nil) the path still answers 404, not the
+// SPA fallback's 200, which a listener would take for a delivery.
+func mountQueryEvents(mux chi.Router, events http.Handler) {
+	if events == nil {
+		mux.HandleFunc("/internal/trino/query-events", func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		})
+		return
+	}
+	mux.Post("/internal/trino/query-events", events.ServeHTTP)
 }

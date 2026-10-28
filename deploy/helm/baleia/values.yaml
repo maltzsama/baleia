@@ -81,6 +81,12 @@ trino:
   # existing secret carrying that key) and a plugin release that supports it.
   registryEncryption: false
   awsRegion: us-east-1    # set explicitly: S3 region auto-detection hangs without EC2 metadata
+  # Query events (#406): the in-chart Trino pushes each completed query to
+  # the API, which records it at once with full statistics. Requires
+  # secrets.values.BALEIA_TRINO_EVENTS_TOKEN (32+ characters). The 30s
+  # poller keeps running and repairs drift.
+  queryEvents:
+    enabled: false
   catalogGuard:
     # The in-chart Trino has no authentication, so the guard cannot verify who
     # claims the admin identity (config.BALEIA_TRINO_ADMIN_USER). When true, ANY

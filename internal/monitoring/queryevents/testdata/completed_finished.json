@@ -1,0 +1,134 @@
+{
+ "context": {
+  "clientCapabilities": [
+   "VARIANT",
+   "SESSION_AUTHORIZATION",
+   "NUMBER",
+   "PATH",
+   "PARAMETRIC_DATETIME"
+  ],
+  "clientTags": [],
+  "enabledRoles": [],
+  "environment": "docker",
+  "groups": [],
+  "originalRoles": [],
+  "originalUser": "trino",
+  "principal": "trino",
+  "queryType": "SELECT",
+  "remoteClientAddress": "127.0.0.1",
+  "resourceEstimates": {},
+  "resourceGroupId": [
+   "global"
+  ],
+  "retryPolicy": "NONE",
+  "serverAddress": "10.10.61.205",
+  "serverVersion": "483",
+  "sessionProperties": {},
+  "source": "trino-cli",
+  "timezone": "UTC",
+  "user": "trino",
+  "userAgent": "trino-cli/483 os=Linux os/version=7.0.0-38-generic arch=amd64 lang/java=25.0.3+9-LTS java/vm=OpenJDK_64-Bit_Server_VM java/vendor=Eclipse_Adoptium locale=en"
+ },
+ "createTime": "2026-10-27T17:06:48.365494877Z",
+ "endTime": "2026-10-27T17:06:50.638067907Z",
+ "executionStartTime": "2026-10-27T17:06:48.514296408Z",
+ "ioMetadata": {
+  "inputs": [
+   {
+    "catalogName": "tpch",
+    "catalogVersion": "default",
+    "columns": [],
+    "connectorMetrics": {},
+    "connectorName": "tpch",
+    "physicalInputBytes": 0,
+    "physicalInputRows": 15000,
+    "schema": "tiny",
+    "table": "orders"
+   }
+  ]
+ },
+ "metadata": {
+  "jsonPlan": "{\"0\": {\"name\": \"Output\"}}",
+  "payload": null,
+  "plan": "Trino version: 483\n(plan trimmed for the fixture)",
+  "query": "SELECT count(*) FROM tpch.tiny.orders",
+  "queryId": "20261027_170648_00000_xnycr",
+  "queryState": "FINISHED",
+  "routines": [
+   {
+    "authorization": "trino",
+    "routine": "count"
+   }
+  ],
+  "tables": [
+   {
+    "authorization": "trino",
+    "catalog": "tpch",
+    "columns": [],
+    "directlyReferenced": true,
+    "filters": [],
+    "referenceChain": [],
+    "schema": "tiny",
+    "table": "orders"
+   }
+  ],
+  "transactionId": "26b0ebdf-e976-41ca-9e70-e6d104a1df45",
+  "uri": "http://10.10.61.205:8080/v1/query/20261027_170648_00000_xnycr"
+ },
+ "selectColumnsLineageInfo": [
+  {
+   "name": "",
+   "sourceColumns": []
+  }
+ ],
+ "statistics": {
+  "analysisTime": 0.077008223,
+  "catalogMetadataMetrics": {},
+  "complete": true,
+  "completedSplits": 13,
+  "cpuTime": 1.498,
+  "cpuTimeDistribution": [],
+  "cumulativeMemory": 0.0,
+  "dynamicFilterDomainStatistics": [],
+  "exchangeMetrics": {},
+  "executionTime": 2.123771498,
+  "failedCpuTime": 0.0,
+  "failedCumulativeMemory": 0.0,
+  "failedInputBlockedTime": 0.0,
+  "failedOutputBlockedTime": 0.0,
+  "failedScheduledTime": 0.0,
+  "finishingTime": 0.015039515,
+  "inputBlockedTime": 11.369999999,
+  "internalNetworkBytes": 172,
+  "internalNetworkRows": 4,
+  "operatorSummaries": [],
+  "optimizerRulesSummaries": [],
+  "outputBlockedTime": 0.0,
+  "outputBufferMetrics": [],
+  "outputBufferUtilization": [],
+  "outputBytes": 9,
+  "outputRows": 1,
+  "peakTaskTotalMemory": 416,
+  "peakTaskUserMemory": 416,
+  "peakUserMemoryBytes": 416,
+  "physicalInputBytes": 0,
+  "physicalInputReadTime": 0.0,
+  "physicalInputRows": 15000,
+  "planNodeStatsAndCosts": "",
+  "planningCpuTime": 0.20436144,
+  "planningTime": 0.206080742,
+  "processedInputBytes": 0,
+  "processedInputRows": 15000,
+  "queuedTime": 0.071285183,
+  "resourceWaitingTime": 0.076855775,
+  "scheduledTime": 5.626999999,
+  "spilledBytes": 0,
+  "stageGcStatistics": [],
+  "startingTime": 0.075803086,
+  "taskStatistics": [],
+  "wallTime": 2.272573029,
+  "writtenBytes": 0,
+  "writtenRows": 0
+ },
+ "warnings": []
+}
