@@ -1069,5 +1069,7 @@
 	"data_opening_the_linked_table": "Abrindo a tabela do link",
 	"data_table_not_found": "Tabela não encontrada",
 	"data_table_not_found_description": "{table} não está neste catálogo, ou o catálogo não está liberado para este workspace.",
-	"data_could_not_open_the_linked_table": "Não foi possível abrir a tabela do link"
+	"data_could_not_open_the_linked_table": "Não foi possível abrir a tabela do link",
+	"monitoring_loading_query_detail": "Carregando o detalhe da query",
+	"monitoring_could_not_load_the_query": "Não foi possível carregar a query"
 }

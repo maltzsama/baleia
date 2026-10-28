@@ -455,4 +455,81 @@ describe('monitoring page', () => {
 		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run maintenance' }));
 		await waitFor(() => expect(posted).toEqual([B]));
 	});
+	});
+
+	// #480: the drawer opens at once, shows a failure with a retry, and a
+	// slow first response never replaces the query clicked after it.
+	describe('query detail drawer', () => {
+		const listed = (id: string, sql: string) => ({
+			trino_query_id: id,
+			state: 'finished',
+			user: 'ada',
+			sql_first_line: sql,
+			catalog: 'lake',
+			created_at: '2026-10-01T12:00:00Z'
+		});
+
+		function useQueries(detail: (id: string) => Promise<Response | null>) {
+			server.use(
+				http.get('/engines/{id}/monitoring/queries', ({ response }) =>
+					response(200).json({
+						items: [listed('q1', 'SELECT 1'), listed('q2', 'SELECT 2')]
+					})
+				),
+				http.get('/engines/{id}/monitoring/queries/{query_id}', async ({ params, response }) => {
+					const result = await detail(params.query_id);
+					if (result) return result;
+					return response(200).json({
+						...listed(params.query_id, ''),
+						sql: `SELECT detail_${params.query_id}`
+					});
+				})
+			);
+		}
+
+		it('shows a loading state, then an error with a retry', async () => {
+			let release: () => void = () => {};
+			const gate = new Promise<void>((resolve) => (release = resolve));
+			let failing = true;
+			useQueries(async () => {
+				await gate;
+				return failing
+					? new Response(JSON.stringify({ code: 'not_found', message: 'gone' }), {
+							status: 404,
+							headers: { 'content-type': 'application/json' }
+						})
+					: null;
+			});
+			render(MonitoringPage);
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+			await fireEvent.click(await screen.findByText('SELECT 1'));
+
+			expect(await screen.findByRole('status', { name: 'Loading the query detail' })).toBeTruthy();
+			release();
+			expect(await screen.findByText('Could not load the query')).toBeTruthy();
+
+			failing = false;
+			await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+			expect(await screen.findByText('SELECT detail_q1')).toBeTruthy();
+		});
+
+		it('keeps the last clicked query when an earlier answer is late', async () => {
+			let releaseFirst: () => void = () => {};
+			const first = new Promise<void>((resolve) => (releaseFirst = resolve));
+			useQueries(async (id) => {
+				if (id === 'q1') await first;
+				return null;
+			});
+			render(MonitoringPage);
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+			await fireEvent.click(await screen.findByText('SELECT 1'));
+			await fireEvent.click(screen.getByText('SELECT 2'));
+			expect(await screen.findByText('SELECT detail_q2')).toBeTruthy();
+
+			releaseFirst();
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(screen.getByText('SELECT detail_q2')).toBeTruthy();
+			expect(screen.queryByText('SELECT detail_q1')).toBeNull();
+		});
+	});
 });
