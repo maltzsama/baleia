@@ -7,11 +7,14 @@
 	let {
 		collapsed = $bindable(false),
 		activeTab = $bindable<'datasources' | 'queries'>('datasources'),
-		onSelectTable
+		onSelectTable,
+		width = 260
 	}: {
 		collapsed?: boolean;
 		activeTab?: 'datasources' | 'queries';
 		onSelectTable?: (t: TableRef | null) => void;
+		/** Expanded width in px (#468); the workbench makes it resizable. */
+		width?: number;
 	} = $props();
 	let search = $state('');
 	let tree = $state<{ handleSearchKey: (event: KeyboardEvent) => void } | null>(null);
@@ -27,8 +30,9 @@
 </script>
 
 <aside
-	class="bg-bg-panel border border-border rounded-[var(--radius)] shadow-sm flex flex-col overflow-hidden transition-[width] duration-200 shrink-0
-	{collapsed ? 'w-9' : 'w-[260px]'}"
+	class="bg-bg-panel border border-border rounded-[var(--radius)] shadow-sm flex flex-col overflow-hidden shrink-0
+	{collapsed ? 'w-9' : ''}"
+	style:width={collapsed ? undefined : `${width}px`}
 >
 	{#if collapsed}
 		<div class="flex flex-col items-center py-2.5 gap-2.5 flex-1">

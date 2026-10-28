@@ -1,4 +1,11 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import PanelResizer from '$lib/ui/PanelResizer.svelte';
+	import { loadWidth } from '$lib/ui/panelWidth';
+
+	// The field panel can be widened for long field names (#468).
+	const FIELDS = { min: 240, max: 560, initial: 288 };
+	let fieldsWidth = $state(browser ? loadWidth('explore-fields', FIELDS) : FIELDS.initial);
 	import { m } from '$lib/paraglide/messages';
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -400,7 +407,8 @@
 
 <div class="flex min-h-0 flex-1 overflow-hidden">
 	<aside
-		class="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-bg-panel p-4"
+		class="flex shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-bg-panel p-4"
+		style:width="{fieldsWidth}px"
 		aria-label={m.explore_fields()}
 	>
 		{#if loading}
@@ -433,6 +441,13 @@
 			</a>
 		{/if}
 	</aside>
+	<PanelResizer
+		bind:value={fieldsWidth}
+		bounds={FIELDS}
+		side="left"
+		storageKey="explore-fields"
+		label={m.ui_panelresizer_resize_fields()}
+	/>
 
 	<div class="flex min-w-0 flex-1 flex-col overflow-y-auto p-6">
 		<div class="mb-4 flex flex-wrap items-start justify-between gap-3">

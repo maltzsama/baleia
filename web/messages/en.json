@@ -1092,5 +1092,11 @@
 	"components_header_switch_workspace": "Workspace: {name}. Switch workspace",
 	"components_header_workspace_type": "Type",
 	"components_header_owning_team": "Owning team",
-	"components_header_create": "Create"
+	"components_header_create": "Create",
+	"ui_panelresizer_hint": "Drag to resize; double-click to reset",
+	"ui_panelresizer_resize_sidebar": "Resize the sidebar",
+	"ui_panelresizer_resize_inspector": "Resize the inspector",
+	"ui_panelresizer_resize_tree": "Resize the catalog tree",
+	"ui_panelresizer_resize_fields": "Resize the field panel",
+	"ui_panelresizer_resize_settings_nav": "Resize the settings menu"
 }
