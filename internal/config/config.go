@@ -227,7 +227,7 @@ func Load() *Config {
 		TrinoAdminUser:        getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
 		TrinoServiceUser:      getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
 		TrinoUserIdentity:     getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
-		PluginVersion:         getEnv("BALEIA_PLUGIN_VERSION", "0.9.2"),
+		PluginVersion:         getEnv("BALEIA_PLUGIN_VERSION", "0.10.0"),
 		JWTSecret:             getEnv("JWT_SECRET", DefaultJWTSecret),
 		AccessTokenTTL:        getEnvDuration("BALEIA_ACCESS_TOKEN_TTL", DefaultAccessTokenTTL),
 		RefreshTokenTTL:       getEnvDuration("BALEIA_REFRESH_TOKEN_TTL", DefaultRefreshTokenTTL),

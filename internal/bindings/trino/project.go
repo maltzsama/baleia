@@ -2,14 +2,14 @@ package trino
 
 // Projections of source connections into Trino catalogs, one function per
 // source family. Property names are checked against the Trino docs of the
-// version the stack runs (483):
-//   - Iceberg REST catalog: https://trino.io/docs/483/object-storage/metastores.html#iceberg-rest-catalog
-//   - S3 file system:       https://trino.io/docs/483/object-storage/file-system-s3.html
-//   - PostgreSQL connector: https://trino.io/docs/483/connector/postgresql.html
-//   - MySQL connector:      https://trino.io/docs/483/connector/mysql.html
-//   - MariaDB connector:    https://trino.io/docs/483/connector/mariadb.html
-//   - SQL Server connector: https://trino.io/docs/483/connector/sqlserver.html
-//   - Oracle connector:     https://trino.io/docs/483/connector/oracle.html
+// version the stack runs (484):
+//   - Iceberg REST catalog: https://trino.io/docs/484/object-storage/metastores.html#iceberg-rest-catalog
+//   - S3 file system:       https://trino.io/docs/484/object-storage/file-system-s3.html
+//   - PostgreSQL connector: https://trino.io/docs/484/connector/postgresql.html
+//   - MySQL connector:      https://trino.io/docs/484/connector/mysql.html
+//   - MariaDB connector:    https://trino.io/docs/484/connector/mariadb.html
+//   - SQL Server connector: https://trino.io/docs/484/connector/sqlserver.html
+//   - Oracle connector:     https://trino.io/docs/484/connector/oracle.html
 
 import (
 	"fmt"
@@ -179,7 +179,7 @@ func icebergRESTProjection(spec bindings.BindingSpec, src connections.Config) (p
 // The warehouse (the binding's source ref) is the addressing key; OAuth2 client
 // credentials authenticate when auth_mode=oauth2. The OAuth2 credential is the
 // only secret; the rest are real connection values. Property names for Trino
-// 483: https://trino.io/docs/483/connector/iceberg.html
+// 484: https://trino.io/docs/484/connector/iceberg.html
 func lakekeeperProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
 	w, err := warehouseOf(spec, src)
 	if err != nil {
@@ -233,10 +233,10 @@ func unityProjection(spec bindings.BindingSpec, src connections.Config) (project
 // Delta Lake catalog. One connection can hold tables of every format; the
 // binding's connector picks which one the catalog exposes. Trino reads the
 // metastore over Thrift (hive.metastore.uri) and the table data from
-// S3-compatible storage. Property names for Trino 483:
-//   - Iceberg:    https://trino.io/docs/483/connector/iceberg.html
-//   - Hive:       https://trino.io/docs/483/connector/hive.html
-//   - Delta Lake: https://trino.io/docs/483/connector/delta-lake.html
+// S3-compatible storage. Property names for Trino 484:
+//   - Iceberg:    https://trino.io/docs/484/connector/iceberg.html
+//   - Hive:       https://trino.io/docs/484/connector/hive.html
+//   - Delta Lake: https://trino.io/docs/484/connector/delta-lake.html
 func hiveProjection(connector string, src connections.Config) (projection, error) {
 	uri := src.Value("metastore_uri")
 	if uri == "" {
@@ -278,10 +278,10 @@ func s3Storage(p *projection, src connections.Config) {
 // glueProjection binds an AWS Glue Data Catalog connection as an Iceberg,
 // Hive or Delta Lake catalog. Trino reads the metastore through the Glue API
 // (hive.metastore.glue.*) and the table data from S3-compatible storage.
-// Property names for Trino 483:
-//   - Iceberg:    https://trino.io/docs/483/connector/iceberg.html
-//   - Hive:       https://trino.io/docs/483/connector/hive.html
-//   - Delta Lake: https://trino.io/docs/483/connector/delta-lake.html
+// Property names for Trino 484:
+//   - Iceberg:    https://trino.io/docs/484/connector/iceberg.html
+//   - Hive:       https://trino.io/docs/484/connector/hive.html
+//   - Delta Lake: https://trino.io/docs/484/connector/delta-lake.html
 func glueProjection(connector string, src connections.Config) (projection, error) {
 	region := src.Value("region")
 	if region == "" {

@@ -2,8 +2,8 @@ BALEIA_DIR ?= $(CURDIR)
 
 # The baleia-trino-catalog-store release Baleia runs and tests its contract
 # against (#88, #39): the single pin for compose, the dev cluster and CI.
-BALEIA_PLUGIN_VERSION ?= 0.9.2
-TRINO_VERSION         ?= 483
+BALEIA_PLUGIN_VERSION ?= 0.10.0
+TRINO_VERSION         ?= 484
 BALEIA_PLUGIN_TARBALL  = baleia-catalog-store-$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION).tar.gz
 BALEIA_PLUGIN_URL     ?= https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v$(BALEIA_PLUGIN_VERSION)/$(BALEIA_PLUGIN_TARBALL)
 
@@ -192,6 +192,7 @@ k8s-up:
 	$(MAKE) k8s-plugin-bundle
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
 		-f deploy/dev/values-dev.yaml \
+		--set-string config.BALEIA_PLUGIN_VERSION=$(K8S_PLUGIN_VERSION) \
 		--set trino.plugin.image=$(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) \
 		--set trino.plugin.version=$(K8S_PLUGIN_VERSION) \
 		--wait --timeout 10m

@@ -67,7 +67,7 @@ jobs:
           nessie.catalog.service.s3.default-options.region: us-east-1
         ports: ["19120:19120"]
       trino:
-        image: trinodb/trino:483
+        image: trinodb/trino:484
         ports: ["8080:8080"]
       clickhouse:
         image: clickhouse/clickhouse-server:24.8
