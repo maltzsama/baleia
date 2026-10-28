@@ -100,7 +100,7 @@
 		<DataSourceTree bind:this={tree} onSelectTable={select} bind:search />
 	</aside>
 
-	<main
+	<section
 		class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--radius)] border border-border bg-bg-panel shadow-sm"
 	>
 		{#if selectedTable}
@@ -129,5 +129,5 @@
 				description="Browse the metadata-driven catalogs on the left to inspect a table and its columns."
 			/>
 		{/if}
-	</main>
+	</section>
 </div>

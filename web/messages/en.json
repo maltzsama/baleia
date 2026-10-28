@@ -1105,5 +1105,9 @@
 	"nav_page_connections": "Connections",
 	"nav_page_catalogs": "Catalogs",
 	"nav_page_engines": "Engines",
-	"nav_primary": "Main navigation"
+	"nav_primary": "Main navigation",
+	"components_leftsidebar_sidebar_views": "Sidebar views",
+	"components_leftsidebar_queries": "Queries",
+	"components_leftsidebar_collapse": "Collapse the sidebar",
+	"layout_skip_to_content": "Skip to content"
 }
