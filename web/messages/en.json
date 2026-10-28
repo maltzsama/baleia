@@ -1119,5 +1119,9 @@
 	"ui_panelresizer_resize_settings_nav": "Resize the settings menu",
 	"sql_q_opening_the_saved_query": "Opening the saved query…",
 	"sql_q_back_to_the_workbench": "Back to the workbench",
-	"components_datasourcetree_search_results": "Search results"
+	"components_datasourcetree_search_results": "Search results",
+	"markdowneditor_write": "Write",
+	"semantic_doceditor_owner_user_id": "Owner user id",
+	"semantic_documentcolumns_description_of": "Description of {column}",
+	"semantic_documentcolumns_tags_of": "Tags of {column}"
 }

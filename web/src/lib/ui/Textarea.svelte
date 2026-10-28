@@ -2,6 +2,8 @@
 	let {
 		value = $bindable(''),
 		label,
+		ariaLabel,
+		ariaLabelledby,
 		id,
 		name,
 		placeholder,
@@ -13,6 +15,10 @@
 	}: {
 		value?: string;
 		label?: string;
+		/** Names a field that has no visible label (a cell in a table). */
+		ariaLabel?: string;
+		/** Names the field by another element, such as a heading. */
+		ariaLabelledby?: string;
 		id?: string;
 		name?: string;
 		placeholder?: string;
@@ -44,6 +50,8 @@
 		{disabled}
 		bind:value
 		class="{base} {error ? 'border-danger' : 'border-border'} {className}"
+		aria-label={ariaLabel}
+		aria-labelledby={ariaLabelledby}
 		aria-invalid={error ? 'true' : undefined}
 		aria-describedby={error ? errorId : undefined}></textarea>
 	{#if error}

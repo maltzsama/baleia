@@ -104,7 +104,7 @@
 
 <Modal bind:open title={column ? `Document column ${column}` : 'About this table'}>
 	<div class="flex flex-col gap-3 text-[12px]">
-		<MarkdownEditor bind:value={description} />
+		<MarkdownEditor label={m.common_description()} bind:value={description} />
 		<Input
 			label={m.semantic_doceditor_tags_comma_separated()}
 			bind:value={tags}
@@ -120,7 +120,7 @@
 				]}
 			/>
 		{:else}
-			<Input label="Owner user id" bind:value={ownerId} class="font-mono" />
+			<Input label={m.semantic_doceditor_owner_user_id()} bind:value={ownerId} class="font-mono" />
 		{/if}
 		{#if canCertify}
 			<Checkbox label={m.common_certified()} bind:checked={certified} />
