@@ -144,20 +144,34 @@
 		}
 	}
 
+	// The catalog the health rows and runs on screen belong to. Switching
+	// catalog clears them, so no row of the old catalog stays actionable,
+	// and a late response for a catalog no longer selected is dropped.
+	let healthCatalog = '';
+
 	async function loadHealth() {
-		if (!catalogId) return;
+		const target = catalogId;
+		if (!target) return;
+		if (healthCatalog !== target) {
+			healthCatalog = target;
+			health = [];
+			runs = [];
+		}
 		healthLoading = true;
 		healthError = '';
 		try {
-			health = await listHealth(catalogId, {
+			const rows = await listHealth(target, {
 				needs: needs || undefined,
 				maxScore: maxScore ? Number(maxScore) : undefined
 			});
-			runs = await listMaintenanceRuns(catalogId);
+			const list = await listMaintenanceRuns(target);
+			if (catalogId !== target) return;
+			health = rows;
+			runs = list;
 		} catch (e) {
-			healthError = e instanceof Error ? e.message : String(e);
+			if (catalogId === target) healthError = e instanceof Error ? e.message : String(e);
 		} finally {
-			healthLoading = false;
+			if (catalogId === target) healthLoading = false;
 		}
 	}
 
@@ -229,7 +243,10 @@
 	}
 
 	async function submitMaintenance() {
-		if (!catalogId || !maintainTarget) return;
+		const target = maintainTarget;
+		if (!target) return;
+		// The row names its own catalog: never pair it with another selection.
+		const targetCatalog = target.catalog_id;
 		const selected = Object.entries(operations)
 			.filter(([, enabled]) => enabled)
 			.map(([operation]) => operation);
@@ -240,18 +257,18 @@
 		maintaining = true;
 		maintainError = '';
 		try {
-			const run = await createMaintenance(catalogId, {
-				namespace: maintainTarget.namespace,
-				table: maintainTarget.table_name,
+			const run = await createMaintenance(targetCatalog, {
+				namespace: target.namespace,
+				table: target.table_name,
 				operations: selected,
 				retention: selected.some((op) => op !== 'optimize') ? retention : undefined
 			});
 			maintainOpen = false;
-			runs = [run, ...runs];
+			if (catalogId === targetCatalog) runs = [run, ...runs];
 			const controller = poll(
 				async () => {
-					const current = await listMaintenanceRuns(catalogId);
-					runs = current;
+					const current = await listMaintenanceRuns(targetCatalog);
+					if (catalogId === targetCatalog) runs = current;
 					return current.find((item) => item.id === run.id);
 				},
 				{ until: (item) => !!item && item.status !== 'running', intervals: [1000, 2000, 5000] }
@@ -790,7 +807,9 @@
 <Modal bind:open={maintainOpen} title={m.monitoring_run_iceberg_maintenance()}>
 	{#if maintainTarget}
 		<div class="flex flex-col gap-3 text-[12px]">
-			<p class="font-mono">{maintainTarget.namespace}.{maintainTarget.table_name}</p>
+			<p class="font-mono">
+				{maintainTarget.catalog_name}.{maintainTarget.namespace}.{maintainTarget.table_name}
+			</p>
 			<Checkbox
 				label={m.monitoring_optimize_rewrite_small_files()}
 				bind:checked={operations.optimize}
