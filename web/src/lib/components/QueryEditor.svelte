@@ -1035,7 +1035,7 @@
 				><polygon points="5 3 19 12 5 21 5 3" /></svg
 			>
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
-			<span class="text-[10px] opacity-70 font-normal">{formatKeys('Mod-Enter')}</span>
+			<span class="text-[10px] font-normal">{formatKeys('Mod-Enter')}</span>
 		</button>
 		{#if executing && canCancel}
 			<button
