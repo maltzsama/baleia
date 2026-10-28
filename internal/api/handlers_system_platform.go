@@ -209,7 +209,7 @@ func (h *OpsHandlers) auditExportStatus(ctx context.Context) SystemStatusResourc
 
 func (h *OpsHandlers) pluginStatus(ctx context.Context) SystemStatusResource {
 	items := make([]SystemStatusItem, 0)
-	expected := "0.9.2"
+	expected := "0.10.0"
 	if h.settings.Ops.PluginVersion != "" {
 		expected = h.settings.Ops.PluginVersion
 	}
