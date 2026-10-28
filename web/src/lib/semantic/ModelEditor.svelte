@@ -6,6 +6,7 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { listCatalogs, type Catalog } from '$lib/catalogs/admin';
+	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import { getTable, searchTables, type SearchResult } from '$lib/metrics/client';
 	import {
 		AGGREGATIONS,
@@ -437,18 +438,38 @@
 	let alive = true;
 	onDestroy(() => (alive = false));
 
+	// A failed lookup is shown next to its control with a retry (#460); an
+	// empty list only means there is nothing to pick. Retrying keeps edits.
+	let catalogsError = $state('');
+	let othersError = $state('');
+
+	async function loadCatalogOptions() {
+		catalogsError = '';
+		try {
+			const rows = await listCatalogs({ limit: 200 });
+			if (alive) catalogs = rows;
+		} catch (e) {
+			if (alive) catalogsError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function loadJoinOptions() {
+		othersError = '';
+		try {
+			const rows = await listModels(workspaceId);
+			if (alive) others = rows;
+		} catch (e) {
+			if (alive) othersError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
 	onMount(async () => {
 		await workspaceStore.load();
 		if (!alive || !workspaceId) return;
 		await savedQueries.reload(workspaceId);
 		if (!alive) return;
-		const [catalogRows, modelRows] = await Promise.all([
-			listCatalogs({ limit: 200 }).catch(() => []),
-			listModels(workspaceId).catch(() => [])
-		]);
+		await Promise.all([loadCatalogOptions(), loadJoinOptions()]);
 		if (!alive) return;
-		catalogs = catalogRows;
-		others = modelRows;
 		if (model) {
 			load(model);
 			await loadBindings(catalogId);
@@ -551,6 +572,15 @@
 						void loadBindings(catalogId);
 					}}
 				/>
+				{#if catalogsError}
+					<div class="mt-2">
+						<ErrorState
+							title={m.models_could_not_load_catalogs()}
+							message={catalogsError}
+							onretry={loadCatalogOptions}
+						/>
+					</div>
+				{/if}
 			</div>
 			<div class="mt-3">
 				<SqlSourceEditor
@@ -794,6 +824,15 @@
 				{m.models_add_join()}
 			</Button>
 		</div>
+		{#if othersError}
+			<div class="mb-3">
+				<ErrorState
+					title={m.models_could_not_load_models_to_join()}
+					message={othersError}
+					onretry={loadJoinOptions}
+				/>
+			</div>
+		{/if}
 		{#if joins.length > 0}
 			<div
 				class="mb-3 rounded bg-bg-toolbar p-3 font-mono text-[11px]"

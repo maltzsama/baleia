@@ -1074,5 +1074,10 @@
 	"statusbadge_synced": "Synced",
 	"statusbadge_sync_failed": "Sync failed",
 	"settings_feature_disabled": "This feature is turned off",
-	"settings_feature_disabled_description": "An administrator can turn it on in the server configuration."
+	"settings_feature_disabled_description": "An administrator can turn it on in the server configuration.",
+	"content_spaces_could_not_load_metrics": "Could not load the metrics",
+	"content_spaces_could_not_load_models": "Could not load the models",
+	"content_spaces_could_not_load_metrics_and_models": "Could not load the metrics and models",
+	"models_could_not_load_catalogs": "Could not load the catalogs",
+	"models_could_not_load_models_to_join": "Could not load the models to join"
 }

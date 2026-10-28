@@ -1074,5 +1074,10 @@
 	"statusbadge_synced": "Sincronizado",
 	"statusbadge_sync_failed": "Falha na sincronização",
 	"settings_feature_disabled": "Este recurso está desativado",
-	"settings_feature_disabled_description": "Um administrador pode ativá-lo na configuração do servidor."
+	"settings_feature_disabled_description": "Um administrador pode ativá-lo na configuração do servidor.",
+	"content_spaces_could_not_load_metrics": "Não foi possível carregar as métricas",
+	"content_spaces_could_not_load_models": "Não foi possível carregar os modelos",
+	"content_spaces_could_not_load_metrics_and_models": "Não foi possível carregar as métricas e os modelos",
+	"models_could_not_load_catalogs": "Não foi possível carregar os catálogos",
+	"models_could_not_load_models_to_join": "Não foi possível carregar os modelos para join"
 }

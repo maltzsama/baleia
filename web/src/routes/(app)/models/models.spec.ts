@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import ModelEditor from '$lib/semantic/ModelEditor.svelte';
@@ -335,5 +336,34 @@ describe('v1 migration dialog', () => {
 				primary_key: ['order_id']
 			}
 		]);
+	});
+	// #460: a failed lookup is not an empty list; retry keeps the edits.
+	it('shows a failed catalog lookup and retries it without losing edits', async () => {
+		baseHandlers([]);
+		let fail = true;
+		server.use(
+			http.get('/catalogs', ({ response }) =>
+				fail ? HttpResponse.error() : response(200).json([])
+			)
+		);
+		render(ModelEditor, {});
+
+		const label = (await screen.findByLabelText('Label')) as HTMLInputElement;
+		await fireEvent.input(label, { target: { value: 'Revenue' } });
+		await fireEvent.change(screen.getByLabelText('Source kind'), { target: { value: 'sql' } });
+		expect(await screen.findByText('Could not load the catalogs')).toBeTruthy();
+
+		fail = false;
+		await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		await waitFor(() => expect(screen.queryByText('Could not load the catalogs')).toBeNull());
+		expect(label.value).toBe('Revenue');
+	});
+
+	it('explains why joins are unavailable when the models lookup fails', async () => {
+		baseHandlers([]);
+		server.use(http.get('/workspaces/{id}/semantic/models', () => HttpResponse.error()));
+		render(ModelEditor, {});
+
+		expect(await screen.findByText('Could not load the models to join')).toBeTruthy();
 	});
 });
