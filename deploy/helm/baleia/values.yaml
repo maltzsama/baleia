@@ -69,7 +69,7 @@ trino:
   enabled: false
   image:
     repository: trinodb/trino
-    tag: "483"
+    tag: "484"
   plugin:
     version: ""           # required when trino.enabled (and plugin.image unset)
     url: ""               # default: GitHub release URL built from version

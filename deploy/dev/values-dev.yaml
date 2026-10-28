@@ -46,7 +46,7 @@ trino:
   enabled: true
   image:
     repository: trinodb/trino
-    tag: "483"
+    tag: "484"
   plugin:
     version: "0.10.0"              # baleia-trino-catalog-store release
     image: "baleia-plugins:0.10.0"  # built by `make k8s-plugin-bundle`; tag = plugin release version

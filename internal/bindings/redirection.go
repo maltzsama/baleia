@@ -20,7 +20,7 @@ type RedirectionStore interface {
 // hive-connector binding (#86). When a metastore connection also exposes an
 // Iceberg or Delta Lake catalog on the same engine, queries on the Hive
 // catalog transparently reach those tables:
-// https://trino.io/docs/483/connector/hive.html#table-redirection
+// https://trino.io/docs/484/connector/hive.html#table-redirection
 //
 // Only a Hive Metastore or Glue source bound through the "hive" connector is
 // affected. Sidings must already be active on the engine, so the property
