@@ -6,6 +6,7 @@ import { clearEnginesCache } from '$lib/engines/client';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
 import { makeSavedQuery, makeSpace, makeWorkspace } from '../../test/factories';
+import { formatKeys } from '$lib/util/keys';
 import QueryEditor from './QueryEditor.svelte';
 
 vi.mock('$lib/workbench/drafts', async (importOriginal) => ({
@@ -163,6 +164,16 @@ describe('QueryEditor', () => {
 		]);
 		await editor.hydrate('u1', WS);
 		await waitFor(() => expect(content.textContent).toBe('SELECT 42'));
+	});
+
+	// #473: the Run button and its tooltip name the shortcut of the platform.
+	it('labels Run with the platform shortcut', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const run = await screen.findByTestId('run-current');
+		expect(run.textContent).toContain(formatKeys('Mod-Enter'));
+		expect(run.getAttribute('title')).toContain(formatKeys('Mod-Enter'));
+		expect(run.getAttribute('title')).not.toContain('⌘/Ctrl');
 	});
 
 	it('runs with the selected target and schema', async () => {

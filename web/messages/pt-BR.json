@@ -1026,7 +1026,7 @@
 	"workbench_completion_function": "função",
 	"components_resultspanel_statements": "Comandos",
 	"components_queryeditor_run_all": "Executar tudo",
-	"components_queryeditor_run_hint": "Executa a seleção, ou o comando onde está o cursor (⌘/Ctrl+Enter)",
+	"components_queryeditor_run_hint": "Executa a seleção, ou o comando onde está o cursor ({keys})",
 	"workbench_split_resize_results": "Redimensionar os resultados",
 	"workbench_split_hint": "Arraste, ou use as setas; clique duas vezes para restaurar",
 	"common_just_now": "agora mesmo",
