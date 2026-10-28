@@ -4,6 +4,10 @@
 	import { page } from '$app/state';
 	import { locate, sectionTitle, visiblePages } from '$lib/nav/sections';
 	import AttentionBell from '$lib/components/AttentionBell.svelte';
+	import Button from '$lib/ui/Button.svelte';
+	import Input from '$lib/ui/Input.svelte';
+	import Modal from '$lib/ui/Modal.svelte';
+	import Select from '$lib/ui/Select.svelte';
 	import { client } from '$lib/api/client';
 	import { canGlobal } from '$lib/authz/can';
 	import { authStore } from '$lib/stores/auth.svelte';
@@ -56,10 +60,36 @@
 	);
 	const canUpdateCurrent = $derived(!!workspaceStore.current?.allowed_actions?.includes('update'));
 
+	// The switcher is a disclosure (#467): its trigger says whether it is
+	// open, and Escape or a click outside closes it and returns the focus.
+	let wsTrigger: HTMLButtonElement | undefined = $state();
+	let wsRoot: HTMLDivElement | undefined = $state();
+
 	function toggleWs() {
 		wsOpen = !wsOpen;
 		closeCreate();
 	}
+
+	function closeWs(refocus: boolean) {
+		wsOpen = false;
+		if (refocus) wsTrigger?.focus();
+	}
+
+	$effect(() => {
+		if (!wsOpen) return;
+		function onKey(event: KeyboardEvent) {
+			if (event.key === 'Escape') closeWs(true);
+		}
+		function onClick(event: MouseEvent) {
+			if (wsRoot && !wsRoot.contains(event.target as Node)) closeWs(false);
+		}
+		document.addEventListener('keydown', onKey);
+		document.addEventListener('click', onClick);
+		return () => {
+			document.removeEventListener('keydown', onKey);
+			document.removeEventListener('click', onClick);
+		};
+	});
 
 	function selectWs(ws: Workspace) {
 		workspaceStore.select(ws);
@@ -78,8 +108,10 @@
 		createType = 'personal';
 		createTeamId = '';
 		createError = '';
-		showCreate = true;
+		// The menu item goes away: the modal returns focus to the switcher.
 		wsOpen = false;
+		wsTrigger?.focus();
+		showCreate = true;
 		if (canShare && teams.length === 0) {
 			const { data } = await client.GET('/teams');
 			teams = (data ?? []) as { id: string; name: string }[];
@@ -108,7 +140,7 @@
 		});
 		creating = false;
 		if (ws) closeCreate();
-		else createError = 'Could not create the workspace.';
+		else createError = m.components_header_could_not_create_the_workspace();
 	}
 
 	function openSettings() {
@@ -140,10 +172,14 @@
 		</nav>
 	{/if}
 
-	<div class="relative">
+	<div class="relative" bind:this={wsRoot}>
 		{#if workspaceStore.current}
 			<button
+				bind:this={wsTrigger}
 				onclick={toggleWs}
+				aria-expanded={wsOpen}
+				aria-controls="workspace-switcher"
+				aria-label={m.components_header_switch_workspace({ name: workspaceStore.current.name })}
 				class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-border hover:border-border-hover rounded-md px-[10px] py-[5px] cursor-pointer text-xs font-semibold transition-all duration-150"
 			>
 				<div class="w-2 h-2 rounded-full bg-success shrink-0"></div>
@@ -153,7 +189,10 @@
 			</button>
 		{:else}
 			<button
+				bind:this={wsTrigger}
 				onclick={toggleWs}
+				aria-expanded={wsOpen}
+				aria-controls="workspace-switcher"
 				class="flex items-center gap-2 border border-dashed border-border hover:border-border-hover rounded-md px-[10px] py-[5px] cursor-pointer text-xs font-semibold transition-all duration-150 text-text-muted hover:text-text-main"
 			>
 				<svg viewBox="0 0 24 24" class="w-3 h-3"
@@ -167,6 +206,7 @@
 
 		{#if wsOpen}
 			<div
+				id="workspace-switcher"
 				class="absolute top-full left-0 mt-1 w-72 bg-bg-panel border border-border rounded-lg shadow-lg z-50 py-1"
 			>
 				{#if showSearch}
@@ -174,6 +214,7 @@
 						<input
 							class="w-full h-8 rounded-md border border-border bg-bg-toolbar px-2 text-xs outline-none focus:border-primary"
 							placeholder={m.components_header_search_workspaces()}
+							aria-label={m.components_header_search_workspaces()}
 							bind:value={search}
 						/>
 					</div>
@@ -187,6 +228,7 @@
 					{#each personal as ws (ws.id)}
 						<button
 							onclick={() => selectWs(ws)}
+							aria-current={ws.id === workspaceStore.current?.id ? 'true' : undefined}
 							class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit"
 						>
 							<span
@@ -207,6 +249,7 @@
 					{#each shared as ws (ws.id)}
 						<button
 							onclick={() => selectWs(ws)}
+							aria-current={ws.id === workspaceStore.current?.id ? 'true' : undefined}
 							class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer bg-none border-none text-inherit"
 						>
 							<span
@@ -285,71 +328,45 @@
 	</div>
 </header>
 
-{#if showCreate}
-	<div
-		class="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-[100] flex items-center justify-center p-6"
-		onclick={(e) => e.target === e.currentTarget && closeCreate()}
+<Modal bind:open={showCreate} title={m.components_header_create_workspace()} onclose={closeCreate}>
+	<form
+		class="flex flex-col gap-3"
+		onsubmit={(event) => {
+			event.preventDefault();
+			void doCreate();
+		}}
 	>
-		<div
-			class="bg-bg-panel border border-border rounded-xl w-full max-w-[400px] shadow-[0_24px_64px_rgba(0,0,0,.2)]"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="flex items-center px-5 py-[18px] border-b border-border">
-				<h2 class="text-sm font-semibold flex-1">{m.components_header_create_workspace()}</h2>
-				<button
-					class="w-[26px] h-[26px] rounded-md border-none bg-transparent cursor-pointer flex items-center justify-center text-text-muted hover:bg-bg-toolbar"
-					onclick={closeCreate}>×</button
-				>
-			</div>
-			<div class="flex flex-col gap-3 p-5">
-				<input
-					class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
-					type="text"
-					placeholder={m.components_header_workspace_name()}
-					bind:value={createName}
-					onkeydown={(e) => e.key === 'Enter' && doCreate()}
+		<Input label={m.components_header_workspace_name()} bind:value={createName} required />
+		<Input label={m.components_header_description_optional()} bind:value={createDescription} />
+		{#if canShare}
+			<Select
+				label={m.components_header_workspace_type()}
+				bind:value={createType}
+				options={[
+					{ value: 'personal', label: m.components_header_personal() },
+					{ value: 'shared', label: m.components_header_shared() }
+				]}
+			/>
+			{#if createType === 'shared'}
+				<Select
+					label={m.components_header_owning_team()}
+					bind:value={createTeamId}
+					placeholder={m.components_header_choose_the_owning_team()}
+					options={teams.map((team) => ({ value: team.id, label: team.name }))}
 				/>
-				<input
-					class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
-					type="text"
-					placeholder={m.components_header_description_optional()}
-					bind:value={createDescription}
-				/>
-				{#if canShare}
-					<select
-						class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
-						bind:value={createType}
-					>
-						<option value="personal">{m.components_header_personal()}</option>
-						<option value="shared">{m.components_header_shared()}</option>
-					</select>
-					{#if createType === 'shared'}
-						<select
-							class="w-full h-9 bg-bg-toolbar border border-border rounded-md px-2.5 text-xs outline-none focus:border-primary"
-							bind:value={createTeamId}
-						>
-							<option value="">{m.components_header_choose_the_owning_team()}</option>
-							{#each teams as team (team.id)}
-								<option value={team.id}>{team.name}</option>
-							{/each}
-						</select>
-					{/if}
-				{/if}
-				{#if createError}<p class="text-[11px] text-danger" role="alert">{createError}</p>{/if}
-				<div class="flex justify-end gap-1.5">
-					<button
-						class="h-[34px] px-3.5 rounded-md border border-border bg-transparent text-xs font-medium text-text-muted cursor-pointer hover:border-border-hover"
-						onclick={closeCreate}>{m.common_cancel()}</button
-					>
-					<button
-						class="h-[34px] px-4 rounded-md border-none bg-primary text-white text-xs font-semibold cursor-pointer hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
-						disabled={!createName.trim() || creating}
-						onclick={doCreate}
-					>
-						{creating ? m.components_header_creating() : 'Create'}
-					</button>
-				</div>
-			</div>
+			{/if}
+		{/if}
+		{#if createError}<p class="text-[11px] text-danger" role="alert">{createError}</p>{/if}
+		<div class="flex justify-end gap-1.5">
+			<Button onclick={closeCreate}>{m.common_cancel()}</Button>
+			<Button
+				type="submit"
+				variant="primary"
+				disabled={!createName.trim() || creating}
+				loading={creating}
+			>
+				{creating ? m.components_header_creating() : m.components_header_create()}
+			</Button>
 		</div>
-	</div>
-{/if}
+	</form>
+</Modal>

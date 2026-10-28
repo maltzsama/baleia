@@ -22,7 +22,9 @@ describe('command palette', () => {
 		render(CommandPalette, { props: { open: true } });
 
 		expect(await screen.findByText('Alpha')).toBeTruthy();
-		await fireEvent.keyDown(screen.getByLabelText('Command palette'), { key: 'Enter' });
+		await fireEvent.keyDown(screen.getByRole('textbox', { name: 'Command palette' }), {
+			key: 'Enter'
+		});
 		await waitFor(() => expect(run).toHaveBeenCalledOnce());
 	});
 

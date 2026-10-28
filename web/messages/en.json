@@ -1091,5 +1091,10 @@
 	"components_leftsidebar_sidebar_views": "Sidebar views",
 	"components_leftsidebar_queries": "Queries",
 	"components_leftsidebar_collapse": "Collapse the sidebar",
-	"layout_skip_to_content": "Skip to content"
+	"layout_skip_to_content": "Skip to content",
+	"components_header_could_not_create_the_workspace": "Could not create the workspace.",
+	"components_header_switch_workspace": "Workspace: {name}. Switch workspace",
+	"components_header_workspace_type": "Type",
+	"components_header_owning_team": "Owning team",
+	"components_header_create": "Create"
 }
