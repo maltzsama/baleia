@@ -1110,5 +1110,11 @@
 	"components_header_switch_workspace": "Workspace: {name}. Trocar de workspace",
 	"components_header_workspace_type": "Tipo",
 	"components_header_owning_team": "Time dono",
-	"components_header_create": "Criar"
+	"components_header_create": "Criar",
+	"ui_panelresizer_hint": "Arraste para redimensionar; clique duas vezes para restaurar",
+	"ui_panelresizer_resize_sidebar": "Redimensionar a barra lateral",
+	"ui_panelresizer_resize_inspector": "Redimensionar o inspetor",
+	"ui_panelresizer_resize_tree": "Redimensionar a árvore de catálogos",
+	"ui_panelresizer_resize_fields": "Redimensionar o painel de campos",
+	"ui_panelresizer_resize_settings_nav": "Redimensionar o menu de configurações"
 }

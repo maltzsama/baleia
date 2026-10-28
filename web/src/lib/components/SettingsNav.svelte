@@ -4,8 +4,11 @@
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { visibleSections, type SettingsSection } from '$lib/settings/sections';
 
-	let { current = '', sections: provided }: { current?: string; sections?: SettingsSection[] } =
-		$props();
+	let {
+		current = '',
+		sections: provided,
+		width = 220
+	}: { current?: string; sections?: SettingsSection[]; width?: number } = $props();
 
 	const sections = $derived(provided ?? visibleSections(authStore.user));
 
@@ -16,7 +19,8 @@
 
 <nav
 	aria-label={m.common_settings()}
-	class="w-[220px] shrink-0 border-r border-border bg-bg-panel overflow-y-auto p-4"
+	class="shrink-0 border-r border-border bg-bg-panel overflow-y-auto p-4"
+	style:width="{width}px"
 >
 	<p class="mb-3 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
 		{m.common_settings()}
