@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { sectionTitle } from '$lib/nav/sections';
 	import { client } from '$lib/api/client';
 	import { canGlobal } from '$lib/authz/can';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import type { Workspace } from '$lib/stores/workspace.svelte';
 
+	// The section the page belongs to (#465), from the shared nav map.
+	const title = $derived(sectionTitle(page.url.pathname));
 	let {
 		onToggleDark,
 		dark
@@ -107,7 +111,7 @@
 <header
 	class="h-12 bg-bg-panel flex items-center px-4 border-b border-border gap-3 shrink-0 relative z-40"
 >
-	<span class="font-semibold text-sm">{m.common_sql_editor()}</span>
+	<span class="min-w-0 max-w-[40%] shrink truncate text-sm font-semibold" {title}>{title}</span>
 
 	<div class="relative">
 		{#if workspaceStore.current}
