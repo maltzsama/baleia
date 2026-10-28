@@ -189,7 +189,6 @@
 	"metrics_metricbuilder_custom_aggregate_dialect_only": "Custom aggregate (dialect only)",
 	"metrics_metricbuilder_custom_sql_expression": "Custom SQL expression",
 	"components_header_dark_mode": "Dark mode",
-	"components_globalnav_data_explorer": "Data Explorer",
 	"components_leftsidebar_datasources": "Datasources",
 	"common_default_role": "Default role",
 	"components_queryeditor_default_schema": "Default schema",
@@ -361,7 +360,6 @@
 	"components_globalnav_profile": "Profile",
 	"connections_providers_engines_catalogs_and_the_engines": "Providers, engines, catalogs and the engines each catalog is bound to.",
 	"monitoring_query_detail": "Query detail",
-	"components_globalnav_query_history": "Query History",
 	"history_query_history": "Query history",
 	"monitoring_query_id": "Query id",
 	"monitoring_query_id_2": "query id",
@@ -460,7 +458,6 @@
 	"content_spaces_folders_saved_queries_and_metrics_a": "Spaces, folders, saved queries and metrics. Access follows each space.",
 	"common_sql": "SQL",
 	"history_sql_contains": "SQL contains",
-	"common_sql_editor": "SQL Editor",
 	"metrics_metricbuilder_sql_preview": "SQL preview",
 	"monitoring_started": "Started",
 	"history_started": "started",
@@ -1107,5 +1104,6 @@
 	"nav_page_trash": "Trash",
 	"nav_page_connections": "Connections",
 	"nav_page_catalogs": "Catalogs",
-	"nav_page_engines": "Engines"
+	"nav_page_engines": "Engines",
+	"nav_primary": "Main navigation"
 }
