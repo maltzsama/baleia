@@ -30,20 +30,39 @@
 		if (workspaceId) await savedQueries.reload(workspaceId);
 	}
 
+	// The search has its own states (#476), apart from the spaces list: too
+	// short, searching, results, no results and error.
+	let searchedFor = $state('');
+	let tooShort = $state(false);
+
 	async function search() {
-		if (!workspaceId || query.trim().length < 2) {
+		const q = query.trim();
+		searchError = '';
+		tooShort = q.length > 0 && q.length < 2;
+		if (!workspaceId || q.length < 2) {
 			results = [];
+			searchedFor = '';
 			return;
 		}
 		searching = true;
-		searchError = '';
 		try {
-			results = await searchContent(workspaceId, query.trim(), { limit: 50 });
+			results = await searchContent(workspaceId, q, { limit: 50 });
+			searchedFor = q;
 		} catch (e) {
+			results = [];
+			searchedFor = '';
 			searchError = e instanceof Error ? e.message : String(e);
 		} finally {
 			searching = false;
 		}
+	}
+
+	function clearSearch() {
+		query = '';
+		results = [];
+		searchedFor = '';
+		searchError = '';
+		tooShort = false;
 	}
 
 	function openSpace(id: string) {
@@ -82,8 +101,22 @@
 		</div>
 		<Button loading={searching} disabled={searching} onclick={search}>{m.common_search()}</Button>
 	</div>
+	<div role="status" class="contents">
+		{#if tooShort}
+			<p class="mb-3 text-[11px] text-slate-600 dark:text-slate-300">
+				{m.content_type_at_least_two_characters()}
+			</p>
+		{:else if searchedFor && !searching && results.length === 0 && !searchError}
+			<div class="mb-5 rounded-lg border border-border bg-bg-panel p-3 text-[12px]">
+				<p>{m.content_no_content_matches({ query: searchedFor })}</p>
+				<Button size="sm" class="mt-2" onclick={clearSearch}>{m.common_clear_search()}</Button>
+			</div>
+		{/if}
+	</div>
 	{#if searchError}
-		<p class="mb-3 text-[11px] text-danger" role="alert">{searchError}</p>
+		<div class="mb-3">
+			<ErrorState title={m.content_search_failed()} message={searchError} onretry={search} />
+		</div>
 	{/if}
 	{#if results.length > 0}
 		<div class="mb-5 rounded-lg border border-border bg-bg-panel p-3">

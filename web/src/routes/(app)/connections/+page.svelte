@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { authStore } from '$lib/stores/auth.svelte';
+	import { canGlobal } from '$lib/authz/can';
 	import { onMount } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -288,15 +290,28 @@
 		</div>
 	{:else if error}
 		<ErrorState title="Could not load connections" message={error} onretry={load} />
-	{:else if filtered.length === 0}
+	{:else if connections.length === 0}
+		<!-- Nothing yet (#476): the first step, when the user may take it. -->
 		<EmptyState
-			title="No connections"
-			description="Connect a catalog manager, a metastore or a database to start querying."
+			title={m.connections_no_connections_yet()}
+			description={m.connections_connect_a_catalog_manager_a_metastore_or_a_database()}
 		>
-			<Button variant="primary" onclick={() => (window.location.href = '/connections/new')}>
-				New connection
-			</Button>
+			{#if canGlobal(authStore.user, 'create_connection')}
+				<Button variant="primary" onclick={() => (window.location.href = '/connections/new')}>
+					{m.connections_new_connection()}
+				</Button>
+			{/if}
 		</EmptyState>
+	{:else if filtered.length === 0}
+		<!-- Connections exist; only the search found none. -->
+		<div role="status">
+			<EmptyState
+				title={m.connections_no_connection_matches({ query: search })}
+				description={m.common_try_other_words_or_clear_the_search()}
+			>
+				<Button onclick={() => (search = '')}>{m.common_clear_search()}</Button>
+			</EmptyState>
+		</div>
 	{:else}
 		<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 			{#each filtered as connection (connection.id)}

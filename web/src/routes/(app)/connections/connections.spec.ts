@@ -9,6 +9,8 @@ import {
 	makeProvider
 } from '../../../test/factories';
 import { http, server } from '../../../test/server';
+import { authStore } from '$lib/stores/auth.svelte';
+import { makeMe } from '../../../test/factories';
 import ConnectionsPage from './+page.svelte';
 
 const CONNECTION = '00000000-0000-0000-0000-0000000000e1';
@@ -89,5 +91,28 @@ describe('connections page', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Register engine' }));
 
 		expect(await screen.findByText('warehouse-engine')).toBeTruthy();
+	});
+	// #476: no connections at all is onboarding; a search with no match is not.
+	it('offers to create the first connection when there is none', async () => {
+		authStore.set(makeMe());
+		server.use(http.get('/catalog-connections', ({ response }) => response(200).json([])));
+		render(ConnectionsPage);
+
+		expect(await screen.findByText('No connections yet')).toBeTruthy();
+		// The page header has one too; the empty state adds the onboarding one.
+		expect(screen.getAllByRole('button', { name: 'New connection' })).toHaveLength(2);
+	});
+
+	it('says the search matched nothing and lets it be cleared', async () => {
+		render(ConnectionsPage);
+		await screen.findByText('Warehouse');
+		await fireEvent.input(screen.getByPlaceholderText('Search connections…'), {
+			target: { value: 'nothing' }
+		});
+
+		expect(await screen.findByText('No connection matches “nothing”')).toBeTruthy();
+		expect(screen.queryByText('No connections yet')).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+		expect(await screen.findByText('Warehouse')).toBeTruthy();
 	});
 });

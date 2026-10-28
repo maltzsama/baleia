@@ -1123,5 +1123,22 @@
 	"markdowneditor_write": "Escrever",
 	"semantic_doceditor_owner_user_id": "Id do usuário dono",
 	"semantic_documentcolumns_description_of": "Descrição de {column}",
-	"semantic_documentcolumns_tags_of": "Tags de {column}"
+	"semantic_documentcolumns_tags_of": "Tags de {column}",
+	"connections_no_connections_yet": "Nenhuma conexão ainda",
+	"connections_connect_a_catalog_manager_a_metastore_or_a_database": "Conecte um gerenciador de catálogos, um metastore ou um banco de dados para começar a consultar.",
+	"connections_no_connection_matches": "Nenhuma conexão corresponde a “{query}”",
+	"common_try_other_words_or_clear_the_search": "Tente outras palavras, ou limpe a busca.",
+	"common_clear_search": "Limpar busca",
+	"common_clear_filters": "Limpar filtros",
+	"common_change_or_clear_the_filters": "Mude os filtros, ou limpe-os para ver tudo.",
+	"catalogs_no_catalog_matches_these_filters": "Nenhum catálogo corresponde a estes filtros",
+	"catalogs_no_catalogs_yet": "Nenhum catálogo ainda",
+	"catalogs_catalogs_come_from_connections": "Catálogos vêm de conexões: adicione uma conexão e depois registre seus catálogos.",
+	"catalogs_go_to_connections": "Ir para conexões",
+	"engines_no_engines_yet": "Nenhuma engine ainda",
+	"engines_a_trino_engine_is_usually_registered_by_the_deployment": "Uma engine Trino costuma ser registrada pela implantação; engines diretas são registradas a partir de uma conexão de banco de dados.",
+	"engines_no_engine_matches": "Nenhuma engine corresponde",
+	"content_type_at_least_two_characters": "Digite pelo menos dois caracteres para buscar.",
+	"content_no_content_matches": "Nenhum conteúdo corresponde a “{query}”.",
+	"content_search_failed": "A busca falhou"
 }
