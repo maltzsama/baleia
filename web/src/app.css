@@ -47,6 +47,8 @@
 	--color-type-other-bg: #f8fafc;
 	--color-type-other-border: #e2e8f0;
 
+	/* UI font, self-hosted (routes/+layout.svelte loads 400/500/600/700); the
+	   system stack is only a fallback while it loads. */
 	--font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	--font-mono: 'Sometype Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 	/* Code font for the results grid data cells (self-hosted, monospace). */
