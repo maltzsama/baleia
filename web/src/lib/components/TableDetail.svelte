@@ -19,7 +19,7 @@
 	import DocumentColumns from '$lib/semantic/DocumentColumns.svelte';
 	import type { SemanticDoc } from '$lib/semantic/docs';
 
-	let { table }: { table: TableRef | null } = $props();
+	let { table, focusColumn = '' }: { table: TableRef | null; focusColumn?: string } = $props();
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 
@@ -96,6 +96,27 @@
 			return column.name.toLowerCase().includes(colSearch.toLowerCase());
 		})
 	);
+
+	// A link to a column (#474) opens the table with that column expanded,
+	// scrolled into view and focused, once per table and column.
+	let focusedFor = '';
+	$effect(() => {
+		const name = focusColumn;
+		const loadedName = detail?.columns.some((column) => column.name === name) ? name : '';
+		if (!loadedName || !detail) return;
+		const key = `${detail.id}:${loadedName}`;
+		if (focusedFor === key) return;
+		focusedFor = key;
+		colSearch = '';
+		expandedCol = loadedName;
+		requestAnimationFrame(() => {
+			const row = document.querySelector<HTMLElement>(
+				`[data-column="${CSS.escape(loadedName)}"] button`
+			);
+			row?.scrollIntoView?.({ block: 'center' });
+			row?.focus();
+		});
+	});
 
 	const hasBindings = $derived((table?.bindings.length ?? 0) > 1);
 
@@ -339,7 +360,12 @@
 					<EmptyState title="No columns" description="This table has no columns in the snapshot." />
 				{:else}
 					{#each filteredColumns as column (column.ordinal)}
-						<div class="border-b border-border last:border-b-0">
+						<div
+							class="border-b border-border last:border-b-0 {focusColumn === column.name
+								? 'bg-blue-50/60 dark:bg-[#152236]/60'
+								: ''}"
+							data-column={column.name}
+						>
 							<button
 								class="flex w-full flex-col gap-1 px-1 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#1c2128]"
 								onclick={() => (expandedCol = expandedCol === column.name ? null : column.name)}

@@ -6,6 +6,8 @@ export type SelectionPatch = {
 	catalog?: string;
 	ns?: string[];
 	table?: string;
+	/** A column of the table to bring into view (#474). */
+	column?: string;
 	tab?: string;
 };
 
@@ -27,6 +29,10 @@ export function applySelection(current: URL, patch: SelectionPatch): string {
 	if (patch.table !== undefined) {
 		if (patch.table) params.set('table', patch.table);
 		else params.delete('table');
+	}
+	if (patch.column !== undefined) {
+		if (patch.column) params.set('column', patch.column);
+		else params.delete('column');
 	}
 	if (patch.tab !== undefined) {
 		if (patch.tab) params.set('tab', patch.tab);

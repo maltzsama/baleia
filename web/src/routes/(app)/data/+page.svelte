@@ -74,10 +74,18 @@
 	function select(table: TableRef | null) {
 		selectedTable = table;
 		linkState = 'idle';
+		// A table picked by hand is opened without a column target.
+		const sameTable =
+			!!table &&
+			table.catalogId === selection.catalog &&
+			table.tableName === selection.table &&
+			table.namespace.join('.') === selection.ns.join('.');
+		const column = sameTable ? selection.column : '';
 		selection.set({
 			catalog: table?.catalogId ?? '',
 			ns: table?.namespace ?? [],
-			table: table?.tableName ?? ''
+			table: table?.tableName ?? '',
+			column
 		});
 	}
 </script>
@@ -119,7 +127,7 @@
 		class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--radius)] border border-border bg-bg-panel shadow-sm"
 	>
 		{#if selectedTable}
-			<TableDetail table={selectedTable} />
+			<TableDetail table={selectedTable} focusColumn={selection.column} />
 		{:else if linkState === 'resolving'}
 			<div class="space-y-2 p-4" role="status" aria-label={m.data_opening_the_linked_table()}>
 				<Skeleton class="h-5 w-1/3" />
