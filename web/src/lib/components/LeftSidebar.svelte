@@ -15,6 +15,15 @@
 	} = $props();
 	let search = $state('');
 	let tree = $state<{ handleSearchKey: (event: KeyboardEvent) => void } | null>(null);
+
+	// Datasources/Queries are tabs (#466): arrows move between them and the
+	// selected one is announced; the focus follows the selection.
+	function onTabKey(event: KeyboardEvent) {
+		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		event.preventDefault();
+		activeTab = activeTab === 'datasources' ? 'queries' : 'datasources';
+		document.getElementById(`left-tab-${activeTab}`)?.focus();
+	}
 </script>
 
 <aside
@@ -43,37 +52,56 @@
 	{:else}
 		<div class="flex flex-col flex-1 overflow-hidden">
 			<div class="flex bg-slate-50 dark:bg-[#1c2128] border-b border-border shrink-0">
-				<button
-					onclick={() => (activeTab = 'datasources')}
-					class="flex-1 text-center py-[9px] px-1.5 text-[11px] font-semibold cursor-pointer flex items-center justify-center gap-1.5 border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
+				<div
+					role="tablist"
+					aria-label={m.components_leftsidebar_sidebar_views()}
+					class="flex flex-1"
+					onkeydown={onTabKey}
+					tabindex="-1"
+				>
+					<button
+						id="left-tab-datasources"
+						role="tab"
+						aria-selected={activeTab === 'datasources'}
+						aria-controls="left-panel"
+						tabindex={activeTab === 'datasources' ? 0 : -1}
+						onclick={() => (activeTab = 'datasources')}
+						class="flex-1 text-center py-[9px] px-1.5 text-[11px] font-semibold cursor-pointer flex items-center justify-center gap-1.5 border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
 						{activeTab === 'datasources'
-						? 'text-primary border-b-primary bg-bg-panel'
-						: 'text-text-muted border-b-transparent hover:text-text-main'}"
-				>
-					<svg viewBox="0 0 24 24" class="w-3 h-3"
-						><ellipse cx="12" cy="5" rx="9" ry="3" /><path
-							d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"
-						/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></svg
+							? 'text-primary border-b-primary bg-bg-panel'
+							: 'text-text-muted border-b-transparent hover:text-text-main'}"
 					>
-					Datasources
-				</button>
-				<button
-					onclick={() => (activeTab = 'queries')}
-					class="flex-1 text-center py-[9px] px-1.5 text-[11px] font-semibold cursor-pointer flex items-center justify-center gap-1.5 border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
+						<svg viewBox="0 0 24 24" class="w-3 h-3"
+							><ellipse cx="12" cy="5" rx="9" ry="3" /><path
+								d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"
+							/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></svg
+						>
+						{m.components_leftsidebar_datasources()}
+					</button>
+					<button
+						id="left-tab-queries"
+						role="tab"
+						aria-selected={activeTab === 'queries'}
+						aria-controls="left-panel"
+						tabindex={activeTab === 'queries' ? 0 : -1}
+						onclick={() => (activeTab = 'queries')}
+						class="flex-1 text-center py-[9px] px-1.5 text-[11px] font-semibold cursor-pointer flex items-center justify-center gap-1.5 border-t-0 border-l-0 border-r-0 border-b-2 transition-all duration-150 bg-transparent
 						{activeTab === 'queries'
-						? 'text-primary border-b-primary bg-bg-panel'
-						: 'text-text-muted border-b-transparent hover:text-text-main'}"
-				>
-					<svg viewBox="0 0 24 24" class="w-3 h-3"
-						><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline
-							points="14 2 14 8 20 8"
-						/></svg
+							? 'text-primary border-b-primary bg-bg-panel'
+							: 'text-text-muted border-b-transparent hover:text-text-main'}"
 					>
-					Queries
-				</button>
+						<svg viewBox="0 0 24 24" class="w-3 h-3"
+							><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline
+								points="14 2 14 8 20 8"
+							/></svg
+						>
+						{m.components_leftsidebar_queries()}
+					</button>
+				</div>
 				<button
 					onclick={() => (collapsed = true)}
-					title="Collapse"
+					title={m.components_leftsidebar_collapse()}
+					aria-label={m.components_leftsidebar_collapse()}
 					class="flex items-center px-2 border-l border-border text-text-muted cursor-pointer bg-transparent border-t-0 border-b-0 border-r-0 transition-colors duration-150 hover:text-text-main"
 				>
 					<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M15 18l-6-6 6-6" /></svg>
@@ -98,11 +126,18 @@
 				</div>
 			</div>
 
-			{#if activeTab === 'datasources'}
-				<DataSourceTree bind:this={tree} bind:search {onSelectTable} />
-			{:else}
-				<SavedQueriesList />
-			{/if}
+			<div
+				id="left-panel"
+				role="tabpanel"
+				aria-labelledby={activeTab === 'datasources' ? 'left-tab-datasources' : 'left-tab-queries'}
+				class="flex min-h-0 flex-1 flex-col overflow-hidden"
+			>
+				{#if activeTab === 'datasources'}
+					<DataSourceTree bind:this={tree} bind:search {onSelectTable} />
+				{:else}
+					<SavedQueriesList />
+				{/if}
+			</div>
 		</div>
 	{/if}
 </aside>

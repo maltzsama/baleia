@@ -1087,5 +1087,9 @@
 	"nav_page_connections": "Conexões",
 	"nav_page_catalogs": "Catálogos",
 	"nav_page_engines": "Engines",
-	"nav_primary": "Navegação principal"
+	"nav_primary": "Navegação principal",
+	"components_leftsidebar_sidebar_views": "Visões da barra lateral",
+	"components_leftsidebar_queries": "Queries",
+	"components_leftsidebar_collapse": "Recolher a barra lateral",
+	"layout_skip_to_content": "Pular para o conteúdo"
 }
