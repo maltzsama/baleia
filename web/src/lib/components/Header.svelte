@@ -179,12 +179,13 @@
 				onclick={toggleWs}
 				aria-expanded={wsOpen}
 				aria-controls="workspace-switcher"
-				aria-label={m.components_header_switch_workspace({ name: workspaceStore.current.name })}
 				class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-border hover:border-border-hover rounded-md px-[10px] py-[5px] cursor-pointer text-xs font-semibold transition-all duration-150"
 			>
 				<div class="w-2 h-2 rounded-full bg-success shrink-0"></div>
 				<span>{workspaceStore.current.name}</span>
 				<span class="text-text-muted font-normal">{m.components_header_workspace()}</span>
+				<!-- The name starts with the visible text, as speech input expects. -->
+				<span class="sr-only">{m.components_header_switch_workspace()}</span>
 				<svg viewBox="0 0 24 24" class="w-3 h-3"><path d="M6 9l6 6 6-6" /></svg>
 			</button>
 		{:else}

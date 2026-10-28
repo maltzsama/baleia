@@ -101,7 +101,7 @@
 		</div>
 
 		{#if loading && !status}
-			<div class="mt-6 grid gap-3 sm:grid-cols-2">
+			<div class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 				<Skeleton height="6rem" />
 				<Skeleton height="6rem" />
 				<Skeleton height="6rem" />
@@ -152,7 +152,7 @@
 				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
 					Platform
 				</h2>
-				<div class="grid gap-3 sm:grid-cols-2">
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 					{#each resources as card (card.label)}
 						<article class="rounded-lg border border-border bg-bg-panel p-3">
 							<div class="flex items-center justify-between gap-2">
