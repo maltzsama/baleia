@@ -10,11 +10,14 @@ import (
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ErrCatalogNotFound means the catalog to sync does not exist.
@@ -44,7 +47,19 @@ func NewSyncer(pool *pgxpool.Pool, opener Opener) *Syncer {
 // metadata_sync_runs row. The pass as a whole is not one transaction. One
 // sync per catalog runs at a time; a second caller gets ErrSyncInProgress.
 // progress, when set, is called after each table with the tables seen.
-func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(seen int)) (RunStats, error) {
+func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(seen int)) (out RunStats, err error) {
+	ctx, span := tracer().Start(ctx, "metadata.sync",
+		trace.WithAttributes(attribute.String("baleia.catalog.id", uuid.UUID(catalogID.Bytes).String())))
+	defer func() {
+		span.SetAttributes(
+			attribute.String("baleia.metadata.path", out.Path),
+			attribute.Int("baleia.tables.seen", out.TablesSeen),
+			attribute.Int("baleia.tables.changed", out.TablesChanged),
+			attribute.Int("baleia.tables.removed", out.TablesRemoved),
+		)
+		obs.FailSpan(span, err, "metadata sync failed")
+		span.End()
+	}()
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return RunStats{}, err
@@ -286,3 +301,6 @@ func nonNilMap(m map[string]string) map[string]string {
 	}
 	return m
 }
+
+// tracer names the metadata sync spans (#380).
+func tracer() trace.Tracer { return obs.Tracer("metadata") }

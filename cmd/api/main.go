@@ -51,6 +51,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		return err
 	}
 	defer core.Close()
+	go obs.ServePprof(ctx, logger, cfg.PprofAddr)
 
 	// Set the baleia_trino password from BALEIA_TRINO_DB_PASSWORD so the role and
 	// the Trino plugin's connection stay in sync (no secret in a migration).

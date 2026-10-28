@@ -91,7 +91,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		}
 	}()
 
-	shutdownTracing, err := obs.Setup(ctx, cfg.TracingEnabled, opts.Service)
+	shutdownTracing, err := obs.Setup(ctx, c.Logger, cfg.TracingEnabled, opts.Service)
 	if err != nil {
 		return nil, fmt.Errorf("tracing setup: %w", err)
 	}

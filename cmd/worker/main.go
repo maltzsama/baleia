@@ -63,6 +63,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		return err
 	}
 	defer core.Close()
+	go obs.ServePprof(ctx, logger, cfg.PprofAddr)
 	pool, reg := core.Pool, core.Metrics
 
 	// The worker's own listener: /metrics (Temporal SDK, pool, build) and
