@@ -1071,5 +1071,6 @@
 	"data_table_not_found_description": "{table} is not in this catalog, or the catalog is not granted to this workspace.",
 	"data_could_not_open_the_linked_table": "Could not open the linked table",
 	"monitoring_loading_query_detail": "Loading the query detail",
-	"monitoring_could_not_load_the_query": "Could not load the query"
+	"monitoring_could_not_load_the_query": "Could not load the query",
+	"monitoring_retention_applies_to": "Used by snapshot expiry and orphan file removal; optimize ignores it."
 }
