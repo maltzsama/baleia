@@ -270,15 +270,44 @@
 	const columnResults = $derived(searchResults.filter((r) => r.kind === 'column'));
 	const flatResults = $derived([...tableResults, ...columnResults]);
 
+	// The search input lives in the page; it is a combobox over this listbox
+	// (#472) and spreads these attributes so the option Enter picks is named.
+	const uid = $props.id();
+	const resultsId = `${uid}-results`;
+	const resultId = (index: number) => `${uid}-result-${index}`;
+
+	/** ARIA for the search input that drives this tree's results. */
+	export function comboboxAttrs() {
+		const open = searchActive && !searchLoading && !searchError && flatResults.length > 0;
+		return {
+			role: 'combobox' as const,
+			'aria-controls': resultsId,
+			'aria-expanded': open,
+			'aria-autocomplete': 'list' as const,
+			'aria-activedescendant': open ? resultId(activeResult) : undefined
+		};
+	}
+
+	function moveResult(index: number) {
+		activeResult = index;
+		document.getElementById(resultId(index))?.scrollIntoView?.({ block: 'nearest' });
+	}
+
 	/** Keyboard navigation from the sidebar search input (FD11). */
 	export function handleSearchKey(event: KeyboardEvent) {
+		if (event.key === 'Escape' && search) {
+			// Escape clears the search and goes back to the tree.
+			event.preventDefault();
+			search = '';
+			return;
+		}
 		if (!searchActive) return;
 		if (event.key === 'ArrowDown') {
 			event.preventDefault();
-			activeResult = Math.min(activeResult + 1, flatResults.length - 1);
+			moveResult(Math.min(activeResult + 1, flatResults.length - 1));
 		} else if (event.key === 'ArrowUp') {
 			event.preventDefault();
-			activeResult = Math.max(activeResult - 1, 0);
+			moveResult(Math.max(activeResult - 1, 0));
 		} else if (event.key === 'Enter') {
 			event.preventDefault();
 			const hit = flatResults[activeResult];
@@ -381,7 +410,7 @@
 		{:else if searchError}
 			<ErrorState title="Search failed" message={searchError} onretry={() => retryTick++} />
 		{:else}
-			<div role="listbox" aria-label="Search results">
+			<div id={resultsId} role="listbox" aria-label={m.components_datasourcetree_search_results()}>
 				{#if tableResults.length > 0}
 					<p class="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">
 						Tables
@@ -449,6 +478,8 @@
 {#snippet searchRow(result: MetadataSearchResult, flatIndex: number)}
 	<button
 		role="option"
+		id={resultId(flatIndex)}
+		tabindex="-1"
 		aria-selected={activeResult === flatIndex}
 		class="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-[#1c2128] {activeResult ===
 		flatIndex

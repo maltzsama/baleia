@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { formatKeys } from '$lib/util/keys';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
@@ -1026,7 +1027,7 @@
 		<button
 			onclick={() => void runCurrent()}
 			disabled={executing}
-			title={m.components_queryeditor_run_hint()}
+			title={m.components_queryeditor_run_hint({ keys: formatKeys('Mod-Enter') })}
 			data-testid="run-current"
 			class="bg-success text-white border-none py-[5px] px-3.5 text-xs font-bold rounded-[5px] cursor-pointer flex items-center gap-1.5 hover:enabled:bg-success-hover disabled:opacity-60 disabled:cursor-not-allowed"
 		>
@@ -1034,7 +1035,7 @@
 				><polygon points="5 3 19 12 5 21 5 3" /></svg
 			>
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
-			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
+			<span class="text-[10px] font-normal">{formatKeys('Mod-Enter')}</span>
 		</button>
 		{#if executing && canCancel}
 			<button
@@ -1274,7 +1275,7 @@
 			{#each [['Run current statement', 'Mod-Enter'], ['Run all', 'Shift-Mod-Enter'], ['Save', 'Mod-S'], ['Save as a copy', 'Shift-Mod-S'], ['Quick open', 'Mod-P'], ['Command palette', 'Mod-K'], ['Format', 'Shift-Alt-F'], ['Explain', 'Mod-E'], ['New tab', 'Alt-N'], ['Close tab', 'Alt-W']] as [label, keys] (label)}
 				<li class="flex justify-between gap-4">
 					<span>{label}</span>
-					<kbd class="font-mono text-[11px]">{keys}</kbd>
+					<kbd class="font-mono text-[11px]">{formatKeys(keys)}</kbd>
 				</li>
 			{/each}
 		</ul>

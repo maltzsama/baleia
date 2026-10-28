@@ -200,6 +200,23 @@ describe('DataSourceTree', () => {
 		expect(await screen.findByText('Columns')).toBeTruthy();
 		expect(screen.getAllByRole('option')).toHaveLength(2);
 
+		// #472: the input is a combobox over the results and names the active one.
+		expect(input.getAttribute('role')).toBe('combobox');
+		expect(input.getAttribute('aria-expanded')).toBe('true');
+		expect(input.getAttribute('aria-controls')).toBe(screen.getByRole('listbox').id);
+		const active = () => document.getElementById(input.getAttribute('aria-activedescendant')!);
+		expect(active()?.getAttribute('aria-selected')).toBe('true');
+		await fireEvent.keyDown(input, { key: 'ArrowDown' });
+		expect(active()?.textContent).toContain('orders.');
+		await fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+		// Escape clears the search and goes back to the tree.
+		await fireEvent.keyDown(input, { key: 'Escape' });
+		expect((input as HTMLInputElement).value).toBe('');
+		expect(input.getAttribute('aria-expanded')).toBe('false');
+		await fireEvent.input(input, { target: { value: 'ord' } });
+		await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2));
+
 		// Enter selects the first hit and reveals it in the tree.
 		await fireEvent.keyDown(input, { key: 'Enter' });
 		await waitFor(() =>

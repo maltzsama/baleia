@@ -1026,7 +1026,7 @@
 	"workbench_completion_function": "function",
 	"components_resultspanel_statements": "Statements",
 	"components_queryeditor_run_all": "Run all",
-	"components_queryeditor_run_hint": "Runs the selection, or the statement at the cursor (⌘/Ctrl+Enter)",
+	"components_queryeditor_run_hint": "Runs the selection, or the statement at the cursor ({keys})",
 	"workbench_split_resize_results": "Resize the results",
 	"workbench_split_hint": "Drag, or use the arrow keys; double-click to reset",
 	"common_just_now": "just now",
@@ -1116,5 +1116,8 @@
 	"ui_panelresizer_resize_inspector": "Resize the inspector",
 	"ui_panelresizer_resize_tree": "Resize the catalog tree",
 	"ui_panelresizer_resize_fields": "Resize the field panel",
-	"ui_panelresizer_resize_settings_nav": "Resize the settings menu"
+	"ui_panelresizer_resize_settings_nav": "Resize the settings menu",
+	"sql_q_opening_the_saved_query": "Opening the saved query…",
+	"sql_q_back_to_the_workbench": "Back to the workbench",
+	"components_datasourcetree_search_results": "Search results"
 }

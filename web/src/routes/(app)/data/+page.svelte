@@ -100,6 +100,7 @@
 					aria-label={m.data_search_tables_and_columns()}
 					bind:value={search}
 					onkeydown={(event) => tree?.handleSearchKey(event)}
+					{...tree?.comboboxAttrs()}
 					class="w-full border-none bg-transparent text-xs text-text-main outline-none placeholder:text-text-muted"
 				/>
 			</div>
