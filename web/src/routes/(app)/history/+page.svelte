@@ -12,6 +12,7 @@
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Drawer from '$lib/ui/Drawer.svelte';
+	import Modal from '$lib/ui/Modal.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -503,29 +504,10 @@
 	{/if}
 </Drawer>
 
-{#if resultsOpen && selected}
-	<div
-		class="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-6"
-		role="dialog"
-		aria-modal="true"
-		aria-label={m.history_execution_results()}
-		tabindex="-1"
-	>
-		<div
-			class="flex h-[80vh] w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border border-border bg-bg-panel"
-		>
-			<header class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-				<h2 class="flex-1 text-sm font-semibold">{m.common_results()}</h2>
-				<button
-					type="button"
-					class="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-bg-toolbar hover:text-text-main"
-					aria-label={m.history_close_results()}
-					onclick={() => (resultsOpen = false)}>×</button
-				>
-			</header>
-			<ResultsPanel executionId={selected.id} enabled={true} initialPosition={resultsPosition} />
-		</div>
-	</div>
+{#if selected}
+	<Modal bind:open={resultsOpen} title={m.common_results()} size="xl" flush>
+		<ResultsPanel executionId={selected.id} enabled={true} initialPosition={resultsPosition} />
+	</Modal>
 {/if}
 
 {#if cancelling}

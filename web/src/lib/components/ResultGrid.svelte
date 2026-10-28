@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import { toasts } from '$lib/ui/toast.svelte';
+	import Modal from '$lib/ui/Modal.svelte';
 	import { cellText, formatCell, fullJson, type ColumnMeta } from '$lib/results/format';
 	import { RESULT_PAGE_SIZE, type ResultsStore } from '$lib/results/store.svelte';
 	import type { Snippet } from 'svelte';
@@ -314,27 +315,12 @@
 </div>
 
 {#if expanded}
-	<div
-		class="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-6 backdrop-blur-[2px]"
-		role="dialog"
-		aria-modal="true"
-		aria-label={`${expanded.column.name} value`}
-		tabindex="-1"
+	<Modal
+		open={true}
+		title={`${expanded.column.name} · ${expanded.column.type}`}
+		size="lg"
+		onclose={() => (expanded = null)}
 	>
-		<div
-			class="flex max-h-[80vh] w-full max-w-[720px] flex-col rounded-xl border border-border bg-bg-panel shadow-[0_24px_64px_rgba(0,0,0,.2)]"
-		>
-			<header class="flex items-center gap-2 border-b border-border px-4 py-3">
-				<span class="flex-1 font-mono text-xs font-semibold">{expanded.column.name}</span>
-				<span class="font-mono text-[10px] text-text-muted">{expanded.column.type}</span>
-				<button
-					type="button"
-					class="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-bg-toolbar hover:text-text-main"
-					aria-label={m.common_close()}
-					onclick={() => (expanded = null)}>×</button
-				>
-			</header>
-			<pre class="overflow-auto p-4 font-mono text-xs">{fullJson(expanded.value)}</pre>
-		</div>
-	</div>
+		<pre class="overflow-auto font-mono text-xs">{fullJson(expanded.value)}</pre>
+	</Modal>
 {/if}
