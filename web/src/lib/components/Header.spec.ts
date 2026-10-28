@@ -79,4 +79,63 @@ describe('Header', () => {
 		expect(screen.queryByRole('dialog', { name: 'Attention' })).toBeNull();
 		expect(document.activeElement).toBe(bells[0]);
 	});
+	// #467: the switcher is a labelled disclosure and the create dialog is a
+	// real modal with labelled fields.
+	describe('workspaces', () => {
+		const analytics = makeWorkspace({ id: 'w1', name: 'Analytics' });
+		const finance = makeWorkspace({ id: 'w2', name: 'Finance' });
+
+		async function openSwitcher() {
+			server.use(
+				http.get('/workspaces', ({ response }) => response(200).json([analytics, finance]))
+			);
+			nav.url = new URL('http://localhost/sql');
+			authStore.set(makeMe());
+			await workspaceStore.load();
+			workspaceStore.select(analytics);
+			render(Header, { props: { onToggleDark: vi.fn(), dark: false } });
+			const trigger = screen.getByRole('button', { name: /Switch workspace/ });
+			expect(trigger.getAttribute('aria-expanded')).toBe('false');
+			await fireEvent.click(trigger);
+			return trigger;
+		}
+
+		it('announces its state and the current workspace, and closes on Escape', async () => {
+			const trigger = await openSwitcher();
+			expect(trigger.getAttribute('aria-expanded')).toBe('true');
+			const panel = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+			expect(
+				within(panel).getByRole('button', { name: 'Analytics' }).getAttribute('aria-current')
+			).toBe('true');
+
+			await fireEvent.keyDown(document, { key: 'Escape' });
+			expect(trigger.getAttribute('aria-expanded')).toBe('false');
+			expect(document.activeElement).toBe(trigger);
+		});
+
+		it('closes on a click outside', async () => {
+			const trigger = await openSwitcher();
+			await fireEvent.click(document.body);
+			expect(trigger.getAttribute('aria-expanded')).toBe('false');
+		});
+
+		it('creates from a labelled modal and keeps the values on error', async () => {
+			server.use(
+				http.post('/workspaces', ({ response }) =>
+					response(403).json({ code: 'forbidden', message: 'no' })
+				)
+			);
+			await openSwitcher();
+			await fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+			const dialog = await screen.findByRole('dialog', { name: 'Create workspace' });
+			const name = within(dialog).getByLabelText(/Workspace name/) as HTMLInputElement;
+			await fireEvent.input(name, { target: { value: 'Ops' } });
+			expect(within(dialog).getByRole('button', { name: 'Close' })).toBeTruthy();
+			await fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+			expect(await within(dialog).findByRole('alert')).toBeTruthy();
+			expect(name.value).toBe('Ops');
+		});
+	});
 });

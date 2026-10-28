@@ -1109,5 +1109,10 @@
 	"components_leftsidebar_sidebar_views": "Visões da barra lateral",
 	"components_leftsidebar_queries": "Queries",
 	"components_leftsidebar_collapse": "Recolher a barra lateral",
-	"layout_skip_to_content": "Pular para o conteúdo"
+	"layout_skip_to_content": "Pular para o conteúdo",
+	"components_header_could_not_create_the_workspace": "Não foi possível criar o workspace.",
+	"components_header_switch_workspace": "Workspace: {name}. Trocar de workspace",
+	"components_header_workspace_type": "Tipo",
+	"components_header_owning_team": "Time dono",
+	"components_header_create": "Criar"
 }
