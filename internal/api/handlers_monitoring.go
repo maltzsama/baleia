@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
@@ -232,24 +233,65 @@ func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitor
 	if !h.maySeeQuery(ctx, p, snapshot) {
 		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
-	first := firstSQLine(snapshot.Sql)
+	// The detail carries what the list carries (#407), plus the SQL, the
+	// error and what the query used, read from the engine now.
+	base := monitoringQuery(snapshot)
 	detail := MonitoringQueryDetail{
-		TrinoQueryId: snapshot.TrinoQueryID,
-		State:        snapshot.State,
-		User:         snapshot.User,
-		SqlFirstLine: &first,
-		Catalog:      strOrEmpty(snapshot.Catalog),
-		Schema:       snapshot.Schema,
-		CreatedAt:    pgTimestampToTime(snapshot.CreatedAt),
-		Origin:       &snapshot.Origin,
-		Sql:          &snapshot.Sql,
-		ErrorMessage: snapshot.ErrorMessage,
-	}
-	if snapshot.ExecutionID.Valid {
-		id := openapi_types.UUID(snapshot.ExecutionID.Bytes)
-		detail.ExecutionId = &id
+		TrinoQueryId:       base.TrinoQueryId,
+		ExecutionId:        base.ExecutionId,
+		State:              base.State,
+		User:               base.User,
+		SqlFirstLine:       base.SqlFirstLine,
+		Catalog:            base.Catalog,
+		Schema:             base.Schema,
+		CreatedAt:          base.CreatedAt,
+		Origin:             base.Origin,
+		ElapsedMs:          base.ElapsedMs,
+		CpuMs:              base.CpuMs,
+		PhysicalInputBytes: base.PhysicalInputBytes,
+		OutputRows:         base.OutputRows,
+		Sql:                &snapshot.Sql,
+		ErrorMessage:       snapshot.ErrorMessage,
+		Resources:          h.queryResources(ctx, engineID, request.QueryId),
 	}
 	return GetMonitoringQuery200JSONResponse(detail), nil
+}
+
+// queryResourcesTimeout bounds the call to the engine: the detail answers
+// without the resources rather than wait.
+const queryResourcesTimeout = 3 * time.Second
+
+// queryResources reads what the query used from its engine, best effort: nil
+// when the engine does not report it, no longer knows the query, or fails.
+func (h *OpsHandlers) queryResources(ctx context.Context, engineID pgtype.UUID, queryID string) *MonitoringQueryResources {
+	eng, err := h.engines.Get(ctx, engineID)
+	if err != nil {
+		h.logger.WarnContext(ctx, "query resources: engine unavailable", "engine_id", engineID.String(), "err", err)
+		return nil
+	}
+	reader, ok := queryengine.As[queryengine.QueryResourcesReader](eng)
+	if !ok {
+		return nil
+	}
+	rctx, cancel := context.WithTimeout(ctx, queryResourcesTimeout)
+	defer cancel()
+	r, err := reader.QueryResources(rctx, queryID)
+	if errors.Is(err, queryengine.ErrQueryUnknown) {
+		return nil
+	}
+	if err != nil {
+		h.logger.WarnContext(ctx, "query resources not read", "engine_id", engineID.String(), "err", err)
+		return nil
+	}
+	return &MonitoringQueryResources{
+		PeakMemoryBytes: r.PeakMemoryBytes,
+		ProcessedRows:   r.ProcessedRows,
+		ProcessedBytes:  r.ProcessedBytes,
+		OutputRows:      r.OutputRows,
+		OutputBytes:     r.OutputBytes,
+		QueuedMs:        r.QueuedMs,
+		PlanningMs:      r.PlanningMs,
+	}
 }
 
 func (h *core) maySeeQuery(ctx context.Context, p authz.Principal, snapshot db.TrinoQuerySnapshot) bool {

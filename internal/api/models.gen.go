@@ -2970,18 +2970,42 @@ type MonitoringQueryDetail struct {
 	Origin             *string             `json:"origin,omitempty"`
 	OutputRows         *int                `json:"output_rows"`
 	PhysicalInputBytes *int                `json:"physical_input_bytes"`
-	Schema             *string             `json:"schema"`
-	Sql                *string             `json:"sql,omitempty"`
-	SqlFirstLine       *string             `json:"sql_first_line,omitempty"`
-	State              string              `json:"state"`
-	TrinoQueryId       string              `json:"trino_query_id"`
-	User               string              `json:"user"`
+
+	// Resources What the query used, read from the coordinator when the detail is opened (#407). Absent when the engine does not report it or no longer knows the query; a field is null when the engine leaves it out.
+	Resources    *MonitoringQueryResources `json:"resources"`
+	Schema       *string                   `json:"schema"`
+	Sql          *string                   `json:"sql,omitempty"`
+	SqlFirstLine *string                   `json:"sql_first_line,omitempty"`
+	State        string                    `json:"state"`
+	TrinoQueryId string                    `json:"trino_query_id"`
+	User         string                    `json:"user"`
 }
 
 // MonitoringQueryPage defines model for MonitoringQueryPage.
 type MonitoringQueryPage struct {
 	Items      []MonitoringQuery `json:"items"`
 	NextOffset *int              `json:"next_offset"`
+}
+
+// MonitoringQueryResources What the query used, read from the coordinator when the detail is opened (#407). Absent when the engine does not report it or no longer knows the query; a field is null when the engine leaves it out.
+type MonitoringQueryResources struct {
+	OutputBytes *int64 `json:"output_bytes"`
+	OutputRows  *int64 `json:"output_rows"`
+
+	// PeakMemoryBytes Peak user memory
+	PeakMemoryBytes *int64 `json:"peak_memory_bytes"`
+
+	// PlanningMs Time spent planning
+	PlanningMs *int64 `json:"planning_ms"`
+
+	// ProcessedBytes Input bytes the query processed
+	ProcessedBytes *int64 `json:"processed_bytes"`
+
+	// ProcessedRows Input rows the query processed
+	ProcessedRows *int64 `json:"processed_rows"`
+
+	// QueuedMs Time spent queued
+	QueuedMs *int64 `json:"queued_ms"`
 }
 
 // NessieCredentials defines model for NessieCredentials.

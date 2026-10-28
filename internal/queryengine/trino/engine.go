@@ -193,3 +193,27 @@ func (e *Engine) MaintenanceStatements(table []string, retention string) ([]stri
 		fmt.Sprintf("ALTER TABLE %s EXECUTE remove_orphan_files(retention_threshold => %s)", name, r),
 	}, nil
 }
+
+var _ queryengine.QueryResourcesReader = (*Engine)(nil)
+
+// QueryResources reads the query's statistics from the coordinator as the
+// admin identity, which sees every user's queries (#407).
+func (e *Engine) QueryResources(ctx context.Context, queryID string) (queryengine.QueryResources, error) {
+	qi, err := e.admin.GetQuery(ctx, queryID)
+	if errors.Is(err, trinoclient.ErrQueryGone) {
+		return queryengine.QueryResources{}, queryengine.ErrQueryUnknown
+	}
+	if err != nil {
+		return queryengine.QueryResources{}, err
+	}
+	r := qi.Resources()
+	return queryengine.QueryResources{
+		PeakMemoryBytes: r.PeakMemoryBytes,
+		ProcessedRows:   r.ProcessedRows,
+		ProcessedBytes:  r.ProcessedBytes,
+		OutputRows:      r.OutputRows,
+		OutputBytes:     r.OutputBytes,
+		QueuedMs:        r.QueuedMs,
+		PlanningMs:      r.PlanningMs,
+	}, nil
+}

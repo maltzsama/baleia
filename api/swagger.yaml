@@ -3022,6 +3022,24 @@ components:
           properties:
             sql: { type: string }
             error_message: { type: string, nullable: true }
+            resources:
+              $ref: "#/components/schemas/MonitoringQueryResources"
+
+    MonitoringQueryResources:
+      type: object
+      nullable: true
+      description: >-
+        What the query used, read from the coordinator when the detail is
+        opened (#407). Absent when the engine does not report it or no longer
+        knows the query; a field is null when the engine leaves it out.
+      properties:
+        peak_memory_bytes: { type: integer, format: int64, nullable: true, description: "Peak user memory" }
+        processed_rows: { type: integer, format: int64, nullable: true, description: "Input rows the query processed" }
+        processed_bytes: { type: integer, format: int64, nullable: true, description: "Input bytes the query processed" }
+        output_rows: { type: integer, format: int64, nullable: true }
+        output_bytes: { type: integer, format: int64, nullable: true }
+        queued_ms: { type: integer, format: int64, nullable: true, description: "Time spent queued" }
+        planning_ms: { type: integer, format: int64, nullable: true, description: "Time spent planning" }
 
     MonitoringQueryPage:
       type: object

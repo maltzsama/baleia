@@ -5620,7 +5620,40 @@ export interface components {
         MonitoringQueryDetail: components["schemas"]["MonitoringQuery"] & {
             sql?: string;
             error_message?: string | null;
+            resources?: components["schemas"]["MonitoringQueryResources"];
         };
+        /** @description What the query used, read from the coordinator when the detail is opened (#407). Absent when the engine does not report it or no longer knows the query; a field is null when the engine leaves it out. */
+        MonitoringQueryResources: {
+            /**
+             * Format: int64
+             * @description Peak user memory
+             */
+            peak_memory_bytes?: number | null;
+            /**
+             * Format: int64
+             * @description Input rows the query processed
+             */
+            processed_rows?: number | null;
+            /**
+             * Format: int64
+             * @description Input bytes the query processed
+             */
+            processed_bytes?: number | null;
+            /** Format: int64 */
+            output_rows?: number | null;
+            /** Format: int64 */
+            output_bytes?: number | null;
+            /**
+             * Format: int64
+             * @description Time spent queued
+             */
+            queued_ms?: number | null;
+            /**
+             * Format: int64
+             * @description Time spent planning
+             */
+            planning_ms?: number | null;
+        } | null;
         MonitoringQueryPage: {
             items: components["schemas"]["MonitoringQuery"][];
             next_offset?: number | null;

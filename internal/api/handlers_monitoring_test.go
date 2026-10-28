@@ -8,6 +8,8 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
+	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/queryengine/fake"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -112,5 +114,60 @@ func TestCreateMaintenanceRun_RejectsForeignBinding(t *testing.T) {
 	})
 	if err != nil || !isType[CreateMaintenanceRun422JSONResponse](resp) {
 		t.Fatalf("foreign binding = %T, %v; want 422", resp, err)
+	}
+}
+
+// detailFake answers the snapshot lookup with snap.
+type detailFake struct {
+	snapshotFake
+	snap db.TrinoQuerySnapshot
+}
+
+func (q detailFake) GetTrinoQuerySnapshotByEngine(context.Context, db.GetTrinoQuerySnapshotByEngineParams) (db.TrinoQuerySnapshot, error) {
+	return q.snap, nil
+}
+
+// resourcesEngine reports res, or err, for any query.
+type resourcesEngine struct {
+	queryengine.Engine
+	res queryengine.QueryResources
+	err error
+}
+
+func (e resourcesEngine) QueryResources(context.Context, string) (queryengine.QueryResources, error) {
+	return e.res, e.err
+}
+
+// TestMonitoringQuery_DetailCarriesResources: the detail carries the list's
+// CPU, time and I/O, plus what the engine reports the query used; an engine
+// that no longer knows the query leaves the resources out (#407).
+func TestMonitoringQuery_DetailCarriesResources(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newAuthzHandlers(t)
+	admin := ctxAs(ownerID, "admin")
+	cpu, peak := int32(840), int64(1<<20)
+	h.queries = detailFake{snapshotFake: snapshotFake{authzFake: q}, snap: db.TrinoQuerySnapshot{TrinoQueryID: "q1", State: "FINISHED", User: "ada", CpuMs: &cpu}}
+	h.access = wsaccess.New(h.queries)
+	h.topology = topology.New(h.queries)
+	h.monitor = monitoring.New(h.queries)
+	req := GetMonitoringQueryRequestObject{Id: [16]byte{0xE1}, QueryId: "q1"}
+
+	h.engines = fixedEngines{resourcesEngine{Engine: fake.New(fake.Options{}), res: queryengine.QueryResources{PeakMemoryBytes: &peak}}}
+	resp, err := h.GetMonitoringQuery(admin, req)
+	detail, ok := resp.(GetMonitoringQuery200JSONResponse)
+	if err != nil || !ok {
+		t.Fatalf("detail = %T, %v", resp, err)
+	}
+	if detail.CpuMs == nil || *detail.CpuMs != 840 {
+		t.Errorf("cpu_ms = %v, want the snapshot's 840", detail.CpuMs)
+	}
+	if detail.Resources == nil || detail.Resources.PeakMemoryBytes == nil || *detail.Resources.PeakMemoryBytes != peak {
+		t.Errorf("resources = %+v, want the engine's peak memory", detail.Resources)
+	}
+
+	h.engines = fixedEngines{resourcesEngine{Engine: fake.New(fake.Options{}), err: queryengine.ErrQueryUnknown}}
+	resp, err = h.GetMonitoringQuery(admin, req)
+	if detail, ok := resp.(GetMonitoringQuery200JSONResponse); err != nil || !ok || detail.Resources != nil {
+		t.Errorf("forgotten query = %T %v, want 200 without resources", resp, err)
 	}
 }

@@ -1047,5 +1047,17 @@
 	"history_cancel_consequence_engine": "A instrução em execução é interrompida no engine, e as instruções seguintes não rodam.",
 	"history_cancel_consequence_results": "As instruções que já terminaram mantêm seus resultados.",
 	"history_execution_cancelled": "Execução cancelada",
-	"history_execution_already_ended": "A execução já tinha terminado"
+	"history_execution_already_ended": "A execução já tinha terminado",
+	"monitoring_cpu": "CPU",
+	"monitoring_resources": "Recursos",
+	"monitoring_cpu_time": "Tempo de CPU",
+	"monitoring_elapsed": "Duração",
+	"monitoring_queued": "Em fila",
+	"monitoring_planning": "Planejamento",
+	"monitoring_peak_memory": "Pico de memória",
+	"monitoring_data_read": "Dados lidos",
+	"monitoring_rows_processed": "Linhas processadas",
+	"monitoring_bytes_processed": "Bytes processados",
+	"monitoring_rows_returned": "Linhas retornadas",
+	"monitoring_bytes_returned": "Bytes retornados"
 }
