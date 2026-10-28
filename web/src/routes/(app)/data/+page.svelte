@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import PanelResizer from '$lib/ui/PanelResizer.svelte';
+	import { loadWidth } from '$lib/ui/panelWidth';
 	import DataSourceTree from '$lib/components/DataSourceTree.svelte';
 	import TableDetail from '$lib/components/TableDetail.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -11,6 +14,9 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	let selectedTable = $state<TableRef | null>(null);
+	// The catalog tree can be widened for long names (#468).
+	const TREE = { min: 240, max: 640, initial: 320 };
+	let treeWidth = $state(browser ? loadWidth('data-tree', TREE) : TREE.initial);
 	let search = $state('');
 	let tree = $state<DataSourceTree | null>(null);
 
@@ -78,7 +84,8 @@
 
 <div class="flex flex-1 gap-2.5 overflow-hidden p-2.5">
 	<aside
-		class="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-[var(--radius)] border border-border bg-bg-panel shadow-sm"
+		class="flex shrink-0 flex-col overflow-hidden rounded-[var(--radius)] border border-border bg-bg-panel shadow-sm"
+		style:width="{treeWidth}px"
 	>
 		<div class="border-b border-border px-3 py-2">
 			<div
@@ -99,8 +106,15 @@
 		</div>
 		<DataSourceTree bind:this={tree} onSelectTable={select} bind:search />
 	</aside>
+	<PanelResizer
+		bind:value={treeWidth}
+		bounds={TREE}
+		side="left"
+		storageKey="data-tree"
+		label={m.ui_panelresizer_resize_tree()}
+	/>
 
-	<main
+	<section
 		class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--radius)] border border-border bg-bg-panel shadow-sm"
 	>
 		{#if selectedTable}
@@ -129,5 +143,5 @@
 				description="Browse the metadata-driven catalogs on the left to inspect a table and its columns."
 			/>
 		{/if}
-	</main>
+	</section>
 </div>

@@ -11,6 +11,7 @@
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Loader from '$lib/ui/Skeleton.svelte';
+	import Modal from '$lib/ui/Modal.svelte';
 	import MarkdownView from '$lib/ui/patterns/MarkdownView.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import CopyButton from '$lib/ui/patterns/CopyButton.svelte';
@@ -413,70 +414,47 @@
 	/>
 {/if}
 
-{#if previewOpen}
-	<div
-		class="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-6 backdrop-blur-[2px]"
-		role="dialog"
-		aria-modal="true"
-		aria-label={m.components_tabledetail_table_preview()}
-		tabindex="-1"
-		onclick={(e) => e.target === e.currentTarget && (previewOpen = false)}
-	>
-		<div
-			class="flex max-h-[85vh] w-full max-w-[900px] flex-col rounded-xl border border-border bg-bg-panel shadow-[0_24px_64px_rgba(0,0,0,.2)]"
-		>
-			<div class="flex items-center gap-2 border-b border-border px-5 py-[14px]">
-				<h2 class="flex-1 text-sm font-semibold">
-					{m.components_tabledetail_preview()}
-					{detail?.name}
-				</h2>
-				<button
-					type="button"
-					class="flex h-[26px] w-[26px] items-center justify-center rounded-md text-text-muted hover:bg-bg-toolbar hover:text-text-main"
-					aria-label={m.components_tabledetail_close_preview()}
-					onclick={() => (previewOpen = false)}>×</button
-				>
-			</div>
-			<div class="flex-1 overflow-auto p-4">
-				{#if previewLoading}
-					<div class="space-y-2" aria-label={m.components_tabledetail_running_preview()}>
-						<Loader class="h-4 w-2/3" />
-						<Loader class="h-4 w-3/4" />
-						<Loader class="h-4 w-1/2" />
-					</div>
-				{:else if previewError}
-					<ErrorState title="Preview failed" message={previewError} onretry={runPreview} />
-				{:else if previewColumns.length === 0}
-					<EmptyState title="No rows" description="The preview returned no rows." />
-				{:else}
-					<table class="w-full border-separate border-spacing-0 text-left text-xs">
-						<thead>
-							<tr>
-								{#each previewColumns as column (column)}
-									<th
-										class="sticky top-0 border-b border-border bg-bg-toolbar px-3 py-2 text-[11px] font-semibold uppercase text-text-muted"
-										>{column}</th
-									>
-								{/each}
-							</tr>
-						</thead>
-						<tbody>
-							{#each previewRows as row, index (index)}
-								<tr class="hover:[&>td]:bg-bg-toolbar">
-									{#each row as cell, cellIndex (cellIndex)}
-										<td class="whitespace-nowrap border-b border-border px-3 py-1.5 font-mono">
-											{cell === null ? 'NULL' : String(cell)}
-										</td>
-									{/each}
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				{/if}
-			</div>
+<Modal
+	bind:open={previewOpen}
+	title={`${m.components_tabledetail_preview()} ${detail?.name ?? ''}`}
+	size="lg"
+>
+	{#if previewLoading}
+		<div class="space-y-2" aria-label={m.components_tabledetail_running_preview()}>
+			<Loader class="h-4 w-2/3" />
+			<Loader class="h-4 w-3/4" />
+			<Loader class="h-4 w-1/2" />
 		</div>
-	</div>
-{/if}
+	{:else if previewError}
+		<ErrorState title="Preview failed" message={previewError} onretry={runPreview} />
+	{:else if previewColumns.length === 0}
+		<EmptyState title="No rows" description="The preview returned no rows." />
+	{:else}
+		<table class="w-full border-separate border-spacing-0 text-left text-xs">
+			<thead>
+				<tr>
+					{#each previewColumns as column (column)}
+						<th
+							class="sticky top-0 border-b border-border bg-bg-toolbar px-3 py-2 text-[11px] font-semibold uppercase text-text-muted"
+							>{column}</th
+						>
+					{/each}
+				</tr>
+			</thead>
+			<tbody>
+				{#each previewRows as row, index (index)}
+					<tr class="hover:[&>td]:bg-bg-toolbar">
+						{#each row as cell, cellIndex (cellIndex)}
+							<td class="whitespace-nowrap border-b border-border px-3 py-1.5 font-mono">
+								{cell === null ? 'NULL' : String(cell)}
+							</td>
+						{/each}
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
+</Modal>
 
 <style>
 	.type-string {

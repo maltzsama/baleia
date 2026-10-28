@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import GlobalNav from '$lib/components/GlobalNav.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import SessionExpired from '$lib/components/SessionExpired.svelte';
@@ -33,11 +34,25 @@
 	});
 </script>
 
+<!-- Skips the repeated navigation (#466); visible when focused. -->
+<a
+	href="#main-content"
+	class="sr-only z-[200] rounded-md bg-primary px-3 py-2 text-[13px] font-semibold text-white focus:not-sr-only focus:fixed focus:left-2 focus:top-2"
+>
+	{m.layout_skip_to_content()}
+</a>
 <div class="h-screen flex overflow-hidden">
 	<GlobalNav />
 	<div class="flex-1 flex flex-col overflow-hidden">
 		<Header onToggleDark={() => (dark = !dark)} {dark} />
-		{@render children()}
+		<!-- The one main landmark of every app page. -->
+		<main
+			id="main-content"
+			tabindex="-1"
+			class="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
+		>
+			{@render children()}
+		</main>
 	</div>
 </div>
 

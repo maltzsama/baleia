@@ -7,9 +7,9 @@ test('@issue-112 the workbench opens the command palette', async ({ page, loginA
 	await page.goto('/sql');
 
 	await page.getByRole('button', { name: 'Commands' }).click();
-	await expect(page.getByLabel('Command palette')).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Command palette' })).toBeVisible();
 	await expect(page.getByText('Run current statement')).toBeVisible();
 
 	await page.keyboard.press('Escape');
-	await expect(page.getByLabel('Command palette')).toBeHidden();
+	await expect(page.getByRole('textbox', { name: 'Command palette' })).toBeHidden();
 });

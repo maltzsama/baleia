@@ -279,7 +279,7 @@
 
 	{#if loading}
 		<div
-			class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+			class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3"
 			aria-label={m.connections_loading_connections()}
 		>
 			{#each [0, 1, 2] as item (item)}
@@ -298,7 +298,7 @@
 			</Button>
 		</EmptyState>
 	{:else}
-		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+		<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 			{#each filtered as connection (connection.id)}
 				{@const provider = providerOf(connection.type)}
 				{@const ownEngines = enginesOf(connection.id)}
@@ -496,6 +496,7 @@
 
 {#if activity}
 	<Drawer
+		size="lg"
 		bind:open={activityOpen}
 		title={`Activity — ${activity.name}`}
 		onclose={() => {

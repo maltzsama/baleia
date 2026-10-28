@@ -740,7 +740,7 @@
 	{/if}
 </div>
 
-<Drawer bind:open={queryDrawer} title={m.monitoring_query_detail()}>
+<Drawer size="lg" bind:open={queryDrawer} title={m.monitoring_query_detail()}>
 	{#if queryLoading}
 		<div class="flex flex-col gap-2" role="status" aria-label={m.monitoring_loading_query_detail()}>
 			<Skeleton class="h-4 w-2/3" />

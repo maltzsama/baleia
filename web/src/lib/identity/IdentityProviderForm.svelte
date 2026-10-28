@@ -247,11 +247,13 @@
 
 <Modal
 	bind:open
+	size="lg"
 	title={provider
 		? m.identity_identityproviderform_edit_identity_provider()
 		: m.identity_identityproviderform_add_identity_provider()}
 >
-	<div class="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1">
+	<!-- The modal body is the one scroll region (#468). -->
+	<div class="flex flex-col gap-3">
 		{#if error}
 			<p class="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[12px] text-danger">
 				{error}

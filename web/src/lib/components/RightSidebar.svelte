@@ -8,10 +8,13 @@
 
 	let {
 		collapsed = $bindable(true),
-		selectedTable
+		selectedTable,
+		width = 340
 	}: {
 		collapsed?: boolean;
 		selectedTable?: TableRef | null;
+		/** Expanded width in px (#468); the workbench makes it resizable. */
+		width?: number;
 	} = $props();
 
 	let tab = $state<'inspector' | 'assistant'>('inspector');
@@ -33,8 +36,9 @@
 </script>
 
 <aside
-	class="bg-bg-panel border border-border rounded-[var(--radius)] shadow-sm flex flex-col overflow-hidden transition-[width] duration-200 shrink-0
-	{collapsed ? 'w-9' : 'w-[340px]'}"
+	class="bg-bg-panel border border-border rounded-[var(--radius)] shadow-sm flex flex-col overflow-hidden shrink-0
+	{collapsed ? 'w-9' : ''}"
+	style:width={collapsed ? undefined : `${width}px`}
 >
 	{#if collapsed}
 		<div class="flex flex-col items-center py-2.5 gap-2.5 flex-1">

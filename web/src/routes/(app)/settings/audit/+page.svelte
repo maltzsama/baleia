@@ -361,7 +361,7 @@
 	{/if}
 </div>
 
-<Drawer bind:open={drawerOpen} title={m.settings_audit_audit_event()}>
+<Drawer size="lg" bind:open={drawerOpen} title={m.settings_audit_audit_event()}>
 	{#if selected}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
 			<dt class="text-slate-600 dark:text-slate-300">{m.common_time()}</dt>

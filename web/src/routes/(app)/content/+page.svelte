@@ -107,7 +107,7 @@
 
 	{#if loading}
 		<div
-			class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+			class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3"
 			role="status"
 			aria-label={m.content_loading_spaces()}
 		>
@@ -123,7 +123,7 @@
 			description="Create a space to organize saved queries and metrics."
 		/>
 	{:else}
-		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+		<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
 			{#each spaces as space (space.id)}
 				<article class="flex flex-col gap-2 rounded-lg border border-border bg-bg-panel p-4">
 					<div class="flex items-start justify-between gap-2">

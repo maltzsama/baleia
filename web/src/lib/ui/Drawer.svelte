@@ -5,49 +5,62 @@
 	let {
 		open = $bindable(false),
 		title,
+		size = 'md',
 		onclose,
 		children,
 		footer
 	}: {
 		open?: boolean;
 		title: string;
+		/** md for short details; lg for SQL, plans, JSON and diffs (#468). */
+		size?: 'md' | 'lg';
 		onclose?: () => void;
 		children: Snippet;
 		footer?: Snippet;
 	} = $props();
 
+	let dialogEl: HTMLDialogElement | undefined = $state();
 	let panelEl: HTMLDivElement | undefined = $state();
+	let previouslyFocused: HTMLElement | null = null;
 
+	// A native modal <dialog>, like Modal (#483): it keeps Tab inside, makes
+	// the page behind inert and closes on Esc. This effect mirrors `open` onto
+	// showModal()/close() and starts focus on the panel.
 	$effect(() => {
-		if (open) panelEl?.focus();
+		if (!dialogEl) return;
+		if (open && !dialogEl.open) {
+			previouslyFocused = document.activeElement as HTMLElement | null;
+			dialogEl.showModal();
+			panelEl?.focus();
+		} else if (!open && dialogEl.open) {
+			dialogEl.close();
+		}
 	});
 
 	function close() {
-		open = false;
-		onclose?.();
+		dialogEl?.close();
 	}
 
-	function onkeydown(event: KeyboardEvent) {
-		if (open && event.key === 'Escape') close();
+	function handleClose() {
+		open = false;
+		previouslyFocused?.focus();
+		previouslyFocused = null;
+		onclose?.();
 	}
 </script>
 
-<svelte:window {onkeydown} />
-
-{#if open}
-	<div
-		class="fixed inset-0 z-[100] flex justify-end bg-black/30 backdrop-blur-[2px]"
-		role="presentation"
-		onclick={(event) => event.target === event.currentTarget && close()}
-	>
-		<div
-			bind:this={panelEl}
-			tabindex="-1"
-			role="dialog"
-			aria-modal="true"
-			aria-label={title}
-			class="flex h-full w-full max-w-[420px] flex-col border-l border-border bg-bg-panel text-text-main shadow-[0_0_48px_rgba(0,0,0,.18)] outline-none"
-		>
+<!-- A click on the backdrop lands on the dialog itself, outside the panel. -->
+<dialog
+	bind:this={dialogEl}
+	onclose={handleClose}
+	onclick={(event) => event.target === dialogEl && close()}
+	aria-label={title}
+	class="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full {size === 'lg'
+		? 'max-w-[min(960px,60vw)]'
+		: 'max-w-[420px]'} border-0 border-l border-border bg-bg-panel p-0 text-text-main shadow-[0_0_48px_rgba(0,0,0,.18)] backdrop:bg-black/30 backdrop:backdrop-blur-[2px]"
+>
+	{#if open}
+		<div bind:this={panelEl} tabindex="-1" class="flex h-full flex-col outline-none">
 			<header class="flex items-center border-b border-border px-5 py-[18px]">
 				<h2 class="flex-1 text-sm font-semibold">{title}</h2>
 				<button
@@ -64,5 +77,5 @@
 				<footer class="border-t border-border px-5 py-3.5">{@render footer()}</footer>
 			{/if}
 		</div>
-	</div>
-{/if}
+	{/if}
+</dialog>
