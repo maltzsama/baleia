@@ -1,5 +1,6 @@
 // Typed audit reads (#49). The scope (own events vs owned workspaces vs all)
 // is a server rule; the client only sends filters.
+import { m } from '$lib/paraglide/messages';
 import { SvelteURLSearchParams } from 'svelte/reactivity';
 import { apiErrorMessage, apiFetch, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
@@ -55,7 +56,7 @@ export async function listAuditEvents(filters: AuditFilters): Promise<AuditPage>
 	if (error || !data) {
 		const body = error as { code?: string } | undefined;
 		throw new AuditRequestError(
-			apiErrorMessage(error, 'Could not load the audit trail'),
+			apiErrorMessage(error, m.audit_client_could_not_load_the_audit_trail()),
 			body?.code
 		);
 	}
@@ -65,7 +66,9 @@ export async function listAuditEvents(filters: AuditFilters): Promise<AuditPage>
 export async function listAuditActions(): Promise<string[]> {
 	const { data, error } = await client.GET('/audit/actions');
 	if (error || !data)
-		throw new AuditRequestError(apiErrorMessage(error, 'Could not load the actions'));
+		throw new AuditRequestError(
+			apiErrorMessage(error, m.audit_client_could_not_load_the_actions())
+		);
 	return data;
 }
 
@@ -77,7 +80,7 @@ export async function resolveAudit(body: {
 }): Promise<AuditResolve> {
 	const { data, error } = await client.POST('/audit/resolve', { body });
 	if (error || !data)
-		throw new AuditRequestError(apiErrorMessage(error, 'Could not resolve names'));
+		throw new AuditRequestError(apiErrorMessage(error, m.audit_client_could_not_resolve_names()));
 	return data;
 }
 

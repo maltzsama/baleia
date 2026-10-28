@@ -174,10 +174,15 @@
 		if (!impact) return [];
 		return [
 			impact.engine
-				? `Deletes the engine ${impact.engine.name} and its catalogs.`
-				: 'No engine backs this connection.',
-			`${impact.catalogs} catalog(s) and ${impact.bindings} binding(s) depend on it.`,
-			`${impact.running_executions} execution(s) are running now.`
+				? m.connections_detail_deletes_the_engine_and_its_catalogs({ name: impact.engine.name })
+				: m.connections_detail_no_engine_backs_this_connection(),
+			m.connections_detail_catalog_s_and_binding_s_depend({
+				catalogs: impact.catalogs,
+				bindings: impact.bindings
+			}),
+			m.connections_detail_execution_s_are_running_now({
+				running_executions: impact.running_executions
+			})
 		];
 	}
 

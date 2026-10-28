@@ -81,7 +81,12 @@
 			options={[
 				{ value: '', label: m.monitoring_any() },
 				{ value: 'source', label: m.catalogs_source() },
-				{ value: 'native', label: 'Native' }
+				{
+					value: 'native',
+					get label() {
+						return m.catalogs_native();
+					}
+				}
 			]}
 		/>
 		<Select
@@ -176,7 +181,7 @@
 														? 'danger'
 														: 'neutral'}
 											>
-												{binding.sync_status ?? 'pending'}
+												{binding.sync_status ?? m.catalogs_pending()}
 											</Badge>
 										</span>
 									{:else}

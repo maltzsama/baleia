@@ -255,7 +255,7 @@
 	resourceName={metric?.label ?? ''}
 	confirmLabel={m.metrics_detail_delete_metric()}
 	consequences={[
-		'Queries and links that reference this metric stop resolving.',
+		m.metrics_detail_queries_and_links_that_reference_this(),
 		m.metrics_the_metric_can_be_restored_from_trash()
 	]}
 	onconfirm={remove}
@@ -267,6 +267,6 @@
 	resourceName={metric?.label ?? ''}
 	confirmLabel={m.metrics_detail_remove_certification()}
 	danger={false}
-	consequences={['The certified badge disappears; the metric remains available.']}
+	consequences={[m.metrics_detail_the_certified_badge_disappears_the_metric()]}
 	onconfirm={() => setCertified(false)}
 />

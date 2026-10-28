@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { eachLimited } from '$lib/util/limit';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
@@ -182,7 +183,7 @@
 		const { error: err } = await client.DELETE('/teams/{id}/members/{user_id}', {
 			params: { path: { id: removeTarget.team.id, user_id: removeTarget.member.user.id } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not remove the member.'));
+		if (err) throw new Error(apiErrorMessage(err, m.settings_teams_could_not_remove_the_member()));
 		toasts.success(m.settings_teams_member_removed());
 		await load();
 	}
@@ -199,7 +200,7 @@
 			params: { path: { id: roleTarget.team.id, user_id: roleTarget.member.user.id } },
 			body: { role: roleValue }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not change the role.'));
+		if (err) throw new Error(apiErrorMessage(err, m.settings_teams_could_not_change_the_role()));
 		toasts.success(m.settings_teams_team_role_updated());
 		await load();
 	}
@@ -214,7 +215,7 @@
 		const { error: err } = await client.DELETE('/teams/{id}', {
 			params: { path: { id: deleteTarget.id } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not delete the team.'));
+		if (err) throw new Error(apiErrorMessage(err, m.settings_teams_could_not_delete_the_team()));
 		toasts.success(m.settings_teams_team_deleted());
 		await load();
 	}
@@ -273,8 +274,11 @@
 								{/if}
 								{#if memberState[team.id]?.status === 'ready'}
 									<p class="mt-1 text-[11px] text-text-muted">
-										{(members[team.id] ?? []).length}
-										{(members[team.id] ?? []).length === 1 ? 'member' : 'members'}
+										{plural(
+											(members[team.id] ?? []).length,
+											m.settings_teams_member_count_one,
+											m.settings_teams_member_count_other
+										)}
 									</p>
 								{/if}
 							</div>
@@ -401,7 +405,7 @@
 	title={m.settings_teams_remove_team_member()}
 	resourceName={removeTarget?.member.user.name ?? ''}
 	consequences={[
-		'They immediately lose access to workspaces owned by this team.',
+		m.settings_teams_they_immediately_lose_access_to_workspaces(),
 		m.settings_teams_their_account_and_other_team_memberships_a()
 	]}
 	confirmLabel={m.settings_teams_remove_member()}
@@ -413,7 +417,7 @@
 	title={m.settings_teams_change_team_role()}
 	resourceName={roleTarget?.member.user.name ?? ''}
 	consequences={[
-		'Owners can manage the team and its workspaces; members cannot.',
+		m.settings_teams_owners_can_manage_the_team_and(),
 		m.settings_teams_the_change_applies_immediately()
 	]}
 	confirmLabel={m.settings_teams_change_role()}
@@ -425,7 +429,7 @@
 	title={m.settings_teams_delete_team()}
 	resourceName={deleteTarget?.name ?? ''}
 	consequences={[
-		'Members lose access to the workspaces this team owns.',
+		m.settings_teams_members_lose_access_to_the_workspaces(),
 		m.settings_teams_the_team_is_removed_its_workspaces_and_con()
 	]}
 	confirmLabel={m.settings_teams_delete_team()}

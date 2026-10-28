@@ -52,4 +52,42 @@ describe('check-i18n', () => {
 <Badge label="SQL" />`;
 		expect(find('src/x.svelte', source)).toEqual([]);
 	});
+
+	it('finds getters, label functions, prop defaults and {#each} titles', () => {
+		const ts = `export const s = {
+	get label() {
+		return 'System status';
+	}
+};
+function rowsLabel(n: number) {
+	return n === 1 ? 'row' : 'rows';
+}`;
+		expect(find('src/lib/x.ts', ts)).toEqual(['System status', 'row', 'rows']);
+		const svelte = `<script lang="ts">
+	let { title = 'Activity' } = $props();
+</script>
+{#each [['overview', 'Overview'], ['activity', m.x()]] as [id, label] (id)}{label}{/each}
+<ConfirmDialog consequences={['The table is not dropped.']} />`;
+		expect(find('src/x.svelte', svelte)).toEqual([
+			'Overview',
+			'The table is not dropped.',
+			'Activity'
+		]);
+	});
+
+	it('finds error fallbacks, toasts and message parameters, even one lowercase word', () => {
+		const source = `<script lang="ts">
+	const e = apiErrorMessage(err, 'Could not load');
+	toasts.success('saved');
+</script>
+{m.x({ value: ok ? 'yes' : 'no' })}
+{status ?? 'pending'}`;
+		expect(find('src/x.svelte', source)).toEqual([
+			'yes',
+			'no',
+			'pending',
+			'Could not load',
+			'saved'
+		]);
+	});
 });

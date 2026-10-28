@@ -263,7 +263,12 @@
 				{ value: '', label: m.monitoring_any() },
 				{ value: 'allowed', label: m.settings_audit_allowed() },
 				{ value: 'denied', label: m.settings_audit_denied() },
-				{ value: 'error', label: 'Error' }
+				{
+					value: 'error',
+					get label() {
+						return m.settings_audit_error();
+					}
+				}
 			]}
 		/>
 		{#if isAdmin}

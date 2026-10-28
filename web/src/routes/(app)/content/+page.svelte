@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -181,12 +182,28 @@
 						{#if space.my_role}<Badge tone="success">{space.my_role}</Badge>{/if}
 					</div>
 					<div class="text-[10px] text-slate-600 dark:text-slate-300">
-						{m.content_queries_metrics_models_folders({
-							value: space.counts?.saved_queries ?? 0,
-							value2: space.counts?.semantic_metrics ?? 0,
-							value3: space.counts?.semantic_models ?? 0,
-							value4: space.counts?.folders ?? 0
-						})}
+						{[
+							plural(
+								space.counts?.saved_queries ?? 0,
+								m.content_query_count_one,
+								m.content_query_count_other
+							),
+							plural(
+								space.counts?.semantic_metrics ?? 0,
+								m.content_metric_count_one,
+								m.content_metric_count_other
+							),
+							plural(
+								space.counts?.semantic_models ?? 0,
+								m.content_model_count_one,
+								m.content_model_count_other
+							),
+							plural(
+								space.counts?.folders ?? 0,
+								m.content_folder_count_one,
+								m.content_folder_count_other
+							)
+						].join(' · ')}
 						{#if space.updated_at}{m.content_updated()} <RelativeTime at={space.updated_at} />{/if}
 					</div>
 				</article>

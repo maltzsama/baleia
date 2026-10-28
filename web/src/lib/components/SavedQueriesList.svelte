@@ -328,7 +328,7 @@
 	title={m.components_savedquerieslist_delete_saved_query()}
 	resourceName={deletingQuery?.name ?? ''}
 	consequences={[
-		'The query and its edit history are removed.',
+		m.components_savedquerieslist_the_query_and_its_edit_history(),
 		m.components_savedquerieslist_executions_already_run_keep_their_history()
 	]}
 	confirmLabel={m.components_savedquerieslist_delete_query()}
@@ -339,7 +339,7 @@
 	title={m.components_savedquerieslist_delete_space()}
 	resourceName={deletingSpace?.name ?? ''}
 	consequences={[
-		'The space and its access list are removed.',
+		m.components_savedquerieslist_the_space_and_its_access_list(),
 		m.components_savedquerieslist_every_folder_and_saved_query_in_it_is_dele(),
 		m.components_savedquerieslist_this_cannot_be_undone()
 	]}

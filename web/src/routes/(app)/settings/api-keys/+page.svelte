@@ -85,7 +85,7 @@
 		const { error: err } = await client.DELETE('/api-keys/{id}', {
 			params: { path: { id: revokeTarget.id } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not revoke the key.'));
+		if (err) throw new Error(apiErrorMessage(err, m.settings_api_keys_could_not_revoke_the_key()));
 		toasts.success(m.settings_api_keys_api_key_revoked());
 		await load();
 	}
@@ -185,7 +185,7 @@
 	title={m.settings_api_keys_revoke_api_key()}
 	resourceName={revokeTarget?.name ?? ''}
 	consequences={[
-		'Any script or agent using this key stops working immediately.',
+		m.settings_api_keys_any_script_or_agent_using_this(),
 		m.settings_api_keys_the_key_cannot_be_recovered_create_a_new_o()
 	]}
 	confirmLabel={m.settings_api_keys_revoke_key()}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { plural } from '$lib/i18n/plural';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
@@ -48,7 +49,7 @@
 	function rowsLabel(statement: StatementState): string {
 		if (statement.rowsReturned == null || statement.status !== 'finished') return '';
 		const rows = statement.rowsReturned;
-		return `${rows.toLocaleString()} ${rows === 1 ? 'row' : 'rows'}`;
+		return plural(rows, m.run_runpanel_row_count_one, m.run_runpanel_row_count_other);
 	}
 
 	// A lone statement is summarised in the header; the list (one row per

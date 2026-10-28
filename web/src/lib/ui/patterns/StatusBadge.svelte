@@ -26,9 +26,27 @@
 					return m.statusbadge_active();
 				}
 			},
-			provisioning: { tone: 'info', label: m.statusbadge_provisioning(), spinning: true },
-			updating: { tone: 'info', label: m.statusbadge_updating(), spinning: true },
-			deprovisioning: { tone: 'warning', label: m.statusbadge_deprovisioning(), spinning: true },
+			provisioning: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_provisioning();
+				},
+				spinning: true
+			},
+			updating: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_updating();
+				},
+				spinning: true
+			},
+			deprovisioning: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_deprovisioning();
+				},
+				spinning: true
+			},
 			error: {
 				tone: 'danger',
 				get label() {
@@ -115,7 +133,12 @@
 					return m.statusbadge_cancelled();
 				}
 			},
-			skipped: { tone: 'neutral', label: m.statusbadge_skipped() }
+			skipped: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_skipped();
+				}
+			}
 		},
 		sync: {
 			ok: {
@@ -124,7 +147,13 @@
 					return m.statusbadge_synced();
 				}
 			},
-			running: { tone: 'info', label: m.statusbadge_syncing(), spinning: true },
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_syncing();
+				},
+				spinning: true
+			},
 			failed: {
 				tone: 'danger',
 				get label() {
@@ -140,21 +169,58 @@
 		},
 		// A catalog's metadata sync (#454): "never" has not run, it is not a success.
 		metadataSync: {
-			never: { tone: 'neutral', label: m.statusbadge_never_synced() },
-			running: { tone: 'info', label: m.statusbadge_syncing(), spinning: true },
-			finished: { tone: 'success', label: m.statusbadge_synced() },
-			failed: { tone: 'danger', label: m.statusbadge_sync_failed() }
+			never: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_never_synced();
+				}
+			},
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_syncing();
+				},
+				spinning: true
+			},
+			finished: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_synced();
+				}
+			},
+			failed: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_sync_failed();
+				}
+			}
 		},
 		reconcile: {
-			ok: { tone: 'success', label: m.statusbadge_in_sync() },
-			drift: { tone: 'warning', label: m.statusbadge_drift() },
+			ok: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_in_sync();
+				}
+			},
+			drift: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_drift();
+				}
+			},
 			failed: {
 				tone: 'danger',
 				get label() {
 					return m.statusbadge_failed();
 				}
 			},
-			running: { tone: 'info', label: m.statusbadge_reconciling(), spinning: true }
+			running: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_reconciling();
+				},
+				spinning: true
+			}
 		},
 		retriever: {
 			active: {
@@ -210,8 +276,18 @@
 					return m.statusbadge_active();
 				}
 			},
-			expired: { tone: 'warning', label: m.statusbadge_expired() },
-			revoked: { tone: 'danger', label: m.statusbadge_revoked() },
+			expired: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_expired();
+				}
+			},
+			revoked: {
+				tone: 'danger',
+				get label() {
+					return m.statusbadge_revoked();
+				}
+			},
 			pending: {
 				tone: 'neutral',
 				get label() {
@@ -220,7 +296,12 @@
 			}
 		},
 		engine: {
-			ok: { tone: 'success', label: m.statusbadge_healthy() },
+			ok: {
+				tone: 'success',
+				get label() {
+					return m.statusbadge_healthy();
+				}
+			},
 			unreachable: {
 				tone: 'danger',
 				get label() {

@@ -81,11 +81,17 @@
 				</option>
 			{/each}
 		</select>
-		<Button size="sm" variant="ghost" onclick={() => assistantStore.create()}>+</Button>
+		<Button
+			size="sm"
+			variant="ghost"
+			ariaLabel={m.assistant_panel_new_conversation()}
+			onclick={() => assistantStore.create()}>+</Button
+		>
 		<Button
 			size="sm"
 			variant="ghost"
 			disabled={!assistantStore.active}
+			ariaLabel={m.assistant_panel_delete_conversation()}
 			onclick={() => assistantStore.active && assistantStore.remove(assistantStore.active.id)}
 		>
 			×

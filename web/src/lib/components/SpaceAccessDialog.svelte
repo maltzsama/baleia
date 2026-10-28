@@ -163,8 +163,18 @@
 				label={m.common_kind()}
 				bind:value={principalType}
 				options={[
-					{ value: 'user', label: 'User' },
-					{ value: 'team', label: 'Team' }
+					{
+						value: 'user',
+						get label() {
+							return m.components_spaceaccessdialog_user();
+						}
+					},
+					{
+						value: 'team',
+						get label() {
+							return m.components_spaceaccessdialog_team();
+						}
+					}
 				]}
 			/>
 			<Select

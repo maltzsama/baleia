@@ -12,6 +12,7 @@
 		loading = false,
 		class: className = '',
 		onclick,
+		ariaLabel,
 		children
 	}: {
 		variant?: Variant;
@@ -21,6 +22,8 @@
 		loading?: boolean;
 		class?: string;
 		onclick?: (event: MouseEvent) => void;
+		/** Accessible name for an icon-only button. */
+		ariaLabel?: string;
 		children: Snippet;
 	} = $props();
 
@@ -45,6 +48,7 @@
 	disabled={disabled || loading}
 	class="{base} {sizes[size]} {variants[variant]} {className}"
 	aria-busy={loading}
+	aria-label={ariaLabel}
 	{onclick}
 >
 	{#if loading}

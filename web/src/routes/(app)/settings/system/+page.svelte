@@ -170,7 +170,9 @@
 								{#if card.section.configured !== undefined}
 									<div>
 										{m.settings_system_configured({
-											value: card.section.configured ? 'yes' : 'no'
+											value: card.section.configured
+												? m.settings_system_yes()
+												: m.settings_system_no()
 										})}
 									</div>
 								{/if}

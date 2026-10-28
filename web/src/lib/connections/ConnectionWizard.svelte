@@ -721,8 +721,18 @@
 						label={m.connections_connectionwizard_permission()}
 						bind:value={grantPermission}
 						options={[
-							{ value: 'read', label: 'Read' },
-							{ value: 'write', label: 'Write' }
+							{
+								value: 'read',
+								get label() {
+									return m.connections_connectionwizard_read();
+								}
+							},
+							{
+								value: 'write',
+								get label() {
+									return m.connections_connectionwizard_write();
+								}
+							}
 						]}
 					/>
 				</div>

@@ -132,7 +132,7 @@
 			params: { path: { id: roleTarget.id } },
 			body: { role: roleValue }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not change the role.'));
+		if (err) throw new Error(apiErrorMessage(err, m.settings_users_could_not_change_the_role()));
 		toasts.success(m.settings_users_role_updated_the_user_signs_in());
 		await load();
 	}
@@ -148,7 +148,7 @@
 			params: { path: { id: suspendTarget.id } },
 			body: { reason: 'admin' }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not suspend the user.'));
+		if (err) throw new Error(apiErrorMessage(err, m.settings_users_could_not_suspend_the_user()));
 		toasts.success(m.settings_users_user_suspended_sessions_and_api_keys());
 		await load();
 	}
@@ -323,7 +323,7 @@
 	title={m.settings_users_change_user_role()}
 	resourceName={roleTarget?.name ?? ''}
 	consequences={[
-		'The change takes effect on the next sign-in; existing sessions are revoked.',
+		m.settings_users_the_change_takes_effect_on_the(),
 		m.settings_users_administrators_can_manage_users_identity_p()
 	]}
 	confirmLabel={m.settings_users_change_role()}
@@ -336,7 +336,7 @@
 	title={m.settings_users_suspend_user()}
 	resourceName={suspendTarget?.name ?? ''}
 	consequences={[
-		'The user is signed out everywhere and cannot sign in again.',
+		m.settings_users_the_user_is_signed_out_everywhere(),
 		m.settings_users_all_api_keys_are_revoked_immediately(),
 		m.settings_users_the_account_is_kept_and_can_be_reinstated()
 	]}

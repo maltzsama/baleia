@@ -411,7 +411,13 @@
 					<Duration ms={selected.duration_ms} />
 				{/if}
 				{#if selected.rows_returned != null}
-					<span>{selected.rows_returned.toLocaleString()} {m.common_rows()}</span>
+					<span
+						>{plural(
+							selected.rows_returned,
+							m.history_row_count_one,
+							m.history_row_count_other
+						)}</span
+					>
 				{/if}
 			</div>
 

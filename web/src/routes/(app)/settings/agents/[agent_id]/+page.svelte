@@ -56,12 +56,12 @@
 		}
 	];
 	const limitFields = [
-		['max_rows_returned', 'Rows per result'],
-		['max_result_bytes', 'Result bytes'],
-		['max_query_runtime_seconds', 'Query runtime (s)'],
-		['max_concurrent_queries', 'Concurrent queries'],
-		['max_queries_per_hour', 'Queries per hour'],
-		['max_tool_calls_per_minute', 'Tool calls per minute']
+		['max_rows_returned', m.settings_agents_detail_limit_rows_returned],
+		['max_result_bytes', m.settings_agents_detail_limit_result_bytes],
+		['max_query_runtime_seconds', m.settings_agents_detail_limit_query_runtime_seconds],
+		['max_concurrent_queries', m.settings_agents_detail_limit_concurrent_queries],
+		['max_queries_per_hour', m.settings_agents_detail_limit_queries_per_hour],
+		['max_tool_calls_per_minute', m.settings_agents_detail_limit_tool_calls_per_minute]
 	] as const;
 
 	const agentId = $derived(page.params.agent_id ?? '');
@@ -268,7 +268,8 @@
 		const { error: err } = await client.DELETE('/agents/{agent_id}/tokens/{token_id}', {
 			params: { path: { agent_id: agentId, token_id: revokeTarget.id } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not revoke the token.'));
+		if (err)
+			throw new Error(apiErrorMessage(err, m.settings_agents_detail_could_not_revoke_the_token()));
 		toasts.success(m.settings_agents_detail_token_revoked());
 		await load();
 	}
@@ -588,7 +589,10 @@
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
 							{#each limitFields as [field, label] (field)}
 								<Input
-									label={m.settings_agents_detail_max({ label, value: ceiling(field) ?? '—' })}
+									label={m.settings_agents_detail_max({
+										label: label(),
+										value: ceiling(field) ?? '—'
+									})}
 									type="number"
 									placeholder={displayLimit(field)?.toString() ??
 										m.connections_providerform_default()}
@@ -712,7 +716,7 @@
 	title={m.settings_agents_revoke_token()}
 	resourceName={revokeTarget?.name ?? ''}
 	consequences={[
-		'Clients using this token stop working immediately.',
+		m.settings_agents_detail_clients_using_this_token_stop_working(),
 		m.settings_agents_the_token_cannot_be_restored_create_a_new()
 	]}
 	confirmLabel={m.settings_agents_detail_revoke_token()}

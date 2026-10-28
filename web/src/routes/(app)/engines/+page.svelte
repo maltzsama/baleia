@@ -155,8 +155,18 @@
 				bind:value={classFilter}
 				options={[
 					{ value: '', label: m.monitoring_any() },
-					{ value: 'federated', label: 'Federated' },
-					{ value: 'direct', label: 'Direct' }
+					{
+						value: 'federated',
+						get label() {
+							return m.engines_federated();
+						}
+					},
+					{
+						value: 'direct',
+						get label() {
+							return m.engines_direct();
+						}
+					}
 				]}
 			/>
 			<Select
@@ -173,8 +183,18 @@
 				options={[
 					{ value: '', label: m.monitoring_any() },
 					{ value: 'ok', label: m.statusbadge_healthy() },
-					{ value: 'unreachable', label: 'Unreachable' },
-					{ value: 'unknown', label: 'Unknown' }
+					{
+						value: 'unreachable',
+						get label() {
+							return m.engines_unreachable();
+						}
+					},
+					{
+						value: 'unknown',
+						get label() {
+							return m.engines_unknown();
+						}
+					}
 				]}
 			/>
 			<Select
@@ -182,8 +202,18 @@
 				bind:value={enabledFilter}
 				options={[
 					{ value: '', label: m.monitoring_any() },
-					{ value: 'enabled', label: 'Enabled' },
-					{ value: 'disabled', label: 'Disabled' }
+					{
+						value: 'enabled',
+						get label() {
+							return m.engines_enabled();
+						}
+					},
+					{
+						value: 'disabled',
+						get label() {
+							return m.engines_disabled();
+						}
+					}
 				]}
 			/>
 		</div>

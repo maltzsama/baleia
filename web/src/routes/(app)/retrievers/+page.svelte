@@ -248,7 +248,7 @@
 		title={m.retrievers_remove_retriever()}
 		resourceName={deleting.name}
 		consequences={[
-			'The destination table is not dropped.',
+			m.retrievers_the_destination_table_is_not_dropped(),
 			m.retrievers_refresh_history_is_removed()
 		]}
 		confirmLabel={m.retrievers_remove_retriever()}

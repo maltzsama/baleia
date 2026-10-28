@@ -299,7 +299,7 @@
 			<Input bind:value={search} placeholder={m.connections_search_connections()} />
 		</div>
 		<span class="ml-auto font-mono text-xs text-slate-600 dark:text-slate-300"
-			>{filtered.length} {m.common_connection()}{filtered.length === 1 ? '' : 's'}</span
+			>{plural(filtered.length, m.connections_count_one, m.connections_count_other)}</span
 		>
 	</div>
 

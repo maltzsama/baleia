@@ -77,7 +77,12 @@
 			label={m.common_space()}
 			bind:value={spaceId}
 			options={[
-				{ value: '', label: 'All' },
+				{
+					value: '',
+					get label() {
+						return m.metrics_all();
+					}
+				},
 				...spaces.map((space) => ({ value: space.id, label: space.name }))
 			]}
 		/>

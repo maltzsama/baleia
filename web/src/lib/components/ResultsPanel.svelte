@@ -113,7 +113,10 @@
 	onDestroy(() => store.cancel());
 
 	function statementTitle(statement: QueryStatement): string {
-		return statement.sql.trim().split('\n')[0]?.slice(0, 60) || `Statement ${statement.position}`;
+		return (
+			statement.sql.trim().split('\n')[0]?.slice(0, 60) ||
+			m.components_resultspanel_statement({ position: statement.position })
+		);
 	}
 
 	async function download() {

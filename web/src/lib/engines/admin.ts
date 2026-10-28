@@ -147,21 +147,19 @@ export function readOnlyGuarantee(engine: Engine): {
 		return {
 			label: m.engines_admin_read_only_enforced(),
 			tone: 'success',
-			detail: 'The engine itself rejects writes, so read-only grants and agents are safe.'
+			detail: m.engines_admin_the_engine_itself_rejects_writes_so()
 		};
 	}
 	if (engine.credentials_read_only) {
 		return {
 			label: m.engines_admin_read_only_via_credentials(),
 			tone: 'warning',
-			detail:
-				'The engine can write; the connection asserts its credentials only allow reads. Read-only grants rely on that assertion.'
+			detail: m.engines_admin_the_engine_can_write_the_connection()
 		};
 	}
 	return {
 		label: m.engines_admin_read_only_not_available(),
 		tone: 'danger',
-		detail:
-			'Read-only grants and agents cannot use this engine until an administrator asserts read-only credentials on its connection.'
+		detail: m.engines_admin_read_only_grants_and_agents_cannot()
 	};
 }

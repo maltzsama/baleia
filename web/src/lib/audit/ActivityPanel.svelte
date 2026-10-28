@@ -11,7 +11,7 @@
 		resourceType,
 		resourceId,
 		limit = 50,
-		title = 'Activity'
+		title = m.audit_activitypanel_activity()
 	}: {
 		resourceType: string;
 		resourceId: string;

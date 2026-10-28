@@ -204,18 +204,33 @@
 		if (!engine || !impact) return [];
 		if (pending === 'delete') {
 			return [
-				`${impact.native_catalogs} native catalog(s) and their bindings are deleted with the engine.`,
-				`${impact.managed_bindings} managed binding(s) block deletion while they exist.`,
-				`${impact.running_executions} running execution(s) block deletion.`,
-				`${impact.grants} grant(s), ${impact.metrics} metric(s) and ${impact.saved_queries_targeting} saved quer(ies) target its catalogs.`
+				m.engines_detail_native_catalog_s_and_their_bindings({
+					native_catalogs: impact.native_catalogs
+				}),
+				m.engines_detail_managed_binding_s_block_deletion_while({
+					managed_bindings: impact.managed_bindings
+				}),
+				m.engines_detail_running_execution_s_block_deletion({
+					running_executions: impact.running_executions
+				}),
+				m.engines_detail_grant_s_metric_s_and_saved({
+					grants: impact.grants,
+					metrics: impact.metrics,
+					saved_queries_targeting: impact.saved_queries_targeting
+				})
 			];
 		}
 		return [
 			pending === 'disable'
-				? 'New queries stop using this engine until it is enabled again.'
-				: 'The engine becomes available for queries again.',
-			`${impact.native_catalogs} native catalog(s), ${impact.managed_bindings} managed binding(s).`,
-			`${impact.running_executions} execution(s) are running now.`
+				? m.engines_detail_new_queries_stop_using_this_engine()
+				: m.engines_detail_the_engine_becomes_available_for_queries(),
+			m.engines_detail_native_catalog_s_managed_binding_s({
+				native_catalogs: impact.native_catalogs,
+				managed_bindings: impact.managed_bindings
+			}),
+			m.engines_detail_execution_s_are_running_now({
+				running_executions: impact.running_executions
+			})
 		];
 	}
 
@@ -281,7 +296,7 @@
 			role="tablist"
 			aria-label={m.engines_detail_engine_tabs()}
 		>
-			{#each [['overview', 'Overview'], ['catalogs', 'Catalogs'], ...(federated ? [['observed', m.engines_observed()], ['reconcile', m.settings_system_reconcile()]] : []), ['activity', 'Activity']] as [value, label] (value)}
+			{#each [['overview', m.engines_detail_overview()], ['catalogs', m.engines_detail_catalogs()], ...(federated ? [['observed', m.engines_observed()], ['reconcile', m.settings_system_reconcile()]] : []), ['activity', m.engines_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -661,8 +676,10 @@
 	confirmLabel={m.engines_detail_apply_changes()}
 	consequences={[
 		...mutating.map((a) => `${a.kind} ${a.catalog} (${a.reason})`),
-		`At most ${report?.max_actions ?? m.engines_the_configured_cap()} changes run; the rest are reported.`,
-		'Catalogs Baleia does not manage are adopted and never changed.'
+		m.engines_detail_at_most_changes_run_the_rest({
+			engines_the_configured_cap: report?.max_actions ?? m.engines_the_configured_cap()
+		}),
+		m.engines_detail_catalogs_baleia_does_not_manage_are()
 	]}
 	onconfirm={applyDrift}
 />

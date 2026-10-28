@@ -69,12 +69,14 @@
 				params: { path: { id: editing.id } },
 				body: body as Update
 			});
-			if (err) throw new Error(apiErrorMessage(err, 'Could not save the provider.'));
+			if (err)
+				throw new Error(apiErrorMessage(err, m.settings_identity_could_not_save_the_provider()));
 		} else {
 			const { error: err } = await client.POST('/admin/identity-providers', {
 				body: body as Create
 			});
-			if (err) throw new Error(apiErrorMessage(err, 'Could not create the provider.'));
+			if (err)
+				throw new Error(apiErrorMessage(err, m.settings_identity_could_not_create_the_provider()));
 		}
 		await load();
 	}
@@ -129,7 +131,8 @@
 		const { error: err } = await client.DELETE('/admin/identity-providers/{id}', {
 			params: { path: { id: deleting.id }, query: { suspend_users: true } }
 		});
-		if (err) throw new Error(apiErrorMessage(err, 'Could not delete the provider.'));
+		if (err)
+			throw new Error(apiErrorMessage(err, m.settings_identity_could_not_delete_the_provider()));
 		deleteOpen = false;
 		await load();
 	}
@@ -248,7 +251,7 @@
 	title={m.settings_identity_delete_identity_provider()}
 	resourceName={deleting?.name ?? ''}
 	consequences={[
-		'Users linked to this provider are suspended and detached; they are never deleted.',
+		m.settings_identity_users_linked_to_this_provider_are(),
 		m.settings_identity_their_refresh_tokens_and_api_keys_are_revo(),
 		m.settings_identity_the_provider_configuration_and_stored_secr()
 	]}

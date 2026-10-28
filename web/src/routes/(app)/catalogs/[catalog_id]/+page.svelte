@@ -393,9 +393,14 @@
 	function consequences(): string[] {
 		if (!impact) return [];
 		return [
-			`${impact.bindings} binding(s) will be deprovisioned.`,
-			`${impact.grants} workspace grant(s) and ${impact.saved_queries_targeting} saved quer(ies) target it.`,
-			`${impact.running_executions} execution(s) are running now.`
+			m.catalogs_detail_binding_s_will_be_deprovisioned({ bindings: impact.bindings }),
+			m.catalogs_detail_workspace_grant_s_and_saved_quer({
+				grants: impact.grants,
+				saved_queries_targeting: impact.saved_queries_targeting
+			}),
+			m.catalogs_detail_execution_s_are_running_now({
+				running_executions: impact.running_executions
+			})
 		];
 	}
 
@@ -450,7 +455,7 @@
 			role="tablist"
 			aria-label={m.catalogs_detail_catalog_tabs()}
 		>
-			{#each [['overview', 'Overview'], ['bindings', 'Bindings'], ['metadata', 'Metadata'], ['access', m.catalogs_access()], ['activity', 'Activity']] as [value, label] (value)}
+			{#each [['overview', m.catalogs_detail_overview()], ['bindings', m.catalogs_detail_bindings()], ['metadata', m.catalogs_detail_metadata()], ['access', m.catalogs_access()], ['activity', m.catalogs_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -852,8 +857,18 @@
 			label={m.common_permission()}
 			bind:value={grantPermission}
 			options={[
-				{ value: 'read', label: 'Read' },
-				{ value: 'write', label: 'Write' }
+				{
+					value: 'read',
+					get label() {
+						return m.catalogs_detail_read();
+					}
+				},
+				{
+					value: 'write',
+					get label() {
+						return m.catalogs_detail_write();
+					}
+				}
 			]}
 		/>
 		{#if grantError}<p class="text-danger" role="alert">{grantError}</p>{/if}
@@ -902,7 +917,7 @@
 	title={m.common_revoke_catalog_access()}
 	resourceName={revokeWorkspace?.name ?? ''}
 	confirmLabel={m.catalogs_detail_revoke()}
-	consequences={['Members of this workspace lose access to the catalog.']}
+	consequences={[m.catalogs_detail_members_of_this_workspace_lose_access()]}
 	onconfirm={async () => {
 		if (revokeWorkspace) await revoke(revokeWorkspace.id);
 	}}

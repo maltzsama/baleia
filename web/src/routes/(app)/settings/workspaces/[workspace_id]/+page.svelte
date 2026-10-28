@@ -248,7 +248,7 @@
 			role="tablist"
 			aria-label={m.settings_workspaces_detail_workspace_tabs()}
 		>
-			{#each [['general', 'General'], ['target', m.settings_workspaces_default_target()], ['catalogs', 'Catalogs'], ['members', 'Members'], ['activity', 'Activity']] as [value, label] (value)}
+			{#each [['general', m.settings_workspaces_detail_general()], ['target', m.settings_workspaces_default_target()], ['catalogs', m.settings_workspaces_detail_catalogs()], ['members', m.settings_workspaces_detail_members()], ['activity', m.settings_workspaces_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -497,12 +497,16 @@
 	resourceName={revokeCatalog?.catalog_name ?? ''}
 	confirmLabel={m.settings_workspaces_detail_revoke()}
 	consequences={[
-		`${revokeImpact?.saved_queries ?? 0} saved quer(ies) target this catalog and fall back to the workspace default.`,
-		`${revokeImpact?.metrics ?? 0} metric(s) use it.`,
+		m.settings_workspaces_detail_saved_quer_ies_target_this_catalog({
+			value: revokeImpact?.saved_queries ?? 0
+		}),
+		m.settings_workspaces_detail_metric_s_use_it({ value: revokeImpact?.metrics ?? 0 }),
 		revokeImpact?.default_target_affected
-			? 'The workspace default target uses this catalog and will be cleared.'
-			: 'The workspace default target is not affected.',
-		`${revokeImpact?.running_executions ?? 0} execution(s) are running and continue to completion.`
+			? m.settings_workspaces_detail_the_workspace_default_target_uses_this()
+			: m.settings_workspaces_detail_the_workspace_default_target_is_not(),
+		m.settings_workspaces_detail_execution_s_are_running_and_continue({
+			value: revokeImpact?.running_executions ?? 0
+		})
 	]}
 	onconfirm={confirmRevoke}
 />
@@ -514,9 +518,15 @@
 	confirmLabel={m.settings_workspaces_detail_delete_workspace()}
 	typeToConfirm
 	consequences={[
-		`${impact?.spaces ?? 0} space(s), ${impact?.saved_queries ?? 0} saved quer(ies) and ${impact?.metrics ?? 0} metric(s) are deleted.`,
-		`${impact?.running_executions ?? 0} execution(s) must finish first.`,
-		'Grants and defaults are removed with the workspace.'
+		m.settings_workspaces_detail_space_s_saved_quer_ies_and({
+			value: impact?.spaces ?? 0,
+			value2: impact?.saved_queries ?? 0,
+			value3: impact?.metrics ?? 0
+		}),
+		m.settings_workspaces_detail_execution_s_must_finish_first({
+			value: impact?.running_executions ?? 0
+		}),
+		m.settings_workspaces_detail_grants_and_defaults_are_removed_with()
 	]}
 	onconfirm={confirmDelete}
 />

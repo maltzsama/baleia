@@ -38,8 +38,8 @@ export function modelPaletteProvider(options: {
 					items.push({
 						id: `model-${model.id}-${field.name}`,
 						label: field.label,
-						detail: `${model.label} · ${field.kind === 'metrics' ? 'metric' : 'dimension'}`,
-						group: 'Models',
+						detail: `${model.label} · ${field.kind === 'metrics' ? m.semantic_palette_metric() : m.semantic_palette_dimension()}`,
+						group: m.semantic_palette_models(),
 						run: async () => {
 							const explore: ExploreQuery = { model: model.slug, [field.kind]: [field.name] };
 							const out = await compileExplore(workspaceId, explore, options.bindingId() || null);

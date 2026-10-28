@@ -155,7 +155,8 @@
 				client.GET('/workspaces/{id}/targets', { params: { path: { id: wid } } }),
 				loadEngines().catch(() => [] as Engine[])
 			]);
-			if (error) throw new Error(apiErrorMessage(error, 'Failed to load targets'));
+			if (error)
+				throw new Error(apiErrorMessage(error, m.components_queryeditor_failed_to_load_targets()));
 			targets = data ?? [];
 			engines = loadedEngines;
 		} catch (e) {
@@ -436,7 +437,7 @@
 					}
 				]
 					.filter((action) => action.label.toLowerCase().includes(q))
-					.map((action) => ({ ...action, group: 'Actions' }));
+					.map((action) => ({ ...action, group: m.components_queryeditor_actions() }));
 			}
 		});
 		registerProvider({
@@ -456,7 +457,7 @@
 						id: `query-${item.id}`,
 						label: item.name,
 						detail: item.slug,
-						group: 'Saved queries',
+						group: m.components_queryeditor_saved_queries(),
 						run: () => {
 							editor.openSavedQuery(item, !savedQueries.canEdit(item.space_id));
 						}
@@ -476,7 +477,7 @@
 						id: `table-${result.table_id}`,
 						label: result.table,
 						detail: result.namespace.join('.'),
-						group: 'Tables',
+						group: m.components_queryeditor_tables(),
 						run: () => editor.insert(`${result.namespace.join('.')}.${result.table}`)
 					}));
 			}
@@ -500,7 +501,7 @@
 						id: `metric-${metric.id}`,
 						label: metric.label,
 						detail: metric.slug,
-						group: 'Metrics',
+						group: m.components_queryeditor_metrics(),
 						run: async () => {
 							const { data: rendered } = await client.GET(
 								'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
@@ -716,7 +717,10 @@
 			params: { path: { name } },
 			body: { sql: sqlText }
 		});
-		if (error || !data) throw new Error(apiErrorMessage(error, 'Could not split the script'));
+		if (error || !data)
+			throw new Error(
+				apiErrorMessage(error, m.components_queryeditor_could_not_split_the_script())
+			);
 		return data;
 	}
 
@@ -810,7 +814,8 @@
 			const { error } = await client.POST('/workspaces/{id}/executions/{execution_id}/cancel', {
 				params: { path: { id: workspaceId, execution_id: tab.executionId } }
 			});
-			if (error) throw new Error(apiErrorMessage(error, 'Could not cancel'));
+			if (error)
+				throw new Error(apiErrorMessage(error, m.components_queryeditor_could_not_cancel()));
 		} catch (e) {
 			tab.errorMsg = errorMessage(e);
 		}
@@ -896,7 +901,8 @@
 					rerun: { execution_id: tab.executionId, from_position: fromPosition }
 				}
 			});
-			if (error || !data) throw new Error(apiErrorMessage(error, 'Could not re-run'));
+			if (error || !data)
+				throw new Error(apiErrorMessage(error, m.components_queryeditor_could_not_re_run()));
 			if (!isOpen(tab.id)) return;
 			tab.results = [];
 			tab.errorMsg = '';
@@ -1276,7 +1282,7 @@
 
 	<Modal bind:open={shortcutsOpen} title={m.components_queryeditor_keyboard_shortcuts()}>
 		<ul class="grid gap-1 text-[12px] text-slate-600 dark:text-slate-300">
-			{#each [['Run current statement', 'Mod-Enter'], ['Run all', 'Shift-Mod-Enter'], ['Save', 'Mod-S'], ['Save as a copy', 'Shift-Mod-S'], ['Quick open', 'Mod-P'], ['Command palette', 'Mod-K'], ['Format', 'Shift-Alt-F'], ['Explain', 'Mod-E'], ['New tab', 'Alt-N'], ['Close tab', 'Alt-W']] as [label, keys] (label)}
+			{#each [[m.components_queryeditor_run_current_statement(), 'Mod-Enter'], [m.components_queryeditor_run_all(), 'Shift-Mod-Enter'], [m.components_queryeditor_save(), 'Mod-S'], [m.components_queryeditor_save_as_a_copy(), 'Shift-Mod-S'], [m.components_queryeditor_quick_open(), 'Mod-P'], [m.components_queryeditor_command_palette(), 'Mod-K'], [m.components_queryeditor_format(), 'Shift-Alt-F'], [m.components_queryeditor_explain(), 'Mod-E'], [m.components_queryeditor_new_tab(), 'Alt-N'], [m.components_queryeditor_close_tab(), 'Alt-W']] as [label, keys] (label)}
 				<li class="flex justify-between gap-4">
 					<span>{label}</span>
 					<kbd class="font-mono text-[11px]">{formatKeys(keys)}</kbd>

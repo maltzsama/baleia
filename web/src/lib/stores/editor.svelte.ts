@@ -1,6 +1,7 @@
 // Typed workbench state (#29, #112). Components read and mutate tabs here
 // instead of exchanging `window` CustomEvents. Drafts persist per user ×
 // workspace through IndexedDB (#112).
+import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import { loadDrafts, saveDrafts, type PersistedTab } from '$lib/workbench/drafts';
 
@@ -60,7 +61,7 @@ function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
 		rowCount: 0,
 		durationMs: 0,
 		errorMsg: '',
-		statusText: 'Ready',
+		statusText: m.stores_editorsvelte_ready(),
 		page: 1,
 		readOnly: false,
 		dirty: false,

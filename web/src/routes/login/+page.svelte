@@ -184,7 +184,7 @@
 			} else if (response.status === 503) {
 				showError(m.login_password_reset_by_e_mail_is_not_configured());
 			} else {
-				showError(`Could not request a reset link (HTTP ${response.status}). Try again.`);
+				showError(m.login_could_not_request_a_reset_link({ status: response.status }));
 			}
 		} catch {
 			showError(m.setup_connection_error_is_the_server_running());

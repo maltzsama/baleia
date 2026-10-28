@@ -389,7 +389,7 @@
 			role="tablist"
 			aria-label={m.monitoring_monitoring_tabs()}
 		>
-			{#each [['cluster', m.monitoring_cluster()], ['queries', 'Queries'], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
+			{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -440,7 +440,7 @@
 				/>
 			{:else}
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-					{#each [['Workers', cluster.latest.active_workers], ['Running', cluster.latest.running_queries], ['Queued', cluster.latest.queued_queries], ['Blocked', cluster.latest.blocked_queries]] as [label, value] (label)}
+					{#each [[m.monitoring_workers(), cluster.latest.active_workers], [m.monitoring_running(), cluster.latest.running_queries], [m.monitoring_queued(), cluster.latest.queued_queries], [m.monitoring_blocked(), cluster.latest.blocked_queries]] as [label, value] (label)}
 						<div class="rounded-lg border border-border bg-bg-panel p-3">
 							<div class="text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300">
 								{label}
@@ -473,7 +473,12 @@
 					label={m.monitoring_scope()}
 					bind:value={scope}
 					options={[
-						{ value: 'mine', label: 'Mine' },
+						{
+							value: 'mine',
+							get label() {
+								return m.monitoring_mine();
+							}
+						},
 						...(isAdmin ? [{ value: 'all', label: m.monitoring_everyone() }] : [])
 					]}
 					onchange={() => loadQueries()}
@@ -483,10 +488,30 @@
 					bind:value={queryState}
 					options={[
 						{ value: '', label: m.monitoring_any() },
-						{ value: 'running', label: 'Running' },
-						{ value: 'finished', label: 'Finished' },
-						{ value: 'failed', label: 'Failed' },
-						{ value: 'cancelled', label: 'Cancelled' }
+						{
+							value: 'running',
+							get label() {
+								return m.monitoring_running();
+							}
+						},
+						{
+							value: 'finished',
+							get label() {
+								return m.monitoring_finished();
+							}
+						},
+						{
+							value: 'failed',
+							get label() {
+								return m.monitoring_failed();
+							}
+						},
+						{
+							value: 'cancelled',
+							get label() {
+								return m.monitoring_cancelled();
+							}
+						}
 					]}
 					onchange={() => loadQueries()}
 				/>

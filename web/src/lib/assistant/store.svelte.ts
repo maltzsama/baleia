@@ -38,7 +38,7 @@ class AssistantStore {
 				params: { query: { workspace_id: workspaceId } }
 			});
 			if (error || !data) {
-				this.error = apiErrorMessage(error, 'Could not load conversations.');
+				this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_load_conversations());
 				return;
 			}
 			this.conversations = data;
@@ -57,7 +57,10 @@ class AssistantStore {
 			params: { path: { id } }
 		});
 		if (error || !data) {
-			this.error = apiErrorMessage(error, 'Could not open the conversation.');
+			this.error = apiErrorMessage(
+				error,
+				m.assistant_storesvelte_could_not_open_the_conversation()
+			);
 			return;
 		}
 		this.stop();
@@ -82,7 +85,7 @@ class AssistantStore {
 			body: { workspace_id: this.workspaceId }
 		});
 		if (error || !data) {
-			this.error = apiErrorMessage(error, 'Could not start a conversation.');
+			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_start_a_conversation());
 			return;
 		}
 		this.conversations = [data, ...this.conversations];
@@ -100,7 +103,7 @@ class AssistantStore {
 		});
 		if (error) {
 			this.state = 'idle';
-			this.error = apiErrorMessage(error, 'Could not send the message.');
+			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
 		}
 	}
 
