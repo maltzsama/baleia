@@ -1021,8 +1021,8 @@
 	</div>
 
 	<div class="flex items-center py-1.5 px-3 gap-1.5 border-b border-border bg-bg-toolbar shrink-0">
-		<!-- Run is the selection, or the statement at the cursor, like ⌘↵ (#395).
-		     ⇧⌘↵ and the palette run the whole script (#417). -->
+		<!-- Run is the selection, or the statement at the cursor, like Ctrl/⌘+Enter (#395).
+		     Ctrl/⌘+Shift+Enter and the palette run the whole script (#417). -->
 		<button
 			onclick={() => void runCurrent()}
 			disabled={executing}
@@ -1034,7 +1034,9 @@
 				><polygon points="5 3 19 12 5 21 5 3" /></svg
 			>
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
-			<span class="text-[10px] opacity-70 font-normal">⌘↵</span>
+			<span class="text-[10px] opacity-70 font-normal"
+				>{m.components_queryeditor_run_shortcut()}</span
+			>
 		</button>
 		{#if executing && canCancel}
 			<button
@@ -1271,7 +1273,7 @@
 
 	<Modal bind:open={shortcutsOpen} title={m.components_queryeditor_keyboard_shortcuts()}>
 		<ul class="grid gap-1 text-[12px] text-slate-600 dark:text-slate-300">
-			{#each [['Run current statement', 'Mod-Enter'], ['Run all', 'Shift-Mod-Enter'], ['Save', 'Mod-S'], ['Save as a copy', 'Shift-Mod-S'], ['Quick open', 'Mod-P'], ['Command palette', 'Mod-K'], ['Format', 'Shift-Alt-F'], ['Explain', 'Mod-E'], ['New tab', 'Alt-N'], ['Close tab', 'Alt-W']] as [label, keys] (label)}
+			{#each [['Run current statement', 'Ctrl/⌘+Enter'], ['Run all', 'Ctrl/⌘+Shift+Enter'], ['Save', 'Ctrl/⌘+S'], ['Save as a copy', 'Ctrl/⌘+Shift+S'], ['Quick open', 'Ctrl/⌘+P'], ['Command palette', 'Ctrl/⌘+K'], ['Format', 'Shift+Alt+F'], ['Explain', 'Ctrl/⌘+E'], ['New tab', 'Alt+N'], ['Close tab', 'Alt+W']] as [label, keys] (label)}
 				<li class="flex justify-between gap-4">
 					<span>{label}</span>
 					<kbd class="font-mono text-[11px]">{keys}</kbd>
