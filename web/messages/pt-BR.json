@@ -1065,5 +1065,5 @@
 	"monitoring_kill_this_query": "Encerrar esta query?",
 	"monitoring_kill_consequence_stop": "“{query}” é interrompida em {engine}, e {user} recebe um erro em vez dos resultados.",
 	"monitoring_kill_consequence_undo": "Não dá para desfazer: a query precisa ser executada de novo.",
-	"monitoring_query_killed": "Query encerrada."
+	"monitoring_query_killed": "Cancelamento solicitado; a query para em instantes."
 }

@@ -5,6 +5,7 @@ import { makeMe, makeMetadataCatalog, makeWorkspace } from '../../../test/factor
 import { renderPage } from '../../../test/render';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { authStore } from '$lib/stores/auth.svelte';
+import { toasts } from '$lib/ui/toast.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import MonitoringPage from './+page.svelte';
 
@@ -218,6 +219,69 @@ describe('monitoring page', () => {
 
 			await waitFor(() => expect(screen.queryByText('No maintenance runs yet.')).toBeNull());
 			expect(screen.getAllByText('sales.orders').length).toBeGreaterThan(1);
+		});
+	});
+
+	// #458: a slow kill is sent once however often Kill query is pressed, and a
+	// refusal stays in the dialog.
+	describe('kill request', () => {
+		const running = {
+			trino_query_id: 'q9',
+			state: 'running',
+			user: 'ada',
+			sql_first_line: 'SELECT * FROM orders',
+			catalog: 'lake',
+			created_at: '2026-10-01T12:00:00Z'
+		};
+
+		async function confirmKill() {
+			render(MonitoringPage);
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+			await fireEvent.click(await screen.findByRole('button', { name: 'Kill' }));
+			const dialog = await screen.findByRole('dialog');
+			return { dialog, confirm: within(dialog).getByRole('button', { name: 'Kill query' }) };
+		}
+
+		it('sends one request while a slow kill is pending', async () => {
+			let kills = 0;
+			let release: () => void = () => {};
+			const gate = new Promise<void>((resolve) => (release = resolve));
+			server.use(
+				http.get('/engines/{id}/monitoring/queries', ({ response }) =>
+					response(200).json({ items: [running] })
+				),
+				http.post('/engines/{id}/monitoring/queries/{query_id}', async ({ response }) => {
+					kills++;
+					await gate;
+					return response(202).empty();
+				})
+			);
+			const { confirm } = await confirmKill();
+			await fireEvent.click(confirm);
+			await fireEvent.click(confirm);
+			await fireEvent.click(confirm);
+			release();
+			await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+			expect(kills).toBe(1);
+			expect(toasts.items.map((toast) => toast.message)).toContain(
+				'Cancellation requested; the query stops shortly.'
+			);
+		});
+
+		it('keeps a refused kill in the dialog', async () => {
+			server.use(
+				http.get('/engines/{id}/monitoring/queries', ({ response }) =>
+					response(200).json({ items: [running] })
+				),
+				http.post('/engines/{id}/monitoring/queries/{query_id}', ({ response }) =>
+					response(409).json({ code: 'conflict', message: 'the query already ended' })
+				)
+			);
+			const { dialog, confirm } = await confirmKill();
+			await fireEvent.click(confirm);
+			// The API error is shown through the error catalog (FD7), in the dialog.
+			await waitFor(() => expect(dialog.textContent).toContain('The resource already exists.'));
+			expect(screen.getByRole('dialog')).toBeTruthy();
 		});
 	});
 

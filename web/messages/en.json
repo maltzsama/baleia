@@ -1065,5 +1065,5 @@
 	"monitoring_kill_this_query": "Kill this query?",
 	"monitoring_kill_consequence_stop": "“{query}” is stopped on {engine}, and {user} gets an error instead of its results.",
 	"monitoring_kill_consequence_undo": "This cannot be undone: the query has to be run again.",
-	"monitoring_query_killed": "Query killed."
+	"monitoring_query_killed": "Cancellation requested; the query stops shortly."
 }
