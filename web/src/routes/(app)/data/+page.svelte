@@ -4,46 +4,72 @@
 	import DataSourceTree from '$lib/components/DataSourceTree.svelte';
 	import TableDetail from '$lib/components/TableDetail.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
+	import ErrorState from '$lib/ui/ErrorState.svelte';
+	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import { selection } from '$lib/stores/selection.svelte';
-	import { searchMetadata, type TableRef } from '$lib/metadata/client';
+	import { findTable, loadCatalogs, type TableRef } from '$lib/metadata/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	let selectedTable = $state<TableRef | null>(null);
 	let search = $state('');
-	let tree = $state<{ handleSearchKey: (event: KeyboardEvent) => void } | null>(null);
+	let tree = $state<DataSourceTree | null>(null);
 
-	onMount(async () => {
-		if (selectedTable || !selection.table) return;
-		await workspaceStore.load();
-		const ws = workspaceStore.current?.id;
-		if (!ws) return;
+	// A deep link (?catalog=<id>&ns=&table=) restores the table it names in
+	// that catalog, revealed in the tree; it never falls back to another one.
+	type LinkState = 'idle' | 'resolving' | 'missing' | 'error';
+	let linkState = $state<LinkState>('idle');
+	let linkError = $state('');
+
+	async function restoreLink() {
+		const catalogParam = selection.catalog;
+		const ns = selection.ns;
+		const table = selection.table;
+		if (!catalogParam || !tree) return;
+		linkState = 'resolving';
+		linkError = '';
 		try {
-			const results = await searchMetadata(ws, selection.table, { kind: 'table', limit: 50 });
-			const match = results.find(
-				(result) =>
-					result.kind === 'table' &&
-					result.table === selection.table &&
-					result.namespace.join('.') === selection.ns.join('.')
-			);
-			if (match) {
-				selectedTable = {
-					tableId: match.table_id,
-					catalogId: match.catalog_id,
-					catalogName: selection.catalog,
-					namespace: match.namespace,
-					tableName: match.table,
-					bindings: []
-				};
+			await workspaceStore.load();
+			const ws = workspaceStore.current?.id;
+			if (!ws) {
+				linkState = 'idle';
+				return;
 			}
-		} catch {
-			// The tree is still usable; a bad deep link just opens nothing.
+			// Links written before #455 carry the catalog name.
+			const catalogs = await loadCatalogs(ws);
+			const catalog =
+				catalogs.find((item) => item.id === catalogParam) ??
+				catalogs.find((item) => item.name === catalogParam);
+			if (!catalog) {
+				linkState = table ? 'missing' : 'idle';
+				return;
+			}
+			if (!table) {
+				await tree.revealCatalog(catalog.id);
+				linkState = 'idle';
+				return;
+			}
+			const tableId = await findTable(ws, catalog.id, ns, table);
+			if (!tableId) {
+				linkState = 'missing';
+				return;
+			}
+			await tree.revealTable(catalog.id, ns, { id: tableId, name: table });
+			linkState = 'idle';
+		} catch (e) {
+			linkError = e instanceof Error ? e.message : String(e);
+			linkState = 'error';
 		}
+	}
+
+	onMount(() => {
+		if (!selectedTable) void restoreLink();
 	});
 
 	function select(table: TableRef | null) {
 		selectedTable = table;
+		linkState = 'idle';
 		selection.set({
-			catalog: table?.catalogName ?? '',
+			catalog: table?.catalogId ?? '',
 			ns: table?.namespace ?? [],
 			table: table?.tableName ?? ''
 		});
@@ -79,6 +105,24 @@
 	>
 		{#if selectedTable}
 			<TableDetail table={selectedTable} />
+		{:else if linkState === 'resolving'}
+			<div class="space-y-2 p-4" role="status" aria-label={m.data_opening_the_linked_table()}>
+				<Skeleton class="h-5 w-1/3" />
+				<Skeleton class="h-4 w-2/3" />
+			</div>
+		{:else if linkState === 'missing'}
+			<EmptyState
+				title={m.data_table_not_found()}
+				description={m.data_table_not_found_description({
+					table: [...selection.ns, selection.table].join('.')
+				})}
+			/>
+		{:else if linkState === 'error'}
+			<ErrorState
+				title={m.data_could_not_open_the_linked_table()}
+				message={linkError}
+				onretry={restoreLink}
+			/>
 		{:else}
 			<EmptyState
 				title="Select a table"

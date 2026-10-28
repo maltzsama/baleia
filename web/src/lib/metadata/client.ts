@@ -198,3 +198,39 @@ export function searchMetadata(
 			return data;
 		});
 }
+
+// A deep link names a table by catalog, namespace and name. Search ranks an
+// exact name first, so it usually answers in one request; a namespace with
+// many tables of that name falls back to its table pages.
+const FIND_TABLE_PAGES = 20;
+
+/** The id of the table a deep link names, or null when the catalog has none. */
+export async function findTable(
+	workspaceId: string,
+	catalogId: string,
+	namespace: string[],
+	table: string
+): Promise<string | null> {
+	const sameNamespace = (path: string[]) =>
+		path.length === namespace.length && path.every((part, i) => part === namespace[i]);
+	if (table.length >= 2) {
+		const hits = await searchMetadata(workspaceId, table, { kind: 'table', catalogId, limit: 50 });
+		const hit = hits.find(
+			(result) =>
+				result.kind === 'table' &&
+				result.catalog_id === catalogId &&
+				result.table === table &&
+				sameNamespace(result.namespace)
+		);
+		if (hit) return hit.table_id;
+	}
+	let cursor: string | undefined;
+	for (let page = 0; page < FIND_TABLE_PAGES; page++) {
+		const list = await loadTables(workspaceId, catalogId, namespace, cursor);
+		const found = list.items.find((item) => item.name === table);
+		if (found) return found.id;
+		if (!list.next_cursor) return null;
+		cursor = list.next_cursor;
+	}
+	return null;
+}

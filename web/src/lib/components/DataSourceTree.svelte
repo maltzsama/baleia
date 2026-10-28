@@ -288,23 +288,48 @@
 
 	/** Expands the tree to a search hit and selects it. */
 	async function reveal(hit: MetadataSearchResult) {
+		await revealTable(hit.catalog_id, hit.namespace, { id: hit.table_id, name: hit.table });
+		search = '';
+	}
+
+	/** A granted catalog by id, waiting for the roots when they are still loading. */
+	async function catalogById(catalogId: string): Promise<MetadataCatalog | undefined> {
+		const list = catalogs.length > 0 ? catalogs : await loadCatalogs(workspaceId);
+		return list.find((c) => c.id === catalogId);
+	}
+
+	/** Expands a catalog's root, for a link that names only the catalog. */
+	export async function revealCatalog(catalogId: string): Promise<boolean> {
+		const catalog = await catalogById(catalogId);
+		if (!catalog) return false;
 		view = 'catalog';
-		const catalog = catalogs.find((c) => c.id === hit.catalog_id);
-		if (!catalog) return;
+		expanded.add(nodeKey(catalog.id, []));
+		await ensureLoaded(catalog.id, catalog, []);
+		return true;
+	}
+
+	/**
+	 * Expands the tree down to a table and selects it, for a search hit or a
+	 * deep link. False when the catalog is not granted to the workspace.
+	 */
+	export async function revealTable(
+		catalogId: string,
+		namespace: string[],
+		table: { id: string; name: string }
+	): Promise<boolean> {
+		const catalog = await catalogById(catalogId);
+		if (!catalog) return false;
+		view = 'catalog';
 		const refKey = catalog.id;
 		expanded.add(nodeKey(refKey, []));
 		await ensureLoaded(refKey, catalog, []);
-		for (let depth = 1; depth <= hit.namespace.length; depth++) {
-			const path = hit.namespace.slice(0, depth);
+		for (let depth = 1; depth <= namespace.length; depth++) {
+			const path = namespace.slice(0, depth);
 			expanded.add(nodeKey(refKey, path));
 			await ensureLoaded(refKey, catalog, path);
 		}
-		selectTable(catalog, hit.namespace, {
-			id: hit.table_id,
-			name: hit.table,
-			kind: 'table'
-		});
-		search = '';
+		selectTable(catalog, namespace, { id: table.id, name: table.name, kind: 'table' });
+		return true;
 	}
 
 	// ── Engine grouping ──────────────────────────────────────────────────

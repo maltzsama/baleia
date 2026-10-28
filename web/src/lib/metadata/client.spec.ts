@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { http, server } from '../../test/server';
-import { makeMetadataCatalog } from '../../test/factories';
+import { makeMetadataCatalog, makeSearchResult } from '../../test/factories';
 import {
 	clearMetadataCache,
+	findTable,
 	loadCatalogs,
 	loadNamespaces,
 	loadTables,
@@ -103,5 +104,62 @@ describe('metadata client', () => {
 		expect(url).toContain('q=ord');
 		expect(url).toContain('kind=all');
 		expect(url).toContain('limit=20');
+	});
+	// #455: a deep link resolves by catalog, namespace and name, past the
+	// search's first page when the name is common.
+	describe('findTable', () => {
+		const ORDERS = '00000000-0000-0000-0000-0000000000d9';
+
+		it('takes the exact hit in the catalog and namespace', async () => {
+			let catalogParam: string | null = null;
+			server.use(
+				http.get('/workspaces/{id}/metadata/search', ({ request, response }) => {
+					catalogParam = new URL(request.url).searchParams.get('catalog_id');
+					return response(200).json([
+						makeSearchResult({ table_id: 'other', namespace: ['crm'], catalog_id: CAT }),
+						makeSearchResult({ table_id: ORDERS, namespace: ['sales'], catalog_id: CAT })
+					]);
+				})
+			);
+			expect(await findTable(WS, CAT, ['sales'], 'orders')).toBe(ORDERS);
+			expect(catalogParam).toBe(CAT);
+		});
+
+		it('pages through the namespace when search misses it', async () => {
+			const cursors: (string | null)[] = [];
+			server.use(
+				http.get('/workspaces/{id}/metadata/search', ({ response }) => response(200).json([])),
+				http.get(
+					'/workspaces/{id}/metadata/catalogs/{catalog_id}/tables',
+					({ request, response }) => {
+						const cursor = new URL(request.url).searchParams.get('cursor');
+						cursors.push(cursor);
+						return response(200).json({
+							freshness: { metadata_synced_at: null },
+							items: cursor
+								? [{ id: ORDERS, name: 'orders', kind: 'table' }]
+								: [{ id: 'a', name: 'accounts', kind: 'table' }],
+							next_cursor: cursor ? null : 'page-2'
+						});
+					}
+				)
+			);
+			expect(await findTable(WS, CAT, ['sales'], 'orders')).toBe(ORDERS);
+			expect(cursors).toEqual([null, 'page-2']);
+		});
+
+		it('is null when the namespace has no such table', async () => {
+			server.use(
+				http.get('/workspaces/{id}/metadata/search', ({ response }) => response(200).json([])),
+				http.get('/workspaces/{id}/metadata/catalogs/{catalog_id}/tables', ({ response }) =>
+					response(200).json({
+						freshness: { metadata_synced_at: null },
+						items: [],
+						next_cursor: null
+					})
+				)
+			);
+			expect(await findTable(WS, CAT, ['sales'], 'orders')).toBeNull();
+		});
 	});
 });
