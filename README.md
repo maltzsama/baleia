@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="web/static/baleia.svg" alt="Baleia logo" width="128" height="128">
+</p>
+
 # Baleia
 
 **A self-hosted SQL workspace for your data platform.** Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
