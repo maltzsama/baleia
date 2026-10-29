@@ -143,6 +143,6 @@ jobs:
           # needs its bootstrap; it is covered against the dev stack). A
           # conformance subtest may skip by design; only a skipped top-level
           # test fails the job.
-          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \(|TestConformanceMariaDB \()' test.log | grep -v polaris; then
+          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \(|TestConformanceMariaDB \(|TestConformanceAlterSystem \()' test.log | grep -v polaris; then
             echo "an integration test was skipped" && exit 1
           fi
