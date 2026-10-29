@@ -72,7 +72,7 @@ The in-chart Trino has no authentication. Read the catalog guard notes in [Archi
 ```bash
 helm install baleia oci://ghcr.io/maltzsama/charts/baleia \
   -n baleia -f values.yaml \
-  --version 0.3.0 # x-release-please-version
+  --version 0.4.0 # x-release-please-version
 ```
 
 The migration job runs first. Open `PUBLIC_URL`: on the first visit, a setup wizard creates the admin account.

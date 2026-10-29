@@ -39,7 +39,7 @@ Open http://localhost:8080. On first visit, a setup wizard creates your admin ac
 Each release publishes a container image and a Helm chart:
 
 ```bash
-helm install baleia oci://ghcr.io/maltzsama/charts/baleia --version 0.3.0 # x-release-please-version
+helm install baleia oci://ghcr.io/maltzsama/charts/baleia --version 0.4.0 # x-release-please-version
 ```
 
 Settings are listed in [docs/configuration.md](docs/configuration.md), and running it in production is covered in [docs/operations.md](docs/operations.md). Upgrading from 0.3? Read [Upgrading to 0.4.0](docs/operations.md#upgrading-to-040) first.
