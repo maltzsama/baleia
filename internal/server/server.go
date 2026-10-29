@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -266,6 +267,12 @@ type engineCapabilities struct{ h *api.API }
 
 func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (queryengine.ReadOnlySupport, error) {
 	return e.h.EngineReadOnly(ctx, id)
+}
+
+// http.FileServer does not know .webmanifest, so it would sniff the PWA
+// manifest as text/plain; browsers expect application/manifest+json.
+func init() {
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
 // staticHandler serves the SPA. The root is the app shell, never the directory

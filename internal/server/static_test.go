@@ -110,6 +110,23 @@ func TestStaticAPIAndAssets(t *testing.T) {
 	}
 }
 
+// The PWA manifest is only installed when it is served as
+// application/manifest+json instead of the text/plain FileServer sniffs.
+func TestStaticWebManifestContentType(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "site.webmanifest"), []byte(`{"name":"Baleia"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := serve(staticHandler(&fakeStaticUsers{configured: true}, dir), http.MethodGet, "/site.webmanifest")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /site.webmanifest = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/manifest+json" {
+		t.Fatalf("GET /site.webmanifest Content-Type = %q, want application/manifest+json", ct)
+	}
+}
+
 // A route that is also a build directory (/connections holds the prerendered
 // connections/new.html) used to answer with the directory listing.
 func TestStaticDirectoryRouteServesTheApp(t *testing.T) {

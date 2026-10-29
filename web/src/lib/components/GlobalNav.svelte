@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { locate, navAreas, type AreaKey } from '$lib/nav/sections';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import Logo from '$lib/components/Logo.svelte';
 
 	let menuOpen = $state(false);
 
@@ -70,9 +71,7 @@
 >
 	<div class="flex flex-col items-center gap-1">
 		<a href={resolve('/')} title={m.common_baleia()} class="mb-3 flex text-white">
-			<svg viewBox="0 0 24 24" class="h-[22px] w-[22px]" aria-hidden="true"
-				><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
-			>
+			<Logo class="h-[30px] w-[30px]" />
 			<span class="sr-only">{m.common_baleia()}</span>
 		</a>
 		{#each mainAreas as area (area.key)}

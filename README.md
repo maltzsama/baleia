@@ -61,6 +61,12 @@ Baleia is in beta and moving fast; expect changes between minor versions. Bugs a
 
 Baleia is mostly a one-person project for now, and help is welcome, especially on the web app (Svelte 5). Start with [docs/development.md](docs/development.md) and [AGENTS.md](AGENTS.md), then open an issue or a pull request. Code, comments and docs are written in English.
 
+## Credits
+
+The Baleia icon comes from [Flaticon](https://www.flaticon.com) and is used
+under its free license; the bundled fonts are under the SIL Open Font License.
+See [CREDITS.md](CREDITS.md) for the attributions and license summaries.
+
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
