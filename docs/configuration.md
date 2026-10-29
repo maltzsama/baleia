@@ -9,6 +9,12 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `JWT_SECRET` | `change-me-in-production` | Key for signing JWTs |
 | `BALEIA_ENCRYPTION_KEY` | _(unset)_ | Key that encrypts stored connection credentials (≥ 32 characters, must differ from `JWT_SECRET`). Required once any credential is stored; the API refuses to start without it. Derived with HKDF-SHA256; each value is bound to its connection row |
 | `BALEIA_ENCRYPTION_KEY_PREVIOUS` | _(unset)_ | Previous encryption key, set only during rotation: values are read with the current or previous key and always written with the current one |
+| `BALEIA_ACCESS_TOKEN_TTL` | `15m` | Lifetime of an access token |
+| `BALEIA_REFRESH_TOKEN_TTL` | `720h` (30 days) | Lifetime of a refresh token; a password change or reset, a role change, a suspension or a removal revokes them earlier |
+| `BALEIA_RESET_TOKEN_TTL` | `30m` | Lifetime of a password-reset link |
+| `BALEIA_BCRYPT_COST` | `12` | Password hashing cost, between 10 and 31; higher is slower to sign in and to brute-force |
+| `BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS` | `false` | Lets an AWS Glue connection with no keys or role of its own use the host's default AWS credential chain. Off by default: otherwise any connection owner could use the platform's IAM role |
+| `BALEIA_AUDIT_EXPORT_URL`, `BALEIA_AUDIT_EXPORT_INDEX`, `BALEIA_AUDIT_EXPORT_AUTH`, `BALEIA_AUDIT_EXPORT_USER`, `BALEIA_AUDIT_EXPORT_PASSWORD`, `BALEIA_AUDIT_EXPORT_TOKEN`, `BALEIA_AUDIT_EXPORT_BATCH`, `BALEIA_AUDIT_EXPORT_INTERVAL`, `BALEIA_AUDIT_EXPORT_CA_FILE` | export off | Shipping the audit trail to OpenSearch/Elasticsearch: defaults, authentication modes and behavior in [Audit export](operations.md#audit-export) |
 | `TEMPORAL_HOST` | `localhost:7233` | Temporal server address |
 | `TRINO_URL` | `http://localhost:8088` | Trino coordinator REST endpoint. At API boot it also seeds the default Trino engine (with the service and admin identities below) and keeps it in step while that engine's connection is system-owned; engine endpoints live in the database (`engines`, [ADR 0002](adr/0002-connections-engines-catalogs-bindings.md)). Trino is dialed through the connections dialer like every engine, so a loopback `TRINO_URL` needs `BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true` (set by `make dev`) |
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |

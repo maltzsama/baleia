@@ -15,6 +15,7 @@
 - **Connect your lakehouse.** Register Polaris, Nessie, Lakekeeper, Iceberg REST, Unity, AWS Glue or Hive Metastore, and Baleia sets up the matching Trino catalog for you.
 - **Find your data.** Browse catalogs, schemas, tables and columns, search across them, and document tables right next to the data.
 - **Share and reuse.** Keep saved queries, metrics and semantic models in team spaces, each with version history. Build questions in **Explore** by clicking dimensions and metrics instead of writing SQL.
+- **Materialize queries.** Retrievers rebuild an Iceberg table from a query on a schedule, and spaces export to bundles you can keep in Git.
 - **Keep an eye on things.** See the cluster, running queries, query history and Iceberg table health, and run table maintenance.
 - **Control access.** Use workspaces, teams and roles, sign in with OIDC or LDAP, create API keys, and review everything in the audit trail.
 - **Bring in AI, if you want.** An optional assistant, plus an MCP server so your own agents can query within the limits you set.
@@ -50,7 +51,7 @@ The documentation is published at **https://maltzsama.github.io/baleia/**, built
 | | |
 |---|---|
 | [Quick start](docs/quick-start.md) · [Install](docs/install.md) · [Concepts](docs/concepts.md) | Getting started |
-| [Guides](docs/guides/workbench.md) | The workbench, data explorer, Explore, monitoring and administration |
+| [Guides](docs/guides/workbench.md) | The workbench, data explorer, Explore, content and retrievers, monitoring and administration |
 | [Configuration](docs/configuration.md) | Every setting, and how credentials are encrypted |
 | [Operations](docs/operations.md) | Metrics, alerts, the audit trail and runbooks |
 | [Connections](docs/connections.md) | Every source and catalog Baleia can connect to |
