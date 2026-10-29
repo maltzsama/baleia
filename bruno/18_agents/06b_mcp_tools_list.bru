@@ -1,0 +1,49 @@
+meta {
+  name: MCP tools/list
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+script:pre-request {
+  // /mcp is served next to /api/v1, not under it; a literal ".." in the URL
+  // reaches the server as is and does not match the route.
+  bru.setVar("mcp_url", bru.getEnvVar("base_url").replace(/\/api\/v1\/?$/, "") + "/mcp");
+}
+
+headers {
+  Authorization: Bearer {{agent_token_secret}}
+  Accept: application/json, text/event-stream
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list",
+    "params": {}
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the v1 registry is exposed", function () {
+    // The tools of internal/agentpolicy (AllTools), as docs/mcp.md lists them.
+    const want = [
+      "list_workspaces", "list_catalogs", "list_schemas", "list_tables",
+      "describe_table", "search_metadata", "list_metrics", "render_metric",
+      "list_models", "describe_model", "query_semantic", "run_query",
+      "get_execution", "get_results", "cancel_execution"
+    ];
+    const got = res.body.result.tools.map((t) => t.name).sort();
+    expect(got).to.deep.equal([...want].sort());
+  });
+}

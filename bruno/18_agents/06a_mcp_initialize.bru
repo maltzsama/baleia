@@ -1,13 +1,19 @@
 meta {
   name: MCP initialize
   type: http
-  seq: 1
+  seq: 7
 }
 
 post {
-  url: {{base_url}}/../mcp
+  url: {{mcp_url}}
   body: json
   auth: none
+}
+
+script:pre-request {
+  // /mcp is served next to /api/v1, not under it; a literal ".." in the URL
+  // reaches the server as is and does not match the route.
+  bru.setVar("mcp_url", bru.getEnvVar("base_url").replace(/\/api\/v1\/?$/, "") + "/mcp");
 }
 
 headers {
@@ -30,4 +36,9 @@ body:json {
 
 assert {
   res.status: eq 200
+}
+
+docs {
+  The MCP server (#59) answers on /mcp with the agent token created above,
+  before 07 revokes it.
 }

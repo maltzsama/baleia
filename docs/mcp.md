@@ -45,6 +45,9 @@ Every request needs an agent token minted in the UI (`/settings/agents`):
 | `search_metadata` | Search tables, columns and metrics |
 | `list_metrics` | Semantic metrics of a workspace |
 | `render_metric` | Render a metric's SQL for a binding |
+| `list_models` | Semantic models visible in a workspace |
+| `describe_model` | A model's source, dimensions, metrics and joins |
+| `query_semantic` | Compile an explore query over a model to SQL; run it with `run_query` |
 | `run_query` | Run **one** read-only statement and wait for it |
 | `get_execution` | State of an execution this agent created |
 | `get_results` | Stored rows of a finished execution, with caps |

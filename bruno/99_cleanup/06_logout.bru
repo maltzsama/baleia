@@ -1,13 +1,17 @@
 meta {
   name: Logout
   type: http
-  seq: 6
+  seq: 7
 }
 
 post {
   url: {{base_url}}/auth/logout
   body: json
   auth: bearer
+}
+
+headers {
+  X-Requested-With: baleia
 }
 
 auth:bearer {

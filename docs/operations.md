@@ -3,6 +3,78 @@
 How to monitor Baleia: what it exposes, how to scrape it, and what to do when an alert fires.
 The metrics catalog and its rules come from #87.
 
+## Upgrading to 0.4.0
+
+Read this before `helm upgrade` from 0.3.x. The `migrate` job applies the
+schema changes (migrations 00060 and 00061, maintenance parameters and table
+health metrics) before the api and worker start.
+
+### 1. Let running queries finish
+
+0.3.x runs queries on `QueryExecutionWorkflowV2`; 0.4.0 only has its
+successor. A query still running when the new worker starts cannot finish:
+its execution stays "running". Before upgrading, let running queries finish
+or cancel them, then check that none is left:
+
+```bash
+temporal workflow count \
+  --query 'WorkflowType="QueryExecutionWorkflowV2" AND ExecutionStatus="Running"'
+```
+
+If some were left behind, terminate them and close their executions (the
+workflow ID is `exec-<execution id>`):
+
+```bash
+temporal workflow terminate --reason "upgrade to 0.4.0" \
+  --query 'WorkflowType="QueryExecutionWorkflowV2" AND ExecutionStatus="Running"'
+```
+
+```sql
+UPDATE query_executions SET status = 'cancelled', finished_at = now()
+WHERE status = 'running' AND started_at < '<time of the upgrade>';
+```
+
+### 2. Trino 484 needs plugin 0.10.0
+
+The chart's Trino image is now `trinodb/trino:484`. The catalog-store plugin
+is built per Trino version, and 0.10.0 is the first release for 484: set
+`trino.plugin.version: 0.10.0` (and `config.BALEIA_PLUGIN_VERSION`, whose
+default is now 0.10.0). An older plugin does not load on 484.
+
+### 3. Managed Iceberg catalogs are re-created once
+
+Managed Iceberg catalogs gain `iceberg.expire-snapshots.min-retention` and
+`iceberg.remove-orphan-files.min-retention` (`BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION`,
+default `1h`). The new properties change each catalog's version, so the next
+reconcile re-creates every managed Iceberg catalog on its engine once;
+queries on a catalog fail briefly while it is re-created. Until then the
+catalog keeps Trino's 7-day floor, and table maintenance refuses shorter
+retentions.
+
+### 4. API and UI changes
+
+- `TableHealth.needs_orphan_cleanup` is removed: read `due_operations`
+  (orphan cleanup is now due when its maximum interval passes).
+- Profile and API keys moved to `/profile` and `/profile/api-keys`; the old
+  `/settings/profile` and `/settings/api-keys` answer 308.
+- Monitoring's table health lists source Iceberg catalogs only.
+
+### 5. New settings
+
+All are optional. One group changes behavior with its defaults: Baleia's own
+database sessions are now bounded, with a 1-minute statement timeout
+(`BALEIA_DB_STATEMENT_TIMEOUT`), a 30-second lock timeout
+(`BALEIA_DB_LOCK_TIMEOUT`) and a 1-minute idle-in-transaction timeout
+(`BALEIA_DB_IDLE_IN_TX_TIMEOUT`) for the api and worker (the migrate job is
+not bounded); raise them if a large installation hits them. The rest keep the previous behavior when unset: `BALEIA_LOG_LEVEL`,
+`BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS`,
+`BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION`, the other pool and HTTP timeouts
+(`BALEIA_DB_*`, `BALEIA_HTTP_*`), `BALEIA_LOB_MAX_BYTES`,
+`BALEIA_SECRET_FILE_BASE_DIR`, `BALEIA_PPROF_ADDR`, `WORKER_HEALTH_PORT`,
+`POLARIS_CLIENT_ID`/`POLARIS_CLIENT_SECRET` and, for query events,
+`BALEIA_TRINO_EVENTS_TOKEN` (`trino.queryEvents.enabled`). See
+[configuration.md](configuration.md).
+
 ## Endpoints
 
 | Process | Endpoint | Notes |

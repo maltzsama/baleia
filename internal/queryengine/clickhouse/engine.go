@@ -7,6 +7,7 @@ package clickhouse
 
 import (
 	"context"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -93,13 +94,37 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 	if h.QueryID == "" {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), connectTimeout)
-	defer cancel()
-	_, err := e.c.queryStrings(ctx, request{
-		sql:    "KILL QUERY WHERE query_id = {id:String} SYNC",
-		params: map[string]string{"id": h.QueryID},
+	ctx = context.WithoutCancel(ctx)
+	return killUntilFound(cancelWindow, func() (bool, error) {
+		kctx, cancel := context.WithTimeout(ctx, connectTimeout)
+		defer cancel()
+		rows, err := e.c.queryStrings(kctx, request{
+			sql:    "KILL QUERY WHERE query_id = {id:String} SYNC",
+			params: map[string]string{"id": h.QueryID},
+		})
+		return len(rows) > 0, err
 	})
-	return err
+}
+
+// cancelWindow is how long Cancel keeps looking for a query it did not find.
+const cancelWindow = 3 * time.Second
+
+// killUntilFound runs kill until it reports a killed query, for up to window.
+// A handle is reported before ClickHouse registers its query (OnStart runs
+// before the request is sent), so a KILL right after it can find nothing and
+// the statement would run to the end. A query still missing after the window
+// is gone, which is not an error.
+func killUntilFound(window time.Duration, kill func() (bool, error)) error {
+	deadline := time.Now().Add(window)
+	wait := 50 * time.Millisecond
+	for {
+		killed, err := kill()
+		if err != nil || killed || !time.Now().Before(deadline) {
+			return err
+		}
+		time.Sleep(min(wait, time.Until(deadline)))
+		wait = min(wait*2, 400*time.Millisecond)
+	}
 }
 
 // OpenSession starts one ClickHouse HTTP session; USE and SET persist on it.
