@@ -2428,5 +2428,10 @@
 	"maintenance_col_next": "Próxima rodada",
 	"maintenance_col_last_run": "Última execução",
 	"maintenance_nothing_due": "Nada devido",
-	"maintenance_read_only": "Você pode ver a manutenção desta tabela, mas não alterá-la."
+	"maintenance_read_only": "Você pode ver a manutenção desta tabela, mas não alterá-la.",
+	"settings_group_platform": "Plataforma",
+	"settings_group_access": "Acesso",
+	"settings_group_activity": "Atividade",
+	"nav_profile": "Perfil",
+	"nav_page_api_keys": "Chaves de API"
 }

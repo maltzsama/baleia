@@ -4,15 +4,24 @@ import { m } from '$lib/paraglide/messages';
 import { canGlobal, type GlobalAction } from '$lib/authz/can';
 import type { AuthUser, Features } from '$lib/stores/auth.svelte';
 
+/** Settings is administration only; personal pages live under /profile. */
+export type SettingsGroup = 'platform' | 'access' | 'activity';
+
 export type SettingsSection = {
 	href: string;
 	label: string;
-	description: string;
+	group: SettingsGroup;
 	/** Absent means every authenticated user can open the section. */
 	action?: GlobalAction;
 	/** Feature flag from /auth/me; absent means no feature gating. */
 	feature?: keyof Features;
 };
+
+export const settingsGroups: { key: SettingsGroup; label: () => string }[] = [
+	{ key: 'platform', label: m.settings_group_platform },
+	{ key: 'access', label: m.settings_group_access },
+	{ key: 'activity', label: m.settings_group_activity }
+];
 
 export const settingsSections: SettingsSection[] = [
 	{
@@ -20,19 +29,23 @@ export const settingsSections: SettingsSection[] = [
 		get label() {
 			return m.settings_sections_system_status();
 		},
-		get description() {
-			return m.settings_sections_health_of_every_platform_component();
-		},
+		group: 'platform',
 		action: 'view_system'
+	},
+	{
+		href: '/settings/assistant',
+		get label() {
+			return m.settings_sections_assistant();
+		},
+		group: 'platform',
+		feature: 'assistant'
 	},
 	{
 		href: '/settings/identity',
 		get label() {
 			return m.settings_sections_identity_providers();
 		},
-		get description() {
-			return m.settings_sections_oidc_and_ldap_sign_in_group();
-		},
+		group: 'access',
 		action: 'manage_identity'
 	},
 	{
@@ -40,9 +53,7 @@ export const settingsSections: SettingsSection[] = [
 		get label() {
 			return m.settings_sections_users();
 		},
-		get description() {
-			return m.settings_sections_invite_people_change_roles_and_suspend();
-		},
+		group: 'access',
 		action: 'manage_users'
 	},
 	{
@@ -50,56 +61,22 @@ export const settingsSections: SettingsSection[] = [
 		get label() {
 			return m.settings_sections_teams();
 		},
-		get description() {
-			return m.settings_sections_team_membership_and_roles_for_sharing();
-		}
+		group: 'access'
 	},
 	{
 		href: '/settings/agents',
 		get label() {
 			return m.settings_sections_agents();
 		},
-		get description() {
-			return m.settings_sections_read_only_mcp_agents_their_tokens();
-		},
+		group: 'access',
 		feature: 'agents'
-	},
-	{
-		href: '/settings/assistant',
-		get label() {
-			return m.settings_sections_assistant();
-		},
-		get description() {
-			return m.settings_sections_provider_data_sharing_and_turn_limits();
-		},
-		feature: 'assistant'
 	},
 	{
 		href: '/settings/audit',
 		get label() {
 			return m.settings_sections_audit_trail();
 		},
-		get description() {
-			return m.settings_sections_who_changed_what_when_and_which();
-		}
-	},
-	{
-		href: '/settings/profile',
-		get label() {
-			return m.settings_sections_profile();
-		},
-		get description() {
-			return m.settings_sections_your_name_e_mail_and_password();
-		}
-	},
-	{
-		href: '/settings/api-keys',
-		get label() {
-			return m.settings_sections_api_keys();
-		},
-		get description() {
-			return m.settings_sections_keys_for_scripts_and_agents_shown();
-		}
+		group: 'activity'
 	}
 ];
 

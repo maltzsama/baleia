@@ -2428,5 +2428,10 @@
 	"maintenance_col_next": "Next round",
 	"maintenance_col_last_run": "Last run",
 	"maintenance_nothing_due": "Nothing due",
-	"maintenance_read_only": "You can see this table's maintenance but not change it."
+	"maintenance_read_only": "You can see this table's maintenance but not change it.",
+	"settings_group_platform": "Platform",
+	"settings_group_access": "Access",
+	"settings_group_activity": "Activity",
+	"nav_profile": "Profile",
+	"nav_page_api_keys": "API keys"
 }
