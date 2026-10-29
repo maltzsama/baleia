@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 6
 ---
 
 # Administration
@@ -25,6 +25,21 @@ sidebar_position: 5
   - **Grants:** a catalog is granted for read or write. Read grants run in read-only sessions where the engine enforces them. Revoking the catalog used as the default target clears it.
   - **Deletion:** deleting a shared workspace removes its spaces, content and grants. Personal workspaces cannot be deleted.
 - **Agents:** read-only clients of the [MCP server](../mcp.md), bound to workspaces. Each agent has tokens, shown once and stored only as a hash. Revoking a token takes effect at once.
+
+## Attention
+
+The bell in the header lists what needs attention, errors first. It is computed from the current state each time, so an item disappears once fixed; there is no read state and no e-mail. Each item links to the page that fixes it, and everyone sees only what they can act on:
+
+| Item | Meaning |
+|---|---|
+| Binding error | A catalog binding failed to apply on its engine |
+| Metadata sync failed / stale | A catalog's metadata could not be refreshed, or is older than expected |
+| Engine unreachable | An engine does not answer |
+| Retriever error | A [retriever](content.md#retrievers) refresh failed |
+| Reconcile drift | An engine's catalogs differ from what Baleia manages ([reconciliation](../operations.md#binding-reconciliation)) |
+| Schedule missing | A recurring job is not scheduled in Temporal |
+| Audit export lagging | The audit export is behind |
+| Agent token expiring | An [agent](#access)'s token expires soon |
 
 ## Activity
 

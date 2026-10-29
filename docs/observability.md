@@ -28,7 +28,7 @@ One trace covers, with the W3C `traceparent` propagated across every hop:
   the matched route template (`internal/obs`, `HTTPHandler` + `RouteName`).
 - **Temporal** — the SDK's OpenTelemetry interceptor on the client (API and
   worker) and the worker, so client → workflow → activity spans connect.
-- **Trino HTTP** — `otelhttp.NewTransport` on the coordinator client; Trino 483
+- **Trino HTTP** — `otelhttp.NewTransport` on the coordinator client; Trino
   continues the trace when its own tracing is enabled
   (`tracing.enabled=true`, `tracing.exporter.endpoint`).
 - **Object storage** — the same transport on the S3 client.
