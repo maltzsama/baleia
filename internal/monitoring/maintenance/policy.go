@@ -7,8 +7,9 @@ import (
 	"encoding/json"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/trino"
 )
 
 // Operations are Trino's Iceberg procedures, in the priority a round runs
@@ -249,8 +250,10 @@ func (v *validator) optimize(s Settings, writerInterval int64, t Table) {
 	if n := s.Params.SkipFilesNewerThanSeconds; n != nil && *n < writerInterval {
 		v.add(op+".params.skip_files_newer_than_seconds", CodeOutOfRange, map[string]string{"min": strconv.FormatInt(writerInterval, 10)})
 	}
-	if f := s.Params.PartitionFilter; f != nil && (strings.TrimSpace(*f) == "" || strings.Contains(*f, ";")) {
-		v.add(op+".params.partition_filter", CodeInvalidFormat, nil)
+	if f := s.Params.PartitionFilter; f != nil {
+		if err := trino.ValidatePartitionFilter(*f); err != nil {
+			v.add(op+".params.partition_filter", CodeInvalidFormat, map[string]string{"reason": err.Error()})
+		}
 	}
 	v.onlyParams(op, s.Params, "target_file_size_bytes", "partition_filter", "skip_files_newer_than_seconds", "sorted_by")
 }

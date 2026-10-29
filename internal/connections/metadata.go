@@ -46,6 +46,11 @@ type TableMeta struct {
 	Format string
 	// Properties carries format-specific details (location, table engine, …).
 	Properties map[string]string
+	// TableProperties are the table's own properties as its catalog stores
+	// them (Iceberg's history.expire.*, write.*, …); nil when not read.
+	TableProperties map[string]string
+	// FormatVersion is the Iceberg format version; 0 when unknown.
+	FormatVersion int
 	// Snapshots are oldest first; empty for non-Iceberg tables.
 	Snapshots []Snapshot
 }

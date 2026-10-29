@@ -90,8 +90,20 @@ ORDER BY captured_at ASC
 LIMIT @lim::int;
 
 -- name: UpsertTableHealthSnapshot :one
-INSERT INTO table_health_snapshots (catalog_id, catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO table_health_snapshots (
+    catalog_id, catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count,
+    total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction,
+    needs_snapshot_expiry, delete_file_count, equality_delete_count, position_delete_count,
+    small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count,
+    format_version, table_properties, due_operations, policy_revision)
+VALUES (
+    @catalog_id, @catalog_connection_id, @catalog, @namespace, @table_name, @snapshot_count, @file_count,
+    @total_size_bytes, @oldest_snapshot_age_hours, @last_maintenance_at, @health_score, @needs_compaction,
+    @needs_snapshot_expiry, sqlc.narg(delete_file_count)::bigint, sqlc.narg(equality_delete_count)::bigint,
+    sqlc.narg(position_delete_count)::bigint, sqlc.narg(small_file_count)::bigint,
+    sqlc.narg(commits_last_hour)::int, sqlc.narg(commits_last_day)::int, sqlc.narg(avg_file_size_bytes)::bigint,
+    sqlc.narg(manifest_count)::int, sqlc.narg(format_version)::int, @table_properties::jsonb,
+    @due_operations::text[], sqlc.narg(policy_revision)::bigint)
 ON CONFLICT (catalog_id, namespace, table_name) DO UPDATE
 SET captured_at               = now(),
     catalog_connection_id     = EXCLUDED.catalog_connection_id,
@@ -104,7 +116,18 @@ SET captured_at               = now(),
     health_score              = EXCLUDED.health_score,
     needs_compaction          = EXCLUDED.needs_compaction,
     needs_snapshot_expiry     = EXCLUDED.needs_snapshot_expiry,
-    needs_orphan_cleanup      = EXCLUDED.needs_orphan_cleanup
+    delete_file_count         = EXCLUDED.delete_file_count,
+    equality_delete_count     = EXCLUDED.equality_delete_count,
+    position_delete_count     = EXCLUDED.position_delete_count,
+    small_file_count          = EXCLUDED.small_file_count,
+    commits_last_hour         = EXCLUDED.commits_last_hour,
+    commits_last_day          = EXCLUDED.commits_last_day,
+    avg_file_size_bytes       = EXCLUDED.avg_file_size_bytes,
+    manifest_count            = EXCLUDED.manifest_count,
+    format_version            = EXCLUDED.format_version,
+    table_properties          = EXCLUDED.table_properties,
+    due_operations            = EXCLUDED.due_operations,
+    policy_revision           = EXCLUDED.policy_revision
 RETURNING *;
 
 -- name: ListTableHealthSnapshots :many
@@ -125,7 +148,7 @@ WHERE catalog_id = @catalog_id::uuid
   AND (sqlc.narg(needs)::text IS NULL
        OR (sqlc.narg(needs)::text = 'compaction' AND needs_compaction)
        OR (sqlc.narg(needs)::text = 'snapshot_expiry' AND needs_snapshot_expiry)
-       OR (sqlc.narg(needs)::text = 'orphan_cleanup' AND needs_orphan_cleanup))
+       OR sqlc.narg(needs)::text = ANY (due_operations))
   AND (sqlc.narg(max_score)::int IS NULL OR health_score <= sqlc.narg(max_score)::int)
 ORDER BY health_score ASC, namespace, table_name
 LIMIT @lim::int OFFSET @off::int;
@@ -150,6 +173,11 @@ RETURNING *;
 -- name: ListMaintenanceRuns :many
 SELECT * FROM maintenance_runs
 WHERE catalog_id = @catalog_id::uuid
+  AND (sqlc.narg(trigger)::text IS NULL OR trigger = sqlc.narg(trigger)::text)
+  AND (sqlc.narg(operation)::text IS NULL OR sqlc.narg(operation)::text = ANY (operations))
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
+  AND (sqlc.narg(ns)::text IS NULL OR namespace = sqlc.narg(ns)::text)
+  AND (sqlc.narg(tbl)::text IS NULL OR table_name = sqlc.narg(tbl)::text)
 ORDER BY started_at DESC
 LIMIT @lim::int OFFSET @off::int;
 

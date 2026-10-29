@@ -20,6 +20,13 @@ type Catalog = components['schemas']['Catalog'];
 type CatalogBinding = components['schemas']['CatalogBinding'];
 type BindingSupport = components['schemas']['BindingSupport'];
 type TestCatalogConnectionResult = components['schemas']['TestCatalogConnectionResult'];
+type TableHealth = components['schemas']['TableHealth'];
+type MaintenanceRun = components['schemas']['MaintenanceRun'];
+type MaintenanceSettings = components['schemas']['MaintenanceSettings'];
+type MaintenancePolicy = components['schemas']['MaintenancePolicy'];
+type StoredMaintenancePolicy = components['schemas']['StoredMaintenancePolicy'];
+type MaintenancePlan = components['schemas']['MaintenancePlan'];
+type TableMaintenance = components['schemas']['TableMaintenance'];
 
 export function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 	return {
@@ -341,6 +348,129 @@ export function makeSemanticModel(overrides: Partial<SemanticModel> = {}): Seman
 		updated_at: '2026-01-01T00:00:00Z',
 		version: 1,
 		allowed_actions: ['view', 'update', 'delete'],
+		...overrides
+	};
+}
+
+export function makeTableHealth(overrides: Partial<TableHealth> = {}): TableHealth {
+	return {
+		catalog_id: '00000000-0000-0000-0000-0000000000c1',
+		catalog_name: 'lake',
+		namespace: 'sales',
+		table_name: 'orders',
+		health_score: 80,
+		needs_compaction: false,
+		needs_snapshot_expiry: false,
+		due_operations: [],
+		...overrides
+	};
+}
+
+export function makeMaintenanceRun(overrides: Partial<MaintenanceRun> = {}): MaintenanceRun {
+	return {
+		id: '00000000-0000-0000-0000-0000000000a9',
+		catalog_id: '00000000-0000-0000-0000-0000000000c1',
+		namespace: 'sales',
+		table_name: 'orders',
+		operations: ['optimize'],
+		status: 'finished',
+		started_at: '2026-10-01T12:00:00Z',
+		finished_at: '2026-10-01T12:05:00Z',
+		workflow_id: 'wf-1',
+		trigger: 'manual',
+		reason: {},
+		attempts: 1,
+		...overrides
+	};
+}
+
+export function makeMaintenanceSettings(
+	overrides: Partial<MaintenanceSettings> = {}
+): MaintenanceSettings {
+	return {
+		enabled: false,
+		trigger: {},
+		min_interval_seconds: 3600,
+		max_interval_seconds: null,
+		window: null,
+		timeout_seconds: 1800,
+		on_conflict: 'retry_with_backoff',
+		params: {},
+		...overrides
+	};
+}
+
+export function makeMaintenancePolicy(
+	overrides: Partial<MaintenancePolicy> = {}
+): MaintenancePolicy {
+	return {
+		mode: 'managed',
+		writer_commit_interval_seconds: 60,
+		optimize: makeMaintenanceSettings(),
+		optimize_manifests: makeMaintenanceSettings(),
+		expire_snapshots: makeMaintenanceSettings({
+			enabled: true,
+			trigger: { snapshots: 100 },
+			params: { retention_seconds: 86400, retain_last: 10 }
+		}),
+		remove_orphan_files: makeMaintenanceSettings(),
+		...overrides
+	};
+}
+
+export function makeStoredMaintenancePolicy(
+	overrides: Partial<StoredMaintenancePolicy> = {}
+): StoredMaintenancePolicy {
+	return {
+		...makeMaintenancePolicy(),
+		revision: 1,
+		created_at: '2026-10-01T12:00:00Z',
+		updated_at: '2026-10-01T12:00:00Z',
+		updated_by: null,
+		...overrides
+	};
+}
+
+export function makeMaintenancePlan(overrides: Partial<MaintenancePlan> = {}): MaintenancePlan {
+	return {
+		evaluated_at: '2026-10-01T12:00:00Z',
+		policy_revision: 1,
+		plan: [
+			{ operation: 'optimize', due: false, would_run: false, reason: { blocked: 'disabled' } },
+			{
+				operation: 'optimize_manifests',
+				due: false,
+				would_run: false,
+				reason: { blocked: 'disabled' }
+			},
+			{
+				operation: 'expire_snapshots',
+				due: true,
+				would_run: true,
+				reason: { fired: 'snapshots', measured: 140, threshold: 100 }
+			},
+			{
+				operation: 'remove_orphan_files',
+				due: false,
+				would_run: false,
+				reason: { blocked: 'disabled' }
+			}
+		],
+		...overrides
+	};
+}
+
+export function makeTableMaintenance(overrides: Partial<TableMaintenance> = {}): TableMaintenance {
+	return {
+		catalog_id: '00000000-0000-0000-0000-0000000000c1',
+		namespace: 'sales',
+		table_name: 'orders',
+		retention_floor_seconds: 3600,
+		format_version: 2,
+		allowed_actions: ['view', 'update'],
+		runs: [],
+		policy: null,
+		plan: null,
 		...overrides
 	};
 }

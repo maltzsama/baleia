@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -478,4 +479,28 @@ func mergeExtra(p *projection, extra map[string]string) error {
 		p.props[k] = extra[k]
 	}
 	return nil
+}
+
+// minRetention sets Trino's minimum retention for Iceberg maintenance unless
+// the binding's extra properties already chose one (#500).
+func minRetention(p *projection, d time.Duration) {
+	v := retentionDuration(d)
+	for _, key := range []string{"iceberg.expire-snapshots.min-retention", "iceberg.remove-orphan-files.min-retention"} {
+		if _, ok := p.props[key]; !ok {
+			p.props[key] = v
+		}
+	}
+}
+
+// retentionDuration spells d in the largest whole unit (d, h, m, s).
+func retentionDuration(d time.Duration) string {
+	switch {
+	case d%(24*time.Hour) == 0:
+		return fmt.Sprintf("%dd", d/(24*time.Hour))
+	case d%time.Hour == 0:
+		return fmt.Sprintf("%dh", d/time.Hour)
+	case d%time.Minute == 0:
+		return fmt.Sprintf("%dm", d/time.Minute)
+	}
+	return fmt.Sprintf("%ds", d/time.Second)
 }

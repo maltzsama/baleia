@@ -144,10 +144,36 @@ func encodeOperations(p maintenance.Policy) (map[string][]byte, error) {
 	return out, nil
 }
 
-// TableRetentionFloor is the shortest retention the catalog's engine accepts
-// for expire_snapshots and remove_orphan_files. Until Baleia projects a lower
-// minimum into managed catalogs, Trino's default applies to every catalog.
-func TableRetentionFloor(db.Catalog) time.Duration {
+// MaintenanceBinding picks the binding maintenance runs on: an enabled one
+// on a capable engine, a managed one first, since only managed bindings carry
+// Baleia's minimum retention.
+func MaintenanceBinding(ctx context.Context, bindings []db.CatalogBinding, capable Capable) (db.CatalogBinding, bool) {
+	var other *db.CatalogBinding
+	for i, b := range bindings {
+		if !b.Enabled || !capable(ctx, b.EngineID) {
+			continue
+		}
+		if b.Mode == "managed" {
+			return b, true
+		}
+		if other == nil {
+			other = &bindings[i]
+		}
+	}
+	if other != nil {
+		return *other, true
+	}
+	return db.CatalogBinding{}, false
+}
+
+// RetentionFloor is the shortest retention the binding's engine accepts for
+// expire_snapshots and remove_orphan_files: Baleia's projected minimum on a
+// managed binding, Trino's default on an adopted or native one, which Baleia
+// never changes.
+func RetentionFloor(b db.CatalogBinding, managedFloor time.Duration) time.Duration {
+	if b.Mode == "managed" && managedFloor > 0 {
+		return managedFloor
+	}
 	return maintenance.UnmanagedRetentionFloor
 }
 

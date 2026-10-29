@@ -56,6 +56,7 @@ func TestEvaluate(t *testing.T) {
 			wantDue:  []string{OpOptimize, OpExpireSnapshots},
 			wantRuns: OpOptimize,
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				s := step(p, OpOptimize)
 				if s.Reason.Fired != "small_file_ratio" || *s.Reason.Measured != 0.42 || *s.Reason.Threshold != 0.3 {
 					t.Errorf("optimize reason = %+v", s.Reason)
@@ -82,6 +83,7 @@ func TestEvaluate(t *testing.T) {
 			wantDue:  []string{OpOptimize, OpExpireSnapshots},
 			wantRuns: OpExpireSnapshots,
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				if w := step(p, OpOptimize).WaitsFor; w != OpExpireSnapshots {
 					t.Errorf("compaction waits for %q, want expire_snapshots", w)
 				}
@@ -94,6 +96,7 @@ func TestEvaluate(t *testing.T) {
 			wantDue:  []string{OpExpireSnapshots, OpRemoveOrphanFiles},
 			wantRuns: OpExpireSnapshots,
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				if r := step(p, OpRemoveOrphanFiles).Reason; r.Fired != FiredMaxInterval || *r.ElapsedSeconds != 8*24*3600 {
 					t.Errorf("orphan reason = %+v", r)
 				}
@@ -106,6 +109,7 @@ func TestEvaluate(t *testing.T) {
 			}},
 			wantDue: []string{OpExpireSnapshots}, wantRuns: OpExpireSnapshots,
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				r := step(p, OpOptimize).Reason
 				if r.Blocked != BlockedMinInterval || *r.MinIntervalSeconds != 3600 || r.LastSuccessAt == nil {
 					t.Errorf("optimize reason = %+v", r)
@@ -120,6 +124,7 @@ func TestEvaluate(t *testing.T) {
 			}},
 			wantDue: []string{OpExpireSnapshots}, wantRuns: OpExpireSnapshots,
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				r := step(p, OpExpireSnapshots).Reason
 				if r.Fired != "max_interval" || *r.ElapsedSeconds != 90000 || *r.MaxIntervalSeconds != 86400 {
 					t.Errorf("expiry reason = %+v", r)
@@ -132,6 +137,7 @@ func TestEvaluate(t *testing.T) {
 				OpExpireSnapshots: now.Add(-time.Hour), OpRemoveOrphanFiles: now.Add(-time.Hour),
 			}},
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				if r := step(p, OpOptimize).Reason; r.Blocked != BlockedNotFired {
 					t.Errorf("optimize reason = %+v", r)
 				}
@@ -143,6 +149,7 @@ func TestEvaluate(t *testing.T) {
 			state:   State{LastSuccess: map[string]time.Time{OpRemoveOrphanFiles: now, OpExpireSnapshots: now}},
 			wantDue: []string{OpOptimize}, wantRuns: OpOptimize,
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				if r := step(p, OpOptimize).Reason; r.Fired != "delete_files" || *r.Measured != 250 {
 					t.Errorf("optimize reason = %+v", r)
 				}
@@ -165,6 +172,7 @@ func TestEvaluate(t *testing.T) {
 				p.Optimize.Window, p.ExpireSnapshots.Window, p.RemoveOrphanFiles.Window = w, w, w
 			},
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				if r := step(p, OpOptimize).Reason; r.Blocked != BlockedWindow {
 					t.Errorf("optimize reason = %+v", r)
 				}
@@ -182,6 +190,7 @@ func TestEvaluate(t *testing.T) {
 			name: "nothing runs while a run is in progress", metrics: smallFiles, kind: Automatic,
 			state: State{Running: true},
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				if r := step(p, OpOptimize).Reason; r.Blocked != BlockedRunning {
 					t.Errorf("optimize reason = %+v", r)
 				}
@@ -191,6 +200,7 @@ func TestEvaluate(t *testing.T) {
 			name: "an automatic round skips mode off", metrics: smallFiles, kind: Automatic,
 			change: func(p *Policy) { p.Mode = ModeOff },
 			check: func(t *testing.T, p Plan) {
+				t.Helper()
 				if r := step(p, OpOptimize).Reason; r.Blocked != BlockedMode {
 					t.Errorf("optimize reason = %+v", r)
 				}

@@ -1,0 +1,28 @@
+meta {
+  name: Maintenance - Get (no parameters)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/maintenance
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+
+assert {
+  res.status: eq 200
+  res.body.policy: isNull
+  res.body.retention_floor_seconds: gt 0
+}
+
+docs {
+  GET /catalogs/{id}/tables/{ns}/{table}/maintenance (#500): a table without
+  parameters answers with no policy, the catalog's retention floor and its runs.
+}

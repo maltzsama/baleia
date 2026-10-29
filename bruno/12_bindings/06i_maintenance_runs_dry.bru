@@ -1,0 +1,27 @@
+meta {
+  name: Maintenance - Dry runs of the catalog
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/maintenance-runs?trigger=dry_run
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+
+assert {
+  res.status: eq 200
+  res.body[0].trigger: eq dry_run
+  res.body[0].status: eq dry_run
+}
+
+docs {
+  maintenance-runs filters by trigger (#500).
+}

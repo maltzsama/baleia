@@ -175,7 +175,8 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.Storage.SetMetrics(c.Metrics.Storage())
 
 	c.TrinoAdmin = trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, obs.WrapHTTPClient(c.Dialer.HTTPClient(60*time.Second)))
-	c.Binder = bindtrino.New(c.Logger, c.TrinoAdmin, c.Queries).WithRegistryKeyring(c.RegistryKeyring)
+	c.Binder = bindtrino.New(c.Logger, c.TrinoAdmin, c.Queries).WithRegistryKeyring(c.RegistryKeyring).
+		WithIcebergMinRetention(cfg.MaintenanceMinRetention())
 	c.Audit = audit.NewPostgres(c.Logger, c.Queries, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)
 	return c, nil
 }

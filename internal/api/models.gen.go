@@ -430,6 +430,7 @@ const (
 	ErrorCodeInvalidIdentifier         ErrorCode = "invalid_identifier"
 	ErrorCodeInvalidSql                ErrorCode = "invalid_sql"
 	ErrorCodeInvalidTimeRange          ErrorCode = "invalid_time_range"
+	ErrorCodeMaintenanceExternal       ErrorCode = "maintenance_external"
 	ErrorCodeNameConflict              ErrorCode = "name_conflict"
 	ErrorCodeNameInUse                 ErrorCode = "name_in_use"
 	ErrorCodeNotDirect                 ErrorCode = "not_direct"
@@ -596,6 +597,53 @@ const (
 const (
 	LocaleEn   Locale = "en"
 	LocalePtBR Locale = "pt-BR"
+)
+
+// Defines values for MaintenanceMode.
+const (
+	MaintenanceModeMaintainedElsewhere MaintenanceMode = "maintained_elsewhere"
+	MaintenanceModeManaged             MaintenanceMode = "managed"
+	MaintenanceModeOff                 MaintenanceMode = "off"
+)
+
+// Defines values for MaintenanceOperation.
+const (
+	MaintenanceOperationExpireSnapshots   MaintenanceOperation = "expire_snapshots"
+	MaintenanceOperationOptimize          MaintenanceOperation = "optimize"
+	MaintenanceOperationOptimizeManifests MaintenanceOperation = "optimize_manifests"
+	MaintenanceOperationRemoveOrphanFiles MaintenanceOperation = "remove_orphan_files"
+)
+
+// Defines values for MaintenanceReasonBlocked.
+const (
+	MaintenanceReasonBlockedDisabled    MaintenanceReasonBlocked = "disabled"
+	MaintenanceReasonBlockedMinInterval MaintenanceReasonBlocked = "min_interval"
+	MaintenanceReasonBlockedMode        MaintenanceReasonBlocked = "mode"
+	MaintenanceReasonBlockedNotFired    MaintenanceReasonBlocked = "not_fired"
+	MaintenanceReasonBlockedRunning     MaintenanceReasonBlocked = "running"
+	MaintenanceReasonBlockedWindow      MaintenanceReasonBlocked = "window"
+)
+
+// Defines values for MaintenanceRunTrigger.
+const (
+	MaintenanceRunTriggerAutomatic MaintenanceRunTrigger = "automatic"
+	MaintenanceRunTriggerDryRun    MaintenanceRunTrigger = "dry_run"
+	MaintenanceRunTriggerManual    MaintenanceRunTrigger = "manual"
+)
+
+// Defines values for MaintenanceSettingsOnConflict.
+const (
+	GiveUpAndReport  MaintenanceSettingsOnConflict = "give_up_and_report"
+	RetryWithBackoff MaintenanceSettingsOnConflict = "retry_with_backoff"
+)
+
+// Defines values for ManualMaintenanceRequestOperation.
+const (
+	ManualMaintenanceRequestOperationExpireSnapshots   ManualMaintenanceRequestOperation = "expire_snapshots"
+	ManualMaintenanceRequestOperationNextDue           ManualMaintenanceRequestOperation = "next_due"
+	ManualMaintenanceRequestOperationOptimize          ManualMaintenanceRequestOperation = "optimize"
+	ManualMaintenanceRequestOperationOptimizeManifests ManualMaintenanceRequestOperation = "optimize_manifests"
+	ManualMaintenanceRequestOperationRemoveOrphanFiles ManualMaintenanceRequestOperation = "remove_orphan_files"
 )
 
 // Defines values for MeAuthProvider.
@@ -851,6 +899,12 @@ const (
 	Unknown SystemStatusSectionStatus = "unknown"
 )
 
+// Defines values for TableMaintenanceAllowedAction.
+const (
+	TableMaintenanceAllowedActionUpdate TableMaintenanceAllowedAction = "update"
+	TableMaintenanceAllowedActionView   TableMaintenanceAllowedAction = "view"
+)
+
 // Defines values for TeamMemberRole.
 const (
 	TeamMemberRoleMember TeamMemberRole = "member"
@@ -989,9 +1043,9 @@ const (
 
 // Defines values for WorkspaceTargetMode.
 const (
-	WorkspaceTargetModeAdopted WorkspaceTargetMode = "adopted"
-	WorkspaceTargetModeManaged WorkspaceTargetMode = "managed"
-	WorkspaceTargetModeNative  WorkspaceTargetMode = "native"
+	Adopted WorkspaceTargetMode = "adopted"
+	Managed WorkspaceTargetMode = "managed"
+	Native  WorkspaceTargetMode = "native"
 )
 
 // Defines values for WorkspaceTargetPermission.
@@ -1012,6 +1066,22 @@ const (
 	ExportAuditCSVParamsOutcomeAllowed ExportAuditCSVParamsOutcome = "allowed"
 	ExportAuditCSVParamsOutcomeDenied  ExportAuditCSVParamsOutcome = "denied"
 	ExportAuditCSVParamsOutcomeError   ExportAuditCSVParamsOutcome = "error"
+)
+
+// Defines values for ListMaintenanceRunsParamsTrigger.
+const (
+	ListMaintenanceRunsParamsTriggerAutomatic ListMaintenanceRunsParamsTrigger = "automatic"
+	ListMaintenanceRunsParamsTriggerDryRun    ListMaintenanceRunsParamsTrigger = "dry_run"
+	ListMaintenanceRunsParamsTriggerManual    ListMaintenanceRunsParamsTrigger = "manual"
+)
+
+// Defines values for ListMaintenanceRunsParamsStatus.
+const (
+	ListMaintenanceRunsParamsStatusDryRun   ListMaintenanceRunsParamsStatus = "dry_run"
+	ListMaintenanceRunsParamsStatusFailed   ListMaintenanceRunsParamsStatus = "failed"
+	ListMaintenanceRunsParamsStatusFinished ListMaintenanceRunsParamsStatus = "finished"
+	ListMaintenanceRunsParamsStatusGaveUp   ListMaintenanceRunsParamsStatus = "gave_up"
+	ListMaintenanceRunsParamsStatusRunning  ListMaintenanceRunsParamsStatus = "running"
 )
 
 // Defines values for ListMigrationItemsParamsStatus.
@@ -1642,6 +1712,15 @@ type CatalogImpact struct {
 	Metrics               int `json:"metrics"`
 	RunningExecutions     int `json:"running_executions"`
 	SavedQueriesTargeting int `json:"saved_queries_targeting"`
+}
+
+// CatalogMaintenancePlanItem defines model for CatalogMaintenancePlanItem.
+type CatalogMaintenancePlanItem struct {
+	LastRun   *MaintenanceRun `json:"last_run"`
+	Mode      MaintenanceMode `json:"mode"`
+	Namespace string          `json:"namespace"`
+	Plan      MaintenancePlan `json:"plan"`
+	TableName string          `json:"table_name"`
 }
 
 // CatalogSummary defines model for CatalogSummary.
@@ -2629,8 +2708,73 @@ type LogoutRequest struct {
 	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
+// MaintenanceMode defines model for MaintenanceMode.
+type MaintenanceMode string
+
+// MaintenanceOperation defines model for MaintenanceOperation.
+type MaintenanceOperation string
+
+// MaintenanceParams defines model for MaintenanceParams.
+type MaintenanceParams struct {
+	CleanExpiredMetadata *bool  `json:"clean_expired_metadata"`
+	OlderThanSeconds     *int64 `json:"older_than_seconds"`
+
+	// PartitionFilter optimize: WHERE on partition columns
+	PartitionFilter           *string   `json:"partition_filter"`
+	RetainLast                *int64    `json:"retain_last"`
+	RetentionSeconds          *int64    `json:"retention_seconds"`
+	SkipFilesNewerThanSeconds *int64    `json:"skip_files_newer_than_seconds"`
+	SortedBy                  *[]string `json:"sorted_by"`
+	TargetFileSizeBytes       *int64    `json:"target_file_size_bytes"`
+}
+
+// MaintenancePlan defines model for MaintenancePlan.
+type MaintenancePlan struct {
+	EvaluatedAt    time.Time             `json:"evaluated_at"`
+	Plan           []MaintenancePlanStep `json:"plan"`
+	PolicyRevision *int64                `json:"policy_revision"`
+}
+
+// MaintenancePlanStep defines model for MaintenancePlanStep.
+type MaintenancePlanStep struct {
+	Due       bool                  `json:"due"`
+	Operation MaintenanceOperation  `json:"operation"`
+	Reason    MaintenanceReason     `json:"reason"`
+	WaitsFor  *MaintenanceOperation `json:"waits_for"`
+	WouldRun  bool                  `json:"would_run"`
+}
+
+// MaintenancePolicy A table's maintenance parameters (#500).
+type MaintenancePolicy struct {
+	ExpireSnapshots             MaintenanceSettings `json:"expire_snapshots"`
+	Mode                        MaintenanceMode     `json:"mode"`
+	Optimize                    MaintenanceSettings `json:"optimize"`
+	OptimizeManifests           MaintenanceSettings `json:"optimize_manifests"`
+	RemoveOrphanFiles           MaintenanceSettings `json:"remove_orphan_files"`
+	WriterCommitIntervalSeconds int64               `json:"writer_commit_interval_seconds"`
+}
+
+// MaintenanceReason defines model for MaintenanceReason.
+type MaintenanceReason struct {
+	Blocked        *MaintenanceReasonBlocked `json:"blocked,omitempty"`
+	ElapsedSeconds *int64                    `json:"elapsed_seconds,omitempty"`
+
+	// Fired trigger that fired, max_interval or manual
+	Fired              *string             `json:"fired,omitempty"`
+	LastSuccessAt      *time.Time          `json:"last_success_at,omitempty"`
+	MaxIntervalSeconds *int64              `json:"max_interval_seconds,omitempty"`
+	Measured           *float64            `json:"measured,omitempty"`
+	MinIntervalSeconds *int64              `json:"min_interval_seconds,omitempty"`
+	RequestedBy        *openapi_types.UUID `json:"requested_by,omitempty"`
+	Threshold          *float64            `json:"threshold,omitempty"`
+}
+
+// MaintenanceReasonBlocked defines model for MaintenanceReason.Blocked.
+type MaintenanceReasonBlocked string
+
 // MaintenanceRun defines model for MaintenanceRun.
 type MaintenanceRun struct {
+	Attempts     int                 `json:"attempts"`
 	BindingId    *openapi_types.UUID `json:"binding_id"`
 	CatalogId    openapi_types.UUID  `json:"catalog_id"`
 	ErrorCode    *string             `json:"error_code"`
@@ -2639,13 +2783,74 @@ type MaintenanceRun struct {
 	Id           openapi_types.UUID  `json:"id"`
 	Namespace    string              `json:"namespace"`
 	Operations   []string            `json:"operations"`
-	Retention    *string             `json:"retention"`
-	StartedAt    time.Time           `json:"started_at"`
-	StartedBy    *openapi_types.UUID `json:"started_by"`
-	Status       string              `json:"status"`
-	TableName    string              `json:"table_name"`
-	WorkflowId   string              `json:"workflow_id"`
+
+	// Parameters The operation's settings when the run was created.
+	Parameters     *map[string]interface{} `json:"parameters,omitempty"`
+	PolicyRevision *int64                  `json:"policy_revision"`
+	Reason         MaintenanceReason       `json:"reason"`
+	Retention      *string                 `json:"retention"`
+	StartedAt      time.Time               `json:"started_at"`
+	StartedBy      *openapi_types.UUID     `json:"started_by"`
+	Status         string                  `json:"status"`
+	TableName      string                  `json:"table_name"`
+	Trigger        MaintenanceRunTrigger   `json:"trigger"`
+	WorkflowId     string                  `json:"workflow_id"`
 }
+
+// MaintenanceRunTrigger defines model for MaintenanceRun.Trigger.
+type MaintenanceRunTrigger string
+
+// MaintenanceSettings defines model for MaintenanceSettings.
+type MaintenanceSettings struct {
+	Enabled            bool                          `json:"enabled"`
+	MaxIntervalSeconds *int64                        `json:"max_interval_seconds"`
+	MinIntervalSeconds int64                         `json:"min_interval_seconds"`
+	OnConflict         MaintenanceSettingsOnConflict `json:"on_conflict"`
+	Params             MaintenanceParams             `json:"params"`
+	TimeoutSeconds     int64                         `json:"timeout_seconds"`
+
+	// Trigger Measured conditions that call for an operation; each operation reads only its own.
+	Trigger MaintenanceTrigger `json:"trigger"`
+	Window  *MaintenanceWindow `json:"window"`
+}
+
+// MaintenanceSettingsOnConflict defines model for MaintenanceSettings.OnConflict.
+type MaintenanceSettingsOnConflict string
+
+// MaintenanceTrigger Measured conditions that call for an operation; each operation reads only its own.
+type MaintenanceTrigger struct {
+	// DeleteFiles optimize: delete files (format v2+)
+	DeleteFiles *int64 `json:"delete_files"`
+
+	// Manifests optimize_manifests: manifest count
+	Manifests *int64 `json:"manifests"`
+
+	// OldestAgeSeconds expire_snapshots: age of the oldest snapshot
+	OldestAgeSeconds *int64 `json:"oldest_age_seconds"`
+
+	// SmallFileRatio optimize: share of files below target_file_size_bytes
+	SmallFileRatio *float64 `json:"small_file_ratio"`
+
+	// Snapshots expire_snapshots: snapshot count
+	Snapshots *int64 `json:"snapshots"`
+}
+
+// MaintenanceWindow defines model for MaintenanceWindow.
+type MaintenanceWindow struct {
+	EndHour   int `json:"end_hour"`
+	StartHour int `json:"start_hour"`
+
+	// Tz IANA time zone, e.g. UTC or America/Sao_Paulo
+	Tz string `json:"tz"`
+}
+
+// ManualMaintenanceRequest defines model for ManualMaintenanceRequest.
+type ManualMaintenanceRequest struct {
+	Operation ManualMaintenanceRequestOperation `json:"operation"`
+}
+
+// ManualMaintenanceRequestOperation defines model for ManualMaintenanceRequest.Operation.
+type ManualMaintenanceRequestOperation string
 
 // Me defines model for Me.
 type Me struct {
@@ -3606,6 +3811,20 @@ type StatementSpan struct {
 	Start int `json:"start"`
 }
 
+// StoredMaintenancePolicy defines model for StoredMaintenancePolicy.
+type StoredMaintenancePolicy struct {
+	CreatedAt                   time.Time           `json:"created_at"`
+	ExpireSnapshots             MaintenanceSettings `json:"expire_snapshots"`
+	Mode                        MaintenanceMode     `json:"mode"`
+	Optimize                    MaintenanceSettings `json:"optimize"`
+	OptimizeManifests           MaintenanceSettings `json:"optimize_manifests"`
+	RemoveOrphanFiles           MaintenanceSettings `json:"remove_orphan_files"`
+	Revision                    int64               `json:"revision"`
+	UpdatedAt                   time.Time           `json:"updated_at"`
+	UpdatedBy                   *openapi_types.UUID `json:"updated_by"`
+	WriterCommitIntervalSeconds int64               `json:"writer_commit_interval_seconds"`
+}
+
 // SuspendUserRequest defines model for SuspendUserRequest.
 type SuspendUserRequest struct {
 	Reason *SuspendUserRequestReason `json:"reason,omitempty"`
@@ -3685,20 +3904,58 @@ type SystemStatusSectionStatus string
 
 // TableHealth defines model for TableHealth.
 type TableHealth struct {
-	CatalogId              openapi_types.UUID `json:"catalog_id"`
-	CatalogName            string             `json:"catalog_name"`
-	FileCount              *int               `json:"file_count"`
-	HealthScore            int                `json:"health_score"`
-	LastMaintenanceAt      *time.Time         `json:"last_maintenance_at"`
-	Namespace              string             `json:"namespace"`
-	NeedsCompaction        bool               `json:"needs_compaction"`
-	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
-	NeedsSnapshotExpiry    bool               `json:"needs_snapshot_expiry"`
-	OldestSnapshotAgeHours *int               `json:"oldest_snapshot_age_hours"`
-	SnapshotCount          *int               `json:"snapshot_count,omitempty"`
-	TableName              string             `json:"table_name"`
-	TotalSizeBytes         *int               `json:"total_size_bytes"`
+	AvgFileSizeBytes *int               `json:"avg_file_size_bytes"`
+	CapturedAt       *time.Time         `json:"captured_at,omitempty"`
+	CatalogId        openapi_types.UUID `json:"catalog_id"`
+	CatalogName      string             `json:"catalog_name"`
+	CommitsLastDay   *int               `json:"commits_last_day"`
+	CommitsLastHour  *int               `json:"commits_last_hour"`
+	DeleteFileCount  *int               `json:"delete_file_count"`
+
+	// DueOperations Operations the table's maintenance parameters find due at the last health pass.
+	DueOperations       []MaintenanceOperation `json:"due_operations"`
+	EqualityDeleteCount *int                   `json:"equality_delete_count"`
+	FileCount           *int                   `json:"file_count"`
+	FormatVersion       *int                   `json:"format_version"`
+	HealthScore         int                    `json:"health_score"`
+	LastMaintenanceAt   *time.Time             `json:"last_maintenance_at"`
+
+	// MaintenanceMode The table's maintenance mode; null when it has no parameters.
+	MaintenanceMode        *MaintenanceMode `json:"maintenance_mode"`
+	ManifestCount          *int             `json:"manifest_count"`
+	Namespace              string           `json:"namespace"`
+	NeedsCompaction        bool             `json:"needs_compaction"`
+	NeedsSnapshotExpiry    bool             `json:"needs_snapshot_expiry"`
+	OldestSnapshotAgeHours *int             `json:"oldest_snapshot_age_hours"`
+	PolicyRevision         *int64           `json:"policy_revision"`
+	PositionDeleteCount    *int             `json:"position_delete_count"`
+	SmallFileCount         *int             `json:"small_file_count"`
+	SnapshotCount          *int             `json:"snapshot_count,omitempty"`
+	TableName              string           `json:"table_name"`
+	TotalSizeBytes         *int             `json:"total_size_bytes"`
 }
+
+// TableMaintenance A table's maintenance parameters, what its catalog allows, its recent runs and its current plan.
+type TableMaintenance struct {
+	// AllowedActions update covers saving and removing the parameters, dry runs, runs and analysis.
+	AllowedActions *[]TableMaintenanceAllowedAction `json:"allowed_actions,omitempty"`
+	CatalogId      openapi_types.UUID               `json:"catalog_id"`
+	FormatVersion  *int                             `json:"format_version"`
+	Namespace      string                           `json:"namespace"`
+	Plan           *MaintenancePlan                 `json:"plan"`
+	Policy         *StoredMaintenancePolicy         `json:"policy"`
+
+	// Properties Iceberg table properties read at the last health pass.
+	Properties *map[string]string `json:"properties,omitempty"`
+
+	// RetentionFloorSeconds Shortest retention the catalog's engine accepts for expiry and orphan cleanup.
+	RetentionFloorSeconds int64            `json:"retention_floor_seconds"`
+	Runs                  []MaintenanceRun `json:"runs"`
+	TableName             string           `json:"table_name"`
+}
+
+// TableMaintenanceAllowedAction defines model for TableMaintenanceAllowedAction.
+type TableMaintenanceAllowedAction string
 
 // TargetRequest Where to run. binding_id names a target; catalog_id picks the catalog's only enabled binding, or the one on engine_id when it has several. Omitted, the workspace default applies, else the workspace's only target; otherwise 422 target_required.
 type TargetRequest struct {
@@ -4159,6 +4416,15 @@ type WsTicketRequest struct {
 	ExecutionId *openapi_types.UUID `json:"execution_id,omitempty"`
 }
 
+// MaintenanceCatalogId defines model for MaintenanceCatalogId.
+type MaintenanceCatalogId = openapi_types.UUID
+
+// MaintenanceNamespace defines model for MaintenanceNamespace.
+type MaintenanceNamespace = string
+
+// MaintenanceTable defines model for MaintenanceTable.
+type MaintenanceTable = string
+
 // PathAgentId defines model for PathAgentId.
 type PathAgentId = openapi_types.UUID
 
@@ -4299,9 +4565,20 @@ type ListAllCatalogsParams struct {
 
 // ListMaintenanceRunsParams defines parameters for ListMaintenanceRuns.
 type ListMaintenanceRunsParams struct {
-	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+	Trigger   *ListMaintenanceRunsParamsTrigger `form:"trigger,omitempty" json:"trigger,omitempty"`
+	Operation *MaintenanceOperation             `form:"operation,omitempty" json:"operation,omitempty"`
+	Status    *ListMaintenanceRunsParamsStatus  `form:"status,omitempty" json:"status,omitempty"`
+	Ns        *string                           `form:"ns,omitempty" json:"ns,omitempty"`
+	Table     *string                           `form:"table,omitempty" json:"table,omitempty"`
+	Limit     *int                              `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset    *int                              `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListMaintenanceRunsParamsTrigger defines parameters for ListMaintenanceRuns.
+type ListMaintenanceRunsParamsTrigger string
+
+// ListMaintenanceRunsParamsStatus defines parameters for ListMaintenanceRuns.
+type ListMaintenanceRunsParamsStatus string
 
 // ListCatalogMetadataSyncRunsParams defines parameters for ListCatalogMetadataSyncRuns.
 type ListCatalogMetadataSyncRunsParams struct {
@@ -4315,6 +4592,12 @@ type ListTableHealthParams struct {
 	MaxScore *int    `form:"max_score,omitempty" json:"max_score,omitempty"`
 	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset   *int    `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// PutTableMaintenanceParams defines parameters for PutTableMaintenance.
+type PutTableMaintenanceParams struct {
+	// IfMatch The revision being replaced.
+	IfMatch *string `json:"If-Match,omitempty"`
 }
 
 // GetDialectParams defines parameters for GetDialect.
@@ -4685,6 +4968,12 @@ type UpdateCatalogDetailJSONRequestBody = UpdateCatalogDetailRequest
 
 // CreateMaintenanceRunJSONRequestBody defines body for CreateMaintenanceRun for application/json ContentType.
 type CreateMaintenanceRunJSONRequestBody = CreateMaintenanceRequest
+
+// PutTableMaintenanceJSONRequestBody defines body for PutTableMaintenance for application/json ContentType.
+type PutTableMaintenanceJSONRequestBody = MaintenancePolicy
+
+// RunTableMaintenanceJSONRequestBody defines body for RunTableMaintenance for application/json ContentType.
+type RunTableMaintenanceJSONRequestBody = ManualMaintenanceRequest
 
 // CreateCatalogBindingJSONRequestBody defines body for CreateCatalogBinding for application/json ContentType.
 type CreateCatalogBindingJSONRequestBody = CreateBindingRequest

@@ -314,13 +314,23 @@ var operationAccess = map[string]access{
 	"ListTableHealth":       checked("PrincipalFromContext", "catalogForMonitoring"),
 	"CreateMaintenanceRun":  checked("PrincipalFromContext", "catalogForMonitoring"),
 	"ListMaintenanceRuns":   checked("PrincipalFromContext", "catalogForMonitoring"),
-	"StreamExecution":       {kind: kindStub}, // the real one is the ws route below
-	"ListMigrations":        {kind: kindStub},
-	"CreateMigration":       {kind: kindStub},
-	"GetMigration":          {kind: kindStub},
-	"CancelMigration":       {kind: kindStub},
-	"ListMigrationItems":    {kind: kindStub},
-	"StartMigration":        {kind: kindStub},
+	// Per-table maintenance (#500): maintenanceTable resolves the principal
+	// and checks the catalog through catalogForMonitoring (view or write).
+	"GetTableMaintenance":       checked("maintenanceTable"),
+	"PutTableMaintenance":       checked("maintenanceTable"),
+	"DeleteTableMaintenance":    checked("maintenanceTable"),
+	"DryRunTableMaintenance":    checked("maintenanceTable"),
+	"RunTableMaintenance":       checked("maintenanceTable"),
+	"AnalyzeCatalogTableHealth": checked("maintenanceTable"),
+	"AnalyzeTableHealth":        checked("maintenanceTable"),
+	"GetCatalogMaintenancePlan": checked("maintenanceTable"),
+	"StreamExecution":           {kind: kindStub}, // the real one is the ws route below
+	"ListMigrations":            {kind: kindStub},
+	"CreateMigration":           {kind: kindStub},
+	"GetMigration":              {kind: kindStub},
+	"CancelMigration":           {kind: kindStub},
+	"ListMigrationItems":        {kind: kindStub},
+	"StartMigration":            {kind: kindStub},
 }
 
 // routeAccess covers the routes registered by hand with chi (everything that is

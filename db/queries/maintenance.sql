@@ -84,3 +84,9 @@ RETURNING *;
 -- name: GetTableHealthByTable :one
 SELECT * FROM table_health_snapshots
 WHERE catalog_id = @catalog_id::uuid AND namespace = @namespace::text AND table_name = @table_name::text;
+
+-- name: CountRunningMaintenanceRuns :one
+SELECT count(*)::int FROM maintenance_runs WHERE status = 'running';
+
+-- name: SetMaintenanceRunAttempts :exec
+UPDATE maintenance_runs SET attempts = @attempts::int WHERE id = @id::uuid;

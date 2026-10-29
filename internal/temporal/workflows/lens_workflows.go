@@ -79,6 +79,18 @@ func LensTableHealthWorkflow(ctx workflow.Context) error {
 			}).Get(actCtx, nil); err != nil {
 				workflow.GetLogger(ctx).Error("analyze table health failed",
 					"catalog", cat.Catalog, "err", err)
+				return
+			}
+			// Each analyzed catalog runs its maintenance round (#500), on
+			// fresh metrics only. Versioned: passes started before it replay
+			// without the child.
+			if workflow.GetVersion(ctx, "maintenance-round", workflow.DefaultVersion, 1) == 1 {
+				roundCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+					WorkflowID: "maintenance-round-" + workflow.GetInfo(ctx).WorkflowExecution.RunID + "-" + cat.Catalog,
+				})
+				if err := workflow.ExecuteChildWorkflow(roundCtx, MaintenanceRoundWorkflow, cat.ID).Get(roundCtx, nil); err != nil {
+					workflow.GetLogger(ctx).Error("maintenance round failed", "catalog", cat.Catalog, "err", err)
+				}
 			}
 		})
 	}

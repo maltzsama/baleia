@@ -81,11 +81,23 @@ func TestLensTableHealth_FanOut(t *testing.T) {
 			return nil
 		})
 
+	env.RegisterWorkflow(MaintenanceRoundWorkflow)
+	var rounds []string
+	env.OnActivity(activities.PlanMaintenanceRound, mock.Anything, mock.Anything).
+		Return(func(ctx context.Context, p activities.PlanMaintenanceRoundParams) ([]activities.PlannedRun, error) {
+			mu.Lock()
+			rounds = append(rounds, p.CatalogID)
+			mu.Unlock()
+			return nil, nil
+		})
+
 	env.ExecuteWorkflow(LensTableHealthWorkflow)
 
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError(), "a failing catalog must not fail the run")
 	require.Len(t, analyzed, 3)
+	// #500: a round follows every catalog analyzed, never a failed one.
+	require.Len(t, rounds, 2)
 }
 
 func parseWorkflowSources() (*token.FileSet, []*ast.File, error) {
@@ -158,6 +170,12 @@ func TestLensTableHealth_RecordsPassLast(t *testing.T) {
 			}
 			return nil
 		})
+	env.RegisterWorkflow(MaintenanceRoundWorkflow)
+	env.OnActivity(activities.PlanMaintenanceRound, mock.Anything, mock.Anything).
+		Return(func(ctx context.Context, p activities.PlanMaintenanceRoundParams) ([]activities.PlannedRun, error) {
+			record("round")
+			return nil, nil
+		})
 	env.OnActivity(activities.SchedulePassSucceeded, mock.Anything, activities.SchedulePassSucceededParams{Schedule: schedules.LensTableHealth}).
 		Return(func(ctx context.Context, p activities.SchedulePassSucceededParams) error {
 			record("pass")
@@ -167,7 +185,9 @@ func TestLensTableHealth_RecordsPassLast(t *testing.T) {
 	env.ExecuteWorkflow(LensTableHealthWorkflow)
 
 	require.NoError(t, env.GetWorkflowError())
-	require.Equal(t, []string{"analyze", "analyze", "pass"}, events)
+	require.Len(t, events, 4)
+	require.Equal(t, "pass", events[3], "the pass is recorded after every analysis and round")
+	require.ElementsMatch(t, []string{"analyze", "analyze", "round", "pass"}, events)
 }
 
 // TestLensTableHealth_NoPassWhenListingFails: a pass that failed is not

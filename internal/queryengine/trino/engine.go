@@ -194,6 +194,109 @@ func (e *Engine) MaintenanceStatements(table []string, retention string) ([]stri
 	}, nil
 }
 
+// IcebergStatement renders one maintenance procedure with its arguments
+// (#500). The partition filter is checked again here: a workflow input is
+// not a trust boundary, and the statement runs as the engine's identity.
+func (e *Engine) IcebergStatement(table []string, op queryengine.IcebergOperation) (string, error) {
+	d := e.Dialect()
+	name, err := d.QualifiedName(table...)
+	if err != nil {
+		return "", fmt.Errorf("invalid table name: %w", err)
+	}
+	var args []string
+	switch op.Name {
+	case "optimize":
+		if op.FileSizeThreshold > 0 {
+			args = append(args, "file_size_threshold => "+d.QuoteString(fmt.Sprintf("%dB", op.FileSizeThreshold)))
+		}
+		if len(op.SortedBy) > 0 {
+			cols := make([]string, 0, len(op.SortedBy))
+			for _, c := range op.SortedBy {
+				cols = append(cols, d.QuoteString(c))
+			}
+			args = append(args, "sorted_by => ARRAY["+strings.Join(cols, ", ")+"]")
+		}
+		stmt := fmt.Sprintf("ALTER TABLE %s EXECUTE optimize%s", name, procArgs(args))
+		var where []string
+		if op.PartitionFilter != "" {
+			if err := trinoclient.ValidatePartitionFilter(op.PartitionFilter); err != nil {
+				return "", fmt.Errorf("invalid partition filter: %w", err)
+			}
+			where = append(where, "("+op.PartitionFilter+")")
+		}
+		if op.SkipFilesNewerThan > 0 {
+			where = append(where, fmt.Sprintf(`"$file_modified_time" < current_timestamp - INTERVAL '%d' SECOND`,
+				int64(op.SkipFilesNewerThan/time.Second)))
+		}
+		if len(where) > 0 {
+			stmt += " WHERE " + strings.Join(where, " AND ")
+		}
+		return stmt, nil
+	case "optimize_manifests":
+		return fmt.Sprintf("ALTER TABLE %s EXECUTE optimize_manifests", name), nil
+	case "expire_snapshots", "remove_orphan_files":
+		if op.Retention <= 0 {
+			return "", fmt.Errorf("%s needs a retention", op.Name)
+		}
+		args = append(args, "retention_threshold => "+d.QuoteString(trinoDuration(op.Retention)))
+		if op.Name == "expire_snapshots" {
+			if op.RetainLast > 0 {
+				args = append(args, fmt.Sprintf("retain_last => %d", op.RetainLast))
+			}
+			if op.CleanExpiredMetadata != nil {
+				args = append(args, fmt.Sprintf("clean_expired_metadata => %t", *op.CleanExpiredMetadata))
+			}
+		}
+		return fmt.Sprintf("ALTER TABLE %s EXECUTE %s%s", name, op.Name, procArgs(args)), nil
+	}
+	return "", fmt.Errorf("unknown maintenance operation %q", op.Name)
+}
+
+// IcebergMetricsStatements count the table's data files below the target
+// size and its manifests, through the $files and $manifests tables.
+func (e *Engine) IcebergMetricsStatements(table []string, targetFileSize int64) (smallFiles, manifests string, err error) {
+	if len(table) == 0 {
+		return "", "", errors.New("invalid table name: empty")
+	}
+	d := e.Dialect()
+	last := len(table) - 1
+	meta := func(suffix string) (string, error) {
+		parts := append(append([]string{}, table[:last]...), table[last]+suffix)
+		return d.QualifiedName(parts...)
+	}
+	files, err := meta("$files")
+	if err != nil {
+		return "", "", fmt.Errorf("invalid table name: %w", err)
+	}
+	mans, err := meta("$manifests")
+	if err != nil {
+		return "", "", fmt.Errorf("invalid table name: %w", err)
+	}
+	// content 0 is a data file; delete files are counted from the snapshot.
+	smallFiles = fmt.Sprintf("SELECT count(*) FROM %s WHERE content = 0 AND file_size_in_bytes < %d", files, targetFileSize)
+	manifests = fmt.Sprintf("SELECT count(*) FROM %s", mans)
+	return smallFiles, manifests, nil
+}
+
+func procArgs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return "(" + strings.Join(args, ", ") + ")"
+}
+
+// trinoDuration spells d in the largest whole unit Trino's retention
+// accepts (days, hours or minutes), rounding a remainder up to a minute.
+func trinoDuration(d time.Duration) string {
+	switch {
+	case d%(24*time.Hour) == 0:
+		return fmt.Sprintf("%dd", d/(24*time.Hour))
+	case d%time.Hour == 0:
+		return fmt.Sprintf("%dh", d/time.Hour)
+	}
+	return fmt.Sprintf("%dm", (d+time.Minute-1)/time.Minute)
+}
+
 var _ queryengine.QueryResourcesReader = (*Engine)(nil)
 
 // QueryResources reads the query's statistics from the coordinator as the

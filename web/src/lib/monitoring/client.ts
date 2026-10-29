@@ -104,10 +104,18 @@ export async function createMaintenance(
 	);
 }
 
-export async function listMaintenanceRuns(catalogId: string): Promise<MaintenanceRun[]> {
+export type RunFilter = {
+	trigger?: 'manual' | 'automatic' | 'dry_run';
+	operation?: 'optimize' | 'optimize_manifests' | 'expire_snapshots' | 'remove_orphan_files';
+};
+
+export async function listMaintenanceRuns(
+	catalogId: string,
+	filter: RunFilter = {}
+): Promise<MaintenanceRun[]> {
 	return fail(
 		await client.GET('/catalogs/{catalog_id}/maintenance-runs', {
-			params: { path: { catalog_id: catalogId } }
+			params: { path: { catalog_id: catalogId }, query: filter }
 		}),
 		'Could not load maintenance runs'
 	);

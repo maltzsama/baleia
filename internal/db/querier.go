@@ -61,6 +61,7 @@ type Querier interface {
 	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
 	CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
 	CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error)
+	CountRunningMaintenanceRuns(ctx context.Context) (int32, error)
 	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
 	CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error)
 	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
@@ -521,6 +522,7 @@ type Querier interface {
 	// Stores the resolved target of an execution. target_snapshot is immutable
 	// context for history and carries no secret.
 	SetExecutionTarget(ctx context.Context, arg SetExecutionTargetParams) error
+	SetMaintenanceRunAttempts(ctx context.Context, arg SetMaintenanceRunAttemptsParams) error
 	SetSemanticMetricCertification(ctx context.Context, arg SetSemanticMetricCertificationParams) (SemanticMetric, error)
 	SetSemanticModelCertification(ctx context.Context, arg SetSemanticModelCertificationParams) (SemanticModel, error)
 	SetSpaceMember(ctx context.Context, arg SetSpaceMemberParams) (SpaceMember, error)

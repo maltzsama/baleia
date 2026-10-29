@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRunningMaintenanceRuns = `-- name: CountRunningMaintenanceRuns :one
+SELECT count(*)::int FROM maintenance_runs WHERE status = 'running'
+`
+
+func (q *Queries) CountRunningMaintenanceRuns(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, countRunningMaintenanceRuns)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createPlannedMaintenanceRun = `-- name: CreatePlannedMaintenanceRun :one
 INSERT INTO maintenance_runs (
     catalog_id, binding_id, namespace, table_name, operations, retention, status,
@@ -217,7 +228,7 @@ func (q *Queries) GetRunningMaintenanceRun(ctx context.Context, arg GetRunningMa
 }
 
 const getTableHealthByTable = `-- name: GetTableHealthByTable :one
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision FROM table_health_snapshots
 WHERE catalog_id = $1::uuid AND namespace = $2::text AND table_name = $3::text
 `
 
@@ -245,8 +256,19 @@ func (q *Queries) GetTableHealthByTable(ctx context.Context, arg GetTableHealthB
 		&i.HealthScore,
 		&i.NeedsCompaction,
 		&i.NeedsSnapshotExpiry,
-		&i.NeedsOrphanCleanup,
 		&i.CatalogID,
+		&i.DeleteFileCount,
+		&i.EqualityDeleteCount,
+		&i.PositionDeleteCount,
+		&i.SmallFileCount,
+		&i.CommitsLastHour,
+		&i.CommitsLastDay,
+		&i.AvgFileSizeBytes,
+		&i.ManifestCount,
+		&i.FormatVersion,
+		&i.TableProperties,
+		&i.DueOperations,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
@@ -468,6 +490,20 @@ func (q *Queries) ListTableMaintenanceRuns(ctx context.Context, arg ListTableMai
 		return nil, err
 	}
 	return items, nil
+}
+
+const setMaintenanceRunAttempts = `-- name: SetMaintenanceRunAttempts :exec
+UPDATE maintenance_runs SET attempts = $1::int WHERE id = $2::uuid
+`
+
+type SetMaintenanceRunAttemptsParams struct {
+	Attempts int32       `json:"attempts"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) SetMaintenanceRunAttempts(ctx context.Context, arg SetMaintenanceRunAttemptsParams) error {
+	_, err := q.db.Exec(ctx, setMaintenanceRunAttempts, arg.Attempts, arg.ID)
+	return err
 }
 
 const updateTableMaintenancePolicy = `-- name: UpdateTableMaintenancePolicy :one

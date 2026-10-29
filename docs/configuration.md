@@ -27,6 +27,8 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_RECONCILE_INTERVAL` | unset | Apply binding reconciliation on a schedule (at least `5m`); unset: no schedule, only `POST /engines/{id}/reconcile` |
 | `BALEIA_RECONCILE_MAX_ACTIONS` | `20` | Changes one reconcile run may apply; the rest are reported |
 | `BALEIA_METADATA_SYNC_INTERVAL` | `15m` | How often every catalog's metadata snapshot is refreshed (at least `5m`) |
+| `BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS` | `4` | Automatic Iceberg maintenance runs in progress at once, across tables (#500) |
+| `BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION` | `1h` | Minimum retention projected into managed Iceberg catalogs for `expire_snapshots` and `remove_orphan_files`; table parameters below it are refused (at least `1m`) |
 | `BALEIA_EXECUTION_TIMEOUT` | `2h` | Cap for a whole execution: all statements run in one engine session, so a script may take statements × statement timeout, capped by this |
 | `BALEIA_RESULT_MAX_ROWS` | `1000000` | Max rows buffered per statement result before truncation |
 | `BALEIA_LOB_MAX_BYTES` | `1048576` | Max bytes an Oracle engine reads from one CLOB/NCLOB/BLOB value into a result (1 MiB) |

@@ -1,0 +1,25 @@
+meta {
+  name: Maintenance - Remove parameters
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/maintenance
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Removing the parameters stops maintaining the table (#500).
+}

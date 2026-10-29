@@ -8,6 +8,7 @@ import { authStore } from '$lib/stores/auth.svelte';
 import { toasts } from '$lib/ui/toast.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import MonitoringPage from './+page.svelte';
+import type { TableHealth } from '$lib/monitoring/client';
 
 const ENGINE = '00000000-0000-0000-0000-0000000000e1';
 const WORKSPACE = '00000000-0000-0000-0000-000000000001';
@@ -123,7 +124,10 @@ describe('monitoring page', () => {
 			started_at: '2026-10-01T12:00:00Z',
 			finished_at: status === 'running' ? null : '2026-10-01T12:05:00Z',
 			error_code: status === 'failed' ? 'engine_error' : null,
-			workflow_id: `wf-${id}`
+			workflow_id: `wf-${id}`,
+			trigger: 'manual' as const,
+			reason: {},
+			attempts: 1
 		});
 
 		const healthRow = {
@@ -134,25 +138,30 @@ describe('monitoring page', () => {
 			health_score: 80,
 			needs_compaction: true,
 			needs_snapshot_expiry: false,
-			needs_orphan_cleanup: false
+			due_operations: [] as TableHealth['due_operations']
 		};
 
 		function mockTables(
 			runs: ReturnType<typeof run>[],
-			options: { health?: (typeof healthRow)[]; runsFail?: boolean } = {}
+			options: {
+				health?: (Partial<TableHealth> & typeof healthRow)[];
+				runsFail?: boolean;
+				runQueries?: URLSearchParams[];
+			} = {}
 		) {
 			server.use(
 				http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-					response(200).json([makeMetadataCatalog({ id: CATALOG })])
+					response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
 				),
 				http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
 					response(200).json(options.health ?? [healthRow])
 				),
-				http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) =>
-					options.runsFail
+				http.get('/catalogs/{catalog_id}/maintenance-runs', ({ request, response }) => {
+					options.runQueries?.push(new URL(request.url).searchParams);
+					return options.runsFail
 						? response(404).json({ code: 'not_found', message: 'catalog not found' })
-						: response(200).json(runs)
-				)
+						: response(200).json(runs);
+				})
 			);
 		}
 
@@ -196,6 +205,58 @@ describe('monitoring page', () => {
 
 			expect(await screen.findByText('Could not load table health')).toBeTruthy();
 			expect(screen.queryByText('No maintenance runs yet.')).toBeNull();
+		});
+
+		it('shows what parameters find due and links each table to its configuration', async () => {
+			mockTables([], {
+				health: [
+					{
+						...healthRow,
+						due_operations: ['optimize', 'expire_snapshots'],
+						maintenance_mode: 'managed'
+					}
+				]
+			});
+			await openTables();
+
+			const row = (await screen.findByText('sales.orders')).closest('tr')!;
+			expect(within(row).getByText('Optimize')).toBeTruthy();
+			expect(within(row).getByText('Expire snapshots')).toBeTruthy();
+			expect(within(row).getByText('Managed')).toBeTruthy();
+			expect(within(row).getByRole('link', { name: 'Configure' }).getAttribute('href')).toBe(
+				`/data?catalog=${CATALOG}&ns=sales&table=orders`
+			);
+			expect(within(row).getByRole('button', { name: 'Run now' })).toBeTruthy();
+			expect(within(row).queryByRole('button', { name: 'Run maintenance…' })).toBeNull();
+		});
+
+		it('filters the run history by trigger', async () => {
+			const runQueries: URLSearchParams[] = [];
+			mockTables([], { runQueries });
+			await openTables();
+			await screen.findByText('sales.orders');
+
+			await fireEvent.change(screen.getByLabelText('Trigger'), { target: { value: 'automatic' } });
+			await waitFor(() => expect(runQueries.at(-1)?.get('trigger')).toBe('automatic'));
+		});
+
+		it('offers to analyze a catalog that has no health rows yet', async () => {
+			let analyzed = false;
+			mockTables([], { health: [] });
+			server.use(
+				http.post('/catalogs/{catalog_id}/table-health/analyze', ({ response }) => {
+					analyzed = true;
+					return response(202).empty();
+				})
+			);
+			await openTables();
+
+			await screen.findByRole('button', { name: 'Analyze now' });
+			// The empty state is rebuilt when health reloads; click the live one.
+			await waitFor(async () => {
+				await fireEvent.click(screen.getByRole('button', { name: 'Analyze now' }));
+				expect(analyzed).toBe(true);
+			});
 		});
 
 		it('lists a run started from the modal without a reload', async () => {
@@ -338,7 +399,7 @@ describe('monitoring page', () => {
 			health_score: 40,
 			needs_compaction: true,
 			needs_snapshot_expiry: false,
-			needs_orphan_cleanup: false
+			due_operations: [] as TableHealth['due_operations']
 		});
 		let releaseB: () => void = () => {};
 		const gateB = new Promise<void>((resolve) => (releaseB = resolve));
@@ -346,8 +407,8 @@ describe('monitoring page', () => {
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
 				response(200).json([
-					makeMetadataCatalog({ id: A, name: 'lake' }),
-					makeMetadataCatalog({ id: B, name: 'warehouse' })
+					makeMetadataCatalog({ id: A, name: 'lake', origin: 'source' }),
+					makeMetadataCatalog({ id: B, name: 'warehouse', origin: 'source' })
 				])
 			),
 			http.get('/catalogs/{catalog_id}/table-health', async ({ params, response }) => {
@@ -370,7 +431,10 @@ describe('monitoring page', () => {
 					status: 'finished',
 					started_at: '2026-10-01T12:00:00Z',
 					finished_at: '2026-10-01T12:01:00Z',
-					workflow_id: 'wf-1'
+					workflow_id: 'wf-1',
+					trigger: 'manual' as const,
+					reason: {},
+					attempts: 1
 				});
 			})
 		);
@@ -403,7 +467,7 @@ describe('monitoring page', () => {
 			health_score: 40,
 			needs_compaction: true,
 			needs_snapshot_expiry: false,
-			needs_orphan_cleanup: false
+			due_operations: [] as TableHealth['due_operations']
 		});
 		let releaseA: () => void = () => {};
 		const gateA = new Promise<void>((resolve) => (releaseA = resolve));
@@ -411,8 +475,8 @@ describe('monitoring page', () => {
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
 				response(200).json([
-					makeMetadataCatalog({ id: A, name: 'lake' }),
-					makeMetadataCatalog({ id: B, name: 'warehouse' })
+					makeMetadataCatalog({ id: A, name: 'lake', origin: 'source' }),
+					makeMetadataCatalog({ id: B, name: 'warehouse', origin: 'source' })
 				])
 			),
 			http.get('/catalogs/{catalog_id}/table-health', async ({ params, response }) => {
@@ -435,7 +499,10 @@ describe('monitoring page', () => {
 					status: 'finished',
 					started_at: '2026-10-01T12:00:00Z',
 					finished_at: '2026-10-01T12:01:00Z',
-					workflow_id: 'wf-1'
+					workflow_id: 'wf-1',
+					trigger: 'manual' as const,
+					reason: {},
+					attempts: 1
 				});
 			})
 		);
@@ -537,7 +604,7 @@ describe('monitoring page', () => {
 		const bodies: { operations: string[]; retention?: string }[] = [];
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-				response(200).json([makeMetadataCatalog({ id: CATALOG })])
+				response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
 			),
 			http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
 				response(200).json([
@@ -549,7 +616,7 @@ describe('monitoring page', () => {
 						health_score: 40,
 						needs_compaction: true,
 						needs_snapshot_expiry: false,
-						needs_orphan_cleanup: false
+						due_operations: []
 					}
 				])
 			),
@@ -566,7 +633,10 @@ describe('monitoring page', () => {
 					status: 'finished',
 					started_at: '2026-10-01T12:00:00Z',
 					finished_at: '2026-10-01T12:01:00Z',
-					workflow_id: 'wf'
+					workflow_id: 'wf',
+					trigger: 'manual' as const,
+					reason: {},
+					attempts: 1
 				});
 			})
 		);

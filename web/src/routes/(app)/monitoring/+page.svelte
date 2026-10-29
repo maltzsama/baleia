@@ -5,6 +5,14 @@
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { loadCatalogs, type MetadataCatalog } from '$lib/metadata/client';
+	import { resolve } from '$app/paths';
+	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
+	import {
+		analyzeCatalogTableHealth,
+		dataTableQuery,
+		runTableMaintenance
+	} from '$lib/maintenance/client';
+	import { operationLabel, triggerLabel } from '$lib/maintenance/labels';
 	import { poll, type PollController } from '$lib/util/poll';
 	import { formatDuration } from '$lib/util/time';
 	import { formatBytes } from '$lib/util/size';
@@ -73,6 +81,9 @@
 	let needs = $state('');
 	let maxScore = $state('');
 	let runs = $state<MaintenanceRun[]>([]);
+	let runTrigger = $state('');
+	let runOperation = $state('');
+	let analyzing = $state(false);
 	let maintainTarget = $state<TableHealth | null>(null);
 	let maintainOpen = $state(false);
 	let operations = $state<Record<string, boolean>>({
@@ -138,7 +149,8 @@
 	async function loadCatalogList() {
 		if (!workspaceId || catalogs.length > 0) return;
 		try {
-			catalogs = await loadCatalogs(workspaceId);
+			// Table health covers Iceberg catalogs only (#500).
+			catalogs = (await loadCatalogs(workspaceId)).filter((catalog) => hasTableHealth(catalog));
 			catalogId = catalogs[0]?.id ?? '';
 		} catch {
 			catalogs = [];
@@ -165,7 +177,7 @@
 				needs: needs || undefined,
 				maxScore: maxScore ? Number(maxScore) : undefined
 			});
-			const list = await listMaintenanceRuns(target);
+			const list = await listMaintenanceRuns(target, runFilter());
 			if (catalogId !== target) return;
 			health = rows;
 			runs = list;
@@ -247,7 +259,7 @@
 		operations = {
 			optimize: row.needs_compaction,
 			expire_snapshots: row.needs_snapshot_expiry,
-			remove_orphan_files: row.needs_orphan_cleanup
+			remove_orphan_files: false
 		};
 		if (!operations.optimize && !operations.expire_snapshots && !operations.remove_orphan_files) {
 			operations.optimize = true;
@@ -299,12 +311,57 @@
 		}
 	}
 
+	// A table with maintenance parameters shows what they find due; one
+	// without shows the default thresholds' needs (#500).
 	function needsLabels(row: TableHealth): string[] {
+		if (row.maintenance_mode) return row.due_operations.map(operationLabel);
 		const out: string[] = [];
-		if (row.needs_compaction) out.push('compaction');
+		if (row.needs_compaction) out.push(m.monitoring_compaction());
 		if (row.needs_snapshot_expiry) out.push(m.monitoring_snapshot_expiry());
-		if (row.needs_orphan_cleanup) out.push(m.monitoring_orphan_cleanup());
 		return out;
+	}
+
+	function runFilter() {
+		return {
+			trigger: (runTrigger || undefined) as 'manual' | 'automatic' | 'dry_run' | undefined,
+			operation: (runOperation || undefined) as
+				'optimize' | 'optimize_manifests' | 'expire_snapshots' | 'remove_orphan_files' | undefined
+		};
+	}
+
+	async function analyzeNow() {
+		if (!catalogId) return;
+		analyzing = true;
+		try {
+			await analyzeCatalogTableHealth(catalogId);
+			toasts.success(m.maintenance_analysis_started());
+		} catch (e) {
+			toasts.error(e instanceof Error ? e.message : String(e));
+		} finally {
+			analyzing = false;
+		}
+	}
+
+	// A table with parameters runs what they find due, through its own route.
+	async function runDue(row: TableHealth) {
+		try {
+			await runTableMaintenance(
+				{ catalogId: row.catalog_id, namespace: row.namespace, table: row.table_name },
+				'next_due'
+			);
+			toasts.success(m.maintenance_run_started({ operation: m.maintenance_run_next_due() }));
+			await loadHealth();
+		} catch (e) {
+			toasts.error(e instanceof Error ? e.message : String(e));
+		}
+	}
+
+	function modeLabel(mode: string): string {
+		return mode === 'managed'
+			? m.maintenance_mode_managed()
+			: mode === 'off'
+				? m.maintenance_mode_off()
+				: m.maintenance_mode_elsewhere();
 	}
 
 	function scoreTone(score: number): 'success' | 'warning' | 'danger' {
@@ -624,7 +681,10 @@
 						{ value: '', label: m.monitoring_any() },
 						{ value: 'compaction', label: m.monitoring_compaction() },
 						{ value: 'snapshot_expiry', label: m.monitoring_snapshot_expiry_2() },
-						{ value: 'orphan_cleanup', label: m.monitoring_orphan_cleanup_2() }
+						{ value: 'optimize', label: m.maintenance_op_optimize() },
+						{ value: 'optimize_manifests', label: m.maintenance_op_optimize_manifests() },
+						{ value: 'expire_snapshots', label: m.maintenance_op_expire_snapshots() },
+						{ value: 'remove_orphan_files', label: m.maintenance_op_remove_orphan_files() }
 					]}
 					onchange={() => loadHealth()}
 				/>
@@ -636,8 +696,12 @@
 			{#if catalogs.length === 0}
 				<EmptyState
 					title={m.monitoring_no_catalogs()}
-					description={m.monitoring_no_iceberg_catalog_is_granted_to()}
-				/>
+					description={m.maintenance_no_iceberg_catalog()}
+				>
+					<a class="text-[12px] font-semibold text-primary" href={resolve('/connections')}
+						>{m.maintenance_go_to_connections()}</a
+					>
+				</EmptyState>
 			{:else if healthLoading && health.length === 0}
 				<Skeleton class="h-32 w-full" />
 			{:else if healthError}
@@ -649,8 +713,12 @@
 			{:else if health.length === 0}
 				<EmptyState
 					title={m.monitoring_no_table_health_rows()}
-					description={m.monitoring_the_health_poller_has_not_seen()}
-				/>
+					description={m.maintenance_no_health_yet()}
+				>
+					<Button size="sm" loading={analyzing} onclick={analyzeNow}
+						>{m.maintenance_analyze_now()}</Button
+					>
+				</EmptyState>
 			{:else}
 				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
@@ -662,15 +730,19 @@
 								<th class="px-3 py-2">{m.monitoring_health()}</th>
 								<th class="px-3 py-2">{m.monitoring_snapshots()}</th>
 								<th class="px-3 py-2">{m.monitoring_files()}</th>
+								<th class="px-3 py-2">{m.maintenance_col_delete_files()}</th>
+								<th class="px-3 py-2">{m.maintenance_col_commits_hour()}</th>
 								<th class="px-3 py-2">{m.monitoring_size()}</th>
 								<th class="px-3 py-2">{m.monitoring_oldest()}</th>
 								<th class="px-3 py-2">{m.monitoring_needs()}</th>
+								<th class="px-3 py-2">{m.maintenance_mode()}</th>
 								<th class="px-3 py-2">{m.monitoring_last_maintenance()}</th>
 								<th class="px-3 py-2 text-right">{m.monitoring_actions()}</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each health as row (row.catalog_id + row.namespace + row.table_name)}
+								{@const configureHref = `${resolve('/data')}?${dataTableQuery(row.catalog_id, row.namespace, row.table_name)}`}
 								<tr class="border-b border-border/60 last:border-b-0">
 									<td class="px-3 py-1.5 font-mono">{row.namespace}.{row.table_name}</td>
 									<td class="px-3 py-1.5">
@@ -690,6 +762,8 @@
 									</td>
 									<td class="px-3 py-1.5">{row.snapshot_count}</td>
 									<td class="px-3 py-1.5">{row.file_count ?? '—'}</td>
+									<td class="px-3 py-1.5">{row.delete_file_count ?? '—'}</td>
+									<td class="px-3 py-1.5">{row.commits_last_hour ?? '—'}</td>
 									<td class="px-3 py-1.5">
 										{row.total_size_bytes != null
 											? m.monitoring_mib({ value: Math.round(row.total_size_bytes / 1024 / 1024) })
@@ -708,6 +782,13 @@
 										</div>
 									</td>
 									<td class="px-3 py-1.5">
+										{#if row.maintenance_mode}
+											<Badge tone="neutral">{modeLabel(row.maintenance_mode)}</Badge>
+										{:else}
+											<span class="text-text-muted">{m.maintenance_not_set()}</span>
+										{/if}
+									</td>
+									<td class="px-3 py-1.5">
 										{#if row.last_maintenance_at}
 											<RelativeTime at={row.last_maintenance_at} />
 										{:else}
@@ -715,9 +796,23 @@
 										{/if}
 									</td>
 									<td class="px-3 py-1.5 text-right">
-										<Button size="sm" onclick={() => openMaintenance(row)}
-											>{m.monitoring_run_maintenance_2()}</Button
-										>
+										<div class="flex justify-end gap-1.5">
+											<!-- eslint-disable svelte/no-navigation-without-resolve -- configureHref is resolve('/data') plus the query -->
+											<a
+												class="inline-flex h-7 items-center rounded-md border border-border px-2.5 text-[11px] font-semibold text-text-muted no-underline hover:text-text-main"
+												href={configureHref}>{m.maintenance_configure()}</a
+											>
+											<!-- eslint-enable svelte/no-navigation-without-resolve -->
+											{#if row.maintenance_mode === 'managed' || row.maintenance_mode === 'off'}
+												<Button size="sm" onclick={() => runDue(row)}
+													>{m.maintenance_run_now()}</Button
+												>
+											{:else if !row.maintenance_mode}
+												<Button size="sm" onclick={() => openMaintenance(row)}
+													>{m.monitoring_run_maintenance_2()}</Button
+												>
+											{/if}
+										</div>
 									</td>
 								</tr>
 							{/each}
@@ -726,7 +821,38 @@
 				</div>
 			{/if}
 			{#if catalogs.length > 0 && !healthError && !(healthLoading && health.length === 0)}
-				<h2 class="mt-5 text-[13px] font-semibold">{m.monitoring_maintenance_runs()}</h2>
+				<div class="mt-5 flex flex-wrap items-end justify-between gap-2">
+					<h2 class="text-[13px] font-semibold">{m.monitoring_maintenance_runs()}</h2>
+					<div class="flex gap-2">
+						<div class="w-40">
+							<Select
+								label={m.maintenance_filter_trigger()}
+								bind:value={runTrigger}
+								options={[
+									{ value: '', label: m.monitoring_any() },
+									{ value: 'automatic', label: m.maintenance_trigger_automatic() },
+									{ value: 'manual', label: m.maintenance_trigger_manual() },
+									{ value: 'dry_run', label: m.maintenance_trigger_dry_run() }
+								]}
+								onchange={() => loadHealth()}
+							/>
+						</div>
+						<div class="w-44">
+							<Select
+								label={m.maintenance_filter_operation()}
+								bind:value={runOperation}
+								options={[
+									{ value: '', label: m.monitoring_any() },
+									{ value: 'optimize', label: m.maintenance_op_optimize() },
+									{ value: 'optimize_manifests', label: m.maintenance_op_optimize_manifests() },
+									{ value: 'expire_snapshots', label: m.maintenance_op_expire_snapshots() },
+									{ value: 'remove_orphan_files', label: m.maintenance_op_remove_orphan_files() }
+								]}
+								onchange={() => loadHealth()}
+							/>
+						</div>
+					</div>
+				</div>
 				<div class="mt-2 overflow-x-auto rounded-lg border border-border bg-bg-panel">
 					<table class="w-full text-left text-[11px]">
 						<thead
@@ -736,6 +862,7 @@
 								<th class="px-3 py-2">{m.monitoring_status()}</th>
 								<th class="px-3 py-2">{m.monitoring_table()}</th>
 								<th class="px-3 py-2">{m.monitoring_operations()}</th>
+								<th class="px-3 py-2">{m.maintenance_col_trigger()}</th>
 								<th class="px-3 py-2">{m.monitoring_started()}</th>
 								<th class="px-3 py-2">{m.monitoring_finished()}</th>
 								<th class="px-3 py-2">{m.monitoring_error()}</th>
@@ -748,7 +875,9 @@
 										<StatusBadge kind="maintenance" status={run.status} />
 									</td>
 									<td class="px-3 py-1.5 font-mono">{run.namespace}.{run.table_name}</td>
-									<td class="px-3 py-1.5">{run.operations.join(', ')}</td>
+									<td class="px-3 py-1.5">{run.operations.map(operationLabel).join(', ') || '—'}</td
+									>
+									<td class="px-3 py-1.5">{triggerLabel(run.trigger)}</td>
 									<td class="px-3 py-1.5"><RelativeTime at={run.started_at} /></td>
 									<td class="px-3 py-1.5">
 										{#if run.finished_at}
@@ -767,7 +896,7 @@
 								</tr>
 							{:else}
 								<tr>
-									<td class="px-3 py-3 text-slate-600 dark:text-slate-300" colspan="6">
+									<td class="px-3 py-3 text-slate-600 dark:text-slate-300" colspan="7">
 										{m.monitoring_no_maintenance_runs_yet()}
 									</td>
 								</tr>

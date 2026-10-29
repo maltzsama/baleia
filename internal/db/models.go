@@ -587,8 +587,19 @@ type TableHealthSnapshot struct {
 	HealthScore            int32              `json:"health_score"`
 	NeedsCompaction        bool               `json:"needs_compaction"`
 	NeedsSnapshotExpiry    bool               `json:"needs_snapshot_expiry"`
-	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
 	CatalogID              pgtype.UUID        `json:"catalog_id"`
+	DeleteFileCount        *int64             `json:"delete_file_count"`
+	EqualityDeleteCount    *int64             `json:"equality_delete_count"`
+	PositionDeleteCount    *int64             `json:"position_delete_count"`
+	SmallFileCount         *int64             `json:"small_file_count"`
+	CommitsLastHour        *int32             `json:"commits_last_hour"`
+	CommitsLastDay         *int32             `json:"commits_last_day"`
+	AvgFileSizeBytes       *int64             `json:"avg_file_size_bytes"`
+	ManifestCount          *int32             `json:"manifest_count"`
+	FormatVersion          *int32             `json:"format_version"`
+	TableProperties        []byte             `json:"table_properties"`
+	DueOperations          []string           `json:"due_operations"`
+	PolicyRevision         *int64             `json:"policy_revision"`
 }
 
 type TableMaintenancePolicy struct {

@@ -231,6 +231,9 @@ type ServerInterface interface {
 	// Run optimize/expire/orphan cleanup on one Iceberg table
 	// (POST /catalogs/{catalog_id}/maintenance)
 	CreateMaintenanceRun(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// The current maintenance plan of every table of the catalog with parameters
+	// (GET /catalogs/{catalog_id}/maintenance-plan)
+	GetCatalogMaintenancePlan(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
 	// Maintenance runs of a catalog, newest first
 	// (GET /catalogs/{catalog_id}/maintenance-runs)
 	ListMaintenanceRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListMaintenanceRunsParams)
@@ -246,6 +249,27 @@ type ServerInterface interface {
 	// Iceberg table health of a logical catalog
 	// (GET /catalogs/{catalog_id}/table-health)
 	ListTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListTableHealthParams)
+	// Analyze the health of every table of an Iceberg catalog now
+	// (POST /catalogs/{catalog_id}/table-health/analyze)
+	AnalyzeCatalogTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Remove a table's maintenance parameters: the table is no longer maintained
+	// (DELETE /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+	DeleteTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable)
+	// A table's maintenance parameters, recent runs and current plan
+	// (GET /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+	GetTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable)
+	// Create or replace a table's maintenance parameters
+	// (PUT /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+	PutTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable, params PutTableMaintenanceParams)
+	// What a round would run on the table now, without running it
+	// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/dry-run)
+	DryRunTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable)
+	// Run one maintenance operation on the table now
+	// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/runs)
+	RunTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable)
+	// Analyze the health of one Iceberg table now
+	// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/table-health/analyze)
+	AnalyzeTableHealth(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable)
 	// Engines a catalog is bound to (anyone who may read the catalog)
 	// (GET /catalogs/{id}/bindings)
 	ListCatalogBindings(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1104,6 +1128,12 @@ func (_ Unimplemented) CreateMaintenanceRun(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// The current maintenance plan of every table of the catalog with parameters
+// (GET /catalogs/{catalog_id}/maintenance-plan)
+func (_ Unimplemented) GetCatalogMaintenancePlan(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Maintenance runs of a catalog, newest first
 // (GET /catalogs/{catalog_id}/maintenance-runs)
 func (_ Unimplemented) ListMaintenanceRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListMaintenanceRunsParams) {
@@ -1131,6 +1161,48 @@ func (_ Unimplemented) SyncCatalog(w http.ResponseWriter, r *http.Request, catal
 // Iceberg table health of a logical catalog
 // (GET /catalogs/{catalog_id}/table-health)
 func (_ Unimplemented) ListTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListTableHealthParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Analyze the health of every table of an Iceberg catalog now
+// (POST /catalogs/{catalog_id}/table-health/analyze)
+func (_ Unimplemented) AnalyzeCatalogTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a table's maintenance parameters: the table is no longer maintained
+// (DELETE /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+func (_ Unimplemented) DeleteTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A table's maintenance parameters, recent runs and current plan
+// (GET /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+func (_ Unimplemented) GetTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create or replace a table's maintenance parameters
+// (PUT /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+func (_ Unimplemented) PutTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable, params PutTableMaintenanceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What a round would run on the table now, without running it
+// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/dry-run)
+func (_ Unimplemented) DryRunTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Run one maintenance operation on the table now
+// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/runs)
+func (_ Unimplemented) RunTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Analyze the health of one Iceberg table now
+// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/table-health/analyze)
+func (_ Unimplemented) AnalyzeTableHealth(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4300,6 +4372,39 @@ func (siw *ServerInterfaceWrapper) CreateMaintenanceRun(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GetCatalogMaintenancePlan operation middleware
+func (siw *ServerInterfaceWrapper) GetCatalogMaintenancePlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCatalogMaintenancePlan(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMaintenanceRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListMaintenanceRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -4324,6 +4429,46 @@ func (siw *ServerInterfaceWrapper) ListMaintenanceRuns(w http.ResponseWriter, r 
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListMaintenanceRunsParams
+
+	// ------------- Optional query parameter "trigger" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "trigger", r.URL.Query(), &params.Trigger)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trigger", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "operation" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "operation", r.URL.Query(), &params.Operation)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operation", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "status", r.URL.Query(), &params.Status)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "ns" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ns", r.URL.Query(), &params.Ns)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "table" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "limit" -------------
 
@@ -4529,6 +4674,369 @@ func (siw *ServerInterfaceWrapper) ListTableHealth(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListTableHealth(w, r, catalogId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AnalyzeCatalogTableHealth operation middleware
+func (siw *ServerInterfaceWrapper) AnalyzeCatalogTableHealth(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnalyzeCatalogTableHealth(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTableMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTableMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId MaintenanceCatalogId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace MaintenanceNamespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "table" -------------
+	var table MaintenanceTable
+
+	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTableMaintenance(w, r, catalogId, namespace, table)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTableMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) GetTableMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId MaintenanceCatalogId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace MaintenanceNamespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "table" -------------
+	var table MaintenanceTable
+
+	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTableMaintenance(w, r, catalogId, namespace, table)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutTableMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) PutTableMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId MaintenanceCatalogId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace MaintenanceNamespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "table" -------------
+	var table MaintenanceTable
+
+	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutTableMaintenanceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutTableMaintenance(w, r, catalogId, namespace, table, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DryRunTableMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) DryRunTableMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId MaintenanceCatalogId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace MaintenanceNamespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "table" -------------
+	var table MaintenanceTable
+
+	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DryRunTableMaintenance(w, r, catalogId, namespace, table)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunTableMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) RunTableMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId MaintenanceCatalogId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace MaintenanceNamespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "table" -------------
+	var table MaintenanceTable
+
+	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunTableMaintenance(w, r, catalogId, namespace, table)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AnalyzeTableHealth operation middleware
+func (siw *ServerInterfaceWrapper) AnalyzeTableHealth(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId MaintenanceCatalogId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace MaintenanceNamespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", chi.URLParam(r, "namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "table" -------------
+	var table MaintenanceTable
+
+	err = runtime.BindStyledParameterWithOptions("simple", "table", chi.URLParam(r, "table"), &table, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnalyzeTableHealth(w, r, catalogId, namespace, table)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10853,6 +11361,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalogs/{catalog_id}/maintenance", wrapper.CreateMaintenanceRun)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/maintenance-plan", wrapper.GetCatalogMaintenancePlan)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{catalog_id}/maintenance-runs", wrapper.ListMaintenanceRuns)
 	})
 	r.Group(func(r chi.Router) {
@@ -10866,6 +11377,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{catalog_id}/table-health", wrapper.ListTableHealth)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{catalog_id}/table-health/analyze", wrapper.AnalyzeCatalogTableHealth)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance", wrapper.DeleteTableMaintenance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance", wrapper.GetTableMaintenance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance", wrapper.PutTableMaintenance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/dry-run", wrapper.DryRunTableMaintenance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/runs", wrapper.RunTableMaintenance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{catalog_id}/tables/{namespace}/{table}/table-health/analyze", wrapper.AnalyzeTableHealth)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{id}/bindings", wrapper.ListCatalogBindings)
@@ -14183,6 +14715,15 @@ func (response CreateMaintenanceRun404JSONResponse) VisitCreateMaintenanceRunRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateMaintenanceRun409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateMaintenanceRun409JSONResponse) VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateMaintenanceRun422JSONResponse struct {
 	UnprocessableEntityJSONResponse
 }
@@ -14190,6 +14731,41 @@ type CreateMaintenanceRun422JSONResponse struct {
 func (response CreateMaintenanceRun422JSONResponse) VisitCreateMaintenanceRunResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogMaintenancePlanRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type GetCatalogMaintenancePlanResponseObject interface {
+	VisitGetCatalogMaintenancePlanResponse(w http.ResponseWriter) error
+}
+
+type GetCatalogMaintenancePlan200JSONResponse []CatalogMaintenancePlanItem
+
+func (response GetCatalogMaintenancePlan200JSONResponse) VisitGetCatalogMaintenancePlanResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogMaintenancePlan401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetCatalogMaintenancePlan401JSONResponse) VisitGetCatalogMaintenancePlanResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCatalogMaintenancePlan404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetCatalogMaintenancePlan404JSONResponse) VisitGetCatalogMaintenancePlanResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -14415,6 +14991,388 @@ type ListTableHealth404JSONResponse struct{ NotFoundJSONResponse }
 func (response ListTableHealth404JSONResponse) VisitListTableHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeCatalogTableHealthRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type AnalyzeCatalogTableHealthResponseObject interface {
+	VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error
+}
+
+type AnalyzeCatalogTableHealth202Response struct {
+}
+
+func (response AnalyzeCatalogTableHealth202Response) VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type AnalyzeCatalogTableHealth401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response AnalyzeCatalogTableHealth401JSONResponse) VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeCatalogTableHealth403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AnalyzeCatalogTableHealth403JSONResponse) VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeCatalogTableHealth404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AnalyzeCatalogTableHealth404JSONResponse) VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeCatalogTableHealth422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response AnalyzeCatalogTableHealth422JSONResponse) VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteTableMaintenanceRequestObject struct {
+	CatalogId MaintenanceCatalogId `json:"catalog_id"`
+	Namespace MaintenanceNamespace `json:"namespace"`
+	Table     MaintenanceTable     `json:"table"`
+}
+
+type DeleteTableMaintenanceResponseObject interface {
+	VisitDeleteTableMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type DeleteTableMaintenance204Response struct {
+}
+
+func (response DeleteTableMaintenance204Response) VisitDeleteTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteTableMaintenance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteTableMaintenance401JSONResponse) VisitDeleteTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteTableMaintenance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTableMaintenance403JSONResponse) VisitDeleteTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteTableMaintenance404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteTableMaintenance404JSONResponse) VisitDeleteTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTableMaintenanceRequestObject struct {
+	CatalogId MaintenanceCatalogId `json:"catalog_id"`
+	Namespace MaintenanceNamespace `json:"namespace"`
+	Table     MaintenanceTable     `json:"table"`
+}
+
+type GetTableMaintenanceResponseObject interface {
+	VisitGetTableMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type GetTableMaintenance200JSONResponse TableMaintenance
+
+func (response GetTableMaintenance200JSONResponse) VisitGetTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTableMaintenance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetTableMaintenance401JSONResponse) VisitGetTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTableMaintenance404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetTableMaintenance404JSONResponse) VisitGetTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutTableMaintenanceRequestObject struct {
+	CatalogId MaintenanceCatalogId `json:"catalog_id"`
+	Namespace MaintenanceNamespace `json:"namespace"`
+	Table     MaintenanceTable     `json:"table"`
+	Params    PutTableMaintenanceParams
+	Body      *PutTableMaintenanceJSONRequestBody
+}
+
+type PutTableMaintenanceResponseObject interface {
+	VisitPutTableMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type PutTableMaintenance200JSONResponse StoredMaintenancePolicy
+
+func (response PutTableMaintenance200JSONResponse) VisitPutTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutTableMaintenance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PutTableMaintenance401JSONResponse) VisitPutTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutTableMaintenance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutTableMaintenance403JSONResponse) VisitPutTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutTableMaintenance404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutTableMaintenance404JSONResponse) VisitPutTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutTableMaintenance409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PutTableMaintenance409JSONResponse) VisitPutTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutTableMaintenance422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PutTableMaintenance422JSONResponse) VisitPutTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunTableMaintenanceRequestObject struct {
+	CatalogId MaintenanceCatalogId `json:"catalog_id"`
+	Namespace MaintenanceNamespace `json:"namespace"`
+	Table     MaintenanceTable     `json:"table"`
+}
+
+type DryRunTableMaintenanceResponseObject interface {
+	VisitDryRunTableMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type DryRunTableMaintenance200JSONResponse MaintenancePlan
+
+func (response DryRunTableMaintenance200JSONResponse) VisitDryRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunTableMaintenance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DryRunTableMaintenance401JSONResponse) VisitDryRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunTableMaintenance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DryRunTableMaintenance403JSONResponse) VisitDryRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunTableMaintenance404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DryRunTableMaintenance404JSONResponse) VisitDryRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunTableMaintenance409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DryRunTableMaintenance409JSONResponse) VisitDryRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RunTableMaintenanceRequestObject struct {
+	CatalogId MaintenanceCatalogId `json:"catalog_id"`
+	Namespace MaintenanceNamespace `json:"namespace"`
+	Table     MaintenanceTable     `json:"table"`
+	Body      *RunTableMaintenanceJSONRequestBody
+}
+
+type RunTableMaintenanceResponseObject interface {
+	VisitRunTableMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type RunTableMaintenance202JSONResponse MaintenanceRun
+
+func (response RunTableMaintenance202JSONResponse) VisitRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RunTableMaintenance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RunTableMaintenance401JSONResponse) VisitRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RunTableMaintenance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RunTableMaintenance403JSONResponse) VisitRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RunTableMaintenance404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RunTableMaintenance404JSONResponse) VisitRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RunTableMaintenance409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RunTableMaintenance409JSONResponse) VisitRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RunTableMaintenance422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response RunTableMaintenance422JSONResponse) VisitRunTableMaintenanceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeTableHealthRequestObject struct {
+	CatalogId MaintenanceCatalogId `json:"catalog_id"`
+	Namespace MaintenanceNamespace `json:"namespace"`
+	Table     MaintenanceTable     `json:"table"`
+}
+
+type AnalyzeTableHealthResponseObject interface {
+	VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error
+}
+
+type AnalyzeTableHealth202Response struct {
+}
+
+func (response AnalyzeTableHealth202Response) VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type AnalyzeTableHealth401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response AnalyzeTableHealth401JSONResponse) VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeTableHealth403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AnalyzeTableHealth403JSONResponse) VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeTableHealth404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AnalyzeTableHealth404JSONResponse) VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AnalyzeTableHealth422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response AnalyzeTableHealth422JSONResponse) VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -20969,6 +21927,9 @@ type StrictServerInterface interface {
 	// Run optimize/expire/orphan cleanup on one Iceberg table
 	// (POST /catalogs/{catalog_id}/maintenance)
 	CreateMaintenanceRun(ctx context.Context, request CreateMaintenanceRunRequestObject) (CreateMaintenanceRunResponseObject, error)
+	// The current maintenance plan of every table of the catalog with parameters
+	// (GET /catalogs/{catalog_id}/maintenance-plan)
+	GetCatalogMaintenancePlan(ctx context.Context, request GetCatalogMaintenancePlanRequestObject) (GetCatalogMaintenancePlanResponseObject, error)
 	// Maintenance runs of a catalog, newest first
 	// (GET /catalogs/{catalog_id}/maintenance-runs)
 	ListMaintenanceRuns(ctx context.Context, request ListMaintenanceRunsRequestObject) (ListMaintenanceRunsResponseObject, error)
@@ -20984,6 +21945,27 @@ type StrictServerInterface interface {
 	// Iceberg table health of a logical catalog
 	// (GET /catalogs/{catalog_id}/table-health)
 	ListTableHealth(ctx context.Context, request ListTableHealthRequestObject) (ListTableHealthResponseObject, error)
+	// Analyze the health of every table of an Iceberg catalog now
+	// (POST /catalogs/{catalog_id}/table-health/analyze)
+	AnalyzeCatalogTableHealth(ctx context.Context, request AnalyzeCatalogTableHealthRequestObject) (AnalyzeCatalogTableHealthResponseObject, error)
+	// Remove a table's maintenance parameters: the table is no longer maintained
+	// (DELETE /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+	DeleteTableMaintenance(ctx context.Context, request DeleteTableMaintenanceRequestObject) (DeleteTableMaintenanceResponseObject, error)
+	// A table's maintenance parameters, recent runs and current plan
+	// (GET /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+	GetTableMaintenance(ctx context.Context, request GetTableMaintenanceRequestObject) (GetTableMaintenanceResponseObject, error)
+	// Create or replace a table's maintenance parameters
+	// (PUT /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance)
+	PutTableMaintenance(ctx context.Context, request PutTableMaintenanceRequestObject) (PutTableMaintenanceResponseObject, error)
+	// What a round would run on the table now, without running it
+	// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/dry-run)
+	DryRunTableMaintenance(ctx context.Context, request DryRunTableMaintenanceRequestObject) (DryRunTableMaintenanceResponseObject, error)
+	// Run one maintenance operation on the table now
+	// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/runs)
+	RunTableMaintenance(ctx context.Context, request RunTableMaintenanceRequestObject) (RunTableMaintenanceResponseObject, error)
+	// Analyze the health of one Iceberg table now
+	// (POST /catalogs/{catalog_id}/tables/{namespace}/{table}/table-health/analyze)
+	AnalyzeTableHealth(ctx context.Context, request AnalyzeTableHealthRequestObject) (AnalyzeTableHealthResponseObject, error)
 	// Engines a catalog is bound to (anyone who may read the catalog)
 	// (GET /catalogs/{id}/bindings)
 	ListCatalogBindings(ctx context.Context, request ListCatalogBindingsRequestObject) (ListCatalogBindingsResponseObject, error)
@@ -23407,6 +24389,32 @@ func (sh *strictHandler) CreateMaintenanceRun(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// GetCatalogMaintenancePlan operation middleware
+func (sh *strictHandler) GetCatalogMaintenancePlan(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request GetCatalogMaintenancePlanRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCatalogMaintenancePlan(ctx, request.(GetCatalogMaintenancePlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCatalogMaintenancePlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCatalogMaintenancePlanResponseObject); ok {
+		if err := validResponse.VisitGetCatalogMaintenancePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListMaintenanceRuns operation middleware
 func (sh *strictHandler) ListMaintenanceRuns(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID, params ListMaintenanceRunsParams) {
 	var request ListMaintenanceRunsRequestObject
@@ -23533,6 +24541,215 @@ func (sh *strictHandler) ListTableHealth(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListTableHealthResponseObject); ok {
 		if err := validResponse.VisitListTableHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AnalyzeCatalogTableHealth operation middleware
+func (sh *strictHandler) AnalyzeCatalogTableHealth(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request AnalyzeCatalogTableHealthRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AnalyzeCatalogTableHealth(ctx, request.(AnalyzeCatalogTableHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AnalyzeCatalogTableHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AnalyzeCatalogTableHealthResponseObject); ok {
+		if err := validResponse.VisitAnalyzeCatalogTableHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteTableMaintenance operation middleware
+func (sh *strictHandler) DeleteTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	var request DeleteTableMaintenanceRequestObject
+
+	request.CatalogId = catalogId
+	request.Namespace = namespace
+	request.Table = table
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTableMaintenance(ctx, request.(DeleteTableMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTableMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTableMaintenanceResponseObject); ok {
+		if err := validResponse.VisitDeleteTableMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTableMaintenance operation middleware
+func (sh *strictHandler) GetTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	var request GetTableMaintenanceRequestObject
+
+	request.CatalogId = catalogId
+	request.Namespace = namespace
+	request.Table = table
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTableMaintenance(ctx, request.(GetTableMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTableMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTableMaintenanceResponseObject); ok {
+		if err := validResponse.VisitGetTableMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutTableMaintenance operation middleware
+func (sh *strictHandler) PutTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable, params PutTableMaintenanceParams) {
+	var request PutTableMaintenanceRequestObject
+
+	request.CatalogId = catalogId
+	request.Namespace = namespace
+	request.Table = table
+	request.Params = params
+
+	var body PutTableMaintenanceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutTableMaintenance(ctx, request.(PutTableMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutTableMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutTableMaintenanceResponseObject); ok {
+		if err := validResponse.VisitPutTableMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DryRunTableMaintenance operation middleware
+func (sh *strictHandler) DryRunTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	var request DryRunTableMaintenanceRequestObject
+
+	request.CatalogId = catalogId
+	request.Namespace = namespace
+	request.Table = table
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DryRunTableMaintenance(ctx, request.(DryRunTableMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DryRunTableMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DryRunTableMaintenanceResponseObject); ok {
+		if err := validResponse.VisitDryRunTableMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RunTableMaintenance operation middleware
+func (sh *strictHandler) RunTableMaintenance(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	var request RunTableMaintenanceRequestObject
+
+	request.CatalogId = catalogId
+	request.Namespace = namespace
+	request.Table = table
+
+	var body RunTableMaintenanceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RunTableMaintenance(ctx, request.(RunTableMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RunTableMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RunTableMaintenanceResponseObject); ok {
+		if err := validResponse.VisitRunTableMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AnalyzeTableHealth operation middleware
+func (sh *strictHandler) AnalyzeTableHealth(w http.ResponseWriter, r *http.Request, catalogId MaintenanceCatalogId, namespace MaintenanceNamespace, table MaintenanceTable) {
+	var request AnalyzeTableHealthRequestObject
+
+	request.CatalogId = catalogId
+	request.Namespace = namespace
+	request.Table = table
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AnalyzeTableHealth(ctx, request.(AnalyzeTableHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AnalyzeTableHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AnalyzeTableHealthResponseObject); ok {
+		if err := validResponse.VisitAnalyzeTableHealthResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

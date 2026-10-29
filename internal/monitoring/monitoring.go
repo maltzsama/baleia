@@ -176,10 +176,24 @@ func (s *Service) TableHealth(ctx context.Context, catalogID pgtype.UUID, f Heal
 	return s.store.ListTableHealthByCatalog(ctx, params)
 }
 
+// RunFilter narrows a catalog's runs; nil fields do not filter.
+type RunFilter struct {
+	Trigger   *string
+	Operation *string
+	Status    *string
+	Namespace *string
+	Table     *string
+	Limit     *int
+	Offset    *int
+}
+
 // Runs lists a catalog's maintenance runs. A nil limit is DefaultRuns.
-func (s *Service) Runs(ctx context.Context, catalogID pgtype.UUID, limit, offset *int) ([]db.MaintenanceRun, error) {
-	lim, off := page(limit, offset, DefaultRuns)
-	return s.store.ListMaintenanceRuns(ctx, db.ListMaintenanceRunsParams{CatalogID: catalogID, Lim: lim, Off: off})
+func (s *Service) Runs(ctx context.Context, catalogID pgtype.UUID, f RunFilter) ([]db.MaintenanceRun, error) {
+	lim, off := page(f.Limit, f.Offset, DefaultRuns)
+	return s.store.ListMaintenanceRuns(ctx, db.ListMaintenanceRunsParams{
+		CatalogID: catalogID, Trigger: f.Trigger, Operation: f.Operation, Status: f.Status,
+		Ns: f.Namespace, Tbl: f.Table, Lim: lim, Off: off,
+	})
 }
 
 // Maintenance is a maintenance request for one table.

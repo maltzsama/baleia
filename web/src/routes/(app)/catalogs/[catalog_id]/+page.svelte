@@ -3,6 +3,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
+	import CatalogMaintenancePlan from '$lib/maintenance/CatalogMaintenancePlan.svelte';
+	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
 	import {
 		bindingProjection,
 		bindingRemediation,
@@ -49,7 +51,7 @@
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
 
-	type Tab = 'overview' | 'bindings' | 'metadata' | 'access' | 'activity';
+	type Tab = 'overview' | 'bindings' | 'metadata' | 'maintenance' | 'access' | 'activity';
 
 	const catalogId = $derived(page.params.catalog_id ?? '');
 	const engineNameRe = /^[a-z][a-z0-9_]{0,62}$/;
@@ -408,7 +410,7 @@
 		const requested = page.url.searchParams.get('tab');
 		if (
 			requested &&
-			['overview', 'bindings', 'metadata', 'access', 'activity'].includes(requested)
+			['overview', 'bindings', 'metadata', 'maintenance', 'access', 'activity'].includes(requested)
 		) {
 			tab = requested as Tab;
 		}
@@ -455,7 +457,7 @@
 			role="tablist"
 			aria-label={m.catalogs_detail_catalog_tabs()}
 		>
-			{#each [['overview', m.catalogs_detail_overview()], ['bindings', m.catalogs_detail_bindings()], ['metadata', m.catalogs_detail_metadata()], ['access', m.catalogs_access()], ['activity', m.catalogs_detail_activity()]] as [value, label] (value)}
+			{#each [['overview', m.catalogs_detail_overview()], ['bindings', m.catalogs_detail_bindings()], ['metadata', m.catalogs_detail_metadata()], ...(hasTableHealth(catalog) ? [['maintenance', m.maintenance_title()]] : []), ['access', m.catalogs_access()], ['activity', m.catalogs_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -741,6 +743,8 @@
 					</table>
 				</div>
 			{/if}
+		{:else if tab === 'maintenance'}
+			<CatalogMaintenancePlan {catalogId} />
 		{:else if tab === 'activity'}
 			<ActivityPanel
 				resourceType="catalog"

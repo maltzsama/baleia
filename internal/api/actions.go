@@ -28,6 +28,20 @@ func (h *core) catalogActions(ctx context.Context, id pgtype.UUID) []CatalogAllo
 	return acts
 }
 
+// tableMaintenanceActions classifies the same check the maintenance handlers
+// run (#500): reading the catalog's monitoring, and writing it.
+func (h *core) tableMaintenanceActions(ctx context.Context, connectionID, catalogID pgtype.UUID) []TableMaintenanceAllowedAction {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil
+	}
+	acts := []TableMaintenanceAllowedAction{TableMaintenanceAllowedActionView}
+	if _, _, err := h.authz().CatalogOfConnection(ctx, p, connectionID, catalogID, authz.ActWrite); err == nil {
+		acts = append(acts, TableMaintenanceAllowedActionUpdate)
+	}
+	return acts
+}
+
 func (h *core) catalogBindingActions(ctx context.Context, b dbCatalogBindingRef) []CatalogBindingAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
