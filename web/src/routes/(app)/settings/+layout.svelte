@@ -13,7 +13,7 @@
 
 	let { children } = $props();
 	// The section list can be widened (#468).
-	const NAV = { min: 180, max: 360, initial: 220 };
+	const NAV = { min: 160, max: 320, initial: 200 };
 	let navWidth = $state(browser ? loadWidth('settings-nav', NAV) : NAV.initial);
 
 	const section = $derived(sectionForPath($page.url.pathname));

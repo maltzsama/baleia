@@ -28,12 +28,12 @@ import SettingsLayout from './+layout.svelte';
 const audit: SettingsSection = {
 	href: '/settings/audit',
 	label: 'Audit trail',
-	description: 'Who changed what.'
+	group: 'activity'
 };
 const system: SettingsSection = {
 	href: '/settings/system',
 	label: 'System',
-	description: 'Health of every component.',
+	group: 'platform',
 	action: 'view_system'
 };
 
@@ -80,7 +80,7 @@ describe('settings gating', () => {
 		const agents: SettingsSection = {
 			href: '/settings/agents',
 			label: 'Agents',
-			description: 'Agent identities.',
+			group: 'access',
 			action: 'manage_users',
 			feature: 'agents'
 		};

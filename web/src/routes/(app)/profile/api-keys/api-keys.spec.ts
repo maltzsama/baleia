@@ -16,7 +16,7 @@ const key = {
 describe('api keys settings', () => {
 	beforeEach(() => {
 		localStorage.clear();
-		window.history.replaceState(null, '', '/settings/api-keys');
+		window.history.replaceState(null, '', '/profile/api-keys');
 	});
 
 	it('creates a key and shows the secret exactly once', async () => {
@@ -26,7 +26,7 @@ describe('api keys settings', () => {
 				response(201).json({ ...key, name: 'agent', secret: 'bal_secret_once' })
 			)
 		);
-		renderPage(ApiKeysPage, { me: makeMe(), url: '/settings/api-keys' });
+		renderPage(ApiKeysPage, { me: makeMe(), url: '/profile/api-keys' });
 		await screen.findByText('ci-pipeline');
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Create key' }));
@@ -50,7 +50,7 @@ describe('api keys settings', () => {
 				return response(204).empty();
 			})
 		);
-		renderPage(ApiKeysPage, { me: makeMe(), url: '/settings/api-keys' });
+		renderPage(ApiKeysPage, { me: makeMe(), url: '/profile/api-keys' });
 		await screen.findByText('ci-pipeline');
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
