@@ -13,6 +13,7 @@ the phase-3 issues reference as **FD1–FD16**.
 | `make generate` / `make sqlc` | Regenerate OpenAPI handlers / SQL code. |
 | `make lint` / `make lint-all` | `golangci-lint` on what is new since `origin/main` / on everything. |
 | `make vuln` | `govulncheck`. |
+| `cd website && npm ci && npm run build` | Build the documentation site (Docusaurus over `docs/`); `npm start` serves it with reload. |
 | `make build` / `build-web` / `build-all` | Compile binaries / frontend / both. |
 | `make e2e` | minikube (`make k8s-up`) + `cmd/e2e-seed` + Playwright (`web/e2e`). |
 | `make e2e-down` | Tear minikube down (`k8s-down` with `K8S_PURGE=1`). |

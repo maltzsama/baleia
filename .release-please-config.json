@@ -5,7 +5,7 @@
       "release-type": "go",
       "initial-version": "0.1.0",
       "bump-minor-pre-major": true,
-      "extra-files": ["README.md"]
+      "extra-files": ["README.md", "docs/install.md"]
     }
   },
   "bootstrap-sha": "dd23fcc19529586cdd2d554c1faf3f9bfa222161",
