@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"encoding/json"
+	"math"
 	"slices"
 	"testing"
 	"time"
@@ -87,6 +88,10 @@ func TestValidate(t *testing.T) {
 		{name: "unknown mode", change: func(p *Policy) { p.Mode = "auto" }, table: managedTable,
 			want: []string{"mode not_allowed"}},
 		{name: "writer interval", change: func(p *Policy) { p.WriterCommitIntervalSeconds = 0 }, table: managedTable,
+			want: []string{
+				"writer_commit_interval_seconds out_of_range",
+			}},
+		{name: "writer interval above the column", change: func(p *Policy) { p.WriterCommitIntervalSeconds = math.MaxInt32 + 1 }, table: managedTable,
 			want: []string{
 				"writer_commit_interval_seconds out_of_range",
 			}},

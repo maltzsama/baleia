@@ -188,6 +188,32 @@ func (q *Queries) DeleteTableMaintenancePolicy(ctx context.Context, arg DeleteTa
 	return i, err
 }
 
+const getAppliedCatalogRetention = `-- name: GetAppliedCatalogRetention :one
+SELECT r.properties, r.updated_by
+  FROM trino_catalog_registry r
+  JOIN trino_clusters c ON c.id = r.cluster_id
+ WHERE c.engine_id = $1::uuid AND r.catalog_name = $2::text
+`
+
+type GetAppliedCatalogRetentionParams struct {
+	EngineID    pgtype.UUID `json:"engine_id"`
+	CatalogName string      `json:"catalog_name"`
+}
+
+type GetAppliedCatalogRetentionRow struct {
+	Properties []byte `json:"properties"`
+	UpdatedBy  string `json:"updated_by"`
+}
+
+// The properties Baleia wrote for the binding's catalog on its engine's
+// cluster, and whether the plugin confirmed loading them (#500).
+func (q *Queries) GetAppliedCatalogRetention(ctx context.Context, arg GetAppliedCatalogRetentionParams) (GetAppliedCatalogRetentionRow, error) {
+	row := q.db.QueryRow(ctx, getAppliedCatalogRetention, arg.EngineID, arg.CatalogName)
+	var i GetAppliedCatalogRetentionRow
+	err := row.Scan(&i.Properties, &i.UpdatedBy)
+	return i, err
+}
+
 const getRunningMaintenanceRun = `-- name: GetRunningMaintenanceRun :one
 SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision FROM maintenance_runs
 WHERE catalog_id = $1::uuid AND namespace = $2::text AND table_name = $3::text
@@ -349,6 +375,176 @@ func (q *Queries) LastSuccessfulMaintenanceByOperation(ctx context.Context, arg 
 	return items, nil
 }
 
+const listCatalogLastSuccessfulMaintenance = `-- name: ListCatalogLastSuccessfulMaintenance :many
+SELECT DISTINCT ON (namespace, table_name, op) namespace, table_name, op::text AS operation, finished_at
+FROM maintenance_runs, unnest(operations) AS op
+WHERE catalog_id = $1::uuid AND status = 'finished' AND finished_at IS NOT NULL
+ORDER BY namespace, table_name, op, finished_at DESC
+`
+
+type ListCatalogLastSuccessfulMaintenanceRow struct {
+	Namespace  string             `json:"namespace"`
+	TableName  string             `json:"table_name"`
+	Operation  string             `json:"operation"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+}
+
+// LastSuccessfulMaintenanceByOperation for every table of a catalog.
+func (q *Queries) ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogLastSuccessfulMaintenanceRow, error) {
+	rows, err := q.db.Query(ctx, listCatalogLastSuccessfulMaintenance, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCatalogLastSuccessfulMaintenanceRow
+	for rows.Next() {
+		var i ListCatalogLastSuccessfulMaintenanceRow
+		if err := rows.Scan(
+			&i.Namespace,
+			&i.TableName,
+			&i.Operation,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCatalogLatestMaintenanceRuns = `-- name: ListCatalogLatestMaintenanceRuns :many
+SELECT DISTINCT ON (namespace, table_name) id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision
+FROM maintenance_runs
+WHERE catalog_id = $1::uuid
+ORDER BY namespace, table_name, started_at DESC
+`
+
+// Each table's most recent run.
+func (q *Queries) ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID pgtype.UUID) ([]MaintenanceRun, error) {
+	rows, err := q.db.Query(ctx, listCatalogLatestMaintenanceRuns, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MaintenanceRun
+	for rows.Next() {
+		var i MaintenanceRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.CatalogID,
+			&i.BindingID,
+			&i.Namespace,
+			&i.TableName,
+			&i.Operations,
+			&i.Retention,
+			&i.Status,
+			&i.ErrorCode,
+			&i.ErrorMessage,
+			&i.StartedBy,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.WorkflowID,
+			&i.Trigger,
+			&i.Reason,
+			&i.Parameters,
+			&i.Attempts,
+			&i.PolicyRevision,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCatalogRunningMaintenance = `-- name: ListCatalogRunningMaintenance :many
+SELECT namespace, table_name FROM maintenance_runs
+WHERE catalog_id = $1::uuid AND status = 'running'
+`
+
+type ListCatalogRunningMaintenanceRow struct {
+	Namespace string `json:"namespace"`
+	TableName string `json:"table_name"`
+}
+
+func (q *Queries) ListCatalogRunningMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogRunningMaintenanceRow, error) {
+	rows, err := q.db.Query(ctx, listCatalogRunningMaintenance, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCatalogRunningMaintenanceRow
+	for rows.Next() {
+		var i ListCatalogRunningMaintenanceRow
+		if err := rows.Scan(&i.Namespace, &i.TableName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCatalogTableHealth = `-- name: ListCatalogTableHealth :many
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision FROM table_health_snapshots WHERE catalog_id = $1::uuid
+`
+
+func (q *Queries) ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID) ([]TableHealthSnapshot, error) {
+	rows, err := q.db.Query(ctx, listCatalogTableHealth, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TableHealthSnapshot
+	for rows.Next() {
+		var i TableHealthSnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.CatalogConnectionID,
+			&i.Catalog,
+			&i.Namespace,
+			&i.TableName,
+			&i.CapturedAt,
+			&i.SnapshotCount,
+			&i.FileCount,
+			&i.TotalSizeBytes,
+			&i.OldestSnapshotAgeHours,
+			&i.LastMaintenanceAt,
+			&i.HealthScore,
+			&i.NeedsCompaction,
+			&i.NeedsSnapshotExpiry,
+			&i.CatalogID,
+			&i.DeleteFileCount,
+			&i.EqualityDeleteCount,
+			&i.PositionDeleteCount,
+			&i.SmallFileCount,
+			&i.CommitsLastHour,
+			&i.CommitsLastDay,
+			&i.AvgFileSizeBytes,
+			&i.ManifestCount,
+			&i.FormatVersion,
+			&i.TableProperties,
+			&i.DueOperations,
+			&i.PolicyRevision,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listManagedMaintenancePolicies = `-- name: ListManagedMaintenancePolicies :many
 SELECT id, catalog_id, namespace, table_name, mode, writer_commit_interval_seconds, optimize, optimize_manifests, expire_snapshots, remove_orphan_files, revision, created_by, updated_by, created_at, updated_at FROM table_maintenance_policies
 WHERE catalog_id = $1::uuid AND mode = 'managed'
@@ -490,6 +686,17 @@ func (q *Queries) ListTableMaintenanceRuns(ctx context.Context, arg ListTableMai
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockMaintenanceCapacity = `-- name: LockMaintenanceCapacity :exec
+SELECT pg_advisory_xact_lock(hashtext('maintenance-capacity'))
+`
+
+// Serializes the rounds' capacity check and run creation until the
+// transaction ends, so concurrent catalogs cannot overfill the limit.
+func (q *Queries) LockMaintenanceCapacity(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockMaintenanceCapacity)
+	return err
 }
 
 const setMaintenanceRunAttempts = `-- name: SetMaintenanceRunAttempts :exec

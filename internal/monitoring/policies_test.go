@@ -19,6 +19,7 @@ type policyStore struct {
 	fakeStore
 	policy  *db.TableMaintenancePolicy
 	health  *db.TableHealthSnapshot
+	applied *db.GetAppliedCatalogRetentionRow
 	last    []db.LastSuccessfulMaintenanceByOperationRow
 	running bool
 	created []db.CreatePlannedMaintenanceRunParams
@@ -84,6 +85,13 @@ func (s *policyStore) CreatePlannedMaintenanceRun(_ context.Context, a db.Create
 	return db.MaintenanceRun{Operations: a.Operations, Status: "dry_run", Trigger: a.Trigger}, nil
 }
 
+func (s *policyStore) GetAppliedCatalogRetention(context.Context, db.GetAppliedCatalogRetentionParams) (db.GetAppliedCatalogRetentionRow, error) {
+	if s.applied == nil {
+		return db.GetAppliedCatalogRetentionRow{}, pgx.ErrNoRows
+	}
+	return *s.applied, nil
+}
+
 func (s *policyStore) GetTableHealthByTable(context.Context, db.GetTableHealthByTableParams) (db.TableHealthSnapshot, error) {
 	if s.health == nil {
 		return db.TableHealthSnapshot{}, pgx.ErrNoRows
@@ -104,6 +112,38 @@ func expiryPolicy(mode string) maintenance.Policy {
 			TimeoutSeconds: 600, OnConflict: maintenance.RetryWithBackoff,
 			Params: maintenance.Params{RetentionSeconds: p64(7 * 86400)},
 		},
+	}
+}
+
+func TestService_RetentionFloor(t *testing.T) {
+	t.Parallel()
+	week := maintenance.UnmanagedRetentionFloor
+	row := func(props, by string) *db.GetAppliedCatalogRetentionRow {
+		return &db.GetAppliedCatalogRetentionRow{Properties: []byte(props), UpdatedBy: by}
+	}
+	both := `{"iceberg.expire-snapshots.min-retention": "1h", "iceberg.remove-orphan-files.min-retention": "90m"}`
+	tests := []struct {
+		name    string
+		mode    string
+		applied *db.GetAppliedCatalogRetentionRow
+		want    time.Duration
+	}{
+		{"loaded floor, the larger key", "managed", row(both, "trino"), 90 * time.Minute},
+		{"fractional duration", "managed", row(`{"iceberg.expire-snapshots.min-retention": "1.5h", "iceberg.remove-orphan-files.min-retention": "1h"}`, "trino"), 90 * time.Minute},
+		{"key missing is Trino's default", "managed", row(`{"iceberg.expire-snapshots.min-retention": "1h"}`, "trino"), week},
+		{"not confirmed by the plugin", "managed", row(both, "baleia"), week},
+		{"not in the registry", "managed", nil, week},
+		{"adopted binding", "adopted", row(both, "trino"), week},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := New(&policyStore{applied: tt.applied})
+			got, err := svc.RetentionFloor(context.Background(), db.CatalogBinding{Mode: tt.mode, EngineCatalogName: "lake"})
+			if err != nil || got != tt.want {
+				t.Fatalf("RetentionFloor() = %v, %v; want %v", got, err, tt.want)
+			}
+		})
 	}
 }
 
@@ -212,6 +252,61 @@ func TestService_PlanTable(t *testing.T) {
 			var reason maintenance.Reason
 			if err := json.Unmarshal(got.Reason, &reason); err != nil || reason.Fired != "snapshots" {
 				t.Fatalf("reason = %s, %v", got.Reason, err)
+			}
+		})
+	}
+}
+
+// TestService_TableMetrics_FileTriggers: the counts the health pass stores
+// reach the planner, so optimize and optimize_manifests fire on them and
+// not only on their maximum interval.
+func TestService_TableMetrics_FileTriggers(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 6, 4, 10, 0, 0, 0, time.UTC)
+	settings := func(trigger maintenance.Trigger) maintenance.Settings {
+		return maintenance.Settings{
+			Enabled: true, Trigger: trigger, MinIntervalSeconds: 3600,
+			TimeoutSeconds: 600, OnConflict: maintenance.RetryWithBackoff,
+		}
+	}
+	manifests := int32(150)
+	tests := []struct {
+		name   string
+		policy maintenance.Policy
+		health db.TableHealthSnapshot
+		want   string
+		fired  string
+	}{
+		{
+			name:   "delete files fire optimize",
+			policy: maintenance.Policy{Mode: maintenance.ModeManaged, WriterCommitIntervalSeconds: 60, Optimize: settings(maintenance.Trigger{DeleteFiles: p64(100)})},
+			health: db.TableHealthSnapshot{SnapshotCount: 3, DeleteFileCount: p64(240)},
+			want:   maintenance.OpOptimize, fired: "delete_files",
+		},
+		{
+			name:   "manifests fire optimize_manifests",
+			policy: maintenance.Policy{Mode: maintenance.ModeManaged, WriterCommitIntervalSeconds: 60, OptimizeManifests: settings(maintenance.Trigger{Manifests: p64(100)})},
+			health: db.TableHealthSnapshot{SnapshotCount: 3, ManifestCount: &manifests},
+			want:   maintenance.OpOptimizeManifests, fired: "manifests",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			store := &policyStore{health: &tt.health}
+			svc := New(store)
+			row, _, err := svc.SetTablePolicy(ctx, table, tt.policy, nil, pgtype.UUID{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err := svc.PlanTable(ctx, table, row, maintenance.DryRun, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			next, ok := plan.Next()
+			if !ok || next.Operation != tt.want || next.Reason.Fired != tt.fired {
+				t.Fatalf("next = %+v, %v; want %s fired by %s", next, ok, tt.want, tt.fired)
 			}
 		})
 	}

@@ -5,6 +5,7 @@ package maintenance
 
 import (
 	"encoding/json"
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -168,8 +169,14 @@ func Validate(p Policy, t Table) []FieldError {
 	default:
 		v.add("mode", CodeNotAllowed, nil)
 	}
-	if p.WriterCommitIntervalSeconds <= 0 {
-		v.add("writer_commit_interval_seconds", CodeOutOfRange, map[string]string{"min": "1"})
+	// The column is an INTEGER: a larger value is a field error, not a
+	// failed write.
+	// An invalid interval is reported once; the checks that compare with it
+	// skip the comparison instead of repeating the error.
+	writer := p.WriterCommitIntervalSeconds
+	if writer <= 0 || writer > math.MaxInt32 {
+		v.add("writer_commit_interval_seconds", CodeOutOfRange, map[string]string{"min": "1", "max": strconv.Itoa(math.MaxInt32)})
+		writer = 0
 	}
 	for _, op := range Priority {
 		s := p.Operation(op)
@@ -179,14 +186,14 @@ func Validate(p Policy, t Table) []FieldError {
 		v.common(op, s)
 		switch op {
 		case OpOptimize:
-			v.optimize(s, p.WriterCommitIntervalSeconds, t)
+			v.optimize(s, writer, t)
 		case OpOptimizeManifests:
 			v.onlyTriggers(op, s.Trigger, "manifests")
 			v.positive(op+".trigger.manifests", s.Trigger.Manifests)
 		case OpExpireSnapshots:
 			v.expire(s, t)
 		case OpRemoveOrphanFiles:
-			v.orphans(s, p.WriterCommitIntervalSeconds, t)
+			v.orphans(s, writer, t)
 		}
 	}
 	return v.errs

@@ -69,7 +69,11 @@ func (h *OpsHandlers) maintenanceBinding(ctx context.Context, catalogID pgtype.U
 	if !ok {
 		return db.CatalogBinding{}, maintenance.UnmanagedRetentionFloor, false, nil
 	}
-	return b, monitoring.RetentionFloor(b, h.settings.Ops.MaintenanceMinRetention), true, nil
+	floor, err := h.monitor.RetentionFloor(ctx, b)
+	if err != nil {
+		return db.CatalogBinding{}, 0, false, err
+	}
+	return b, floor, true, nil
 }
 
 func notFound(msg string) NotFoundJSONResponse {
@@ -432,26 +436,21 @@ func (h *OpsHandlers) GetCatalogMaintenancePlan(ctx context.Context, request Get
 		return nil, err
 	}
 	now := time.Now()
-	out := make([]CatalogMaintenancePlanItem, 0, len(rows))
-	for _, row := range rows {
-		key := monitoring.TableKey{CatalogID: t.key.CatalogID, Namespace: row.Namespace, Table: row.TableName}
-		item := CatalogMaintenancePlanItem{Namespace: row.Namespace, TableName: row.TableName, Mode: MaintenanceMode(row.Mode),
+	plans, err := h.monitor.PlanCatalog(ctx, t.key.CatalogID, rows, maintenance.Automatic, now)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CatalogMaintenancePlanItem, 0, len(plans))
+	for _, p := range plans {
+		item := CatalogMaintenancePlanItem{Namespace: p.Row.Namespace, TableName: p.Row.TableName, Mode: MaintenanceMode(p.Row.Mode),
 			Plan: MaintenancePlan{EvaluatedAt: now, Plan: []MaintenancePlanStep{}}}
-		if row.Mode != maintenance.ModeMaintainedElsewhere {
-			plan, err := h.monitor.PlanTable(ctx, key, row, maintenance.Automatic, now)
-			if err != nil {
-				return nil, err
-			}
-			if item.Plan, err = apiPlan(plan, row.Revision, now); err != nil {
+		if p.Row.Mode != maintenance.ModeMaintainedElsewhere {
+			if item.Plan, err = apiPlan(p.Plan, p.Row.Revision, now); err != nil {
 				return nil, err
 			}
 		}
-		runs, err := h.monitor.TableRuns(ctx, key)
-		if err != nil {
-			return nil, err
-		}
-		if len(runs) > 0 {
-			last := maintenanceRun(runs[0])
+		if p.LastRun != nil {
+			last := maintenanceRun(*p.LastRun)
 			item.LastRun = &last
 		}
 		out = append(out, item)

@@ -55,6 +55,27 @@ WHERE catalog_id = @catalog_id::uuid AND namespace = @namespace::text AND table_
   AND status = 'finished' AND finished_at IS NOT NULL
 ORDER BY op, finished_at DESC;
 
+-- name: ListCatalogTableHealth :many
+SELECT * FROM table_health_snapshots WHERE catalog_id = @catalog_id::uuid;
+
+-- name: ListCatalogLastSuccessfulMaintenance :many
+-- LastSuccessfulMaintenanceByOperation for every table of a catalog.
+SELECT DISTINCT ON (namespace, table_name, op) namespace, table_name, op::text AS operation, finished_at
+FROM maintenance_runs, unnest(operations) AS op
+WHERE catalog_id = @catalog_id::uuid AND status = 'finished' AND finished_at IS NOT NULL
+ORDER BY namespace, table_name, op, finished_at DESC;
+
+-- name: ListCatalogLatestMaintenanceRuns :many
+-- Each table's most recent run.
+SELECT DISTINCT ON (namespace, table_name) *
+FROM maintenance_runs
+WHERE catalog_id = @catalog_id::uuid
+ORDER BY namespace, table_name, started_at DESC;
+
+-- name: ListCatalogRunningMaintenance :many
+SELECT namespace, table_name FROM maintenance_runs
+WHERE catalog_id = @catalog_id::uuid AND status = 'running';
+
 -- name: GetRunningMaintenanceRun :one
 SELECT * FROM maintenance_runs
 WHERE catalog_id = @catalog_id::uuid AND namespace = @namespace::text AND table_name = @table_name::text
@@ -84,6 +105,19 @@ RETURNING *;
 -- name: GetTableHealthByTable :one
 SELECT * FROM table_health_snapshots
 WHERE catalog_id = @catalog_id::uuid AND namespace = @namespace::text AND table_name = @table_name::text;
+
+-- name: GetAppliedCatalogRetention :one
+-- The properties Baleia wrote for the binding's catalog on its engine's
+-- cluster, and whether the plugin confirmed loading them (#500).
+SELECT r.properties, r.updated_by
+  FROM trino_catalog_registry r
+  JOIN trino_clusters c ON c.id = r.cluster_id
+ WHERE c.engine_id = @engine_id::uuid AND r.catalog_name = @catalog_name::text;
+
+-- name: LockMaintenanceCapacity :exec
+-- Serializes the rounds' capacity check and run creation until the
+-- transaction ends, so concurrent catalogs cannot overfill the limit.
+SELECT pg_advisory_xact_lock(hashtext('maintenance-capacity'));
 
 -- name: CountRunningMaintenanceRuns :one
 SELECT count(*)::int FROM maintenance_runs WHERE status = 'running';

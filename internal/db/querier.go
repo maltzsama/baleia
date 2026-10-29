@@ -169,6 +169,9 @@ type Querier interface {
 	GetAgentByID(ctx context.Context, id pgtype.UUID) (Agent, error)
 	GetAgentTokenByHash(ctx context.Context, tokenHash string) (AgentToken, error)
 	GetAgentTokenByID(ctx context.Context, arg GetAgentTokenByIDParams) (AgentToken, error)
+	// The properties Baleia wrote for the binding's catalog on its engine's
+	// cluster, and whether the plugin confirmed loading them (#500).
+	GetAppliedCatalogRetention(ctx context.Context, arg GetAppliedCatalogRetentionParams) (GetAppliedCatalogRetentionRow, error)
 	// The age of the oldest audit event not yet exported (the lag the exporter
 	// reports). NULL when nothing is pending.
 	GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamptz, error)
@@ -322,6 +325,12 @@ type Querier interface {
 	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
 	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error)
 	ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogGrantsRow, error)
+	// LastSuccessfulMaintenanceByOperation for every table of a catalog.
+	ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogLastSuccessfulMaintenanceRow, error)
+	// Each table's most recent run.
+	ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID pgtype.UUID) ([]MaintenanceRun, error)
+	ListCatalogRunningMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogRunningMaintenanceRow, error)
+	ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID) ([]TableHealthSnapshot, error)
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
 	// The catalogs of one connection that a user reaches through workspace grants.
 	ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error)
@@ -460,6 +469,9 @@ type Querier interface {
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	// Serializes first-admin setup until the transaction ends (#375).
 	LockFirstAdminSetup(ctx context.Context) error
+	// Serializes the rounds' capacity check and run creation until the
+	// transaction ends, so concurrent catalogs cannot overfill the limit.
+	LockMaintenanceCapacity(ctx context.Context) error
 	ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
 	MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error
 	MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error

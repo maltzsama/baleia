@@ -1,13 +1,22 @@
 package activities
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func i64(v int64) *int64 { return &v }
@@ -109,5 +118,109 @@ func TestIcebergOperation(t *testing.T) {
 	orph := icebergOperation(maintenance.OpRemoveOrphanFiles, maintenance.Settings{Params: maintenance.Params{OlderThanSeconds: i64(7200)}})
 	if orph.Retention != 2*time.Hour {
 		t.Errorf("orphans = %+v", orph)
+	}
+}
+
+func TestOrderCandidates(t *testing.T) {
+	t.Parallel()
+	at := func(h int) *time.Time {
+		v := time.Date(2026, 6, 4, h, 0, 0, 0, time.UTC)
+		return &v
+	}
+	cand := func(table, fired string, last *time.Time) roundCandidate {
+		return roundCandidate{
+			key:  monitoring.TableKey{Namespace: "cdc", Table: table},
+			step: maintenance.Step{Reason: maintenance.Reason{Fired: fired, LastSuccessAt: last}},
+		}
+	}
+	// "busy" is due every round and sorts first by name: it must not keep
+	// the overdue, never-run and long-waiting tables from their turn.
+	c := []roundCandidate{
+		cand("a_busy", "snapshots", at(9)),
+		cand("waiting", "snapshots", at(1)),
+		cand("never", "small_file_ratio", nil),
+		cand("overdue", maintenance.FiredMaxInterval, at(8)),
+	}
+	orderCandidates(c)
+	var got []string
+	for _, x := range c {
+		got = append(got, x.key.Table)
+	}
+	if want := []string{"overdue", "never", "waiting", "a_busy"}; !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+}
+
+// TestReserveRuns_GlobalLimit: rounds of several catalogs at once never
+// start more runs than the limit, and a table already running is skipped.
+func TestReserveRuns_GlobalLimit(t *testing.T) {
+	t.Parallel()
+	pool := testdb.New(t)
+	ctx := context.Background()
+	var user, conn, engConn, engine pgtype.UUID
+	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, role, password_hash) VALUES ('m', 'm@maint.test', 'admin', 'x') RETURNING id`).Scan(&user); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		dst  *pgtype.UUID
+	}{{"src", &conn}, {"eng", &engConn}} {
+		if err := pool.QueryRow(ctx, `INSERT INTO catalog_connections (name, type, url, created_by) VALUES ($1, 'polaris', 'http://p.test', $2) RETURNING id`, c.name, user).Scan(c.dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO engines (name, kind, class, connection_id, identity_mode, created_by)
+		VALUES ('e', 'trino', 'federated', $1, 'connection', $2) RETURNING id`, engConn, user).Scan(&engine); err != nil {
+		t.Fatal(err)
+	}
+	const catalogs, tables, limit = 4, 3, 5
+	a := &Activities{queries: db.New(pool), pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: limit}}
+	type round struct {
+		binding    db.CatalogBinding
+		candidates []roundCandidate
+	}
+	rounds := make([]round, catalogs)
+	for i := range rounds {
+		var catalogID pgtype.UUID
+		if err := pool.QueryRow(ctx, `INSERT INTO catalogs (connection_id, name, trino_catalog_name, cluster_id, warehouse, connector)
+			VALUES ($1, $2, $2, (SELECT id FROM trino_clusters LIMIT 1), 'wh', 'iceberg') RETURNING id`, conn, fmt.Sprintf("lake%d", i)).Scan(&catalogID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode, enabled, lifecycle_state)
+			VALUES ($1, $2, $3, 'managed', true, 'active') RETURNING id`, catalogID, engine, fmt.Sprintf("lake%d", i)).Scan(&rounds[i].binding.ID); err != nil {
+			t.Fatal(err)
+		}
+		for j := range tables {
+			key := monitoring.TableKey{CatalogID: catalogID, Namespace: "cdc", Table: fmt.Sprintf("t%d", j)}
+			step := maintenance.Step{Operation: maintenance.OpExpireSnapshots, Due: true, WouldRun: true}
+			rounds[i].candidates = append(rounds[i].candidates, roundCandidate{key: key, step: step})
+		}
+	}
+	// The first catalog's first table is already running.
+	first := rounds[0].candidates[0]
+	if _, err := RecordMaintenanceRun(ctx, db.New(pool), first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", pgtype.UUID{}); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, catalogs)
+	for _, r := range rounds {
+		wg.Go(func() {
+			if _, err := a.reserveRuns(ctx, r.binding, r.candidates); err != nil {
+				errs <- err
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	var running int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM maintenance_runs WHERE status = 'running'`).Scan(&running); err != nil {
+		t.Fatal(err)
+	}
+	if running != limit {
+		t.Fatalf("running runs = %d, want the limit %d", running, limit)
 	}
 }

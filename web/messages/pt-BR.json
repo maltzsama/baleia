@@ -2338,7 +2338,7 @@
 	"maintenance_mode_elsewhere": "Mantida em outro lugar",
 	"maintenance_mode_managed_hint": "Cada rodada executa no máximo uma operação devida nesta tabela.",
 	"maintenance_mode_off_hint": "As rodadas ignoram esta tabela; Executar agora continua funcionando.",
-	"maintenance_mode_elsewhere_hint": "Outro sistema mantém esta tabela: o Baleia só informa a saúde dela e nunca executa operações nela.",
+	"maintenance_mode_elsewhere_hint": "Outro sistema mantém esta tabela: a Baleia só informa a saúde dela e nunca executa operações nela.",
 	"maintenance_writer_interval": "Intervalo de commit do escritor (segundos)",
 	"maintenance_enabled": "Ativada",
 	"maintenance_triggers": "Gatilhos",

@@ -1,7 +1,7 @@
 meta {
   name: Maintenance - Stale revision
   type: http
-  seq: 6
+  seq: 11
 }
 
 put {
@@ -31,7 +31,7 @@ body:json {
       "min_interval_seconds": 3600,
       "timeout_seconds": 600,
       "on_conflict": "retry_with_backoff",
-      "params": { "retention_seconds": 86400, "retain_last": 10 }
+      "params": { "retention_seconds": {{maintenance_retention}}, "retain_last": 10 }
     }
   }
 }

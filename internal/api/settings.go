@@ -69,9 +69,6 @@ type OpsSettings struct {
 	MetadataSyncEvery   time.Duration
 	ReconcileMaxActions int
 	ReconcileInterval   time.Duration
-	// MaintenanceMinRetention is the retention floor projected into managed
-	// Iceberg catalogs (#500).
-	MaintenanceMinRetention time.Duration
 }
 
 // SettingsFromConfig resolves the handler settings from the process config.
@@ -111,13 +108,12 @@ func SettingsFromConfig(c *config.Config) Settings {
 			PolarisDefaultCredentials: c.PolarisDefaultCredentials(),
 		},
 		Ops: OpsSettings{
-			PluginVersion:           c.PluginVersion,
-			AuditExportURL:          c.AuditExportURL,
-			SchedulesEnabled:        c.SchedulesEnabled,
-			MetadataSyncEvery:       c.MetadataSyncEvery(),
-			ReconcileMaxActions:     c.ReconcileMaxActions,
-			ReconcileInterval:       c.ReconcileInterval,
-			MaintenanceMinRetention: c.MaintenanceMinRetention(),
+			PluginVersion:       c.PluginVersion,
+			AuditExportURL:      c.AuditExportURL,
+			SchedulesEnabled:    c.SchedulesEnabled,
+			MetadataSyncEvery:   c.MetadataSyncEvery(),
+			ReconcileMaxActions: c.ReconcileMaxActions,
+			ReconcileInterval:   c.ReconcileInterval,
 		},
 	}
 }

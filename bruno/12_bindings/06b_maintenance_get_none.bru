@@ -1,7 +1,7 @@
 meta {
   name: Maintenance - Get (no parameters)
   type: http
-  seq: 6
+  seq: 8
 }
 
 get {
@@ -15,6 +15,12 @@ auth:bearer {
 }
 
 
+
+script:post-response {
+  // The PUT cases use a retention the catalog accepts: at least its floor
+  // (Trino's 7 days until the projected floor is loaded).
+  bru.setVar("maintenance_retention", Math.max(res.getBody().retention_floor_seconds, 86400));
+}
 
 assert {
   res.status: eq 200

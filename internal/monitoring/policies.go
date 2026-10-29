@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
@@ -24,6 +26,11 @@ type Policies interface {
 	ListTableMaintenanceRuns(ctx context.Context, arg db.ListTableMaintenanceRunsParams) ([]db.MaintenanceRun, error)
 	CreatePlannedMaintenanceRun(ctx context.Context, arg db.CreatePlannedMaintenanceRunParams) (db.MaintenanceRun, error)
 	GetTableHealthByTable(ctx context.Context, arg db.GetTableHealthByTableParams) (db.TableHealthSnapshot, error)
+	GetAppliedCatalogRetention(ctx context.Context, arg db.GetAppliedCatalogRetentionParams) (db.GetAppliedCatalogRetentionRow, error)
+	ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID) ([]db.TableHealthSnapshot, error)
+	ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogLastSuccessfulMaintenanceRow, error)
+	ListCatalogRunningMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogRunningMaintenanceRow, error)
+	ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID pgtype.UUID) ([]db.MaintenanceRun, error)
 }
 
 // TableKey names one table of a catalog.
@@ -167,14 +174,72 @@ func MaintenanceBinding(ctx context.Context, bindings []db.CatalogBinding, capab
 }
 
 // RetentionFloor is the shortest retention the binding's engine accepts for
-// expire_snapshots and remove_orphan_files: Baleia's projected minimum on a
-// managed binding, Trino's default on an adopted or native one, which Baleia
-// never changes.
-func RetentionFloor(b db.CatalogBinding, managedFloor time.Duration) time.Duration {
-	if b.Mode == "managed" && managedFloor > 0 {
-		return managedFloor
+// expire_snapshots and remove_orphan_files. It is what the engine has
+// loaded, not what Baleia would project now: after an upgrade or a change
+// of BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION a catalog keeps its old floor
+// until it is reconciled. An adopted or native binding, a catalog the
+// registry does not hold, or one the plugin has not confirmed, has Trino's
+// default.
+func (s *Service) RetentionFloor(ctx context.Context, b db.CatalogBinding) (time.Duration, error) {
+	if b.Mode != "managed" {
+		return maintenance.UnmanagedRetentionFloor, nil
 	}
-	return maintenance.UnmanagedRetentionFloor
+	row, err := s.store.GetAppliedCatalogRetention(ctx, db.GetAppliedCatalogRetentionParams{
+		EngineID: b.EngineID, CatalogName: b.EngineCatalogName,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return maintenance.UnmanagedRetentionFloor, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	if row.UpdatedBy != "trino" {
+		return maintenance.UnmanagedRetentionFloor, nil
+	}
+	return AppliedRetentionFloor(row.Properties), nil
+}
+
+// retentionKeys are the catalog properties that bound expiry and orphan
+// cleanup; the floor is the larger of the two.
+var retentionKeys = []string{"iceberg.expire-snapshots.min-retention", "iceberg.remove-orphan-files.min-retention"}
+
+// AppliedRetentionFloor reads the floor from a catalog's properties; a key
+// that is missing or unreadable counts as Trino's default.
+func AppliedRetentionFloor(raw []byte) time.Duration {
+	var props map[string]string
+	if err := json.Unmarshal(raw, &props); err != nil {
+		return maintenance.UnmanagedRetentionFloor
+	}
+	var floor time.Duration
+	for _, key := range retentionKeys {
+		d, ok := trinoDuration(props[key])
+		if !ok {
+			d = maintenance.UnmanagedRetentionFloor
+		}
+		floor = max(floor, d)
+	}
+	return floor
+}
+
+// trinoDuration parses an airlift duration such as "7d", "1h" or "1.5h".
+func trinoDuration(v string) (time.Duration, bool) {
+	v = strings.TrimSpace(v)
+	units := []struct {
+		suffix string
+		unit   time.Duration
+	}{{"ns", time.Nanosecond}, {"us", time.Microsecond}, {"ms", time.Millisecond}, {"s", time.Second}, {"m", time.Minute}, {"h", time.Hour}, {"d", 24 * time.Hour}}
+	for _, u := range units {
+		num, ok := strings.CutSuffix(v, u.suffix)
+		if !ok || num == "" {
+			continue
+		}
+		f, err := strconv.ParseFloat(strings.TrimSpace(num), 64)
+		if err != nil || f < 0 {
+			return 0, false
+		}
+		return time.Duration(f * float64(u.unit)), true
+	}
+	return 0, false
 }
 
 // TableState reads what the table's runs say: the last success of each
@@ -217,6 +282,11 @@ func (s *Service) TableMetrics(ctx context.Context, k TableKey) (maintenance.Met
 	if err != nil {
 		return maintenance.Metrics{}, err
 	}
+	return metricsFrom(row), nil
+}
+
+// metricsFrom is what the planner reads from one health snapshot.
+func metricsFrom(row db.TableHealthSnapshot) maintenance.Metrics {
 	m := maintenance.Metrics{}
 	snapshots := int64(row.SnapshotCount)
 	m.Snapshots = &snapshots
@@ -228,7 +298,15 @@ func (s *Service) TableMetrics(ctx context.Context, k TableKey) (maintenance.Met
 		v := time.Duration(*row.OldestSnapshotAgeHours) * time.Hour
 		m.OldestSnapshotAge = &v
 	}
-	return m, nil
+	// The pass stores the counts the triggers read; without them only the
+	// maximum interval could fire optimize and optimize_manifests.
+	m.SmallFiles = row.SmallFileCount
+	m.DeleteFiles = row.DeleteFileCount
+	if row.ManifestCount != nil {
+		v := int64(*row.ManifestCount)
+		m.Manifests = &v
+	}
+	return m
 }
 
 // TableRuns lists the table's most recent runs.
@@ -253,6 +331,83 @@ func (s *Service) PlanTable(ctx context.Context, k TableKey, row db.TableMainten
 		return maintenance.Plan{}, err
 	}
 	return maintenance.Evaluate(p, metrics, st, kind, now)
+}
+
+// CatalogPlan is every table of a catalog with parameters, planned from
+// catalog-wide reads: a fixed number of queries whatever the table count.
+type CatalogPlan struct {
+	Row     db.TableMaintenancePolicy
+	Plan    maintenance.Plan
+	LastRun *db.MaintenanceRun
+}
+
+// PlanCatalog plans each row of the catalog; a table maintained elsewhere
+// gets an empty plan.
+func (s *Service) PlanCatalog(ctx context.Context, catalogID pgtype.UUID, rows []db.TableMaintenancePolicy, kind maintenance.Kind, now time.Time) ([]CatalogPlan, error) {
+	type table struct{ ns, name string }
+	health, err := s.store.ListCatalogTableHealth(ctx, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	metrics := make(map[table]maintenance.Metrics, len(health))
+	for _, h := range health {
+		metrics[table{h.Namespace, h.TableName}] = metricsFrom(h)
+	}
+	successes, err := s.store.ListCatalogLastSuccessfulMaintenance(ctx, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	last := map[table]map[string]time.Time{}
+	for _, r := range successes {
+		if !r.FinishedAt.Valid {
+			continue
+		}
+		k := table{r.Namespace, r.TableName}
+		if last[k] == nil {
+			last[k] = map[string]time.Time{}
+		}
+		last[k][r.Operation] = r.FinishedAt.Time
+	}
+	running, err := s.store.ListCatalogRunningMaintenance(ctx, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	busy := make(map[table]bool, len(running))
+	for _, r := range running {
+		busy[table{r.Namespace, r.TableName}] = true
+	}
+	latest, err := s.store.ListCatalogLatestMaintenanceRuns(ctx, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	lastRun := make(map[table]db.MaintenanceRun, len(latest))
+	for _, r := range latest {
+		lastRun[table{r.Namespace, r.TableName}] = r
+	}
+
+	out := make([]CatalogPlan, 0, len(rows))
+	for _, row := range rows {
+		k := table{row.Namespace, row.TableName}
+		item := CatalogPlan{Row: row}
+		if r, ok := lastRun[k]; ok {
+			item.LastRun = &r
+		}
+		if row.Mode != maintenance.ModeMaintainedElsewhere {
+			p, err := DecodePolicy(row)
+			if err != nil {
+				return nil, err
+			}
+			st := maintenance.State{LastSuccess: last[k], Running: busy[k], Since: row.CreatedAt.Time}
+			if st.LastSuccess == nil {
+				st.LastSuccess = map[string]time.Time{}
+			}
+			if item.Plan, err = maintenance.Evaluate(p, metrics[k], st, kind, now); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 // RecordDryRun stores a dry run: finished at once, with the operation the

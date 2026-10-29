@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -221,18 +222,10 @@ func (a *Activities) planMaintenanceRound(ctx context.Context, params PlanMainte
 	if !ok {
 		return nil, nil
 	}
-	running, err := a.queries.CountRunningMaintenanceRuns(ctx)
-	if err != nil {
-		return nil, err
-	}
-	limit := a.cfg.MaintenanceConcurrency()
 	svc := monitoring.New(a.queries)
 	now := time.Now()
-	var out []PlannedRun
+	var candidates []roundCandidate
 	for _, row := range policies {
-		if int(running) >= limit {
-			break
-		}
 		key := monitoring.TableKey{CatalogID: catalogID, Namespace: row.Namespace, Table: row.TableName}
 		plan, err := svc.PlanTable(ctx, key, row, maintenance.Automatic, now)
 		if err != nil {
@@ -247,24 +240,99 @@ func (a *Activities) planMaintenanceRound(ctx context.Context, params PlanMainte
 		if err != nil {
 			continue
 		}
-		settings := p.Operation(next.Operation)
-		run, err := a.recordRun(ctx, key, binding, row, next, settings, string(maintenance.Automatic), pgtype.UUID{})
+		candidates = append(candidates, roundCandidate{key: key, row: row, step: next, settings: p.Operation(next.Operation)})
+	}
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+	orderCandidates(candidates)
+	return a.reserveRuns(ctx, binding, candidates)
+}
+
+// roundCandidate is a table with an operation due this round.
+type roundCandidate struct {
+	key      monitoring.TableKey
+	row      db.TableMaintenancePolicy
+	step     maintenance.Step
+	settings maintenance.Settings
+}
+
+// orderCandidates puts the most urgent tables first, so a table due every
+// round cannot keep another from its turn: operations past their maximum
+// interval first, then the one waiting longest since its last success
+// (never run counts as longest), then by name for a stable order.
+func orderCandidates(c []roundCandidate) {
+	slices.SortStableFunc(c, func(a, b roundCandidate) int {
+		aOver, bOver := a.step.Reason.Fired == maintenance.FiredMaxInterval, b.step.Reason.Fired == maintenance.FiredMaxInterval
+		if aOver != bOver {
+			if aOver {
+				return -1
+			}
+			return 1
+		}
+		aLast, bLast := a.step.Reason.LastSuccessAt, b.step.Reason.LastSuccessAt
+		switch {
+		case aLast == nil && bLast != nil:
+			return -1
+		case aLast != nil && bLast == nil:
+			return 1
+		case aLast != nil && !aLast.Equal(*bLast):
+			return aLast.Compare(*bLast)
+		}
+		return strings.Compare(a.key.Namespace+"."+a.key.Table, b.key.Namespace+"."+b.key.Table)
+	})
+}
+
+// reserveRuns records runs for the candidates while the global limit has
+// room. The capacity check and the inserts share one transaction under an
+// advisory lock: concurrent catalog rounds take turns instead of each
+// filling the free capacity they read.
+func (a *Activities) reserveRuns(ctx context.Context, binding db.CatalogBinding, candidates []roundCandidate) ([]PlannedRun, error) {
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := db.New(tx)
+	if err := q.LockMaintenanceCapacity(ctx); err != nil {
+		return nil, err
+	}
+	running, err := q.CountRunningMaintenanceRuns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	limit := a.cfg.MaintenanceConcurrency()
+	var out []PlannedRun
+	for _, c := range candidates {
+		if int(running) >= limit {
+			break
+		}
+		// A savepoint keeps the transaction usable when the table's
+		// one-running index refuses the insert.
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return nil, err
+		}
+		run, err := RecordMaintenanceRun(ctx, db.New(sp), c.key, binding, c.row, c.step, c.settings, string(maintenance.Automatic), pgtype.UUID{})
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			_ = sp.Rollback(ctx)
 			continue // a run started on the table meanwhile
 		}
 		if err != nil {
-			return out, err
+			_ = sp.Rollback(ctx)
+			return nil, err
+		}
+		if err := sp.Commit(ctx); err != nil {
+			return nil, err
 		}
 		running++
-		out = append(out, PlannedRun{RunID: uuid.UUID(run.ID.Bytes).String(), WorkflowID: run.WorkflowID, TimeoutSeconds: settings.TimeoutSeconds})
+		out = append(out, PlannedRun{RunID: uuid.UUID(run.ID.Bytes).String(), WorkflowID: run.WorkflowID, TimeoutSeconds: c.settings.TimeoutSeconds})
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 	return out, nil
-}
-
-// recordRun inserts a run with its frozen settings and reason.
-func (a *Activities) recordRun(ctx context.Context, k monitoring.TableKey, b db.CatalogBinding, row db.TableMaintenancePolicy, step maintenance.Step, s maintenance.Settings, trigger string, actor pgtype.UUID) (db.MaintenanceRun, error) {
-	return RecordMaintenanceRun(ctx, a.queries, k, b, row, step, s, trigger, actor)
 }
 
 // RecordMaintenanceRun stores a run of one operation, shared by the round

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"reflect"
 	"slices"
 	"strconv"
 	"sync"
@@ -111,6 +112,12 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 		VALUES ($1, $2, 'lake', $3, true, 'active') RETURNING id`, f.catalogID, engine, bindingMode).Scan(&f.bindingID); err != nil {
 		t.Fatal(err)
 	}
+	// The engine's cluster has loaded the catalog with the projected 1h
+	// floor; an adopted binding's registry row is irrelevant.
+	if _, err := pool.Exec(ctx, `UPDATE trino_clusters SET engine_id = $1 WHERE id = (SELECT cluster_id FROM catalogs WHERE id = $2)`, engine, f.catalogID); err != nil {
+		t.Fatal(err)
+	}
+	f.setApplied(t, `{"iceberg.expire-snapshots.min-retention": "1h", "iceberg.remove-orphan-files.min-retention": "1h"}`, "trino")
 	f.h = testAPI(handlerFields{
 		queries:  db.New(pool),
 		pool:     pool,
@@ -120,6 +127,17 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 		settings: SettingsFromConfig(&config.Config{IcebergMaintenanceMinRetention: time.Hour}),
 	})
 	return f
+}
+
+// setApplied writes what the engine's cluster holds for the catalog.
+func (f *maintenanceFixture) setApplied(t *testing.T, props, updatedBy string) {
+	t.Helper()
+	if _, err := f.pool.Exec(context.Background(), `INSERT INTO trino_catalog_registry (cluster_id, catalog_name, connector_name, properties, updated_by)
+		VALUES ((SELECT cluster_id FROM catalogs WHERE id = $1), 'lake', 'iceberg', $2::jsonb, $3)
+		ON CONFLICT (cluster_id, catalog_name) DO UPDATE SET properties = EXCLUDED.properties, updated_by = EXCLUDED.updated_by`,
+		f.catalogID, props, updatedBy); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (f *maintenanceFixture) catalog() openapi_types.UUID {
@@ -224,6 +242,15 @@ func TestTableMaintenance_Validation(t *testing.T) {
 		t.Fatalf("below the 1h floor = %T", resp)
 	}
 
+	// The engine still holds Trino's 7 days (before reconcile): 1h is
+	// refused as out of range, with the floor it has now.
+	stale := newMaintenanceFixture(t, "managed")
+	stale.setApplied(t, `{}`, "trino")
+	resp, ok = stale.put(stale.admin, t, expiryParams(3600), nil).(PutTableMaintenance422JSONResponse)
+	if !ok || resp.Fields == nil || (*resp.Fields)[0].Field != "expire_snapshots.params.retention_seconds" || (*(*resp.Fields)[0].Params)["min"] != "604800" {
+		t.Fatalf("not yet reconciled, 1h = %+v", resp)
+	}
+
 	adopted := newMaintenanceFixture(t, "adopted")
 	if resp, ok := adopted.put(adopted.admin, t, expiryParams(3600), nil).(PutTableMaintenance409JSONResponse); !ok || resp.Code != ErrorCodeCatalogNotManaged {
 		t.Fatalf("adopted binding, 1h = %+v", resp)
@@ -316,6 +343,23 @@ func TestTableMaintenance_RunsAndPlans(t *testing.T) {
 	}
 	if items := catalogPlan.(GetCatalogMaintenancePlan200JSONResponse); len(items) != 1 || items[0].LastRun == nil || items[0].Mode != "managed" {
 		t.Fatalf("catalog plan = %+v", items)
+	}
+	// The catalog plan reads catalog-wide; it must say what the table's own
+	// plan says (a run is in progress here, so every step is blocked).
+	view, err := f.h.GetTableMaintenance(f.admin, GetTableMaintenanceRequestObject{CatalogId: c, Namespace: ns, Table: tb})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := view.(GetTableMaintenance200JSONResponse).Plan
+	batched := catalogPlan.(GetCatalogMaintenancePlan200JSONResponse)[0].Plan.Plan
+	if own == nil || len(own.Plan) != len(batched) {
+		t.Fatalf("own plan = %+v, catalog plan = %+v", own, batched)
+	}
+	for i := range batched {
+		a, b := own.Plan[i], batched[i]
+		if a.Operation != b.Operation || a.Due != b.Due || a.WouldRun != b.WouldRun || !reflect.DeepEqual(a.Reason, b.Reason) {
+			t.Fatalf("step %d: own %+v, catalog %+v", i, a, b)
+		}
 	}
 	health, err := f.h.ListTableHealth(f.admin, ListTableHealthRequestObject{CatalogId: c})
 	if err != nil {
