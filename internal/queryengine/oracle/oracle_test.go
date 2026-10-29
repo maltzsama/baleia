@@ -78,6 +78,31 @@ func TestOraCode(t *testing.T) {
 	}
 }
 
+// TestCauseOf: ORA-00604 is reported by the error it wraps, so a cancel
+// during parsing is a cancel, not an internal error.
+func TestCauseOf(t *testing.T) {
+	t.Parallel()
+	recursive := "ORA-00604: Error occurred at recursive SQL level 1. Check subsequent errors.\nORA-01013: User requested cancel of current operation.\n"
+	tests := []struct {
+		code int
+		msg  string
+		want int
+	}{
+		{604, recursive, 1013},
+		{604, "ORA-00604: Error occurred at recursive SQL level 1.", 604},
+		{1013, "ORA-01013: User requested cancel of current operation.", 1013},
+		{942, "ORA-00942: table or view does not exist", 942},
+	}
+	for _, tt := range tests {
+		if got := causeOf(tt.code, tt.msg); got != tt.want {
+			t.Errorf("causeOf(%d, %q) = %d, want %d", tt.code, tt.msg, got, tt.want)
+		}
+	}
+	if got := oraCode(causeOf(604, recursive)); got != queryengine.CodeCancelled {
+		t.Errorf("a cancel during parsing maps to %q, want cancelled", got)
+	}
+}
+
 func TestSessionIDs(t *testing.T) {
 	t.Parallel()
 	if _, _, err := sessionIDs(queryengine.QueryHandle{}); err == nil {

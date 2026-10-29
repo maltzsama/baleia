@@ -108,6 +108,17 @@ jobs:
             sleep 3
           done
           echo "Trino did not start" && exit 1
+      - name: Grant Oracle cross-process cancel
+        # cancel_with_alter_system needs ALTER SYSTEM and the v$ views; the
+        # conformance suite runs a second time with it (#505).
+        run: |
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -s "sys/baleia_dev@FREEPDB1 as sysdba" <<'SQL'
+          WHENEVER SQLERROR EXIT FAILURE
+          GRANT ALTER SYSTEM TO baleia;
+          GRANT SELECT ON v_$session TO baleia;
+          GRANT SELECT ON v_$sql TO baleia;
+          EXIT
+          SQL
       - name: Provider integration tests
         env:
           BALEIA_TEST_POSTGRES_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres
@@ -115,6 +126,7 @@ jobs:
           BALEIA_TEST_MARIADB_URL: mysql://root:baleia_dev@127.0.0.1:3307
           BALEIA_TEST_SQLSERVER_URL: sqlserver://sa:Baleia_dev_2026@127.0.0.1:1433
           BALEIA_TEST_ORACLE_URL: oracle://baleia:baleia_dev@127.0.0.1:1521/FREEPDB1
+          BALEIA_TEST_ORACLE_ALTER_SYSTEM: "1"
           BALEIA_TEST_CLICKHOUSE_URL: http://baleia:baleia_dev@127.0.0.1:8123
           BALEIA_TEST_MOTO_URL: http://127.0.0.1:5000
           BALEIA_TEST_NESSIE_URL: http://127.0.0.1:19120

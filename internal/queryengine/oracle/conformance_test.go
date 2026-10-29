@@ -3,6 +3,7 @@ package oracle
 import (
 	"context"
 	"database/sql"
+	"maps"
 	"net/url"
 	"os"
 	"strconv"
@@ -20,6 +21,22 @@ import (
 // TestConformance runs the engine suite against a real Oracle Database. Set
 // BALEIA_TEST_ORACLE_URL (oracle://user:pass@host:port/SERVICE).
 func TestConformance(t *testing.T) {
+	runConformance(t, nil)
+}
+
+// TestConformanceAlterSystem runs the suite with cross-process cancel
+// (cancel_with_alter_system), which needs ALTER SYSTEM and SELECT on
+// v$session and v$sql: set BALEIA_TEST_ORACLE_ALTER_SYSTEM=1 once the test
+// user has them (the Sources workflow grants them).
+func TestConformanceAlterSystem(t *testing.T) {
+	if os.Getenv("BALEIA_TEST_ORACLE_ALTER_SYSTEM") != "1" {
+		t.Skip("BALEIA_TEST_ORACLE_ALTER_SYSTEM not set")
+	}
+	runConformance(t, map[string]string{"cancel_with_alter_system": "true"})
+}
+
+func runConformance(t *testing.T, extra map[string]string) {
+	t.Helper()
 	raw := os.Getenv("BALEIA_TEST_ORACLE_URL")
 	if raw == "" {
 		t.Skip("BALEIA_TEST_ORACLE_URL not set")
@@ -49,6 +66,7 @@ func TestConformance(t *testing.T) {
 		},
 		Secrets: map[string]string{"password": pass},
 	}
+	maps.Copy(cfg.Values, extra)
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
 		e, err := newEngine(Options{}, dialect.NewRegistry().MustGet(dialect.Oracle))(context.Background(), queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, d)
 		if err != nil {

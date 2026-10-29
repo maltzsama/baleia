@@ -254,6 +254,37 @@ func Run(t *testing.T, newEngine func(t *testing.T) queryengine.Engine, fx Fixtu
 		}
 	})
 
+	// A cancel that arrives between OnStart and the statement reaching the
+	// server must not be lost (#505): OnStart holds the statement back, and
+	// the handle is cancelled from another process meanwhile.
+	t.Run("cancel before start", func(t *testing.T) {
+		if caps.CancelScope != queryengine.CancelAnyProcess {
+			t.Skip("engine cancels in process only")
+		}
+		s := open(t, e, queryengine.SessionSpec{}) //nolint:contextcheck // like every case: open uses its own background context
+		defer func() { _ = s.Close() }()
+		other := newEngine(t)
+		cancelled := make(chan error, 1)
+		done := make(chan error, 1)
+		go func() {
+			done <- s.Execute(ctx, fx.SleepSQL, queryengine.Callbacks{OnStart: func(h queryengine.QueryHandle) {
+				go func() { cancelled <- other.Cancel(ctx, h) }()
+				time.Sleep(300 * time.Millisecond) // the statement leaves late
+			}}, &recorder{})
+		}()
+		select {
+		case err := <-done:
+			if queryengine.CodeOf(err) != queryengine.CodeCancelled {
+				t.Fatalf("err = %v, want cancelled", err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("statement still running 10 s after an early Cancel(handle)")
+		}
+		if err := <-cancelled; err != nil {
+			t.Fatalf("Cancel: %v", err)
+		}
+	})
+
 	t.Run("errors", func(t *testing.T) {
 		for sql, want := range map[string]queryengine.ErrorCode{fx.SyntaxErrorSQL: queryengine.CodeSyntax, fx.MissingTableSQL: queryengine.CodeNotFound} {
 			s := open(t, e, queryengine.SessionSpec{})

@@ -75,16 +75,18 @@ func (s *session) Close() error {
 // Execute runs one statement and streams its results as Arrow.
 func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callbacks, sink queryengine.RecordSink) error {
 	start := time.Now()
+	tag := queryengine.NewStatementTag()
 	if cb.OnStart != nil {
 		cb.OnStart(queryengine.QueryHandle{
 			EngineID: s.engine.id,
 			Extra: map[string]string{
-				"sid":    strconv.Itoa(s.sid),
-				"serial": strconv.Itoa(s.serial),
+				"sid":                       strconv.Itoa(s.sid),
+				"serial":                    strconv.Itoa(s.serial),
+				queryengine.StatementTagKey: tag,
 			},
 		})
 	}
-	rows, err := s.conn.QueryContext(ctx, sql)
+	rows, err := s.conn.QueryContext(ctx, queryengine.TagStatement(sql, tag))
 	if err != nil {
 		return mapError(err)
 	}

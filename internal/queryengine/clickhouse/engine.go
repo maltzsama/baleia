@@ -95,7 +95,7 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 		return nil
 	}
 	ctx = context.WithoutCancel(ctx)
-	return killUntilFound(cancelWindow, func(left time.Duration) (bool, error) {
+	return queryengine.CancelUntilFound(queryengine.CancelWindow, func(left time.Duration) (bool, error) {
 		kctx, cancel := context.WithTimeout(ctx, min(connectTimeout, left))
 		defer cancel()
 		rows, err := e.c.queryStrings(kctx, request{
@@ -104,33 +104,6 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 		})
 		return len(rows) > 0, err
 	})
-}
-
-// cancelWindow is how long Cancel keeps looking for a query it did not find;
-// minAttempt is the least time one KILL request gets.
-const (
-	cancelWindow = 3 * time.Second
-	minAttempt   = time.Second
-)
-
-// killUntilFound runs kill until it reports a killed query, for up to window.
-// A handle is reported before ClickHouse registers its query (OnStart runs
-// before the request is sent), so a KILL right after it can find nothing and
-// the statement would run to the end. A query still missing after the window
-// is gone, which is not an error. kill gets the time left, at least
-// minAttempt so the last attempt is not cut short, which bounds Cancel to
-// about window + minAttempt even when a request stalls.
-func killUntilFound(window time.Duration, kill func(left time.Duration) (bool, error)) error {
-	deadline := time.Now().Add(window)
-	wait := 50 * time.Millisecond
-	for {
-		killed, err := kill(max(time.Until(deadline), minAttempt))
-		if err != nil || killed || !time.Now().Before(deadline) {
-			return err
-		}
-		time.Sleep(min(wait, time.Until(deadline)))
-		wait = min(wait*2, 400*time.Millisecond)
-	}
 }
 
 // OpenSession starts one ClickHouse HTTP session; USE and SET persist on it.
