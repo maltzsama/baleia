@@ -7,7 +7,7 @@ import { sectionForPath } from '$lib/settings/sections';
 import type { Features } from '$lib/stores/auth.svelte';
 
 export type AreaKey =
-	'sql' | 'data' | 'explore' | 'content' | 'connections' | 'monitoring' | 'settings';
+	'sql' | 'data' | 'explore' | 'content' | 'connections' | 'monitoring' | 'settings' | 'profile';
 
 export type NavPage = {
 	href: string;
@@ -80,8 +80,21 @@ export const navAreas: NavArea[] = [
 		pages: [{ href: '/monitoring', label: m.nav_monitoring }]
 	},
 	// Settings keeps its own section nav (lib/settings/sections.ts).
-	{ key: 'settings', label: m.nav_settings, href: '/settings', pages: [] }
+	{ key: 'settings', label: m.nav_settings, href: '/settings', pages: [] },
+	// Personal pages: opened from the avatar menu, not from the rail.
+	{
+		key: 'profile',
+		label: m.nav_profile,
+		href: '/profile',
+		pages: [
+			{ href: '/profile', label: m.nav_profile },
+			{ href: '/profile/api-keys', label: m.nav_page_api_keys }
+		]
+	}
 ];
+
+/** Areas with a rail entry; profile lives in the avatar menu. */
+export const railAreas = navAreas.filter((area) => area.key !== 'profile');
 
 function under(pathname: string, href: string): boolean {
 	return pathname === href || pathname.startsWith(`${href}/`);

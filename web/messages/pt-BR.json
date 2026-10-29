@@ -2455,5 +2455,10 @@
 	"credits_realfavicongenerator": "RealFaviconGenerator",
 	"credits_fontsource": "Fontsource",
 	"credits_sil_ofl": "SIL Open Font License 1.1",
-	"credits_apache": "Licença Apache 2.0"
+	"credits_apache": "Licença Apache 2.0",
+	"settings_group_platform": "Plataforma",
+	"settings_group_access": "Acesso",
+	"settings_group_activity": "Atividade",
+	"nav_profile": "Perfil",
+	"nav_page_api_keys": "Chaves de API"
 }

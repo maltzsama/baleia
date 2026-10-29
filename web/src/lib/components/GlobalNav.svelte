@@ -2,16 +2,20 @@
 	import { m } from '$lib/paraglide/messages';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { locate, navAreas, type AreaKey } from '$lib/nav/sections';
+	import { locate, railAreas, type AreaKey } from '$lib/nav/sections';
+	import { visibleSections } from '$lib/settings/sections';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import Logo from '$lib/components/Logo.svelte';
 
 	let menuOpen = $state(false);
 
-	// One rail entry per area (#464); the area's pages are tabs in the header.
+	// One icon per area (#464): its name is the tooltip and the accessible
+	// name, and its pages are tabs in the header. Settings is administration,
+	// shown only to someone who can open one of its sections.
 	const current = $derived(locate(page.url.pathname)?.area.key ?? null);
-	const mainAreas = navAreas.filter((area) => area.key !== 'settings');
-	const settingsArea = navAreas.find((area) => area.key === 'settings')!;
+	const mainAreas = railAreas.filter((area) => area.key !== 'settings');
+	const settingsArea = railAreas.find((area) => area.key === 'settings')!;
+	const showSettings = $derived(visibleSections(authStore.user).length > 0);
 
 	// Icon paths per area (24×24, stroked like the rest of the shell).
 	const icons: Record<AreaKey, string> = {
@@ -23,7 +27,8 @@
 			'M3 5c0-1.66 4-3 9-3s9 1.34 9 3-4 3-9 3-9-1.34-9-3zM21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5',
 		monitoring: 'M18 20V10M12 20V4M6 20v-6',
 		settings:
-			'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 0 14.14 14.14'
+			'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 0 14.14 14.14',
+		profile: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
 	};
 
 	function toggleMenu() {
@@ -56,18 +61,21 @@
 {#snippet entry(key: AreaKey, href: string, label: string)}
 	<a
 		href={resolve(href as '/')}
+		title={label}
 		aria-current={current === key ? 'page' : undefined}
-		class="flex w-[88px] flex-col items-center gap-1 rounded-[10px] px-1 py-1.5 text-[10px] font-medium leading-none no-underline transition-colors duration-150
+		class="flex h-10 w-10 items-center justify-center rounded-[10px] no-underline transition-colors duration-150
 			{current === key ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
 	>
-		<svg viewBox="0 0 24 24" class="h-4 w-4" aria-hidden="true"><path d={icons[key]} /></svg>
-		<span class="max-w-full truncate">{label}</span>
+		<svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" aria-hidden="true"
+			><path d={icons[key]} /></svg
+		>
+		<span class="sr-only">{label}</span>
 	</a>
 {/snippet}
 
 <nav
 	aria-label={m.nav_primary()}
-	class="z-10 flex w-[96px] shrink-0 flex-col items-center justify-between bg-brand-dark py-3"
+	class="z-10 flex w-14 shrink-0 flex-col items-center justify-between bg-brand-dark py-3"
 >
 	<div class="flex flex-col items-center gap-1">
 		<a href={resolve('/')} title={m.common_baleia()} class="mb-3 flex text-white">
@@ -80,7 +88,9 @@
 	</div>
 
 	<div class="flex flex-col items-center gap-2">
-		{@render entry(settingsArea.key, settingsArea.href, settingsArea.label())}
+		{#if showSettings}
+			{@render entry(settingsArea.key, settingsArea.href, settingsArea.label())}
+		{/if}
 		<div data-avatar-menu class="relative">
 			<button
 				onclick={toggleMenu}
@@ -91,22 +101,20 @@
 			</button>
 			{#if menuOpen}
 				<div
-					class="absolute bottom-full left-0 mb-2 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50"
+					class="absolute bottom-full left-0 mb-2 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50"
 				>
-					<a
-						href={resolve('/settings/profile')}
-						onclick={() => (menuOpen = false)}
-						class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-slate-200 no-underline transition-colors duration-150 hover:bg-slate-700"
-					>
-						<svg viewBox="0 0 24 24" class="w-4 h-4"
-							><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle
-								cx="12"
-								cy="7"
-								r="4"
-							/></svg
+					{#each [{ href: '/profile', label: m.nav_profile(), icon: icons.profile }, { href: '/profile/api-keys', label: m.nav_page_api_keys(), icon: 'M15 7a4 4 0 1 1-3.87 5H9l-2 2-2-2-2 2v-3l6-6h3.13A4 4 0 0 1 15 7zM16 9h.01' }] as item (item.href)}
+						<a
+							href={resolve(item.href as '/profile')}
+							onclick={() => (menuOpen = false)}
+							class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-slate-200 no-underline transition-colors duration-150 hover:bg-slate-700"
 						>
-						{m.components_globalnav_profile()}
-					</a>
+							<svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"
+								><path d={item.icon} /></svg
+							>
+							{item.label}
+						</a>
+					{/each}
 					<button
 						onclick={authStore.logout}
 						class="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[13px] text-slate-200 transition-colors duration-150 hover:bg-slate-700 border-none bg-transparent cursor-pointer text-left"

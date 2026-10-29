@@ -69,6 +69,29 @@ func TestStaticHTMLRedirectsToTheRoute(t *testing.T) {
 	}
 }
 
+// TestStaticMovedRoutes: the profile pages left settings; the old URLs
+// answer 308 to the fixed new route.
+func TestStaticMovedRoutes(t *testing.T) {
+	t.Parallel()
+	tests := []struct{ target, want string }{
+		{"/settings/profile", "/profile"},
+		{"/settings/profile/", "/profile"},
+		{"/settings/api-keys?next=//evil.example", "/profile/api-keys"},
+	}
+	for _, tt := range tests {
+		rec := serve(staticFixture(t, true), http.MethodGet, tt.target)
+		if rec.Code != http.StatusPermanentRedirect {
+			t.Fatalf("GET %s = %d, want 308", tt.target, rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != tt.want {
+			t.Fatalf("GET %s Location = %q, want %q", tt.target, loc, tt.want)
+		}
+	}
+	if rec := serve(staticFixture(t, true), http.MethodGet, "/settings/users"); rec.Code != http.StatusOK {
+		t.Fatalf("GET /settings/users = %d, want the app", rec.Code)
+	}
+}
+
 func TestStaticSPAFallback(t *testing.T) {
 	t.Parallel()
 	rec := serve(staticFixture(t, true), http.MethodGet, "/sql")

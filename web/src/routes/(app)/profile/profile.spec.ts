@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import { makeMe } from '../../../../test/factories';
-import { renderPage } from '../../../../test/render';
+import { makeMe } from '../../../test/factories';
+import { renderPage } from '../../../test/render';
 import Page from './+page.svelte';
 
 describe('profile page', () => {
