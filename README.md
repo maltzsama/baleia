@@ -45,8 +45,12 @@ Settings are listed in [docs/configuration.md](docs/configuration.md), and runni
 
 ## Documentation
 
+The documentation is published at **https://maltzsama.github.io/baleia/**, built from [`docs/`](docs/) with the site in [`website/`](website/).
+
 | | |
 |---|---|
+| [Quick start](docs/quick-start.md) · [Install](docs/install.md) · [Concepts](docs/concepts.md) | Getting started |
+| [Guides](docs/guides/workbench.md) | The workbench, data explorer, Explore, monitoring and administration |
 | [Configuration](docs/configuration.md) | Every setting, and how credentials are encrypted |
 | [Operations](docs/operations.md) | Metrics, alerts, the audit trail and runbooks |
 | [Connections](docs/connections.md) | Every source and catalog Baleia can connect to |

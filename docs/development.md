@@ -70,6 +70,7 @@ To work on the code with fast reloads, run the processes on the host against eit
 | `web/` | The SvelteKit web app and its Playwright suite |
 | `deploy/helm`, `deploy/dev`, `deploy/prometheus` | Helm chart, minikube environment, alert rules |
 | `docs/` | This documentation and the ADRs |
+| `website/` | The documentation site: Docusaurus over `docs/`, published to GitHub Pages from `main` (`npm start` to preview) |
 
 ## Adding a connection provider
 

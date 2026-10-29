@@ -1,0 +1,29 @@
+/* Baleia's palette: the web app's primary blue (web/src/app.css). */
+:root {
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1554e0;
+  --ifm-color-primary-darker: #1350d4;
+  --ifm-color-primary-darkest: #1042ae;
+  --ifm-color-primary-light: #3e75ed;
+  --ifm-color-primary-lighter: #4a7eee;
+  --ifm-color-primary-lightest: #7098f2;
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #60a5fa;
+  --ifm-color-primary-dark: #3e92f9;
+  --ifm-color-primary-darker: #2e89f8;
+  --ifm-color-primary-darkest: #076deb;
+  --ifm-color-primary-light: #82b8fb;
+  --ifm-color-primary-lighter: #92c1fc;
+  --ifm-color-primary-lightest: #c5defd;
+  --ifm-background-color: #0f172a;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.1);
+}
+
+.navbar__logo img {
+  height: 28px;
+}
