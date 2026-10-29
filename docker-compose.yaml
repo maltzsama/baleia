@@ -16,7 +16,7 @@ services:
   # ============================================
 
   rustfs:
-    image: rustfs/rustfs:latest
+    image: rustfs/rustfs:1.0.4
     container_name: baleia_rustfs
     hostname: rustfs
     ports:
@@ -28,7 +28,8 @@ services:
       app_net:
         ipv4_address: 172.28.0.10
     healthcheck:
-      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:9000/"]
+      # / answers 403 without credentials since RustFS 1.0.4; /health is open.
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:9000/health"]
       interval: 15s
       timeout: 10s
       retries: 20
