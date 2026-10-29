@@ -5,34 +5,79 @@ The metrics catalog and its rules come from #87.
 
 ## Upgrading to 0.4.0
 
-Read this before `helm upgrade` from 0.3.x. The `migrate` job applies the
-schema changes (migrations 00060 and 00061, maintenance parameters and table
-health metrics) before the api and worker start.
+Read this before `helm upgrade` from 0.3.x. Migrations 00060 and 00061 add
+the maintenance parameters and the table health metrics. Both the `migrate`
+job and the API apply pending migrations when they start; the worker does
+not wait for them, so its first jobs can fail against the old schema until
+the API is up, and Temporal retries them.
 
-### 1. Let running queries finish
+### 1. Drain running queries
 
 0.3.x runs queries on `QueryExecutionWorkflowV2`; 0.4.0 only has its
 successor. A query still running when the new worker starts cannot finish:
-its execution stays "running". Before upgrading, let running queries finish
-or cancel them, then check that none is left:
+its execution stays "running". Drain them before upgrading:
 
-```bash
-temporal workflow count \
-  --query 'WorkflowType="QueryExecutionWorkflowV2" AND ExecutionStatus="Running"'
-```
+1. Cancel the long queries you do not want to wait for, from **SQL →
+   History**, while 0.3.x still runs.
+2. Stop new submissions by scaling the API down. The 0.3.x worker keeps
+   running and finishes what is left:
 
-If some were left behind, terminate them and close their executions (the
-workflow ID is `exec-<execution id>`):
+   ```bash
+   kubectl -n baleia scale deployment/baleia-api --replicas=0
+   ```
 
-```bash
-temporal workflow terminate --reason "upgrade to 0.4.0" \
-  --query 'WorkflowType="QueryExecutionWorkflowV2" AND ExecutionStatus="Running"'
-```
+3. Wait until no query is running:
 
-```sql
-UPDATE query_executions SET status = 'cancelled', finished_at = now()
-WHERE status = 'running' AND started_at < '<time of the upgrade>';
-```
+   ```bash
+   temporal workflow count \
+     --query 'WorkflowType="QueryExecutionWorkflowV2" AND ExecutionStatus="Running"'
+   ```
+
+4. Run `helm upgrade`, which brings the API back on 0.4.0.
+
+#### Queries left behind
+
+If the count was not zero when the new worker started, those queries are
+stuck: the 0.4.0 worker cannot run them, and terminating a workflow skips
+its cleanup. Close them by hand:
+
+1. Terminate the workflows. The command starts a batch job; repeat the count
+   above until it is 0 before going on:
+
+   ```bash
+   temporal workflow terminate --reason "upgrade to 0.4.0" \
+     --query 'WorkflowType="QueryExecutionWorkflowV2" AND ExecutionStatus="Running"'
+   ```
+
+2. Stop what may still run on the engines. Each stuck statement keeps its
+   engine handle; on Trino, kill it with
+   `CALL system.runtime.kill_query(query_id => '<engine_query_id>', message => 'upgrade')`.
+   Otherwise it ends at the engine's own statement timeout.
+
+   ```sql
+   SELECT s.execution_id, s.position, s.engine_query_id, s.query_handle
+   FROM query_statements s JOIN query_executions e ON e.id = s.execution_id
+   WHERE e.status = 'running' AND s.status = 'running';
+   ```
+
+3. Close the statements, then the executions (the workflow ID of an
+   execution is `exec-<execution id>`):
+
+   ```sql
+   BEGIN;
+   UPDATE query_statements s
+   SET status = CASE s.status WHEN 'pending' THEN 'skipped' ELSE 'cancelled' END,
+       finished_at = now()
+   FROM query_executions e
+   WHERE e.id = s.execution_id AND e.status = 'running'
+     AND s.status IN ('pending', 'running');
+   UPDATE query_executions SET status = 'cancelled', finished_at = now()
+   WHERE status = 'running';
+   COMMIT;
+   ```
+
+   Run this only after the drain, while no 0.4.0 query has started yet, or
+   narrow it to the stuck executions with `AND e.id IN (…)`.
 
 ### 2. Trino 484 needs plugin 0.10.0
 
@@ -45,11 +90,18 @@ default is now 0.10.0). An older plugin does not load on 484.
 
 Managed Iceberg catalogs gain `iceberg.expire-snapshots.min-retention` and
 `iceberg.remove-orphan-files.min-retention` (`BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION`,
-default `1h`). The new properties change each catalog's version, so the next
+default `1h`). The new properties change each catalog's version, so a
 reconcile re-creates every managed Iceberg catalog on its engine once;
 queries on a catalog fail briefly while it is re-created. Until then the
 catalog keeps Trino's 7-day floor, and table maintenance refuses shorter
 retentions.
+
+Reconciliation is not automatic unless `BALEIA_RECONCILE_INTERVAL` is set
+(the worker's boot run is a dry run). Run it from **Engines → (the engine) →
+Apply reconcile**, or `POST /api/v1/engines/{id}/reconcile?dry_run=false`.
+A run applies at most `BALEIA_RECONCILE_MAX_ACTIONS` changes (20); repeat it
+until the run reports nothing left. See [Binding
+reconciliation](#binding-reconciliation).
 
 ### 4. API and UI changes
 

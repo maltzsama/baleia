@@ -15,8 +15,10 @@ headers {
 }
 
 script:pre-request {
+  // Optional: skipped, not failed, when the environment does not set it up.
   if (!bru.getEnvVar("ldap_provider_id") || !bru.getEnvVar("ldap_username") || !bru.getEnvVar("ldap_password")) {
-    throw new Error("Set ldap_provider_id, ldap_username and ldap_password (see `docker compose --profile ldap up`)");
+    bru.runner.skipRequest();
+    return;
   }
 }
 

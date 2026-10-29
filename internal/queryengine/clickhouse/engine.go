@@ -95,8 +95,8 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 		return nil
 	}
 	ctx = context.WithoutCancel(ctx)
-	return killUntilFound(cancelWindow, func() (bool, error) {
-		kctx, cancel := context.WithTimeout(ctx, connectTimeout)
+	return killUntilFound(cancelWindow, func(left time.Duration) (bool, error) {
+		kctx, cancel := context.WithTimeout(ctx, min(connectTimeout, left))
 		defer cancel()
 		rows, err := e.c.queryStrings(kctx, request{
 			sql:    "KILL QUERY WHERE query_id = {id:String} SYNC",
@@ -113,12 +113,13 @@ const cancelWindow = 3 * time.Second
 // A handle is reported before ClickHouse registers its query (OnStart runs
 // before the request is sent), so a KILL right after it can find nothing and
 // the statement would run to the end. A query still missing after the window
-// is gone, which is not an error.
-func killUntilFound(window time.Duration, kill func() (bool, error)) error {
+// is gone, which is not an error. kill gets the time left, so a stalled
+// attempt cannot outlast the window.
+func killUntilFound(window time.Duration, kill func(left time.Duration) (bool, error)) error {
 	deadline := time.Now().Add(window)
 	wait := 50 * time.Millisecond
 	for {
-		killed, err := kill()
+		killed, err := kill(time.Until(deadline))
 		if err != nil || killed || !time.Now().Before(deadline) {
 			return err
 		}

@@ -60,7 +60,7 @@ func TestKillUntilFound(t *testing.T) {
 	t.Run("found on a later try", func(t *testing.T) {
 		t.Parallel()
 		calls := 0
-		err := killUntilFound(time.Second, func() (bool, error) {
+		err := killUntilFound(time.Second, func(time.Duration) (bool, error) {
 			calls++
 			return calls == 3, nil
 		})
@@ -72,7 +72,7 @@ func TestKillUntilFound(t *testing.T) {
 		t.Parallel()
 		start := time.Now()
 		calls := 0
-		err := killUntilFound(200*time.Millisecond, func() (bool, error) {
+		err := killUntilFound(200*time.Millisecond, func(time.Duration) (bool, error) {
 			calls++
 			return false, nil
 		})
@@ -80,11 +80,22 @@ func TestKillUntilFound(t *testing.T) {
 			t.Fatalf("calls = %d, err = %v, took %s", calls, err, time.Since(start))
 		}
 	})
+	t.Run("each attempt gets the time left", func(t *testing.T) {
+		t.Parallel()
+		var lefts []time.Duration
+		_ = killUntilFound(300*time.Millisecond, func(left time.Duration) (bool, error) {
+			lefts = append(lefts, left)
+			return false, nil
+		})
+		if len(lefts) < 2 || lefts[0] > 300*time.Millisecond || lefts[len(lefts)-1] >= lefts[0] {
+			t.Fatalf("time left per attempt = %v", lefts)
+		}
+	})
 	t.Run("error stops at once", func(t *testing.T) {
 		t.Parallel()
 		boom := errors.New("boom")
 		calls := 0
-		err := killUntilFound(time.Second, func() (bool, error) {
+		err := killUntilFound(time.Second, func(time.Duration) (bool, error) {
 			calls++
 			return false, boom
 		})
