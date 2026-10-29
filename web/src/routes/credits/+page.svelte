@@ -34,7 +34,24 @@
 				{m.credits_brand_heading()}
 			</h2>
 			<p class="mt-2 text-[13px] leading-relaxed">{m.credits_brand_body()}</p>
+			<p class="mt-2 text-[13px]">
+				<a
+					class="text-primary hover:underline"
+					href="https://www.flaticon.com/free-icons/tv-show"
+					title={m.credits_attribution_title()}
+					target="_blank"
+					rel="noopener noreferrer">{m.credits_attribution()}</a
+				>
+			</p>
 			<ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
+				<li>
+					<a
+						class="text-primary hover:underline"
+						href="https://www.flaticon.com/free-icon/pet_7688189"
+						target="_blank"
+						rel="noopener noreferrer">{m.credits_icon_page()}</a
+					>
+				</li>
 				<li>
 					<a
 						class="text-primary hover:underline"

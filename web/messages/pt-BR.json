@@ -2434,7 +2434,7 @@
 	"settings_system_icon_and_font_licenses": "O ícone do app e as fontes incluídas são usados sob suas próprias licenças.",
 	"credits_intro": "O Baleia é um projeto de código aberto. O ícone, as fontes e as dependências mantêm suas próprias licenças.",
 	"credits_brand_heading": "Ícone da marca",
-	"credits_brand_body": "A marca do Baleia e os favicons vêm do Flaticon e são usados sob a Licença Gratuita do Flaticon.",
+	"credits_brand_body": "A marca da Baleia e os favicons são o ícone \"pet\" de bsd no Flaticon, usado sob a Licença Gratuita do Flaticon.",
 	"credits_license_summary": "Nossa licença permite usar o conteúdo:",
 	"credits_license_commercial": "Em projetos comerciais e pessoais",
 	"credits_license_media": "Em mídia digital ou impressa",
@@ -2460,5 +2460,8 @@
 	"settings_group_access": "Acesso",
 	"settings_group_activity": "Atividade",
 	"nav_profile": "Perfil",
-	"nav_page_api_keys": "Chaves de API"
+	"nav_page_api_keys": "Chaves de API",
+	"credits_attribution": "Tv show icons created by bsd - Flaticon",
+	"credits_attribution_title": "tv show icons",
+	"credits_icon_page": "O ícone \"pet\" no Flaticon"
 }

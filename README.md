@@ -67,8 +67,10 @@ Baleia is mostly a one-person project for now, and help is welcome, especially o
 
 ## Credits
 
-The Baleia icon comes from [Flaticon](https://www.flaticon.com) and is used
-under its free license; the bundled fonts are under the SIL Open Font License.
+The Baleia icon is the ["pet" icon](https://www.flaticon.com/free-icon/pet_7688189)
+by bsd from [Flaticon](https://www.flaticon.com)
+([Tv show icons created by bsd - Flaticon](https://www.flaticon.com/free-icons/tv-show)),
+used under its free license; the bundled fonts are under the SIL Open Font License.
 See [CREDITS.md](CREDITS.md) for the attributions and license summaries.
 
 ## License

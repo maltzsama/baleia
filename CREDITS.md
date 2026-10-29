@@ -6,8 +6,12 @@ and dependencies below keep their own licenses.
 ## Brand icon
 
 The Baleia mark — `web/static/baleia.svg`, the favicons and the web app icons —
-comes from [Flaticon](https://www.flaticon.com) and is used under the
+is the ["pet" icon](https://www.flaticon.com/free-icon/pet_7688189) by bsd on
+[Flaticon](https://www.flaticon.com), used under the
 [Flaticon Free License](https://www.flaticon.com/legal).
+
+Attribution, as Flaticon requires it:
+<a href="https://www.flaticon.com/free-icons/tv-show" title="tv show icons">Tv show icons created by bsd - Flaticon</a>
 
 License summary, as published by Flaticon:
 
