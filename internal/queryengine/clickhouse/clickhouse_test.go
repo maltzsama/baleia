@@ -1,7 +1,9 @@
 package clickhouse
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -48,4 +50,64 @@ func TestLogComment(t *testing.T) {
 	if got != `{"source":"editor","execution_id":"e1"}` {
 		t.Fatalf("logComment = %q", got)
 	}
+}
+
+// TestKillUntilFound: a KILL that finds nothing is retried, since the query
+// may not be registered yet; one that keeps finding nothing gives up without
+// an error after the window.
+func TestKillUntilFound(t *testing.T) {
+	t.Parallel()
+	t.Run("found on a later try", func(t *testing.T) {
+		t.Parallel()
+		calls := 0
+		err := killUntilFound(time.Second, func(time.Duration) (bool, error) {
+			calls++
+			return calls == 3, nil
+		})
+		if err != nil || calls != 3 {
+			t.Fatalf("calls = %d, err = %v; want 3, nil", calls, err)
+		}
+	})
+	t.Run("gone", func(t *testing.T) {
+		t.Parallel()
+		start := time.Now()
+		calls := 0
+		err := killUntilFound(200*time.Millisecond, func(time.Duration) (bool, error) {
+			calls++
+			return false, nil
+		})
+		if err != nil || calls < 2 || time.Since(start) > time.Second {
+			t.Fatalf("calls = %d, err = %v, took %s", calls, err, time.Since(start))
+		}
+	})
+	t.Run("each attempt gets at least the floor", func(t *testing.T) {
+		t.Parallel()
+		var lefts []time.Duration
+		_ = killUntilFound(300*time.Millisecond, func(left time.Duration) (bool, error) {
+			lefts = append(lefts, left)
+			return false, nil
+		})
+		// The window is shorter than minAttempt: every attempt still gets
+		// the floor, so the last one is not cut short.
+		for _, left := range lefts {
+			if left < minAttempt {
+				t.Fatalf("time per attempt = %v, want at least %s each", lefts, minAttempt)
+			}
+		}
+		if len(lefts) < 2 {
+			t.Fatalf("attempts = %d, want retries", len(lefts))
+		}
+	})
+	t.Run("error stops at once", func(t *testing.T) {
+		t.Parallel()
+		boom := errors.New("boom")
+		calls := 0
+		err := killUntilFound(time.Second, func(time.Duration) (bool, error) {
+			calls++
+			return false, boom
+		})
+		if !errors.Is(err, boom) || calls != 1 {
+			t.Fatalf("calls = %d, err = %v", calls, err)
+		}
+	})
 }

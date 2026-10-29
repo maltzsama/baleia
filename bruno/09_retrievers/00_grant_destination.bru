@@ -1,0 +1,32 @@
+meta {
+  name: Grant the destination for writing
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/catalog-access
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "catalog_id": "{{explorer_catalog_id}}",
+    "permission": "write"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.permission: eq write
+}
+
+docs {
+  A retriever writes to an active Iceberg binding the workspace has a write
+  grant on (#118). The grant is an upsert, so the case can run again.
+}

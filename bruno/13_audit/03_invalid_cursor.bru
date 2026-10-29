@@ -5,13 +5,19 @@ meta {
 }
 
 get {
-  url: {{base_url}}/audit/events?cursor=not-a-cursor
+  url: {{base_url}}/audit/events?cursor=not-a-cursor&from={{audit_from}}
   body: none
   auth: bearer
 }
 
 auth:bearer {
   token: {{token}}
+}
+
+script:pre-request {
+  // The list needs a time window unless it is narrowed by resource or
+  // actor (#49): the last day covers this run.
+  bru.setVar("audit_from", new Date(Date.now() - 24 * 3600 * 1000).toISOString());
 }
 
 assert {

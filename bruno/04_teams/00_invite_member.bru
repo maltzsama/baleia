@@ -14,11 +14,21 @@ auth:bearer {
   token: {{token}}
 }
 
+script:pre-request {
+  // A fresh address each run: an invite of an existing e-mail is a 409 and
+  // would leave team_member_id unset. 99_cleanup removes the user.
+  bru.setVar("team_member_email", `member_teams_${Date.now()}@baleia.io`);
+}
+
 body:json {
   {
-    "email": "member01_teams@baleia.io",
+    "email": "{{team_member_email}}",
     "role": "member"
   }
+}
+
+assert {
+  res.status: eq 201
 }
 
 vars:post-response {

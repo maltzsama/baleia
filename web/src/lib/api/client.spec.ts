@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 function json(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -12,6 +12,13 @@ function urlOf(input: RequestInfo | URL): string {
 }
 
 describe('api client', () => {
+	// The tests import the client fresh (resetModules). Its first import
+	// transforms the module and its generated types, which under a loaded
+	// full run took more than a test's 5 s budget: pay it once, here.
+	beforeAll(async () => {
+		await import('./client');
+	}, 30_000);
+
 	beforeEach(() => {
 		vi.resetModules();
 		localStorage.clear();

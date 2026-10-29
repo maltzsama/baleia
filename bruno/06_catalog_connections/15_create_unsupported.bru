@@ -16,8 +16,8 @@ auth:bearer {
 
 body:json {
   {
-    "name": "Glue",
-    "type": "glue",
+    "name": "Doris",
+    "type": "doris",
     "config": {}
   }
 }
@@ -28,5 +28,6 @@ assert {
 }
 
 docs {
-  Glue and Hive Metastore get providers in #86; until then they are rejected.
+  Doris and StarRocks are planned after v1 (#21, #30): a connection of a
+  planned type is rejected with provider_unsupported.
 }
